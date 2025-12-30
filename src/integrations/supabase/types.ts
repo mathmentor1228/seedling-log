@@ -279,6 +279,9 @@ export type Database = {
           homework_completion_rate: number | null
           id: string
           risk_level: string | null
+          sent_at: string | null
+          sent_by: string | null
+          sent_status: string | null
           student_id: string
           summary: string | null
           total_lessons: number
@@ -292,6 +295,9 @@ export type Database = {
           homework_completion_rate?: number | null
           id?: string
           risk_level?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_status?: string | null
           student_id: string
           summary?: string | null
           total_lessons?: number
@@ -305,6 +311,9 @@ export type Database = {
           homework_completion_rate?: number | null
           id?: string
           risk_level?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_status?: string | null
           student_id?: string
           summary?: string | null
           total_lessons?: number
