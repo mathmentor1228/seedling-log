@@ -3,7 +3,7 @@ import Dashboard from './Dashboard';
 
 export default function DashboardPage() {
   return (
-    <ProtectedRoute allowedRoles={['admin']}>
+    <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
       <Dashboard />
     </ProtectedRoute>
   );

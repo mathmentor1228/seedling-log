@@ -3,7 +3,7 @@ import Lessons from './Lessons';
 
 export default function LessonsPage() {
   return (
-    <ProtectedRoute allowedRoles={['admin', 'teacher']}>
+    <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
       <Lessons />
     </ProtectedRoute>
   );

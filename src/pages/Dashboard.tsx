@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth, isAdmin, isTeacher, isAssistant } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
 import { RiskBadge } from '@/components/ui/risk-badge';
@@ -95,10 +95,10 @@ export default function Dashboard() {
       try {
         const weekAgo = subDays(new Date(), 7);
         // Use 7 days for assistants, 10 days for others
-        const homeworkDaysAgo = role === 'assistant' ? subDays(new Date(), 7) : subDays(new Date(), 10);
+        const homeworkDaysAgo = isAssistant(role) ? subDays(new Date(), 7) : subDays(new Date(), 10);
 
-        // Assistants have minimal access - only fetch homework and basic stats
-        if (role !== 'assistant') {
+        // Admin and Teacher can view dashboard stats (not assistant)
+        if (!isAssistant(role)) {
           // Fetch students count
           const { count: studentsCount } = await supabase
             .from('students')
@@ -115,7 +115,8 @@ export default function Dashboard() {
             .select('*', { count: 'exact' })
             .gte('lesson_date', format(weekAgo, 'yyyy-MM-dd'));
 
-          if (role === 'teacher') {
+          // Teachers only see their own lessons
+          if (isTeacher(role)) {
             lessonsQuery = lessonsQuery.eq('teacher_id', user.id);
           }
 
@@ -139,7 +140,8 @@ export default function Dashboard() {
             .order('lesson_date', { ascending: false })
             .limit(5);
 
-          if (role === 'teacher') {
+          // Teachers only see their own recent lessons
+          if (isTeacher(role)) {
             recentQuery = recentQuery.eq('teacher_id', user.id);
           }
 
@@ -187,8 +189,8 @@ export default function Dashboard() {
             }))
           );
 
-          // Fetch overdue drafts for admin
-          if (role === 'admin') {
+          // Fetch overdue drafts for admin only
+          if (isAdmin(role)) {
             await fetchOverdueDrafts();
           }
         }
@@ -295,18 +297,18 @@ export default function Dashboard() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">대시보드</h1>
         <p className="text-muted-foreground mt-1">
-          {role === 'admin' 
+          {isAdmin(role) 
             ? '학원 전체 현황을 한눈에 확인하세요' 
-            : role === 'assistant'
+            : isAssistant(role)
             ? '숙제 확인 현황'
             : '나의 수업 현황'}
         </p>
       </div>
 
-      {/* Stats Grid - Hidden for assistants */}
-      {role !== 'assistant' && (
+      {/* Stats Grid - Visible for admin and teacher */}
+      {!isAssistant(role) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {role === 'admin' && (
+          {isAdmin(role) && (
             <>
               <StatCard
                 title="전체 학생"
@@ -331,7 +333,7 @@ export default function Dashboard() {
             subtitle="5점 만점"
             icon={<TrendingUp className="w-6 h-6" />}
           />
-          {role === 'admin' && (
+          {isAdmin(role) && (
             <StatCard
               title="고위험 학생"
               value={stats.highRiskStudents}
@@ -343,7 +345,7 @@ export default function Dashboard() {
       )}
 
       {/* Overdue Drafts Section - Admin Only */}
-      {role === 'admin' && totalOverdueDrafts > 0 && (
+      {isAdmin(role) && totalOverdueDrafts > 0 && (
         <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-amber-600">
@@ -429,8 +431,8 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Content Grid - Hidden for assistants */}
-      {role !== 'assistant' && (
+      {/* Content Grid - Visible for admin and teacher */}
+      {!isAssistant(role) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Lessons */}
           <Card className="animate-slide-up">
@@ -465,7 +467,7 @@ export default function Dashboard() {
           </Card>
 
           {/* At Risk Students - Admin Only */}
-          {role === 'admin' && (
+          {isAdmin(role) && (
             <Card className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

@@ -109,3 +109,26 @@ export function useAuth() {
   }
   return context;
 }
+
+// Role helper functions - treat roles as distinct (not hierarchical)
+export function isAdmin(role: AppRole | null): boolean {
+  return role === 'admin';
+}
+
+export function isTeacher(role: AppRole | null): boolean {
+  return role === 'teacher';
+}
+
+export function isAssistant(role: AppRole | null): boolean {
+  return role === 'assistant';
+}
+
+// Check if user can create/edit lessons (admin or teacher only)
+export function canManageLessons(role: AppRole | null): boolean {
+  return role === 'admin' || role === 'teacher';
+}
+
+// Check if user can view lessons (all authenticated roles)
+export function canViewLessons(role: AppRole | null): boolean {
+  return role === 'admin' || role === 'teacher' || role === 'assistant';
+}
