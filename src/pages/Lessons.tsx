@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface LessonRecord {
@@ -47,6 +48,9 @@ interface LessonRecord {
   next_lesson_goal: string | null;
   notes: string | null;
   student_name?: string;
+  submitted: boolean;
+  submitted_at: string | null;
+  draft_created_at: string;
 }
 
 interface Student {
@@ -61,21 +65,21 @@ interface ClassItem {
 }
 
 const LEARNING_ISSUES = [
-  'Concentration difficulty',
-  'Vocabulary gaps',
-  'Concept understanding',
-  'Problem solving',
-  'Memory retention',
-  'Test anxiety',
-  'Homework completion',
-  'Time management',
+  '집중력 부족',
+  '어휘력 부족',
+  '개념 이해 어려움',
+  '문제 해결 능력',
+  '기억력',
+  '시험 불안',
+  '숙제 완수',
+  '시간 관리',
 ];
 
 const HOMEWORK_STATUS = [
-  { value: 'completed', label: 'Completed' },
-  { value: 'partial', label: 'Partially Done' },
-  { value: 'not_done', label: 'Not Done' },
-  { value: 'none_assigned', label: 'None Assigned' },
+  { value: 'completed', label: '완료' },
+  { value: 'partial', label: '부분 완료' },
+  { value: 'not_done', label: '미완료' },
+  { value: 'none_assigned', label: '미배정' },
 ];
 
 export default function Lessons() {
@@ -87,7 +91,9 @@ export default function Lessons() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [editingLesson, setEditingLesson] = useState<LessonRecord | null>(null);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     student_id: '',
     class_id: '',
@@ -101,12 +107,32 @@ export default function Lessons() {
     notes: '',
   });
   const { toast } = useToast();
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchLessons();
     fetchStudents();
     fetchClasses();
   }, [user, role]);
+
+  // Auto-save effect
+  useEffect(() => {
+    if (!currentDraftId || !isDialogOpen) return;
+
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      handleAutoSave();
+    }, 2000); // Auto-save after 2 seconds of inactivity
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [formData, currentDraftId, isDialogOpen]);
 
   async function fetchLessons() {
     if (!user) return;
@@ -137,8 +163,8 @@ export default function Lessons() {
     } catch (error) {
       console.error('Error fetching lessons:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to load lessons',
+        title: '오류',
+        description: '수업 기록을 불러오는데 실패했습니다',
         variant: 'destructive',
       });
     } finally {
@@ -174,14 +200,162 @@ export default function Lessons() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Create initial draft when opening form for new record
+  async function createInitialDraft() {
+    if (!user) return;
+
+    try {
+      const defaultStudent = students[0]?.id || '';
+      const { data, error } = await supabase
+        .from('lesson_records')
+        .insert({
+          teacher_id: user.id,
+          student_id: defaultStudent,
+          subject: '',
+          lesson_date: format(new Date(), 'yyyy-MM-dd'),
+          lesson_range: '',
+          understanding_score: 3,
+          homework_status: 'none_assigned',
+          learning_issues: [],
+          submitted: false,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setCurrentDraftId(data.id);
+      setFormData({
+        student_id: defaultStudent,
+        class_id: '',
+        subject: '',
+        lesson_date: format(new Date(), 'yyyy-MM-dd'),
+        lesson_range: '',
+        understanding_score: '3',
+        homework_status: 'none_assigned',
+        learning_issues: [],
+        next_lesson_goal: '',
+        notes: '',
+      });
+
+      return data.id;
+    } catch (error: any) {
+      console.error('Error creating draft:', error);
+      toast({
+        title: '오류',
+        description: '임시저장 생성에 실패했습니다',
+        variant: 'destructive',
+      });
+      return null;
+    }
+  }
+
+  // Auto-save to existing draft
+  const handleAutoSave = useCallback(async () => {
+    if (!currentDraftId || !user) return;
+
+    try {
+      const payload = buildPayload();
+      if (!payload.student_id) return; // Don't save if no student selected
+
+      await supabase
+        .from('lesson_records')
+        .update({
+          ...payload,
+          submitted: false,
+        })
+        .eq('id', currentDraftId);
+    } catch (error) {
+      console.error('Auto-save error:', error);
+    }
+  }, [currentDraftId, formData, user]);
+
+  function buildPayload() {
+    return {
+      teacher_id: user!.id,
+      student_id: formData.student_id,
+      class_id: formData.class_id || null,
+      subject: formData.subject.trim(),
+      lesson_date: formData.lesson_date,
+      lesson_range: formData.lesson_range.trim(),
+      understanding_score: parseInt(formData.understanding_score),
+      homework_status: formData.homework_status,
+      learning_issues: formData.learning_issues,
+      next_lesson_goal: formData.next_lesson_goal.trim() || null,
+      notes: formData.notes.trim() || null,
+    };
+  }
+
+  // Manual save as draft
+  const handleSaveDraft = async () => {
+    if (!user) return;
+
+    if (!formData.student_id) {
+      toast({
+        title: '유효성 오류',
+        description: '학생을 선택해주세요',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSavingDraft(true);
+
+    try {
+      const payload = buildPayload();
+      const draftId = currentDraftId || editingLesson?.id;
+
+      if (draftId) {
+        const { error } = await supabase
+          .from('lesson_records')
+          .update({
+            ...payload,
+            submitted: false,
+          })
+          .eq('id', draftId);
+
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from('lesson_records')
+          .insert({
+            ...payload,
+            submitted: false,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        setCurrentDraftId(data.id);
+      }
+
+      toast({
+        title: '임시저장 완료',
+        description: '수업 기록이 임시저장되었습니다',
+      });
+
+      fetchLessons();
+    } catch (error: any) {
+      console.error('Error saving draft:', error);
+      toast({
+        title: '오류',
+        description: error.message || '임시저장에 실패했습니다',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
+  // Submit record
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!user) return;
 
     if (!formData.student_id || !formData.subject || !formData.lesson_range) {
       toast({
-        title: 'Validation Error',
-        description: 'Please fill in all required fields',
+        title: '유효성 오류',
+        description: '필수 항목을 모두 입력해주세요',
         variant: 'destructive',
       });
       return;
@@ -190,52 +364,41 @@ export default function Lessons() {
     setIsSubmitting(true);
 
     try {
-      const lessonPayload = {
-        teacher_id: user.id,
-        student_id: formData.student_id,
-        class_id: formData.class_id || null,
-        subject: formData.subject.trim(),
-        lesson_date: formData.lesson_date,
-        lesson_range: formData.lesson_range.trim(),
-        understanding_score: parseInt(formData.understanding_score),
-        homework_status: formData.homework_status,
-        learning_issues: formData.learning_issues,
-        next_lesson_goal: formData.next_lesson_goal.trim() || null,
-        notes: formData.notes.trim() || null,
+      const payload = {
+        ...buildPayload(),
+        submitted: true,
+        submitted_at: new Date().toISOString(),
       };
 
-      if (editingLesson) {
+      const recordId = currentDraftId || editingLesson?.id;
+
+      if (recordId) {
         const { error } = await supabase
           .from('lesson_records')
-          .update(lessonPayload)
-          .eq('id', editingLesson.id);
+          .update(payload)
+          .eq('id', recordId);
 
         if (error) throw error;
-
-        toast({
-          title: 'Success',
-          description: 'Lesson record updated successfully',
-        });
       } else {
-        const { error } = await supabase.from('lesson_records').insert(lessonPayload);
-
+        const { error } = await supabase.from('lesson_records').insert(payload);
         if (error) throw error;
-
-        toast({
-          title: 'Success',
-          description: 'Lesson record created successfully',
-        });
       }
+
+      toast({
+        title: '제출 완료',
+        description: '수업 기록이 제출되었습니다',
+      });
 
       setIsDialogOpen(false);
       setEditingLesson(null);
+      setCurrentDraftId(null);
       resetForm();
       fetchLessons();
     } catch (error: any) {
-      console.error('Error saving lesson:', error);
+      console.error('Error submitting lesson:', error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to save lesson record',
+        title: '오류',
+        description: error.message || '수업 기록 제출에 실패했습니다',
         variant: 'destructive',
       });
     } finally {
@@ -256,10 +419,24 @@ export default function Lessons() {
       next_lesson_goal: '',
       notes: '',
     });
+    setCurrentDraftId(null);
+  };
+
+  const handleOpenNewForm = async () => {
+    setEditingLesson(null);
+    resetForm();
+    setIsDialogOpen(true);
+    // Create draft after dialog opens
+    setTimeout(async () => {
+      if (students.length > 0) {
+        await createInitialDraft();
+      }
+    }, 100);
   };
 
   const handleEdit = (lesson: LessonRecord) => {
     setEditingLesson(lesson);
+    setCurrentDraftId(lesson.id);
     setFormData({
       student_id: lesson.student_id,
       class_id: lesson.class_id || '',
@@ -276,25 +453,43 @@ export default function Lessons() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this lesson record?')) return;
+    if (!confirm('이 수업 기록을 삭제하시겠습니까?')) return;
 
     try {
       const { error } = await supabase.from('lesson_records').delete().eq('id', id);
       if (error) throw error;
 
       toast({
-        title: 'Success',
-        description: 'Lesson record deleted successfully',
+        title: '삭제 완료',
+        description: '수업 기록이 삭제되었습니다',
       });
       fetchLessons();
     } catch (error: any) {
       console.error('Error deleting lesson:', error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete lesson record',
+        title: '오류',
+        description: error.message || '수업 기록 삭제에 실패했습니다',
         variant: 'destructive',
       });
     }
+  };
+
+  const handleDialogClose = async (open: boolean) => {
+    if (!open) {
+      // If closing and there's an empty draft, delete it
+      if (currentDraftId && !formData.student_id && !formData.subject && !formData.lesson_range) {
+        try {
+          await supabase.from('lesson_records').delete().eq('id', currentDraftId);
+        } catch (error) {
+          console.error('Error cleaning up empty draft:', error);
+        }
+      }
+      setEditingLesson(null);
+      setCurrentDraftId(null);
+      resetForm();
+      fetchLessons();
+    }
+    setIsDialogOpen(open);
   };
 
   const toggleIssue = (issue: string) => {
@@ -328,41 +523,45 @@ export default function Lessons() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Lesson Records</h1>
+          <h1 className="text-2xl font-bold text-foreground">수업 기록</h1>
           <p className="text-muted-foreground mt-1">
-            {role === 'admin' ? 'All lesson records' : 'Log and track your lessons'}
+            {role === 'admin' ? '전체 수업 기록' : '수업 내용을 기록하고 관리하세요'}
           </p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) {
-            setEditingLesson(null);
-            resetForm();
-          }
-        }}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={handleOpenNewForm}>
               <Plus className="w-4 h-4 mr-2" />
-              Log Lesson
+              수업 기록 작성
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>
-                {editingLesson ? 'Edit Lesson Record' : 'Log New Lesson'}
+              <DialogTitle className="flex items-center gap-2">
+                {editingLesson ? (
+                  editingLesson.submitted ? '수업 기록 수정' : '임시저장 수정'
+                ) : (
+                  '새 수업 기록'
+                )}
+                {currentDraftId && !editingLesson?.submitted && (
+                  <Badge variant="outline" className="ml-2">
+                    <FileEdit className="w-3 h-3 mr-1" />
+                    임시저장
+                  </Badge>
+                )}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="student">Student *</Label>
+                  <Label htmlFor="student">학생 *</Label>
                   <Select
                     value={formData.student_id}
                     onValueChange={(value) => setFormData({ ...formData, student_id: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select student" />
+                      <SelectValue placeholder="학생 선택" />
                     </SelectTrigger>
                     <SelectContent>
                       {students.map((student) => (
@@ -374,13 +573,13 @@ export default function Lessons() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="class">Class (Optional)</Label>
+                  <Label htmlFor="class">클래스 (선택)</Label>
                   <Select
                     value={formData.class_id}
                     onValueChange={(value) => setFormData({ ...formData, class_id: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select class" />
+                      <SelectValue placeholder="클래스 선택" />
                     </SelectTrigger>
                     <SelectContent>
                       {classes.map((c) => (
@@ -395,17 +594,17 @@ export default function Lessons() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="subject">Subject *</Label>
+                  <Label htmlFor="subject">과목 *</Label>
                   <Input
                     id="subject"
                     value={formData.subject}
                     onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    placeholder="e.g., Mathematics"
+                    placeholder="예: 수학"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lesson_date">Lesson Date *</Label>
+                  <Label htmlFor="lesson_date">수업 날짜 *</Label>
                   <Input
                     id="lesson_date"
                     type="date"
@@ -417,19 +616,19 @@ export default function Lessons() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="lesson_range">Lesson Range/Content *</Label>
+                <Label htmlFor="lesson_range">수업 범위/내용 *</Label>
                 <Input
                   id="lesson_range"
                   value={formData.lesson_range}
                   onChange={(e) => setFormData({ ...formData, lesson_range: e.target.value })}
-                  placeholder="e.g., Chapter 5: Quadratic Equations (pages 120-135)"
+                  placeholder="예: 5장 이차방정식 (120-135페이지)"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Understanding Score (1-5) *</Label>
+                  <Label>이해도 (1-5) *</Label>
                   <Select
                     value={formData.understanding_score}
                     onValueChange={(value) => setFormData({ ...formData, understanding_score: value })}
@@ -440,14 +639,14 @@ export default function Lessons() {
                     <SelectContent>
                       {[1, 2, 3, 4, 5].map((score) => (
                         <SelectItem key={score} value={score.toString()}>
-                          {score} - {score === 1 ? 'Poor' : score === 2 ? 'Below Average' : score === 3 ? 'Average' : score === 4 ? 'Good' : 'Excellent'}
+                          {score} - {score === 1 ? '매우 낮음' : score === 2 ? '낮음' : score === 3 ? '보통' : score === 4 ? '높음' : '매우 높음'}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Homework Status *</Label>
+                  <Label>숙제 상태 *</Label>
                   <Select
                     value={formData.homework_status}
                     onValueChange={(value) => setFormData({ ...formData, homework_status: value })}
@@ -467,7 +666,7 @@ export default function Lessons() {
               </div>
 
               <div className="space-y-2">
-                <Label>Learning Issues (Select all that apply)</Label>
+                <Label>학습 이슈 (해당 항목 선택)</Label>
                 <div className="grid grid-cols-2 gap-2 p-4 bg-secondary/50 rounded-lg">
                   {LEARNING_ISSUES.map((issue) => (
                     <div key={issue} className="flex items-center space-x-2">
@@ -485,22 +684,22 @@ export default function Lessons() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="next_goal">Next Lesson Goal</Label>
+                <Label htmlFor="next_goal">다음 수업 목표</Label>
                 <Input
                   id="next_goal"
                   value={formData.next_lesson_goal}
                   onChange={(e) => setFormData({ ...formData, next_lesson_goal: e.target.value })}
-                  placeholder="What to focus on next lesson"
+                  placeholder="다음 수업에서 집중할 내용"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes">Additional Notes</Label>
+                <Label htmlFor="notes">추가 메모</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Any other observations or comments"
+                  placeholder="기타 관찰 사항이나 코멘트"
                   rows={3}
                 />
               </div>
@@ -509,13 +708,24 @@ export default function Lessons() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
+                  onClick={() => handleDialogClose(false)}
                 >
-                  Cancel
+                  취소
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleSaveDraft}
+                  disabled={isSavingDraft || isSubmitting}
+                >
+                  {isSavingDraft && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  <Save className="w-4 h-4 mr-2" />
+                  임시저장
+                </Button>
+                <Button type="submit" disabled={isSubmitting || isSavingDraft}>
                   {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {editingLesson ? 'Update' : 'Save'} Record
+                  <Send className="w-4 h-4 mr-2" />
+                  제출
                 </Button>
               </div>
             </form>
@@ -528,7 +738,7 @@ export default function Lessons() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search by student or subject..."
+              placeholder="학생 또는 과목으로 검색..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -540,7 +750,7 @@ export default function Lessons() {
             <div className="text-center py-12">
               <ClipboardList className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">
-                {searchQuery ? 'No lessons found' : 'No lesson records yet. Log your first lesson!'}
+                {searchQuery ? '검색 결과가 없습니다' : '수업 기록이 없습니다. 첫 번째 수업을 기록해보세요!'}
               </p>
             </div>
           ) : (
@@ -548,20 +758,21 @@ export default function Lessons() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Content</TableHead>
-                    <TableHead>Score</TableHead>
-                    <TableHead>Homework</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
+                    <TableHead>날짜</TableHead>
+                    <TableHead>학생</TableHead>
+                    <TableHead>과목</TableHead>
+                    <TableHead>내용</TableHead>
+                    <TableHead>점수</TableHead>
+                    <TableHead>숙제</TableHead>
+                    <TableHead>상태</TableHead>
+                    <TableHead className="w-[100px]">작업</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredLessons.map((lesson) => (
                     <TableRow key={lesson.id}>
                       <TableCell className="text-muted-foreground">
-                        {format(new Date(lesson.lesson_date), 'MMM d, yyyy')}
+                        {format(new Date(lesson.lesson_date), 'MM/dd')}
                       </TableCell>
                       <TableCell className="font-medium">{lesson.student_name}</TableCell>
                       <TableCell>{lesson.subject}</TableCell>
@@ -573,6 +784,18 @@ export default function Lessons() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {getHomeworkLabel(lesson.homework_status)}
+                      </TableCell>
+                      <TableCell>
+                        {lesson.submitted ? (
+                          <Badge variant="default" className="bg-green-500/10 text-green-600 border-green-500/20">
+                            제출됨
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                            <FileEdit className="w-3 h-3 mr-1" />
+                            임시저장
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
