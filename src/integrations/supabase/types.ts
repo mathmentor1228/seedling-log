@@ -128,7 +128,7 @@ export type Database = {
           next_lesson_goal: string | null
           notes: string | null
           student_id: string
-          subject: string
+          subject: Database["public"]["Enums"]["subject_type"]
           submitted: boolean
           submitted_at: string | null
           teacher_id: string
@@ -147,7 +147,7 @@ export type Database = {
           next_lesson_goal?: string | null
           notes?: string | null
           student_id: string
-          subject: string
+          subject: Database["public"]["Enums"]["subject_type"]
           submitted?: boolean
           submitted_at?: string | null
           teacher_id: string
@@ -166,7 +166,7 @@ export type Database = {
           next_lesson_goal?: string | null
           notes?: string | null
           student_id?: string
-          subject?: string
+          subject?: Database["public"]["Enums"]["subject_type"]
           submitted?: boolean
           submitted_at?: string | null
           teacher_id?: string
@@ -349,7 +349,7 @@ export type Database = {
           overdue_hours: number | null
           student_id: string | null
           student_name: string | null
-          subject: string | null
+          subject: Database["public"]["Enums"]["subject_type"] | null
           teacher_id: string | null
           teacher_name: string | null
         }
@@ -379,6 +379,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "teacher"
+      subject_type: "수학" | "과학" | "영어" | "국어"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -507,6 +508,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "teacher"],
+      subject_type: ["수학", "과학", "영어", "국어"],
     },
   },
 } as const
