@@ -597,11 +597,38 @@ export default function Reports() {
                   복사
                 </Button>
               </div>
-              <ScrollArea className="h-[300px]">
+              <ScrollArea className="h-[350px]">
                 <div className="bg-muted/50 rounded-md p-4">
-                  <pre className="text-sm whitespace-pre-wrap font-sans">
-                    {previewReport?.student_message || '메시지가 없습니다. 리포트를 다시 생성해주세요.'}
-                  </pre>
+                  {previewReport?.student_message ? (
+                    <div className="text-sm space-y-3">
+                      {previewReport.student_message.split('\n').map((line, idx) => {
+                        // Subject headers get special styling
+                        if (line.startsWith('■')) {
+                          return (
+                            <div key={idx} className="font-semibold text-primary border-l-2 border-primary pl-2 mt-4 first:mt-0">
+                              {line}
+                            </div>
+                          );
+                        }
+                        // Header line
+                        if (line.startsWith('[더멘토]')) {
+                          return (
+                            <div key={idx} className="font-bold text-base mb-2">
+                              {line}
+                            </div>
+                          );
+                        }
+                        // Empty lines
+                        if (line.trim() === '') {
+                          return <div key={idx} className="h-1" />;
+                        }
+                        // Regular lines
+                        return <div key={idx}>{line}</div>;
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">메시지가 없습니다. 리포트를 다시 생성해주세요.</p>
+                  )}
                 </div>
               </ScrollArea>
             </TabsContent>
@@ -618,11 +645,46 @@ export default function Reports() {
                   복사
                 </Button>
               </div>
-              <ScrollArea className="h-[300px]">
+              <ScrollArea className="h-[350px]">
                 <div className="bg-muted/50 rounded-md p-4">
-                  <pre className="text-sm whitespace-pre-wrap font-sans">
-                    {previewReport?.parent_message || '메시지가 없습니다. 리포트를 다시 생성해주세요.'}
-                  </pre>
+                  {previewReport?.parent_message ? (
+                    <div className="text-sm space-y-2">
+                      {previewReport.parent_message.split('\n').map((line, idx) => {
+                        // Subject headers get special styling
+                        if (line.startsWith('■')) {
+                          return (
+                            <div key={idx} className="font-semibold text-primary border-l-2 border-primary pl-2 mt-4 first:mt-0 bg-primary/5 py-1 rounded-r">
+                              {line}
+                            </div>
+                          );
+                        }
+                        // Header line
+                        if (line.startsWith('[더멘토]')) {
+                          return (
+                            <div key={idx} className="font-bold text-base mb-3 pb-2 border-b border-border">
+                              {line}
+                            </div>
+                          );
+                        }
+                        // Bullet points
+                        if (line.startsWith('- ')) {
+                          return (
+                            <div key={idx} className="pl-4 text-muted-foreground">
+                              {line}
+                            </div>
+                          );
+                        }
+                        // Empty lines
+                        if (line.trim() === '') {
+                          return <div key={idx} className="h-1" />;
+                        }
+                        // Regular lines (closing message)
+                        return <div key={idx} className="mt-2">{line}</div>;
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">메시지가 없습니다. 리포트를 다시 생성해주세요.</p>
+                  )}
                 </div>
               </ScrollArea>
             </TabsContent>
