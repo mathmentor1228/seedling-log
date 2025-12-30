@@ -290,6 +290,8 @@ export type Database = {
           parent_message: string | null
           parent_sent_at: string | null
           parent_sent_status: string | null
+          principal_comment: string | null
+          principal_comment_enabled: boolean | null
           risk_level: string | null
           sent_at: string | null
           sent_by: string | null
@@ -313,6 +315,8 @@ export type Database = {
           parent_message?: string | null
           parent_sent_at?: string | null
           parent_sent_status?: string | null
+          principal_comment?: string | null
+          principal_comment_enabled?: boolean | null
           risk_level?: string | null
           sent_at?: string | null
           sent_by?: string | null
@@ -336,6 +340,8 @@ export type Database = {
           parent_message?: string | null
           parent_sent_at?: string | null
           parent_sent_status?: string | null
+          principal_comment?: string | null
+          principal_comment_enabled?: boolean | null
           risk_level?: string | null
           sent_at?: string | null
           sent_by?: string | null

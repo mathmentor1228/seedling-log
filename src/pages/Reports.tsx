@@ -37,8 +37,12 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  MessageSquare
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -63,6 +67,8 @@ interface WeeklyReport {
   student_name?: string;
   parent_phone?: string;
   student_phone?: string;
+  principal_comment?: string | null;
+  principal_comment_enabled?: boolean | null;
 }
 
 interface SendTarget {
@@ -87,6 +93,10 @@ export default function Reports() {
   const [previewReport, setPreviewReport] = useState<WeeklyReport | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [previewTab, setPreviewTab] = useState<'student' | 'parent'>('student');
+
+  // Principal comment state
+  const [principalCommentEnabled, setPrincipalCommentEnabled] = useState(false);
+  const [principalComment, setPrincipalComment] = useState('');
 
   useEffect(() => {
     fetchReports();
@@ -225,14 +235,34 @@ export default function Reports() {
 
           // Send to parent if checked
           if (target.sendParent && (report.parent_sent_status !== 'sent' || resendEnabled)) {
+            // Prepare message with optional principal comment
+            let finalParentMessage = report.parent_message || '';
+            if (principalCommentEnabled && principalComment.trim()) {
+              // Insert principal comment after comparison sentence (after second \n\n)
+              const parts = finalParentMessage.split('\n\n');
+              if (parts.length >= 2) {
+                parts.splice(2, 0, `💬 원장 코멘트: ${principalComment.trim()}`);
+                finalParentMessage = parts.join('\n\n');
+              } else {
+                finalParentMessage = finalParentMessage + `\n\n💬 원장 코멘트: ${principalComment.trim()}`;
+              }
+            }
+            
             console.log('=== 학부모 메시지 전송 (테스트 모드) ===');
             console.log('학생:', report.student_name);
             console.log('연락처:', report.parent_phone);
-            console.log('메시지:', report.parent_message);
+            console.log('메시지:', finalParentMessage);
             console.log('=====================================');
             
             updates.parent_sent_status = 'sent';
             updates.parent_sent_at = new Date().toISOString();
+            
+            // Save principal comment settings to DB
+            if (principalCommentEnabled && principalComment.trim()) {
+              updates.principal_comment = principalComment.trim();
+              updates.principal_comment_enabled = true;
+            }
+            
             parentSentCount++;
           }
 
@@ -354,6 +384,42 @@ export default function Reports() {
               <strong>현재는 테스트 모드입니다.</strong> 실제 발송은 되지 않습니다. 
               전송 시 DB 상태만 업데이트됩니다.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Principal Comment Section */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                <Label htmlFor="principal-toggle" className="font-medium cursor-pointer">
+                  원장 코멘트 포함
+                </Label>
+              </div>
+              <Switch
+                id="principal-toggle"
+                checked={principalCommentEnabled}
+                onCheckedChange={setPrincipalCommentEnabled}
+              />
+            </div>
+            {principalCommentEnabled && (
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="학부모 메시지에 추가할 원장 코멘트를 입력하세요 (최대 120자)"
+                  value={principalComment}
+                  onChange={(e) => setPrincipalComment(e.target.value.slice(0, 120))}
+                  maxLength={120}
+                  rows={2}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground text-right">
+                  {principalComment.length}/120자
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -639,7 +705,20 @@ export default function Reports() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => previewReport?.parent_message && copyToClipboard(previewReport.parent_message)}
+                  onClick={() => {
+                    let msg = previewReport?.parent_message || '';
+                    // Include principal comment in copied message
+                    if (principalCommentEnabled && principalComment.trim()) {
+                      const parts = msg.split('\n\n');
+                      if (parts.length >= 2) {
+                        parts.splice(2, 0, `💬 원장 코멘트: ${principalComment.trim()}`);
+                        msg = parts.join('\n\n');
+                      } else {
+                        msg = msg + `\n\n💬 원장 코멘트: ${principalComment.trim()}`;
+                      }
+                    }
+                    copyToClipboard(msg);
+                  }}
                 >
                   <Copy className="h-4 w-4 mr-2" />
                   복사
@@ -649,38 +728,67 @@ export default function Reports() {
                 <div className="bg-muted/50 rounded-md p-4">
                   {previewReport?.parent_message ? (
                     <div className="text-sm space-y-2">
-                      {previewReport.parent_message.split('\n').map((line, idx) => {
-                        // Subject headers get special styling
-                        if (line.startsWith('■')) {
-                          return (
-                            <div key={idx} className="font-semibold text-primary border-l-2 border-primary pl-2 mt-4 first:mt-0 bg-primary/5 py-1 rounded-r">
-                              {line}
-                            </div>
-                          );
+                      {(() => {
+                        // Prepare message with principal comment for preview
+                        let msgToRender = previewReport.parent_message;
+                        if (principalCommentEnabled && principalComment.trim()) {
+                          const parts = msgToRender.split('\n\n');
+                          if (parts.length >= 2) {
+                            parts.splice(2, 0, `💬 원장 코멘트: ${principalComment.trim()}`);
+                            msgToRender = parts.join('\n\n');
+                          } else {
+                            msgToRender = msgToRender + `\n\n💬 원장 코멘트: ${principalComment.trim()}`;
+                          }
                         }
-                        // Header line
-                        if (line.startsWith('[더멘토]')) {
-                          return (
-                            <div key={idx} className="font-bold text-base mb-3 pb-2 border-b border-border">
-                              {line}
-                            </div>
-                          );
-                        }
-                        // Bullet points
-                        if (line.startsWith('- ')) {
-                          return (
-                            <div key={idx} className="pl-4 text-muted-foreground">
-                              {line}
-                            </div>
-                          );
-                        }
-                        // Empty lines
-                        if (line.trim() === '') {
-                          return <div key={idx} className="h-1" />;
-                        }
-                        // Regular lines (closing message)
-                        return <div key={idx} className="mt-2">{line}</div>;
-                      })}
+                        return msgToRender.split('\n').map((line, idx) => {
+                          // Principal comment styling
+                          if (line.startsWith('💬 원장 코멘트:')) {
+                            return (
+                              <div key={idx} className="bg-blue-500/10 border border-blue-500/30 rounded-md p-3 my-2">
+                                <span className="font-medium text-blue-600 dark:text-blue-400">{line}</span>
+                              </div>
+                            );
+                          }
+                          // Comparison sentence styling (emoji prefixed lines after header)
+                          if (line.startsWith('📈') || line.startsWith('📊') || line.startsWith('📋')) {
+                            return (
+                              <div key={idx} className="bg-secondary/50 rounded-md p-2 my-2 text-sm">
+                                {line}
+                              </div>
+                            );
+                          }
+                          // Subject headers get special styling
+                          if (line.startsWith('■')) {
+                            return (
+                              <div key={idx} className="font-semibold text-primary border-l-2 border-primary pl-2 mt-4 first:mt-0 bg-primary/5 py-1 rounded-r">
+                                {line}
+                              </div>
+                            );
+                          }
+                          // Header line
+                          if (line.startsWith('[더멘토]')) {
+                            return (
+                              <div key={idx} className="font-bold text-base mb-3 pb-2 border-b border-border">
+                                {line}
+                              </div>
+                            );
+                          }
+                          // Bullet points
+                          if (line.startsWith('- ')) {
+                            return (
+                              <div key={idx} className="pl-4 text-muted-foreground">
+                                {line}
+                              </div>
+                            );
+                          }
+                          // Empty lines
+                          if (line.trim() === '') {
+                            return <div key={idx} className="h-1" />;
+                          }
+                          // Regular lines (closing message)
+                          return <div key={idx} className="mt-2">{line}</div>;
+                        });
+                      })()}
                     </div>
                   ) : (
                     <p className="text-muted-foreground">메시지가 없습니다. 리포트를 다시 생성해주세요.</p>
