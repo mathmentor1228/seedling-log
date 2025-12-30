@@ -9,6 +9,7 @@ import {
   BookOpen, 
   ClipboardList, 
   FileBarChart,
+  Send,
   LogOut,
   Menu,
   X,
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { label: 'Classes', href: '/classes', icon: <BookOpen className="w-5 h-5" />, adminOnly: true },
   { label: 'Lesson Records', href: '/lessons', icon: <ClipboardList className="w-5 h-5" /> },
   { label: 'Weekly Reports', href: '/reports', icon: <FileBarChart className="w-5 h-5" />, adminOnly: true },
+  { label: 'Send Reports', href: '/reports/send', icon: <Send className="w-5 h-5" />, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
