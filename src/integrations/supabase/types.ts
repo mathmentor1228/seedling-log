@@ -341,7 +341,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      overdue_lesson_drafts: {
+        Row: {
+          draft_created_at: string | null
+          id: string | null
+          lesson_date: string | null
+          overdue_hours: number | null
+          student_id: string | null
+          student_name: string | null
+          subject: string | null
+          teacher_id: string | null
+          teacher_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_records_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       generate_weekly_reports: {
