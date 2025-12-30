@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance: {
+        Row: {
+          att_date: string
+          created_at: string
+          id: string
+          note: string | null
+          status: string
+          student_id: string
+        }
+        Insert: {
+          att_date: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          status: string
+          student_id: string
+        }
+        Update: {
+          att_date?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          status?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_students: {
         Row: {
           class_id: string
@@ -178,7 +213,11 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          parent_phone: string | null
           phone: string | null
+          school: string | null
+          status: string | null
+          student_phone: string | null
           updated_at: string
         }
         Insert: {
@@ -188,7 +227,11 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          parent_phone?: string | null
           phone?: string | null
+          school?: string | null
+          status?: string | null
+          student_phone?: string | null
           updated_at?: string
         }
         Update: {
@@ -198,7 +241,11 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          parent_phone?: string | null
           phone?: string | null
+          school?: string | null
+          status?: string | null
+          student_phone?: string | null
           updated_at?: string
         }
         Relationships: []
