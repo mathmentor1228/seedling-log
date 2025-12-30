@@ -19,7 +19,7 @@ import {
   FileEdit,
   CheckSquare
 } from 'lucide-react';
-import { format, subDays } from 'date-fns';
+import { format, subDays, startOfDay } from 'date-fns';
 
 interface PendingHomework {
   id: string;
@@ -94,103 +94,107 @@ export default function Dashboard() {
 
       try {
         const weekAgo = subDays(new Date(), 7);
-        const tenDaysAgo = subDays(new Date(), 10);
+        // Use 7 days for assistants, 10 days for others
+        const homeworkDaysAgo = role === 'assistant' ? subDays(new Date(), 7) : subDays(new Date(), 10);
 
-        // Fetch students count
-        const { count: studentsCount } = await supabase
-          .from('students')
-          .select('*', { count: 'exact', head: true });
+        // Assistants have minimal access - only fetch homework and basic stats
+        if (role !== 'assistant') {
+          // Fetch students count
+          const { count: studentsCount } = await supabase
+            .from('students')
+            .select('*', { count: 'exact', head: true });
 
-        // Fetch classes count
-        const { count: classesCount } = await supabase
-          .from('classes')
-          .select('*', { count: 'exact', head: true });
+          // Fetch classes count
+          const { count: classesCount } = await supabase
+            .from('classes')
+            .select('*', { count: 'exact', head: true });
 
-        // Fetch lessons this week
-        let lessonsQuery = supabase
-          .from('lesson_records')
-          .select('*', { count: 'exact' })
-          .gte('lesson_date', format(weekAgo, 'yyyy-MM-dd'));
+          // Fetch lessons this week
+          let lessonsQuery = supabase
+            .from('lesson_records')
+            .select('*', { count: 'exact' })
+            .gte('lesson_date', format(weekAgo, 'yyyy-MM-dd'));
 
-        if (role === 'teacher') {
-          lessonsQuery = lessonsQuery.eq('teacher_id', user.id);
+          if (role === 'teacher') {
+            lessonsQuery = lessonsQuery.eq('teacher_id', user.id);
+          }
+
+          const { count: lessonsCount, data: lessonsData } = await lessonsQuery;
+
+          // Calculate average understanding
+          const avgScore = lessonsData?.length 
+            ? lessonsData.reduce((sum, l) => sum + l.understanding_score, 0) / lessonsData.length
+            : 0;
+
+          // Fetch recent lessons with student names
+          let recentQuery = supabase
+            .from('lesson_records')
+            .select(`
+              id,
+              subject,
+              understanding_score,
+              lesson_date,
+              students:student_id (name)
+            `)
+            .order('lesson_date', { ascending: false })
+            .limit(5);
+
+          if (role === 'teacher') {
+            recentQuery = recentQuery.eq('teacher_id', user.id);
+          }
+
+          const { data: recentData } = await recentQuery;
+
+          // Fetch weekly reports for at-risk students
+          const { data: reportsData } = await supabase
+            .from('weekly_reports')
+            .select(`
+              id,
+              risk_level,
+              avg_understanding,
+              students:student_id (id, name)
+            `)
+            .in('risk_level', ['medium', 'high'])
+            .order('generated_at', { ascending: false })
+            .limit(5);
+
+          const highRisk = reportsData?.filter(r => r.risk_level === 'high').length || 0;
+
+          setStats({
+            totalStudents: studentsCount || 0,
+            totalClasses: classesCount || 0,
+            lessonsThisWeek: lessonsCount || 0,
+            avgUnderstanding: Math.round(avgScore * 10) / 10,
+            highRiskStudents: highRisk,
+          });
+
+          setRecentLessons(
+            (recentData || []).map((l: any) => ({
+              id: l.id,
+              student_name: l.students?.name || 'Unknown',
+              subject: l.subject,
+              understanding_score: l.understanding_score,
+              lesson_date: l.lesson_date,
+            }))
+          );
+
+          setAtRiskStudents(
+            (reportsData || []).map((r: any) => ({
+              id: r.students?.id || r.id,
+              name: r.students?.name || 'Unknown',
+              risk_level: r.risk_level as 'low' | 'medium' | 'high',
+              avg_score: Number(r.avg_understanding) || 0,
+            }))
+          );
+
+          // Fetch overdue drafts for admin
+          if (role === 'admin') {
+            await fetchOverdueDrafts();
+          }
         }
 
-        const { count: lessonsCount, data: lessonsData } = await lessonsQuery;
-
-        // Calculate average understanding
-        const avgScore = lessonsData?.length 
-          ? lessonsData.reduce((sum, l) => sum + l.understanding_score, 0) / lessonsData.length
-          : 0;
-
-        // Fetch recent lessons with student names
-        let recentQuery = supabase
-          .from('lesson_records')
-          .select(`
-            id,
-            subject,
-            understanding_score,
-            lesson_date,
-            students:student_id (name)
-          `)
-          .order('lesson_date', { ascending: false })
-          .limit(5);
-
-        if (role === 'teacher') {
-          recentQuery = recentQuery.eq('teacher_id', user.id);
-        }
-
-        const { data: recentData } = await recentQuery;
-
-        // Fetch weekly reports for at-risk students
-        const { data: reportsData } = await supabase
-          .from('weekly_reports')
-          .select(`
-            id,
-            risk_level,
-            avg_understanding,
-            students:student_id (id, name)
-          `)
-          .in('risk_level', ['medium', 'high'])
-          .order('generated_at', { ascending: false })
-          .limit(5);
-
-        const highRisk = reportsData?.filter(r => r.risk_level === 'high').length || 0;
-
-        setStats({
-          totalStudents: studentsCount || 0,
-          totalClasses: classesCount || 0,
-          lessonsThisWeek: lessonsCount || 0,
-          avgUnderstanding: Math.round(avgScore * 10) / 10,
-          highRiskStudents: highRisk,
-        });
-
-        setRecentLessons(
-          (recentData || []).map((l: any) => ({
-            id: l.id,
-            student_name: l.students?.name || 'Unknown',
-            subject: l.subject,
-            understanding_score: l.understanding_score,
-            lesson_date: l.lesson_date,
-          }))
-        );
-
-        setAtRiskStudents(
-          (reportsData || []).map((r: any) => ({
-            id: r.students?.id || r.id,
-            name: r.students?.name || 'Unknown',
-            risk_level: r.risk_level as 'low' | 'medium' | 'high',
-            avg_score: Number(r.avg_understanding) || 0,
-          }))
-        );
-
-        // Fetch overdue drafts for admin
-        if (role === 'admin') {
-          await fetchOverdueDrafts();
-        }
-
-        // Fetch pending homework (unchecked within last 10 days)
-        // RLS handles teacher filtering automatically
+        // Fetch pending homework (unchecked)
+        // RLS handles filtering: admin/assistant see all, teacher sees only their students
         const { data: homeworkData } = await supabase
           .from('homework_assignments')
           .select(`
@@ -202,7 +206,7 @@ export default function Dashboard() {
             students:student_id (name)
           `)
           .eq('check_status', 'unchecked')
-          .gte('assigned_date', format(tenDaysAgo, 'yyyy-MM-dd'))
+          .gte('assigned_date', format(homeworkDaysAgo, 'yyyy-MM-dd'))
           .order('assigned_date', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(20);
@@ -293,46 +297,50 @@ export default function Dashboard() {
         <p className="text-muted-foreground mt-1">
           {role === 'admin' 
             ? '학원 전체 현황을 한눈에 확인하세요' 
+            : role === 'assistant'
+            ? '숙제 확인 현황'
             : '나의 수업 현황'}
         </p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {role === 'admin' && (
-          <>
-            <StatCard
-              title="전체 학생"
-              value={stats.totalStudents}
-              icon={<Users className="w-6 h-6" />}
-            />
-            <StatCard
-              title="활성 클래스"
-              value={stats.totalClasses}
-              icon={<BookOpen className="w-6 h-6" />}
-            />
-          </>
-        )}
-        <StatCard
-          title="이번 주 수업"
-          value={stats.lessonsThisWeek}
-          icon={<ClipboardList className="w-6 h-6" />}
-        />
-        <StatCard
-          title="평균 이해도"
-          value={stats.avgUnderstanding || '-'}
-          subtitle="5점 만점"
-          icon={<TrendingUp className="w-6 h-6" />}
-        />
-        {role === 'admin' && (
+      {/* Stats Grid - Hidden for assistants */}
+      {role !== 'assistant' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {role === 'admin' && (
+            <>
+              <StatCard
+                title="전체 학생"
+                value={stats.totalStudents}
+                icon={<Users className="w-6 h-6" />}
+              />
+              <StatCard
+                title="활성 클래스"
+                value={stats.totalClasses}
+                icon={<BookOpen className="w-6 h-6" />}
+              />
+            </>
+          )}
           <StatCard
-            title="고위험 학생"
-            value={stats.highRiskStudents}
-            icon={<AlertTriangle className="w-6 h-6" />}
-            className={stats.highRiskStudents > 0 ? 'border-destructive/30' : ''}
+            title="이번 주 수업"
+            value={stats.lessonsThisWeek}
+            icon={<ClipboardList className="w-6 h-6" />}
           />
-        )}
-      </div>
+          <StatCard
+            title="평균 이해도"
+            value={stats.avgUnderstanding || '-'}
+            subtitle="5점 만점"
+            icon={<TrendingUp className="w-6 h-6" />}
+          />
+          {role === 'admin' && (
+            <StatCard
+              title="고위험 학생"
+              value={stats.highRiskStudents}
+              icon={<AlertTriangle className="w-6 h-6" />}
+              className={stats.highRiskStudents > 0 ? 'border-destructive/30' : ''}
+            />
+          )}
+        </div>
+      )}
 
       {/* Overdue Drafts Section - Admin Only */}
       {role === 'admin' && totalOverdueDrafts > 0 && (
@@ -421,76 +429,78 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Lessons */}
-        <Card className="animate-slide-up">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-primary" />
-              최근 수업
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentLessons.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">최근 수업이 없습니다</p>
-            ) : (
-              <div className="space-y-3">
-                {recentLessons.map((lesson) => (
-                  <div
-                    key={lesson.id}
-                    className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">{lesson.student_name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {lesson.subject} • {format(new Date(lesson.lesson_date), 'MM/dd')}
-                      </p>
-                    </div>
-                    <ScoreBadge score={lesson.understanding_score} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* At Risk Students - Admin Only */}
-        {role === 'admin' && (
-          <Card className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+      {/* Content Grid - Hidden for assistants */}
+      {role !== 'assistant' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Lessons */}
+          <Card className="animate-slide-up">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-500" />
-                주의가 필요한 학생
+                <Calendar className="w-5 h-5 text-primary" />
+                최근 수업
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {atRiskStudents.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  위험 학생이 없습니다
-                </p>
+              {recentLessons.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">최근 수업이 없습니다</p>
               ) : (
                 <div className="space-y-3">
-                  {atRiskStudents.map((student) => (
+                  {recentLessons.map((lesson) => (
                     <div
-                      key={student.id}
+                      key={lesson.id}
                       className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
                     >
                       <div>
-                        <p className="font-medium text-foreground">{student.name}</p>
+                        <p className="font-medium text-foreground">{lesson.student_name}</p>
                         <p className="text-sm text-muted-foreground">
-                          평균 점수: {student.avg_score.toFixed(1)}
+                          {lesson.subject} • {format(new Date(lesson.lesson_date), 'MM/dd')}
                         </p>
                       </div>
-                      <RiskBadge level={student.risk_level} />
+                      <ScoreBadge score={lesson.understanding_score} />
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
-        )}
-      </div>
+
+          {/* At Risk Students - Admin Only */}
+          {role === 'admin' && (
+            <Card className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  주의가 필요한 학생
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {atRiskStudents.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    위험 학생이 없습니다
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {atRiskStudents.map((student) => (
+                      <div
+                        key={student.id}
+                        className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
+                      >
+                        <div>
+                          <p className="font-medium text-foreground">{student.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            평균 점수: {student.avg_score.toFixed(1)}
+                          </p>
+                        </div>
+                        <RiskBadge level={student.risk_level} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }

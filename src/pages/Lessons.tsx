@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck } from 'lucide-react';
 import { format } from 'date-fns';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
@@ -79,6 +79,12 @@ interface LessonRecord {
   submitted: boolean;
   submitted_at: string | null;
   draft_created_at: string;
+  // Test fields
+  test_name?: string | null;
+  test_result_text?: string | null;
+  test_result?: 'pass' | 'fail' | 'none';
+  test_notes?: string | null;
+  test_date?: string | null;
 }
 
 interface Student {
@@ -241,6 +247,18 @@ export default function Lessons() {
   // New homework state
   const [newHomeworkContent, setNewHomeworkContent] = useState('');
 
+  // Test fields state
+  const [testFormData, setTestFormData] = useState({
+    test_name: '',
+    test_result_text: '',
+    test_result: 'none' as 'pass' | 'fail' | 'none',
+    test_notes: '',
+    test_date: '',
+  });
+  const [isSavingTestFields, setIsSavingTestFields] = useState(false);
+
+  // Check if user is assistant (can only update test fields and homework check)
+  const isAssistant = role === 'assistant';
   useEffect(() => {
     fetchLessons();
     fetchStudents();
@@ -603,6 +621,13 @@ export default function Lessons() {
     setHomeworkCheckResult('');
     setHomeworkCheckNotes('');
     setNewHomeworkContent('');
+    setTestFormData({
+      test_name: '',
+      test_result_text: '',
+      test_result: 'none',
+      test_notes: '',
+      test_date: '',
+    });
   };
 
   // Fetch previous homework when student_id and subject change
@@ -709,6 +734,58 @@ export default function Lessons() {
     }
   };
 
+  // Save test fields (uses RPC for assistant role)
+  const handleSaveTestFields = async () => {
+    if (!editingLesson?.id || !user) return;
+
+    setIsSavingTestFields(true);
+    try {
+      // Use RPC for assistants (security definer function)
+      if (isAssistant) {
+        const { error } = await supabase.rpc('update_lesson_test_fields', {
+          _lesson_id: editingLesson.id,
+          _test_name: testFormData.test_name || null,
+          _test_result_text: testFormData.test_result_text || null,
+          _test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
+          _test_notes: testFormData.test_notes || null,
+          _test_date: testFormData.test_date || null,
+        });
+
+        if (error) throw error;
+      } else {
+        // Direct update for teachers/admins
+        const { error } = await supabase
+          .from('lesson_records')
+          .update({
+            test_name: testFormData.test_name || null,
+            test_result_text: testFormData.test_result_text || null,
+            test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
+            test_notes: testFormData.test_notes || null,
+            test_date: testFormData.test_date || null,
+          })
+          .eq('id', editingLesson.id);
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: '저장 완료',
+        description: '테스트 결과가 저장되었습니다',
+      });
+
+      fetchLessons();
+    } catch (error: any) {
+      console.error('Error saving test fields:', error);
+      toast({
+        title: '오류',
+        description: error.message || '테스트 결과 저장에 실패했습니다',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingTestFields(false);
+    }
+  };
+
   const handleOpenNewForm = async () => {
     setEditingLesson(null);
     resetForm();
@@ -735,6 +812,14 @@ export default function Lessons() {
       learning_issues: lesson.learning_issues || [],
       next_lesson_goal: lesson.next_lesson_goal || '',
       notes: lesson.notes || '',
+    });
+    // Set test form data from lesson
+    setTestFormData({
+      test_name: lesson.test_name || '',
+      test_result_text: lesson.test_result_text || '',
+      test_result: lesson.test_result || 'none',
+      test_notes: lesson.test_notes || '',
+      test_date: lesson.test_date || lesson.lesson_date,
     });
     setIsDialogOpen(true);
   };
@@ -935,12 +1020,14 @@ export default function Lessons() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Main form fields - disabled for assistants */}
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAssistant ? 'opacity-60 pointer-events-none' : ''}`}>
                 <div className="space-y-2">
                   <Label htmlFor="student">학생 *</Label>
                   <Select
                     value={formData.student_id}
                     onValueChange={(value) => setFormData({ ...formData, student_id: value })}
+                    disabled={isAssistant}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="학생 선택" />
@@ -959,6 +1046,7 @@ export default function Lessons() {
                   <Select
                     value={formData.class_id}
                     onValueChange={(value) => setFormData({ ...formData, class_id: value })}
+                    disabled={isAssistant}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="클래스 선택" />
@@ -974,121 +1062,121 @@ export default function Lessons() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="subject">과목 *</Label>
-                  <Select
-                    value={formData.subject}
-                    onValueChange={(value) => {
-                      const newSubject = SUBJECT_VALUES.includes(value as SubjectType)
-                        ? (value as SubjectType)
-                        : '수학';
-                      
-                      // If subject is being changed and there are selected learning issues, show confirmation
-                      if (formData.subject && formData.subject !== newSubject && formData.learning_issues.length > 0) {
-                        setPendingSubject(newSubject);
-                        setShowSubjectChangeDialog(true);
-                      } else {
-                        // No confirmation needed - just change the subject
-                        setFormData({ ...formData, subject: newSubject, learning_issues: [] });
-                        setLastSelectedSubject(user?.id, newSubject);
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="cursor-pointer bg-secondary/50 border-2 border-input hover:border-primary/50 focus:border-primary transition-colors">
-                      <SelectValue placeholder="과목 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SUBJECTS.map((subject) => (
-                        <SelectItem key={subject.value} value={subject.value}>
-                          {subject.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">수학/과학/영어/국어 중 선택</p>
+              {/* Instructional fields - disabled for assistants */}
+              <div className={`space-y-4 ${isAssistant ? 'opacity-60 pointer-events-none' : ''}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="subject">과목 *</Label>
+                    <Select
+                      value={formData.subject}
+                      onValueChange={(value) => {
+                        const newSubject = SUBJECT_VALUES.includes(value as SubjectType)
+                          ? (value as SubjectType)
+                          : '수학';
+                        if (formData.subject && formData.subject !== newSubject && formData.learning_issues.length > 0) {
+                          setPendingSubject(newSubject);
+                          setShowSubjectChangeDialog(true);
+                        } else {
+                          setFormData({ ...formData, subject: newSubject, learning_issues: [] });
+                          setLastSelectedSubject(user?.id, newSubject);
+                        }
+                      }}
+                      disabled={isAssistant}
+                    >
+                      <SelectTrigger className="cursor-pointer bg-secondary/50 border-2 border-input hover:border-primary/50 focus:border-primary transition-colors">
+                        <SelectValue placeholder="과목 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUBJECTS.map((subject) => (
+                          <SelectItem key={subject.value} value={subject.value}>
+                            {subject.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">수학/과학/영어/국어 중 선택</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lesson_date">수업 날짜 *</Label>
+                    <Input
+                      id="lesson_date"
+                      type="date"
+                      value={formData.lesson_date}
+                      onChange={(e) => setFormData({ ...formData, lesson_date: e.target.value })}
+                      required
+                      disabled={isAssistant}
+                    />
+                  </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="lesson_date">수업 날짜 *</Label>
+                  <Label htmlFor="lesson_range">수업 범위/내용 *</Label>
                   <Input
-                    id="lesson_date"
-                    type="date"
-                    value={formData.lesson_date}
-                    onChange={(e) => setFormData({ ...formData, lesson_date: e.target.value })}
+                    id="lesson_range"
+                    value={formData.lesson_range}
+                    onChange={(e) => setFormData({ ...formData, lesson_range: e.target.value })}
+                    placeholder="예: 5장 이차방정식 (120-135페이지)"
                     required
+                    disabled={isAssistant}
                   />
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="lesson_range">수업 범위/내용 *</Label>
-                <Input
-                  id="lesson_range"
-                  value={formData.lesson_range}
-                  onChange={(e) => setFormData({ ...formData, lesson_range: e.target.value })}
-                  placeholder="예: 5장 이차방정식 (120-135페이지)"
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>이해도 (1-5) *</Label>
+                    <Select
+                      value={formData.understanding_score}
+                      onValueChange={(value) => setFormData({ ...formData, understanding_score: value })}
+                      disabled={isAssistant}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5].map((score) => (
+                          <SelectItem key={score} value={score.toString()}>
+                            {score} - {score === 1 ? '매우 낮음' : score === 2 ? '낮음' : score === 3 ? '보통' : score === 4 ? '높음' : '매우 높음'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>숙제 상태 *</Label>
+                    <Select
+                      value={formData.homework_status}
+                      onValueChange={(value) => setFormData({ ...formData, homework_status: value })}
+                      disabled={isAssistant}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {HOMEWORK_STATUS.map((status) => (
+                          <SelectItem key={status.value} value={status.value}>
+                            {status.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>이해도 (1-5) *</Label>
-                  <Select
-                    value={formData.understanding_score}
-                    onValueChange={(value) => setFormData({ ...formData, understanding_score: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[1, 2, 3, 4, 5].map((score) => (
-                        <SelectItem key={score} value={score.toString()}>
-                          {score} - {score === 1 ? '매우 낮음' : score === 2 ? '낮음' : score === 3 ? '보통' : score === 4 ? '높음' : '매우 높음'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>학습 이슈 (해당 항목 선택)</Label>
+                  <div className="grid grid-cols-2 gap-2 p-4 bg-secondary/50 rounded-lg">
+                    {getLearningIssuesForSubject(formData.subject as SubjectType).map((issue) => (
+                      <div key={issue} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={issue}
+                          checked={formData.learning_issues.includes(issue)}
+                          onCheckedChange={() => toggleIssue(issue)}
+                          disabled={isAssistant}
+                        />
+                        <label htmlFor={issue} className="text-sm cursor-pointer">{issue}</label>
+                      </div>
+                    ))}
+                  </div>
+                  {!formData.subject && (
+                    <p className="text-xs text-muted-foreground">과목을 먼저 선택하세요</p>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label>숙제 상태 *</Label>
-                  <Select
-                    value={formData.homework_status}
-                    onValueChange={(value) => setFormData({ ...formData, homework_status: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {HOMEWORK_STATUS.map((status) => (
-                        <SelectItem key={status.value} value={status.value}>
-                          {status.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>학습 이슈 (해당 항목 선택)</Label>
-                <div className="grid grid-cols-2 gap-2 p-4 bg-secondary/50 rounded-lg">
-                  {getLearningIssuesForSubject(formData.subject as SubjectType).map((issue) => (
-                    <div key={issue} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={issue}
-                        checked={formData.learning_issues.includes(issue)}
-                        onCheckedChange={() => toggleIssue(issue)}
-                      />
-                      <label htmlFor={issue} className="text-sm cursor-pointer">
-                        {issue}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-                {!formData.subject && (
-                  <p className="text-xs text-muted-foreground">과목을 먼저 선택하세요</p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -1112,44 +1200,158 @@ export default function Lessons() {
                 />
               </div>
 
-              {/* 이번 숙제 Section */}
-              <div className="space-y-2 p-4 rounded-lg border-2 border-secondary bg-secondary/30">
-                <Label htmlFor="new_homework" className="text-base font-semibold">이번 숙제</Label>
-                <Textarea
-                  id="new_homework"
-                  value={newHomeworkContent}
-                  onChange={(e) => setNewHomeworkContent(e.target.value)}
-                  placeholder="이번 수업에서 배정할 숙제 내용을 입력하세요"
-                  rows={2}
-                  className="text-sm"
-                />
-                <p className="text-xs text-muted-foreground">
-                  제출 시 숙제가 자동으로 저장됩니다
-                </p>
-              </div>
+              {/* 테스트/결과 Section - Only shown when editing */}
+              {editingLesson && (
+                <div className="space-y-3 p-4 rounded-lg border-2 border-amber-500/20 bg-amber-500/5">
+                  <div className="flex items-center gap-2">
+                    <ClipboardCheck className="w-5 h-5 text-amber-600" />
+                    <Label className="text-base font-semibold">테스트/결과</Label>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="test_name" className="text-sm">테스트 이름</Label>
+                      <Input
+                        id="test_name"
+                        value={testFormData.test_name}
+                        onChange={(e) => setTestFormData({ ...testFormData, test_name: e.target.value })}
+                        placeholder="예: 1단원 테스트"
+                        className="text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="test_date" className="text-sm">테스트 날짜</Label>
+                      <Input
+                        id="test_date"
+                        type="date"
+                        value={testFormData.test_date}
+                        onChange={(e) => setTestFormData({ ...testFormData, test_date: e.target.value })}
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="test_result_text" className="text-sm">결과 (자유형식)</Label>
+                    <Input
+                      id="test_result_text"
+                      value={testFormData.test_result_text}
+                      onChange={(e) => setTestFormData({ ...testFormData, test_result_text: e.target.value })}
+                      placeholder="예: 18/25, 10문제 중 7개"
+                      className="text-sm"
+                    />
+                  </div>
+
+                  {/* Pass/Fail - Only for English subject */}
+                  {formData.subject === '영어' && (
+                    <div className="space-y-1">
+                      <Label className="text-sm">통과 여부 (영어 전용)</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={testFormData.test_result === 'pass' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setTestFormData({ ...testFormData, test_result: 'pass' })}
+                          className="gap-1"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          통과
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={testFormData.test_result === 'fail' ? 'destructive' : 'outline'}
+                          size="sm"
+                          onClick={() => setTestFormData({ ...testFormData, test_result: 'fail' })}
+                          className="gap-1"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          불통과
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={testFormData.test_result === 'none' ? 'secondary' : 'outline'}
+                          size="sm"
+                          onClick={() => setTestFormData({ ...testFormData, test_result: 'none' })}
+                          className="gap-1"
+                        >
+                          해당없음
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <Label htmlFor="test_notes" className="text-sm">테스트 메모</Label>
+                    <Textarea
+                      id="test_notes"
+                      value={testFormData.test_notes}
+                      onChange={(e) => setTestFormData({ ...testFormData, test_notes: e.target.value })}
+                      placeholder="테스트 관련 메모"
+                      rows={2}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSaveTestFields}
+                    disabled={isSavingTestFields}
+                    className="w-full"
+                  >
+                    {isSavingTestFields && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                    <CheckCircle2 className="w-4 h-4 mr-1" />
+                    테스트 결과 저장
+                  </Button>
+                </div>
+              )}
+
+              {/* 이번 숙제 Section - Hidden for assistants */}
+              {!isAssistant && (
+                <div className="space-y-2 p-4 rounded-lg border-2 border-secondary bg-secondary/30">
+                  <Label htmlFor="new_homework" className="text-base font-semibold">이번 숙제</Label>
+                  <Textarea
+                    id="new_homework"
+                    value={newHomeworkContent}
+                    onChange={(e) => setNewHomeworkContent(e.target.value)}
+                    placeholder="이번 수업에서 배정할 숙제 내용을 입력하세요"
+                    rows={2}
+                    className="text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    제출 시 숙제가 자동으로 저장됩니다
+                  </p>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-4">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => handleDialogClose(false)}
                 >
-                  취소
+                  {isAssistant ? '닫기' : '취소'}
                 </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleSaveDraft}
-                  disabled={isSavingDraft || isSubmitting}
-                >
-                  {isSavingDraft && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  <Save className="w-4 h-4 mr-2" />
-                  임시저장
-                </Button>
-                <Button type="submit" disabled={isSubmitting || isSavingDraft}>
-                  {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  <Send className="w-4 h-4 mr-2" />
-                  제출
-                </Button>
+                {/* Hide draft/submit buttons for assistants */}
+                {!isAssistant && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleSaveDraft}
+                      disabled={isSavingDraft || isSubmitting}
+                    >
+                      {isSavingDraft && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      <Save className="w-4 h-4 mr-2" />
+                      임시저장
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting || isSavingDraft}>
+                      {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      <Send className="w-4 h-4 mr-2" />
+                      제출
+                    </Button>
+                  </>
+                )}
               </div>
             </form>
           </DialogContent>
