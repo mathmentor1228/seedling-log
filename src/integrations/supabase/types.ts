@@ -115,6 +115,73 @@ export type Database = {
         }
         Relationships: []
       }
+      homework_assignments: {
+        Row: {
+          assigned_date: string
+          check_status: string
+          checked_at: string | null
+          checked_by: string | null
+          content: string
+          created_at: string | null
+          id: string
+          lesson_record_id: string | null
+          notes: string | null
+          result: string | null
+          student_id: string
+          subject: Database["public"]["Enums"]["subject_type"]
+        }
+        Insert: {
+          assigned_date?: string
+          check_status?: string
+          checked_at?: string | null
+          checked_by?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          lesson_record_id?: string | null
+          notes?: string | null
+          result?: string | null
+          student_id: string
+          subject: Database["public"]["Enums"]["subject_type"]
+        }
+        Update: {
+          assigned_date?: string
+          check_status?: string
+          checked_at?: string | null
+          checked_by?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          lesson_record_id?: string | null
+          notes?: string | null
+          result?: string | null
+          student_id?: string
+          subject?: Database["public"]["Enums"]["subject_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "homework_assignments_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "homework_assignments_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_lesson_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "homework_assignments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lesson_records: {
         Row: {
           class_id: string | null

@@ -42,10 +42,25 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
+
+interface HomeworkAssignment {
+  id: string;
+  student_id: string;
+  subject: SubjectType;
+  lesson_record_id: string | null;
+  assigned_date: string;
+  content: string;
+  check_status: 'unchecked' | 'checked';
+  result: 'completed' | 'partial' | 'not_done' | 'unable_to_verify' | null;
+  checked_by: string | null;
+  checked_at: string | null;
+  notes: string | null;
+  checker_name?: string;
+}
 
 interface LessonRecord {
   id: string;
@@ -156,6 +171,33 @@ const HOMEWORK_STATUS = [
   { value: 'none_assigned', label: '미배정' },
 ];
 
+// Homework result options
+const HOMEWORK_RESULT_OPTIONS = [
+  { value: 'completed', label: '완료', icon: CheckCircle2, color: 'text-green-600' },
+  { value: 'partial', label: '부분', icon: Clock, color: 'text-amber-600' },
+  { value: 'not_done', label: '미완', icon: XCircle, color: 'text-red-600' },
+  { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle, color: 'text-muted-foreground' },
+];
+
+function getHomeworkStatusBadge(homework: HomeworkAssignment | null) {
+  if (!homework) return null;
+  
+  if (homework.check_status === 'unchecked') {
+    return <Badge variant="outline" className="border-amber-500/50 text-amber-600"><AlertCircle className="w-3 h-3 mr-1" />미확인</Badge>;
+  }
+  
+  const option = HOMEWORK_RESULT_OPTIONS.find(o => o.value === homework.result);
+  if (!option) return null;
+  
+  const Icon = option.icon;
+  const colorClass = homework.result === 'completed' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                     homework.result === 'partial' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                     homework.result === 'not_done' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                     'bg-muted text-muted-foreground';
+  
+  return <Badge variant="outline" className={colorClass}><Icon className="w-3 h-3 mr-1" />{option.label}</Badge>;
+}
+
 export default function Lessons() {
   const { user, role } = useAuth();
   const [lessons, setLessons] = useState<LessonRecord[]>([]);
@@ -186,6 +228,16 @@ export default function Lessons() {
   // Subject change confirmation dialog state
   const [pendingSubject, setPendingSubject] = useState<SubjectType | null>(null);
   const [showSubjectChangeDialog, setShowSubjectChangeDialog] = useState(false);
+  
+  // Previous homework state
+  const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
+  const [loadingHomework, setLoadingHomework] = useState(false);
+  const [homeworkCheckResult, setHomeworkCheckResult] = useState<string>('');
+  const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
+  const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
+  
+  // New homework state
+  const [newHomeworkContent, setNewHomeworkContent] = useState('');
 
   useEffect(() => {
     fetchLessons();
@@ -452,6 +504,7 @@ export default function Lessons() {
       };
 
       const recordId = currentDraftId || editingLesson?.id;
+      let finalRecordId = recordId;
 
       if (recordId) {
         const { error } = await supabase
@@ -461,8 +514,31 @@ export default function Lessons() {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('lesson_records').insert(payload);
+        const { data, error } = await supabase
+          .from('lesson_records')
+          .insert(payload)
+          .select()
+          .single();
         if (error) throw error;
+        finalRecordId = data.id;
+      }
+
+      // Insert new homework if content provided
+      if (newHomeworkContent.trim() && finalRecordId) {
+        const { error: homeworkError } = await supabase
+          .from('homework_assignments')
+          .insert({
+            student_id: formData.student_id,
+            subject: formData.subject as SubjectType,
+            lesson_record_id: finalRecordId,
+            assigned_date: formData.lesson_date,
+            content: newHomeworkContent.trim(),
+          });
+
+        if (homeworkError) {
+          console.error('Error inserting homework:', homeworkError);
+          // Don't throw - lesson was saved successfully
+        }
       }
 
       toast({
@@ -502,6 +578,114 @@ export default function Lessons() {
       notes: '',
     });
     setCurrentDraftId(null);
+    setPreviousHomework(null);
+    setHomeworkCheckResult('');
+    setHomeworkCheckNotes('');
+    setNewHomeworkContent('');
+  };
+
+  // Fetch previous homework when student_id and subject change
+  const fetchPreviousHomework = useCallback(async (studentId: string, subject: string) => {
+    if (!studentId || !subject) {
+      setPreviousHomework(null);
+      return;
+    }
+
+    setLoadingHomework(true);
+    try {
+      const { data, error } = await supabase
+        .from('homework_assignments')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('subject', subject as SubjectType)
+        .order('assigned_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        // Fetch checker name if checked
+        let checkerName = '';
+        if (data.checked_by) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', data.checked_by)
+            .maybeSingle();
+          checkerName = profile?.full_name || profile?.email || '';
+        }
+        
+        setPreviousHomework({
+          ...data,
+          checker_name: checkerName,
+        } as HomeworkAssignment);
+        
+        // Pre-fill check fields if already checked
+        if (data.check_status === 'checked') {
+          setHomeworkCheckResult(data.result || '');
+          setHomeworkCheckNotes(data.notes || '');
+        } else {
+          setHomeworkCheckResult('');
+          setHomeworkCheckNotes('');
+        }
+      } else {
+        setPreviousHomework(null);
+        setHomeworkCheckResult('');
+        setHomeworkCheckNotes('');
+      }
+    } catch (error) {
+      console.error('Error fetching previous homework:', error);
+      setPreviousHomework(null);
+    } finally {
+      setLoadingHomework(false);
+    }
+  }, []);
+
+  // Effect to fetch homework when student/subject changes
+  useEffect(() => {
+    if (isDialogOpen && formData.student_id && formData.subject) {
+      fetchPreviousHomework(formData.student_id, formData.subject);
+    }
+  }, [isDialogOpen, formData.student_id, formData.subject, fetchPreviousHomework]);
+
+  // Save homework check
+  const handleSaveHomeworkCheck = async () => {
+    if (!previousHomework || !homeworkCheckResult || !user) return;
+
+    setIsSavingHomeworkCheck(true);
+    try {
+      const { error } = await supabase
+        .from('homework_assignments')
+        .update({
+          check_status: 'checked',
+          result: homeworkCheckResult,
+          notes: homeworkCheckNotes.trim() || null,
+          checked_by: user.id,
+          checked_at: new Date().toISOString(),
+        })
+        .eq('id', previousHomework.id);
+
+      if (error) throw error;
+
+      toast({
+        title: '확인 완료',
+        description: '숙제 확인이 저장되었습니다',
+      });
+
+      // Refresh the homework data
+      await fetchPreviousHomework(formData.student_id, formData.subject);
+    } catch (error: any) {
+      console.error('Error saving homework check:', error);
+      toast({
+        title: '오류',
+        description: error.message || '숙제 확인 저장에 실패했습니다',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingHomeworkCheck(false);
+    }
   };
 
   const handleOpenNewForm = async () => {
@@ -635,6 +819,101 @@ export default function Lessons() {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+              {/* 지난 숙제 Section - At the very top */}
+              {formData.student_id && formData.subject && (
+                <div className="p-4 rounded-lg border-2 border-primary/20 bg-primary/5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Label className="text-base font-semibold">
+                      지난 숙제 ({formData.subject})
+                    </Label>
+                    {loadingHomework ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      getHomeworkStatusBadge(previousHomework)
+                    )}
+                  </div>
+                  
+                  {loadingHomework ? (
+                    <div className="text-sm text-muted-foreground">불러오는 중...</div>
+                  ) : previousHomework ? (
+                    <div className="space-y-3">
+                      {/* Homework content - read only */}
+                      <div className="p-3 bg-background rounded border">
+                        <p className="text-sm whitespace-pre-wrap">{previousHomework.content}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          배정일: {format(new Date(previousHomework.assigned_date), 'yyyy-MM-dd')}
+                        </p>
+                      </div>
+                      
+                      {/* If already checked, show result */}
+                      {previousHomework.check_status === 'checked' && (
+                        <div className="text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-600" />
+                            <span>
+                              확인됨: {HOMEWORK_RESULT_OPTIONS.find(o => o.value === previousHomework.result)?.label}
+                              {previousHomework.checker_name && ` (${previousHomework.checker_name})`}
+                            </span>
+                          </div>
+                          {previousHomework.checked_at && (
+                            <p className="ml-6 text-xs">
+                              {format(new Date(previousHomework.checked_at), 'yyyy-MM-dd HH:mm')}
+                            </p>
+                          )}
+                          {previousHomework.notes && (
+                            <p className="ml-6 mt-1 text-xs italic">{previousHomework.notes}</p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Check controls - only if not already checked */}
+                      {previousHomework.check_status !== 'checked' && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-sm">숙제 확인</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {HOMEWORK_RESULT_OPTIONS.map((opt) => {
+                              const Icon = opt.icon;
+                              return (
+                                <Button
+                                  key={opt.value}
+                                  type="button"
+                                  variant={homeworkCheckResult === opt.value ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => setHomeworkCheckResult(opt.value)}
+                                  className="gap-1"
+                                >
+                                  <Icon className="w-4 h-4" />
+                                  {opt.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <Textarea
+                            placeholder="확인 메모 (선택)"
+                            value={homeworkCheckNotes}
+                            onChange={(e) => setHomeworkCheckNotes(e.target.value)}
+                            rows={2}
+                            className="text-sm"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleSaveHomeworkCheck}
+                            disabled={!homeworkCheckResult || isSavingHomeworkCheck}
+                          >
+                            {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            확인 저장
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">지난 숙제 없음</div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="student">학생 *</Label>
@@ -812,6 +1091,21 @@ export default function Lessons() {
                 />
               </div>
 
+              {/* 이번 숙제 Section */}
+              <div className="space-y-2 p-4 rounded-lg border-2 border-secondary bg-secondary/30">
+                <Label htmlFor="new_homework" className="text-base font-semibold">이번 숙제</Label>
+                <Textarea
+                  id="new_homework"
+                  value={newHomeworkContent}
+                  onChange={(e) => setNewHomeworkContent(e.target.value)}
+                  placeholder="이번 수업에서 배정할 숙제 내용을 입력하세요"
+                  rows={2}
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  제출 시 숙제가 자동으로 저장됩니다
+                </p>
+              </div>
               <div className="flex justify-end gap-2 pt-4">
                 <Button
                   type="button"
