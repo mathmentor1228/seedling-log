@@ -36,6 +36,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RiskBadge } from '@/components/ui/risk-badge';
 import { ScoreBadge } from '@/components/ui/score-badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { 
   CalendarIcon, 
@@ -48,7 +49,8 @@ import {
   Clock,
   AlertTriangle,
   Eye,
-  FileEdit
+  FileEdit,
+  Copy
 } from 'lucide-react';
 import { format, startOfWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -65,6 +67,12 @@ interface WeeklyReportRow {
   sent_status: 'draft' | 'sent' | 'failed' | null;
   sent_at: string | null;
   summary: string | null;
+  student_message: string | null;
+  parent_message: string | null;
+  student_sent_status: 'draft' | 'sent' | 'failed' | null;
+  parent_sent_status: 'draft' | 'sent' | 'failed' | null;
+  student_sent_at: string | null;
+  parent_sent_at: string | null;
   student_name?: string;
   parent_phone?: string;
   student_phone?: string;
@@ -72,12 +80,10 @@ interface WeeklyReportRow {
   teacher_name?: string;
 }
 
-interface MessagePreview {
-  studentName: string;
-  parentPhone: string;
-  studentPhone: string;
-  parentMessage: string;
-  studentMessage: string;
+interface SendTarget {
+  reportId: string;
+  sendStudent: boolean;
+  sendParent: boolean;
 }
 
 interface ClassOption {
@@ -120,14 +126,15 @@ export default function WeeklyReportSend() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
-  const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
   const [resendEnabled, setResendEnabled] = useState(false);
   
-  // Message preview state
+  // Send targets state - tracks which checkboxes are checked per report
+  const [sendTargets, setSendTargets] = useState<Map<string, SendTarget>>(new Map());
+  
+  // Preview state
+  const [previewReport, setPreviewReport] = useState<WeeklyReportRow | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [messagePreviews, setMessagePreviews] = useState<MessagePreview[]>([]);
-  const [sentMessagesLog, setSentMessagesLog] = useState<MessagePreview[]>([]);
-  const [showSentLog, setShowSentLog] = useState(false);
+  const [previewTab, setPreviewTab] = useState<'student' | 'parent'>('student');
   
   // Filters
   const [filterRisk, setFilterRisk] = useState<string>('all');
@@ -221,11 +228,21 @@ export default function WeeklyReportSend() {
       }));
 
       setReports(formattedReports);
-      // Default select only reports with total_lessons > 0 AND sent_status = 'draft'
-      const defaultSelected = formattedReports
-        .filter(r => r.total_lessons > 0 && r.sent_status === 'draft')
-        .map(r => r.id);
-      setSelectedReports(new Set(defaultSelected));
+      
+      // Initialize send targets - default both checked for reports with lessons
+      const newTargets = new Map<string, SendTarget>();
+      formattedReports.forEach(r => {
+        const hasLessons = r.total_lessons > 0;
+        const canSendStudent = hasLessons && (r.student_sent_status !== 'sent' || resendEnabled);
+        const canSendParent = hasLessons && (r.parent_sent_status !== 'sent' || resendEnabled);
+        
+        newTargets.set(r.id, {
+          reportId: r.id,
+          sendStudent: canSendStudent,
+          sendParent: canSendParent,
+        });
+      });
+      setSendTargets(newTargets);
 
       // Fetch excluded drafts (unsubmitted lesson records for students with 0 lessons)
       const zeroLessonStudentIds = formattedReports
@@ -298,136 +315,127 @@ export default function WeeklyReportSend() {
     }
   }
 
-  function buildReportMessage(report: WeeklyReportRow) {
-    const riskLabel = report.risk_level === 'high' ? '⚠️ 주의 필요' : 
-                      report.risk_level === 'medium' ? '📊 보통' : '✅ 양호';
-    
-    const issues = report.common_issues?.length > 0 
-      ? report.common_issues.join(', ') 
-      : '없음';
-
-    const parentMessage = `[주간 학습 리포트]
-학생: ${report.student_name}
-기간: ${report.week_start} ~ ${report.week_end}
-수업 횟수: ${report.total_lessons}회
-평균 이해도: ${report.avg_understanding?.toFixed(1) || '-'}/5
-학습 상태: ${riskLabel}
-주요 이슈: ${issues}`;
-
-    const studentMessage = `[이번 주 학습 리포트]
-${report.student_name}님, 이번 주 수고했어요!
-수업: ${report.total_lessons}회
-이해도: ${report.avg_understanding?.toFixed(1) || '-'}/5
-다음 주도 화이팅! 💪`;
-
-    return { parent: parentMessage, student: studentMessage };
+  function toggleSendStudent(reportId: string) {
+    setSendTargets(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(reportId);
+      if (current) {
+        newMap.set(reportId, { ...current, sendStudent: !current.sendStudent });
+      }
+      return newMap;
+    });
   }
 
-  function handlePreviewMessages() {
-    // SKIP reports with total_lessons = 0 even if manually selected
-    const toSend = filteredReports.filter((r) => {
-      if (!selectedReports.has(r.id)) return false;
-      if (r.total_lessons === 0) return false; // Skip 0-lesson reports
-      if (r.sent_status === 'sent' && !resendEnabled) return false;
-      return true;
+  function toggleSendParent(reportId: string) {
+    setSendTargets(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(reportId);
+      if (current) {
+        newMap.set(reportId, { ...current, sendParent: !current.sendParent });
+      }
+      return newMap;
     });
+  }
 
-    if (toSend.length === 0) {
-      toast({
-        title: '선택된 리포트 없음',
-        description: '전송할 리포트를 선택해주세요.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const previews: MessagePreview[] = toSend.map((report) => {
-      const messages = buildReportMessage(report);
-      return {
-        studentName: report.student_name || '-',
-        parentPhone: report.parent_phone || '-',
-        studentPhone: report.student_phone || '-',
-        parentMessage: messages.parent,
-        studentMessage: messages.student,
-      };
-    });
-
-    setMessagePreviews(previews);
+  function handlePreview(report: WeeklyReportRow) {
+    setPreviewReport(report);
+    setPreviewTab('student');
     setShowPreview(true);
+  }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: '클립보드에 복사되었습니다.' });
+    } catch (err) {
+      toast({ title: '복사 실패', variant: 'destructive' });
+    }
   }
 
   async function handleSendReports() {
     if (!user) return;
     
-    setShowPreview(false);
     setSending(true);
-    let successCount = 0;
+    let studentSentCount = 0;
+    let parentSentCount = 0;
     let failCount = 0;
-    const sentMessages: MessagePreview[] = [];
 
-    // SKIP reports with total_lessons = 0 even if manually selected
-    const toSend = filteredReports.filter((r) => {
-      if (!selectedReports.has(r.id)) return false;
-      if (r.total_lessons === 0) return false; // Skip 0-lesson reports
-      if (r.sent_status === 'sent' && !resendEnabled) return false;
-      return true;
+    // Get reports with at least one target checked and has lessons
+    const toProcess = filteredReports.filter(r => {
+      if (r.total_lessons === 0) return false;
+      const target = sendTargets.get(r.id);
+      if (!target) return false;
+      return target.sendStudent || target.sendParent;
     });
 
+    if (toProcess.length === 0) {
+      toast({
+        title: '선택된 리포트 없음',
+        description: '전송할 대상을 선택해주세요.',
+        variant: 'destructive',
+      });
+      setSending(false);
+      return;
+    }
+
     try {
-      for (const report of toSend) {
+      for (const report of toProcess) {
+        const target = sendTargets.get(report.id);
+        if (!target) continue;
+
         try {
-          const messages = buildReportMessage(report);
+          const updates: any = {};
           
-          // TEST MODE: Log messages instead of sending
-          console.log('=== 테스트 모드 - 메시지 미리보기 ===');
-          console.log('학생:', report.student_name);
-          console.log('학부모 전화번호:', report.parent_phone);
-          console.log('학부모 메시지:', messages.parent);
-          console.log('학생 전화번호:', report.student_phone);
-          console.log('학생 메시지:', messages.student);
-          console.log('=====================================');
+          // Send to student if checked
+          if (target.sendStudent && (report.student_sent_status !== 'sent' || resendEnabled)) {
+            console.log('=== 학생 메시지 전송 (테스트 모드) ===');
+            console.log('학생:', report.student_name);
+            console.log('연락처:', report.student_phone);
+            console.log('메시지:', report.student_message);
+            console.log('=====================================');
+            
+            updates.student_sent_status = 'sent';
+            updates.student_sent_at = new Date().toISOString();
+            studentSentCount++;
+          }
 
-          // Save to log
-          sentMessages.push({
-            studentName: report.student_name || '-',
-            parentPhone: report.parent_phone || '-',
-            studentPhone: report.student_phone || '-',
-            parentMessage: messages.parent,
-            studentMessage: messages.student,
-          });
+          // Send to parent if checked
+          if (target.sendParent && (report.parent_sent_status !== 'sent' || resendEnabled)) {
+            console.log('=== 학부모 메시지 전송 (테스트 모드) ===');
+            console.log('학생:', report.student_name);
+            console.log('연락처:', report.parent_phone);
+            console.log('메시지:', report.parent_message);
+            console.log('=====================================');
+            
+            updates.parent_sent_status = 'sent';
+            updates.parent_sent_at = new Date().toISOString();
+            parentSentCount++;
+          }
 
-          // Update the report status
-          const { error: updateError } = await supabase
-            .from('weekly_reports')
-            .update({
-              sent_status: 'sent',
-              sent_at: new Date().toISOString(),
-              sent_by: user.id,
-            })
-            .eq('id', report.id);
+          // Update legacy sent_status if both are sent
+          if (updates.student_sent_status === 'sent' && updates.parent_sent_status === 'sent') {
+            updates.sent_status = 'sent';
+            updates.sent_at = new Date().toISOString();
+            updates.sent_by = user.id;
+          }
 
-          if (updateError) throw updateError;
-          successCount++;
+          if (Object.keys(updates).length > 0) {
+            const { error: updateError } = await supabase
+              .from('weekly_reports')
+              .update(updates)
+              .eq('id', report.id);
+
+            if (updateError) throw updateError;
+          }
         } catch (err) {
           console.error(`Failed to process report ${report.id}:`, err);
-          
-          // Mark as failed
-          await supabase
-            .from('weekly_reports')
-            .update({ sent_status: 'failed' })
-            .eq('id', report.id);
-          
           failCount++;
         }
       }
 
-      // Update sent messages log
-      setSentMessagesLog(sentMessages);
-      setShowSentLog(true);
-
       toast({
         title: '전송 완료 (테스트 모드)',
-        description: `${successCount}건 처리 완료${failCount > 0 ? `, ${failCount}건 실패` : ''}. 실제 발송은 되지 않았습니다.`,
+        description: `학생 ${studentSentCount}건, 학부모 ${parentSentCount}건 처리 완료${failCount > 0 ? `, ${failCount}건 실패` : ''}. 실제 발송은 되지 않았습니다.`,
         variant: failCount > 0 ? 'destructive' : 'default',
       });
 
@@ -448,46 +456,33 @@ ${report.student_name}님, 이번 주 수고했어요!
   // Apply filters
   const filteredReports = reports.filter((r) => {
     if (filterRisk !== 'all' && r.risk_level !== filterRisk) return false;
-    if (filterSentStatus !== 'all' && r.sent_status !== filterSentStatus) return false;
-    if (filterSendableOnly && (r.total_lessons === 0 || r.sent_status !== 'draft')) return false;
+    if (filterSentStatus !== 'all') {
+      // Check both student and parent status
+      const bothSent = r.student_sent_status === 'sent' && r.parent_sent_status === 'sent';
+      const anySent = r.student_sent_status === 'sent' || r.parent_sent_status === 'sent';
+      const anyFailed = r.student_sent_status === 'failed' || r.parent_sent_status === 'failed';
+      
+      if (filterSentStatus === 'sent' && !bothSent) return false;
+      if (filterSentStatus === 'draft' && anySent) return false;
+      if (filterSentStatus === 'failed' && !anyFailed) return false;
+    }
+    if (filterSendableOnly && (r.total_lessons === 0 || (r.student_sent_status === 'sent' && r.parent_sent_status === 'sent'))) return false;
     return true;
   });
 
   // Calculate excluded students
   const excludedZeroLessons = reports.filter(r => r.total_lessons === 0);
-  const excludedAlreadySent = reports.filter(r => r.sent_status === 'sent' && !resendEnabled);
-  const selectedZeroLessonCount = [...selectedReports].filter(id => {
-    const report = reports.find(r => r.id === id);
-    return report && report.total_lessons === 0;
+
+  // Count selected targets
+  const selectedStudentCount = [...sendTargets.values()].filter(t => {
+    const report = reports.find(r => r.id === t.reportId);
+    return t.sendStudent && report && report.total_lessons > 0 && (report.student_sent_status !== 'sent' || resendEnabled);
   }).length;
-
-  const toggleSelectAll = () => {
-    // Exclude reports with 0 lessons and already sent (unless resend is enabled)
-    const selectableReports = filteredReports.filter((r) => {
-      if (r.sent_status === 'sent' && !resendEnabled) return false;
-      return true;
-    });
-    
-    const currentlySelected = selectableReports.filter(r => selectedReports.has(r.id));
-    
-    if (currentlySelected.length === selectableReports.length) {
-      setSelectedReports(new Set());
-    } else {
-      // Select all but exclude 0-lesson reports by default
-      const reportsToSelect = selectableReports.filter(r => r.total_lessons > 0);
-      setSelectedReports(new Set(reportsToSelect.map((r) => r.id)));
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    const newSet = new Set(selectedReports);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setSelectedReports(newSet);
-  };
+  
+  const selectedParentCount = [...sendTargets.values()].filter(t => {
+    const report = reports.find(r => r.id === t.reportId);
+    return t.sendParent && report && report.total_lessons > 0 && (report.parent_sent_status !== 'sent' || resendEnabled);
+  }).length;
 
   const getSentStatusIcon = (status: string | null) => {
     switch (status) {
@@ -497,17 +492,6 @@ ${report.student_name}님, 이번 주 수고했어요!
         return <XCircle className="w-4 h-4 text-destructive" />;
       default:
         return <Clock className="w-4 h-4 text-muted-foreground" />;
-    }
-  };
-
-  const getSentStatusLabel = (status: string | null) => {
-    switch (status) {
-      case 'sent':
-        return '발송됨';
-      case 'failed':
-        return '실패';
-      default:
-        return '대기중';
     }
   };
 
@@ -681,7 +665,7 @@ ${report.student_name}님, 이번 주 수고했어요!
       </Card>
 
       {/* Excluded Students Section */}
-      {reports.length > 0 && (excludedZeroLessons.length > 0 || excludedAlreadySent.length > 0) && (
+      {reports.length > 0 && excludedZeroLessons.length > 0 && (
         <Card className="border-muted">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -691,32 +675,15 @@ ${report.student_name}님, 이번 주 수고했어요!
           </CardHeader>
           <CardContent className="pt-0">
             <div className="flex flex-wrap gap-4 text-sm">
-              {excludedZeroLessons.length > 0 && (
-                <div className="flex items-center gap-2 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2 rounded-lg">
-                  <span className="font-medium">수업기록 미제출:</span>
-                  <span>{excludedZeroLessons.length}명</span>
-                  <span className="text-xs text-muted-foreground">(발송 시 자동 제외)</span>
-                </div>
-              )}
-              {excludedAlreadySent.length > 0 && !resendEnabled && (
-                <div className="flex items-center gap-2 bg-muted px-3 py-2 rounded-lg">
-                  <span className="font-medium">이미 발송됨:</span>
-                  <span>{excludedAlreadySent.length}명</span>
-                  <span className="text-xs text-muted-foreground">(재전송 허용 체크 필요)</span>
-                </div>
-              )}
-              {selectedZeroLessonCount > 0 && (
-                <div className="flex items-center gap-2 bg-destructive/10 text-destructive px-3 py-2 rounded-lg">
-                  <XCircle className="w-4 h-4" />
-                  <span>선택된 {selectedZeroLessonCount}명은 수업기록이 없어 발송 시 제외됩니다</span>
-                </div>
-              )}
-            </div>
-            {excludedZeroLessons.length > 0 && (
-              <div className="mt-3 text-xs text-muted-foreground">
-                제외된 학생: {excludedZeroLessons.map(r => r.student_name).join(', ')}
+              <div className="flex items-center gap-2 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2 rounded-lg">
+                <span className="font-medium">수업기록 미제출:</span>
+                <span>{excludedZeroLessons.length}명</span>
+                <span className="text-xs text-muted-foreground">(발송 시 자동 제외)</span>
               </div>
-            )}
+            </div>
+            <div className="mt-3 text-xs text-muted-foreground">
+              제외된 학생: {excludedZeroLessons.map(r => r.student_name).join(', ')}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -812,22 +779,16 @@ ${report.student_name}님, 이번 주 수고했어요!
                 재전송 허용
               </label>
             </div>
-            {sentMessagesLog.length > 0 && (
-              <Button variant="outline" size="sm" onClick={() => setShowSentLog(true)}>
-                <Eye className="mr-2 h-4 w-4" />
-                전송 로그 보기
-              </Button>
-            )}
             <Button 
-              onClick={handlePreviewMessages} 
-              disabled={sending || selectedReports.size === 0}
+              onClick={handleSendReports} 
+              disabled={sending || (selectedStudentCount === 0 && selectedParentCount === 0)}
             >
               {sending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <Send className="mr-2 h-4 w-4" />
               )}
-              알림톡 전송 ({selectedReports.size}건)
+              선택 전송 (학생 {selectedStudentCount} / 학부모 {selectedParentCount})
             </Button>
           </div>
         </CardHeader>
@@ -848,41 +809,44 @@ ${report.student_name}님, 이번 주 수고했어요!
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[50px]">
-                      <Checkbox
-                        checked={selectedReports.size === filteredReports.length && filteredReports.length > 0}
-                        onCheckedChange={toggleSelectAll}
-                      />
-                    </TableHead>
+                    <TableHead className="w-[100px]">학생 전송</TableHead>
+                    <TableHead className="w-[100px]">학부모 전송</TableHead>
                     <TableHead>학생</TableHead>
-                    <TableHead>학부모 연락처</TableHead>
-                    <TableHead>학생 연락처</TableHead>
                     <TableHead>수업 수</TableHead>
                     <TableHead>평균 점수</TableHead>
                     <TableHead>주요 이슈</TableHead>
                     <TableHead>위험도</TableHead>
-                    <TableHead>상태</TableHead>
-                    <TableHead>발송 시간</TableHead>
+                    <TableHead>학생 상태</TableHead>
+                    <TableHead>학부모 상태</TableHead>
+                    <TableHead>미리보기</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredReports.map((report) => {
                     const hasNoLessons = report.total_lessons === 0;
-                    const isDisabled = (report.sent_status === 'sent' && !resendEnabled);
+                    const target = sendTargets.get(report.id);
+                    const studentDisabled = hasNoLessons || (report.student_sent_status === 'sent' && !resendEnabled);
+                    const parentDisabled = hasNoLessons || (report.parent_sent_status === 'sent' && !resendEnabled);
                     
                     return (
                     <TableRow 
                       key={report.id}
                       className={cn(
-                        isDisabled && 'opacity-50',
                         hasNoLessons && 'bg-amber-500/5'
                       )}
                     >
                       <TableCell>
                         <Checkbox
-                          checked={selectedReports.has(report.id)}
-                          onCheckedChange={() => toggleSelect(report.id)}
-                          disabled={isDisabled}
+                          checked={target?.sendStudent ?? false}
+                          onCheckedChange={() => toggleSendStudent(report.id)}
+                          disabled={studentDisabled}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Checkbox
+                          checked={target?.sendParent ?? false}
+                          onCheckedChange={() => toggleSendParent(report.id)}
+                          disabled={parentDisabled}
                         />
                       </TableCell>
                       <TableCell className="font-medium">
@@ -895,12 +859,6 @@ ${report.student_name}님, 이번 주 수고했어요!
                             </span>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {report.parent_phone || '-'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {report.student_phone || '-'}
                       </TableCell>
                       <TableCell>
                         {hasNoLessons ? (
@@ -941,16 +899,33 @@ ${report.student_name}님, 이번 주 수고했어요!
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {getSentStatusIcon(report.sent_status)}
-                          <span className="text-sm">
-                            {getSentStatusLabel(report.sent_status)}
-                          </span>
+                          {getSentStatusIcon(report.student_sent_status)}
+                          {report.student_sent_at && (
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(report.student_sent_at), 'MM/dd')}
+                            </span>
+                          )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {report.sent_at 
-                          ? format(new Date(report.sent_at), 'MM/dd HH:mm')
-                          : '-'}
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {getSentStatusIcon(report.parent_sent_status)}
+                          {report.parent_sent_at && (
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(report.parent_sent_at), 'MM/dd')}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handlePreview(report)}
+                          disabled={hasNoLessons}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                     );
@@ -966,105 +941,63 @@ ${report.student_name}님, 이번 주 수고했어요!
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle>메시지 미리보기</DialogTitle>
+            <DialogTitle>메시지 미리보기 - {previewReport?.student_name}</DialogTitle>
             <DialogDescription>
-              전송될 메시지를 확인하세요. 확인 후 "전송하기"를 클릭하면 상태가 업데이트됩니다.
+              학생/학부모에게 전송될 메시지를 확인하세요.
             </DialogDescription>
           </DialogHeader>
-          <ScrollArea className="h-[400px] pr-4">
-            <div className="space-y-6">
-              {messagePreviews.map((preview, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold">{preview.studentName}</h4>
-                    <span className="text-xs text-muted-foreground">#{index + 1}</span>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="font-medium text-muted-foreground">학부모:</span>
-                      <span>{preview.parentPhone || '번호 없음'}</span>
-                    </div>
-                    <div className="bg-muted/50 rounded-md p-3">
-                      <pre className="text-sm whitespace-pre-wrap font-sans">{preview.parentMessage}</pre>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="font-medium text-muted-foreground">학생:</span>
-                      <span>{preview.studentPhone || '번호 없음'}</span>
-                    </div>
-                    <div className="bg-muted/50 rounded-md p-3">
-                      <pre className="text-sm whitespace-pre-wrap font-sans">{preview.studentMessage}</pre>
-                    </div>
-                  </div>
+          
+          <Tabs value={previewTab} onValueChange={(v) => setPreviewTab(v as 'student' | 'parent')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="student">학생용</TabsTrigger>
+              <TabsTrigger value="parent">학부모용</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="student" className="space-y-4">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>연락처: {previewReport?.student_phone || '번호 없음'}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => previewReport?.student_message && copyToClipboard(previewReport.student_message)}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  복사
+                </Button>
+              </div>
+              <ScrollArea className="h-[300px]">
+                <div className="bg-muted/50 rounded-md p-4">
+                  <pre className="text-sm whitespace-pre-wrap font-sans">
+                    {previewReport?.student_message || '메시지가 없습니다. 리포트를 다시 생성해주세요.'}
+                  </pre>
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
+              </ScrollArea>
+            </TabsContent>
+            
+            <TabsContent value="parent" className="space-y-4">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>연락처: {previewReport?.parent_phone || '번호 없음'}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => previewReport?.parent_message && copyToClipboard(previewReport.parent_message)}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  복사
+                </Button>
+              </div>
+              <ScrollArea className="h-[300px]">
+                <div className="bg-muted/50 rounded-md p-4">
+                  <pre className="text-sm whitespace-pre-wrap font-sans">
+                    {previewReport?.parent_message || '메시지가 없습니다. 리포트를 다시 생성해주세요.'}
+                  </pre>
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+          
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPreview(false)}>
-              취소
-            </Button>
-            <Button onClick={handleSendReports} disabled={sending}>
-              {sending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 h-4 w-4" />
-              )}
-              전송하기 (테스트 모드)
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Sent Messages Log Dialog */}
-      <Dialog open={showSentLog} onOpenChange={setShowSentLog}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>전송 로그</DialogTitle>
-            <DialogDescription>
-              최근 전송 처리된 메시지 목록입니다. (테스트 모드 - 실제 발송 안됨)
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="h-[400px] pr-4">
-            <div className="space-y-6">
-              {sentMessagesLog.map((log, index) => (
-                <div key={index} className="border rounded-lg p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold">{log.studentName}</h4>
-                    <div className="flex items-center gap-1 text-green-500 text-sm">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>처리됨</span>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="font-medium text-muted-foreground">학부모:</span>
-                      <span>{log.parentPhone || '번호 없음'}</span>
-                    </div>
-                    <div className="bg-muted/50 rounded-md p-3">
-                      <pre className="text-sm whitespace-pre-wrap font-sans">{log.parentMessage}</pre>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="font-medium text-muted-foreground">학생:</span>
-                      <span>{log.studentPhone || '번호 없음'}</span>
-                    </div>
-                    <div className="bg-muted/50 rounded-md p-3">
-                      <pre className="text-sm whitespace-pre-wrap font-sans">{log.studentMessage}</pre>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSentLog(false)}>
               닫기
             </Button>
           </DialogFooter>
