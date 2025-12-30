@@ -436,7 +436,7 @@ export default function Lessons() {
   };
 
   const resetForm = () => {
-    const lastSubject = localStorage.getItem('lastSelectedSubject') || '수학';
+    const lastSubject = getLastSelectedSubject(user?.id);
     setFormData({
       student_id: '',
       class_id: '',
@@ -628,9 +628,11 @@ export default function Lessons() {
                   <Select
                     value={formData.subject}
                     onValueChange={(value) => {
-                      setFormData({ ...formData, subject: value });
-                      // Save last selected subject to localStorage
-                      localStorage.setItem('lastSelectedSubject', value);
+                      const subject = SUBJECT_VALUES.includes(value as SubjectType)
+                        ? (value as SubjectType)
+                        : '수학';
+                      setFormData({ ...formData, subject });
+                      setLastSelectedSubject(user?.id, subject);
                     }}
                   >
                     <SelectTrigger>
