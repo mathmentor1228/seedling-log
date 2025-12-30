@@ -119,6 +119,7 @@ export type Database = {
         Row: {
           class_id: string | null
           created_at: string
+          draft_created_at: string
           homework_status: string
           id: string
           learning_issues: string[] | null
@@ -128,6 +129,8 @@ export type Database = {
           notes: string | null
           student_id: string
           subject: string
+          submitted: boolean
+          submitted_at: string | null
           teacher_id: string
           understanding_score: number
           updated_at: string
@@ -135,6 +138,7 @@ export type Database = {
         Insert: {
           class_id?: string | null
           created_at?: string
+          draft_created_at?: string
           homework_status: string
           id?: string
           learning_issues?: string[] | null
@@ -144,6 +148,8 @@ export type Database = {
           notes?: string | null
           student_id: string
           subject: string
+          submitted?: boolean
+          submitted_at?: string | null
           teacher_id: string
           understanding_score: number
           updated_at?: string
@@ -151,6 +157,7 @@ export type Database = {
         Update: {
           class_id?: string | null
           created_at?: string
+          draft_created_at?: string
           homework_status?: string
           id?: string
           learning_issues?: string[] | null
@@ -160,6 +167,8 @@ export type Database = {
           notes?: string | null
           student_id?: string
           subject?: string
+          submitted?: boolean
+          submitted_at?: string | null
           teacher_id?: string
           understanding_score?: number
           updated_at?: string
