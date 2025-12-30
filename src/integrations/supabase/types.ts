@@ -287,11 +287,17 @@ export type Database = {
           generated_at: string
           homework_completion_rate: number | null
           id: string
+          parent_message: string | null
+          parent_sent_at: string | null
+          parent_sent_status: string | null
           risk_level: string | null
           sent_at: string | null
           sent_by: string | null
           sent_status: string | null
           student_id: string
+          student_message: string | null
+          student_sent_at: string | null
+          student_sent_status: string | null
           summary: string | null
           total_lessons: number
           week_end: string
@@ -303,11 +309,17 @@ export type Database = {
           generated_at?: string
           homework_completion_rate?: number | null
           id?: string
+          parent_message?: string | null
+          parent_sent_at?: string | null
+          parent_sent_status?: string | null
           risk_level?: string | null
           sent_at?: string | null
           sent_by?: string | null
           sent_status?: string | null
           student_id: string
+          student_message?: string | null
+          student_sent_at?: string | null
+          student_sent_status?: string | null
           summary?: string | null
           total_lessons?: number
           week_end: string
@@ -319,11 +331,17 @@ export type Database = {
           generated_at?: string
           homework_completion_rate?: number | null
           id?: string
+          parent_message?: string | null
+          parent_sent_at?: string | null
+          parent_sent_status?: string | null
           risk_level?: string | null
           sent_at?: string | null
           sent_by?: string | null
           sent_status?: string | null
           student_id?: string
+          student_message?: string | null
+          student_sent_at?: string | null
+          student_sent_status?: string | null
           summary?: string | null
           total_lessons?: number
           week_end?: string
