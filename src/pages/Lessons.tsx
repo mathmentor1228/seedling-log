@@ -624,7 +624,7 @@ export default function Lessons() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label htmlFor="subject">과목 * (v2-select)</Label>
+                  <Label htmlFor="subject">과목 *</Label>
                   <Select
                     value={formData.subject}
                     onValueChange={(value) => {
