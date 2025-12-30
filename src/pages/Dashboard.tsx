@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
 import { RiskBadge } from '@/components/ui/risk-badge';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { 
   Users, 
   BookOpen, 
@@ -13,9 +16,19 @@ import {
   TrendingUp, 
   Calendar,
   Clock,
-  FileEdit
+  FileEdit,
+  CheckSquare
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
+
+interface PendingHomework {
+  id: string;
+  student_id: string;
+  student_name: string;
+  subject: string;
+  content: string;
+  assigned_date: string;
+}
 
 interface DashboardStats {
   totalStudents: number;
@@ -71,7 +84,9 @@ export default function Dashboard() {
   const [recentLessons, setRecentLessons] = useState<RecentLesson[]>([]);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
   const [overdueDrafts, setOverdueDrafts] = useState<GroupedOverdueDrafts[]>([]);
+  const [pendingHomework, setPendingHomework] = useState<PendingHomework[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -79,6 +94,7 @@ export default function Dashboard() {
 
       try {
         const weekAgo = subDays(new Date(), 7);
+        const tenDaysAgo = subDays(new Date(), 10);
 
         // Fetch students count
         const { count: studentsCount } = await supabase
@@ -172,6 +188,35 @@ export default function Dashboard() {
         if (role === 'admin') {
           await fetchOverdueDrafts();
         }
+
+        // Fetch pending homework (unchecked within last 10 days)
+        // RLS handles teacher filtering automatically
+        const { data: homeworkData } = await supabase
+          .from('homework_assignments')
+          .select(`
+            id,
+            student_id,
+            subject,
+            content,
+            assigned_date,
+            students:student_id (name)
+          `)
+          .eq('check_status', 'unchecked')
+          .gte('assigned_date', format(tenDaysAgo, 'yyyy-MM-dd'))
+          .order('assigned_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        setPendingHomework(
+          (homeworkData || []).map((h: any) => ({
+            id: h.id,
+            student_id: h.student_id,
+            student_name: h.students?.name || 'Unknown',
+            subject: h.subject,
+            content: h.content,
+            assigned_date: h.assigned_date,
+          }))
+        );
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -328,6 +373,47 @@ export default function Dashboard() {
                       </div>
                     ))}
                   </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Homework Section */}
+      {pendingHomework.length > 0 && (
+        <Card className="border-blue-500/50 bg-blue-500/5 animate-slide-up">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-600">
+              <CheckSquare className="w-5 h-5" />
+              숙제 확인 대기 ({pendingHomework.length}건)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {pendingHomework.map((hw) => (
+                <div
+                  key={hw.id}
+                  className="flex items-center justify-between p-3 bg-background rounded-lg border"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-foreground">{hw.student_name}</span>
+                      <Badge variant="outline" className="text-xs">{hw.subject}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(hw.assigned_date), 'MM/dd')}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground truncate">{hw.content}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-3 shrink-0"
+                    onClick={() => navigate(`/lessons?student_id=${hw.student_id}&subject=${encodeURIComponent(hw.subject)}`)}
+                  >
+                    확인하기
+                  </Button>
                 </div>
               ))}
             </div>

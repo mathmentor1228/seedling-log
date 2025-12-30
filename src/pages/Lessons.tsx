@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -200,6 +201,7 @@ function getHomeworkStatusBadge(homework: HomeworkAssignment | null) {
 
 export default function Lessons() {
   const { user, role } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [lessons, setLessons] = useState<LessonRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -244,6 +246,25 @@ export default function Lessons() {
     fetchStudents();
     fetchClasses();
   }, [user, role]);
+
+  // Deep link handling - auto-open dialog with student_id and subject from URL
+  useEffect(() => {
+    const studentId = searchParams.get('student_id');
+    const subject = searchParams.get('subject');
+    
+    if (studentId && subject && !loading && students.length > 0) {
+      // Clear URL params
+      setSearchParams({});
+      
+      // Pre-fill form and open dialog
+      setFormData(prev => ({
+        ...prev,
+        student_id: studentId,
+        subject: subject,
+      }));
+      setIsDialogOpen(true);
+    }
+  }, [searchParams, loading, students]);
 
   // Auto-save effect
   useEffect(() => {
