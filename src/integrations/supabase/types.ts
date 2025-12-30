@@ -326,6 +326,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_weekly_reports: {
+        Args: { _week_end: string; _week_start: string }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
