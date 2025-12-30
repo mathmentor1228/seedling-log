@@ -35,11 +35,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit } from 'lucide-react';
 import { format } from 'date-fns';
 
+type SubjectType = '수학' | '과학' | '영어' | '국어';
+
 interface LessonRecord {
   id: string;
   student_id: string;
   class_id: string | null;
-  subject: string;
+  subject: SubjectType;
   lesson_date: string;
   lesson_range: string;
   understanding_score: number;
@@ -63,6 +65,13 @@ interface ClassItem {
   name: string;
   subject: string;
 }
+
+const SUBJECTS = [
+  { value: '수학', label: '수학' },
+  { value: '과학', label: '과학' },
+  { value: '영어', label: '영어' },
+  { value: '국어', label: '국어' },
+];
 
 const LEARNING_ISSUES = [
   '집중력 부족',
@@ -206,12 +215,14 @@ export default function Lessons() {
 
     try {
       const defaultStudent = students[0]?.id || '';
+      const lastSubject = (localStorage.getItem('lastSelectedSubject') as SubjectType) || '수학';
+      
       const { data, error } = await supabase
         .from('lesson_records')
         .insert({
           teacher_id: user.id,
           student_id: defaultStudent,
-          subject: '',
+          subject: lastSubject,
           lesson_date: format(new Date(), 'yyyy-MM-dd'),
           lesson_range: '',
           understanding_score: 3,
@@ -228,7 +239,7 @@ export default function Lessons() {
       setFormData({
         student_id: defaultStudent,
         class_id: '',
-        subject: '',
+        subject: lastSubject,
         lesson_date: format(new Date(), 'yyyy-MM-dd'),
         lesson_range: '',
         understanding_score: '3',
@@ -271,11 +282,12 @@ export default function Lessons() {
   }, [currentDraftId, formData, user]);
 
   function buildPayload() {
+    const subject = formData.subject as SubjectType;
     return {
       teacher_id: user!.id,
       student_id: formData.student_id,
       class_id: formData.class_id || null,
-      subject: formData.subject.trim(),
+      subject,
       lesson_date: formData.lesson_date,
       lesson_range: formData.lesson_range.trim(),
       understanding_score: parseInt(formData.understanding_score),
@@ -407,10 +419,11 @@ export default function Lessons() {
   };
 
   const resetForm = () => {
+    const lastSubject = localStorage.getItem('lastSelectedSubject') || '수학';
     setFormData({
       student_id: '',
       class_id: '',
-      subject: '',
+      subject: lastSubject,
       lesson_date: format(new Date(), 'yyyy-MM-dd'),
       lesson_range: '',
       understanding_score: '3',
@@ -595,13 +608,25 @@ export default function Lessons() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="subject">과목 *</Label>
-                  <Input
-                    id="subject"
+                  <Select
                     value={formData.subject}
-                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    placeholder="예: 수학"
-                    required
-                  />
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, subject: value });
+                      // Save last selected subject to localStorage
+                      localStorage.setItem('lastSelectedSubject', value);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="과목 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.map((subject) => (
+                        <SelectItem key={subject.value} value={subject.value}>
+                          {subject.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lesson_date">수업 날짜 *</Label>
