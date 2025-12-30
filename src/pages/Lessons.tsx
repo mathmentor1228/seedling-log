@@ -800,7 +800,9 @@ export default function Lessons() {
                         {format(new Date(lesson.lesson_date), 'MM/dd')}
                       </TableCell>
                       <TableCell className="font-medium">{lesson.student_name}</TableCell>
-                      <TableCell>{lesson.subject}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{lesson.subject}</Badge>
+                      </TableCell>
                       <TableCell className="max-w-[200px] truncate" title={lesson.lesson_range}>
                         {lesson.lesson_range}
                       </TableCell>

@@ -91,7 +91,7 @@ export type Database = {
           id: string
           name: string
           schedule: string | null
-          subject: string
+          subject: Database["public"]["Enums"]["subject_type"]
           teacher_id: string | null
           updated_at: string
         }
@@ -100,7 +100,7 @@ export type Database = {
           id?: string
           name: string
           schedule?: string | null
-          subject: string
+          subject: Database["public"]["Enums"]["subject_type"]
           teacher_id?: string | null
           updated_at?: string
         }
@@ -109,7 +109,7 @@ export type Database = {
           id?: string
           name?: string
           schedule?: string | null
-          subject?: string
+          subject?: Database["public"]["Enums"]["subject_type"]
           teacher_id?: string | null
           updated_at?: string
         }
