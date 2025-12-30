@@ -623,7 +623,7 @@ export default function Lessons() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <Label htmlFor="subject">과목 *</Label>
                   <Select
                     value={formData.subject}
@@ -635,7 +635,7 @@ export default function Lessons() {
                       setLastSelectedSubject(user?.id, subject);
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="cursor-pointer bg-secondary/50 border-2 border-input hover:border-primary/50 focus:border-primary transition-colors">
                       <SelectValue placeholder="과목 선택" />
                     </SelectTrigger>
                     <SelectContent>
@@ -646,6 +646,7 @@ export default function Lessons() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">수학/과학/영어/국어 중 선택</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lesson_date">수업 날짜 *</Label>
