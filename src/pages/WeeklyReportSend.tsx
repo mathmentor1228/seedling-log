@@ -47,7 +47,8 @@ import {
   XCircle,
   Clock,
   AlertTriangle,
-  Eye
+  Eye,
+  FileEdit
 } from 'lucide-react';
 import { format, startOfWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -89,6 +90,16 @@ interface TeacherOption {
   full_name: string;
 }
 
+interface ExcludedDraftInfo {
+  student_id: string;
+  student_name: string;
+  teacher_id: string;
+  teacher_name: string;
+  subject: string;
+  draft_created_at: string;
+  lesson_date: string;
+}
+
 export default function WeeklyReportSend() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -124,6 +135,10 @@ export default function WeeklyReportSend() {
   const [filterTeacher, setFilterTeacher] = useState<string>('all');
   const [filterSentStatus, setFilterSentStatus] = useState<string>('all');
   const [filterSendableOnly, setFilterSendableOnly] = useState<boolean>(false);
+  
+  // Excluded drafts panel
+  const [excludedDrafts, setExcludedDrafts] = useState<ExcludedDraftInfo[]>([]);
+  const [excludedDraftsTeacherFilter, setExcludedDraftsTeacherFilter] = useState<string>('all');
 
   useEffect(() => {
     fetchFiltersData();
@@ -211,6 +226,17 @@ export default function WeeklyReportSend() {
         .filter(r => r.total_lessons > 0 && r.sent_status === 'draft')
         .map(r => r.id);
       setSelectedReports(new Set(defaultSelected));
+
+      // Fetch excluded drafts (unsubmitted lesson records for students with 0 lessons)
+      const zeroLessonStudentIds = formattedReports
+        .filter(r => r.total_lessons === 0)
+        .map(r => r.student_id);
+
+      if (zeroLessonStudentIds.length > 0) {
+        await fetchExcludedDrafts(zeroLessonStudentIds, startStr, endStr);
+      } else {
+        setExcludedDrafts([]);
+      }
     } catch (error: any) {
       console.error('Error fetching reports:', error);
       toast({
@@ -220,6 +246,55 @@ export default function WeeklyReportSend() {
       });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchExcludedDrafts(studentIds: string[], startStr: string, endStr: string) {
+    try {
+      const { data, error } = await supabase
+        .from('lesson_records')
+        .select(`
+          id,
+          student_id,
+          teacher_id,
+          subject,
+          lesson_date,
+          draft_created_at,
+          students:student_id (name),
+          profiles:teacher_id (full_name)
+        `)
+        .in('student_id', studentIds)
+        .gte('lesson_date', startStr)
+        .lte('lesson_date', endStr)
+        .eq('submitted', false)
+        .order('draft_created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching excluded drafts:', error);
+        return;
+      }
+
+      // Group by student and get the latest draft for each
+      const latestDraftsMap = new Map<string, ExcludedDraftInfo>();
+      
+      (data || []).forEach((d: any) => {
+        const studentId = d.student_id;
+        if (!latestDraftsMap.has(studentId)) {
+          latestDraftsMap.set(studentId, {
+            student_id: studentId,
+            student_name: d.students?.name || '알 수 없음',
+            teacher_id: d.teacher_id,
+            teacher_name: d.profiles?.full_name || '알 수 없음',
+            subject: d.subject || '-',
+            draft_created_at: d.draft_created_at,
+            lesson_date: d.lesson_date,
+          });
+        }
+      });
+
+      setExcludedDrafts(Array.from(latestDraftsMap.values()));
+    } catch (error) {
+      console.error('Error fetching excluded drafts:', error);
     }
   }
 
@@ -642,6 +717,80 @@ ${report.student_name}님, 이번 주 수고했어요!
                 제외된 학생: {excludedZeroLessons.map(r => r.student_name).join(', ')}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Excluded Due to Drafts Panel */}
+      {excludedDrafts.length > 0 && (
+        <Card className="border-amber-500/30">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileEdit className="w-4 h-4 text-amber-500" />
+                미제출 수업기록으로 인한 제외 ({excludedDrafts.length}명)
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">선생님:</label>
+                <Select 
+                  value={excludedDraftsTeacherFilter} 
+                  onValueChange={setExcludedDraftsTeacherFilter}
+                >
+                  <SelectTrigger className="w-[150px] h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    {[...new Set(excludedDrafts.map(d => d.teacher_id))].map(teacherId => {
+                      const draft = excludedDrafts.find(d => d.teacher_id === teacherId);
+                      return (
+                        <SelectItem key={teacherId} value={teacherId}>
+                          {draft?.teacher_name || '알 수 없음'}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>학생</TableHead>
+                    <TableHead>선생님</TableHead>
+                    <TableHead>과목</TableHead>
+                    <TableHead>수업 날짜</TableHead>
+                    <TableHead>임시저장 시간</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {excludedDrafts
+                    .filter(d => excludedDraftsTeacherFilter === 'all' || d.teacher_id === excludedDraftsTeacherFilter)
+                    .map((draft, index) => (
+                    <TableRow key={`${draft.student_id}-${index}`} className="bg-amber-500/5">
+                      <TableCell className="font-medium">{draft.student_name}</TableCell>
+                      <TableCell className="text-muted-foreground">{draft.teacher_name}</TableCell>
+                      <TableCell>{draft.subject}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {draft.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {draft.draft_created_at 
+                          ? format(new Date(draft.draft_created_at), 'MM/dd HH:mm')
+                          : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              위 학생들은 해당 기간에 제출된 수업기록이 없어 리포트 발송에서 제외됩니다. 
+              선생님이 임시저장된 수업기록을 제출하면 다음 리포트 생성 시 반영됩니다.
+            </p>
           </CardContent>
         </Card>
       )}
