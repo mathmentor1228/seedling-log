@@ -123,6 +123,7 @@ export default function WeeklyReportSend() {
   const [filterClass, setFilterClass] = useState<string>('all');
   const [filterTeacher, setFilterTeacher] = useState<string>('all');
   const [filterSentStatus, setFilterSentStatus] = useState<string>('all');
+  const [filterSendableOnly, setFilterSendableOnly] = useState<boolean>(false);
 
   useEffect(() => {
     fetchFiltersData();
@@ -205,8 +206,11 @@ export default function WeeklyReportSend() {
       }));
 
       setReports(formattedReports);
-      // Don't auto-select reports with 0 lessons
-      setSelectedReports(new Set());
+      // Default select only reports with total_lessons > 0 AND sent_status = 'draft'
+      const defaultSelected = formattedReports
+        .filter(r => r.total_lessons > 0 && r.sent_status === 'draft')
+        .map(r => r.id);
+      setSelectedReports(new Set(defaultSelected));
     } catch (error: any) {
       console.error('Error fetching reports:', error);
       toast({
@@ -245,8 +249,10 @@ ${report.student_name}님, 이번 주 수고했어요!
   }
 
   function handlePreviewMessages() {
+    // SKIP reports with total_lessons = 0 even if manually selected
     const toSend = filteredReports.filter((r) => {
       if (!selectedReports.has(r.id)) return false;
+      if (r.total_lessons === 0) return false; // Skip 0-lesson reports
       if (r.sent_status === 'sent' && !resendEnabled) return false;
       return true;
     });
@@ -284,8 +290,10 @@ ${report.student_name}님, 이번 주 수고했어요!
     let failCount = 0;
     const sentMessages: MessagePreview[] = [];
 
+    // SKIP reports with total_lessons = 0 even if manually selected
     const toSend = filteredReports.filter((r) => {
       if (!selectedReports.has(r.id)) return false;
+      if (r.total_lessons === 0) return false; // Skip 0-lesson reports
       if (r.sent_status === 'sent' && !resendEnabled) return false;
       return true;
     });
@@ -366,8 +374,17 @@ ${report.student_name}님, 이번 주 수고했어요!
   const filteredReports = reports.filter((r) => {
     if (filterRisk !== 'all' && r.risk_level !== filterRisk) return false;
     if (filterSentStatus !== 'all' && r.sent_status !== filterSentStatus) return false;
+    if (filterSendableOnly && (r.total_lessons === 0 || r.sent_status !== 'draft')) return false;
     return true;
   });
+
+  // Calculate excluded students
+  const excludedZeroLessons = reports.filter(r => r.total_lessons === 0);
+  const excludedAlreadySent = reports.filter(r => r.sent_status === 'sent' && !resendEnabled);
+  const selectedZeroLessonCount = [...selectedReports].filter(id => {
+    const report = reports.find(r => r.id === id);
+    return report && report.total_lessons === 0;
+  }).length;
 
   const toggleSelectAll = () => {
     // Exclude reports with 0 lessons and already sent (unless resend is enabled)
@@ -571,9 +588,63 @@ ${report.student_name}님, 이번 주 수고했어요!
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Quick filter for sendable only */}
+            <div className="flex items-center gap-2 pt-6">
+              <Checkbox
+                id="sendableOnly"
+                checked={filterSendableOnly}
+                onCheckedChange={(checked) => setFilterSendableOnly(!!checked)}
+              />
+              <label htmlFor="sendableOnly" className="text-sm cursor-pointer font-medium">
+                발송 가능만 보기
+              </label>
+              <span className="text-xs text-muted-foreground">(수업기록 있음 + 대기중)</span>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Excluded Students Section */}
+      {reports.length > 0 && (excludedZeroLessons.length > 0 || excludedAlreadySent.length > 0) && (
+        <Card className="border-muted">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              발송 제외 안내
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-4 text-sm">
+              {excludedZeroLessons.length > 0 && (
+                <div className="flex items-center gap-2 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2 rounded-lg">
+                  <span className="font-medium">수업기록 미제출:</span>
+                  <span>{excludedZeroLessons.length}명</span>
+                  <span className="text-xs text-muted-foreground">(발송 시 자동 제외)</span>
+                </div>
+              )}
+              {excludedAlreadySent.length > 0 && !resendEnabled && (
+                <div className="flex items-center gap-2 bg-muted px-3 py-2 rounded-lg">
+                  <span className="font-medium">이미 발송됨:</span>
+                  <span>{excludedAlreadySent.length}명</span>
+                  <span className="text-xs text-muted-foreground">(재전송 허용 체크 필요)</span>
+                </div>
+              )}
+              {selectedZeroLessonCount > 0 && (
+                <div className="flex items-center gap-2 bg-destructive/10 text-destructive px-3 py-2 rounded-lg">
+                  <XCircle className="w-4 h-4" />
+                  <span>선택된 {selectedZeroLessonCount}명은 수업기록이 없어 발송 시 제외됩니다</span>
+                </div>
+              )}
+            </div>
+            {excludedZeroLessons.length > 0 && (
+              <div className="mt-3 text-xs text-muted-foreground">
+                제외된 학생: {excludedZeroLessons.map(r => r.student_name).join(', ')}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Reports Table */}
       <Card>
@@ -669,9 +740,9 @@ ${report.student_name}님, 이번 주 수고했어요!
                         <div className="flex items-center gap-2">
                           {report.student_name || '-'}
                           {hasNoLessons && (
-                            <span className="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-full">
-                              <AlertTriangle className="w-3 h-3" />
-                              수업기록 없음
+                            <span className="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-600 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                              <XCircle className="w-3 h-3" />
+                              미제출로 제외
                             </span>
                           )}
                         </div>
