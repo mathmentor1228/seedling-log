@@ -13,7 +13,8 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  UserCog
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { label: 'Lesson Records', href: '/lessons', icon: <ClipboardList className="w-5 h-5" /> },
   { label: 'Weekly Reports', href: '/reports', icon: <FileBarChart className="w-5 h-5" />, adminOnly: true },
   { label: 'Send Reports', href: '/reports/send', icon: <Send className="w-5 h-5" />, adminOnly: true },
+  { label: 'User Management', href: '/admin/users', icon: <UserCog className="w-5 h-5" />, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
