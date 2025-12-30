@@ -5,7 +5,16 @@ import { StatCard } from '@/components/ui/stat-card';
 import { RiskBadge } from '@/components/ui/risk-badge';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, BookOpen, ClipboardList, AlertTriangle, TrendingUp, Calendar } from 'lucide-react';
+import { 
+  Users, 
+  BookOpen, 
+  ClipboardList, 
+  AlertTriangle, 
+  TrendingUp, 
+  Calendar,
+  Clock,
+  FileEdit
+} from 'lucide-react';
 import { format, subDays } from 'date-fns';
 
 interface DashboardStats {
@@ -31,6 +40,25 @@ interface AtRiskStudent {
   avg_score: number;
 }
 
+interface OverdueDraft {
+  id: string;
+  teacher_id: string;
+  teacher_name: string;
+  student_id: string;
+  student_name: string;
+  subject: string;
+  lesson_date: string;
+  draft_created_at: string;
+  overdue_hours: number;
+}
+
+interface GroupedOverdueDrafts {
+  teacher_name: string;
+  teacher_id: string;
+  count: number;
+  drafts: OverdueDraft[];
+}
+
 export default function Dashboard() {
   const { role, user } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
@@ -42,6 +70,7 @@ export default function Dashboard() {
   });
   const [recentLessons, setRecentLessons] = useState<RecentLesson[]>([]);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
+  const [overdueDrafts, setOverdueDrafts] = useState<GroupedOverdueDrafts[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -138,6 +167,11 @@ export default function Dashboard() {
             avg_score: Number(r.avg_understanding) || 0,
           }))
         );
+
+        // Fetch overdue drafts for admin
+        if (role === 'admin') {
+          await fetchOverdueDrafts();
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -148,6 +182,55 @@ export default function Dashboard() {
     fetchDashboardData();
   }, [user, role]);
 
+  async function fetchOverdueDrafts() {
+    try {
+      // Query the view directly
+      const { data, error } = await supabase
+        .from('overdue_lesson_drafts')
+        .select('*')
+        .order('overdue_hours', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching overdue drafts:', error);
+        return;
+      }
+
+      // Group by teacher
+      const grouped: Record<string, GroupedOverdueDrafts> = {};
+      
+      (data || []).forEach((draft: any) => {
+        const teacherId = draft.teacher_id;
+        const teacherName = draft.teacher_name || '알 수 없음';
+        
+        if (!grouped[teacherId]) {
+          grouped[teacherId] = {
+            teacher_id: teacherId,
+            teacher_name: teacherName,
+            count: 0,
+            drafts: [],
+          };
+        }
+        
+        grouped[teacherId].count++;
+        grouped[teacherId].drafts.push({
+          id: draft.id,
+          teacher_id: draft.teacher_id,
+          teacher_name: teacherName,
+          student_id: draft.student_id,
+          student_name: draft.student_name || '알 수 없음',
+          subject: draft.subject || '-',
+          lesson_date: draft.lesson_date,
+          draft_created_at: draft.draft_created_at,
+          overdue_hours: Math.round(Number(draft.overdue_hours) || 0),
+        });
+      });
+
+      setOverdueDrafts(Object.values(grouped));
+    } catch (error) {
+      console.error('Error fetching overdue drafts:', error);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -156,14 +239,16 @@ export default function Dashboard() {
     );
   }
 
+  const totalOverdueDrafts = overdueDrafts.reduce((sum, g) => sum + g.count, 0);
+
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-foreground">대시보드</h1>
         <p className="text-muted-foreground mt-1">
           {role === 'admin' 
-            ? 'Overview of your academy performance' 
-            : 'Your teaching overview'}
+            ? '학원 전체 현황을 한눈에 확인하세요' 
+            : '나의 수업 현황'}
         </p>
       </div>
 
@@ -172,37 +257,83 @@ export default function Dashboard() {
         {role === 'admin' && (
           <>
             <StatCard
-              title="Total Students"
+              title="전체 학생"
               value={stats.totalStudents}
               icon={<Users className="w-6 h-6" />}
             />
             <StatCard
-              title="Active Classes"
+              title="활성 클래스"
               value={stats.totalClasses}
               icon={<BookOpen className="w-6 h-6" />}
             />
           </>
         )}
         <StatCard
-          title="Lessons This Week"
+          title="이번 주 수업"
           value={stats.lessonsThisWeek}
           icon={<ClipboardList className="w-6 h-6" />}
         />
         <StatCard
-          title="Avg Understanding"
+          title="평균 이해도"
           value={stats.avgUnderstanding || '-'}
-          subtitle="Out of 5"
+          subtitle="5점 만점"
           icon={<TrendingUp className="w-6 h-6" />}
         />
         {role === 'admin' && (
           <StatCard
-            title="High Risk Students"
+            title="고위험 학생"
             value={stats.highRiskStudents}
             icon={<AlertTriangle className="w-6 h-6" />}
-            className={stats.highRiskStudents > 0 ? 'border-risk-high/30' : ''}
+            className={stats.highRiskStudents > 0 ? 'border-destructive/30' : ''}
           />
         )}
       </div>
+
+      {/* Overdue Drafts Section - Admin Only */}
+      {role === 'admin' && totalOverdueDrafts > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-600">
+              <Clock className="w-5 h-5" />
+              24시간 이상 미제출 수업기록 ({totalOverdueDrafts}건)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {overdueDrafts.map((group) => (
+                <div key={group.teacher_id} className="border rounded-lg p-4 bg-background">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-foreground">{group.teacher_name}</h4>
+                    <span className="text-sm bg-amber-500/10 text-amber-600 px-2 py-1 rounded-full">
+                      {group.count}건 미제출
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {group.drafts.map((draft) => (
+                      <div
+                        key={draft.id}
+                        className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileEdit className="w-4 h-4 text-amber-500" />
+                          <span className="font-medium">{draft.student_name}</span>
+                          <span className="text-muted-foreground">{draft.subject || '-'}</span>
+                          <span className="text-muted-foreground">
+                            {draft.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
+                          </span>
+                        </div>
+                        <span className="text-amber-600 font-medium">
+                          {draft.overdue_hours}시간 경과
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -211,12 +342,12 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-primary" />
-              Recent Lessons
+              최근 수업
             </CardTitle>
           </CardHeader>
           <CardContent>
             {recentLessons.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No recent lessons</p>
+              <p className="text-muted-foreground text-center py-8">최근 수업이 없습니다</p>
             ) : (
               <div className="space-y-3">
                 {recentLessons.map((lesson) => (
@@ -227,7 +358,7 @@ export default function Dashboard() {
                     <div>
                       <p className="font-medium text-foreground">{lesson.student_name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {lesson.subject} • {format(new Date(lesson.lesson_date), 'MMM d, yyyy')}
+                        {lesson.subject} • {format(new Date(lesson.lesson_date), 'MM/dd')}
                       </p>
                     </div>
                     <ScoreBadge score={lesson.understanding_score} />
@@ -243,14 +374,14 @@ export default function Dashboard() {
           <Card className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-warning" />
-                Students Needing Attention
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                주의가 필요한 학생
               </CardTitle>
             </CardHeader>
             <CardContent>
               {atRiskStudents.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
-                  No at-risk students identified
+                  위험 학생이 없습니다
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -262,7 +393,7 @@ export default function Dashboard() {
                       <div>
                         <p className="font-medium text-foreground">{student.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          Avg Score: {student.avg_score.toFixed(1)}
+                          평균 점수: {student.avg_score.toFixed(1)}
                         </p>
                       </div>
                       <RiskBadge level={student.risk_level} />
