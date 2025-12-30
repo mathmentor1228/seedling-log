@@ -71,7 +71,24 @@ const SUBJECTS = [
   { value: '과학', label: '과학' },
   { value: '영어', label: '영어' },
   { value: '국어', label: '국어' },
-];
+] as const;
+
+const SUBJECT_VALUES: SubjectType[] = ['수학', '과학', '영어', '국어'];
+
+function subjectStorageKey(userId?: string | null) {
+  return userId ? `lesson_records:lastSelectedSubject:${userId}` : 'lesson_records:lastSelectedSubject';
+}
+
+function getLastSelectedSubject(userId?: string | null): SubjectType {
+  const raw = localStorage.getItem(subjectStorageKey(userId));
+  if (raw && SUBJECT_VALUES.includes(raw as SubjectType)) return raw as SubjectType;
+  return '수학';
+}
+
+function setLastSelectedSubject(userId: string | null | undefined, subject: SubjectType) {
+  localStorage.setItem(subjectStorageKey(userId), subject);
+}
+
 
 const LEARNING_ISSUES = [
   '집중력 부족',
@@ -215,8 +232,8 @@ export default function Lessons() {
 
     try {
       const defaultStudent = students[0]?.id || '';
-      const lastSubject = (localStorage.getItem('lastSelectedSubject') as SubjectType) || '수학';
-      
+      const lastSubject = getLastSelectedSubject(user.id);
+
       const { data, error } = await supabase
         .from('lesson_records')
         .insert({
