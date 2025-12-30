@@ -63,6 +63,7 @@ interface WeeklyReportRow {
   risk_level: 'low' | 'medium' | 'high' | null;
   sent_status: 'draft' | 'sent' | 'failed' | null;
   sent_at: string | null;
+  summary: string | null;
   student_name?: string;
   parent_phone?: string;
   student_phone?: string;
@@ -204,6 +205,7 @@ export default function WeeklyReportSend() {
       }));
 
       setReports(formattedReports);
+      // Don't auto-select reports with 0 lessons
       setSelectedReports(new Set());
     } catch (error: any) {
       console.error('Error fetching reports:', error);
@@ -368,10 +370,20 @@ ${report.student_name}님, 이번 주 수고했어요!
   });
 
   const toggleSelectAll = () => {
-    if (selectedReports.size === filteredReports.length) {
+    // Exclude reports with 0 lessons and already sent (unless resend is enabled)
+    const selectableReports = filteredReports.filter((r) => {
+      if (r.sent_status === 'sent' && !resendEnabled) return false;
+      return true;
+    });
+    
+    const currentlySelected = selectableReports.filter(r => selectedReports.has(r.id));
+    
+    if (currentlySelected.length === selectableReports.length) {
       setSelectedReports(new Set());
     } else {
-      setSelectedReports(new Set(filteredReports.map((r) => r.id)));
+      // Select all but exclude 0-lesson reports by default
+      const reportsToSelect = selectableReports.filter(r => r.total_lessons > 0);
+      setSelectedReports(new Set(reportsToSelect.map((r) => r.id)));
     }
   };
 
@@ -634,22 +646,35 @@ ${report.student_name}님, 이번 주 수고했어요!
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredReports.map((report) => (
+                  {filteredReports.map((report) => {
+                    const hasNoLessons = report.total_lessons === 0;
+                    const isDisabled = (report.sent_status === 'sent' && !resendEnabled);
+                    
+                    return (
                     <TableRow 
                       key={report.id}
                       className={cn(
-                        report.sent_status === 'sent' && !resendEnabled && 'opacity-50'
+                        isDisabled && 'opacity-50',
+                        hasNoLessons && 'bg-amber-500/5'
                       )}
                     >
                       <TableCell>
                         <Checkbox
                           checked={selectedReports.has(report.id)}
                           onCheckedChange={() => toggleSelect(report.id)}
-                          disabled={report.sent_status === 'sent' && !resendEnabled}
+                          disabled={isDisabled}
                         />
                       </TableCell>
                       <TableCell className="font-medium">
-                        {report.student_name || '-'}
+                        <div className="flex items-center gap-2">
+                          {report.student_name || '-'}
+                          {hasNoLessons && (
+                            <span className="inline-flex items-center gap-1 text-xs bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-full">
+                              <AlertTriangle className="w-3 h-3" />
+                              수업기록 없음
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {report.parent_phone || '-'}
@@ -657,7 +682,13 @@ ${report.student_name}님, 이번 주 수고했어요!
                       <TableCell className="text-muted-foreground">
                         {report.student_phone || '-'}
                       </TableCell>
-                      <TableCell>{report.total_lessons}</TableCell>
+                      <TableCell>
+                        {hasNoLessons ? (
+                          <span className="text-amber-600 font-medium">0</span>
+                        ) : (
+                          report.total_lessons
+                        )}
+                      </TableCell>
                       <TableCell>
                         {report.avg_understanding ? (
                           <ScoreBadge score={Math.round(report.avg_understanding)} />
@@ -702,7 +733,8 @@ ${report.student_name}님, 이번 주 수고했어요!
                           : '-'}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
