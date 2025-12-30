@@ -199,6 +199,11 @@ export type Database = {
           submitted: boolean
           submitted_at: string | null
           teacher_id: string
+          test_date: string | null
+          test_name: string | null
+          test_notes: string | null
+          test_result: string
+          test_result_text: string | null
           understanding_score: number
           updated_at: string
         }
@@ -218,6 +223,11 @@ export type Database = {
           submitted?: boolean
           submitted_at?: string | null
           teacher_id: string
+          test_date?: string | null
+          test_name?: string | null
+          test_notes?: string | null
+          test_result?: string
+          test_result_text?: string | null
           understanding_score: number
           updated_at?: string
         }
@@ -237,6 +247,11 @@ export type Database = {
           submitted?: boolean
           submitted_at?: string | null
           teacher_id?: string
+          test_date?: string | null
+          test_name?: string | null
+          test_notes?: string | null
+          test_result?: string
+          test_result_text?: string | null
           understanding_score?: number
           updated_at?: string
         }
@@ -472,6 +487,26 @@ export type Database = {
       }
       teacher_owns_student: {
         Args: { _student_id: string; _teacher_id: string }
+        Returns: boolean
+      }
+      update_homework_check: {
+        Args: {
+          _check_status: string
+          _homework_id: string
+          _notes?: string
+          _result: string
+        }
+        Returns: boolean
+      }
+      update_lesson_test_fields: {
+        Args: {
+          _lesson_id: string
+          _test_date?: string
+          _test_name?: string
+          _test_notes?: string
+          _test_result?: string
+          _test_result_text?: string
+        }
         Returns: boolean
       }
     }
