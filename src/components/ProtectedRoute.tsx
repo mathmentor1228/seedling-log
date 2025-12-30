@@ -1,9 +1,17 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { Loader2 } from 'lucide-react';
 
-export default function Index() {
+type AllowedRole = 'admin' | 'teacher' | 'any';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  allowedRoles?: AllowedRole[];
+}
+
+export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRouteProps) {
   const { user, loading, role } = useAuth();
   const navigate = useNavigate();
 
@@ -13,15 +21,23 @@ export default function Index() {
       return;
     }
 
-    // Redirect based on role
+    if (!loading && user && !role) {
+      // User has no role assigned yet
+      return;
+    }
+
     if (!loading && user && role) {
-      if (role === 'admin') {
-        navigate('/dashboard');
-      } else if (role === 'teacher') {
-        navigate('/lessons');
+      // Check if user has required role
+      const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role);
+      
+      if (!hasAccess) {
+        // Teachers trying to access admin pages get redirected to Lessons
+        if (role === 'teacher') {
+          navigate('/lessons');
+        }
       }
     }
-  }, [user, loading, role, navigate]);
+  }, [user, loading, role, navigate, allowedRoles]);
 
   if (loading) {
     return (
@@ -52,5 +68,11 @@ export default function Index() {
     );
   }
 
-  return null;
+  // Check access
+  const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role);
+  if (!hasAccess) {
+    return null;
+  }
+
+  return <AppLayout>{children}</AppLayout>;
 }

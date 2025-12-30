@@ -29,7 +29,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/', icon: <LayoutDashboard className="w-5 h-5" /> },
+  { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" />, adminOnly: true },
   { label: 'Students', href: '/students', icon: <Users className="w-5 h-5" />, adminOnly: true },
   { label: 'Classes', href: '/classes', icon: <BookOpen className="w-5 h-5" />, adminOnly: true },
   { label: 'Lesson Records', href: '/lessons', icon: <ClipboardList className="w-5 h-5" /> },

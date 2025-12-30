@@ -1,10 +1,10 @@
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import Classes from './Classes';
+import Dashboard from './Dashboard';
 
-export default function ClassesPage() {
+export default function DashboardPage() {
   return (
     <ProtectedRoute allowedRoles={['admin']}>
-      <Classes />
+      <Dashboard />
     </ProtectedRoute>
   );
 }
