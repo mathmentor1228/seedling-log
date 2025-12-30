@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -22,10 +23,19 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Users, BookOpen, Edit2, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
+type SubjectType = '수학' | '과학' | '영어' | '국어';
+
+const SUBJECTS: { value: SubjectType; label: string }[] = [
+  { value: '수학', label: '수학' },
+  { value: '과학', label: '과학' },
+  { value: '영어', label: '영어' },
+  { value: '국어', label: '국어' },
+];
+
 interface ClassItem {
   id: string;
   name: string;
-  subject: string;
+  subject: SubjectType;
   teacher_id: string | null;
   schedule: string | null;
   created_at: string;
@@ -117,10 +127,10 @@ export default function Classes() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.subject.trim()) {
+    if (!formData.name.trim() || !formData.subject) {
       toast({
-        title: 'Validation Error',
-        description: 'Name and subject are required',
+        title: '유효성 오류',
+        description: '이름과 과목은 필수입니다',
         variant: 'destructive',
       });
       return;
@@ -131,7 +141,7 @@ export default function Classes() {
     try {
       const classPayload = {
         name: formData.name.trim(),
-        subject: formData.subject.trim(),
+        subject: formData.subject as SubjectType,
         teacher_id: formData.teacher_id || null,
         schedule: formData.schedule.trim() || null,
       };
@@ -255,14 +265,22 @@ export default function Classes() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="subject">Subject *</Label>
-                <Input
-                  id="subject"
+                <Label htmlFor="subject">과목 *</Label>
+                <Select
                   value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                  placeholder="e.g., Mathematics"
-                  required
-                />
+                  onValueChange={(value) => setFormData({ ...formData, subject: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="과목 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUBJECTS.map((subject) => (
+                      <SelectItem key={subject.value} value={subject.value}>
+                        {subject.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="teacher">Assigned Teacher</Label>
@@ -326,9 +344,9 @@ export default function Classes() {
                 <div className="flex items-start justify-between">
                   <div>
                     <CardTitle className="text-lg">{classItem.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <Badge variant="secondary" className="mt-1">
                       {classItem.subject}
-                    </p>
+                    </Badge>
                   </div>
                   <div className="flex items-center gap-1">
                     <Button
