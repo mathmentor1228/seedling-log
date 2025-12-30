@@ -298,6 +298,7 @@ export type Database = {
           student_message: string | null
           student_sent_at: string | null
           student_sent_status: string | null
+          subject_breakdown: Json | null
           summary: string | null
           total_lessons: number
           week_end: string
@@ -320,6 +321,7 @@ export type Database = {
           student_message?: string | null
           student_sent_at?: string | null
           student_sent_status?: string | null
+          subject_breakdown?: Json | null
           summary?: string | null
           total_lessons?: number
           week_end: string
@@ -342,6 +344,7 @@ export type Database = {
           student_message?: string | null
           student_sent_at?: string | null
           student_sent_status?: string | null
+          subject_breakdown?: Json | null
           summary?: string | null
           total_lessons?: number
           week_end?: string
