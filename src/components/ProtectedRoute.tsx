@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Loader2 } from 'lucide-react';
 
-type AllowedRole = 'admin' | 'teacher' | 'any';
+type AllowedRole = 'admin' | 'teacher' | 'assistant' | 'any';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -31,8 +31,8 @@ export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRo
       const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role);
       
       if (!hasAccess) {
-        // Teachers trying to access admin pages get redirected to Lessons
-        if (role === 'teacher') {
+        // Teachers and assistants trying to access admin pages get redirected
+        if (role === 'teacher' || role === 'assistant') {
           navigate('/lessons');
         }
       }
@@ -61,7 +61,7 @@ export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRo
         <div className="text-center max-w-md px-4">
           <h1 className="text-2xl font-bold text-foreground mb-4">Welcome to EduTrack!</h1>
           <p className="text-muted-foreground">
-            Your account is set up. Please contact your administrator to assign your role (Admin or Teacher).
+            Your account is set up. Please contact your administrator to assign your role (Admin, Teacher, or Assistant).
           </p>
         </div>
       </div>
