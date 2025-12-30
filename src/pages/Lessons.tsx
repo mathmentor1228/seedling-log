@@ -16,6 +16,16 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -90,16 +100,54 @@ function setLastSelectedSubject(userId: string | null | undefined, subject: Subj
 }
 
 
-const LEARNING_ISSUES = [
-  '집중력 부족',
-  '어휘력 부족',
-  '개념 이해 어려움',
-  '문제 해결 능력',
-  '기억력',
-  '시험 불안',
-  '숙제 완수',
-  '시간 관리',
+// Common learning issues for all subjects
+const COMMON_ISSUES = [
+  '체력적으로 피곤',
+  '고민하는 노력 필요',
+  '학습속도 느림',
 ];
+
+// Subject-specific learning issues
+const SUBJECT_SPECIFIC_ISSUES: Record<SubjectType, string[]> = {
+  '수학': [
+    '개념 이해 부족',
+    '계산 실수',
+    '문제 해석 미흡',
+    '풀이 과정 누락',
+    '시간 관리 미숙',
+  ],
+  '과학': [
+    '개념 암기 부족',
+    '개념 간 연결 부족',
+    '그래프/자료 해석 미흡',
+    '서술형 정리 부족',
+    '실험/탐구 이해 부족',
+  ],
+  '영어': [
+    '어휘 부족',
+    '문장 구조 이해 부족',
+    '독해 속도 느림',
+    '문법 적용 미흡',
+    '추론/빈칸 문제 약함',
+    '단어통과',
+    '단어불통과',
+  ],
+  '국어': [
+    '지문 독해 미흡',
+    '선지 판단 오류',
+    '어휘/표현 이해 부족',
+    '문학 해석 미흡',
+    '서술형 구조 부족',
+  ],
+};
+
+// Get learning issues for a specific subject
+function getLearningIssuesForSubject(subject: SubjectType | ''): string[] {
+  if (!subject || !SUBJECT_VALUES.includes(subject as SubjectType)) {
+    return COMMON_ISSUES;
+  }
+  return [...COMMON_ISSUES, ...SUBJECT_SPECIFIC_ISSUES[subject as SubjectType]];
+}
 
 const HOMEWORK_STATUS = [
   { value: 'completed', label: '완료' },
@@ -134,6 +182,10 @@ export default function Lessons() {
   });
   const { toast } = useToast();
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Subject change confirmation dialog state
+  const [pendingSubject, setPendingSubject] = useState<SubjectType | null>(null);
+  const [showSubjectChangeDialog, setShowSubjectChangeDialog] = useState(false);
 
   useEffect(() => {
     fetchLessons();
@@ -628,11 +680,19 @@ export default function Lessons() {
                   <Select
                     value={formData.subject}
                     onValueChange={(value) => {
-                      const subject = SUBJECT_VALUES.includes(value as SubjectType)
+                      const newSubject = SUBJECT_VALUES.includes(value as SubjectType)
                         ? (value as SubjectType)
                         : '수학';
-                      setFormData({ ...formData, subject });
-                      setLastSelectedSubject(user?.id, subject);
+                      
+                      // If subject is being changed and there are selected learning issues, show confirmation
+                      if (formData.subject && formData.subject !== newSubject && formData.learning_issues.length > 0) {
+                        setPendingSubject(newSubject);
+                        setShowSubjectChangeDialog(true);
+                      } else {
+                        // No confirmation needed - just change the subject
+                        setFormData({ ...formData, subject: newSubject, learning_issues: [] });
+                        setLastSelectedSubject(user?.id, newSubject);
+                      }
                     }}
                   >
                     <SelectTrigger className="cursor-pointer bg-secondary/50 border-2 border-input hover:border-primary/50 focus:border-primary transition-colors">
@@ -713,7 +773,7 @@ export default function Lessons() {
               <div className="space-y-2">
                 <Label>학습 이슈 (해당 항목 선택)</Label>
                 <div className="grid grid-cols-2 gap-2 p-4 bg-secondary/50 rounded-lg">
-                  {LEARNING_ISSUES.map((issue) => (
+                  {getLearningIssuesForSubject(formData.subject as SubjectType).map((issue) => (
                     <div key={issue} className="flex items-center space-x-2">
                       <Checkbox
                         id={issue}
@@ -726,6 +786,9 @@ export default function Lessons() {
                     </div>
                   ))}
                 </div>
+                {!formData.subject && (
+                  <p className="text-xs text-muted-foreground">과목을 먼저 선택하세요</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -871,6 +934,35 @@ export default function Lessons() {
           )}
         </CardContent>
       </Card>
+      {/* Subject Change Confirmation Dialog */}
+      <AlertDialog open={showSubjectChangeDialog} onOpenChange={setShowSubjectChangeDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>과목 변경 확인</AlertDialogTitle>
+            <AlertDialogDescription>
+              과목을 변경하면 선택한 학습이슈가 초기화됩니다. 변경할까요?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setPendingSubject(null);
+              setShowSubjectChangeDialog(false);
+            }}>
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (pendingSubject) {
+                setFormData({ ...formData, subject: pendingSubject, learning_issues: [] });
+                setLastSelectedSubject(user?.id, pendingSubject);
+              }
+              setPendingSubject(null);
+              setShowSubjectChangeDialog(false);
+            }}>
+              변경
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
