@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth, isAssistant as checkIsAssistant, canManageLessons } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -258,7 +258,9 @@ export default function Lessons() {
   const [isSavingTestFields, setIsSavingTestFields] = useState(false);
 
   // Check if user is assistant (can only update test fields and homework check)
-  const isAssistant = role === 'assistant';
+  const isAssistant = checkIsAssistant(role);
+  // Check if user can create/edit/delete lessons
+  const canManage = canManageLessons(role);
   useEffect(() => {
     fetchLessons();
     fetchStudents();
@@ -902,12 +904,14 @@ export default function Lessons() {
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
-          <DialogTrigger asChild>
-            <Button onClick={handleOpenNewForm}>
-              <Plus className="w-4 h-4 mr-2" />
-              수업 기록 작성
-            </Button>
-          </DialogTrigger>
+          {canManage && (
+            <DialogTrigger asChild>
+              <Button onClick={handleOpenNewForm}>
+                <Plus className="w-4 h-4 mr-2" />
+                수업 기록 작성
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1424,25 +1428,27 @@ export default function Lessons() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(lesson)}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(lesson.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(lesson)}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            {canManage && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(lesson.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
