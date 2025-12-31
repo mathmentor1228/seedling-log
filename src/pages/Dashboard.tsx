@@ -8,6 +8,8 @@ import { ScoreBadge } from '@/components/ui/score-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Users, 
   BookOpen, 
@@ -17,9 +19,10 @@ import {
   Calendar,
   Clock,
   FileEdit,
-  CheckSquare
+  CheckSquare,
+  GraduationCap
 } from 'lucide-react';
-import { format, subDays, startOfDay } from 'date-fns';
+import { format, subDays, startOfDay, getDay } from 'date-fns';
 
 interface PendingHomework {
   id: string;
@@ -72,8 +75,19 @@ interface GroupedOverdueDrafts {
   drafts: OverdueDraft[];
 }
 
+interface TodaySlot {
+  id: string;
+  class_id: string;
+  class_name: string;
+  subject: string;
+  start_time: string;
+  end_time: string;
+  students: { id: string; name: string }[];
+}
+
 export default function Dashboard() {
   const { role, user } = useAuth();
+  const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats>({
     totalStudents: 0,
     totalClasses: 0,
@@ -83,6 +97,7 @@ export default function Dashboard() {
   });
   const [recentLessons, setRecentLessons] = useState<RecentLesson[]>([]);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
+  const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
   const [overdueDrafts, setOverdueDrafts] = useState<GroupedOverdueDrafts[]>([]);
   const [pendingHomework, setPendingHomework] = useState<PendingHomework[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,6 +208,11 @@ export default function Dashboard() {
           if (isAdmin(role)) {
             await fetchOverdueDrafts();
           }
+
+          // Fetch today's slots for teacher
+          if (isTeacher(role)) {
+            await fetchTodaySlots();
+          }
         }
 
         // Fetch pending homework (unchecked)
@@ -279,6 +299,102 @@ export default function Dashboard() {
       setOverdueDrafts(Object.values(grouped));
     } catch (error) {
       console.error('Error fetching overdue drafts:', error);
+      toast({
+        title: '데이터 로드 오류',
+        description: '미제출 기록을 불러오는 중 오류가 발생했습니다.',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function fetchTodaySlots() {
+    if (!user) return;
+
+    try {
+      // Get today's day of week (0=Sunday, 1=Monday, etc.)
+      const today = new Date();
+      const dayOfWeek = getDay(today);
+
+      // Fetch class schedules for today for this teacher
+      const { data: schedules, error: schedulesError } = await supabase
+        .from('class_schedules')
+        .select(`
+          id,
+          class_id,
+          start_time,
+          end_time,
+          classes:class_id (
+            id,
+            name,
+            subject
+          )
+        `)
+        .eq('teacher_id', user.id)
+        .eq('day_of_week', dayOfWeek)
+        .eq('is_active', true)
+        .order('start_time', { ascending: true });
+
+      if (schedulesError) {
+        console.error('Error fetching today slots:', schedulesError);
+        toast({
+          title: '데이터 로드 오류',
+          description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Get students for each class
+      const classIds = schedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
+      
+      let studentsMap: Record<string, { id: string; name: string }[]> = {};
+      
+      if (classIds.length > 0) {
+        const { data: classStudents, error: studentsError } = await supabase
+          .from('class_students')
+          .select(`
+            class_id,
+            students:student_id (id, name)
+          `)
+          .in('class_id', classIds);
+
+        if (studentsError) {
+          console.error('Error fetching class students:', studentsError);
+        } else {
+          // Group students by class_id
+          (classStudents || []).forEach((cs: any) => {
+            if (!studentsMap[cs.class_id]) {
+              studentsMap[cs.class_id] = [];
+            }
+            if (cs.students) {
+              studentsMap[cs.class_id].push({
+                id: cs.students.id,
+                name: cs.students.name,
+              });
+            }
+          });
+        }
+      }
+
+      // Build slots array
+      const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
+        id: s.id,
+        class_id: s.classes?.id || '',
+        class_name: s.classes?.name || '알 수 없음',
+        subject: s.classes?.subject || '-',
+        start_time: s.start_time,
+        end_time: s.end_time,
+        students: studentsMap[s.classes?.id] || [],
+      }));
+
+      setTodaySlots(slots);
+    } catch (error) {
+      console.error('Error fetching today slots:', error);
+      toast({
+        title: '데이터 로드 오류',
+        description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
+        variant: 'destructive',
+      });
     }
   }
 
@@ -386,6 +502,53 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Today's Classes Section - Teacher Only */}
+      {isTeacher(role) && (
+        <Card className="border-primary/30 bg-primary/5 animate-slide-up">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-primary" />
+              오늘 수업 ({todaySlots.length}개)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {todaySlots.length === 0 ? (
+              <div className="text-center py-8">
+                <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {todaySlots.map((slot) => (
+                  <div key={slot.id} className="border rounded-lg p-4 bg-background">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">{slot.class_name}</span>
+                        <Badge variant="outline">{slot.subject}</Badge>
+                      </div>
+                      <span className="text-sm text-muted-foreground font-medium">
+                        {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
+                      </span>
+                    </div>
+                    {slot.students.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {slot.students.map((student) => (
+                          <Badge key={student.id} variant="secondary" className="text-xs">
+                            {student.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
