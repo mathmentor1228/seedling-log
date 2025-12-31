@@ -32,7 +32,8 @@ export default function Auth() {
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      // Always redirect to dashboard after login
+      navigate('/dashboard', { replace: true });
     }
   }, [user, navigate]);
 
@@ -82,7 +83,8 @@ export default function Auth() {
             title: 'Welcome back!',
             description: 'You have successfully logged in.',
           });
-          navigate('/');
+          // Redirect to dashboard after successful login
+          navigate('/dashboard', { replace: true });
         }
       } else {
         const { error } = await signUp(email, password, fullName);
