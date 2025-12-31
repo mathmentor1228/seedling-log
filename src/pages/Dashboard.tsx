@@ -85,6 +85,14 @@ interface TodaySlot {
   students: { id: string; name: string }[];
 }
 
+interface TodaySlotsDebug {
+  dayOfWeek: number;
+  slotsCount: number;
+  classIdsCount: number;
+  totalStudents: number;
+  fetchError: string | null;
+}
+
 export default function Dashboard() {
   const { role, user } = useAuth();
   const { toast } = useToast();
@@ -98,6 +106,7 @@ export default function Dashboard() {
   const [recentLessons, setRecentLessons] = useState<RecentLesson[]>([]);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
   const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
+  const [todaySlotsDebug, setTodaySlotsDebug] = useState<TodaySlotsDebug | null>(null);
   const [overdueDrafts, setOverdueDrafts] = useState<GroupedOverdueDrafts[]>([]);
   const [pendingHomework, setPendingHomework] = useState<PendingHomework[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,11 +217,11 @@ export default function Dashboard() {
           if (isAdmin(role)) {
             await fetchOverdueDrafts();
           }
+        }
 
-          // Fetch today's slots for teacher
-          if (isTeacher(role)) {
-            await fetchTodaySlots();
-          }
+        // Fetch today's slots for teacher - ALWAYS run for teachers regardless of isAssistant check
+        if (isTeacher(role)) {
+          await fetchTodaySlots();
         }
 
         // Fetch pending homework (unchecked)
@@ -308,12 +317,27 @@ export default function Dashboard() {
   }
 
   async function fetchTodaySlots() {
-    if (!user) return;
+    if (!user) {
+      console.error('fetchTodaySlots: No user found');
+      setTodaySlotsDebug({
+        dayOfWeek: -1,
+        slotsCount: 0,
+        classIdsCount: 0,
+        totalStudents: 0,
+        fetchError: 'No user',
+      });
+      return;
+    }
 
     try {
-      // Get today's day of week (0=Sunday, 1=Monday, etc.)
-      const today = new Date();
-      const dayOfWeek = getDay(today);
+      // Get today's day of week (0=Sunday, 1=Monday, etc.) using KST
+      const now = new Date();
+      // Convert to KST by adding 9 hours offset
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const kstDate = new Date(now.getTime() + kstOffset);
+      const dayOfWeek = kstDate.getUTCDay(); // Use UTC day since we added KST offset
+      
+      console.log('fetchTodaySlots: user.id =', user.id, ', dayOfWeek (KST) =', dayOfWeek);
 
       // Fetch class schedules for today for this teacher
       const { data: schedules, error: schedulesError } = await supabase
@@ -323,10 +347,13 @@ export default function Dashboard() {
           class_id,
           start_time,
           end_time,
+          day_of_week,
+          teacher_id,
           classes:class_id (
             id,
             name,
-            subject
+            subject,
+            teacher_id
           )
         `)
         .eq('teacher_id', user.id)
@@ -341,13 +368,23 @@ export default function Dashboard() {
           description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
           variant: 'destructive',
         });
+        setTodaySlotsDebug({
+          dayOfWeek,
+          slotsCount: 0,
+          classIdsCount: 0,
+          totalStudents: 0,
+          fetchError: schedulesError.message,
+        });
         return;
       }
+
+      console.log('fetchTodaySlots: schedules returned =', schedules?.length || 0, schedules);
 
       // Get students for each class
       const classIds = schedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
       
       let studentsMap: Record<string, { id: string; name: string }[]> = {};
+      let totalStudentsCount = 0;
       
       if (classIds.length > 0) {
         const { data: classStudents, error: studentsError } = await supabase
@@ -360,7 +397,13 @@ export default function Dashboard() {
 
         if (studentsError) {
           console.error('Error fetching class students:', studentsError);
+          toast({
+            title: '데이터 로드 오류',
+            description: '학생 목록을 불러오는 중 오류가 발생했습니다.',
+            variant: 'destructive',
+          });
         } else {
+          console.log('fetchTodaySlots: classStudents returned =', classStudents?.length || 0, classStudents);
           // Group students by class_id
           (classStudents || []).forEach((cs: any) => {
             if (!studentsMap[cs.class_id]) {
@@ -371,6 +414,7 @@ export default function Dashboard() {
                 id: cs.students.id,
                 name: cs.students.name,
               });
+              totalStudentsCount++;
             }
           });
         }
@@ -388,12 +432,26 @@ export default function Dashboard() {
       }));
 
       setTodaySlots(slots);
-    } catch (error) {
+      setTodaySlotsDebug({
+        dayOfWeek,
+        slotsCount: slots.length,
+        classIdsCount: classIds.length,
+        totalStudents: totalStudentsCount,
+        fetchError: null,
+      });
+    } catch (error: any) {
       console.error('Error fetching today slots:', error);
       toast({
         title: '데이터 로드 오류',
         description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
+      });
+      setTodaySlotsDebug({
+        dayOfWeek: -1,
+        slotsCount: 0,
+        classIdsCount: 0,
+        totalStudents: 0,
+        fetchError: error?.message || 'Unknown error',
       });
     }
   }
@@ -506,7 +564,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Today's Classes Section - Teacher Only (PRIMARY SECTION) */}
+      {/* Today's Classes Section - Teacher Only (PRIMARY SECTION) - ALWAYS RENDER */}
       {isTeacher(role) && (
         <Card className="border-primary/30 bg-primary/5 animate-slide-up">
           <CardHeader>
@@ -514,6 +572,13 @@ export default function Dashboard() {
               <GraduationCap className="w-5 h-5 text-primary" />
               오늘 수업 ({todaySlots.length}개)
             </CardTitle>
+            {/* Debug info for teacher - temporary */}
+            {todaySlotsDebug && (
+              <p className="text-xs text-muted-foreground mt-1">
+                [DEBUG] dayOfWeek(KST): {todaySlotsDebug.dayOfWeek}, slots: {todaySlotsDebug.slotsCount}, class_ids: {todaySlotsDebug.classIdsCount}, roster_students: {todaySlotsDebug.totalStudents}
+                {todaySlotsDebug.fetchError && <span className="text-destructive"> | error: {todaySlotsDebug.fetchError}</span>}
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             {todaySlots.length === 0 ? (
