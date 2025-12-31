@@ -30,7 +30,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" />, adminOnly: true },
+  { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> }, // Visible to ALL roles
   { label: 'Students', href: '/students', icon: <Users className="w-5 h-5" />, adminOnly: true },
   { label: 'Classes', href: '/classes', icon: <BookOpen className="w-5 h-5" />, adminOnly: true },
   { label: 'Lesson Records', href: '/lessons', icon: <ClipboardList className="w-5 h-5" /> },
