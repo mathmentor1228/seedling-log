@@ -87,7 +87,7 @@ interface Profile {
 }
 
 export default function Classes() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [teachers, setTeachers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -198,15 +198,17 @@ export default function Classes() {
 
   async function fetchTeachers() {
     try {
+      // Fetch users with teacher OR admin role
       const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
-        .eq('role', 'teacher');
+        .select('user_id, role')
+        .in('role', ['teacher', 'admin']);
 
       if (rolesError) throw rolesError;
 
       if (rolesData && rolesData.length > 0) {
-        const teacherIds = rolesData.map((r) => r.user_id);
+        // Deduplicate user IDs (in case someone has both roles)
+        const teacherIds = [...new Set(rolesData.map((r) => r.user_id))];
         const { data: profilesData, error: profilesError } = await supabase
           .from('profiles')
           .select('*')
@@ -534,9 +536,15 @@ export default function Classes() {
                         <SelectValue placeholder="선생님 선택" />
                       </SelectTrigger>
                       <SelectContent>
-                        {teachers.map((teacher) => (
+                        {isAdmin(role) && user && (
+                          <SelectItem key="self" value={user.id} className="border-b border-border mb-1 pb-2">
+                            <span className="font-medium">나 (원장)</span>
+                          </SelectItem>
+                        )}
+                        {teachers.filter(t => !(isAdmin(role) && user && t.id === user.id)).map((teacher) => (
                           <SelectItem key={teacher.id} value={teacher.id}>
-                            {teacher.full_name}
+                            <span>{teacher.full_name}</span>
+                            <span className="text-muted-foreground ml-2 text-xs">{teacher.email}</span>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -677,9 +685,15 @@ export default function Classes() {
                       <SelectValue placeholder="선생님 선택" />
                     </SelectTrigger>
                     <SelectContent>
-                      {teachers.map((teacher) => (
+                      {isAdmin(role) && user && (
+                        <SelectItem key="self" value={user.id} className="border-b border-border mb-1 pb-2">
+                          <span className="font-medium">나 (원장)</span>
+                        </SelectItem>
+                      )}
+                      {teachers.filter(t => !(isAdmin(role) && user && t.id === user.id)).map((teacher) => (
                         <SelectItem key={teacher.id} value={teacher.id}>
-                          {teacher.full_name} ({teacher.email})
+                          <span>{teacher.full_name}</span>
+                          <span className="text-muted-foreground ml-2 text-xs">{teacher.email}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
