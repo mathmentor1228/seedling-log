@@ -540,6 +540,15 @@ export type Database = {
         Args: { _week_end: string; _week_start: string }
         Returns: undefined
       }
+      get_prev_homework_status_for_roster: {
+        Args: { _pairs: Json; _today?: string }
+        Returns: {
+          class_id: string
+          homework_status: string
+          prev_lesson_date: string
+          student_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

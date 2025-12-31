@@ -451,30 +451,26 @@ export default function Dashboard() {
         }
       }
 
-      // Batch fetch previous lesson records for all students
-      // Use a single query to get the most recent lesson per student+class pair
+      // Batch fetch previous homework status via RPC
       const today = format(new Date(), 'yyyy-MM-dd');
-      const allStudentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
       
       let previousHomeworkMap: Record<string, string> = {}; // key: `${studentId}:${classId}`
       
-      if (allStudentIds.length > 0) {
-        const { data: previousLessons, error: prevError } = await supabase
-          .from('lesson_records')
-          .select('student_id, class_id, homework_status, lesson_date')
-          .in('student_id', allStudentIds)
-          .in('class_id', classIds)
-          .lt('lesson_date', today)
-          .eq('submitted', true)
-          .order('lesson_date', { ascending: false });
+      if (allStudentClassPairs.length > 0) {
+        const pairs = allStudentClassPairs.map(p => ({
+          student_id: p.studentId,
+          class_id: p.classId,
+        }));
+        
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+          'get_prev_homework_status_for_roster',
+          { _pairs: pairs, _today: today }
+        );
 
-        if (!prevError && previousLessons) {
-          // Keep only the most recent lesson per student+class pair
-          previousLessons.forEach((lesson: any) => {
-            const key = `${lesson.student_id}:${lesson.class_id}`;
-            if (!previousHomeworkMap[key]) {
-              previousHomeworkMap[key] = lesson.homework_status;
-            }
+        if (!rpcError && rpcResult) {
+          (rpcResult as any[]).forEach((row: any) => {
+            const key = `${row.student_id}:${row.class_id}`;
+            previousHomeworkMap[key] = row.homework_status;
           });
         }
       }
