@@ -87,6 +87,9 @@ interface LessonRecord {
   test_date?: string | null;
   test_time?: string | null;
   test_assistant?: string | null;
+  // Lesson type and attendance fields
+  lesson_types?: string[];
+  attendance_status?: string[];
 }
 
 interface Student {
@@ -190,6 +193,25 @@ const HOMEWORK_STATUS = [
   { value: 'none_assigned', label: '미배정' },
 ];
 
+// Lesson type options for 종류 checkbox group
+const LESSON_TYPE_OPTIONS = [
+  { value: '정규수업', label: '정규수업' },
+  { value: '보충수업', label: '보충수업' },
+  { value: '시험특강', label: '시험특강' },
+  { value: '방학특강', label: '방학특강' },
+  { value: '공지사항', label: '공지사항' },
+];
+
+// Attendance status options for 출결사항 checkbox group
+const ATTENDANCE_STATUS_OPTIONS = [
+  { value: '정상등원', label: '정상등원' },
+  { value: '지각', label: '지각' },
+  { value: '조퇴', label: '조퇴' },
+  { value: '인정결석', label: '인정결석' },
+  { value: '무단결석', label: '무단결석' },
+  { value: '보충불가', label: '보충불가' },
+];
+
 // Homework result options
 const HOMEWORK_RESULT_OPTIONS = [
   { value: 'completed', label: '완료', icon: CheckCircle2, color: 'text-green-600' },
@@ -243,6 +265,8 @@ export default function Lessons() {
     learning_issues: [] as string[],
     next_lesson_goal: '',
     notes: '',
+    lesson_types: ['정규수업'] as string[],
+    attendance_status: ['정상등원'] as string[],
   });
   const { toast } = useToast();
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -573,6 +597,8 @@ export default function Lessons() {
         learning_issues: [],
         next_lesson_goal: '',
         notes: '',
+        lesson_types: ['정규수업'],
+        attendance_status: ['정상등원'],
       });
 
       return data.id;
@@ -609,6 +635,9 @@ export default function Lessons() {
 
   function buildPayload() {
     const subject = formData.subject as SubjectType;
+    // Ensure at least one value is selected for lesson_types and attendance_status
+    const lesson_types = formData.lesson_types.length > 0 ? formData.lesson_types : ['정규수업'];
+    const attendance_status = formData.attendance_status.length > 0 ? formData.attendance_status : ['정상등원'];
     return {
       teacher_id: user!.id,
       student_id: formData.student_id,
@@ -621,6 +650,8 @@ export default function Lessons() {
       learning_issues: formData.learning_issues,
       next_lesson_goal: formData.next_lesson_goal.trim() || null,
       notes: formData.notes.trim() || null,
+      lesson_types,
+      attendance_status,
     };
   }
 
@@ -781,6 +812,8 @@ export default function Lessons() {
       learning_issues: [],
       next_lesson_goal: '',
       notes: '',
+      lesson_types: ['정규수업'],
+      attendance_status: ['정상등원'],
     });
     setCurrentDraftId(null);
     setPreviousHomework(null);
@@ -984,6 +1017,8 @@ export default function Lessons() {
       learning_issues: lesson.learning_issues || [],
       next_lesson_goal: lesson.next_lesson_goal || '',
       notes: lesson.notes || '',
+      lesson_types: lesson.lesson_types || ['정규수업'],
+      attendance_status: lesson.attendance_status || ['정상등원'],
     });
     // Set test form data from lesson
     setTestFormData({
@@ -993,7 +1028,7 @@ export default function Lessons() {
       test_notes: lesson.test_notes || '',
       test_date: lesson.test_date || lesson.lesson_date,
       test_time: lesson.test_time || '',
-      test_assistant: (lesson as any).test_assistant || '',
+      test_assistant: lesson.test_assistant || '',
     });
     setIsDialogOpen(true);
   };
@@ -1334,6 +1369,66 @@ export default function Lessons() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              {/* 종류 and 출결사항 checkbox groups - disabled for assistants */}
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAssistant ? 'opacity-60 pointer-events-none' : ''}`}>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">종류</Label>
+                  <div className="p-3 bg-secondary/50 rounded-lg space-y-2">
+                    {LESSON_TYPE_OPTIONS.map((opt) => (
+                      <div key={opt.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`lesson_type_${opt.value}`}
+                          checked={formData.lesson_types.includes(opt.value)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setFormData({ ...formData, lesson_types: [...formData.lesson_types, opt.value] });
+                            } else {
+                              // Prevent unchecking if it would leave empty array
+                              const newTypes = formData.lesson_types.filter(t => t !== opt.value);
+                              if (newTypes.length === 0) {
+                                setFormData({ ...formData, lesson_types: ['정규수업'] });
+                              } else {
+                                setFormData({ ...formData, lesson_types: newTypes });
+                              }
+                            }
+                          }}
+                          disabled={isAssistant}
+                        />
+                        <label htmlFor={`lesson_type_${opt.value}`} className="text-sm cursor-pointer">{opt.label}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">출결사항</Label>
+                  <div className="p-3 bg-secondary/50 rounded-lg space-y-2">
+                    {ATTENDANCE_STATUS_OPTIONS.map((opt) => (
+                      <div key={opt.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`attendance_${opt.value}`}
+                          checked={formData.attendance_status.includes(opt.value)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setFormData({ ...formData, attendance_status: [...formData.attendance_status, opt.value] });
+                            } else {
+                              // Prevent unchecking if it would leave empty array
+                              const newStatus = formData.attendance_status.filter(s => s !== opt.value);
+                              if (newStatus.length === 0) {
+                                setFormData({ ...formData, attendance_status: ['정상등원'] });
+                              } else {
+                                setFormData({ ...formData, attendance_status: newStatus });
+                              }
+                            }
+                          }}
+                          disabled={isAssistant}
+                        />
+                        <label htmlFor={`attendance_${opt.value}`} className="text-sm cursor-pointer">{opt.label}</label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

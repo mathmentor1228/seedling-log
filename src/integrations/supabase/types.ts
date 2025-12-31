@@ -228,6 +228,7 @@ export type Database = {
       }
       lesson_records: {
         Row: {
+          attendance_status: string[] | null
           class_id: string | null
           created_at: string
           draft_created_at: string
@@ -236,6 +237,7 @@ export type Database = {
           learning_issues: string[] | null
           lesson_date: string
           lesson_range: string
+          lesson_types: string[] | null
           next_lesson_goal: string | null
           notes: string | null
           student_id: string
@@ -254,6 +256,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          attendance_status?: string[] | null
           class_id?: string | null
           created_at?: string
           draft_created_at?: string
@@ -262,6 +265,7 @@ export type Database = {
           learning_issues?: string[] | null
           lesson_date?: string
           lesson_range: string
+          lesson_types?: string[] | null
           next_lesson_goal?: string | null
           notes?: string | null
           student_id: string
@@ -280,6 +284,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          attendance_status?: string[] | null
           class_id?: string | null
           created_at?: string
           draft_created_at?: string
@@ -288,6 +293,7 @@ export type Database = {
           learning_issues?: string[] | null
           lesson_date?: string
           lesson_range?: string
+          lesson_types?: string[] | null
           next_lesson_goal?: string | null
           notes?: string | null
           student_id?: string
