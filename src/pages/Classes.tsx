@@ -22,6 +22,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Users, BookOpen, Edit2, Trash2, Loader2, Clock } from 'lucide-react';
 import { ClassScheduleManager, formatScheduleDisplay, type Schedule } from '@/components/ClassScheduleManager';
+import { ClassStudentManager } from '@/components/ClassStudentManager';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -57,6 +58,7 @@ export default function Classes() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
+  const [detailClass, setDetailClass] = useState<ClassItem | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     subject: '',
@@ -369,7 +371,11 @@ export default function Classes() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {classes.map((classItem) => (
-            <Card key={classItem.id} className="animate-fade-in">
+            <Card
+              key={classItem.id}
+              className="animate-fade-in cursor-pointer hover:border-primary/50 transition-colors"
+              onClick={() => setDetailClass(classItem)}
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
@@ -378,7 +384,7 @@ export default function Classes() {
                       {classItem.subject}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -416,6 +422,42 @@ export default function Classes() {
           ))}
         </div>
       )}
+
+      {/* Class Detail Dialog */}
+      <Dialog open={!!detailClass} onOpenChange={(open) => !open && setDetailClass(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {detailClass?.name}
+              <Badge variant="secondary">{detailClass?.subject}</Badge>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>담당: {detailClass?.teacher_email || '미배정'}</p>
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                <span>{formatScheduleDisplay(detailClass?.schedules || [])}</span>
+              </div>
+            </div>
+            {detailClass && (
+              <ClassStudentManager
+                classId={detailClass.id}
+                onStudentCountChange={(count) => {
+                  setClasses((prev) =>
+                    prev.map((c) =>
+                      c.id === detailClass.id ? { ...c, student_count: count } : c
+                    )
+                  );
+                  setDetailClass((prev) =>
+                    prev ? { ...prev, student_count: count } : prev
+                  );
+                }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
