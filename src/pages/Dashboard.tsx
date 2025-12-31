@@ -468,7 +468,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* UNCONDITIONAL DEBUG MARKERS - render at very top regardless of data/role */}
+      {/* UNCONDITIONAL DEPLOY VERIFICATION - renders for ALL roles */}
+      <div className="text-xs text-white bg-destructive p-2 rounded border border-destructive font-bold">
+        DEPLOY-CHECK-V1
+      </div>
+      
+      {/* Role-specific debug markers */}
       {isAdmin(role) && (
         <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded border border-border">
           DASHBOARD-MARKER-ADMIN-V3
