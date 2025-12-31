@@ -120,6 +120,17 @@ interface TodaySlot {
   students: TodaySlotStudent[];
 }
 
+// Normalize homework status values from DB (handles both English and Korean)
+function normalizeHomeworkStatus(status: string | null | undefined): TodaySlotStudent['previousHomeworkStatus'] {
+  if (!status) return null;
+  const normalized = status.toLowerCase().trim();
+  if (['not_done', '미이행', '미완료'].includes(normalized)) return 'not_done';
+  if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return 'partial';
+  if (['completed', '완료'].includes(normalized)) return 'completed';
+  if (['none_assigned', '없음', '미배정'].includes(normalized)) return 'none_assigned';
+  return null;
+}
+
 // Helper function to render previous homework status badge
 function getPreviousHomeworkBadge(status: TodaySlotStudent['previousHomeworkStatus']) {
   if (!status || status === 'completed' || status === 'none_assigned') return null;
@@ -261,6 +272,12 @@ function getHomeworkStatusBadge(homework: HomeworkAssignment | null) {
   return <Badge variant="outline" className={colorClass}><Icon className="w-3 h-3 mr-1" />{option.label}</Badge>;
 }
 
+interface HwBadgeDebug {
+  pairsCount: number;
+  rpcRowsCount: number;
+  firstRow: any;
+}
+
 export default function Lessons() {
   const { user, role } = useAuth();
   const navigate = useNavigate();
@@ -269,6 +286,7 @@ export default function Lessons() {
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
+  const [hwBadgeDebug, setHwBadgeDebug] = useState<HwBadgeDebug | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -564,7 +582,8 @@ export default function Lessons() {
       // Batch fetch previous homework status via RPC
       const today = format(new Date(), 'yyyy-MM-dd');
       
-      let previousHomeworkMap: Record<string, string> = {}; // key: `${studentId}:${classId}`
+      let previousHomeworkMap: Record<string, TodaySlotStudent['previousHomeworkStatus']> = {}; // key: `${studentId}:${classId}`
+      let hwBadgeDebug = { pairsCount: 0, rpcRowsCount: 0, firstRow: null as any };
       
       if (allStudentClassPairs.length > 0) {
         const pairs = allStudentClassPairs.map(p => ({
@@ -572,26 +591,45 @@ export default function Lessons() {
           class_id: p.classId,
         }));
         
+        hwBadgeDebug.pairsCount = pairs.length;
+        console.log('[HW_BADGE] pairs count', pairs.length);
+        console.log('[HW_BADGE] pairs sample', pairs.slice(0, 3));
+        
         const { data: rpcResult, error: rpcError } = await supabase.rpc(
           'get_prev_homework_status_for_roster',
           { _pairs: pairs, _today: today }
         );
 
+        console.log('[HW_BADGE] rpc error', rpcError);
+        console.log('[HW_BADGE] rpc rows', rpcResult?.length, (rpcResult as any[])?.slice(0, 5));
+
         if (!rpcError && rpcResult) {
+          hwBadgeDebug.rpcRowsCount = (rpcResult as any[]).length;
+          if ((rpcResult as any[]).length > 0) {
+            hwBadgeDebug.firstRow = (rpcResult as any[])[0];
+          }
           (rpcResult as any[]).forEach((row: any) => {
             const key = `${row.student_id}:${row.class_id}`;
-            previousHomeworkMap[key] = row.homework_status;
+            previousHomeworkMap[key] = normalizeHomeworkStatus(row.homework_status);
+            console.log('[HW_BADGE] mapped', key, row.homework_status, '->', previousHomeworkMap[key]);
           });
         }
       }
 
       // Update studentsMap with previousHomeworkStatus
       Object.keys(studentsMap).forEach(classId => {
-        studentsMap[classId] = studentsMap[classId].map(student => ({
-          ...student,
-          previousHomeworkStatus: previousHomeworkMap[`${student.id}:${classId}`] as any || null,
-        }));
+        studentsMap[classId] = studentsMap[classId].map(student => {
+          const key = `${student.id}:${classId}`;
+          const status = previousHomeworkMap[key] || null;
+          return {
+            ...student,
+            previousHomeworkStatus: status,
+          };
+        });
       });
+      
+      // Store debug info for display
+      setHwBadgeDebug(hwBadgeDebug);
 
       // Build slots array
       const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
@@ -1273,6 +1311,13 @@ export default function Lessons() {
               <GraduationCap className="w-5 h-5 text-primary" />
               오늘 수업 ({todaySlots.length}개)
             </CardTitle>
+            {/* HW Badge Debug Line */}
+            <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-1 rounded mt-1">
+              HW_BADGE_DEBUG: pairs={hwBadgeDebug?.pairsCount ?? 'N/A'}, rpcRows={hwBadgeDebug?.rpcRowsCount ?? 'N/A'}
+              {hwBadgeDebug?.firstRow && (
+                <span> | first={hwBadgeDebug.firstRow.student_id?.slice(0,8)}:{hwBadgeDebug.firstRow.class_id?.slice(0,8)} status={hwBadgeDebug.firstRow.homework_status}</span>
+              )}
+            </p>
           </CardHeader>
           <CardContent>
             {todaySlots.length === 0 ? (
