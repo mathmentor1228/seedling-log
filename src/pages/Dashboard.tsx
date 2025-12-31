@@ -478,9 +478,9 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* UNCONDITIONAL DEPLOY VERIFICATION - renders for ALL roles */}
+      {/* UNCONDITIONAL LOGIN REDIRECT VERIFICATION - renders for ALL roles */}
       <div className="text-xs text-white bg-destructive p-2 rounded border border-destructive font-bold">
-        DEPLOY-CHECK-V1
+        LOGIN-REDIRECT-CHECK-V2
       </div>
       
       {/* Role-specific debug markers */}

@@ -31,10 +31,8 @@ export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRo
       const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role);
       
       if (!hasAccess) {
-        // Teachers and assistants trying to access admin pages get redirected
-        if (role === 'teacher' || role === 'assistant') {
-          navigate('/lessons');
-        }
+        // Users without access get redirected to dashboard (accessible by all roles)
+        navigate('/dashboard', { replace: true });
       }
     }
   }, [user, loading, role, navigate, allowedRoles]);
