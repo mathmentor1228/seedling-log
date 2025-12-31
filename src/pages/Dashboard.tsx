@@ -75,6 +75,12 @@ interface GroupedOverdueDrafts {
   drafts: OverdueDraft[];
 }
 
+interface TodaySlotStudent {
+  id: string;
+  name: string;
+  previousHomeworkStatus?: 'completed' | 'partial' | 'not_done' | 'none_assigned' | null;
+}
+
 interface TodaySlot {
   id: string;
   class_id: string;
@@ -82,7 +88,7 @@ interface TodaySlot {
   subject: string;
   start_time: string;
   end_time: string;
-  students: { id: string; name: string }[];
+  students: TodaySlotStudent[];
 }
 
 interface TodaySlotsDebug {
@@ -91,6 +97,29 @@ interface TodaySlotsDebug {
   classIdsCount: number;
   totalStudents: number;
   fetchError: string | null;
+}
+
+// Helper function to render previous homework status badge
+function getPreviousHomeworkBadge(status: TodaySlotStudent['previousHomeworkStatus']) {
+  if (!status || status === 'completed' || status === 'none_assigned') return null;
+  
+  if (status === 'not_done') {
+    return (
+      <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+        지난 숙제 미이행
+      </Badge>
+    );
+  }
+  
+  if (status === 'partial') {
+    return (
+      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
+        지난 숙제 일부완료
+      </Badge>
+    );
+  }
+  
+  return null;
 }
 
 export default function Dashboard() {
@@ -383,7 +412,8 @@ export default function Dashboard() {
       // Get students for each class
       const classIds = schedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
       
-      let studentsMap: Record<string, { id: string; name: string }[]> = {};
+      let studentsMap: Record<string, TodaySlotStudent[]> = {};
+      let allStudentClassPairs: { studentId: string; classId: string }[] = [];
       let totalStudentsCount = 0;
       
       if (classIds.length > 0) {
@@ -404,7 +434,7 @@ export default function Dashboard() {
           });
         } else {
           console.log('fetchTodaySlots: classStudents returned =', classStudents?.length || 0, classStudents);
-          // Group students by class_id
+          // Group students by class_id and collect pairs for batch lookup
           (classStudents || []).forEach((cs: any) => {
             if (!studentsMap[cs.class_id]) {
               studentsMap[cs.class_id] = [];
@@ -414,11 +444,48 @@ export default function Dashboard() {
                 id: cs.students.id,
                 name: cs.students.name,
               });
+              allStudentClassPairs.push({ studentId: cs.students.id, classId: cs.class_id });
               totalStudentsCount++;
             }
           });
         }
       }
+
+      // Batch fetch previous lesson records for all students
+      // Use a single query to get the most recent lesson per student+class pair
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const allStudentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
+      
+      let previousHomeworkMap: Record<string, string> = {}; // key: `${studentId}:${classId}`
+      
+      if (allStudentIds.length > 0) {
+        const { data: previousLessons, error: prevError } = await supabase
+          .from('lesson_records')
+          .select('student_id, class_id, homework_status, lesson_date')
+          .in('student_id', allStudentIds)
+          .in('class_id', classIds)
+          .lt('lesson_date', today)
+          .eq('submitted', true)
+          .order('lesson_date', { ascending: false });
+
+        if (!prevError && previousLessons) {
+          // Keep only the most recent lesson per student+class pair
+          previousLessons.forEach((lesson: any) => {
+            const key = `${lesson.student_id}:${lesson.class_id}`;
+            if (!previousHomeworkMap[key]) {
+              previousHomeworkMap[key] = lesson.homework_status;
+            }
+          });
+        }
+      }
+
+      // Update studentsMap with previousHomeworkStatus
+      Object.keys(studentsMap).forEach(classId => {
+        studentsMap[classId] = studentsMap[classId].map(student => ({
+          ...student,
+          previousHomeworkStatus: previousHomeworkMap[`${student.id}:${classId}`] as any || null,
+        }));
+      });
 
       // Build slots array
       const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
@@ -639,7 +706,10 @@ export default function Dashboard() {
                             key={student.id} 
                             className="flex items-center justify-between p-2 bg-secondary/50 rounded-md"
                           >
-                            <span className="font-medium text-foreground">{student.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-foreground">{student.name}</span>
+                              {getPreviousHomeworkBadge(student.previousHomeworkStatus)}
+                            </div>
                             <div className="flex items-center gap-2">
                               <Button
                                 variant="outline"
