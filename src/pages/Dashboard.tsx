@@ -79,6 +79,7 @@ interface TodaySlotStudent {
   id: string;
   name: string;
   previousHomeworkStatus?: 'completed' | 'partial' | 'not_done' | 'none_assigned' | null;
+  debugReason?: 'no_prev_record' | 'found' | 'blocked_by_access' | null;
 }
 
 interface TodaySlot {
@@ -89,14 +90,6 @@ interface TodaySlot {
   start_time: string;
   end_time: string;
   students: TodaySlotStudent[];
-}
-
-interface TodaySlotsDebug {
-  dayOfWeek: number;
-  slotsCount: number;
-  classIdsCount: number;
-  totalStudents: number;
-  fetchError: string | null;
 }
 
 // Normalize homework status values from DB (handles both English and Korean)
@@ -111,7 +104,19 @@ function normalizeHomeworkStatus(status: string | null | undefined): TodaySlotSt
 }
 
 // Helper function to render previous homework status badge
-function getPreviousHomeworkBadge(status: TodaySlotStudent['previousHomeworkStatus']) {
+function getPreviousHomeworkBadge(
+  status: TodaySlotStudent['previousHomeworkStatus'],
+  debugReason?: TodaySlotStudent['debugReason']
+) {
+  // Show "첫 수업" badge when there's no previous lesson record
+  if (debugReason === 'no_prev_record') {
+    return (
+      <Badge variant="outline" className="text-muted-foreground border-muted text-xs">
+        첫 수업
+      </Badge>
+    );
+  }
+  
   if (!status || status === 'completed' || status === 'none_assigned') return null;
   
   if (status === 'not_done') {
@@ -133,20 +138,6 @@ function getPreviousHomeworkBadge(status: TodaySlotStudent['previousHomeworkStat
   return null;
 }
 
-interface HwBadgeDebugPair {
-  student_id: string;
-  class_id: string;
-  class_name?: string;
-}
-
-interface HwBadgeDebug {
-  pairsCount: number;
-  rpcRowsCount: number;
-  firstRow: any;
-  firstPairs: HwBadgeDebugPair[];
-  debugReasons: Record<string, number>; // count by debug_reason
-}
-
 export default function Dashboard() {
   const { role, user } = useAuth();
   const { toast } = useToast();
@@ -160,8 +151,6 @@ export default function Dashboard() {
   const [recentLessons, setRecentLessons] = useState<RecentLesson[]>([]);
   const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
   const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
-  const [todaySlotsDebug, setTodaySlotsDebug] = useState<TodaySlotsDebug | null>(null);
-  const [hwBadgeDebug, setHwBadgeDebug] = useState<HwBadgeDebug | null>(null);
   const [overdueDrafts, setOverdueDrafts] = useState<GroupedOverdueDrafts[]>([]);
   const [pendingHomework, setPendingHomework] = useState<PendingHomework[]>([]);
   const [loading, setLoading] = useState(true);
@@ -374,13 +363,6 @@ export default function Dashboard() {
   async function fetchTodaySlots() {
     if (!user) {
       console.error('fetchTodaySlots: No user found');
-      setTodaySlotsDebug({
-        dayOfWeek: -1,
-        slotsCount: 0,
-        classIdsCount: 0,
-        totalStudents: 0,
-        fetchError: 'No user',
-      });
       return;
     }
 
@@ -422,13 +404,6 @@ export default function Dashboard() {
           title: '데이터 로드 오류',
           description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
           variant: 'destructive',
-        });
-        setTodaySlotsDebug({
-          dayOfWeek,
-          slotsCount: 0,
-          classIdsCount: 0,
-          totalStudents: 0,
-          fetchError: schedulesError.message,
         });
         return;
       }
@@ -480,23 +455,11 @@ export default function Dashboard() {
       // Batch fetch previous homework status via RPC
       const today = format(new Date(), 'yyyy-MM-dd');
       
-      let previousHomeworkMap: Record<string, TodaySlotStudent['previousHomeworkStatus']> = {}; // key: `${studentId}:${classId}`
-      
-      // Build class_id -> class_name map for debug
-      const classIdToName: Record<string, string> = {};
-      (schedules || []).forEach((s: any) => {
-        if (s.classes?.id && s.classes?.name) {
-          classIdToName[s.classes.id] = s.classes.name;
-        }
-      });
-      
-      let hwBadgeDebugData: HwBadgeDebug = { 
-        pairsCount: 0, 
-        rpcRowsCount: 0, 
-        firstRow: null, 
-        firstPairs: [],
-        debugReasons: {} 
-      };
+      // key: `${studentId}:${classId}` -> { status, debugReason }
+      let previousHomeworkMap: Record<string, { 
+        status: TodaySlotStudent['previousHomeworkStatus']; 
+        debugReason: TodaySlotStudent['debugReason'];
+      }> = {};
       
       if (allStudentClassPairs.length > 0) {
         const pairs = allStudentClassPairs.map(p => ({
@@ -504,60 +467,34 @@ export default function Dashboard() {
           class_id: p.classId,
         }));
         
-        hwBadgeDebugData.pairsCount = pairs.length;
-        // Store first 3 pairs with class names for debug display
-        hwBadgeDebugData.firstPairs = pairs.slice(0, 3).map(p => ({
-          ...p,
-          class_name: classIdToName[p.class_id] || 'unknown',
-        }));
-        
-        console.log('[HW_BADGE] pairs count', pairs.length);
-        console.log('[HW_BADGE] pairs sample with names', hwBadgeDebugData.firstPairs);
-        
         const { data: rpcResult, error: rpcError } = await supabase.rpc(
           'get_prev_homework_status_for_roster',
           { _pairs: pairs, _today: today }
         );
 
-        console.log('[HW_BADGE] rpc error', rpcError);
-        console.log('[HW_BADGE] rpc rows', rpcResult?.length, (rpcResult as any[])?.slice(0, 5));
-
         if (!rpcError && rpcResult) {
-          hwBadgeDebugData.rpcRowsCount = (rpcResult as any[]).length;
-          if ((rpcResult as any[]).length > 0) {
-            hwBadgeDebugData.firstRow = (rpcResult as any[])[0];
-          }
-          // Count debug_reasons
           (rpcResult as any[]).forEach((row: any) => {
-            const reason = row.debug_reason || 'unknown';
-            hwBadgeDebugData.debugReasons[reason] = (hwBadgeDebugData.debugReasons[reason] || 0) + 1;
-            
-            // Only map if we have a valid homework_status (not blocked)
-            if (row.homework_status !== null) {
-              const key = `${row.student_id}:${row.class_id}`;
-              previousHomeworkMap[key] = normalizeHomeworkStatus(row.homework_status);
-              console.log('[HW_BADGE] mapped', key, row.homework_status, '->', previousHomeworkMap[key]);
-            }
+            const key = `${row.student_id}:${row.class_id}`;
+            previousHomeworkMap[key] = {
+              status: normalizeHomeworkStatus(row.homework_status),
+              debugReason: row.debug_reason as TodaySlotStudent['debugReason'],
+            };
           });
         }
-        
-        console.log('[HW_BADGE] debugReasons', hwBadgeDebugData.debugReasons);
       }
 
-      // Update studentsMap with previousHomeworkStatus
+      // Update studentsMap with previousHomeworkStatus and debugReason
       Object.keys(studentsMap).forEach(classId => {
         studentsMap[classId] = studentsMap[classId].map(student => {
           const key = `${student.id}:${classId}`;
-          const status = previousHomeworkMap[key] || null;
+          const mapped = previousHomeworkMap[key];
           return {
             ...student,
-            previousHomeworkStatus: status,
+            previousHomeworkStatus: mapped?.status || null,
+            debugReason: mapped?.debugReason || null,
           };
         });
       });
-      
-      // Store debug info for display
-      setHwBadgeDebug(hwBadgeDebugData);
 
       // Build slots array
       const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
@@ -571,26 +508,12 @@ export default function Dashboard() {
       }));
 
       setTodaySlots(slots);
-      setTodaySlotsDebug({
-        dayOfWeek,
-        slotsCount: slots.length,
-        classIdsCount: classIds.length,
-        totalStudents: totalStudentsCount,
-        fetchError: null,
-      });
     } catch (error: any) {
       console.error('Error fetching today slots:', error);
       toast({
         title: '데이터 로드 오류',
         description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
-      });
-      setTodaySlotsDebug({
-        dayOfWeek: -1,
-        slotsCount: 0,
-        classIdsCount: 0,
-        totalStudents: 0,
-        fetchError: error?.message || 'Unknown error',
       });
     }
   }
@@ -617,28 +540,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* FIXED TOP-LEFT DEPLOY MARKER - always visible */}
-      <div className="fixed top-2 left-2 z-[9999] text-xs font-bold text-white bg-fuchsia-600 px-2 py-1 rounded shadow-lg">
-        DEPLOY-MARKER-HW-V1
-      </div>
-      
-      {/* UNCONDITIONAL LOGIN REDIRECT VERIFICATION - renders for ALL roles */}
-      <div className="text-xs text-white bg-destructive p-2 rounded border border-destructive font-bold">
-        LOGIN-REDIRECT-CHECK-V2
-      </div>
-      
-      {/* Role-specific debug markers */}
-      {isAdmin(role) && (
-        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded border border-border">
-          DASHBOARD-MARKER-ADMIN-V3
-        </div>
-      )}
-      {isTeacher(role) && (
-        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded border border-border">
-          DASHBOARD-MARKER-TEACHER-V3
-        </div>
-      )}
-      
       <div>
         <h1 className="text-2xl font-bold text-foreground">대시보드</h1>
         <p className="text-muted-foreground mt-1">
@@ -749,41 +650,6 @@ export default function Dashboard() {
               <GraduationCap className="w-5 h-5 text-primary" />
               오늘 수업 ({todaySlots.length}개)
             </CardTitle>
-            {/* UNCONDITIONAL Debug Marker - always visible */}
-            <p className="text-xs font-bold text-fuchsia-600 bg-fuchsia-100 dark:bg-fuchsia-950/40 p-1 rounded mt-1 border border-fuchsia-300">
-              HW_BADGE_DEBUG_V1 (render-check)
-            </p>
-            {/* Debug info for teacher - temporary */}
-            {todaySlotsDebug && (
-              <p className="text-xs text-muted-foreground mt-1">
-                [DEBUG] dayOfWeek(KST): {todaySlotsDebug.dayOfWeek}, slots: {todaySlotsDebug.slotsCount}, class_ids: {todaySlotsDebug.classIdsCount}, roster_students: {todaySlotsDebug.totalStudents}
-                {todaySlotsDebug.fetchError && <span className="text-destructive"> | error: {todaySlotsDebug.fetchError}</span>}
-              </p>
-            )}
-            {/* HW Badge Debug Line - Enhanced */}
-            <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded mt-1 space-y-1">
-              <p className="font-semibold">
-                HW_BADGE_DEBUG: pairs={hwBadgeDebug?.pairsCount ?? 'N/A'}, rpcRows={hwBadgeDebug?.rpcRowsCount ?? 'N/A'}
-              </p>
-              {hwBadgeDebug?.firstPairs && hwBadgeDebug.firstPairs.length > 0 && (
-                <p>
-                  firstPairs: {hwBadgeDebug.firstPairs.map((p, i) => 
-                    `[${i+1}] ${p.student_id.slice(0,8)}:${p.class_id.slice(0,8)} (${p.class_name})`
-                  ).join(' | ')}
-                </p>
-              )}
-              {hwBadgeDebug?.debugReasons && Object.keys(hwBadgeDebug.debugReasons).length > 0 && (
-                <p className="font-medium">
-                  reasons: {Object.entries(hwBadgeDebug.debugReasons).map(([k, v]) => `${k}=${v}`).join(', ')}
-                </p>
-              )}
-              {hwBadgeDebug?.firstRow && (
-                <p>
-                  firstRow: {hwBadgeDebug.firstRow.student_id?.slice(0,8)}:{hwBadgeDebug.firstRow.class_id?.slice(0,8)} 
-                  status={hwBadgeDebug.firstRow.homework_status} reason={hwBadgeDebug.firstRow.debug_reason}
-                </p>
-              )}
-            </div>
           </CardHeader>
           <CardContent>
             {todaySlots.length === 0 ? (
@@ -813,7 +679,7 @@ export default function Dashboard() {
                           >
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-foreground">{student.name}</span>
-                              {getPreviousHomeworkBadge(student.previousHomeworkStatus)}
+                              {getPreviousHomeworkBadge(student.previousHomeworkStatus, student.debugReason)}
                             </div>
                             <div className="flex items-center gap-2">
                               <Button
