@@ -456,15 +456,25 @@ export default function Dashboard() {
     }
   }
 
+  // Loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="space-y-8">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
 
-  const totalOverdueDrafts = overdueDrafts.reduce((sum, g) => sum + g.count, 0);
+  const totalOverdueDrafts = (overdueDrafts || []).reduce((sum, g) => sum + (g?.count || 0), 0);
 
   return (
     <div className="space-y-8">
@@ -552,30 +562,30 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {overdueDrafts.map((group) => (
-                <div key={group.teacher_id} className="border rounded-lg p-4 bg-background">
+              {(overdueDrafts || []).map((group) => (
+                <div key={group?.teacher_id || 'unknown'} className="border rounded-lg p-4 bg-background">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-foreground">{group.teacher_name}</h4>
+                    <h4 className="font-semibold text-foreground">{group?.teacher_name || '알 수 없음'}</h4>
                     <span className="text-sm bg-amber-500/10 text-amber-600 px-2 py-1 rounded-full">
-                      {group.count}건 미제출
+                      {group?.count || 0}건 미제출
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {group.drafts.map((draft) => (
+                    {(group?.drafts || []).map((draft) => (
                       <div
-                        key={draft.id}
+                        key={draft?.id || Math.random()}
                         className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"
                       >
                         <div className="flex items-center gap-3">
                           <FileEdit className="w-4 h-4 text-amber-500" />
-                          <span className="font-medium">{draft.student_name}</span>
-                          <span className="text-muted-foreground">{draft.subject || '-'}</span>
+                          <span className="font-medium">{draft?.student_name || '알 수 없음'}</span>
+                          <span className="text-muted-foreground">{draft?.subject || '-'}</span>
                           <span className="text-muted-foreground">
-                            {draft.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
+                            {draft?.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
                           </span>
                         </div>
                         <span className="text-amber-600 font-medium">
-                          {draft.overdue_hours}시간 경과
+                          {draft?.overdue_hours || 0}시간 경과
                         </span>
                       </div>
                     ))}
@@ -611,7 +621,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {todaySlots.map((slot) => (
+                {(todaySlots || []).map((slot) => (
                   <div key={slot.id} className="border rounded-lg p-4 bg-background">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
@@ -622,9 +632,9 @@ export default function Dashboard() {
                         {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
                       </span>
                     </div>
-                    {slot.students.length > 0 ? (
+                    {(slot?.students || []).length > 0 ? (
                       <div className="space-y-2">
-                        {slot.students.map((student) => (
+                        {(slot?.students || []).map((student) => (
                           <div 
                             key={student.id} 
                             className="flex items-center justify-between p-2 bg-secondary/50 rounded-md"
@@ -673,7 +683,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {pendingHomework.map((hw) => (
+              {(pendingHomework || []).map((hw) => (
                 <div
                   key={hw.id}
                   className="flex items-center justify-between p-3 bg-background rounded-lg border"
@@ -719,7 +729,7 @@ export default function Dashboard() {
                 <p className="text-muted-foreground text-center py-8">최근 수업이 없습니다</p>
               ) : (
                 <div className="space-y-3">
-                  {recentLessons.map((lesson) => (
+                  {(recentLessons || []).map((lesson) => (
                     <div
                       key={lesson.id}
                       className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
@@ -754,7 +764,7 @@ export default function Dashboard() {
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {atRiskStudents.map((student) => (
+                    {(atRiskStudents || []).map((student) => (
                       <div
                         key={student.id}
                         className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
