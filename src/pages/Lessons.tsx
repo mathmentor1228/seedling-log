@@ -269,7 +269,12 @@ export default function Lessons() {
   const [pendingSubject, setPendingSubject] = useState<SubjectType | null>(null);
   const [showSubjectChangeDialog, setShowSubjectChangeDialog] = useState(false);
   
-  // Previous homework state
+  // Previous lesson state (for "지난 수업" section)
+  const [previousLesson, setPreviousLesson] = useState<LessonRecord | null>(null);
+  const [previousLessonHomework, setPreviousLessonHomework] = useState<HomeworkAssignment | null>(null);
+  const [loadingPreviousLesson, setLoadingPreviousLesson] = useState(false);
+  
+  // Previous homework state (for current check)
   const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
   const [loadingHomework, setLoadingHomework] = useState(false);
   const [homeworkCheckResult, setHomeworkCheckResult] = useState<string>('');
@@ -826,6 +831,8 @@ export default function Lessons() {
       test_time: '',
       test_assistant: '',
     });
+    setPreviousLesson(null);
+    setPreviousLessonHomework(null);
   };
 
   // Fetch previous homework when student_id and subject change
@@ -887,12 +894,98 @@ export default function Lessons() {
     }
   }, []);
 
-  // Effect to fetch homework when student/subject changes
+  // Fetch previous lesson (for "지난 수업" section)
+  const fetchPreviousLesson = useCallback(async (studentId: string, classId: string, currentDate: string) => {
+    if (!studentId || !classId) {
+      setPreviousLesson(null);
+      setPreviousLessonHomework(null);
+      return;
+    }
+
+    setLoadingPreviousLesson(true);
+    try {
+      // Fetch most recent lesson_record for same student & class before current date
+      const { data: lessonData, error: lessonError } = await supabase
+        .from('lesson_records')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('class_id', classId)
+        .lt('lesson_date', currentDate)
+        .eq('submitted', true)
+        .order('lesson_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lessonError) throw lessonError;
+
+      if (lessonData) {
+        setPreviousLesson(lessonData as LessonRecord);
+        
+        // Fetch homework for this lesson
+        const { data: homeworkData, error: homeworkError } = await supabase
+          .from('homework_assignments')
+          .select('*')
+          .eq('lesson_record_id', lessonData.id)
+          .maybeSingle();
+
+        if (!homeworkError && homeworkData) {
+          // Fetch checker name if checked
+          let checkerName = '';
+          if (homeworkData.checked_by) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', homeworkData.checked_by)
+              .maybeSingle();
+            checkerName = profile?.full_name || profile?.email || '';
+          }
+          setPreviousLessonHomework({
+            ...homeworkData,
+            checker_name: checkerName,
+          } as HomeworkAssignment);
+          
+          // Pre-fill homework check if unchecked
+          if (homeworkData.check_status !== 'checked') {
+            setHomeworkCheckResult('');
+            setHomeworkCheckNotes('');
+          } else {
+            setHomeworkCheckResult(homeworkData.result || '');
+            setHomeworkCheckNotes(homeworkData.notes || '');
+          }
+          // Update previousHomework for the check controls
+          setPreviousHomework({
+            ...homeworkData,
+            checker_name: checkerName,
+          } as HomeworkAssignment);
+        } else {
+          setPreviousLessonHomework(null);
+        }
+      } else {
+        setPreviousLesson(null);
+        setPreviousLessonHomework(null);
+      }
+    } catch (error) {
+      console.error('Error fetching previous lesson:', error);
+      setPreviousLesson(null);
+      setPreviousLessonHomework(null);
+    } finally {
+      setLoadingPreviousLesson(false);
+    }
+  }, []);
+
+  // Effect to fetch previous lesson when student/class/date changes
   useEffect(() => {
-    if (isDialogOpen && formData.student_id && formData.subject) {
+    if (isDialogOpen && formData.student_id && formData.class_id && formData.lesson_date) {
+      fetchPreviousLesson(formData.student_id, formData.class_id, formData.lesson_date);
+    }
+  }, [isDialogOpen, formData.student_id, formData.class_id, formData.lesson_date, fetchPreviousLesson]);
+
+  // Effect to fetch homework when student/subject changes (for cases without class_id)
+  useEffect(() => {
+    if (isDialogOpen && formData.student_id && formData.subject && !formData.class_id) {
       fetchPreviousHomework(formData.student_id, formData.subject);
     }
-  }, [isDialogOpen, formData.student_id, formData.subject, fetchPreviousHomework]);
+  }, [isDialogOpen, formData.student_id, formData.subject, formData.class_id, fetchPreviousHomework]);
 
   // Save homework check
   const handleSaveHomeworkCheck = async () => {
@@ -1233,97 +1326,172 @@ export default function Lessons() {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-              {/* 지난 숙제 Section - At the very top */}
-              {formData.student_id && formData.subject && (
-                <div className="p-4 rounded-lg border-2 border-primary/20 bg-primary/5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Label className="text-base font-semibold">
-                      지난 숙제 ({formData.subject})
-                    </Label>
-                    {loadingHomework ? (
+              {/* 지난 수업 Section - At the very top */}
+              {formData.student_id && formData.class_id && (
+                <div className="p-4 rounded-lg border-2 border-blue-500/30 bg-blue-500/5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-blue-600" />
+                    <Label className="text-base font-semibold text-blue-700">지난 수업</Label>
+                    {loadingPreviousLesson && (
                       <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                    ) : (
-                      getHomeworkStatusBadge(previousHomework)
                     )}
                   </div>
                   
-                  {loadingHomework ? (
+                  {loadingPreviousLesson ? (
                     <div className="text-sm text-muted-foreground">불러오는 중...</div>
-                  ) : previousHomework ? (
-                    <div className="space-y-3">
-                      {/* Homework content - read only */}
-                      <div className="p-3 bg-background rounded border">
-                        <p className="text-sm whitespace-pre-wrap">{previousHomework.content}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          배정일: {format(new Date(previousHomework.assigned_date), 'yyyy-MM-dd')}
-                        </p>
+                  ) : previousLesson ? (
+                    <div className="space-y-4">
+                      {/* Previous lesson date and range */}
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        <span>{format(new Date(previousLesson.lesson_date), 'yyyy-MM-dd')}</span>
+                        <span className="mx-1">|</span>
+                        <span className="font-medium text-foreground">{previousLesson.lesson_range}</span>
                       </div>
-                      
-                      {/* If already checked, show result */}
-                      {previousHomework.check_status === 'checked' && (
-                        <div className="text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-green-600" />
-                            <span>
-                              확인됨: {HOMEWORK_RESULT_OPTIONS.find(o => o.value === previousHomework.result)?.label}
-                              {previousHomework.checker_name && ` (${previousHomework.checker_name})`}
-                            </span>
-                          </div>
-                          {previousHomework.checked_at && (
-                            <p className="ml-6 text-xs">
-                              {format(new Date(previousHomework.checked_at), 'yyyy-MM-dd HH:mm')}
-                            </p>
-                          )}
-                          {previousHomework.notes && (
-                            <p className="ml-6 mt-1 text-xs italic">{previousHomework.notes}</p>
+
+                      {/* 지난 숙제 내용 + 상태 */}
+                      <div className="p-3 bg-background rounded-lg border space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Label className="text-sm font-medium">지난 숙제 내용</Label>
+                          {previousLessonHomework ? (
+                            (() => {
+                              const hw = previousLessonHomework;
+                              if (hw.check_status === 'checked') {
+                                const opt = HOMEWORK_RESULT_OPTIONS.find(o => o.value === hw.result);
+                                if (opt) {
+                                  const colorClass = hw.result === 'completed' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                                                     hw.result === 'partial' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                                                     hw.result === 'not_done' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                                                     'bg-muted text-muted-foreground';
+                                  const Icon = opt.icon;
+                                  return <Badge variant="outline" className={colorClass}><Icon className="w-3 h-3 mr-1" />{opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}</Badge>;
+                                }
+                              }
+                              return <Badge variant="outline" className="border-gray-300 text-gray-500">미확인</Badge>;
+                            })()
+                          ) : (
+                            <Badge variant="outline" className="border-gray-300 text-gray-500">없음</Badge>
                           )}
                         </div>
-                      )}
-                      
-                      {/* Check controls - only if not already checked */}
-                      {previousHomework.check_status !== 'checked' && (
-                        <div className="space-y-2 pt-2 border-t">
-                          <Label className="text-sm">숙제 확인</Label>
-                          <div className="flex flex-wrap gap-2">
-                            {HOMEWORK_RESULT_OPTIONS.map((opt) => {
-                              const Icon = opt.icon;
-                              return (
+                        
+                        {previousLessonHomework ? (
+                          <div className="space-y-2">
+                            <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
+                            
+                            {/* If already checked, show result details */}
+                            {previousLessonHomework.check_status === 'checked' && (
+                              <div className="text-sm text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                  <span>
+                                    확인됨 {previousLessonHomework.checker_name && `(${previousLessonHomework.checker_name})`}
+                                  </span>
+                                </div>
+                                {previousLessonHomework.notes && (
+                                  <p className="ml-6 mt-1 text-xs italic">{previousLessonHomework.notes}</p>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Check controls - only if not already checked, for assistant */}
+                            {previousLessonHomework.check_status !== 'checked' && (
+                              <div className="space-y-2 pt-2 border-t">
+                                <Label className="text-sm">숙제상태 확인</Label>
+                                <div className="flex flex-wrap gap-2">
+                                  {HOMEWORK_RESULT_OPTIONS.map((opt) => {
+                                    const Icon = opt.icon;
+                                    return (
+                                      <Button
+                                        key={opt.value}
+                                        type="button"
+                                        variant={homeworkCheckResult === opt.value ? 'default' : 'outline'}
+                                        size="sm"
+                                        onClick={() => setHomeworkCheckResult(opt.value)}
+                                        className="gap-1"
+                                      >
+                                        <Icon className="w-4 h-4" />
+                                        {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
+                                      </Button>
+                                    );
+                                  })}
+                                </div>
+                                <Textarea
+                                  placeholder="확인 메모 (선택)"
+                                  value={homeworkCheckNotes}
+                                  onChange={(e) => setHomeworkCheckNotes(e.target.value)}
+                                  rows={2}
+                                  className="text-sm"
+                                />
                                 <Button
-                                  key={opt.value}
                                   type="button"
-                                  variant={homeworkCheckResult === opt.value ? 'default' : 'outline'}
                                   size="sm"
-                                  onClick={() => setHomeworkCheckResult(opt.value)}
-                                  className="gap-1"
+                                  onClick={handleSaveHomeworkCheck}
+                                  disabled={!homeworkCheckResult || isSavingHomeworkCheck}
                                 >
-                                  <Icon className="w-4 h-4" />
-                                  {opt.label}
+                                  {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                                  <CheckCircle2 className="w-4 h-4 mr-1" />
+                                  확인 저장
                                 </Button>
-                              );
-                            })}
+                              </div>
+                            )}
                           </div>
-                          <Textarea
-                            placeholder="확인 메모 (선택)"
-                            value={homeworkCheckNotes}
-                            onChange={(e) => setHomeworkCheckNotes(e.target.value)}
-                            rows={2}
-                            className="text-sm"
-                          />
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={handleSaveHomeworkCheck}
-                            disabled={!homeworkCheckResult || isSavingHomeworkCheck}
-                          >
-                            {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                            <CheckCircle2 className="w-4 h-4 mr-1" />
-                            확인 저장
-                          </Button>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">숙제 없음</p>
+                        )}
+                      </div>
+
+                      {/* 지난 테스트 summary */}
+                      {(previousLesson.test_result_text || previousLesson.test_name) && (
+                        <div className="p-3 bg-background rounded-lg border space-y-2">
+                          <div className="flex items-center gap-2">
+                            <ClipboardCheck className="w-4 h-4 text-amber-600" />
+                            <Label className="text-sm font-medium">지난 테스트</Label>
+                            {/* 영어 과목일 경우 합/불 badge */}
+                            {previousLesson.subject === '영어' && previousLesson.test_result && previousLesson.test_result !== 'none' && (
+                              <Badge 
+                                variant="outline" 
+                                className={previousLesson.test_result === 'pass' 
+                                  ? 'bg-green-500/10 text-green-600 border-green-500/20' 
+                                  : 'bg-red-500/10 text-red-600 border-red-500/20'}
+                              >
+                                {previousLesson.test_result === 'pass' ? '통과' : '불통과'}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                            {previousLesson.test_name && (
+                              <div>
+                                <span className="text-muted-foreground">이름: </span>
+                                <span className="font-medium">{previousLesson.test_name}</span>
+                              </div>
+                            )}
+                            {previousLesson.test_result_text && (
+                              <div>
+                                <span className="text-muted-foreground">결과: </span>
+                                <span className="font-medium">{previousLesson.test_result_text}</span>
+                              </div>
+                            )}
+                            {previousLesson.test_time && (
+                              <div>
+                                <span className="text-muted-foreground">시간: </span>
+                                <span className="font-medium">{previousLesson.test_time}</span>
+                              </div>
+                            )}
+                            {previousLesson.test_assistant && (
+                              <div>
+                                <span className="text-muted-foreground">담당자: </span>
+                                <span className="font-medium">{previousLesson.test_assistant}</span>
+                              </div>
+                            )}
+                          </div>
+                          {previousLesson.test_notes && (
+                            <p className="text-xs text-muted-foreground italic">{previousLesson.test_notes}</p>
+                          )}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="text-sm text-muted-foreground">지난 숙제 없음</div>
+                    <div className="text-sm text-muted-foreground">이전 수업 기록 없음</div>
                   )}
                 </div>
               )}
@@ -1727,15 +1895,15 @@ export default function Lessons() {
                   </Button>
                 </div>
 
-              {/* 이번 숙제 Section - Hidden for assistants */}
+              {/* 오늘 숙제 Section - Hidden for assistants */}
               {!isAssistant && (
                 <div className="space-y-2 p-4 rounded-lg border-2 border-secondary bg-secondary/30">
-                  <Label htmlFor="new_homework" className="text-base font-semibold">이번 숙제</Label>
+                  <Label htmlFor="new_homework" className="text-base font-semibold">오늘 숙제</Label>
                   <Textarea
                     id="new_homework"
                     value={newHomeworkContent}
                     onChange={(e) => setNewHomeworkContent(e.target.value)}
-                    placeholder="이번 수업에서 배정할 숙제 내용을 입력하세요"
+                    placeholder="오늘 수업에서 배정할 숙제 내용을 입력하세요"
                     rows={2}
                     className="text-sm"
                   />
