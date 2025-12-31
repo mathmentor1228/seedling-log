@@ -86,6 +86,7 @@ interface LessonRecord {
   test_notes?: string | null;
   test_date?: string | null;
   test_time?: string | null;
+  test_assistant?: string | null;
 }
 
 interface Student {
@@ -268,6 +269,7 @@ export default function Lessons() {
     test_notes: '',
     test_date: '',
     test_time: '',
+    test_assistant: '',
   });
   const [isSavingTestFields, setIsSavingTestFields] = useState(false);
 
@@ -748,6 +750,7 @@ export default function Lessons() {
       test_notes: '',
       test_date: '',
       test_time: '',
+      test_assistant: '',
     });
   };
 
@@ -871,6 +874,7 @@ export default function Lessons() {
           _test_notes: testFormData.test_notes || null,
           _test_date: testFormData.test_date || null,
           _test_time: testFormData.test_time || null,
+          _test_assistant: testFormData.test_assistant || null,
         });
 
         if (error) throw error;
@@ -885,6 +889,7 @@ export default function Lessons() {
             test_notes: testFormData.test_notes || null,
             test_date: testFormData.test_date || null,
             test_time: testFormData.test_time || null,
+            test_assistant: testFormData.test_assistant || null,
           })
           .eq('id', editingLesson.id);
 
@@ -944,6 +949,7 @@ export default function Lessons() {
       test_notes: lesson.test_notes || '',
       test_date: lesson.test_date || lesson.lesson_date,
       test_time: lesson.test_time || '',
+      test_assistant: (lesson as any).test_assistant || '',
     });
     setIsDialogOpen(true);
   };
@@ -1443,8 +1449,8 @@ export default function Lessons() {
                 />
               </div>
 
-              {/* TEST-SECTION-MARKER-V2 */}
-              <div className="bg-red-500 text-white font-bold text-center py-2 rounded">TEST-SECTION-MARKER-V2</div>
+              {/* TEST-SECTION-MARKER-V3 */}
+              <div className="bg-red-500 text-white font-bold text-center py-2 rounded">TEST-SECTION-MARKER-V3</div>
               
               {/* 테스트/결과 Section - Always visible */}
               <div className="space-y-3 p-4 rounded-lg border-2 border-amber-500/20 bg-amber-500/5">
@@ -1543,16 +1549,33 @@ export default function Lessons() {
                     </div>
                   )}
 
-                  <div className="space-y-1">
-                    <Label htmlFor="test_notes" className="text-sm">테스트 메모</Label>
-                    <Textarea
-                      id="test_notes"
-                      value={testFormData.test_notes}
-                      onChange={(e) => setTestFormData({ ...testFormData, test_notes: e.target.value })}
-                      placeholder="테스트 관련 메모"
-                      rows={2}
-                      className="text-sm"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="test_notes" className="text-sm">테스트 메모</Label>
+                      <Textarea
+                        id="test_notes"
+                        value={testFormData.test_notes}
+                        onChange={(e) => setTestFormData({ ...testFormData, test_notes: e.target.value })}
+                        placeholder="테스트 관련 메모"
+                        rows={2}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="test_assistant" className="text-sm">테스트 담당자</Label>
+                      <Select
+                        value={testFormData.test_assistant}
+                        onValueChange={(value) => setTestFormData({ ...testFormData, test_assistant: value })}
+                      >
+                        <SelectTrigger className="text-sm">
+                          <SelectValue placeholder="담당자 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="다인조교">다인조교</SelectItem>
+                          <SelectItem value="유빈조교">유빈조교</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
                   <Button
