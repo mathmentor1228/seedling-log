@@ -1217,9 +1217,11 @@ export default function Lessons() {
                 />
               </div>
 
-              {/* 테스트/결과 Section - Only shown when editing */}
-              {editingLesson && (
-                <div className="space-y-3 p-4 rounded-lg border-2 border-amber-500/20 bg-amber-500/5">
+              {/* TEST-SECTION-MARKER-V1 */}
+              <div className="bg-red-500 text-white font-bold text-center py-2 rounded">TEST-SECTION-MARKER-V1</div>
+              
+              {/* 테스트/결과 Section - Always visible */}
+              <div className="space-y-3 p-4 rounded-lg border-2 border-amber-500/20 bg-amber-500/5">
                   <div className="flex items-center gap-2">
                     <ClipboardCheck className="w-5 h-5 text-amber-600" />
                     <Label className="text-base font-semibold">테스트/결과</Label>
@@ -1339,7 +1341,6 @@ export default function Lessons() {
                     테스트 결과 저장
                   </Button>
                 </div>
-              )}
 
               {/* 이번 숙제 Section - Hidden for assistants */}
               {!isAssistant && (
