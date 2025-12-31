@@ -579,6 +579,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* FIXED TOP-LEFT DEPLOY MARKER - always visible */}
+      <div className="fixed top-2 left-2 z-[9999] text-xs font-bold text-white bg-fuchsia-600 px-2 py-1 rounded shadow-lg">
+        DEPLOY-MARKER-HW-V1
+      </div>
+      
       {/* UNCONDITIONAL LOGIN REDIRECT VERIFICATION - renders for ALL roles */}
       <div className="text-xs text-white bg-destructive p-2 rounded border border-destructive font-bold">
         LOGIN-REDIRECT-CHECK-V2
@@ -706,6 +711,10 @@ export default function Dashboard() {
               <GraduationCap className="w-5 h-5 text-primary" />
               오늘 수업 ({todaySlots.length}개)
             </CardTitle>
+            {/* UNCONDITIONAL Debug Marker - always visible */}
+            <p className="text-xs font-bold text-fuchsia-600 bg-fuchsia-100 dark:bg-fuchsia-950/40 p-1 rounded mt-1 border border-fuchsia-300">
+              HW_BADGE_DEBUG_V1 (render-check)
+            </p>
             {/* Debug info for teacher - temporary */}
             {todaySlotsDebug && (
               <p className="text-xs text-muted-foreground mt-1">

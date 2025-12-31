@@ -1311,6 +1311,10 @@ export default function Lessons() {
               <GraduationCap className="w-5 h-5 text-primary" />
               오늘 수업 ({todaySlots.length}개)
             </CardTitle>
+            {/* UNCONDITIONAL Debug Marker - always visible */}
+            <p className="text-xs font-bold text-fuchsia-600 bg-fuchsia-100 dark:bg-fuchsia-950/40 p-1 rounded mt-1 border border-fuchsia-300">
+              HW_BADGE_DEBUG_V1 (render-check)
+            </p>
             {/* HW Badge Debug Line */}
             <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-1 rounded mt-1">
               HW_BADGE_DEBUG: pairs={hwBadgeDebug?.pairsCount ?? 'N/A'}, rpcRows={hwBadgeDebug?.rpcRowsCount ?? 'N/A'}
