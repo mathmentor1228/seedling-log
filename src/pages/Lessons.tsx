@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useAuth, isAssistant as checkIsAssistant, canManageLessons } from '@/lib/auth';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth, isAssistant as checkIsAssistant, isTeacher as checkIsTeacher, isAdmin as checkIsAdmin, canManageLessons } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
@@ -97,6 +97,16 @@ interface ClassItem {
   id: string;
   name: string;
   subject: string;
+}
+
+interface TodaySlot {
+  id: string;
+  class_id: string;
+  class_name: string;
+  subject: string;
+  start_time: string;
+  end_time: string;
+  students: { id: string; name: string }[];
 }
 
 const SUBJECTS = [
@@ -208,10 +218,12 @@ function getHomeworkStatusBadge(homework: HomeworkAssignment | null) {
 
 export default function Lessons() {
   const { user, role } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [lessons, setLessons] = useState<LessonRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -268,12 +280,19 @@ export default function Lessons() {
 
   // Check if user is assistant (can only update test fields and homework check)
   const isAssistant = checkIsAssistant(role);
+  const isTeacher = checkIsTeacher(role);
+  const isAdmin = checkIsAdmin(role);
   // Check if user can create/edit/delete lessons
   const canManage = canManageLessons(role);
+  
   useEffect(() => {
     fetchLessons();
     fetchStudents();
     fetchClasses();
+    // Fetch today's slots for teachers/admins
+    if (isTeacher || isAdmin) {
+      fetchTodaySlots();
+    }
   }, [user, role]);
 
   // Deep link handling - auto-open dialog with student_id and subject from URL
@@ -377,6 +396,96 @@ export default function Lessons() {
       setClasses(data || []);
     } catch (error) {
       console.error('Error fetching classes:', error);
+    }
+  }
+
+  // Fetch today's class slots for the current teacher
+  async function fetchTodaySlots() {
+    if (!user) return;
+
+    try {
+      // Get today's day of week (0=Sunday, 1=Monday, etc.) using KST
+      const now = new Date();
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const kstDate = new Date(now.getTime() + kstOffset);
+      const dayOfWeek = kstDate.getUTCDay();
+
+      // Fetch class schedules for today
+      let schedulesQuery = supabase
+        .from('class_schedules')
+        .select(`
+          id,
+          class_id,
+          start_time,
+          end_time,
+          day_of_week,
+          teacher_id,
+          classes:class_id (
+            id,
+            name,
+            subject,
+            teacher_id
+          )
+        `)
+        .eq('day_of_week', dayOfWeek)
+        .eq('is_active', true)
+        .order('start_time', { ascending: true });
+
+      // For teachers, only show their own schedules
+      if (checkIsTeacher(role)) {
+        schedulesQuery = schedulesQuery.eq('teacher_id', user.id);
+      }
+
+      const { data: schedules, error: schedulesError } = await schedulesQuery;
+
+      if (schedulesError) {
+        console.error('Error fetching today slots:', schedulesError);
+        return;
+      }
+
+      // Get students for each class
+      const classIds = schedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
+      
+      let studentsMap: Record<string, { id: string; name: string }[]> = {};
+      
+      if (classIds.length > 0) {
+        const { data: classStudents, error: studentsError } = await supabase
+          .from('class_students')
+          .select(`
+            class_id,
+            students:student_id (id, name)
+          `)
+          .in('class_id', classIds);
+
+        if (!studentsError) {
+          (classStudents || []).forEach((cs: any) => {
+            if (!studentsMap[cs.class_id]) {
+              studentsMap[cs.class_id] = [];
+            }
+            if (cs.students) {
+              studentsMap[cs.class_id].push({
+                id: cs.students.id,
+                name: cs.students.name,
+              });
+            }
+          });
+        }
+      }
+
+      // Build slots array
+      const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
+        id: s.id,
+        class_id: s.classes?.id || '',
+        class_name: s.classes?.name || '알 수 없음',
+        subject: s.classes?.subject || '-',
+        start_time: s.start_time,
+        end_time: s.end_time,
+        students: studentsMap[s.classes?.id] || [],
+      }));
+
+      setTodaySlots(slots);
+    } catch (error) {
+      console.error('Error fetching today slots:', error);
     }
   }
 
@@ -915,6 +1024,123 @@ export default function Lessons() {
             {role === 'admin' ? '전체 수업 기록' : '수업 내용을 기록하고 관리하세요'}
           </p>
         </div>
+      </div>
+
+      {/* 오늘 수업 Section - For teachers and admins */}
+      {(isTeacher || isAdmin) && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-primary" />
+              오늘 수업 ({todaySlots.length}개)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {todaySlots.length === 0 ? (
+              <div className="text-center py-8">
+                <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {todaySlots.map((slot) => (
+                  <div key={slot.id} className="border rounded-lg p-4 bg-background">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">{slot.class_name}</span>
+                        <Badge variant="outline">{slot.subject}</Badge>
+                      </div>
+                      <span className="text-sm text-muted-foreground font-medium">
+                        {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
+                      </span>
+                    </div>
+                    {slot.students.length > 0 ? (
+                      <div className="space-y-2">
+                        {slot.students.map((student) => (
+                          <div 
+                            key={student.id} 
+                            className="flex items-center justify-between p-2 bg-secondary/50 rounded-md cursor-pointer hover:bg-secondary transition-colors"
+                            onClick={() => {
+                              // Pre-fill form and open dialog
+                              setFormData(prev => ({
+                                ...prev,
+                                student_id: student.id,
+                                class_id: slot.class_id,
+                                subject: slot.subject,
+                                lesson_date: format(new Date(), 'yyyy-MM-dd'),
+                              }));
+                              setEditingLesson(null);
+                              setCurrentDraftId(null);
+                              setIsDialogOpen(true);
+                              // Create draft after a short delay
+                              setTimeout(async () => {
+                                if (user) {
+                                  try {
+                                    const { data, error } = await supabase
+                                      .from('lesson_records')
+                                      .insert({
+                                        teacher_id: user.id,
+                                        student_id: student.id,
+                                        class_id: slot.class_id,
+                                        subject: slot.subject as SubjectType,
+                                        lesson_date: format(new Date(), 'yyyy-MM-dd'),
+                                        lesson_range: '',
+                                        understanding_score: 3,
+                                        homework_status: 'none_assigned',
+                                        learning_issues: [],
+                                        submitted: false,
+                                      })
+                                      .select()
+                                      .single();
+                                    if (!error && data) {
+                                      setCurrentDraftId(data.id);
+                                    }
+                                  } catch (err) {
+                                    console.error('Error creating draft from slot:', err);
+                                  }
+                                }
+                              }, 100);
+                            }}
+                          >
+                            <span className="font-medium text-foreground">{student.name}</span>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // Pre-fill form and open dialog
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    student_id: student.id,
+                                    class_id: slot.class_id,
+                                    subject: slot.subject,
+                                    lesson_date: format(new Date(), 'yyyy-MM-dd'),
+                                  }));
+                                  setEditingLesson(null);
+                                  setCurrentDraftId(null);
+                                  setIsDialogOpen(true);
+                                }}
+                              >
+                                <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                수업기록
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
 
         <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
           {canManage && (
@@ -1217,8 +1443,8 @@ export default function Lessons() {
                 />
               </div>
 
-              {/* TEST-SECTION-MARKER-V1 */}
-              <div className="bg-red-500 text-white font-bold text-center py-2 rounded">TEST-SECTION-MARKER-V1</div>
+              {/* TEST-SECTION-MARKER-V2 */}
+              <div className="bg-red-500 text-white font-bold text-center py-2 rounded">TEST-SECTION-MARKER-V2</div>
               
               {/* 테스트/결과 Section - Always visible */}
               <div className="space-y-3 p-4 rounded-lg border-2 border-amber-500/20 bg-amber-500/5">
