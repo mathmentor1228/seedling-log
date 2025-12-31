@@ -188,7 +188,7 @@ export function ClassScheduleManager({ classId, teacherId, onSchedulesChange }: 
 
   const formatTimeRange = (startTime: string, endTime: string) => {
     const formatTime = (time: string) => time.slice(0, 5); // HH:MM
-    return `${formatTime(startTime)}–${formatTime(endTime)}`;
+    return `${formatTime(startTime)}–${formatTime(endTime)}`; // en dash
   };
 
   if (loading) {
@@ -317,7 +317,7 @@ export function formatScheduleDisplay(schedules: Schedule[]): string {
   
   const grouped = schedules.reduce((acc, s) => {
     const dayLabel = DAYS_OF_WEEK.find((d) => d.value === s.day_of_week)?.label?.charAt(0) || '';
-    const timeRange = `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`;
+    const timeRange = `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`; // en dash
     const key = `${dayLabel} ${timeRange}`;
     if (!acc.includes(key)) acc.push(key);
     return acc;
