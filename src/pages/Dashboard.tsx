@@ -506,7 +506,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Today's Classes Section - Teacher Only */}
+      {/* Today's Classes Section - Teacher Only (PRIMARY SECTION) */}
       {isTeacher(role) && (
         <Card className="border-primary/30 bg-primary/5 animate-slide-up">
           <CardHeader>
@@ -535,11 +535,32 @@ export default function Dashboard() {
                       </span>
                     </div>
                     {slot.students.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="space-y-2">
                         {slot.students.map((student) => (
-                          <Badge key={student.id} variant="secondary" className="text-xs">
-                            {student.name}
-                          </Badge>
+                          <div 
+                            key={student.id} 
+                            className="flex items-center justify-between p-2 bg-secondary/50 rounded-md"
+                          >
+                            <span className="font-medium text-foreground">{student.name}</span>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
+                              >
+                                <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                수업기록
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
+                              >
+                                <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                                숙제/테스트
+                              </Button>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     ) : (
