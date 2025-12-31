@@ -544,6 +544,7 @@ export type Database = {
         Args: { _pairs: Json; _today?: string }
         Returns: {
           class_id: string
+          debug_reason: string
           homework_status: string
           prev_lesson_date: string
           student_id: string

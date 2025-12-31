@@ -272,10 +272,18 @@ function getHomeworkStatusBadge(homework: HomeworkAssignment | null) {
   return <Badge variant="outline" className={colorClass}><Icon className="w-3 h-3 mr-1" />{option.label}</Badge>;
 }
 
+interface HwBadgeDebugPair {
+  student_id: string;
+  class_id: string;
+  class_name?: string;
+}
+
 interface HwBadgeDebug {
   pairsCount: number;
   rpcRowsCount: number;
   firstRow: any;
+  firstPairs: HwBadgeDebugPair[];
+  debugReasons: Record<string, number>;
 }
 
 export default function Lessons() {
@@ -583,7 +591,22 @@ export default function Lessons() {
       const today = format(new Date(), 'yyyy-MM-dd');
       
       let previousHomeworkMap: Record<string, TodaySlotStudent['previousHomeworkStatus']> = {}; // key: `${studentId}:${classId}`
-      let hwBadgeDebug = { pairsCount: 0, rpcRowsCount: 0, firstRow: null as any };
+      
+      // Build class_id -> class_name map for debug
+      const classIdToName: Record<string, string> = {};
+      (schedules || []).forEach((s: any) => {
+        if (s.classes?.id && s.classes?.name) {
+          classIdToName[s.classes.id] = s.classes.name;
+        }
+      });
+      
+      let hwBadgeDebugData: HwBadgeDebug = { 
+        pairsCount: 0, 
+        rpcRowsCount: 0, 
+        firstRow: null, 
+        firstPairs: [],
+        debugReasons: {} 
+      };
       
       if (allStudentClassPairs.length > 0) {
         const pairs = allStudentClassPairs.map(p => ({
@@ -591,9 +614,15 @@ export default function Lessons() {
           class_id: p.classId,
         }));
         
-        hwBadgeDebug.pairsCount = pairs.length;
+        hwBadgeDebugData.pairsCount = pairs.length;
+        // Store first 3 pairs with class names for debug display
+        hwBadgeDebugData.firstPairs = pairs.slice(0, 3).map(p => ({
+          ...p,
+          class_name: classIdToName[p.class_id] || 'unknown',
+        }));
+        
         console.log('[HW_BADGE] pairs count', pairs.length);
-        console.log('[HW_BADGE] pairs sample', pairs.slice(0, 3));
+        console.log('[HW_BADGE] pairs sample with names', hwBadgeDebugData.firstPairs);
         
         const { data: rpcResult, error: rpcError } = await supabase.rpc(
           'get_prev_homework_status_for_roster',
@@ -604,16 +633,25 @@ export default function Lessons() {
         console.log('[HW_BADGE] rpc rows', rpcResult?.length, (rpcResult as any[])?.slice(0, 5));
 
         if (!rpcError && rpcResult) {
-          hwBadgeDebug.rpcRowsCount = (rpcResult as any[]).length;
+          hwBadgeDebugData.rpcRowsCount = (rpcResult as any[]).length;
           if ((rpcResult as any[]).length > 0) {
-            hwBadgeDebug.firstRow = (rpcResult as any[])[0];
+            hwBadgeDebugData.firstRow = (rpcResult as any[])[0];
           }
+          // Count debug_reasons
           (rpcResult as any[]).forEach((row: any) => {
-            const key = `${row.student_id}:${row.class_id}`;
-            previousHomeworkMap[key] = normalizeHomeworkStatus(row.homework_status);
-            console.log('[HW_BADGE] mapped', key, row.homework_status, '->', previousHomeworkMap[key]);
+            const reason = row.debug_reason || 'unknown';
+            hwBadgeDebugData.debugReasons[reason] = (hwBadgeDebugData.debugReasons[reason] || 0) + 1;
+            
+            // Only map if we have a valid homework_status (not blocked)
+            if (row.homework_status !== null) {
+              const key = `${row.student_id}:${row.class_id}`;
+              previousHomeworkMap[key] = normalizeHomeworkStatus(row.homework_status);
+              console.log('[HW_BADGE] mapped', key, row.homework_status, '->', previousHomeworkMap[key]);
+            }
           });
         }
+        
+        console.log('[HW_BADGE] debugReasons', hwBadgeDebugData.debugReasons);
       }
 
       // Update studentsMap with previousHomeworkStatus
@@ -629,7 +667,7 @@ export default function Lessons() {
       });
       
       // Store debug info for display
-      setHwBadgeDebug(hwBadgeDebug);
+      setHwBadgeDebug(hwBadgeDebugData);
 
       // Build slots array
       const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
@@ -1315,13 +1353,30 @@ export default function Lessons() {
             <p className="text-xs font-bold text-fuchsia-600 bg-fuchsia-100 dark:bg-fuchsia-950/40 p-1 rounded mt-1 border border-fuchsia-300">
               HW_BADGE_DEBUG_V1 (render-check)
             </p>
-            {/* HW Badge Debug Line */}
-            <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-1 rounded mt-1">
-              HW_BADGE_DEBUG: pairs={hwBadgeDebug?.pairsCount ?? 'N/A'}, rpcRows={hwBadgeDebug?.rpcRowsCount ?? 'N/A'}
-              {hwBadgeDebug?.firstRow && (
-                <span> | first={hwBadgeDebug.firstRow.student_id?.slice(0,8)}:{hwBadgeDebug.firstRow.class_id?.slice(0,8)} status={hwBadgeDebug.firstRow.homework_status}</span>
+            {/* HW Badge Debug Line - Enhanced */}
+            <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-2 rounded mt-1 space-y-1">
+              <p className="font-semibold">
+                HW_BADGE_DEBUG: pairs={hwBadgeDebug?.pairsCount ?? 'N/A'}, rpcRows={hwBadgeDebug?.rpcRowsCount ?? 'N/A'}
+              </p>
+              {hwBadgeDebug?.firstPairs && hwBadgeDebug.firstPairs.length > 0 && (
+                <p>
+                  firstPairs: {hwBadgeDebug.firstPairs.map((p, i) => 
+                    `[${i+1}] ${p.student_id.slice(0,8)}:${p.class_id.slice(0,8)} (${p.class_name})`
+                  ).join(' | ')}
+                </p>
               )}
-            </p>
+              {hwBadgeDebug?.debugReasons && Object.keys(hwBadgeDebug.debugReasons).length > 0 && (
+                <p className="font-medium">
+                  reasons: {Object.entries(hwBadgeDebug.debugReasons).map(([k, v]) => `${k}=${v}`).join(', ')}
+                </p>
+              )}
+              {hwBadgeDebug?.firstRow && (
+                <p>
+                  firstRow: {hwBadgeDebug.firstRow.student_id?.slice(0,8)}:{hwBadgeDebug.firstRow.class_id?.slice(0,8)} 
+                  status={hwBadgeDebug.firstRow.homework_status} reason={hwBadgeDebug.firstRow.debug_reason}
+                </p>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {todaySlots.length === 0 ? (
