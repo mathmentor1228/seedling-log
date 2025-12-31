@@ -26,6 +26,7 @@ import { format } from 'date-fns';
 import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentCsvImport from '@/components/StudentCsvImport';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
+import { normalizePhone } from '@/lib/phoneUtils';
 
 interface Student {
   id: string;
@@ -100,15 +101,62 @@ export default function Students() {
     setIsSubmitting(true);
 
     try {
-      const payload = {
+      // Normalize phone numbers
+      const normalizedParentPhone = normalizePhone(formData.parent_phone);
+      const normalizedStudentPhone = normalizePhone(formData.student_phone);
+      
+      // For new students, generate student_code if not editing
+      let studentCode: string | null = null;
+      
+      if (!editingStudent) {
+        // Generate student_code from last 4 digits of student_phone
+        if (normalizedStudentPhone.length >= 4) {
+          const last4 = normalizedStudentPhone.slice(-4);
+          
+          // Check for uniqueness
+          const { data: existingCodes } = await supabase
+            .from('students')
+            .select('student_code')
+            .not('student_code', 'is', null);
+          
+          const existingSet = new Set(
+            (existingCodes || []).map((s: any) => s.student_code).filter(Boolean)
+          );
+          
+          let candidateCode = last4;
+          let suffix = 2;
+          
+          while (existingSet.has(candidateCode)) {
+            candidateCode = `${last4}-${suffix}`;
+            suffix++;
+            if (suffix > 100) break;
+          }
+          
+          if (suffix <= 100) {
+            studentCode = candidateCode;
+          }
+        }
+        
+        if (!studentCode && normalizedStudentPhone.length < 4) {
+          toast({
+            title: 'Validation Error',
+            description: '학생번호 생성 불가: 학생전화 없음/짧음',
+            variant: 'destructive',
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      const payload: any = {
         name: formData.name.trim(),
         email: formData.email.trim() || null,
         phone: formData.phone.trim() || null,
         grade: formData.grade.trim() || null,
         notes: formData.notes.trim() || null,
         school: formData.school.trim() || null,
-        parent_phone: formData.parent_phone.trim() || null,
-        student_phone: formData.student_phone.trim() || null,
+        parent_phone: normalizedParentPhone || null,
+        student_phone: normalizedStudentPhone || null,
       };
 
       if (editingStudent) {
@@ -129,13 +177,16 @@ export default function Students() {
           setDetailStudent({ ...editingStudent, ...payload });
         }
       } else {
+        // Add student_code for new students
+        payload.student_code = studentCode;
+        
         const { error } = await supabase.from('students').insert(payload);
 
         if (error) throw error;
 
         toast({
           title: 'Success',
-          description: 'Student added successfully',
+          description: `Student added successfully (코드: ${studentCode})`,
         });
       }
 
