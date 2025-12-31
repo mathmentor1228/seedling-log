@@ -24,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import StudentSlotAssignment from '@/components/StudentSlotAssignment';
+import StudentCsvImport from '@/components/StudentCsvImport';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 
 interface Student {
@@ -240,19 +241,21 @@ export default function Students() {
         </div>
 
         {isAdmin(role) && (
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-            setIsAddDialogOpen(open);
-            if (!open) {
-              setEditingStudent(null);
-              resetForm();
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Student
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <StudentCsvImport onImportComplete={fetchStudents} />
+            <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+              setIsAddDialogOpen(open);
+              if (!open) {
+                setEditingStudent(null);
+                resetForm();
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Student
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>
@@ -352,6 +355,7 @@ export default function Students() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 

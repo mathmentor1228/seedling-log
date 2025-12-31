@@ -1,0 +1,435 @@
+import { useState, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useToast } from '@/hooks/use-toast';
+import { Upload, FileSpreadsheet, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+
+interface ParsedStudent {
+  student_name: string;
+  parent_phone: string;
+  student_phone: string;
+  student_code: string;
+  isValid: boolean;
+  errors: string[];
+}
+
+interface ImportResult {
+  inserted: number;
+  updated: number;
+  errors: number;
+}
+
+interface StudentCsvImportProps {
+  onImportComplete: () => void;
+}
+
+const REQUIRED_HEADERS = ['student_name', 'parent_phone', 'student_phone', 'student_code'];
+
+// Normalize phone: keep original but also store digits-only version
+function normalizePhone(phone: string): string {
+  if (!phone) return '';
+  return phone.trim();
+}
+
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result;
+}
+
+export default function StudentCsvImport({ onImportComplete }: StudentCsvImportProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [parsedData, setParsedData] = useState<ParsedStudent[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [existingCodes, setExistingCodes] = useState<Set<string>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  const resetState = () => {
+    setFile(null);
+    setParsedData([]);
+    setExistingCodes(new Set());
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    if (!selectedFile.name.endsWith('.csv')) {
+      toast({
+        title: '파일 형식 오류',
+        description: 'CSV 파일만 업로드 가능합니다',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setFile(selectedFile);
+    setIsProcessing(true);
+
+    try {
+      // Fetch existing student codes for duplicate detection
+      const { data: existingStudents } = await supabase
+        .from('students')
+        .select('student_code')
+        .not('student_code', 'is', null);
+      
+      const existingSet = new Set(
+        (existingStudents || [])
+          .map((s: any) => s.student_code)
+          .filter(Boolean)
+      );
+      setExistingCodes(existingSet);
+
+      // Parse CSV
+      const text = await selectedFile.text();
+      const lines = text.split(/\r?\n/).filter((line) => line.trim());
+      
+      if (lines.length < 2) {
+        toast({
+          title: '파일 오류',
+          description: '헤더와 최소 1개 이상의 데이터 행이 필요합니다',
+          variant: 'destructive',
+        });
+        resetState();
+        return;
+      }
+
+      // Parse header
+      const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().trim());
+      
+      // Validate required headers
+      const missingHeaders = REQUIRED_HEADERS.filter((h) => !headers.includes(h));
+      if (missingHeaders.length > 0) {
+        toast({
+          title: '헤더 오류',
+          description: `필수 열이 없습니다: ${missingHeaders.join(', ')}`,
+          variant: 'destructive',
+        });
+        resetState();
+        return;
+      }
+
+      // Get column indices
+      const nameIdx = headers.indexOf('student_name');
+      const parentPhoneIdx = headers.indexOf('parent_phone');
+      const studentPhoneIdx = headers.indexOf('student_phone');
+      const codeIdx = headers.indexOf('student_code');
+
+      // Parse data rows
+      const parsed: ParsedStudent[] = [];
+      const seenCodes = new Set<string>();
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]);
+        
+        const student: ParsedStudent = {
+          student_name: values[nameIdx]?.trim() || '',
+          parent_phone: normalizePhone(values[parentPhoneIdx] || ''),
+          student_phone: normalizePhone(values[studentPhoneIdx] || ''),
+          student_code: values[codeIdx]?.trim() || '',
+          isValid: true,
+          errors: [],
+        };
+
+        // Validation
+        if (!student.student_name) {
+          student.isValid = false;
+          student.errors.push('이름 필수');
+        }
+
+        if (!student.student_code) {
+          student.isValid = false;
+          student.errors.push('학생코드 필수');
+        } else if (seenCodes.has(student.student_code)) {
+          student.isValid = false;
+          student.errors.push('CSV 내 중복 코드');
+        } else {
+          seenCodes.add(student.student_code);
+        }
+
+        parsed.push(student);
+      }
+
+      setParsedData(parsed);
+    } catch (error: any) {
+      console.error('CSV parsing error:', error);
+      toast({
+        title: '파싱 오류',
+        description: error.message || 'CSV 파일을 읽을 수 없습니다',
+        variant: 'destructive',
+      });
+      resetState();
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleImport = async () => {
+    const validRows = parsedData.filter((row) => row.isValid);
+    
+    if (validRows.length === 0) {
+      toast({
+        title: '유효한 데이터 없음',
+        description: '등록할 수 있는 학생이 없습니다',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsImporting(true);
+
+    const result: ImportResult = { inserted: 0, updated: 0, errors: 0 };
+
+    try {
+      for (const row of validRows) {
+        try {
+          // Check if student_code exists
+          const { data: existing } = await supabase
+            .from('students')
+            .select('id')
+            .eq('student_code', row.student_code)
+            .maybeSingle();
+
+          if (existing) {
+            // Update existing
+            const { error } = await supabase
+              .from('students')
+              .update({
+                name: row.student_name,
+                parent_phone: row.parent_phone || null,
+                student_phone: row.student_phone || null,
+              })
+              .eq('id', existing.id);
+
+            if (error) throw error;
+            result.updated++;
+          } else {
+            // Insert new
+            const { error } = await supabase.from('students').insert({
+              name: row.student_name,
+              parent_phone: row.parent_phone || null,
+              student_phone: row.student_phone || null,
+              student_code: row.student_code,
+            });
+
+            if (error) throw error;
+            result.inserted++;
+          }
+        } catch (rowError) {
+          console.error('Row import error:', rowError);
+          result.errors++;
+        }
+      }
+
+      toast({
+        title: '등록 완료',
+        description: `신규 ${result.inserted}명, 업데이트 ${result.updated}명, 오류 ${result.errors}명`,
+      });
+
+      onImportComplete();
+      setIsOpen(false);
+      resetState();
+    } catch (error: any) {
+      console.error('Import error:', error);
+      toast({
+        title: '등록 오류',
+        description: error.message || '등록 중 오류가 발생했습니다',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Calculate summary
+  const totalRows = parsedData.length;
+  const validRows = parsedData.filter((r) => r.isValid).length;
+  const invalidRows = totalRows - validRows;
+  const duplicateInDb = parsedData.filter(
+    (r) => r.isValid && existingCodes.has(r.student_code)
+  ).length;
+  const newRows = validRows - duplicateInDb;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      setIsOpen(open);
+      if (!open) resetState();
+    }}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Upload className="w-4 h-4 mr-2" />
+          CSV 업로드
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5" />
+            학생 일괄 등록 (CSV)
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-4">
+          {/* File upload */}
+          <div className="space-y-2">
+            <Label>CSV 파일 선택</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                disabled={isProcessing || isImporting}
+              />
+              {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              필수 열: student_name, parent_phone, student_phone, student_code
+            </p>
+          </div>
+
+          {/* Summary */}
+          {parsedData.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary">전체: {totalRows}건</Badge>
+              <Badge variant="default" className="bg-green-600">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                유효: {validRows}건
+              </Badge>
+              {invalidRows > 0 && (
+                <Badge variant="destructive">
+                  <AlertCircle className="w-3 h-3 mr-1" />
+                  오류: {invalidRows}건
+                </Badge>
+              )}
+              <Badge variant="outline">신규: {newRows}건</Badge>
+              <Badge variant="outline">업데이트 예정: {duplicateInDb}건</Badge>
+            </div>
+          )}
+
+          {/* Preview table */}
+          {parsedData.length > 0 && (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">#</TableHead>
+                    <TableHead>학생명</TableHead>
+                    <TableHead>학생코드</TableHead>
+                    <TableHead>학부모연락처</TableHead>
+                    <TableHead>학생연락처</TableHead>
+                    <TableHead>상태</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parsedData.slice(0, 20).map((row, idx) => (
+                    <TableRow
+                      key={idx}
+                      className={!row.isValid ? 'bg-destructive/10' : ''}
+                    >
+                      <TableCell className="text-muted-foreground">
+                        {idx + 1}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {row.student_name || '-'}
+                      </TableCell>
+                      <TableCell>{row.student_code || '-'}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {row.parent_phone || '-'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {row.student_phone || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {row.isValid ? (
+                          existingCodes.has(row.student_code) ? (
+                            <Badge variant="outline" className="text-amber-600 border-amber-600">
+                              업데이트
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-green-600 border-green-600">
+                              신규
+                            </Badge>
+                          )
+                        ) : (
+                          <Badge variant="destructive" className="text-xs">
+                            {row.errors.join(', ')}
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                  }
+                </TableBody>
+              </Table>
+              {parsedData.length > 20 && (
+                <div className="p-2 text-center text-sm text-muted-foreground bg-muted/50">
+                  ...외 {parsedData.length - 20}건 더 있음
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setIsOpen(false)}>
+              취소
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={validRows === 0 || isImporting}
+            >
+              {isImporting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              등록 ({validRows}건)
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -352,6 +352,7 @@ export type Database = {
           phone: string | null
           school: string | null
           status: string | null
+          student_code: string | null
           student_phone: string | null
           updated_at: string
         }
@@ -366,6 +367,7 @@ export type Database = {
           phone?: string | null
           school?: string | null
           status?: string | null
+          student_code?: string | null
           student_phone?: string | null
           updated_at?: string
         }
@@ -380,6 +382,7 @@ export type Database = {
           phone?: string | null
           school?: string | null
           status?: string | null
+          student_code?: string | null
           student_phone?: string | null
           updated_at?: string
         }
