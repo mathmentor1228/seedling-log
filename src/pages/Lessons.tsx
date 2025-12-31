@@ -1562,6 +1562,8 @@ export default function Lessons() {
                       />
                     </div>
                     <div className="space-y-1">
+                      {/* TEST-ASSISTANT-MARKER-V1 */}
+                      <div className="bg-green-500 text-white font-bold text-xs text-center py-1 rounded mb-1">TEST-ASSISTANT-MARKER-V1</div>
                       <Label htmlFor="test_assistant" className="text-sm">테스트 담당자</Label>
                       <Select
                         value={testFormData.test_assistant}
