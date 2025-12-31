@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Loader2, X, Calendar } from 'lucide-react';
+import { Search, Loader2, X, Calendar, Lock } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type SubjectType = Database['public']['Enums']['subject_type'];
@@ -43,11 +42,13 @@ interface ClassSlot {
 interface StudentSlotAssignmentProps {
   studentId: string;
   studentName: string;
+  readOnly?: boolean;
 }
 
 export default function StudentSlotAssignment({
   studentId,
   studentName,
+  readOnly = false,
 }: StudentSlotAssignmentProps) {
   const [slots, setSlots] = useState<ClassSlot[]>([]);
   const [assignedClassIds, setAssignedClassIds] = useState<Set<string>>(new Set());
@@ -196,6 +197,8 @@ export default function StudentSlotAssignment({
   };
 
   const handleToggleAssignment = async (slot: ClassSlot) => {
+    if (readOnly) return;
+    
     const isAssigned = assignedClassIds.has(slot.classId);
 
     // Check conflict before assigning
@@ -283,6 +286,14 @@ export default function StudentSlotAssignment({
 
   return (
     <div className="space-y-6">
+      {/* Read-only notice */}
+      {readOnly && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-muted-foreground text-sm">
+          <Lock className="h-4 w-4" />
+          <span>읽기 전용 - 배정 변경은 관리자만 가능합니다.</span>
+        </div>
+      )}
+
       {/* Currently Assigned */}
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -302,17 +313,19 @@ export default function StudentSlotAssignment({
                 className="flex items-center gap-1 py-1.5 px-3"
               >
                 <span className="text-xs">{formatSlotLabel(slot)}</span>
-                <button
-                  onClick={() => handleToggleAssignment(slot)}
-                  disabled={processing === slot.classId}
-                  className="ml-1 hover:text-destructive"
-                >
-                  {processing === slot.classId ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <X className="h-3 w-3" />
-                  )}
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => handleToggleAssignment(slot)}
+                    disabled={processing === slot.classId}
+                    className="ml-1 hover:text-destructive"
+                  >
+                    {processing === slot.classId ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <X className="h-3 w-3" />
+                    )}
+                  </button>
+                )}
               </Badge>
             ))}
           </div>
@@ -401,12 +414,12 @@ export default function StudentSlotAssignment({
                   <Checkbox
                     id={slot.scheduleId}
                     checked={isAssigned}
-                    disabled={processing === slot.classId || conflict}
+                    disabled={processing === slot.classId || conflict || readOnly}
                     onCheckedChange={() => handleToggleAssignment(slot)}
                   />
                   <label
                     htmlFor={slot.scheduleId}
-                    className={`flex-1 text-sm cursor-pointer ${
+                    className={`flex-1 text-sm ${readOnly ? '' : 'cursor-pointer'} ${
                       conflict ? 'text-muted-foreground' : ''
                     }`}
                   >
