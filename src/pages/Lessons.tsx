@@ -73,6 +73,7 @@ interface LessonRecord {
   understanding_score: number;
   homework_status: string;
   learning_issues: string[];
+  learning_issues_note: string | null;
   next_lesson_goal: string | null;
   notes: string | null;
   student_name?: string;
@@ -137,53 +138,45 @@ function setLastSelectedSubject(userId: string | null | undefined, subject: Subj
 }
 
 
-// Common learning issues for all subjects
-const COMMON_ISSUES = [
-  '체력적으로 피곤',
-  '고민하는 노력 필요',
-  '학습속도 느림',
-];
-
-// Subject-specific learning issues
+// Subject-specific learning issues (refined options)
 const SUBJECT_SPECIFIC_ISSUES: Record<SubjectType, string[]> = {
   '수학': [
     '개념 이해 부족',
-    '계산 실수',
+    '계산 실수 잦음',
     '문제 해석 미흡',
-    '풀이 과정 누락',
-    '시간 관리 미숙',
+    '풀이 과정 정리 필요',
+    '응용·서술형 약함',
+    '시간 관리 어려움',
   ],
   '과학': [
-    '개념 암기 부족',
-    '개념 간 연결 부족',
-    '그래프/자료 해석 미흡',
-    '서술형 정리 부족',
-    '실험/탐구 이해 부족',
+    '개념 연결 미흡',
+    '암기 부족',
+    '자료 해석 어려움',
+    '실험·탐구 서술 약함',
+    '단원 간 개념 혼동',
   ],
   '영어': [
-    '어휘 부족',
-    '문장 구조 이해 부족',
+    '단어 이해 부족',
+    '문법 개념 혼동',
     '독해 속도 느림',
-    '문법 적용 미흡',
-    '추론/빈칸 문제 약함',
-    '단어통과',
-    '단어불통과',
+    '근거 문장 찾기 어려움',
+    '듣기 이해 부족',
   ],
   '국어': [
-    '지문 독해 미흡',
-    '선지 판단 오류',
-    '어휘/표현 이해 부족',
-    '문학 해석 미흡',
-    '서술형 구조 부족',
+    '지문 독해 어려움',
+    '핵심 개념어 정리 미흡',
+    '서술형 논리 부족',
+    '문학 표현 분석 미흡',
+    '시간 배분 문제',
   ],
 };
 
-// Get learning issues for a specific subject
+// Get learning issues for a specific subject (only subject-specific, no common issues)
 function getLearningIssuesForSubject(subject: SubjectType | ''): string[] {
   if (!subject || !SUBJECT_VALUES.includes(subject as SubjectType)) {
-    return COMMON_ISSUES;
+    return [];
   }
-  return [...COMMON_ISSUES, ...SUBJECT_SPECIFIC_ISSUES[subject as SubjectType]];
+  return SUBJECT_SPECIFIC_ISSUES[subject as SubjectType];
 }
 
 const HOMEWORK_STATUS = [
@@ -263,6 +256,7 @@ export default function Lessons() {
     understanding_score: '3',
     homework_status: 'none_assigned',
     learning_issues: [] as string[],
+    learning_issues_note: '',
     next_lesson_goal: '',
     notes: '',
     lesson_types: ['정규수업'] as string[],
@@ -595,6 +589,7 @@ export default function Lessons() {
         understanding_score: '3',
         homework_status: 'none_assigned',
         learning_issues: [],
+        learning_issues_note: '',
         next_lesson_goal: '',
         notes: '',
         lesson_types: ['정규수업'],
@@ -648,6 +643,7 @@ export default function Lessons() {
       understanding_score: parseInt(formData.understanding_score),
       homework_status: formData.homework_status,
       learning_issues: formData.learning_issues,
+      learning_issues_note: formData.learning_issues_note.trim() || null,
       next_lesson_goal: formData.next_lesson_goal.trim() || null,
       notes: formData.notes.trim() || null,
       lesson_types,
@@ -810,6 +806,7 @@ export default function Lessons() {
       understanding_score: '3',
       homework_status: 'none_assigned',
       learning_issues: [],
+      learning_issues_note: '',
       next_lesson_goal: '',
       notes: '',
       lesson_types: ['정규수업'],
@@ -1015,6 +1012,7 @@ export default function Lessons() {
       understanding_score: lesson.understanding_score.toString(),
       homework_status: lesson.homework_status,
       learning_issues: lesson.learning_issues || [],
+      learning_issues_note: lesson.learning_issues_note || '',
       next_lesson_goal: lesson.next_lesson_goal || '',
       notes: lesson.notes || '',
       lesson_types: lesson.lesson_types || ['정규수업'],
@@ -1530,20 +1528,35 @@ export default function Lessons() {
 
                 <div className="space-y-2">
                   <Label>학습 이슈 (해당 항목 선택)</Label>
-                  <div className="grid grid-cols-2 gap-2 p-4 bg-secondary/50 rounded-lg">
-                    {getLearningIssuesForSubject(formData.subject as SubjectType).map((issue) => (
-                      <div key={issue} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={issue}
-                          checked={formData.learning_issues.includes(issue)}
-                          onCheckedChange={() => toggleIssue(issue)}
-                          disabled={isAssistant}
-                        />
-                        <label htmlFor={issue} className="text-sm cursor-pointer">{issue}</label>
+                  {formData.subject ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2 p-4 bg-secondary/50 rounded-lg">
+                        {getLearningIssuesForSubject(formData.subject as SubjectType).map((issue) => (
+                          <div key={issue} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={issue}
+                              checked={formData.learning_issues.includes(issue)}
+                              onCheckedChange={() => toggleIssue(issue)}
+                              disabled={isAssistant}
+                            />
+                            <label htmlFor={issue} className="text-sm cursor-pointer">{issue}</label>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  {!formData.subject && (
+                      <div className="space-y-1 pt-2">
+                        <Label htmlFor="learning_issues_note" className="text-sm">기타 학습 이슈</Label>
+                        <Textarea
+                          id="learning_issues_note"
+                          value={formData.learning_issues_note}
+                          onChange={(e) => setFormData({ ...formData, learning_issues_note: e.target.value })}
+                          placeholder="체크 항목 외에 보완이 필요한 부분이 있으면 간단히 적어주세요."
+                          rows={2}
+                          disabled={isAssistant}
+                          className="text-sm"
+                        />
+                      </div>
+                    </>
+                  ) : (
                     <p className="text-xs text-muted-foreground">과목을 먼저 선택하세요</p>
                   )}
                 </div>
