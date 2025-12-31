@@ -54,6 +54,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* DEPLOYMENT MARKER - always visible when logged in */}
+      <div className="fixed top-2 left-2 text-xs text-white bg-destructive px-2 py-1 rounded font-bold z-[60]">
+        DEPLOY-MARKER-APP-V3
+      </div>
       {/* Mobile header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card border-b border-border z-50 px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
