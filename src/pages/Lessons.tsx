@@ -85,6 +85,7 @@ interface LessonRecord {
   test_result?: 'pass' | 'fail' | 'none';
   test_notes?: string | null;
   test_date?: string | null;
+  test_time?: string | null;
 }
 
 interface Student {
@@ -254,8 +255,16 @@ export default function Lessons() {
     test_result: 'none' as 'pass' | 'fail' | 'none',
     test_notes: '',
     test_date: '',
+    test_time: '',
   });
   const [isSavingTestFields, setIsSavingTestFields] = useState(false);
+
+  // Generate test time options (16:00 to 21:00, 30-min steps)
+  const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
+    const hour = 16 + Math.floor(i / 2);
+    const minute = (i % 2) * 30;
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+  });
 
   // Check if user is assistant (can only update test fields and homework check)
   const isAssistant = checkIsAssistant(role);
@@ -629,6 +638,7 @@ export default function Lessons() {
       test_result: 'none',
       test_notes: '',
       test_date: '',
+      test_time: '',
     });
   };
 
@@ -751,6 +761,7 @@ export default function Lessons() {
           _test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
           _test_notes: testFormData.test_notes || null,
           _test_date: testFormData.test_date || null,
+          _test_time: testFormData.test_time || null,
         });
 
         if (error) throw error;
@@ -764,6 +775,7 @@ export default function Lessons() {
             test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
             test_notes: testFormData.test_notes || null,
             test_date: testFormData.test_date || null,
+            test_time: testFormData.test_time || null,
           })
           .eq('id', editingLesson.id);
 
@@ -822,6 +834,7 @@ export default function Lessons() {
       test_result: lesson.test_result || 'none',
       test_notes: lesson.test_notes || '',
       test_date: lesson.test_date || lesson.lesson_date,
+      test_time: lesson.test_time || '',
     });
     setIsDialogOpen(true);
   };
@@ -1212,7 +1225,7 @@ export default function Lessons() {
                     <Label className="text-base font-semibold">테스트/결과</Label>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <Label htmlFor="test_name" className="text-sm">테스트 이름</Label>
                       <Input
@@ -1232,6 +1245,24 @@ export default function Lessons() {
                         onChange={(e) => setTestFormData({ ...testFormData, test_date: e.target.value })}
                         className="text-sm"
                       />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="test_time" className="text-sm">테스트 시간</Label>
+                      <Select
+                        value={testFormData.test_time}
+                        onValueChange={(value) => setTestFormData({ ...testFormData, test_time: value })}
+                      >
+                        <SelectTrigger className="text-sm">
+                          <SelectValue placeholder="시간 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TEST_TIME_OPTIONS.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
