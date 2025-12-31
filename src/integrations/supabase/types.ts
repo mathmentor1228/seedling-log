@@ -248,6 +248,7 @@ export type Database = {
           test_notes: string | null
           test_result: string
           test_result_text: string | null
+          test_time: string | null
           understanding_score: number
           updated_at: string
         }
@@ -272,6 +273,7 @@ export type Database = {
           test_notes?: string | null
           test_result?: string
           test_result_text?: string | null
+          test_time?: string | null
           understanding_score: number
           updated_at?: string
         }
@@ -296,6 +298,7 @@ export type Database = {
           test_notes?: string | null
           test_result?: string
           test_result_text?: string | null
+          test_time?: string | null
           understanding_score?: number
           updated_at?: string
         }
@@ -545,17 +548,30 @@ export type Database = {
         }
         Returns: boolean
       }
-      update_lesson_test_fields: {
-        Args: {
-          _lesson_id: string
-          _test_date?: string
-          _test_name?: string
-          _test_notes?: string
-          _test_result?: string
-          _test_result_text?: string
-        }
-        Returns: boolean
-      }
+      update_lesson_test_fields:
+        | {
+            Args: {
+              _lesson_id: string
+              _test_date?: string
+              _test_name?: string
+              _test_notes?: string
+              _test_result?: string
+              _test_result_text?: string
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              _lesson_id: string
+              _test_date?: string
+              _test_name?: string
+              _test_notes?: string
+              _test_result?: string
+              _test_result_text?: string
+              _test_time?: string
+            }
+            Returns: boolean
+          }
     }
     Enums: {
       app_role: "admin" | "teacher" | "assistant"
