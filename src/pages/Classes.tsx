@@ -71,31 +71,64 @@ export default function Classes() {
 
   async function fetchClasses() {
     try {
-      const { data: classData, error } = await supabase
+      // Fetch classes with student count (no FK join on teacher_id)
+      const { data: classData, error: classError } = await supabase
         .from('classes')
         .select(`
           *,
-          profiles:teacher_id (email),
           class_students (count)
         `)
         .order('name');
 
-      if (error) throw error;
+      if (classError) {
+        console.error('Supabase classes error:', classError);
+        toast({
+          title: '클래스 로딩 오류',
+          description: classError.message || '클래스 목록을 불러오지 못했습니다',
+          variant: 'destructive',
+        });
+        setClasses([]);
+        return;
+      }
+
+      // Collect teacher IDs to fetch emails separately
+      const teacherIds = (classData || [])
+        .map((c: any) => c.teacher_id)
+        .filter((id: string | null) => id !== null);
+
+      let teacherMap: Record<string, string> = {};
+      if (teacherIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .in('id', teacherIds);
+
+        if (profilesError) {
+          console.error('Supabase profiles error:', profilesError);
+          // Continue without teacher emails - don't block class display
+        } else {
+          teacherMap = (profilesData || []).reduce((acc: Record<string, string>, p: any) => {
+            acc[p.id] = p.email;
+            return acc;
+          }, {});
+        }
+      }
 
       const formattedClasses = (classData || []).map((c: any) => ({
         ...c,
-        teacher_email: c.profiles?.email,
-        student_count: c.class_students?.[0]?.count || 0,
+        teacher_email: c.teacher_id ? teacherMap[c.teacher_id] : null,
+        student_count: c.class_students?.[0]?.count ?? 0,
       }));
 
       setClasses(formattedClasses);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching classes:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to load classes',
+        title: '오류',
+        description: error?.message || '클래스 목록을 불러오지 못했습니다',
         variant: 'destructive',
       });
+      setClasses([]);
     } finally {
       setLoading(false);
     }
@@ -373,16 +406,12 @@ export default function Classes() {
                     <Users className="w-4 h-4" />
                     <span>{classItem.student_count} students</span>
                   </div>
-                  {classItem.teacher_email && (
-                    <p className="text-muted-foreground">
-                      Teacher: {classItem.teacher_email}
-                    </p>
-                  )}
-                  {classItem.schedule && (
-                    <p className="text-muted-foreground">
-                      Schedule: {classItem.schedule}
-                    </p>
-                  )}
+                  <p className="text-muted-foreground">
+                    담당: {classItem.teacher_email || '미배정'}
+                  </p>
+                  <p className="text-muted-foreground">
+                    일정: {classItem.schedule || '-'}
+                  </p>
                 </div>
               </CardContent>
             </Card>
