@@ -468,6 +468,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* UNCONDITIONAL DEBUG MARKERS - render at very top regardless of data/role */}
+      {isAdmin(role) && (
+        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded border border-border">
+          DASHBOARD-MARKER-ADMIN-V3
+        </div>
+      )}
+      {isTeacher(role) && (
+        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded border border-border">
+          DASHBOARD-MARKER-TEACHER-V3
+        </div>
+      )}
+      
       <div>
         <h1 className="text-2xl font-bold text-foreground">대시보드</h1>
         <p className="text-muted-foreground mt-1">
@@ -477,10 +489,9 @@ export default function Dashboard() {
             ? '숙제 확인 현황'
             : '나의 수업 현황'}
         </p>
-        {/* Debug marker to confirm correct component is rendering */}
+        {/* Debug info for teacher */}
         {isTeacher(role) && (
           <div className="mt-2 text-xs text-muted-foreground space-y-0.5">
-            <p>DASHBOARD-V3 (teacher slots enabled)</p>
             <p>role: {role}, uid: {user?.id}</p>
           </div>
         )}
