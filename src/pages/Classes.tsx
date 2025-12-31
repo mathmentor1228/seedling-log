@@ -20,8 +20,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, BookOpen, Edit2, Trash2, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Users, BookOpen, Edit2, Trash2, Loader2, Clock } from 'lucide-react';
+import { ClassScheduleManager, formatScheduleDisplay, type Schedule } from '@/components/ClassScheduleManager';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -41,6 +41,7 @@ interface ClassItem {
   created_at: string;
   teacher_email?: string;
   student_count?: number;
+  schedules?: Schedule[];
 }
 
 interface Profile {
@@ -60,7 +61,6 @@ export default function Classes() {
     name: '',
     subject: '',
     teacher_id: '',
-    schedule: '',
   });
   const { toast } = useToast();
 
@@ -71,12 +71,13 @@ export default function Classes() {
 
   async function fetchClasses() {
     try {
-      // Fetch classes with student count (no FK join on teacher_id)
+      // Fetch classes with student count and schedules
       const { data: classData, error: classError } = await supabase
         .from('classes')
         .select(`
           *,
-          class_students (count)
+          class_students (count),
+          class_schedules (id, day_of_week, start_time, end_time)
         `)
         .order('name');
 
@@ -105,7 +106,6 @@ export default function Classes() {
 
         if (profilesError) {
           console.error('Supabase profiles error:', profilesError);
-          // Continue without teacher emails - don't block class display
         } else {
           teacherMap = (profilesData || []).reduce((acc: Record<string, string>, p: any) => {
             acc[p.id] = p.email;
@@ -118,6 +118,7 @@ export default function Classes() {
         ...c,
         teacher_email: c.teacher_id ? teacherMap[c.teacher_id] : null,
         student_count: c.class_students?.[0]?.count ?? 0,
+        schedules: c.class_schedules || [],
       }));
 
       setClasses(formattedClasses);
@@ -176,7 +177,6 @@ export default function Classes() {
         name: formData.name.trim(),
         subject: formData.subject as SubjectType,
         teacher_id: formData.teacher_id || null,
-        schedule: formData.schedule.trim() || null,
       };
 
       if (editingClass) {
@@ -204,7 +204,7 @@ export default function Classes() {
 
       setIsDialogOpen(false);
       setEditingClass(null);
-      setFormData({ name: '', subject: '', teacher_id: '', schedule: '' });
+      setFormData({ name: '', subject: '', teacher_id: '' });
       fetchClasses();
     } catch (error: any) {
       console.error('Error saving class:', error);
@@ -224,7 +224,6 @@ export default function Classes() {
       name: classItem.name,
       subject: classItem.subject,
       teacher_id: classItem.teacher_id || '',
-      schedule: classItem.schedule || '',
     });
     setIsDialogOpen(true);
   };
@@ -271,7 +270,7 @@ export default function Classes() {
           setIsDialogOpen(open);
           if (!open) {
             setEditingClass(null);
-            setFormData({ name: '', subject: '', teacher_id: '', schedule: '' });
+            setFormData({ name: '', subject: '', teacher_id: '' });
           }
         }}>
           <DialogTrigger asChild>
@@ -333,15 +332,13 @@ export default function Classes() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="schedule">Schedule</Label>
-                <Input
-                  id="schedule"
-                  value={formData.schedule}
-                  onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
-                  placeholder="e.g., Mon/Wed 3:00 PM"
+              {editingClass && (
+                <ClassScheduleManager
+                  classId={editingClass.id}
+                  teacherId={formData.teacher_id || null}
+                  onSchedulesChange={fetchClasses}
                 />
-              </div>
+              )}
               <div className="flex justify-end gap-2 pt-4">
                 <Button
                   type="button"
@@ -409,9 +406,10 @@ export default function Classes() {
                   <p className="text-muted-foreground">
                     담당: {classItem.teacher_email || '미배정'}
                   </p>
-                  <p className="text-muted-foreground">
-                    일정: {classItem.schedule || '-'}
-                  </p>
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Clock className="w-3 h-3" />
+                    <span>{formatScheduleDisplay(classItem.schedules || [])}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
