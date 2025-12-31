@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -20,8 +20,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
+import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 
 interface Student {
   id: string;
@@ -40,6 +41,7 @@ export default function Students() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -332,6 +334,14 @@ export default function Students() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => setDetailStudent(student)}
+                            title="수업 슬롯 배정"
+                          >
+                            <Calendar className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => handleEdit(student)}
                           >
                             <Edit2 className="w-4 h-4" />
@@ -354,6 +364,24 @@ export default function Students() {
           )}
         </CardContent>
       </Card>
+
+      {/* Student Detail Dialog with Slot Assignment */}
+      <Dialog open={!!detailStudent} onOpenChange={(open) => !open && setDetailStudent(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              수업 슬롯 배정 - {detailStudent?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {detailStudent && (
+            <StudentSlotAssignment
+              studentId={detailStudent.id}
+              studentName={detailStudent.name}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
