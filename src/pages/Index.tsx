@@ -13,13 +13,9 @@ export default function Index() {
       return;
     }
 
-    // Redirect based on role
+    // Redirect ALL roles to /dashboard after login
     if (!loading && user && role) {
-      if (role === 'admin') {
-        navigate('/dashboard');
-      } else if (role === 'teacher') {
-        navigate('/lessons');
-      }
+      navigate('/dashboard');
     }
   }, [user, loading, role, navigate]);
 
