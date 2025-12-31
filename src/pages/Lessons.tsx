@@ -297,24 +297,57 @@ export default function Lessons() {
     }
   }, [user, role]);
 
-  // Deep link handling - auto-open dialog with student_id and subject from URL
+  // Deep link handling - auto-open dialog with student_id, class_id, subject, lesson_date from URL
   useEffect(() => {
     const studentId = searchParams.get('student_id');
     const subject = searchParams.get('subject');
+    const classId = searchParams.get('class_id');
+    const lessonDate = searchParams.get('lesson_date');
     
-    if (studentId && subject && !loading && students.length > 0) {
+    // Need students and classes to be loaded before prefilling
+    if (studentId && !loading && students.length > 0 && classes.length > 0) {
       // Clear URL params
       setSearchParams({});
       
-      // Pre-fill form and open dialog
+      // Validate class_id exists in loaded classes
+      const validClassId = classId && classes.some(c => c.id === classId) ? classId : '';
+      
+      if (classId && !validClassId) {
+        toast({
+          title: '클래스 오류',
+          description: '클래스를 찾을 수 없습니다. 직접 선택해주세요.',
+          variant: 'destructive',
+        });
+      }
+      
+      const finalDate = lessonDate || format(new Date(), 'yyyy-MM-dd');
+      const finalSubject = subject || getLastSelectedSubject(user?.id);
+      
+      // Pre-fill form with all available params
       setFormData(prev => ({
         ...prev,
         student_id: studentId,
-        subject: subject,
+        class_id: validClassId,
+        subject: finalSubject,
+        lesson_date: finalDate,
       }));
+      
+      // Reset editing state and open dialog
+      setEditingLesson(null);
+      setCurrentDraftId(null);
       setIsDialogOpen(true);
+      
+      // Create draft with prefilled values after a short delay
+      setTimeout(async () => {
+        await createInitialDraft({
+          student_id: studentId,
+          class_id: validClassId,
+          subject: finalSubject,
+          lesson_date: finalDate,
+        });
+      }, 100);
     }
-  }, [searchParams, loading, students]);
+  }, [searchParams, loading, students, classes, toast, user]);
 
   // Auto-save effect
   useEffect(() => {
@@ -492,26 +525,37 @@ export default function Lessons() {
   }
 
   // Create initial draft when opening form for new record
-  async function createInitialDraft() {
+  // If prefill is provided, use those values instead of defaults
+  interface DraftPrefill {
+    student_id?: string;
+    class_id?: string;
+    subject?: string;
+    lesson_date?: string;
+  }
+  
+  async function createInitialDraft(prefill?: DraftPrefill) {
     if (!user) return;
 
     try {
-      const defaultStudent = students[0]?.id || '';
-      const lastSubject = getLastSelectedSubject(user.id);
+      const defaultStudent = prefill?.student_id || students[0]?.id || '';
+      const defaultSubject = prefill?.subject || getLastSelectedSubject(user.id);
+      const defaultClassId = prefill?.class_id || null;
+      const defaultDate = prefill?.lesson_date || format(new Date(), 'yyyy-MM-dd');
 
       const { data, error } = await supabase
         .from('lesson_records')
         .insert({
           teacher_id: user.id,
           student_id: defaultStudent,
-          subject: lastSubject,
-          lesson_date: format(new Date(), 'yyyy-MM-dd'),
+          class_id: defaultClassId,
+          subject: defaultSubject as SubjectType,
+          lesson_date: defaultDate,
           lesson_range: '',
           understanding_score: 3,
           homework_status: 'none_assigned',
           learning_issues: [],
           submitted: false,
-        })
+        } as any)
         .select()
         .single();
 
@@ -520,9 +564,9 @@ export default function Lessons() {
       setCurrentDraftId(data.id);
       setFormData({
         student_id: defaultStudent,
-        class_id: '',
-        subject: lastSubject,
-        lesson_date: format(new Date(), 'yyyy-MM-dd'),
+        class_id: defaultClassId || '',
+        subject: defaultSubject,
+        lesson_date: defaultDate,
         lesson_range: '',
         understanding_score: '3',
         homework_status: 'none_assigned',
@@ -1067,45 +1111,22 @@ export default function Lessons() {
                             key={student.id} 
                             className="flex items-center justify-between p-2 bg-secondary/50 rounded-md cursor-pointer hover:bg-secondary transition-colors"
                             onClick={() => {
-                              // Pre-fill form and open dialog
-                              setFormData(prev => ({
-                                ...prev,
+                              const prefill = {
                                 student_id: student.id,
                                 class_id: slot.class_id,
                                 subject: slot.subject,
                                 lesson_date: format(new Date(), 'yyyy-MM-dd'),
+                              };
+                              // Pre-fill form and open dialog
+                              setFormData(prev => ({
+                                ...prev,
+                                ...prefill,
                               }));
                               setEditingLesson(null);
                               setCurrentDraftId(null);
                               setIsDialogOpen(true);
-                              // Create draft after a short delay
-                              setTimeout(async () => {
-                                if (user) {
-                                  try {
-                                    const { data, error } = await supabase
-                                      .from('lesson_records')
-                                      .insert({
-                                        teacher_id: user.id,
-                                        student_id: student.id,
-                                        class_id: slot.class_id,
-                                        subject: slot.subject as SubjectType,
-                                        lesson_date: format(new Date(), 'yyyy-MM-dd'),
-                                        lesson_range: '',
-                                        understanding_score: 3,
-                                        homework_status: 'none_assigned',
-                                        learning_issues: [],
-                                        submitted: false,
-                                      })
-                                      .select()
-                                      .single();
-                                    if (!error && data) {
-                                      setCurrentDraftId(data.id);
-                                    }
-                                  } catch (err) {
-                                    console.error('Error creating draft from slot:', err);
-                                  }
-                                }
-                              }, 100);
+                              // Create draft with prefilled values
+                              setTimeout(() => createInitialDraft(prefill), 100);
                             }}
                           >
                             <span className="font-medium text-foreground">{student.name}</span>
@@ -1115,17 +1136,22 @@ export default function Lessons() {
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Pre-fill form and open dialog
-                                  setFormData(prev => ({
-                                    ...prev,
+                                  const prefill = {
                                     student_id: student.id,
                                     class_id: slot.class_id,
                                     subject: slot.subject,
                                     lesson_date: format(new Date(), 'yyyy-MM-dd'),
+                                  };
+                                  // Pre-fill form and open dialog
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    ...prefill,
                                   }));
                                   setEditingLesson(null);
                                   setCurrentDraftId(null);
                                   setIsDialogOpen(true);
+                                  // Create draft with prefilled values
+                                  setTimeout(() => createInitialDraft(prefill), 100);
                                 }}
                               >
                                 <FileEdit className="w-3.5 h-3.5 mr-1" />
