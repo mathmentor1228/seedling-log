@@ -477,6 +477,13 @@ export default function Dashboard() {
             ? '숙제 확인 현황'
             : '나의 수업 현황'}
         </p>
+        {/* Debug marker to confirm correct component is rendering */}
+        {isTeacher(role) && (
+          <div className="mt-2 text-xs text-muted-foreground space-y-0.5">
+            <p>DASHBOARD-V3 (teacher slots enabled)</p>
+            <p>role: {role}, uid: {user?.id}</p>
+          </div>
+        )}
       </div>
 
       {/* Stats Grid - Visible for admin and teacher */}
