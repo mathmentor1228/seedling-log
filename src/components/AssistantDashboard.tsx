@@ -92,7 +92,6 @@ function getKSTDate(): Date {
 export default function AssistantDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
