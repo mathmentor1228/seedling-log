@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -19,25 +21,26 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   Users, 
   ClipboardCheck, 
-  Calendar,
+  Calendar as CalendarIcon,
   FileEdit,
   CheckSquare,
   GraduationCap,
   Search,
-  Filter,
   AlertCircle,
   Clock,
   Phone,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, addDays, subDays } from 'date-fns';
+import { ko } from 'date-fns/locale';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Teacher {
   id: string;
   name: string;
-  hasLessonsToday: boolean;
+  hasLessonsOnDate: boolean;
 }
 
 interface RosterStudent {
@@ -77,6 +80,13 @@ function normalizeHomeworkStatus(status: string | null | undefined): RosterStude
   return null;
 }
 
+// Get KST date
+function getKSTDate(): Date {
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000;
+  return new Date(now.getTime() + kstOffset);
+}
+
 export default function AssistantDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -85,8 +95,12 @@ export default function AssistantDashboard() {
   const [loading, setLoading] = useState(true);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
-  const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [collapsedTeachers, setCollapsedTeachers] = useState<Set<string>>(new Set());
+  
+  // Date selection
+  const [selectedDate, setSelectedDate] = useState<Date>(getKSTDate());
+  const [calendarOpen, setCalendarOpen] = useState(false);
   
   // Filters
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
@@ -99,23 +113,58 @@ export default function AssistantDashboard() {
     if (user) {
       fetchAllData();
     }
-  }, [user]);
+  }, [user, selectedDate]);
 
   async function fetchAllData() {
     try {
       setLoading(true);
-      // Fetch all teachers and roster in parallel
-      await Promise.all([
-        fetchAllTeachers(),
-        fetchTodayRoster(),
-        fetchTodayHolidays(),
+      
+      // Step 1: Fetch teachers first (independently)
+      const teachers = await fetchAllTeachers();
+      
+      // Step 2: Fetch roster and holidays in parallel
+      const [rosterData, holidaysData] = await Promise.all([
+        fetchRosterForDate(teachers),
+        fetchHolidaysForDate(),
       ]);
+      
+      // Step 3: Build teacher list with hasLessonsOnDate flag
+      const teacherIdsWithLessons = new Set(rosterData.map(r => r.teacher_id));
+      const updatedTeachers = teachers.map(t => ({
+        ...t,
+        hasLessonsOnDate: teacherIdsWithLessons.has(t.id),
+      }));
+      
+      // Sort: teachers with lessons first
+      updatedTeachers.sort((a, b) => {
+        if (a.hasLessonsOnDate !== b.hasLessonsOnDate) {
+          return a.hasLessonsOnDate ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+      
+      // Step 4: Set collapsed state for teachers with no lessons
+      const noLessonsTeacherIds = updatedTeachers
+        .filter(t => !t.hasLessonsOnDate)
+        .map(t => t.id);
+      
+      setAllTeachers(updatedTeachers);
+      setRoster(rosterData);
+      setHolidays(holidaysData);
+      setCollapsedTeachers(new Set(noLessonsTeacherIds));
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: '데이터 로드 오류',
+        description: '데이터를 불러오는 중 오류가 발생했습니다.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
   }
 
-  async function fetchAllTeachers() {
+  async function fetchAllTeachers(): Promise<Teacher[]> {
     try {
       // Get all users with teacher role
       const { data: teacherRoles, error: rolesError } = await supabase
@@ -146,7 +195,7 @@ export default function AssistantDashboard() {
       return (profiles || []).map((p: any) => ({
         id: p.id,
         name: p.full_name || '알 수 없음',
-        hasLessonsToday: false, // Will be updated after roster fetch
+        hasLessonsOnDate: false,
       }));
     } catch (error) {
       console.error('Error fetching all teachers:', error);
@@ -154,32 +203,36 @@ export default function AssistantDashboard() {
     }
   }
 
-  async function fetchTodayHolidays() {
+  async function fetchHolidaysForDate(): Promise<Holiday[]> {
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const { data: holidays } = await supabase
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const { data: holidaysData } = await supabase
         .from('holidays')
         .select('*')
-        .eq('holiday_date', today);
+        .eq('holiday_date', dateStr);
       
-      setTodayHolidays((holidays || []) as Holiday[]);
+      return (holidaysData || []) as Holiday[];
     } catch (error) {
       console.error('Error fetching holidays:', error);
+      return [];
     }
   }
 
-  async function fetchTodayRoster() {
-    if (!user) return;
+  async function fetchRosterForDate(teachers: Teacher[]): Promise<RosterStudent[]> {
+    if (!user) return [];
 
     try {
-      // Get today's day of week using KST
-      const now = new Date();
-      const kstOffset = 9 * 60 * 60 * 1000;
-      const kstDate = new Date(now.getTime() + kstOffset);
-      const dayOfWeek = kstDate.getUTCDay();
-      const today = format(new Date(), 'yyyy-MM-dd');
+      // Get day of week for selected date
+      const dayOfWeek = selectedDate.getDay();
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-      // Fetch ALL class schedules for today across all teachers
+      // Build teacher map from provided teachers
+      const teacherMap: Record<string, string> = {};
+      teachers.forEach(t => {
+        teacherMap[t.id] = t.name;
+      });
+
+      // Fetch ALL class schedules for the selected date across all teachers
       const { data: schedules, error: schedulesError } = await supabase
         .from('class_schedules')
         .select(`
@@ -202,67 +255,38 @@ export default function AssistantDashboard() {
 
       if (schedulesError) {
         console.error('Error fetching schedules:', schedulesError);
-        return;
+        return [];
       }
 
-      // Get unique teacher IDs from schedules (teachers with lessons today)
-      const teacherIdsWithLessons = new Set((schedules || []).map((s: any) => s.teacher_id));
+      if (!schedules || schedules.length === 0) {
+        return [];
+      }
 
-      // Fetch ALL teachers with teacher role
-      const { data: teacherRoles } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'teacher');
-
-      const allTeacherIds = [...new Set((teacherRoles || []).map((r: any) => r.user_id))];
-
-      // Fetch teacher profiles for all teachers
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', allTeacherIds);
-
-      const teacherMap: Record<string, string> = {};
-      (profiles || []).forEach((p: any) => {
-        teacherMap[p.id] = p.full_name;
-      });
-
-      // Build teacher list with hasLessonsToday flag
-      const teacherList: Teacher[] = allTeacherIds.map(id => ({
-        id: id as string,
-        name: teacherMap[id as string] || '알 수 없음',
-        hasLessonsToday: teacherIdsWithLessons.has(id),
-      }));
-
-      // Sort: teachers with lessons first, then by name
-      teacherList.sort((a, b) => {
-        if (a.hasLessonsToday !== b.hasLessonsToday) {
-          return a.hasLessonsToday ? -1 : 1;
-        }
-        return a.name.localeCompare(b.name);
-      });
-
-      setAllTeachers(teacherList);
-
-      // Set collapsed state for teachers with no lessons
-      const noLessonsTeacherIds = teacherList
-        .filter(t => !t.hasLessonsToday)
-        .map(t => t.id);
-      setCollapsedTeachers(new Set(noLessonsTeacherIds));
-
-      // Get students for each class
-      const classIds = (schedules || []).map((s: any) => s.classes?.id).filter(Boolean);
+      // Build class maps
       const classSubjectMap: Record<string, string> = {};
       const classNameMap: Record<string, string> = {};
-      const classTeacherMap: Record<string, string> = {};
 
       (schedules || []).forEach((s: any) => {
         if (s.classes?.id) {
           classSubjectMap[s.classes.id] = s.classes.subject;
           classNameMap[s.classes.id] = s.classes.name;
-          classTeacherMap[s.classes.id] = s.teacher_id;
         }
       });
+
+      // Build schedule by class map
+      const scheduleByClass: Record<string, { start_time: string; end_time: string; teacher_id: string }> = {};
+      (schedules || []).forEach((s: any) => {
+        if (s.classes?.id) {
+          scheduleByClass[s.classes.id] = {
+            start_time: s.start_time,
+            end_time: s.end_time,
+            teacher_id: s.teacher_id,
+          };
+        }
+      });
+
+      // Get class IDs
+      const classIds = (schedules || []).map((s: any) => s.classes?.id).filter(Boolean);
 
       // Fetch class students
       const { data: classStudents } = await supabase
@@ -285,17 +309,6 @@ export default function AssistantDashboard() {
         endTime: string;
       }[] = [];
 
-      const scheduleByClass: Record<string, { start_time: string; end_time: string; teacher_id: string }> = {};
-      (schedules || []).forEach((s: any) => {
-        if (s.classes?.id) {
-          scheduleByClass[s.classes.id] = {
-            start_time: s.start_time,
-            end_time: s.end_time,
-            teacher_id: s.teacher_id,
-          };
-        }
-      });
-
       (classStudents || []).forEach((cs: any) => {
         if (cs.students && scheduleByClass[cs.class_id]) {
           allPairs.push({
@@ -311,6 +324,10 @@ export default function AssistantDashboard() {
         }
       });
 
+      if (allPairs.length === 0) {
+        return [];
+      }
+
       // Batch fetch previous homework status via RPC
       let previousHomeworkMap: Record<string, { 
         status: RosterStudent['previousHomeworkStatus']; 
@@ -318,36 +335,34 @@ export default function AssistantDashboard() {
         followup2wDue: boolean;
       }> = {};
 
-      if (allPairs.length > 0) {
-        const rpcPairs = allPairs.map(p => ({
-          student_id: p.studentId,
-          class_id: p.classId,
-          subject: p.subject,
-        }));
+      const rpcPairs = allPairs.map(p => ({
+        student_id: p.studentId,
+        class_id: p.classId,
+        subject: p.subject,
+      }));
 
-        const { data: rpcResult, error: rpcError } = await supabase.rpc(
-          'get_prev_homework_status_for_roster',
-          { _pairs: rpcPairs, _today: today }
-        );
+      const { data: rpcResult, error: rpcError } = await supabase.rpc(
+        'get_prev_homework_status_for_roster',
+        { _pairs: rpcPairs, _today: dateStr }
+      );
 
-        if (!rpcError && rpcResult) {
-          (rpcResult as any[]).forEach((row: any) => {
-            const key = `${row.student_id}:${row.class_id}`;
-            previousHomeworkMap[key] = {
-              status: normalizeHomeworkStatus(row.homework_status),
-              firstSubject: row.first_subject === true,
-              followup2wDue: row.followup_2w_due === true,
-            };
-          });
-        }
+      if (!rpcError && rpcResult) {
+        (rpcResult as any[]).forEach((row: any) => {
+          const key = `${row.student_id}:${row.class_id}`;
+          previousHomeworkMap[key] = {
+            status: normalizeHomeworkStatus(row.homework_status),
+            firstSubject: row.first_subject === true,
+            followup2wDue: row.followup_2w_due === true,
+          };
+        });
       }
 
-      // Fetch today's lesson records to check for existing records and 휴강
+      // Fetch lesson records for selected date to check for existing records and 휴강
       const studentIds = [...new Set(allPairs.map(p => p.studentId))];
-      const { data: todayRecords } = await supabase
+      const { data: dateRecords } = await supabase
         .from('lesson_records')
         .select('id, student_id, class_id, lesson_types, test_result_text')
-        .eq('lesson_date', today)
+        .eq('lesson_date', dateStr)
         .in('student_id', studentIds)
         .in('class_id', classIds);
 
@@ -355,7 +370,7 @@ export default function AssistantDashboard() {
       const hyugangMap: Record<string, string> = {};
       const hasTestMap: Record<string, boolean> = {};
 
-      (todayRecords || []).forEach((lr: any) => {
+      (dateRecords || []).forEach((lr: any) => {
         const key = `${lr.student_id}:${lr.class_id}`;
         existingRecordMap[key] = lr.id;
         if (lr.lesson_types && lr.lesson_types.includes('휴강')) {
@@ -397,38 +412,24 @@ export default function AssistantDashboard() {
         return a.start_time.localeCompare(b.start_time);
       });
 
-      setRoster(rosterData);
+      return rosterData;
     } catch (error) {
       console.error('Error fetching roster:', error);
-      toast({
-        title: '데이터 로드 오류',
-        description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
+      return [];
     }
   }
 
   // Apply filters
   const filteredRoster = roster.filter(item => {
-    // Teacher filter
     if (selectedTeacher !== 'all' && item.teacher_id !== selectedTeacher) return false;
-    
-    // Search filter
     if (searchQuery && !item.student_name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    
-    // Not done filter
     if (filterNotDone && item.previousHomeworkStatus !== 'not_done' && item.previousHomeworkStatus !== 'partial') return false;
-    
-    // Has test filter
     if (filterHasTest && !item.hasTest) return false;
-    
-    // Followup filter
     if (filterFollowup && !item.followup2wDue) return false;
-    
     return true;
   });
 
-  // Group by teacher (for roster with lessons)
+  // Group by teacher (for roster)
   const rosterByTeacher = filteredRoster.reduce((acc, item) => {
     if (!acc[item.teacher_id]) {
       acc[item.teacher_id] = [];
@@ -441,7 +442,7 @@ export default function AssistantDashboard() {
   const teacherGroups = allTeachers.map(teacher => ({
     teacher_id: teacher.id,
     teacher_name: teacher.name,
-    hasLessonsToday: teacher.hasLessonsToday,
+    hasLessonsOnDate: teacher.hasLessonsOnDate,
     students: rosterByTeacher[teacher.id] || [],
   }));
 
@@ -469,7 +470,11 @@ export default function AssistantDashboard() {
   const testsCount = roster.filter(r => r.hasTest).length;
   const followup2wCount = roster.filter(r => r.followup2wDue).length;
   const totalTeachers = allTeachers.length;
-  const activeTeachers = allTeachers.filter(t => t.hasLessonsToday).length;
+  const activeTeachers = allTeachers.filter(t => t.hasLessonsOnDate).length;
+
+  // Date helpers
+  const isToday = format(selectedDate, 'yyyy-MM-dd') === format(getKSTDate(), 'yyyy-MM-dd');
+  const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
   if (loading) {
     return (
@@ -490,27 +495,98 @@ export default function AssistantDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">조교 대시보드</h1>
-        <p className="text-muted-foreground mt-1">
-          오늘 수업 전체 현황 및 숙제/테스트 관리
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">조교 대시보드</h1>
+          <p className="text-muted-foreground mt-1">
+            {isToday ? '오늘' : format(selectedDate, 'M월 d일', { locale: ko })} 수업 전체 현황 및 숙제/테스트 관리
+          </p>
+          {/* Debug marker - remove after confirmed */}
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            ROSTER_DEBUG: rows={roster.length}, teachers={allTeachers.length}, active={activeTeachers}
+          </p>
+        </div>
+        
+        {/* Date Selector */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="min-w-[140px]">
+                <CalendarIcon className="w-4 h-4 mr-2" />
+                {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedDate(date);
+                    setCalendarOpen(false);
+                  }
+                }}
+                locale={ko}
+              />
+            </PopoverContent>
+          </Popover>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          
+          <div className="flex gap-1 ml-2">
+            <Button
+              variant={format(subDays(getKSTDate(), 1), 'yyyy-MM-dd') === dateStr ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setSelectedDate(subDays(getKSTDate(), 1))}
+            >
+              어제
+            </Button>
+            <Button
+              variant={isToday ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setSelectedDate(getKSTDate())}
+            >
+              오늘
+            </Button>
+            <Button
+              variant={format(addDays(getKSTDate(), 1), 'yyyy-MM-dd') === dateStr ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setSelectedDate(addDays(getKSTDate(), 1))}
+            >
+              내일
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Holiday Banner */}
-      {todayHolidays.length > 0 && (
+      {holidays.length > 0 && (
         <Card className="border-amber-500/50 bg-amber-500/5">
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-amber-600" />
+              <CalendarIcon className="w-5 h-5 text-amber-600" />
               <div>
                 <span className="font-medium text-amber-700">
-                  {todayHolidays.some(h => h.scope === 'all') 
-                    ? '오늘은 휴강일(전체)입니다' 
-                    : '오늘은 일부 휴강일입니다'}
+                  {holidays.some(h => h.scope === 'all') 
+                    ? `${isToday ? '오늘' : format(selectedDate, 'M월 d일', { locale: ko })}은 휴강일(전체)입니다` 
+                    : `${isToday ? '오늘' : format(selectedDate, 'M월 d일', { locale: ko })}은 일부 휴강일입니다`}
                 </span>
                 <span className="text-muted-foreground ml-2">
-                  {todayHolidays.map(h => h.name).join(', ')}
+                  {holidays.map(h => h.name).join(', ')}
                 </span>
               </div>
             </div>
@@ -521,7 +597,7 @@ export default function AssistantDashboard() {
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
-          title="오늘 수업 학생"
+          title={isToday ? '오늘 수업 학생' : '해당일 수업 학생'}
           value={totalStudents}
           icon={<Users className="w-5 h-5" />}
         />
@@ -557,7 +633,7 @@ export default function AssistantDashboard() {
                 <SelectItem value="all">전체 선생님 ({totalTeachers}명)</SelectItem>
                 {allTeachers.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
-                    {t.name} {!t.hasLessonsToday && '(오늘 수업 없음)'}
+                    {t.name} {!t.hasLessonsOnDate && '(수업 없음)'}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -633,7 +709,7 @@ export default function AssistantDashboard() {
             const hasStudents = group.students.length > 0;
 
             // If filtering and no matching students, skip this teacher
-            if (selectedTeacher === 'all' && (searchQuery || filterNotDone || filterHasTest || filterFollowup) && !hasStudents && group.hasLessonsToday) {
+            if (selectedTeacher === 'all' && (searchQuery || filterNotDone || filterHasTest || filterFollowup) && !hasStudents && group.hasLessonsOnDate) {
               return null;
             }
 
@@ -643,7 +719,7 @@ export default function AssistantDashboard() {
                 open={!isCollapsed}
                 onOpenChange={() => toggleCollapsed(group.teacher_id)}
               >
-                <Card className={`${group.hasLessonsToday ? 'border-primary/20' : 'border-muted'}`}>
+                <Card className={`${group.hasLessonsOnDate ? 'border-primary/20' : 'border-muted'}`}>
                   <CollapsibleTrigger asChild>
                     <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
                       <CardTitle className="flex items-center justify-between">
@@ -653,23 +729,23 @@ export default function AssistantDashboard() {
                           ) : (
                             <ChevronDown className="w-4 h-4 text-muted-foreground" />
                           )}
-                          <GraduationCap className={`w-5 h-5 ${group.hasLessonsToday ? 'text-primary' : 'text-muted-foreground'}`} />
-                          <span className={group.hasLessonsToday ? '' : 'text-muted-foreground'}>
+                          <GraduationCap className={`w-5 h-5 ${group.hasLessonsOnDate ? 'text-primary' : 'text-muted-foreground'}`} />
+                          <span className={group.hasLessonsOnDate ? '' : 'text-muted-foreground'}>
                             {group.teacher_name} 선생님
                           </span>
                         </div>
-                        <Badge variant={group.hasLessonsToday ? 'secondary' : 'outline'}>
-                          {group.hasLessonsToday ? `${group.students.length}명` : '오늘 0명'}
+                        <Badge variant={group.hasLessonsOnDate ? 'secondary' : 'outline'}>
+                          {group.hasLessonsOnDate ? `${group.students.length}명` : '0명'}
                         </Badge>
                       </CardTitle>
                     </CardHeader>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <CardContent>
-                      {!group.hasLessonsToday ? (
+                      {!group.hasLessonsOnDate ? (
                         <div className="py-4 text-center text-muted-foreground">
                           <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                          <p>오늘 수업 없음</p>
+                          <p>{isToday ? '오늘' : '해당일'} 수업 없음</p>
                         </div>
                       ) : group.students.length === 0 ? (
                         <div className="py-4 text-center text-muted-foreground">
@@ -733,7 +809,7 @@ export default function AssistantDashboard() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
+                                  onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${dateStr}`)}
                                 >
                                   <FileEdit className="w-3.5 h-3.5 mr-1" />
                                   {student.existingRecordId ? '수정' : '기록'}
@@ -741,7 +817,7 @@ export default function AssistantDashboard() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
+                                  onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${dateStr}&focus=test`)}
                                 >
                                   <CheckSquare className="w-3.5 h-3.5 mr-1" />
                                   숙제/테스트
