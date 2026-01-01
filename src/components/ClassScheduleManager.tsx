@@ -114,12 +114,39 @@ export function ClassScheduleManager({ classId, teacherId, onSchedulesChange }: 
     setIsSubmitting(true);
 
     try {
+      // Non-blocking overlap warning (creation is ALWAYS allowed)
+      const day = parseInt(formData.day_of_week);
+      const { data: existing, error: existingError } = await supabase
+        .from('class_schedules')
+        .select('start_time, end_time')
+        .eq('teacher_id', teacherId)
+        .eq('day_of_week', day)
+        .eq('is_active', true);
+
+      if (!existingError && existing && existing.length > 0) {
+        const newStart = formData.start_time;
+        const newEnd = formData.end_time;
+
+        const hasOverlap = existing.some((s) => {
+          const sStart = (s.start_time || '').slice(0, 5);
+          const sEnd = (s.end_time || '').slice(0, 5);
+          return newStart < sEnd && sStart < newEnd;
+        });
+
+        if (hasOverlap) {
+          toast({
+            title: '주의',
+            description: '동일 시간대 슬롯이 이미 존재합니다. 학생 배정 시 충돌이 발생할 수 있어요.',
+          });
+        }
+      }
+
       const { error } = await supabase
         .from('class_schedules')
         .insert({
           class_id: classId,
           teacher_id: teacherId,
-          day_of_week: parseInt(formData.day_of_week),
+          day_of_week: day,
           start_time: formData.start_time,
           end_time: formData.end_time,
         });
