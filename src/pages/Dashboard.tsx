@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, isAdmin, isTeacher, isAssistant } from '@/lib/auth';
+import AssistantDashboard from '@/components/AssistantDashboard';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
 import { RiskBadge } from '@/components/ui/risk-badge';
@@ -182,6 +183,12 @@ function getRosterBadges(
 export default function Dashboard() {
   const { role, user } = useAuth();
   const { toast } = useToast();
+
+  // Assistants get their own dedicated dashboard
+  if (isAssistant(role)) {
+    return <AssistantDashboard />;
+  }
+
   const [stats, setStats] = useState<DashboardStats>({
     totalStudents: 0,
     totalClasses: 0,
