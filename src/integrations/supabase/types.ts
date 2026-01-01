@@ -159,6 +159,36 @@ export type Database = {
         }
         Relationships: []
       }
+      holidays: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          holiday_date: string
+          id: string
+          name: string
+          scope: string
+          teacher_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          holiday_date: string
+          id?: string
+          name: string
+          scope?: string
+          teacher_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          holiday_date?: string
+          id?: string
+          name?: string
+          scope?: string
+          teacher_id?: string | null
+        }
+        Relationships: []
+      }
       homework_assignments: {
         Row: {
           assigned_date: string
