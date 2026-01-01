@@ -388,6 +388,9 @@ export default function Lessons() {
     test_assistant: '',
   });
   const [isSavingTestFields, setIsSavingTestFields] = useState(false);
+  
+  // Notice when opening existing record instead of creating new
+  const [existingRecordNotice, setExistingRecordNotice] = useState(false);
 
   // Generate test time options (16:00 to 21:00, 30-min steps)
   const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
@@ -413,6 +416,32 @@ export default function Lessons() {
       fetchTodayHolidays();
     }
   }, [user, role]);
+
+  // Check for existing lesson record (duplicate check)
+  async function findExistingLessonRecord(
+    studentId: string,
+    lessonDate: string,
+    subject: string,
+    classId: string | null
+  ): Promise<LessonRecord | null> {
+    if (!studentId || !lessonDate || !subject || !classId) return null;
+    
+    const { data, error } = await supabase
+      .from('lesson_records')
+      .select('*')
+      .eq('student_id', studentId)
+      .eq('lesson_date', lessonDate)
+      .eq('subject', subject as SubjectType)
+      .eq('class_id', classId)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Error checking for existing record:', error);
+      return null;
+    }
+    
+    return data as LessonRecord | null;
+  }
 
   // Deep link handling - auto-open dialog with student_id, class_id, subject, lesson_date from URL
   useEffect(() => {
@@ -440,29 +469,49 @@ export default function Lessons() {
       const finalDate = lessonDate || format(new Date(), 'yyyy-MM-dd');
       const finalSubject = subject || getLastSelectedSubject(user?.id);
       
-      // Pre-fill form with all available params
-      setFormData(prev => ({
-        ...prev,
-        student_id: studentId,
-        class_id: validClassId,
-        subject: finalSubject,
-        lesson_date: finalDate,
-      }));
-      
-      // Reset editing state and open dialog
-      setEditingLesson(null);
-      setCurrentDraftId(null);
-      setIsDialogOpen(true);
-      
-      // Create draft with prefilled values after a short delay
-      setTimeout(async () => {
-        await createInitialDraft({
+      // Check for existing record before creating new draft
+      (async () => {
+        const existingRecord = await findExistingLessonRecord(
+          studentId,
+          finalDate,
+          finalSubject,
+          validClassId || null
+        );
+        
+        if (existingRecord) {
+          // Open existing record instead of creating new one
+          setExistingRecordNotice(true);
+          handleEdit(existingRecord);
+          return;
+        }
+        
+        // No existing record - create new draft
+        setExistingRecordNotice(false);
+        
+        // Pre-fill form with all available params
+        setFormData(prev => ({
+          ...prev,
           student_id: studentId,
           class_id: validClassId,
           subject: finalSubject,
           lesson_date: finalDate,
-        });
-      }, 100);
+        }));
+        
+        // Reset editing state and open dialog
+        setEditingLesson(null);
+        setCurrentDraftId(null);
+        setIsDialogOpen(true);
+        
+        // Create draft with prefilled values after a short delay
+        setTimeout(async () => {
+          await createInitialDraft({
+            student_id: studentId,
+            class_id: validClassId,
+            subject: finalSubject,
+            lesson_date: finalDate,
+          });
+        }, 100);
+      })();
     }
   }, [searchParams, loading, students, classes, toast, user]);
 
@@ -831,7 +880,24 @@ export default function Lessons() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Check for unique constraint violation (duplicate record)
+        if (error.code === '23505' && defaultClassId) {
+          // Re-fetch the existing record and open it
+          const existingRecord = await findExistingLessonRecord(
+            defaultStudent,
+            defaultDate,
+            defaultSubject,
+            defaultClassId
+          );
+          if (existingRecord) {
+            setExistingRecordNotice(true);
+            handleEdit(existingRecord);
+            return existingRecord.id;
+          }
+        }
+        throw error;
+      }
 
       setCurrentDraftId(data.id);
       setFormData({
@@ -1407,6 +1473,7 @@ export default function Lessons() {
       }
       setEditingLesson(null);
       setCurrentDraftId(null);
+      setExistingRecordNotice(false);
       resetForm();
       fetchLessons();
     }
@@ -1579,6 +1646,15 @@ export default function Lessons() {
                 )}
               </DialogTitle>
             </DialogHeader>
+            
+            {/* Notice when existing record was opened */}
+            {existingRecordNotice && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-700 text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>이미 오늘 수업 기록이 있어 기존 기록을 열었습니다.</span>
+              </div>
+            )}
+            
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
               {/* 지난 수업 Section - At the very top */}
               {formData.student_id && formData.class_id && (
