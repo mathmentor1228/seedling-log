@@ -27,13 +27,17 @@ import {
   Filter,
   AlertCircle,
   Clock,
-  Phone
+  Phone,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Teacher {
   id: string;
   name: string;
+  hasLessonsToday: boolean;
 }
 
 interface RosterStudent {
@@ -80,8 +84,9 @@ export default function AssistantDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
   const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
+  const [collapsedTeachers, setCollapsedTeachers] = useState<Set<string>>(new Set());
   
   // Filters
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
@@ -99,12 +104,53 @@ export default function AssistantDashboard() {
   async function fetchAllData() {
     try {
       setLoading(true);
+      // Fetch all teachers and roster in parallel
       await Promise.all([
+        fetchAllTeachers(),
         fetchTodayRoster(),
         fetchTodayHolidays(),
       ]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchAllTeachers() {
+    try {
+      // Get all users with teacher role
+      const { data: teacherRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'teacher');
+
+      if (rolesError) {
+        console.error('Error fetching teacher roles:', rolesError);
+        return [];
+      }
+
+      const teacherUserIds = (teacherRoles || []).map((r: any) => r.user_id);
+      
+      if (teacherUserIds.length === 0) return [];
+
+      // Fetch profiles for teachers
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', teacherUserIds);
+
+      if (profilesError) {
+        console.error('Error fetching teacher profiles:', profilesError);
+        return [];
+      }
+
+      return (profiles || []).map((p: any) => ({
+        id: p.id,
+        name: p.full_name || '알 수 없음',
+        hasLessonsToday: false, // Will be updated after roster fetch
+      }));
+    } catch (error) {
+      console.error('Error fetching all teachers:', error);
+      return [];
     }
   }
 
@@ -159,26 +205,50 @@ export default function AssistantDashboard() {
         return;
       }
 
-      // Get unique teacher IDs from schedules
-      const teacherIds = [...new Set((schedules || []).map((s: any) => s.teacher_id))];
+      // Get unique teacher IDs from schedules (teachers with lessons today)
+      const teacherIdsWithLessons = new Set((schedules || []).map((s: any) => s.teacher_id));
 
-      // Fetch teacher profiles
+      // Fetch ALL teachers with teacher role
+      const { data: teacherRoles } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'teacher');
+
+      const allTeacherIds = [...new Set((teacherRoles || []).map((r: any) => r.user_id))];
+
+      // Fetch teacher profiles for all teachers
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, full_name')
-        .in('id', teacherIds);
+        .in('id', allTeacherIds);
 
       const teacherMap: Record<string, string> = {};
       (profiles || []).forEach((p: any) => {
         teacherMap[p.id] = p.full_name;
       });
 
-      // Set teachers for filter dropdown
-      const teacherList = teacherIds.map(id => ({
+      // Build teacher list with hasLessonsToday flag
+      const teacherList: Teacher[] = allTeacherIds.map(id => ({
         id: id as string,
         name: teacherMap[id as string] || '알 수 없음',
+        hasLessonsToday: teacherIdsWithLessons.has(id),
       }));
-      setTeachers(teacherList);
+
+      // Sort: teachers with lessons first, then by name
+      teacherList.sort((a, b) => {
+        if (a.hasLessonsToday !== b.hasLessonsToday) {
+          return a.hasLessonsToday ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+
+      setAllTeachers(teacherList);
+
+      // Set collapsed state for teachers with no lessons
+      const noLessonsTeacherIds = teacherList
+        .filter(t => !t.hasLessonsToday)
+        .map(t => t.id);
+      setCollapsedTeachers(new Set(noLessonsTeacherIds));
 
       // Get students for each class
       const classIds = (schedules || []).map((s: any) => s.classes?.id).filter(Boolean);
@@ -358,24 +428,48 @@ export default function AssistantDashboard() {
     return true;
   });
 
-  // Group by teacher
-  const groupedByTeacher = filteredRoster.reduce((acc, item) => {
+  // Group by teacher (for roster with lessons)
+  const rosterByTeacher = filteredRoster.reduce((acc, item) => {
     if (!acc[item.teacher_id]) {
-      acc[item.teacher_id] = {
-        teacher_id: item.teacher_id,
-        teacher_name: item.teacher_name,
-        students: [],
-      };
+      acc[item.teacher_id] = [];
     }
-    acc[item.teacher_id].students.push(item);
+    acc[item.teacher_id].push(item);
     return acc;
-  }, {} as Record<string, { teacher_id: string; teacher_name: string; students: RosterStudent[] }>);
+  }, {} as Record<string, RosterStudent[]>);
+
+  // Build complete teacher groups (including teachers with no lessons)
+  const teacherGroups = allTeachers.map(teacher => ({
+    teacher_id: teacher.id,
+    teacher_name: teacher.name,
+    hasLessonsToday: teacher.hasLessonsToday,
+    students: rosterByTeacher[teacher.id] || [],
+  }));
+
+  // Filter teacher groups based on selectedTeacher
+  const filteredTeacherGroups = selectedTeacher === 'all' 
+    ? teacherGroups 
+    : teacherGroups.filter(g => g.teacher_id === selectedTeacher);
+
+  // Toggle collapsed state
+  const toggleCollapsed = (teacherId: string) => {
+    setCollapsedTeachers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(teacherId)) {
+        newSet.delete(teacherId);
+      } else {
+        newSet.add(teacherId);
+      }
+      return newSet;
+    });
+  };
 
   // Stats
   const totalStudents = roster.length;
   const overdueHomeworkCount = roster.filter(r => r.previousHomeworkStatus === 'not_done' || r.previousHomeworkStatus === 'partial').length;
   const testsCount = roster.filter(r => r.hasTest).length;
   const followup2wCount = roster.filter(r => r.followup2wDue).length;
+  const totalTeachers = allTeachers.length;
+  const activeTeachers = allTeachers.filter(t => t.hasLessonsToday).length;
 
   if (loading) {
     return (
@@ -460,9 +554,11 @@ export default function AssistantDashboard() {
                 <SelectValue placeholder="선생님 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체 선생님</SelectItem>
-                {teachers.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                <SelectItem value="all">전체 선생님 ({totalTeachers}명)</SelectItem>
+                {allTeachers.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name} {!t.hasLessonsToday && '(오늘 수업 없음)'}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -513,108 +609,154 @@ export default function AssistantDashboard() {
       </Card>
 
       {/* Grouped Roster by Teacher */}
-      {Object.keys(groupedByTeacher).length === 0 ? (
+      {filteredTeacherGroups.length === 0 ? (
         <Card>
           <CardContent className="py-12">
             <div className="text-center">
               <GraduationCap className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
               <p className="text-muted-foreground">
-                {roster.length === 0 ? '오늘 배정된 수업이 없습니다.' : '검색 결과가 없습니다.'}
+                선생님 정보가 없습니다.
               </p>
             </div>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          {Object.values(groupedByTeacher).map((group) => (
-            <Card key={group.teacher_id} className="border-primary/20">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <GraduationCap className="w-5 h-5 text-primary" />
-                    <span>{group.teacher_name} 선생님</span>
-                  </div>
-                  <Badge variant="secondary">{group.students.length}명</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {group.students.map((student) => (
-                    <div
-                      key={`${student.student_id}-${student.class_id}`}
-                      className={`flex items-center justify-between p-3 rounded-lg ${
-                        student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 flex-wrap flex-1 min-w-0">
-                        <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>
-                          {student.student_name}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <span>{student.class_name}</span>
-                          <span className="text-xs">({student.start_time.slice(0, 5)})</span>
-                        </div>
-                        <Badge variant="outline" className="text-xs">{student.subject}</Badge>
-                        
-                        {/* Badges */}
-                        {student.hyugangRecordId ? (
-                          <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
-                        ) : (
-                          <>
-                            {student.previousHomeworkStatus === 'not_done' && (
-                              <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
-                                지난 숙제 미이행
-                              </Badge>
-                            )}
-                            {student.previousHomeworkStatus === 'partial' && (
-                              <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
-                                지난 숙제 일부완료
-                              </Badge>
-                            )}
-                            {student.firstSubject && student.previousHomeworkStatus !== 'not_done' && student.previousHomeworkStatus !== 'partial' && (
-                              <Badge variant="outline" className="text-muted-foreground border-muted text-xs">
-                                첫 {student.subject} 수업
-                              </Badge>
-                            )}
-                            {student.followup2wDue && (
-                              <Badge className="bg-purple-500/15 text-purple-600 border-purple-500/30 text-xs">
-                                첫등록 2주후(연락)
-                              </Badge>
-                            )}
-                            {student.hasTest && (
-                              <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
-                                테스트
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                      </div>
+          {/* Summary of teachers */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <GraduationCap className="w-4 h-4" />
+            <span>전체 {totalTeachers}명 중 {activeTeachers}명 수업 진행</span>
+          </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
-                        >
-                          <FileEdit className="w-3.5 h-3.5 mr-1" />
-                          {student.existingRecordId ? '수정' : '기록'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
-                        >
-                          <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                          숙제/테스트
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {filteredTeacherGroups.map((group) => {
+            const isCollapsed = collapsedTeachers.has(group.teacher_id);
+            const hasStudents = group.students.length > 0;
+
+            // If filtering and no matching students, skip this teacher
+            if (selectedTeacher === 'all' && (searchQuery || filterNotDone || filterHasTest || filterFollowup) && !hasStudents && group.hasLessonsToday) {
+              return null;
+            }
+
+            return (
+              <Collapsible
+                key={group.teacher_id}
+                open={!isCollapsed}
+                onOpenChange={() => toggleCollapsed(group.teacher_id)}
+              >
+                <Card className={`${group.hasLessonsToday ? 'border-primary/20' : 'border-muted'}`}>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
+                      <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {isCollapsed ? (
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          )}
+                          <GraduationCap className={`w-5 h-5 ${group.hasLessonsToday ? 'text-primary' : 'text-muted-foreground'}`} />
+                          <span className={group.hasLessonsToday ? '' : 'text-muted-foreground'}>
+                            {group.teacher_name} 선생님
+                          </span>
+                        </div>
+                        <Badge variant={group.hasLessonsToday ? 'secondary' : 'outline'}>
+                          {group.hasLessonsToday ? `${group.students.length}명` : '오늘 0명'}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent>
+                      {!group.hasLessonsToday ? (
+                        <div className="py-4 text-center text-muted-foreground">
+                          <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p>오늘 수업 없음</p>
+                        </div>
+                      ) : group.students.length === 0 ? (
+                        <div className="py-4 text-center text-muted-foreground">
+                          <p>검색 결과가 없습니다.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {group.students.map((student) => (
+                            <div
+                              key={`${student.student_id}-${student.class_id}`}
+                              className={`flex items-center justify-between p-3 rounded-lg ${
+                                student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 flex-wrap flex-1 min-w-0">
+                                <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>
+                                  {student.student_name}
+                                </span>
+                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                  <span>{student.class_name}</span>
+                                  <span className="text-xs">({student.start_time.slice(0, 5)})</span>
+                                </div>
+                                <Badge variant="outline" className="text-xs">{student.subject}</Badge>
+                                
+                                {/* Badges */}
+                                {student.hyugangRecordId ? (
+                                  <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
+                                ) : (
+                                  <>
+                                    {student.previousHomeworkStatus === 'not_done' && (
+                                      <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+                                        지난 숙제 미이행
+                                      </Badge>
+                                    )}
+                                    {student.previousHomeworkStatus === 'partial' && (
+                                      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
+                                        지난 숙제 일부완료
+                                      </Badge>
+                                    )}
+                                    {student.firstSubject && student.previousHomeworkStatus !== 'not_done' && student.previousHomeworkStatus !== 'partial' && (
+                                      <Badge variant="outline" className="text-muted-foreground border-muted text-xs">
+                                        첫 {student.subject} 수업
+                                      </Badge>
+                                    )}
+                                    {student.followup2wDue && (
+                                      <Badge className="bg-purple-500/15 text-purple-600 border-purple-500/30 text-xs">
+                                        첫등록 2주후(연락)
+                                      </Badge>
+                                    )}
+                                    {student.hasTest && (
+                                      <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
+                                        테스트
+                                      </Badge>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
+                                >
+                                  <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                  {student.existingRecordId ? '수정' : '기록'}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
+                                >
+                                  <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                                  숙제/테스트
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            );
+          })}
         </div>
       )}
     </div>
