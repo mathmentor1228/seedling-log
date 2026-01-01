@@ -13,6 +13,7 @@ import LessonsPage from "./pages/LessonsPage";
 import ReportsPage from "./pages/ReportsPage";
 import WeeklyReportSendPage from "./pages/WeeklyReportSendPage";
 import UserManagementPage from "./pages/UserManagementPage";
+import TimetablePage from "./pages/TimetablePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reports/send" element={<WeeklyReportSendPage />} />
             <Route path="/admin/users" element={<UserManagementPage />} />
+            <Route path="/timetable" element={<TimetablePage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
