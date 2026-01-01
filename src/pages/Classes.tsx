@@ -393,26 +393,39 @@ export default function Classes() {
 
     try {
       const createdDays: string[] = [];
-      const skippedDays: string[] = [];
+      const warningDays: string[] = [];
+
+      // Non-blocking overlap warning (creation is ALWAYS allowed)
+      let existingSchedules: Array<{ day_of_week: number; start_time: string; end_time: string }> = [];
+      const { data: existingSchedulesData, error: existingSchedulesError } = await supabase
+        .from('class_schedules')
+        .select('day_of_week, start_time, end_time')
+        .eq('teacher_id', bulkForm.teacher_id)
+        .eq('is_active', true)
+        .in('day_of_week', bulkForm.selectedDays);
+
+      if (!existingSchedulesError && existingSchedulesData) {
+        existingSchedules = existingSchedulesData as any;
+      }
+
+      const newStart = bulkForm.start_time;
+      const newEnd = bulkForm.end_time;
 
       for (const day of bulkForm.selectedDays) {
-        // Check for existing schedule with same teacher + day + start_time
-        const { data: existing } = await supabase
-          .from('class_schedules')
-          .select('id')
-          .eq('teacher_id', bulkForm.teacher_id)
-          .eq('day_of_week', day)
-          .eq('start_time', bulkForm.start_time)
-          .eq('is_active', true)
-          .maybeSingle();
+        const dayLabel = DAYS_OF_WEEK.find((d) => d.value === day)?.label || String(day);
 
-        if (existing) {
-          skippedDays.push(DAYS_OF_WEEK.find((d) => d.value === day)?.label || String(day));
-          continue;
+        const overlaps = existingSchedules.some((s) => {
+          const sStart = (s.start_time || '').slice(0, 5);
+          const sEnd = (s.end_time || '').slice(0, 5);
+          return s.day_of_week === day && newStart < sEnd && sStart < newEnd;
+        });
+
+        if (overlaps) {
+          warningDays.push(dayLabel);
         }
 
         // Create class for this day
-        const className = `${bulkForm.subject} ${DAYS_OF_WEEK.find((d) => d.value === day)?.label} ${bulkForm.start_time}`;
+        const className = `${bulkForm.subject} ${dayLabel} ${bulkForm.start_time}`;
         const { data: newClass, error: classError } = await supabase
           .from('classes')
           .insert({
@@ -446,23 +459,21 @@ export default function Classes() {
           continue;
         }
 
-        createdDays.push(DAYS_OF_WEEK.find((d) => d.value === day)?.label || String(day));
-      }
-
-      let message = '';
-      if (createdDays.length > 0) {
-        message += `생성 완료: ${createdDays.length}개`;
-      }
-      if (skippedDays.length > 0) {
-        message += message ? ', ' : '';
-        message += `중복으로 제외: ${skippedDays.length}개 (${skippedDays.join('/')})`;
+        createdDays.push(dayLabel);
       }
 
       toast({
         title: createdDays.length > 0 ? '일괄 생성 완료' : '일괄 생성 실패',
-        description: message || '생성된 슬롯이 없습니다',
+        description: createdDays.length > 0 ? `생성 완료: ${createdDays.length}개` : '생성된 슬롯이 없습니다',
         variant: createdDays.length > 0 ? 'default' : 'destructive',
       });
+
+      if (createdDays.length > 0 && warningDays.length > 0) {
+        toast({
+          title: '주의',
+          description: '동일 시간대 슬롯이 이미 존재합니다. 학생 배정 시 충돌이 발생할 수 있어요.',
+        });
+      }
 
       if (createdDays.length > 0) {
         setIsBulkDialogOpen(false);
