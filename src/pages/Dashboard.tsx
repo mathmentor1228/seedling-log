@@ -24,7 +24,8 @@ import {
   CheckSquare,
   GraduationCap,
   Eye,
-  EyeOff
+  EyeOff,
+  UserCheck
 } from 'lucide-react';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 
@@ -35,6 +36,18 @@ interface PendingHomework {
   subject: string;
   content: string;
   assigned_date: string;
+}
+
+interface TodayAttendanceRecord {
+  id: string;
+  student_id: string;
+  student_name: string;
+  teacher_name: string;
+  class_name: string;
+  subject: string;
+  start_time: string;
+  attendance_status: string[];
+  lesson_date: string;
 }
 
 interface DashboardStats {
@@ -203,6 +216,7 @@ export default function Dashboard() {
   const [pendingHomework, setPendingHomework] = useState<PendingHomework[]>([]);
   const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
   const [allTodayHolidays, setAllTodayHolidays] = useState<Holiday[]>([]); // All holidays for today (for admin/assistant)
+  const [todayAttendance, setTodayAttendance] = useState<TodayAttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [ignoreHoliday, setIgnoreHoliday] = useState(false); // Admin toggle to show roster despite holiday
   const navigate = useNavigate();
@@ -311,6 +325,7 @@ export default function Dashboard() {
           // Fetch overdue drafts for admin only
           if (isAdmin(role)) {
             await fetchOverdueDrafts();
+            await fetchTodayAttendance();
           }
         }
 
@@ -409,6 +424,107 @@ export default function Dashboard() {
         description: '미제출 기록을 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
+    }
+  }
+
+  // Fetch today's attendance records (admin only)
+  async function fetchTodayAttendance() {
+    if (!user) return;
+    
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      
+      // Fetch lesson records for today with attendance status
+      const { data: lessonRecords, error } = await supabase
+        .from('lesson_records')
+        .select(`
+          id,
+          student_id,
+          class_id,
+          subject,
+          attendance_status,
+          lesson_date,
+          students:student_id (name),
+          classes:class_id (name, teacher_id)
+        `)
+        .eq('lesson_date', today)
+        .eq('submitted', true);
+      
+      if (error) {
+        console.error('Error fetching today attendance:', error);
+        return;
+      }
+
+      // Get teacher names for the classes
+      const teacherIds = [...new Set((lessonRecords || [])
+        .map((lr: any) => lr.classes?.teacher_id)
+        .filter(Boolean))];
+      
+      let teacherMap: Record<string, string> = {};
+      if (teacherIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', teacherIds);
+        
+        (profiles || []).forEach((p: any) => {
+          teacherMap[p.id] = p.full_name || '알 수 없음';
+        });
+      }
+
+      // Get class schedules for start times
+      const classIds = [...new Set((lessonRecords || [])
+        .map((lr: any) => lr.class_id)
+        .filter(Boolean))];
+      
+      const kstDate = new Date();
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const dayOfWeek = new Date(kstDate.getTime() + kstOffset).getUTCDay();
+      
+      let scheduleMap: Record<string, string> = {};
+      if (classIds.length > 0) {
+        const { data: schedules } = await supabase
+          .from('class_schedules')
+          .select('class_id, start_time')
+          .in('class_id', classIds)
+          .eq('day_of_week', dayOfWeek)
+          .eq('is_active', true);
+        
+        (schedules || []).forEach((s: any) => {
+          scheduleMap[s.class_id] = s.start_time?.slice(0, 5) || '';
+        });
+      }
+
+      // Build attendance records
+      const records: TodayAttendanceRecord[] = (lessonRecords || []).map((lr: any) => ({
+        id: lr.id,
+        student_id: lr.student_id,
+        student_name: lr.students?.name || '알 수 없음',
+        teacher_name: teacherMap[lr.classes?.teacher_id] || '알 수 없음',
+        class_name: lr.classes?.name || '-',
+        subject: lr.subject,
+        start_time: scheduleMap[lr.class_id] || '-',
+        attendance_status: lr.attendance_status || ['정상등원'],
+        lesson_date: lr.lesson_date,
+      }));
+
+      // Sort by priority: 무단결석/인정결석 > 지각/조퇴 > 정상등원
+      const getStatusPriority = (status: string[]) => {
+        if (status.includes('무단결석') || status.includes('인정결석')) return 0;
+        if (status.includes('지각') || status.includes('조퇴')) return 1;
+        return 2;
+      };
+
+      records.sort((a, b) => {
+        const priorityA = getStatusPriority(a.attendance_status);
+        const priorityB = getStatusPriority(b.attendance_status);
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        return (a.start_time || '').localeCompare(b.start_time || '');
+      });
+
+      setTodayAttendance(records);
+    } catch (error) {
+      console.error('Error fetching today attendance:', error);
     }
   }
 
@@ -807,7 +923,71 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Today's Classes Section - Teacher, Admin, Assistant */}
+      {/* Today's Attendance Overview - Admin Only */}
+      {isAdmin(role) && todayAttendance.length > 0 && (
+        <Card className="animate-slide-up">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-primary" />
+              오늘 출결 현황 ({todayAttendance.length}건)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">학생명</th>
+                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">담당 선생님</th>
+                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">수업 시간</th>
+                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">출결 상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todayAttendance.map((record) => {
+                    // Determine badge color based on attendance status
+                    const getAttendanceBadge = (status: string[]) => {
+                      const hasAbsent = status.includes('무단결석') || status.includes('인정결석');
+                      const hasLateOrEarly = status.includes('지각') || status.includes('조퇴');
+                      const hasNoShow = status.includes('보충불가');
+                      
+                      if (hasAbsent || hasNoShow) {
+                        return (
+                          <Badge className="bg-red-500/15 text-red-600 border-red-500/30">
+                            {status.filter(s => s !== '정상등원').join(', ') || '정상등원'}
+                          </Badge>
+                        );
+                      } else if (hasLateOrEarly) {
+                        return (
+                          <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30">
+                            {status.filter(s => s !== '정상등원').join(', ') || '정상등원'}
+                          </Badge>
+                        );
+                      } else {
+                        return (
+                          <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                            정상등원
+                          </Badge>
+                        );
+                      }
+                    };
+                    
+                    return (
+                      <tr key={record.id} className="border-b last:border-0 hover:bg-muted/30">
+                        <td className="py-2 px-3 font-medium">{record.student_name}</td>
+                        <td className="py-2 px-3 text-muted-foreground">{record.teacher_name}</td>
+                        <td className="py-2 px-3 text-muted-foreground">{record.start_time}</td>
+                        <td className="py-2 px-3">{getAttendanceBadge(record.attendance_status)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {(isTeacher(role) || isAdmin(role) || isAssistant(role)) && (
         <>
           {/* Holiday Banner - show for all roles when there's a holiday */}
