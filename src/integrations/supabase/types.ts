@@ -359,6 +359,7 @@ export type Database = {
         Row: {
           created_at: string
           email: string | null
+          followup_2w_done_subjects: string[]
           grade: string | null
           id: string
           name: string
@@ -374,6 +375,7 @@ export type Database = {
         Insert: {
           created_at?: string
           email?: string | null
+          followup_2w_done_subjects?: string[]
           grade?: string | null
           id?: string
           name: string
@@ -389,6 +391,7 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string | null
+          followup_2w_done_subjects?: string[]
           grade?: string | null
           id?: string
           name?: string
@@ -545,9 +548,13 @@ export type Database = {
         Returns: {
           class_id: string
           debug_reason: string
+          first_subject: boolean
+          first_subject_date: string
+          followup_2w_due: boolean
           homework_status: string
           prev_lesson_date: string
           student_id: string
+          subject: string
         }[]
       }
       has_role: {
