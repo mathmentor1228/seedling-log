@@ -948,12 +948,13 @@ export default function Lessons() {
     }
   }, [currentDraftId, formData, user]);
 
-  function buildPayload() {
+  function buildPayload(includeTestFields: boolean = false) {
     const subject = formData.subject as SubjectType;
     // Ensure at least one value is selected for lesson_types and attendance_status
     const lesson_types = formData.lesson_types.length > 0 ? formData.lesson_types : ['정규수업'];
     const attendance_status = formData.attendance_status.length > 0 ? formData.attendance_status : ['정상등원'];
-    return {
+    
+    const basePayload = {
       teacher_id: user!.id,
       student_id: formData.student_id,
       class_id: formData.class_id || null,
@@ -969,9 +970,25 @@ export default function Lessons() {
       lesson_types,
       attendance_status,
     };
+    
+    // Include test fields if requested (for draft save and submit)
+    if (includeTestFields) {
+      return {
+        ...basePayload,
+        test_name: testFormData.test_name || null,
+        test_result_text: testFormData.test_result_text || null,
+        test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
+        test_notes: testFormData.test_notes || null,
+        test_date: testFormData.test_date || null,
+        test_time: testFormData.test_time || null,
+        test_assistant: testFormData.test_assistant || null,
+      };
+    }
+    
+    return basePayload;
   }
 
-  // Manual save as draft
+  // Manual save as draft - includes test fields and homework
   const handleSaveDraft = async () => {
     if (!user) return;
 
@@ -987,8 +1004,14 @@ export default function Lessons() {
     setIsSavingDraft(true);
 
     try {
-      const payload = buildPayload();
+      // Include test fields in payload
+      const payload = buildPayload(true);
       const draftId = currentDraftId || editingLesson?.id;
+      
+      // Debug log for payload keys
+      console.log('[DRAFT_SAVE_KEYS]', Object.keys(payload));
+
+      let finalDraftId = draftId;
 
       if (draftId) {
         const { error } = await supabase
@@ -1012,10 +1035,40 @@ export default function Lessons() {
 
         if (error) throw error;
         setCurrentDraftId(data.id);
+        finalDraftId = data.id;
+      }
+
+      // Save/update homework if content provided
+      if (newHomeworkContent.trim() && finalDraftId) {
+        // Check if homework already exists for this lesson_record
+        const { data: existingHw } = await supabase
+          .from('homework_assignments')
+          .select('id')
+          .eq('lesson_record_id', finalDraftId)
+          .maybeSingle();
+        
+        if (existingHw) {
+          // Update existing homework
+          await supabase
+            .from('homework_assignments')
+            .update({ content: newHomeworkContent.trim() })
+            .eq('id', existingHw.id);
+        } else {
+          // Insert new homework
+          await supabase
+            .from('homework_assignments')
+            .insert({
+              student_id: formData.student_id,
+              subject: formData.subject as SubjectType,
+              lesson_record_id: finalDraftId,
+              assigned_date: formData.lesson_date,
+              content: newHomeworkContent.trim(),
+            });
+        }
       }
 
       toast({
-        title: '임시저장 완료',
+        title: '임시저장 완료 (오늘숙제/테스트 포함)',
         description: '수업 기록이 임시저장되었습니다',
       });
 
@@ -1049,8 +1102,9 @@ export default function Lessons() {
     setIsSubmitting(true);
 
     try {
+      // Include test fields in submit payload
       const payload = {
-        ...buildPayload(),
+        ...buildPayload(true),
         submitted: true,
         submitted_at: new Date().toISOString(),
       };
@@ -1075,21 +1129,40 @@ export default function Lessons() {
         finalRecordId = data.id;
       }
 
-      // Insert new homework if content provided
+      // Save/update homework if content provided
       if (newHomeworkContent.trim() && finalRecordId) {
-        const { error: homeworkError } = await supabase
+        // Check if homework already exists for this lesson_record
+        const { data: existingHw } = await supabase
           .from('homework_assignments')
-          .insert({
-            student_id: formData.student_id,
-            subject: formData.subject as SubjectType,
-            lesson_record_id: finalRecordId,
-            assigned_date: formData.lesson_date,
-            content: newHomeworkContent.trim(),
-          });
+          .select('id')
+          .eq('lesson_record_id', finalRecordId)
+          .maybeSingle();
+        
+        if (existingHw) {
+          // Update existing homework
+          const { error: homeworkError } = await supabase
+            .from('homework_assignments')
+            .update({ content: newHomeworkContent.trim() })
+            .eq('id', existingHw.id);
 
-        if (homeworkError) {
-          console.error('Error inserting homework:', homeworkError);
-          // Don't throw - lesson was saved successfully
+          if (homeworkError) {
+            console.error('Error updating homework:', homeworkError);
+          }
+        } else {
+          // Insert new homework
+          const { error: homeworkError } = await supabase
+            .from('homework_assignments')
+            .insert({
+              student_id: formData.student_id,
+              subject: formData.subject as SubjectType,
+              lesson_record_id: finalRecordId,
+              assigned_date: formData.lesson_date,
+              content: newHomeworkContent.trim(),
+            });
+
+          if (homeworkError) {
+            console.error('Error inserting homework:', homeworkError);
+          }
         }
       }
 
@@ -1408,7 +1481,7 @@ export default function Lessons() {
     }, 100);
   };
 
-  const handleEdit = (lesson: LessonRecord) => {
+  const handleEdit = async (lesson: LessonRecord) => {
     setEditingLesson(lesson);
     setCurrentDraftId(lesson.id);
     setFormData({
@@ -1436,6 +1509,25 @@ export default function Lessons() {
       test_time: lesson.test_time || '',
       test_assistant: lesson.test_assistant || '',
     });
+    
+    // Load existing homework content for this lesson record
+    try {
+      const { data: existingHw } = await supabase
+        .from('homework_assignments')
+        .select('content')
+        .eq('lesson_record_id', lesson.id)
+        .maybeSingle();
+      
+      if (existingHw?.content) {
+        setNewHomeworkContent(existingHw.content);
+      } else {
+        setNewHomeworkContent('');
+      }
+    } catch (error) {
+      console.error('Error loading homework content:', error);
+      setNewHomeworkContent('');
+    }
+    
     setIsDialogOpen(true);
   };
 
