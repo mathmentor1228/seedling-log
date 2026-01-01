@@ -124,18 +124,7 @@ export function ClassScheduleManager({ classId, teacherId, onSchedulesChange }: 
           end_time: formData.end_time,
         });
 
-      if (error) {
-        // Check for unique constraint violation
-        if (error.code === '23505' || error.message?.includes('unique_teacher_slot')) {
-          toast({
-            title: '일정 중복',
-            description: '해당 요일/시간에는 이미 슬롯이 있습니다. (같은 선생님 기준)',
-            variant: 'destructive',
-          });
-          return;
-        }
-        throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: '성공',

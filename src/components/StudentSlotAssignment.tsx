@@ -184,16 +184,21 @@ export default function StudentSlotAssignment({
     return slots.filter(s => assignedClassIds.has(s.classId));
   }, [slots, assignedClassIds]);
 
-  // Check for time conflict
-  const hasTimeConflict = (slot: ClassSlot): boolean => {
-    if (assignedClassIds.has(slot.classId)) return false; // Already assigned, no conflict
+  // Check for time overlap conflict (startA < endB AND startB < endA)
+  const getConflictingSlot = (slot: ClassSlot): ClassSlot | null => {
+    if (assignedClassIds.has(slot.classId)) return null; // Already assigned, no conflict
     
-    return assignedSlots.some(
+    return assignedSlots.find(
       assigned =>
         assigned.classId !== slot.classId &&
         assigned.dayOfWeek === slot.dayOfWeek &&
-        assigned.startTime === slot.startTime
-    );
+        assigned.startTime < slot.endTime &&
+        slot.startTime < assigned.endTime
+    ) || null;
+  };
+
+  const hasTimeConflict = (slot: ClassSlot): boolean => {
+    return getConflictingSlot(slot) !== null;
   };
 
   const handleToggleAssignment = async (slot: ClassSlot) => {
@@ -202,13 +207,17 @@ export default function StudentSlotAssignment({
     const isAssigned = assignedClassIds.has(slot.classId);
 
     // Check conflict before assigning
-    if (!isAssigned && hasTimeConflict(slot)) {
-      toast({
-        title: '중복 배정 불가',
-        description: '같은 요일/시작시간 슬롯에는 중복 배정할 수 없습니다.',
-        variant: 'destructive',
-      });
-      return;
+    if (!isAssigned) {
+      const conflicting = getConflictingSlot(slot);
+      if (conflicting) {
+        const dayLabel = DAYS_OF_WEEK.find(d => d.value === conflicting.dayOfWeek)?.label || '';
+        toast({
+          title: '중복 배정 불가',
+          description: `이미 같은 요일/시간에 다른 수업이 배정되어 있습니다: ${conflicting.className} (${dayLabel} ${conflicting.startTime}-${conflicting.endTime})`,
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     setProcessing(slot.classId);
