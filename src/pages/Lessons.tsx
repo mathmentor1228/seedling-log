@@ -335,6 +335,7 @@ export default function Lessons() {
   const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterDate, setFilterDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -1581,11 +1582,17 @@ export default function Lessons() {
     }));
   };
 
-  const filteredLessons = lessons.filter(
-    (lesson) =>
+  const filteredLessons = lessons.filter((lesson) => {
+    // Date filter
+    if (filterDate && lesson.lesson_date !== filterDate) {
+      return false;
+    }
+    // Search filter
+    const matchesSearch = !searchQuery || 
       lesson.student_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lesson.subject.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      lesson.subject.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
 
   const getHomeworkLabel = (status: string) => {
     return HOMEWORK_STATUS.find((s) => s.value === status)?.label || status;
@@ -2390,14 +2397,38 @@ export default function Lessons() {
 
       <Card>
         <CardHeader className="pb-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="학생 또는 과목으로 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Date Filter */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="filterDate" className="text-sm font-medium whitespace-nowrap">날짜별 수업 보기</Label>
+              <Input
+                id="filterDate"
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="w-[160px]"
+              />
+              {filterDate && filterDate !== format(new Date(), 'yyyy-MM-dd') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFilterDate(format(new Date(), 'yyyy-MM-dd'))}
+                  className="text-xs text-muted-foreground"
+                >
+                  오늘로
+                </Button>
+              )}
+            </div>
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="학생 또는 과목으로 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
