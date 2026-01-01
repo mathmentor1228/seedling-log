@@ -118,39 +118,165 @@ export default function AssistantDashboard() {
   async function fetchAllData() {
     try {
       setLoading(true);
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
       
-      // Step 1: Fetch teachers first (independently)
-      const teachers = await fetchAllTeachers();
-      
-      // Step 2: Fetch roster and holidays in parallel
-      const [rosterData, holidaysData] = await Promise.all([
-        fetchRosterForDate(teachers),
-        fetchHolidaysForDate(),
-      ]);
-      
-      // Step 3: Build teacher list with hasLessonsOnDate flag
-      const teacherIdsWithLessons = new Set(rosterData.map(r => r.teacher_id));
-      const updatedTeachers = teachers.map(t => ({
-        ...t,
-        hasLessonsOnDate: teacherIdsWithLessons.has(t.id),
+      // Call the RPC which returns teachers + roster in one shot
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        'get_teacher_roster_sheet',
+        { _date: dateStr }
+      );
+
+      if (rpcError) {
+        console.error('RPC error:', rpcError);
+        toast({
+          title: '데이터 로드 오류',
+          description: '로스터 데이터를 불러오는 중 오류가 발생했습니다.',
+          variant: 'destructive',
+        });
+        setAllTeachers([]);
+        setRoster([]);
+        setLoading(false);
+        return;
+      }
+
+      // Cast RPC result
+      const rpcResult = rpcData as { teachers: { teacher_id: string; teacher_name: string }[]; roster_rows: {
+        teacher_id: string;
+        teacher_name: string;
+        student_id: string;
+        student_name: string;
+        class_id: string;
+        class_name: string;
+        subject: string;
+        start_time: string;
+        end_time: string;
+      }[] } | null;
+
+      const teachersRaw = rpcResult?.teachers || [];
+      const rosterRowsRaw = rpcResult?.roster_rows || [];
+
+      // Determine which teachers have lessons
+      const teacherIdsWithLessons = new Set(rosterRowsRaw.map(r => r.teacher_id));
+
+      // Build teacher list
+      const teachersList: Teacher[] = teachersRaw.map(t => ({
+        id: t.teacher_id,
+        name: t.teacher_name,
+        hasLessonsOnDate: teacherIdsWithLessons.has(t.teacher_id),
       }));
-      
+
       // Sort: teachers with lessons first
-      updatedTeachers.sort((a, b) => {
+      teachersList.sort((a, b) => {
         if (a.hasLessonsOnDate !== b.hasLessonsOnDate) {
           return a.hasLessonsOnDate ? -1 : 1;
         }
         return a.name.localeCompare(b.name);
       });
-      
-      // Step 4: Set collapsed state for teachers with no lessons
-      const noLessonsTeacherIds = updatedTeachers
+
+      // Fetch homework status / first subject / followup using existing RPC
+      let previousHomeworkMap: Record<string, { 
+        status: RosterStudent['previousHomeworkStatus']; 
+        firstSubject: boolean;
+        followup2wDue: boolean;
+      }> = {};
+
+      if (rosterRowsRaw.length > 0) {
+        const rpcPairs = rosterRowsRaw.map(r => ({
+          student_id: r.student_id,
+          class_id: r.class_id,
+          subject: r.subject,
+        }));
+
+        const { data: hwResult, error: hwError } = await supabase.rpc(
+          'get_prev_homework_status_for_roster',
+          { _pairs: rpcPairs, _today: dateStr }
+        );
+
+        if (!hwError && hwResult) {
+          (hwResult as any[]).forEach((row: any) => {
+            const key = `${row.student_id}:${row.class_id}`;
+            previousHomeworkMap[key] = {
+              status: normalizeHomeworkStatus(row.homework_status),
+              firstSubject: row.first_subject === true,
+              followup2wDue: row.followup_2w_due === true,
+            };
+          });
+        }
+      }
+
+      // Fetch lesson records for selected date (existing + 휴강 + hasTest)
+      const studentIds = [...new Set(rosterRowsRaw.map(r => r.student_id))];
+      const classIds = [...new Set(rosterRowsRaw.map(r => r.class_id))];
+
+      let existingRecordMap: Record<string, string> = {};
+      let hyugangMap: Record<string, string> = {};
+      let hasTestMap: Record<string, boolean> = {};
+
+      if (studentIds.length > 0 && classIds.length > 0) {
+        const { data: dateRecords } = await supabase
+          .from('lesson_records')
+          .select('id, student_id, class_id, lesson_types, test_result_text')
+          .eq('lesson_date', dateStr)
+          .in('student_id', studentIds)
+          .in('class_id', classIds);
+
+        (dateRecords || []).forEach((lr: any) => {
+          const key = `${lr.student_id}:${lr.class_id}`;
+          existingRecordMap[key] = lr.id;
+          if (lr.lesson_types && lr.lesson_types.includes('휴강')) {
+            hyugangMap[key] = lr.id;
+          }
+          if (lr.test_result_text && lr.test_result_text.trim() !== '') {
+            hasTestMap[key] = true;
+          }
+        });
+      }
+
+      // Build final roster
+      const rosterData: RosterStudent[] = rosterRowsRaw.map(r => {
+        const key = `${r.student_id}:${r.class_id}`;
+        const mapped = previousHomeworkMap[key];
+        return {
+          student_id: r.student_id,
+          student_name: r.student_name,
+          class_id: r.class_id,
+          class_name: r.class_name,
+          subject: r.subject,
+          start_time: r.start_time,
+          end_time: r.end_time,
+          teacher_id: r.teacher_id,
+          teacher_name: r.teacher_name,
+          previousHomeworkStatus: mapped?.status || null,
+          firstSubject: mapped?.firstSubject || false,
+          followup2wDue: mapped?.followup2wDue || false,
+          existingRecordId: existingRecordMap[key] || null,
+          hasTest: hasTestMap[key] || false,
+          hyugangRecordId: hyugangMap[key] || null,
+        };
+      });
+
+      // Sort roster by teacher name, then start time
+      rosterData.sort((a, b) => {
+        if (a.teacher_name !== b.teacher_name) {
+          return a.teacher_name.localeCompare(b.teacher_name);
+        }
+        return a.start_time.localeCompare(b.start_time);
+      });
+
+      // Fetch holidays
+      const { data: holidaysData } = await supabase
+        .from('holidays')
+        .select('*')
+        .eq('holiday_date', dateStr);
+
+      // Set collapsed state for teachers with no lessons
+      const noLessonsTeacherIds = teachersList
         .filter(t => !t.hasLessonsOnDate)
         .map(t => t.id);
-      
-      setAllTeachers(updatedTeachers);
+
+      setAllTeachers(teachersList);
       setRoster(rosterData);
-      setHolidays(holidaysData);
+      setHolidays((holidaysData || []) as Holiday[]);
       setCollapsedTeachers(new Set(noLessonsTeacherIds));
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -161,261 +287,6 @@ export default function AssistantDashboard() {
       });
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function fetchAllTeachers(): Promise<Teacher[]> {
-    try {
-      // Get all users with teacher role
-      const { data: teacherRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'teacher');
-
-      if (rolesError) {
-        console.error('Error fetching teacher roles:', rolesError);
-        return [];
-      }
-
-      const teacherUserIds = (teacherRoles || []).map((r: any) => r.user_id);
-      
-      if (teacherUserIds.length === 0) return [];
-
-      // Fetch profiles for teachers
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', teacherUserIds);
-
-      if (profilesError) {
-        console.error('Error fetching teacher profiles:', profilesError);
-        return [];
-      }
-
-      return (profiles || []).map((p: any) => ({
-        id: p.id,
-        name: p.full_name || '알 수 없음',
-        hasLessonsOnDate: false,
-      }));
-    } catch (error) {
-      console.error('Error fetching all teachers:', error);
-      return [];
-    }
-  }
-
-  async function fetchHolidaysForDate(): Promise<Holiday[]> {
-    try {
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const { data: holidaysData } = await supabase
-        .from('holidays')
-        .select('*')
-        .eq('holiday_date', dateStr);
-      
-      return (holidaysData || []) as Holiday[];
-    } catch (error) {
-      console.error('Error fetching holidays:', error);
-      return [];
-    }
-  }
-
-  async function fetchRosterForDate(teachers: Teacher[]): Promise<RosterStudent[]> {
-    if (!user) return [];
-
-    try {
-      // Get day of week for selected date
-      const dayOfWeek = selectedDate.getDay();
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-
-      // Build teacher map from provided teachers
-      const teacherMap: Record<string, string> = {};
-      teachers.forEach(t => {
-        teacherMap[t.id] = t.name;
-      });
-
-      // Fetch ALL class schedules for the selected date across all teachers
-      const { data: schedules, error: schedulesError } = await supabase
-        .from('class_schedules')
-        .select(`
-          id,
-          class_id,
-          start_time,
-          end_time,
-          day_of_week,
-          teacher_id,
-          classes:class_id (
-            id,
-            name,
-            subject,
-            teacher_id
-          )
-        `)
-        .eq('day_of_week', dayOfWeek)
-        .eq('is_active', true)
-        .order('start_time', { ascending: true });
-
-      if (schedulesError) {
-        console.error('Error fetching schedules:', schedulesError);
-        return [];
-      }
-
-      if (!schedules || schedules.length === 0) {
-        return [];
-      }
-
-      // Build class maps
-      const classSubjectMap: Record<string, string> = {};
-      const classNameMap: Record<string, string> = {};
-
-      (schedules || []).forEach((s: any) => {
-        if (s.classes?.id) {
-          classSubjectMap[s.classes.id] = s.classes.subject;
-          classNameMap[s.classes.id] = s.classes.name;
-        }
-      });
-
-      // Build schedule by class map
-      const scheduleByClass: Record<string, { start_time: string; end_time: string; teacher_id: string }> = {};
-      (schedules || []).forEach((s: any) => {
-        if (s.classes?.id) {
-          scheduleByClass[s.classes.id] = {
-            start_time: s.start_time,
-            end_time: s.end_time,
-            teacher_id: s.teacher_id,
-          };
-        }
-      });
-
-      // Get class IDs
-      const classIds = (schedules || []).map((s: any) => s.classes?.id).filter(Boolean);
-
-      // Fetch class students
-      const { data: classStudents } = await supabase
-        .from('class_students')
-        .select(`
-          class_id,
-          students:student_id (id, name)
-        `)
-        .in('class_id', classIds);
-
-      // Build pairs for RPC and roster
-      const allPairs: { 
-        studentId: string; 
-        studentName: string;
-        classId: string;
-        className: string; 
-        subject: string;
-        teacherId: string;
-        startTime: string;
-        endTime: string;
-      }[] = [];
-
-      (classStudents || []).forEach((cs: any) => {
-        if (cs.students && scheduleByClass[cs.class_id]) {
-          allPairs.push({
-            studentId: cs.students.id,
-            studentName: cs.students.name,
-            classId: cs.class_id,
-            className: classNameMap[cs.class_id] || '알 수 없음',
-            subject: classSubjectMap[cs.class_id] || '-',
-            teacherId: scheduleByClass[cs.class_id].teacher_id,
-            startTime: scheduleByClass[cs.class_id].start_time,
-            endTime: scheduleByClass[cs.class_id].end_time,
-          });
-        }
-      });
-
-      if (allPairs.length === 0) {
-        return [];
-      }
-
-      // Batch fetch previous homework status via RPC
-      let previousHomeworkMap: Record<string, { 
-        status: RosterStudent['previousHomeworkStatus']; 
-        firstSubject: boolean;
-        followup2wDue: boolean;
-      }> = {};
-
-      const rpcPairs = allPairs.map(p => ({
-        student_id: p.studentId,
-        class_id: p.classId,
-        subject: p.subject,
-      }));
-
-      const { data: rpcResult, error: rpcError } = await supabase.rpc(
-        'get_prev_homework_status_for_roster',
-        { _pairs: rpcPairs, _today: dateStr }
-      );
-
-      if (!rpcError && rpcResult) {
-        (rpcResult as any[]).forEach((row: any) => {
-          const key = `${row.student_id}:${row.class_id}`;
-          previousHomeworkMap[key] = {
-            status: normalizeHomeworkStatus(row.homework_status),
-            firstSubject: row.first_subject === true,
-            followup2wDue: row.followup_2w_due === true,
-          };
-        });
-      }
-
-      // Fetch lesson records for selected date to check for existing records and 휴강
-      const studentIds = [...new Set(allPairs.map(p => p.studentId))];
-      const { data: dateRecords } = await supabase
-        .from('lesson_records')
-        .select('id, student_id, class_id, lesson_types, test_result_text')
-        .eq('lesson_date', dateStr)
-        .in('student_id', studentIds)
-        .in('class_id', classIds);
-
-      const existingRecordMap: Record<string, string> = {};
-      const hyugangMap: Record<string, string> = {};
-      const hasTestMap: Record<string, boolean> = {};
-
-      (dateRecords || []).forEach((lr: any) => {
-        const key = `${lr.student_id}:${lr.class_id}`;
-        existingRecordMap[key] = lr.id;
-        if (lr.lesson_types && lr.lesson_types.includes('휴강')) {
-          hyugangMap[key] = lr.id;
-        }
-        if (lr.test_result_text && lr.test_result_text.trim() !== '') {
-          hasTestMap[key] = true;
-        }
-      });
-
-      // Build roster
-      const rosterData: RosterStudent[] = allPairs.map(p => {
-        const key = `${p.studentId}:${p.classId}`;
-        const mapped = previousHomeworkMap[key];
-        return {
-          student_id: p.studentId,
-          student_name: p.studentName,
-          class_id: p.classId,
-          class_name: p.className,
-          subject: p.subject,
-          start_time: p.startTime,
-          end_time: p.endTime,
-          teacher_id: p.teacherId,
-          teacher_name: teacherMap[p.teacherId] || '알 수 없음',
-          previousHomeworkStatus: mapped?.status || null,
-          firstSubject: mapped?.firstSubject || false,
-          followup2wDue: mapped?.followup2wDue || false,
-          existingRecordId: existingRecordMap[key] || null,
-          hasTest: hasTestMap[key] || false,
-          hyugangRecordId: hyugangMap[key] || null,
-        };
-      });
-
-      // Sort by teacher name, then by start time
-      rosterData.sort((a, b) => {
-        if (a.teacher_name !== b.teacher_name) {
-          return a.teacher_name.localeCompare(b.teacher_name);
-        }
-        return a.start_time.localeCompare(b.start_time);
-      });
-
-      return rosterData;
-    } catch (error) {
-      console.error('Error fetching roster:', error);
-      return [];
     }
   }
 
