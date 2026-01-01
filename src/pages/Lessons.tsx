@@ -111,6 +111,7 @@ interface TodaySlotStudent {
   debugReason?: 'no_prev_record' | 'found' | 'blocked_by_access' | null;
   firstSubject?: boolean;
   followup2wDue?: boolean;
+  hyugangRecordId?: string | null; // lesson_record id if 휴강 record exists for today
 }
 
 interface TodaySlot {
@@ -121,6 +122,14 @@ interface TodaySlot {
   start_time: string;
   end_time: string;
   students: TodaySlotStudent[];
+}
+
+interface Holiday {
+  id: string;
+  holiday_date: string;
+  name: string;
+  scope: 'all' | 'teacher';
+  teacher_id: string | null;
 }
 
 // Normalize homework status values from DB (handles both English and Korean)
@@ -275,6 +284,7 @@ const LESSON_TYPE_OPTIONS = [
   { value: '시험특강', label: '시험특강' },
   { value: '방학특강', label: '방학특강' },
   { value: '공지사항', label: '공지사항' },
+  { value: '휴강', label: '휴강' },
 ];
 
 // Attendance status options for 출결사항 checkbox group
@@ -322,6 +332,7 @@ export default function Lessons() {
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
+  const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -396,9 +407,10 @@ export default function Lessons() {
     fetchLessons();
     fetchStudents();
     fetchClasses();
-    // Fetch today's slots for teachers/admins
+    // Fetch today's slots and holidays for teachers/admins
     if (isTeacher || isAdmin) {
       fetchTodaySlots();
+      fetchTodayHolidays();
     }
   }, [user, role]);
 
@@ -635,6 +647,9 @@ export default function Lessons() {
         followup2wDue: boolean;
       }> = {};
       
+      // key: `${studentId}:${classId}` -> lesson_record_id if 휴강 exists for today
+      let hyugangMap: Record<string, string> = {};
+      
       if (allStudentClassPairs.length > 0) {
         const pairs = allStudentClassPairs.map(p => ({
           student_id: p.studentId,
@@ -658,9 +673,30 @@ export default function Lessons() {
             };
           });
         }
+        
+        // Fetch 휴강 records for today (batch for all students in classes)
+        const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
+        const classIdsForHyugang = [...new Set(allStudentClassPairs.map(p => p.classId))];
+        
+        const { data: hyugangRecords } = await supabase
+          .from('lesson_records')
+          .select('id, student_id, class_id, lesson_types')
+          .eq('lesson_date', today)
+          .in('student_id', studentIds)
+          .in('class_id', classIdsForHyugang)
+          .eq('submitted', true);
+        
+        if (hyugangRecords) {
+          hyugangRecords.forEach((lr: any) => {
+            if (lr.lesson_types && lr.lesson_types.includes('휴강')) {
+              const key = `${lr.student_id}:${lr.class_id}`;
+              hyugangMap[key] = lr.id;
+            }
+          });
+        }
       }
 
-      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue
+      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue, hyugangRecordId
       Object.keys(studentsMap).forEach(classId => {
         studentsMap[classId] = studentsMap[classId].map(student => {
           const key = `${student.id}:${classId}`;
@@ -671,6 +707,7 @@ export default function Lessons() {
             debugReason: mapped?.debugReason || null,
             firstSubject: mapped?.firstSubject || false,
             followup2wDue: mapped?.followup2wDue || false,
+            hyugangRecordId: hyugangMap[key] || null,
           };
         });
       });
@@ -689,6 +726,34 @@ export default function Lessons() {
       setTodaySlots(slots);
     } catch (error) {
       console.error('Error fetching today slots:', error);
+    }
+  }
+
+  async function fetchTodayHolidays() {
+    if (!user) return;
+    
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      
+      // Fetch holidays for today (scope='all' or scope='teacher' for current user)
+      const { data: holidays, error } = await supabase
+        .from('holidays')
+        .select('*')
+        .eq('holiday_date', today);
+      
+      if (error) {
+        console.error('Error fetching holidays:', error);
+        return;
+      }
+      
+      // Filter: scope='all' OR (scope='teacher' AND teacher_id=current user)
+      const relevantHolidays = (holidays || []).filter((h: any) => 
+        h.scope === 'all' || (h.scope === 'teacher' && h.teacher_id === user.id)
+      );
+      
+      setTodayHolidays(relevantHolidays as Holiday[]);
+    } catch (error) {
+      console.error('Error fetching holidays:', error);
     }
   }
 
@@ -1419,7 +1484,7 @@ export default function Lessons() {
                         {slot.students.map((student) => (
                           <div 
                             key={student.id} 
-                            className="flex items-center justify-between p-2 bg-secondary/50 rounded-md cursor-pointer hover:bg-secondary transition-colors"
+                            className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${student.hyugangRecordId ? 'bg-muted/50 hover:bg-muted' : 'bg-secondary/50 hover:bg-secondary'}`}
                             onClick={() => {
                               const prefill = {
                                 student_id: student.id,
@@ -1427,28 +1492,27 @@ export default function Lessons() {
                                 subject: slot.subject,
                                 lesson_date: format(new Date(), 'yyyy-MM-dd'),
                               };
-                              // Pre-fill form and open dialog
-                              setFormData(prev => ({
-                                ...prev,
-                                ...prefill,
-                              }));
+                              setFormData(prev => ({ ...prev, ...prefill }));
                               setEditingLesson(null);
                               setCurrentDraftId(null);
                               setIsDialogOpen(true);
-                              // Create draft with prefilled values
                               setTimeout(() => createInitialDraft(prefill), 100);
                             }}
                           >
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-foreground">{student.name}</span>
-                              {getRosterBadges(
-                                student.previousHomeworkStatus,
-                                student.debugReason,
-                                student.firstSubject,
-                                student.followup2wDue,
-                                slot.subject,
-                                isAdmin,
-                                () => markFollowupDone(student.id, slot.subject)
+                              <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
+                              {student.hyugangRecordId ? (
+                                <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
+                              ) : (
+                                getRosterBadges(
+                                  student.previousHomeworkStatus,
+                                  student.debugReason,
+                                  student.firstSubject,
+                                  student.followup2wDue,
+                                  slot.subject,
+                                  isAdmin,
+                                  () => markFollowupDone(student.id, slot.subject)
+                                )
                               )}
                             </div>
                             <div className="flex items-center gap-2">
@@ -1463,20 +1527,15 @@ export default function Lessons() {
                                     subject: slot.subject,
                                     lesson_date: format(new Date(), 'yyyy-MM-dd'),
                                   };
-                                  // Pre-fill form and open dialog
-                                  setFormData(prev => ({
-                                    ...prev,
-                                    ...prefill,
-                                  }));
+                                  setFormData(prev => ({ ...prev, ...prefill }));
                                   setEditingLesson(null);
                                   setCurrentDraftId(null);
                                   setIsDialogOpen(true);
-                                  // Create draft with prefilled values
                                   setTimeout(() => createInitialDraft(prefill), 100);
                                 }}
                               >
                                 <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                수업기록
+                                {student.hyugangRecordId ? '휴강 기록 보기' : '수업기록'}
                               </Button>
                             </div>
                           </div>
@@ -1733,6 +1792,14 @@ export default function Lessons() {
                 </div>
               </div>
 
+              {/* 휴강 badge indicator */}
+              {formData.lesson_types.includes('휴강') && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-muted">
+                  <Badge variant="secondary" className="bg-muted text-muted-foreground">휴강 기록</Badge>
+                  <span className="text-sm text-muted-foreground">수업 범위, 이해도, 학습 이슈 등 수업 관련 필드가 비활성화됩니다.</span>
+                </div>
+              )}
+
               {/* 종류 and 출결사항 checkbox groups - disabled for assistants */}
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAssistant ? 'opacity-60 pointer-events-none' : ''}`}>
                 <div className="space-y-2">
@@ -1744,15 +1811,30 @@ export default function Lessons() {
                           id={`lesson_type_${opt.value}`}
                           checked={formData.lesson_types.includes(opt.value)}
                           onCheckedChange={(checked) => {
-                            if (checked) {
-                              setFormData({ ...formData, lesson_types: [...formData.lesson_types, opt.value] });
-                            } else {
-                              // Prevent unchecking if it would leave empty array
-                              const newTypes = formData.lesson_types.filter(t => t !== opt.value);
-                              if (newTypes.length === 0) {
-                                setFormData({ ...formData, lesson_types: ['정규수업'] });
+                            if (opt.value === '휴강') {
+                              // 휴강 is exclusive - when checked, only 휴강 is selected
+                              if (checked) {
+                                setFormData({ 
+                                  ...formData, 
+                                  lesson_types: ['휴강'],
+                                  homework_status: 'none_assigned',
+                                });
                               } else {
-                                setFormData({ ...formData, lesson_types: newTypes });
+                                setFormData({ ...formData, lesson_types: ['정규수업'] });
+                              }
+                            } else {
+                              if (checked) {
+                                // When checking other types, remove 휴강 if present
+                                const newTypes = formData.lesson_types.filter(t => t !== '휴강');
+                                setFormData({ ...formData, lesson_types: [...newTypes, opt.value] });
+                              } else {
+                                // Prevent unchecking if it would leave empty array
+                                const newTypes = formData.lesson_types.filter(t => t !== opt.value);
+                                if (newTypes.length === 0) {
+                                  setFormData({ ...formData, lesson_types: ['정규수업'] });
+                                } else {
+                                  setFormData({ ...formData, lesson_types: newTypes });
+                                }
                               }
                             }
                           }}
@@ -1793,8 +1875,8 @@ export default function Lessons() {
                 </div>
               </div>
 
-              {/* Instructional fields - disabled for assistants */}
-              <div className={`space-y-4 ${isAssistant ? 'opacity-60 pointer-events-none' : ''}`}>
+              {/* Instructional fields - disabled for assistants or when 휴강 */}
+              <div className={`space-y-4 ${isAssistant || formData.lesson_types.includes('휴강') ? 'opacity-60 pointer-events-none' : ''}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="subject">과목 *</Label>
@@ -1946,8 +2028,6 @@ export default function Lessons() {
                 />
               </div>
 
-              {/* TEST-SECTION-MARKER-V3 */}
-              <div className="bg-red-500 text-white font-bold text-center py-2 rounded">TEST-SECTION-MARKER-V3</div>
               
               {/* 테스트/결과 Section - Always visible */}
               <div className="space-y-3 p-4 rounded-lg border-2 border-amber-500/20 bg-amber-500/5">
@@ -2059,8 +2139,6 @@ export default function Lessons() {
                       />
                     </div>
                     <div className="space-y-1">
-                      {/* TEST-ASSISTANT-MARKER-V1 */}
-                      <div className="bg-green-500 text-white font-bold text-xs text-center py-1 rounded mb-1">TEST-ASSISTANT-MARKER-V1</div>
                       <Label htmlFor="test_assistant" className="text-sm">테스트 담당자</Label>
                       <Select
                         value={testFormData.test_assistant}

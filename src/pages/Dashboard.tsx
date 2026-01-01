@@ -82,6 +82,7 @@ interface TodaySlotStudent {
   debugReason?: 'no_prev_record' | 'found' | 'blocked_by_access' | null;
   firstSubject?: boolean;
   followup2wDue?: boolean;
+  hyugangRecordId?: string | null;
 }
 
 interface TodaySlot {
@@ -92,6 +93,14 @@ interface TodaySlot {
   start_time: string;
   end_time: string;
   students: TodaySlotStudent[];
+}
+
+interface Holiday {
+  id: string;
+  holiday_date: string;
+  name: string;
+  scope: 'all' | 'teacher';
+  teacher_id: string | null;
 }
 
 // Normalize homework status values from DB (handles both English and Korean)
@@ -182,6 +191,7 @@ export default function Dashboard() {
   const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
   const [overdueDrafts, setOverdueDrafts] = useState<GroupedOverdueDrafts[]>([]);
   const [pendingHomework, setPendingHomework] = useState<PendingHomework[]>([]);
+  const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -295,6 +305,7 @@ export default function Dashboard() {
         // Fetch today's slots for teacher - ALWAYS run for teachers regardless of isAssistant check
         if (isTeacher(role)) {
           await fetchTodaySlots();
+          await fetchTodayHolidays();
         }
 
         // Fetch pending homework (unchecked)
@@ -502,6 +513,9 @@ export default function Dashboard() {
         followup2wDue: boolean;
       }> = {};
       
+      // key: `${studentId}:${classId}` -> lesson_record_id if 휴강 exists for today
+      let hyugangMap: Record<string, string> = {};
+      
       if (allStudentClassPairs.length > 0) {
         const pairs = allStudentClassPairs.map(p => ({
           student_id: p.studentId,
@@ -525,9 +539,30 @@ export default function Dashboard() {
             };
           });
         }
+        
+        // Fetch 휴강 records for today (batch for all students in classes)
+        const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
+        const classIdsForHyugang = [...new Set(allStudentClassPairs.map(p => p.classId))];
+        
+        const { data: hyugangRecords } = await supabase
+          .from('lesson_records')
+          .select('id, student_id, class_id, lesson_types')
+          .eq('lesson_date', today)
+          .in('student_id', studentIds)
+          .in('class_id', classIdsForHyugang)
+          .eq('submitted', true);
+        
+        if (hyugangRecords) {
+          hyugangRecords.forEach((lr: any) => {
+            if (lr.lesson_types && lr.lesson_types.includes('휴강')) {
+              const key = `${lr.student_id}:${lr.class_id}`;
+              hyugangMap[key] = lr.id;
+            }
+          });
+        }
       }
 
-      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue
+      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue, hyugangRecordId
       Object.keys(studentsMap).forEach(classId => {
         studentsMap[classId] = studentsMap[classId].map(student => {
           const key = `${student.id}:${classId}`;
@@ -538,6 +573,7 @@ export default function Dashboard() {
             debugReason: mapped?.debugReason || null,
             firstSubject: mapped?.firstSubject || false,
             followup2wDue: mapped?.followup2wDue || false,
+            hyugangRecordId: hyugangMap[key] || null,
           };
         });
       });
@@ -561,6 +597,34 @@ export default function Dashboard() {
         description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
+    }
+  }
+
+  async function fetchTodayHolidays() {
+    if (!user) return;
+    
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      
+      // Fetch holidays for today (scope='all' or scope='teacher' for current user)
+      const { data: holidays, error } = await supabase
+        .from('holidays')
+        .select('*')
+        .eq('holiday_date', today);
+      
+      if (error) {
+        console.error('Error fetching holidays:', error);
+        return;
+      }
+      
+      // Filter: scope='all' OR (scope='teacher' AND teacher_id=current user)
+      const relevantHolidays = (holidays || []).filter((h: any) => 
+        h.scope === 'all' || (h.scope === 'teacher' && h.teacher_id === user.id)
+      );
+      
+      setTodayHolidays(relevantHolidays as Holiday[]);
+    } catch (error) {
+      console.error('Error fetching holidays:', error);
     }
   }
 
@@ -729,81 +793,120 @@ export default function Dashboard() {
 
       {/* Today's Classes Section - Teacher Only (PRIMARY SECTION) - ALWAYS RENDER */}
       {isTeacher(role) && (
-        <Card className="border-primary/30 bg-primary/5 animate-slide-up">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <GraduationCap className="w-5 h-5 text-primary" />
-              오늘 수업 ({todaySlots.length}개)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {todaySlots.length === 0 ? (
-              <div className="text-center py-8">
-                <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {(todaySlots || []).map((slot) => (
-                  <div key={slot.id} className="border rounded-lg p-4 bg-background">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">{slot.class_name}</span>
-                        <Badge variant="outline">{slot.subject}</Badge>
-                      </div>
-                      <span className="text-sm text-muted-foreground font-medium">
-                        {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
-                      </span>
-                    </div>
-                    {(slot?.students || []).length > 0 ? (
-                      <div className="space-y-2">
-                        {(slot?.students || []).map((student) => (
-                          <div 
-                            key={student.id} 
-                            className="flex items-center justify-between p-2 bg-secondary/50 rounded-md"
-                          >
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-foreground">{student.name}</span>
-                              {getRosterBadges(
-                                student.previousHomeworkStatus,
-                                student.debugReason,
-                                student.firstSubject,
-                                student.followup2wDue,
-                                slot.subject,
-                                isAdmin(role),
-                                () => markFollowupDone(student.id, slot.subject)
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
-                              >
-                                <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                수업기록
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
-                              >
-                                <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                                숙제/테스트
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
-                    )}
+        <>
+          {/* Holiday Banner */}
+          {todayHolidays.length > 0 && (
+            <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-3">
+                  <Calendar className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <span className="font-medium text-amber-700">오늘은 휴일입니다</span>
+                    <span className="text-muted-foreground ml-2">
+                      {todayHolidays.map(h => h.name).join(', ')}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
+          {/* Only hide roster for teachers with teacher-specific holiday, not for assistants */}
+          {!(todayHolidays.some(h => h.scope === 'teacher' && h.teacher_id === user?.id)) && (
+            <Card className="border-primary/30 bg-primary/5 animate-slide-up">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="w-5 h-5 text-primary" />
+                  오늘 수업 ({todaySlots.length}개)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {todaySlots.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                    <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {(todaySlots || []).map((slot) => (
+                      <div key={slot.id} className="border rounded-lg p-4 bg-background">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-foreground">{slot.class_name}</span>
+                            <Badge variant="outline">{slot.subject}</Badge>
+                          </div>
+                          <span className="text-sm text-muted-foreground font-medium">
+                            {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
+                          </span>
+                        </div>
+                        {(slot?.students || []).length > 0 ? (
+                          <div className="space-y-2">
+                            {(slot?.students || []).map((student) => (
+                              <div 
+                                key={student.id} 
+                                className={`flex items-center justify-between p-2 rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
+                              >
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
+                                  {student.hyugangRecordId ? (
+                                    <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
+                                  ) : (
+                                    getRosterBadges(
+                                      student.previousHomeworkStatus,
+                                      student.debugReason,
+                                      student.firstSubject,
+                                      student.followup2wDue,
+                                      slot.subject,
+                                      isAdmin(role),
+                                      () => markFollowupDone(student.id, slot.subject)
+                                    )
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {student.hyugangRecordId ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
+                                    >
+                                      <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                      휴강 기록 보기
+                                    </Button>
+                                  ) : (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
+                                      >
+                                        <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                        수업기록
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
+                                      >
+                                        <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                                        숙제/테스트
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Pending Homework Section */}
