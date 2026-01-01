@@ -36,8 +36,6 @@ import { format, addDays, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { RosterActionModal } from '@/components/RosterActionModal';
-import { TeamNotesBoard } from '@/components/TeamNotesBoard';
-import { AcademyCalendar } from '@/components/AcademyCalendar';
 
 interface Teacher {
   id: string;
@@ -382,12 +380,6 @@ export default function AssistantDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Team Notes Board */}
-      <TeamNotesBoard />
-      
-      {/* Academy Calendar */}
-      <AcademyCalendar />
-
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">조교 대시보드</h1>

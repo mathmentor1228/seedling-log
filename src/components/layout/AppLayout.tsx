@@ -17,6 +17,8 @@ import {
   UserCog
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TeamNotesBoard } from '@/components/TeamNotesBoard';
+import { AcademyCalendar } from '@/components/AcademyCalendar';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -51,6 +53,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const filteredNavItems = navItems.filter(item => !item.adminOnly || role === 'admin');
+
+  // Show shared components (TeamNotesBoard, AcademyCalendar) on dashboard route only
+  const isDashboard = location.pathname === '/dashboard';
 
   return (
     <div className="min-h-screen bg-background">
@@ -151,6 +156,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Main content */}
       <main className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
         <div className="p-6 lg:p-8">
+          {/* Shared dashboard components: Comment Board + Calendar */}
+          {isDashboard && (
+            <div className="space-y-6 mb-8">
+              <TeamNotesBoard />
+              <AcademyCalendar />
+            </div>
+          )}
           {children}
         </div>
       </main>
