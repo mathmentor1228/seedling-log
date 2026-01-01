@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -28,10 +28,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, BookOpen, Edit2, Trash2, Loader2, Users, Copy } from 'lucide-react';
+import { Plus, BookOpen, Edit2, Trash2, Loader2, Users, Copy, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { ClassScheduleManager, type Schedule } from '@/components/ClassScheduleManager';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
+import { TeacherScheduleTable } from '@/components/TeacherScheduleTable';
+import { StudentTimetableLookup } from '@/components/StudentTimetableLookup';
 import { useAuth, isAdmin } from '@/lib/auth';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
@@ -106,6 +113,14 @@ export default function Classes() {
   const [filterTeacher, setFilterTeacher] = useState<string>('all');
   const [filterDay, setFilterDay] = useState<string>('all');
   const [filterSubject, setFilterSubject] = useState<string>('all');
+
+  // Admin view mode
+  const [adminViewMode, setAdminViewMode] = useState<'teacher' | 'student'>('teacher');
+  const [adminSelectedTeacher, setAdminSelectedTeacher] = useState<string>('all');
+  const [expandedTeachers, setExpandedTeachers] = useState<Set<string>>(new Set());
+
+  // Highlight class for teacher schedule
+  const [highlightClassId, setHighlightClassId] = useState<string | null>(null);
 
   // Bulk creation form
   const [bulkForm, setBulkForm] = useState({
@@ -245,6 +260,35 @@ export default function Classes() {
     return rows;
   }, [classes]);
 
+  // Teacher's own schedule rows (for teacher view "내 시간표")
+  const myScheduleRows = useMemo(() => {
+    if (isAdmin(role)) return [];
+    return scheduleRows.filter((r) => r.teacherId === user?.id).sort((a, b) => {
+      if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+      return a.startTime.localeCompare(b.startTime);
+    });
+  }, [scheduleRows, role, user?.id]);
+
+  // Group schedules by teacher for admin "전체" view
+  const schedulesByTeacher = useMemo(() => {
+    const map = new Map<string, { teacherName: string; rows: ClassScheduleRow[] }>();
+    scheduleRows.forEach((r) => {
+      const tId = r.teacherId || 'unassigned';
+      if (!map.has(tId)) {
+        map.set(tId, { teacherName: r.teacherName || '미배정', rows: [] });
+      }
+      map.get(tId)!.rows.push(r);
+    });
+    // Sort each teacher's rows
+    map.forEach((val) => {
+      val.rows.sort((a, b) => {
+        if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+        return a.startTime.localeCompare(b.startTime);
+      });
+    });
+    return map;
+  }, [scheduleRows]);
+
   // Apply filters and sorting
   const filteredRows = useMemo(() => {
     let result = scheduleRows;
@@ -268,6 +312,18 @@ export default function Classes() {
 
     return result;
   }, [scheduleRows, filterTeacher, filterDay, filterSubject]);
+
+  const toggleTeacherExpand = (teacherId: string) => {
+    setExpandedTeachers((prev) => {
+      const next = new Set(prev);
+      if (next.has(teacherId)) {
+        next.delete(teacherId);
+      } else {
+        next.add(teacherId);
+      }
+      return next;
+    });
+  };
 
   const formatTime = (time: string) => {
     return time.slice(0, 5); // HH:MM
@@ -736,150 +792,423 @@ export default function Classes() {
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">선생님</Label>
-              <Select value={filterTeacher} onValueChange={setFilterTeacher}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="전체" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  {teachers.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">요일</Label>
-              <Select value={filterDay} onValueChange={setFilterDay}>
-                <SelectTrigger className="w-[100px]">
-                  <SelectValue placeholder="전체" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  {DAYS_OF_WEEK.map((d) => (
-                    <SelectItem key={d.value} value={String(d.value)}>
-                      {d.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">과목</Label>
-              <Select value={filterSubject} onValueChange={setFilterSubject}>
-                <SelectTrigger className="w-[100px]">
-                  <SelectValue placeholder="전체" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  {SUBJECTS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Table */}
-      {filteredRows.length === 0 ? (
+      {/* Admin: View toggle */}
+      {isAdmin(role) && (
         <Card>
-          <CardContent className="text-center py-12">
-            <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">
-              {scheduleRows.length === 0
-                ? '등록된 수업 시간표가 없습니다. 클래스를 추가해주세요!'
-                : '필터 조건에 맞는 수업이 없습니다'}
-            </p>
+          <CardContent className="pt-4">
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">보기 모드</Label>
+                <div className="flex gap-1">
+                  <Button
+                    variant={adminViewMode === 'teacher' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAdminViewMode('teacher')}
+                  >
+                    <Calendar className="w-4 h-4 mr-1" />
+                    선생님 시간표
+                  </Button>
+                  <Button
+                    variant={adminViewMode === 'student' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAdminViewMode('student')}
+                  >
+                    <Users className="w-4 h-4 mr-1" />
+                    학생 시간표
+                  </Button>
+                </div>
+              </div>
+              {adminViewMode === 'teacher' && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">선생님</Label>
+                  <Select value={adminSelectedTeacher} onValueChange={setAdminSelectedTeacher}>
+                    <SelectTrigger className="w-[150px]">
+                      <SelectValue placeholder="전체" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체</SelectItem>
+                      {teachers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
-      ) : (
+      )}
+
+      {/* Admin: Student timetable lookup */}
+      {isAdmin(role) && adminViewMode === 'student' && (
         <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>선생님</TableHead>
-                <TableHead>요일</TableHead>
-                <TableHead>시간</TableHead>
-                <TableHead>과목</TableHead>
-                <TableHead className="text-center">배정학생수</TableHead>
-                <TableHead className="text-center">활성</TableHead>
-                <TableHead className="text-right">액션</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRows.map((row) => (
-                <TableRow key={row.scheduleId}>
-                  <TableCell className="font-medium">
-                    {row.teacherName || '미배정'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {DAYS_OF_WEEK.find((d) => d.value === row.dayOfWeek)?.label}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {formatTime(row.startTime)}–{formatTime(row.endTime)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{row.subject}</Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="flex items-center justify-center gap-1">
-                      <Users className="w-3 h-3" />
-                      {row.studentCount}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={row.isActive ? 'default' : 'outline'}>
-                      {row.isActive ? '활성' : '비활성'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          const cls = classes.find((c) => c.id === row.classId);
-                          if (cls) handleEdit(cls);
-                        }}
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenDetail(row.classId)}
-                      >
-                        <Users className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(row.classId)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">학생 시간표 조회</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <StudentTimetableLookup />
+          </CardContent>
         </Card>
+      )}
+
+      {/* Admin: Teacher schedules view */}
+      {isAdmin(role) && adminViewMode === 'teacher' && (
+        <>
+          {adminSelectedTeacher === 'all' ? (
+            <div className="space-y-3">
+              {Array.from(schedulesByTeacher.entries()).map(([teacherId, { teacherName, rows }]) => (
+                <Collapsible
+                  key={teacherId}
+                  open={expandedTeachers.has(teacherId)}
+                  onOpenChange={() => toggleTeacherExpand(teacherId)}
+                >
+                  <Card>
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {expandedTeachers.has(teacherId) ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                            <span className="font-medium">{teacherName}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {rows.length}개 수업
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="pt-0 pb-4">
+                        <TeacherScheduleTable
+                          scheduleRows={rows}
+                          onRowClick={handleOpenDetail}
+                        />
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {teachers.find((t) => t.id === adminSelectedTeacher)?.full_name || '선생님'} 시간표
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TeacherScheduleTable
+                  scheduleRows={scheduleRows.filter((r) => r.teacherId === adminSelectedTeacher)}
+                  onRowClick={handleOpenDetail}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* Teacher: Side-by-side layout with schedule panel */}
+      {!isAdmin(role) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main content */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Filters */}
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex flex-wrap gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">요일</Label>
+                    <Select value={filterDay} onValueChange={setFilterDay}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue placeholder="전체" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">전체</SelectItem>
+                        {DAYS_OF_WEEK.map((d) => (
+                          <SelectItem key={d.value} value={String(d.value)}>
+                            {d.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">과목</Label>
+                    <Select value={filterSubject} onValueChange={setFilterSubject}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue placeholder="전체" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">전체</SelectItem>
+                        {SUBJECTS.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Table */}
+            {filteredRows.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-12">
+                  <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">
+                    {scheduleRows.length === 0
+                      ? '등록된 수업 시간표가 없습니다.'
+                      : '필터 조건에 맞는 수업이 없습니다'}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>요일</TableHead>
+                      <TableHead>시간</TableHead>
+                      <TableHead>과목</TableHead>
+                      <TableHead className="text-center">배정학생수</TableHead>
+                      <TableHead className="text-center">활성</TableHead>
+                      <TableHead className="text-right">액션</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRows.map((row) => (
+                      <TableRow
+                        key={row.scheduleId}
+                        className={highlightClassId === row.classId ? 'bg-primary/10' : ''}
+                      >
+                        <TableCell>
+                          <Badge variant="outline">
+                            {DAYS_OF_WEEK.find((d) => d.value === row.dayOfWeek)?.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {formatTime(row.startTime)}–{formatTime(row.endTime)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{row.subject}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="flex items-center justify-center gap-1">
+                            <Users className="w-3 h-3" />
+                            {row.studentCount}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={row.isActive ? 'default' : 'outline'}>
+                            {row.isActive ? '활성' : '비활성'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const cls = classes.find((c) => c.id === row.classId);
+                                if (cls) handleEdit(cls);
+                              }}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenDetail(row.classId)}
+                            >
+                              <Users className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
+          </div>
+
+          {/* Right side panel: Teacher's schedule */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  내 시간표
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TeacherScheduleTable
+                  scheduleRows={myScheduleRows}
+                  onRowClick={(classId) => setHighlightClassId(classId)}
+                  highlightClassId={highlightClassId}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Admin: Full table with all columns */}
+      {isAdmin(role) && adminViewMode === 'teacher' && (
+        <>
+          {/* Filters */}
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex flex-wrap gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">선생님</Label>
+                  <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+                    <SelectTrigger className="w-[150px]">
+                      <SelectValue placeholder="전체" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체</SelectItem>
+                      {teachers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">요일</Label>
+                  <Select value={filterDay} onValueChange={setFilterDay}>
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue placeholder="전체" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체</SelectItem>
+                      {DAYS_OF_WEEK.map((d) => (
+                        <SelectItem key={d.value} value={String(d.value)}>
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">과목</Label>
+                  <Select value={filterSubject} onValueChange={setFilterSubject}>
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue placeholder="전체" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체</SelectItem>
+                      {SUBJECTS.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Table */}
+          {filteredRows.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
+                <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  {scheduleRows.length === 0
+                    ? '등록된 수업 시간표가 없습니다. 클래스를 추가해주세요!'
+                    : '필터 조건에 맞는 수업이 없습니다'}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>선생님</TableHead>
+                    <TableHead>요일</TableHead>
+                    <TableHead>시간</TableHead>
+                    <TableHead>과목</TableHead>
+                    <TableHead className="text-center">배정학생수</TableHead>
+                    <TableHead className="text-center">활성</TableHead>
+                    <TableHead className="text-right">액션</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRows.map((row) => (
+                    <TableRow key={row.scheduleId}>
+                      <TableCell className="font-medium">
+                        {row.teacherName || '미배정'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {DAYS_OF_WEEK.find((d) => d.value === row.dayOfWeek)?.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {formatTime(row.startTime)}–{formatTime(row.endTime)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{row.subject}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="flex items-center justify-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {row.studentCount}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={row.isActive ? 'default' : 'outline'}>
+                          {row.isActive ? '활성' : '비활성'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const cls = classes.find((c) => c.id === row.classId);
+                              if (cls) handleEdit(cls);
+                            }}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenDetail(row.classId)}
+                          >
+                            <Users className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(row.classId)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Class Detail Dialog */}
