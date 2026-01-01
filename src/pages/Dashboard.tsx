@@ -80,6 +80,8 @@ interface TodaySlotStudent {
   name: string;
   previousHomeworkStatus?: 'completed' | 'partial' | 'not_done' | 'none_assigned' | null;
   debugReason?: 'no_prev_record' | 'found' | 'blocked_by_access' | null;
+  firstSubject?: boolean;
+  followup2wDue?: boolean;
 }
 
 interface TodaySlot {
@@ -103,39 +105,66 @@ function normalizeHomeworkStatus(status: string | null | undefined): TodaySlotSt
   return null;
 }
 
-// Helper function to render previous homework status badge
-function getPreviousHomeworkBadge(
+// Helper function to render roster badges (homework, first subject, followup)
+function getRosterBadges(
   status: TodaySlotStudent['previousHomeworkStatus'],
-  debugReason?: TodaySlotStudent['debugReason']
+  debugReason: TodaySlotStudent['debugReason'],
+  firstSubject: boolean | undefined,
+  followup2wDue: boolean | undefined,
+  subject: string,
+  isAdmin: boolean,
+  onMarkFollowupDone?: () => void
 ) {
-  // Show "첫 수업" badge when there's no previous lesson record
-  if (debugReason === 'no_prev_record') {
-    return (
-      <Badge variant="outline" className="text-muted-foreground border-muted text-xs">
-        첫 수업
-      </Badge>
-    );
-  }
+  const badges: React.ReactNode[] = [];
   
-  if (!status || status === 'completed' || status === 'none_assigned') return null;
-  
+  // Priority 1: Homework badges
   if (status === 'not_done') {
-    return (
-      <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+    badges.push(
+      <Badge key="hw" className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
         지난 숙제 미이행
       </Badge>
     );
-  }
-  
-  if (status === 'partial') {
-    return (
-      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
+  } else if (status === 'partial') {
+    badges.push(
+      <Badge key="hw" className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
         지난 숙제 일부완료
+      </Badge>
+    );
+  } else if (firstSubject) {
+    // Priority 2: First subject badge (only if no homework issues)
+    badges.push(
+      <Badge key="first" variant="outline" className="text-muted-foreground border-muted text-xs">
+        첫 {subject} 수업
       </Badge>
     );
   }
   
-  return null;
+  // Additional: 2-week followup badge (can show alongside)
+  if (followup2wDue) {
+    badges.push(
+      <Badge key="followup" className="bg-purple-500/15 text-purple-600 border-purple-500/30 text-xs">
+        첫등록 2주후(연락)
+      </Badge>
+    );
+    if (isAdmin && onMarkFollowupDone) {
+      badges.push(
+        <Button
+          key="followup-btn"
+          variant="ghost"
+          size="sm"
+          className="h-5 px-1.5 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-500/10"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMarkFollowupDone();
+          }}
+        >
+          연락완료
+        </Button>
+      );
+    }
+  }
+  
+  return badges.length > 0 ? badges : null;
 }
 
 export default function Dashboard() {
@@ -410,11 +439,17 @@ export default function Dashboard() {
 
       console.log('fetchTodaySlots: schedules returned =', schedules?.length || 0, schedules);
 
-      // Get students for each class
+      // Get students for each class - also build a map of class_id -> subject for RPC
       const classIds = schedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
+      const classSubjectMap: Record<string, string> = {};
+      (schedules || []).forEach((s: any) => {
+        if (s.classes?.id && s.classes?.subject) {
+          classSubjectMap[s.classes.id] = s.classes.subject;
+        }
+      });
       
       let studentsMap: Record<string, TodaySlotStudent[]> = {};
-      let allStudentClassPairs: { studentId: string; classId: string }[] = [];
+      let allStudentClassPairs: { studentId: string; classId: string; subject: string }[] = [];
       let totalStudentsCount = 0;
       
       if (classIds.length > 0) {
@@ -445,7 +480,11 @@ export default function Dashboard() {
                 id: cs.students.id,
                 name: cs.students.name,
               });
-              allStudentClassPairs.push({ studentId: cs.students.id, classId: cs.class_id });
+              allStudentClassPairs.push({ 
+                studentId: cs.students.id, 
+                classId: cs.class_id,
+                subject: classSubjectMap[cs.class_id] || '',
+              });
               totalStudentsCount++;
             }
           });
@@ -455,16 +494,19 @@ export default function Dashboard() {
       // Batch fetch previous homework status via RPC
       const today = format(new Date(), 'yyyy-MM-dd');
       
-      // key: `${studentId}:${classId}` -> { status, debugReason }
+      // key: `${studentId}:${classId}` -> { status, debugReason, firstSubject, followup2wDue }
       let previousHomeworkMap: Record<string, { 
         status: TodaySlotStudent['previousHomeworkStatus']; 
         debugReason: TodaySlotStudent['debugReason'];
+        firstSubject: boolean;
+        followup2wDue: boolean;
       }> = {};
       
       if (allStudentClassPairs.length > 0) {
         const pairs = allStudentClassPairs.map(p => ({
           student_id: p.studentId,
           class_id: p.classId,
+          subject: p.subject,
         }));
         
         const { data: rpcResult, error: rpcError } = await supabase.rpc(
@@ -478,12 +520,14 @@ export default function Dashboard() {
             previousHomeworkMap[key] = {
               status: normalizeHomeworkStatus(row.homework_status),
               debugReason: row.debug_reason as TodaySlotStudent['debugReason'],
+              firstSubject: row.first_subject === true,
+              followup2wDue: row.followup_2w_due === true,
             };
           });
         }
       }
 
-      // Update studentsMap with previousHomeworkStatus and debugReason
+      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue
       Object.keys(studentsMap).forEach(classId => {
         studentsMap[classId] = studentsMap[classId].map(student => {
           const key = `${student.id}:${classId}`;
@@ -492,6 +536,8 @@ export default function Dashboard() {
             ...student,
             previousHomeworkStatus: mapped?.status || null,
             debugReason: mapped?.debugReason || null,
+            firstSubject: mapped?.firstSubject || false,
+            followup2wDue: mapped?.followup2wDue || false,
           };
         });
       });
@@ -513,6 +559,45 @@ export default function Dashboard() {
       toast({
         title: '데이터 로드 오류',
         description: '오늘 수업 정보를 불러오는 중 오류가 발생했습니다.',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  // Mark a subject as followup done for a student (admin only)
+  async function markFollowupDone(studentId: string, subject: string) {
+    try {
+      // Get current done subjects
+      const { data: student, error: fetchError } = await supabase
+        .from('students')
+        .select('followup_2w_done_subjects')
+        .eq('id', studentId)
+        .maybeSingle();
+      
+      if (fetchError) throw fetchError;
+      
+      const currentDone = (student?.followup_2w_done_subjects as string[]) || [];
+      if (currentDone.includes(subject)) return; // Already done
+      
+      const { error: updateError } = await supabase
+        .from('students')
+        .update({ followup_2w_done_subjects: [...currentDone, subject] })
+        .eq('id', studentId);
+      
+      if (updateError) throw updateError;
+      
+      toast({
+        title: '연락 완료',
+        description: `${subject} 과목 첫등록 2주 연락이 완료 처리되었습니다.`,
+      });
+      
+      // Refresh today's slots to update badges
+      await fetchTodaySlots();
+    } catch (error) {
+      console.error('Error marking followup done:', error);
+      toast({
+        title: '오류',
+        description: '연락 완료 처리 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
     }
@@ -677,9 +762,17 @@ export default function Dashboard() {
                             key={student.id} 
                             className="flex items-center justify-between p-2 bg-secondary/50 rounded-md"
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-foreground">{student.name}</span>
-                              {getPreviousHomeworkBadge(student.previousHomeworkStatus, student.debugReason)}
+                              {getRosterBadges(
+                                student.previousHomeworkStatus,
+                                student.debugReason,
+                                student.firstSubject,
+                                student.followup2wDue,
+                                slot.subject,
+                                isAdmin(role),
+                                () => markFollowupDone(student.id, slot.subject)
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <Button

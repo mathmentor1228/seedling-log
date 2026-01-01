@@ -117,10 +117,6 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      {/* DEPLOYMENT MARKER - always visible */}
-      <div className="fixed top-2 left-2 text-xs text-white bg-destructive px-2 py-1 rounded font-bold z-50">
-        DEPLOY-MARKER-AUTH-V3
-      </div>
       <div className="w-full max-w-md animate-fade-in">
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4">
