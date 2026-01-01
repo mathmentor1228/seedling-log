@@ -59,6 +59,7 @@ interface RosterStudent {
   existingRecordId: string | null;
   hasTest: boolean;
   hyugangRecordId: string | null;
+  attendanceStatus: string[];
 }
 
 interface Holiday {
@@ -77,6 +78,39 @@ function normalizeHomeworkStatus(status: string | null | undefined): RosterStude
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return 'partial';
   if (['completed', '완료'].includes(normalized)) return 'completed';
   if (['none_assigned', '없음', '미배정'].includes(normalized)) return 'none_assigned';
+  return null;
+}
+
+// Helper function to render attendance badge
+function getAttendanceStatusBadge(attendanceStatus: string[] | undefined) {
+  if (!attendanceStatus || attendanceStatus.length === 0) return null;
+  
+  const hasAbsent = attendanceStatus.includes('무단결석') || attendanceStatus.includes('인정결석');
+  const hasNoShow = attendanceStatus.includes('보충불가');
+  const hasLateOrEarly = attendanceStatus.includes('지각') || attendanceStatus.includes('조퇴');
+  
+  // Filter out '정상등원' for display
+  const displayStatus = attendanceStatus.filter(s => s !== '정상등원');
+  
+  if (displayStatus.length === 0) {
+    // All normal - don't show badge
+    return null;
+  }
+  
+  if (hasAbsent || hasNoShow) {
+    return (
+      <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+        {displayStatus.join(', ')}
+      </Badge>
+    );
+  } else if (hasLateOrEarly) {
+    return (
+      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
+        {displayStatus.join(', ')}
+      </Badge>
+    );
+  }
+  
   return null;
 }
 
@@ -218,18 +252,19 @@ export default function AssistantDashboard() {
         }
       }
 
-      // Fetch lesson records for selected date (existing + 휴강 + hasTest)
+      // Fetch lesson records for selected date (existing + 휴강 + hasTest + attendance_status)
       const studentIds = [...new Set(rosterRowsRaw.map(r => r.student_id))];
       const classIds = [...new Set(rosterRowsRaw.map(r => r.class_id))];
 
       let existingRecordMap: Record<string, string> = {};
       let hyugangMap: Record<string, string> = {};
       let hasTestMap: Record<string, boolean> = {};
+      let attendanceMap: Record<string, string[]> = {};
 
       if (studentIds.length > 0 && classIds.length > 0) {
         const { data: dateRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, lesson_types, test_result_text')
+          .select('id, student_id, class_id, lesson_types, test_result_text, attendance_status')
           .eq('lesson_date', dateStr)
           .in('student_id', studentIds)
           .in('class_id', classIds);
@@ -243,6 +278,7 @@ export default function AssistantDashboard() {
           if (lr.test_result_text && lr.test_result_text.trim() !== '') {
             hasTestMap[key] = true;
           }
+          attendanceMap[key] = lr.attendance_status || ['정상등원'];
         });
       }
 
@@ -266,6 +302,7 @@ export default function AssistantDashboard() {
           existingRecordId: existingRecordMap[key] || null,
           hasTest: hasTestMap[key] || false,
           hyugangRecordId: hyugangMap[key] || null,
+          attendanceStatus: attendanceMap[key] || ['정상등원'],
         };
       });
 
@@ -656,6 +693,8 @@ export default function AssistantDashboard() {
                                   <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
                                 ) : (
                                   <>
+                                    {/* Attendance badge - show first for visibility */}
+                                    {getAttendanceStatusBadge(student.attendanceStatus)}
                                     {student.previousHomeworkStatus === 'not_done' && (
                                       <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
                                         지난 숙제 미이행
