@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
@@ -36,6 +35,9 @@ import {
 import { format, addDays, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { RosterActionModal } from '@/components/RosterActionModal';
+import { TeamNotesBoard } from '@/components/TeamNotesBoard';
+import { AcademyCalendar } from '@/components/AcademyCalendar';
 
 interface Teacher {
   id: string;
@@ -108,6 +110,21 @@ export default function AssistantDashboard() {
   const [filterNotDone, setFilterNotDone] = useState(false);
   const [filterHasTest, setFilterHasTest] = useState(false);
   const [filterFollowup, setFilterFollowup] = useState(false);
+
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContext, setModalContext] = useState<{
+    date: string;
+    student_id: string;
+    student_name: string;
+    class_id: string;
+    class_name: string;
+    subject: string;
+    teacher_id: string;
+    teacher_name: string;
+    start_time: string;
+    existingRecordId: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -366,15 +383,17 @@ export default function AssistantDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Team Notes Board */}
+      <TeamNotesBoard />
+      
+      {/* Academy Calendar */}
+      <AcademyCalendar />
+
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">조교 대시보드</h1>
           <p className="text-muted-foreground mt-1">
             {isToday ? '오늘' : format(selectedDate, 'M월 d일', { locale: ko })} 수업 전체 현황 및 숙제/테스트 관리
-          </p>
-          {/* Debug marker - remove after confirmed */}
-          <p className="text-xs text-muted-foreground/60 mt-1">
-            ROSTER_DEBUG: rows={roster.length}, teachers={allTeachers.length}, active={activeTeachers}
           </p>
         </div>
         
@@ -675,20 +694,26 @@ export default function AssistantDashboard() {
                                 )}
                               </div>
 
-                              {/* Actions */}
+                              {/* Actions - Open Modal instead of navigating */}
                               <div className="flex items-center gap-2 shrink-0">
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${dateStr}`)}
-                                >
-                                  <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                  {student.existingRecordId ? '수정' : '기록'}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => navigate(`/lessons?student_id=${student.student_id}&class_id=${student.class_id}&subject=${encodeURIComponent(student.subject)}&lesson_date=${dateStr}&focus=test`)}
+                                  onClick={() => {
+                                    setModalContext({
+                                      date: dateStr,
+                                      student_id: student.student_id,
+                                      student_name: student.student_name,
+                                      class_id: student.class_id,
+                                      class_name: student.class_name,
+                                      subject: student.subject,
+                                      teacher_id: student.teacher_id,
+                                      teacher_name: student.teacher_name,
+                                      start_time: student.start_time,
+                                      existingRecordId: student.existingRecordId,
+                                    });
+                                    setModalOpen(true);
+                                  }}
                                 >
                                   <CheckSquare className="w-3.5 h-3.5 mr-1" />
                                   숙제/테스트
@@ -706,6 +731,15 @@ export default function AssistantDashboard() {
           })}
         </div>
       )}
+
+      {/* Roster Action Modal */}
+      <RosterActionModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        context={modalContext}
+        mode="HOMEWORK_TEST"
+        onSaved={() => fetchAllData()}
+      />
     </div>
   );
 }
