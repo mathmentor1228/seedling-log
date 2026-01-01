@@ -81,37 +81,57 @@ function normalizeHomeworkStatus(status: string | null | undefined): RosterStude
   return null;
 }
 
-// Helper function to render attendance badge
+// Helper function to render attendance badge with high visibility
+// 미등원: red, 지각: amber, 등원: neutral gray
 function getAttendanceStatusBadge(attendanceStatus: string[] | undefined) {
   if (!attendanceStatus || attendanceStatus.length === 0) return null;
   
+  // Check for various non-normal statuses
   const hasAbsent = attendanceStatus.includes('무단결석') || attendanceStatus.includes('인정결석');
-  const hasNoShow = attendanceStatus.includes('보충불가');
+  const hasNoShow = attendanceStatus.includes('보충불가') || attendanceStatus.includes('미등원');
   const hasLateOrEarly = attendanceStatus.includes('지각') || attendanceStatus.includes('조퇴');
   
-  // Filter out '정상등원' for display
-  const displayStatus = attendanceStatus.filter(s => s !== '정상등원');
+  // Filter out '정상등원' and '등원' for display
+  const displayStatus = attendanceStatus.filter(s => s !== '정상등원' && s !== '등원');
   
+  // If only normal status, show neutral badge
   if (displayStatus.length === 0) {
-    // All normal - don't show badge
+    // Check if it's explicitly marked as '등원'
+    if (attendanceStatus.includes('등원')) {
+      return (
+        <Badge variant="secondary" className="bg-muted/50 text-muted-foreground border-muted text-xs">
+          등원
+        </Badge>
+      );
+    }
+    // All normal (정상등원) - don't show badge
     return null;
   }
   
+  // 미등원 or absent - RED (high visibility)
   if (hasAbsent || hasNoShow) {
     return (
-      <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
-        {displayStatus.join(', ')}
-      </Badge>
-    );
-  } else if (hasLateOrEarly) {
-    return (
-      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
+      <Badge className="bg-red-500 text-white border-red-600 text-xs font-medium shadow-sm">
         {displayStatus.join(', ')}
       </Badge>
     );
   }
   
-  return null;
+  // 지각 or early leave - AMBER
+  if (hasLateOrEarly) {
+    return (
+      <Badge className="bg-amber-500 text-white border-amber-600 text-xs font-medium shadow-sm">
+        {displayStatus.join(', ')}
+      </Badge>
+    );
+  }
+  
+  // Other status - show as-is
+  return (
+    <Badge variant="outline" className="text-xs">
+      {displayStatus.join(', ')}
+    </Badge>
+  );
 }
 
 // Get KST date
@@ -167,7 +187,7 @@ export default function AssistantDashboard() {
     try {
       setLoading(true);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      
+      console.log('[AssistantDashboard] fetchAllData started, date:', dateStr);
       // Call the RPC which returns teachers + roster in one shot
       const { data: rpcData, error: rpcError } = await supabase.rpc(
         'get_teacher_roster_sheet',
@@ -329,6 +349,10 @@ export default function AssistantDashboard() {
       setRoster(rosterData);
       setHolidays((holidaysData || []) as Holiday[]);
       setCollapsedTeachers(new Set(noLessonsTeacherIds));
+      
+      // DEBUG: Log attendance data fetched
+      const attendanceCount = Object.keys(attendanceMap).length;
+      console.log('[AssistantDashboard] fetchAllData complete - attendanceUpdated=true, rosterUpdated=true, attendanceRecords:', attendanceCount);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -768,7 +792,10 @@ export default function AssistantDashboard() {
         onOpenChange={setModalOpen}
         context={modalContext}
         mode="HOMEWORK_TEST"
-        onSaved={() => fetchAllData()}
+        onSaved={() => {
+          console.log('[AssistantDashboard] Modal onSaved triggered - refetching roster data');
+          fetchAllData();
+        }}
       />
     </div>
   );
