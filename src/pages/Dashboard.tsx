@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import HolidayManagement from '@/components/HolidayManagement';
 import { 
   Users, 
   BookOpen, 
@@ -20,7 +21,9 @@ import {
   Clock,
   FileEdit,
   CheckSquare,
-  GraduationCap
+  GraduationCap,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 
@@ -192,7 +195,9 @@ export default function Dashboard() {
   const [overdueDrafts, setOverdueDrafts] = useState<GroupedOverdueDrafts[]>([]);
   const [pendingHomework, setPendingHomework] = useState<PendingHomework[]>([]);
   const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
+  const [allTodayHolidays, setAllTodayHolidays] = useState<Holiday[]>([]); // All holidays for today (for admin/assistant)
   const [loading, setLoading] = useState(true);
+  const [ignoreHoliday, setIgnoreHoliday] = useState(false); // Admin toggle to show roster despite holiday
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -302,8 +307,8 @@ export default function Dashboard() {
           }
         }
 
-        // Fetch today's slots for teacher - ALWAYS run for teachers regardless of isAssistant check
-        if (isTeacher(role)) {
+        // Fetch today's slots for teacher, admin, or assistant
+        if (isTeacher(role) || isAdmin(role) || isAssistant(role)) {
           await fetchTodaySlots();
           await fetchTodayHolidays();
         }
@@ -606,7 +611,7 @@ export default function Dashboard() {
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
       
-      // Fetch holidays for today (scope='all' or scope='teacher' for current user)
+      // Fetch all holidays for today
       const { data: holidays, error } = await supabase
         .from('holidays')
         .select('*')
@@ -617,7 +622,11 @@ export default function Dashboard() {
         return;
       }
       
+      // Store all holidays for admin/assistant banner
+      setAllTodayHolidays((holidays || []) as Holiday[]);
+      
       // Filter: scope='all' OR (scope='teacher' AND teacher_id=current user)
+      // For teacher role, this determines if their roster should be hidden
       const relevantHolidays = (holidays || []).filter((h: any) => 
         h.scope === 'all' || (h.scope === 'teacher' && h.teacher_id === user.id)
       );
@@ -791,122 +800,177 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Today's Classes Section - Teacher Only (PRIMARY SECTION) - ALWAYS RENDER */}
-      {isTeacher(role) && (
+      {/* Today's Classes Section - Teacher, Admin, Assistant */}
+      {(isTeacher(role) || isAdmin(role) || isAssistant(role)) && (
         <>
-          {/* Holiday Banner */}
-          {todayHolidays.length > 0 && (
+          {/* Holiday Banner - show for all roles when there's a holiday */}
+          {allTodayHolidays.length > 0 && (
             <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
               <CardContent className="py-4">
-                <div className="flex items-center gap-3">
-                  <Calendar className="w-5 h-5 text-amber-600" />
-                  <div>
-                    <span className="font-medium text-amber-700">오늘은 휴일입니다</span>
-                    <span className="text-muted-foreground ml-2">
-                      {todayHolidays.map(h => h.name).join(', ')}
-                    </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="w-5 h-5 text-amber-600" />
+                    <div>
+                      <span className="font-medium text-amber-700">
+                        {allTodayHolidays.some(h => h.scope === 'all') 
+                          ? '오늘은 휴강일(전체)입니다' 
+                          : '오늘은 휴강일입니다'}
+                      </span>
+                      <span className="text-muted-foreground ml-2">
+                        {allTodayHolidays.map(h => h.name).join(', ')}
+                      </span>
+                    </div>
                   </div>
+                  
+                  {/* Admin toggle to show roster despite holiday */}
+                  {isAdmin(role) && allTodayHolidays.some(h => h.scope === 'all') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIgnoreHoliday(!ignoreHoliday)}
+                      className="text-amber-700 hover:text-amber-800"
+                    >
+                      {ignoreHoliday ? (
+                        <>
+                          <EyeOff className="w-4 h-4 mr-1" />
+                          휴강 적용
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-4 h-4 mr-1" />
+                          휴강 무시하고 보기
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
           )}
           
-          {/* Only hide roster for teachers with teacher-specific holiday, not for assistants */}
-          {!(todayHolidays.some(h => h.scope === 'teacher' && h.teacher_id === user?.id)) && (
-            <Card className="border-primary/30 bg-primary/5 animate-slide-up">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <GraduationCap className="w-5 h-5 text-primary" />
-                  오늘 수업 ({todaySlots.length}개)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {todaySlots.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                    <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {(todaySlots || []).map((slot) => (
-                      <div key={slot.id} className="border rounded-lg p-4 bg-background">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">{slot.class_name}</span>
-                            <Badge variant="outline">{slot.subject}</Badge>
+          {/* Roster visibility logic:
+              - Teacher: hide if scope='all' OR scope='teacher' for this teacher
+              - Assistant: ALWAYS show roster (banner only)
+              - Admin: show if ignoreHoliday is true, otherwise hide if scope='all' exists
+          */}
+          {(() => {
+            const hasAllHoliday = allTodayHolidays.some(h => h.scope === 'all');
+            const hasTeacherHoliday = todayHolidays.some(h => h.scope === 'teacher' && h.teacher_id === user?.id);
+            
+            // Determine if roster should be hidden
+            let hideRoster = false;
+            if (isTeacher(role)) {
+              // Teachers: hide if any relevant holiday (all or their specific teacher holiday)
+              hideRoster = hasAllHoliday || hasTeacherHoliday;
+            } else if (isAdmin(role)) {
+              // Admin: hide only if scope='all' holiday exists AND ignoreHoliday is false
+              hideRoster = hasAllHoliday && !ignoreHoliday;
+            }
+            // Assistant: never hide roster (hideRoster stays false)
+            
+            if (hideRoster) return null;
+            
+            return (
+              <Card className="border-primary/30 bg-primary/5 animate-slide-up">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-primary" />
+                    오늘 수업 ({todaySlots.length}개)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {todaySlots.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                      <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {(todaySlots || []).map((slot) => (
+                        <div key={slot.id} className="border rounded-lg p-4 bg-background">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-foreground">{slot.class_name}</span>
+                              <Badge variant="outline">{slot.subject}</Badge>
+                            </div>
+                            <span className="text-sm text-muted-foreground font-medium">
+                              {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
+                            </span>
                           </div>
-                          <span className="text-sm text-muted-foreground font-medium">
-                            {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
-                          </span>
-                        </div>
-                        {(slot?.students || []).length > 0 ? (
-                          <div className="space-y-2">
-                            {(slot?.students || []).map((student) => (
-                              <div 
-                                key={student.id} 
-                                className={`flex items-center justify-between p-2 rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
-                              >
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
-                                  {student.hyugangRecordId ? (
-                                    <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
-                                  ) : (
-                                    getRosterBadges(
-                                      student.previousHomeworkStatus,
-                                      student.debugReason,
-                                      student.firstSubject,
-                                      student.followup2wDue,
-                                      slot.subject,
-                                      isAdmin(role),
-                                      () => markFollowupDone(student.id, slot.subject)
-                                    )
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {student.hyugangRecordId ? (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
-                                    >
-                                      <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                      휴강 기록 보기
-                                    </Button>
-                                  ) : (
-                                    <>
+                          {(slot?.students || []).length > 0 ? (
+                            <div className="space-y-2">
+                              {(slot?.students || []).map((student) => (
+                                <div 
+                                  key={student.id} 
+                                  className={`flex items-center justify-between p-2 rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
+                                >
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
+                                    {student.hyugangRecordId ? (
+                                      <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
+                                    ) : (
+                                      getRosterBadges(
+                                        student.previousHomeworkStatus,
+                                        student.debugReason,
+                                        student.firstSubject,
+                                        student.followup2wDue,
+                                        slot.subject,
+                                        isAdmin(role),
+                                        () => markFollowupDone(student.id, slot.subject)
+                                      )
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {student.hyugangRecordId ? (
                                       <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
                                       >
                                         <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                        수업기록
+                                        휴강 기록 보기
                                       </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
-                                      >
-                                        <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                                        숙제/테스트
-                                      </Button>
-                                    </>
-                                  )}
+                                    ) : (
+                                      <>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
+                                        >
+                                          <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                          수업기록
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
+                                        >
+                                          <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                                          숙제/테스트
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
         </>
+      )}
+
+      {/* Holiday Management Section - Admin Only */}
+      {isAdmin(role) && (
+        <HolidayManagement />
       )}
 
       {/* Pending Homework Section */}
