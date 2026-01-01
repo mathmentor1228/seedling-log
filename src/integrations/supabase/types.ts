@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      academy_events: {
+        Row: {
+          all_day: boolean
+          category: string
+          created_at: string
+          created_by: string
+          description: string | null
+          end_at: string | null
+          id: string
+          is_announcement: boolean
+          location: string | null
+          pinned: boolean
+          start_at: string
+          teacher_id: string | null
+          title: string
+          visibility: string
+        }
+        Insert: {
+          all_day?: boolean
+          category?: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          is_announcement?: boolean
+          location?: string | null
+          pinned?: boolean
+          start_at: string
+          teacher_id?: string | null
+          title: string
+          visibility?: string
+        }
+        Update: {
+          all_day?: boolean
+          category?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          is_announcement?: boolean
+          location?: string | null
+          pinned?: boolean
+          start_at?: string
+          teacher_id?: string | null
+          title?: string
+          visibility?: string
+        }
+        Relationships: []
+      }
       attendance: {
         Row: {
           att_date: string
@@ -435,6 +486,151 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      team_note_attachments: {
+        Row: {
+          created_at: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          note_id: string
+          original_name: string
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          note_id: string
+          original_name: string
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          note_id?: string
+          original_name?: string
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_note_attachments_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "team_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_note_replies: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          id: string
+          note_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          id?: string
+          note_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          note_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_note_replies_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "team_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_notes: {
+        Row: {
+          body: string | null
+          class_id: string | null
+          created_at: string
+          created_by: string
+          done_at: string | null
+          done_by: string | null
+          due_date: string | null
+          id: string
+          priority: string
+          scope: string
+          status: string
+          student_id: string | null
+          target_role: string | null
+          target_user_id: string | null
+          teacher_id: string | null
+          title: string
+        }
+        Insert: {
+          body?: string | null
+          class_id?: string | null
+          created_at?: string
+          created_by: string
+          done_at?: string | null
+          done_by?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: string
+          scope?: string
+          status?: string
+          student_id?: string | null
+          target_role?: string | null
+          target_user_id?: string | null
+          teacher_id?: string | null
+          title: string
+        }
+        Update: {
+          body?: string | null
+          class_id?: string | null
+          created_at?: string
+          created_by?: string
+          done_at?: string | null
+          done_by?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: string
+          scope?: string
+          status?: string
+          student_id?: string | null
+          target_role?: string | null
+          target_user_id?: string | null
+          teacher_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_notes_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_notes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
