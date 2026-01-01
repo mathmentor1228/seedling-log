@@ -100,6 +100,8 @@ interface TodaySlotStudent {
   firstSubject?: boolean;
   followup2wDue?: boolean;
   hyugangRecordId?: string | null;
+  attendanceStatus?: string[];
+  lessonRecordId?: string | null;
 }
 
 interface TodaySlot {
@@ -191,6 +193,39 @@ function getRosterBadges(
   }
   
   return badges.length > 0 ? badges : null;
+}
+
+// Helper function to render attendance badge
+function getAttendanceStatusBadge(attendanceStatus: string[] | undefined) {
+  if (!attendanceStatus || attendanceStatus.length === 0) return null;
+  
+  const hasAbsent = attendanceStatus.includes('무단결석') || attendanceStatus.includes('인정결석');
+  const hasNoShow = attendanceStatus.includes('보충불가');
+  const hasLateOrEarly = attendanceStatus.includes('지각') || attendanceStatus.includes('조퇴');
+  
+  // Filter out '정상등원' for display
+  const displayStatus = attendanceStatus.filter(s => s !== '정상등원');
+  
+  if (displayStatus.length === 0) {
+    // All normal - don't show badge
+    return null;
+  }
+  
+  if (hasAbsent || hasNoShow) {
+    return (
+      <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+        {displayStatus.join(', ')}
+      </Badge>
+    );
+  } else if (hasLateOrEarly) {
+    return (
+      <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">
+        {displayStatus.join(', ')}
+      </Badge>
+    );
+  }
+  
+  return null;
 }
 
 export default function Dashboard() {
@@ -641,8 +676,12 @@ export default function Dashboard() {
         followup2wDue: boolean;
       }> = {};
       
-      // key: `${studentId}:${classId}` -> lesson_record_id if 휴강 exists for today
-      let hyugangMap: Record<string, string> = {};
+      // key: `${studentId}:${classId}` -> { hyugangRecordId, attendanceStatus, lessonRecordId }
+      let lessonRecordMap: Record<string, { 
+        hyugangRecordId: string | null; 
+        attendanceStatus: string[]; 
+        lessonRecordId: string | null;
+      }> = {};
       
       if (allStudentClassPairs.length > 0) {
         const pairs = allStudentClassPairs.map(p => ({
@@ -668,40 +707,45 @@ export default function Dashboard() {
           });
         }
         
-        // Fetch 휴강 records for today (batch for all students in classes)
+        // Fetch lesson records for today (휴강, attendance_status)
         const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
-        const classIdsForHyugang = [...new Set(allStudentClassPairs.map(p => p.classId))];
+        const classIdsForRecords = [...new Set(allStudentClassPairs.map(p => p.classId))];
         
-        const { data: hyugangRecords } = await supabase
+        const { data: todayRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, lesson_types')
+          .select('id, student_id, class_id, lesson_types, attendance_status')
           .eq('lesson_date', today)
           .in('student_id', studentIds)
-          .in('class_id', classIdsForHyugang)
-          .eq('submitted', true);
+          .in('class_id', classIdsForRecords);
         
-        if (hyugangRecords) {
-          hyugangRecords.forEach((lr: any) => {
-            if (lr.lesson_types && lr.lesson_types.includes('휴강')) {
-              const key = `${lr.student_id}:${lr.class_id}`;
-              hyugangMap[key] = lr.id;
-            }
+        if (todayRecords) {
+          todayRecords.forEach((lr: any) => {
+            const key = `${lr.student_id}:${lr.class_id}`;
+            const isHyugang = lr.lesson_types && lr.lesson_types.includes('휴강');
+            lessonRecordMap[key] = {
+              hyugangRecordId: isHyugang ? lr.id : null,
+              attendanceStatus: lr.attendance_status || ['정상등원'],
+              lessonRecordId: lr.id,
+            };
           });
         }
       }
 
-      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue, hyugangRecordId
+      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue, hyugangRecordId, attendanceStatus
       Object.keys(studentsMap).forEach(classId => {
         studentsMap[classId] = studentsMap[classId].map(student => {
           const key = `${student.id}:${classId}`;
           const mapped = previousHomeworkMap[key];
+          const recordInfo = lessonRecordMap[key];
           return {
             ...student,
             previousHomeworkStatus: mapped?.status || null,
             debugReason: mapped?.debugReason || null,
             firstSubject: mapped?.firstSubject || false,
             followup2wDue: mapped?.followup2wDue || false,
-            hyugangRecordId: hyugangMap[key] || null,
+            hyugangRecordId: recordInfo?.hyugangRecordId || null,
+            attendanceStatus: recordInfo?.attendanceStatus || ['정상등원'],
+            lessonRecordId: recordInfo?.lessonRecordId || null,
           };
         });
       });
@@ -1096,15 +1140,19 @@ export default function Dashboard() {
                                     {student.hyugangRecordId ? (
                                       <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
                                     ) : (
-                                      getRosterBadges(
-                                        student.previousHomeworkStatus,
-                                        student.debugReason,
-                                        student.firstSubject,
-                                        student.followup2wDue,
-                                        slot.subject,
-                                        isAdmin(role),
-                                        () => markFollowupDone(student.id, slot.subject)
-                                      )
+                                      <>
+                                        {/* Attendance badge - show first for visibility */}
+                                        {getAttendanceStatusBadge(student.attendanceStatus)}
+                                        {getRosterBadges(
+                                          student.previousHomeworkStatus,
+                                          student.debugReason,
+                                          student.firstSubject,
+                                          student.followup2wDue,
+                                          slot.subject,
+                                          isAdmin(role),
+                                          () => markFollowupDone(student.id, slot.subject)
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-2">
