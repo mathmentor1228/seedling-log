@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { 
-  GraduationCap, 
   LayoutDashboard, 
   Users, 
   BookOpen, 
@@ -13,7 +12,6 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight,
   UserCog
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -32,13 +30,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> }, // Visible to ALL roles
-  { label: 'Students', href: '/students', icon: <Users className="w-5 h-5" />, adminOnly: true },
-  { label: 'Classes', href: '/classes', icon: <BookOpen className="w-5 h-5" />, adminOnly: true },
-  { label: 'Lesson Records', href: '/lessons', icon: <ClipboardList className="w-5 h-5" /> },
-  { label: 'Weekly Reports', href: '/reports', icon: <FileBarChart className="w-5 h-5" />, adminOnly: true },
-  { label: 'Send Reports', href: '/reports/send', icon: <Send className="w-5 h-5" />, adminOnly: true },
-  { label: 'User Management', href: '/admin/users', icon: <UserCog className="w-5 h-5" />, adminOnly: true },
+  { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+  { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
+  { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
+  { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
+  { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
+  { label: '리포트 발송', href: '/reports/send', icon: <Send className="w-4 h-4" />, adminOnly: true },
+  { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, adminOnly: true },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -60,19 +58,20 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card border-b border-border z-50 px-4 flex items-center justify-between">
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-sidebar border-b border-sidebar-border z-50 px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+            className="p-2 hover:bg-sidebar-accent rounded-md transition-colors text-sidebar-foreground"
           >
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-4 h-4 text-primary-foreground" />
+          <div className="flex items-center gap-2.5">
+            {/* Logo Mark */}
+            <div className="w-7 h-7 bg-sidebar-foreground rounded flex items-center justify-center">
+              <span className="text-sidebar-background font-bold text-sm">M</span>
             </div>
-            <span className="font-semibold text-foreground">EduTrack</span>
+            <span className="font-semibold text-sidebar-foreground text-sm">MENTOR LOG</span>
           </div>
         </div>
       </header>
@@ -80,24 +79,25 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed top-0 left-0 h-full w-64 bg-card border-r border-border z-40 transition-transform duration-300 lg:translate-x-0",
+          "fixed top-0 left-0 h-full w-56 bg-sidebar z-40 transition-transform duration-200 lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="h-16 px-6 flex items-center gap-3 border-b border-border">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-primary-foreground" />
+          <div className="h-14 px-4 flex items-center gap-2.5 border-b border-sidebar-border">
+            {/* Logo Mark: Square with "M" */}
+            <div className="w-8 h-8 bg-sidebar-foreground rounded flex items-center justify-center flex-shrink-0">
+              <span className="text-sidebar-background font-bold text-base">M</span>
             </div>
-            <div>
-              <h1 className="font-bold text-foreground">EduTrack</h1>
-              <p className="text-xs text-muted-foreground">Learning Management</p>
+            <div className="min-w-0">
+              <h1 className="font-semibold text-sidebar-foreground text-sm tracking-tight">MENTOR LOG</h1>
+              <p className="text-[10px] text-sidebar-foreground/60 truncate">더멘토학원 학습·운영 관리</p>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1">
+          <nav className="flex-1 p-3 space-y-0.5">
             {filteredNavItems.map((item) => {
               const isActive = location.pathname === item.href;
               return (
@@ -106,40 +106,40 @@ export function AppLayout({ children }: AppLayoutProps) {
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
+                    "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
                     isActive 
-                      ? "bg-primary text-primary-foreground shadow-sm" 
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      ? "bg-sidebar-accent text-sidebar-foreground font-medium" 
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                   )}
                 >
                   {item.icon}
-                  <span className="font-medium">{item.label}</span>
-                  {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
+                  <span>{item.label}</span>
                 </Link>
               );
             })}
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-border">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-secondary rounded-full flex items-center justify-center">
-                <span className="text-sm font-semibold text-foreground">
+          <div className="p-3 border-t border-sidebar-border">
+            <div className="flex items-center gap-2.5 mb-3 px-1">
+              <div className="w-8 h-8 bg-sidebar-accent rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-medium text-sidebar-foreground">
                   {user?.email?.charAt(0).toUpperCase()}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{user?.email}</p>
-                <p className="text-xs text-muted-foreground capitalize">{role || 'No role'}</p>
+                <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.email}</p>
+                <p className="text-[10px] text-sidebar-foreground/60 capitalize">{role || 'No role'}</p>
               </div>
             </div>
             <Button 
-              variant="outline" 
-              className="w-full justify-start gap-2" 
+              variant="ghost" 
+              size="sm"
+              className="w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent h-8 text-xs" 
               onClick={handleSignOut}
             >
-              <LogOut className="w-4 h-4" />
-              Sign out
+              <LogOut className="w-3.5 h-3.5" />
+              로그아웃
             </Button>
           </div>
         </div>
@@ -148,17 +148,17 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 bg-foreground/20 z-30 lg:hidden"
+          className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Main content */}
-      <main className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
-        <div className="p-6 lg:p-8">
+      <main className="lg:ml-56 min-h-screen pt-14 lg:pt-0">
+        <div className="p-4 lg:p-6 max-w-7xl">
           {/* Shared dashboard components: Comment Board + Calendar */}
           {isDashboard && (
-            <div className="space-y-6 mb-8">
+            <div className="space-y-5 mb-6">
               <TeamNotesBoard />
               <AcademyCalendar />
             </div>

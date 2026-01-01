@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { GraduationCap, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -117,45 +117,46 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md animate-fade-in">
+      <div className="w-full max-w-sm animate-fade-in">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4">
-            <GraduationCap className="w-8 h-8 text-primary-foreground" />
+          {/* Logo Mark: Square with "M" */}
+          <div className="w-10 h-10 bg-primary rounded flex items-center justify-center mb-3">
+            <span className="text-primary-foreground font-bold text-lg">M</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">EduTrack LMS</h1>
-          <p className="text-muted-foreground mt-1">Student Learning Management System</p>
+          <h1 className="text-lg font-semibold text-foreground">MENTOR LOG</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">더멘토학원 학습·운영 관리 시스템</p>
         </div>
 
-        <Card className="border-border shadow-lg">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-xl">{isLogin ? 'Sign in' : 'Create account'}</CardTitle>
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle>{isLogin ? '로그인' : '회원가입'}</CardTitle>
             <CardDescription>
               {isLogin 
-                ? 'Enter your credentials to access the system' 
-                : 'Fill in your details to create a new account'}
+                ? '이메일과 비밀번호를 입력하세요' 
+                : '새 계정을 생성합니다'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fullName" className="text-xs">이름</Label>
                   <Input
                     id="fullName"
                     type="text"
-                    placeholder="John Doe"
+                    placeholder="홍길동"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     disabled={isSubmitting}
                   />
                   {errors.fullName && (
-                    <p className="text-sm text-destructive">{errors.fullName}</p>
+                    <p className="text-xs text-destructive">{errors.fullName}</p>
                   )}
                 </div>
               )}
               
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs">이메일</Label>
                 <Input
                   id="email"
                   type="email"
@@ -165,12 +166,12 @@ export default function Auth() {
                   disabled={isSubmitting}
                 />
                 {errors.email && (
-                  <p className="text-sm text-destructive">{errors.email}</p>
+                  <p className="text-xs text-destructive">{errors.email}</p>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-xs">비밀번호</Label>
                 <Input
                   id="password"
                   type="password"
@@ -180,34 +181,34 @@ export default function Auth() {
                   disabled={isSubmitting}
                 />
                 {errors.password && (
-                  <p className="text-sm text-destructive">{errors.password}</p>
+                  <p className="text-xs text-destructive">{errors.password}</p>
                 )}
               </div>
 
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Button type="submit" className="w-full" size="sm" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isLogin ? 'Signing in...' : 'Creating account...'}
+                    {isLogin ? '로그인 중...' : '계정 생성 중...'}
                   </>
                 ) : (
-                  isLogin ? 'Sign in' : 'Create account'
+                  isLogin ? '로그인' : '회원가입'
                 )}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-4 text-center">
               <button
                 type="button"
                 onClick={() => {
                   setIsLogin(!isLogin);
                   setErrors({});
                 }}
-                className="text-sm text-primary hover:underline"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 {isLogin 
-                  ? "Don't have an account? Sign up" 
-                  : 'Already have an account? Sign in'}
+                  ? '계정이 없으신가요? 회원가입' 
+                  : '이미 계정이 있으신가요? 로그인'}
               </button>
             </div>
           </CardContent>

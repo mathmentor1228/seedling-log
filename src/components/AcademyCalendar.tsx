@@ -65,12 +65,12 @@ interface AcademyEvent {
 }
 
 const CATEGORY_OPTIONS = [
-  { value: 'general', label: '일반', color: 'bg-slate-500' },
-  { value: 'notice', label: '공지', color: 'bg-blue-500' },
-  { value: 'exam', label: '시험', color: 'bg-red-500' },
-  { value: 'meeting', label: '회의', color: 'bg-purple-500' },
-  { value: 'holiday', label: '휴강', color: 'bg-amber-500' },
-  { value: 'event', label: '행사', color: 'bg-green-500' },
+  { value: 'general', label: '일반', variant: 'secondary' as const },
+  { value: 'notice', label: '공지', variant: 'default' as const },
+  { value: 'exam', label: '시험', variant: 'destructive' as const },
+  { value: 'meeting', label: '회의', variant: 'outline' as const },
+  { value: 'holiday', label: '휴강', variant: 'warning' as const },
+  { value: 'event', label: '행사', variant: 'success' as const },
 ];
 
 const VISIBILITY_OPTIONS = [
@@ -264,7 +264,7 @@ export function AcademyCalendar() {
     const option = CATEGORY_OPTIONS.find(o => o.value === category);
     if (!option) return null;
     return (
-      <Badge className={`${option.color} text-white`}>
+      <Badge variant={option.variant}>
         {option.label}
       </Badge>
     );
@@ -285,16 +285,16 @@ export function AcademyCalendar() {
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-      <Card className="border-primary/20">
+      <Card>
         <CollapsibleTrigger asChild>
-          <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
-            <CardTitle className="flex items-center justify-between text-base">
-              <div className="flex items-center gap-2">
-                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                <CalendarDays className="w-5 h-5" />
+          <CardHeader className="py-3 cursor-pointer hover:bg-accent/50 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                <CalendarDays className="w-4 h-4 text-muted-foreground" />
                 <span>원내 일정</span>
                 {upcomingEvents.length > 0 && (
-                  <Badge variant="secondary">{upcomingEvents.length}건</Badge>
+                  <Badge variant="secondary" className="ml-1">{upcomingEvents.length}</Badge>
                 )}
               </div>
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -458,7 +458,7 @@ export function AcademyCalendar() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </CardTitle>
+            </div>
           </CardHeader>
         </CollapsibleTrigger>
         
