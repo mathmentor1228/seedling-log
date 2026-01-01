@@ -81,9 +81,9 @@ interface UserOption {
 }
 
 const PRIORITY_OPTIONS = [
-  { value: 'low', label: '낮음', color: 'bg-slate-500/10 text-slate-600 border-slate-500/20' },
-  { value: 'normal', label: '보통', color: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
-  { value: 'high', label: '높음', color: 'bg-red-500/10 text-red-600 border-red-500/20' },
+  { value: 'low', label: '낮음', variant: 'muted' as const },
+  { value: 'normal', label: '보통', variant: 'secondary' as const },
+  { value: 'high', label: '높음', variant: 'warning' as const },
 ];
 
 const SCOPE_OPTIONS = [
@@ -396,7 +396,7 @@ export function TeamNotesBoard() {
   function getPriorityBadge(priority: string) {
     const option = PRIORITY_OPTIONS.find(o => o.value === priority);
     if (!option) return null;
-    return <Badge variant="outline" className={option.color}>{option.label}</Badge>;
+    return <Badge variant={option.variant}>{option.label}</Badge>;
   }
 
   function getTargetLabel(note: TeamNote) {
@@ -416,16 +416,16 @@ export function TeamNotesBoard() {
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-      <Card className="border-primary/20">
+      <Card>
         <CollapsibleTrigger asChild>
-          <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors">
-            <CardTitle className="flex items-center justify-between text-base">
-              <div className="flex items-center gap-2">
-                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                <MessageSquare className="w-5 h-5" />
-                <span>코멘트/요청 보드</span>
+          <CardHeader className="py-3 cursor-pointer hover:bg-accent/50 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                <span>코멘트/요청</span>
                 {openNotes.length > 0 && (
-                  <Badge variant="secondary">{openNotes.length}건</Badge>
+                  <Badge variant="secondary" className="ml-1">{openNotes.length}</Badge>
                 )}
               </div>
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -617,7 +617,7 @@ export function TeamNotesBoard() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </CardTitle>
+            </div>
           </CardHeader>
         </CollapsibleTrigger>
         
