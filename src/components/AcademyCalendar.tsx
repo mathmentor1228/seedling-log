@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth, isAdmin as checkIsAdmin } from '@/lib/auth';
+import { getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,7 +100,7 @@ export function AcademyCalendar() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    start_date: format(new Date(), 'yyyy-MM-dd'),
+    start_date: getTodayKST(),
     start_time: '09:00',
     end_date: '',
     end_time: '',
@@ -132,8 +133,8 @@ export function AcademyCalendar() {
       }
       
       // Filter by date range (next 30 days for list view)
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const futureDate = format(addDays(new Date(), 30), 'yyyy-MM-dd');
+      const today = getTodayKST();
+      const futureDate = format(addDays(getKSTDateObject(), 30), 'yyyy-MM-dd');
       query = query.gte('start_at', today + 'T00:00:00');
       query = query.lte('start_at', futureDate + 'T23:59:59');
       
@@ -213,7 +214,7 @@ export function AcademyCalendar() {
       setFormData({
         title: '',
         description: '',
-        start_date: format(new Date(), 'yyyy-MM-dd'),
+        start_date: getTodayKST(),
         start_time: '09:00',
         end_date: '',
         end_time: '',

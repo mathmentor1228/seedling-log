@@ -28,6 +28,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
+import { getTodayKST } from '@/lib/utils';
 
 interface PendingHomework {
   id: string;
@@ -502,7 +503,7 @@ export default function Dashboard() {
     if (!user) return;
     
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getTodayKST();
       
       // Fetch lesson records for today with attendance status
       const { data: lessonRecords, error } = await supabase
@@ -702,7 +703,7 @@ export default function Dashboard() {
       }
 
       // Batch fetch previous homework status via RPC
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getTodayKST();
       
       // key: `${studentId}:${classId}` -> { status, debugReason, firstSubject, followup2wDue }
       let previousHomeworkMap: Record<string, { 
@@ -816,7 +817,7 @@ export default function Dashboard() {
     if (!user) return;
     
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getTodayKST();
       
       // Fetch all holidays for today
       const { data: holidays, error } = await supabase
@@ -1200,7 +1201,7 @@ export default function Dashboard() {
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
+                                        onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
                                       >
                                         <FileEdit className="w-3.5 h-3.5 mr-1" />
                                         휴강 기록 보기
@@ -1210,7 +1211,7 @@ export default function Dashboard() {
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}`)}
+                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
                                         >
                                           <FileEdit className="w-3.5 h-3.5 mr-1" />
                                           수업기록
@@ -1218,7 +1219,7 @@ export default function Dashboard() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${format(new Date(), 'yyyy-MM-dd')}&focus=test`)}
+                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}&focus=test`)}
                                         >
                                           <CheckSquare className="w-3.5 h-3.5 mr-1" />
                                           숙제/테스트
