@@ -2343,23 +2343,76 @@ export default function Lessons() {
                   </Button>
                 </div>
 
-              {/* 오늘 숙제 Section - Hidden for assistants */}
-              {!isAssistant && (
-                <div className="space-y-2 p-4 rounded-lg border-2 border-secondary bg-secondary/30">
-                  <Label htmlFor="new_homework" className="text-base font-semibold">오늘 숙제</Label>
-                  <Textarea
-                    id="new_homework"
-                    value={newHomeworkContent}
-                    onChange={(e) => setNewHomeworkContent(e.target.value)}
-                    placeholder="오늘 수업에서 배정할 숙제 내용을 입력하세요"
-                    rows={2}
-                    className="text-sm"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    제출 시 숙제가 자동으로 저장됩니다
-                  </p>
-                </div>
-              )}
+              {/* 오늘 숙제 Section - Visible for all (assistants can edit too) */}
+              <div className="space-y-2 p-4 rounded-lg border-2 border-secondary bg-secondary/30">
+                <Label htmlFor="new_homework" className="text-base font-semibold">오늘 숙제</Label>
+                <Textarea
+                  id="new_homework"
+                  value={newHomeworkContent}
+                  onChange={(e) => setNewHomeworkContent(e.target.value)}
+                  placeholder="오늘 수업에서 배정할 숙제 내용을 입력하세요"
+                  rows={2}
+                  className="text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {isAssistant ? '저장 버튼을 눌러 숙제를 저장하세요' : '제출 시 숙제가 자동으로 저장됩니다'}
+                </p>
+                {isAssistant && editingLesson?.id && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={async () => {
+                      if (!newHomeworkContent.trim() || !editingLesson.id) return;
+                      setIsSavingDraft(true);
+                      try {
+                        // Check if homework already exists for this record
+                        const { data: existingHw } = await supabase
+                          .from('homework_assignments')
+                          .select('id')
+                          .eq('lesson_record_id', editingLesson.id)
+                          .maybeSingle();
+                        
+                        if (existingHw) {
+                          await supabase
+                            .from('homework_assignments')
+                            .update({ content: newHomeworkContent.trim() })
+                            .eq('id', existingHw.id);
+                        } else {
+                          await supabase
+                            .from('homework_assignments')
+                            .insert({
+                              student_id: formData.student_id,
+                              subject: formData.subject as SubjectType,
+                              lesson_record_id: editingLesson.id,
+                              assigned_date: formData.lesson_date,
+                              content: newHomeworkContent.trim(),
+                            });
+                        }
+                        
+                        toast({
+                          title: '저장 완료',
+                          description: '오늘 숙제가 저장되었습니다',
+                        });
+                      } catch (error: any) {
+                        console.error('Error saving homework:', error);
+                        toast({
+                          title: '오류',
+                          description: error.message || '숙제 저장에 실패했습니다',
+                          variant: 'destructive',
+                        });
+                      } finally {
+                        setIsSavingDraft(false);
+                      }
+                    }}
+                    disabled={!newHomeworkContent.trim() || isSavingDraft}
+                    className="w-full"
+                  >
+                    {isSavingDraft && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                    <Save className="w-4 h-4 mr-1" />
+                    오늘 숙제 저장
+                  </Button>
+                )}
+              </div>
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button

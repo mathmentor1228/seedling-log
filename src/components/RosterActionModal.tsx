@@ -359,7 +359,7 @@ export function RosterActionModal({
     }
   }
 
-  // Save new homework content
+  // Save new homework content (assistants can now insert/update)
   async function handleSaveNewHomework() {
     if (!newHomeworkContent.trim() || !user || !context) return;
     
@@ -367,7 +367,7 @@ export function RosterActionModal({
     try {
       let recordId = lessonRecord?.id;
       
-      // If no lesson record exists, we need to create one
+      // If no lesson record exists, we need to find or skip
       if (!recordId) {
         // Check again in case created by another process
         const { data: existing } = await supabase
@@ -382,37 +382,38 @@ export function RosterActionModal({
         if (existing) {
           recordId = existing.id;
         } else {
-          // Create a draft record (only teacher/admin can do this normally)
-          if (!isAssistant) {
-            const { data: newRecord, error: createError } = await supabase
-              .from('lesson_records')
-              .insert({
-                teacher_id: context.teacher_id,
-                student_id: context.student_id,
-                class_id: context.class_id,
-                subject: context.subject as SubjectType,
-                lesson_date: context.date,
-                lesson_range: '',
-                understanding_score: 3,
-                homework_status: 'none_assigned',
-                learning_issues: [],
-                submitted: false,
-              })
-              .select()
-              .single();
-            
-            if (createError) throw createError;
-            recordId = newRecord.id;
-            setLessonRecord(newRecord as LessonRecord);
-          } else {
+          // For assistants, show message that lesson record is needed
+          if (isAssistant) {
             toast({
-              title: '권한 부족',
-              description: '수업 기록이 없어 숙제를 추가할 수 없습니다. 선생님이 먼저 수업 기록을 생성해야 합니다.',
+              title: '수업 기록 필요',
+              description: '선생님이 먼저 수업 기록을 생성해야 숙제를 추가할 수 있습니다.',
               variant: 'destructive',
             });
             setIsSavingNewHomework(false);
             return;
           }
+          
+          // Create a draft record (only teacher/admin)
+          const { data: newRecord, error: createError } = await supabase
+            .from('lesson_records')
+            .insert({
+              teacher_id: context.teacher_id,
+              student_id: context.student_id,
+              class_id: context.class_id,
+              subject: context.subject as SubjectType,
+              lesson_date: context.date,
+              lesson_range: '',
+              understanding_score: 3,
+              homework_status: 'none_assigned',
+              learning_issues: [],
+              submitted: false,
+            })
+            .select()
+            .single();
+          
+          if (createError) throw createError;
+          recordId = newRecord.id;
+          setLessonRecord(newRecord as LessonRecord);
         }
       }
       
