@@ -1417,14 +1417,15 @@ export default function Lessons() {
 
   // Save test fields (uses RPC for assistant role)
   const handleSaveTestFields = async () => {
-    if (!editingLesson?.id || !user) return;
+    const recordId = editingLesson?.id || currentDraftId;
+    if (!recordId || !user) return;
 
     setIsSavingTestFields(true);
     try {
       // Use RPC for assistants (security definer function)
       if (isAssistant) {
         const { error } = await supabase.rpc('update_lesson_test_fields', {
-          _lesson_id: editingLesson.id,
+          _lesson_id: recordId,
           _test_name: testFormData.test_name || null,
           _test_result_text: testFormData.test_result_text || null,
           _test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
@@ -1448,7 +1449,7 @@ export default function Lessons() {
             test_time: testFormData.test_time || null,
             test_assistant: testFormData.test_assistant || null,
           })
-          .eq('id', editingLesson.id);
+          .eq('id', recordId);
 
         if (error) throw error;
       }
@@ -2014,7 +2015,6 @@ export default function Lessons() {
                               }
                             }
                           }}
-                          disabled={isAssistant}
                         />
                         <label htmlFor={`lesson_type_${opt.value}`} className="text-sm cursor-pointer">{opt.label}</label>
                       </div>
@@ -2042,7 +2042,6 @@ export default function Lessons() {
                               }
                             }
                           }}
-                          disabled={isAssistant}
                         />
                         <label htmlFor={`attendance_${opt.value}`} className="text-sm cursor-pointer">{opt.label}</label>
                       </div>
@@ -2133,7 +2132,6 @@ export default function Lessons() {
                     <Select
                       value={formData.homework_status}
                       onValueChange={(value) => setFormData({ ...formData, homework_status: value })}
-                      disabled={isAssistant}
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -2358,19 +2356,20 @@ export default function Lessons() {
                 <p className="text-xs text-muted-foreground">
                   {isAssistant ? '저장 버튼을 눌러 숙제를 저장하세요' : '제출 시 숙제가 자동으로 저장됩니다'}
                 </p>
-                {isAssistant && editingLesson?.id && (
+                {isAssistant && (editingLesson?.id || currentDraftId) && (
                   <Button
                     type="button"
                     size="sm"
                     onClick={async () => {
-                      if (!newHomeworkContent.trim() || !editingLesson.id) return;
+                      const recordId = editingLesson?.id || currentDraftId;
+                      if (!newHomeworkContent.trim() || !recordId) return;
                       setIsSavingDraft(true);
                       try {
                         // Check if homework already exists for this record
                         const { data: existingHw } = await supabase
                           .from('homework_assignments')
                           .select('id')
-                          .eq('lesson_record_id', editingLesson.id)
+                          .eq('lesson_record_id', recordId)
                           .maybeSingle();
                         
                         if (existingHw) {
@@ -2384,7 +2383,7 @@ export default function Lessons() {
                             .insert({
                               student_id: formData.student_id,
                               subject: formData.subject as SubjectType,
-                              lesson_record_id: editingLesson.id,
+                              lesson_record_id: recordId,
                               assigned_date: formData.lesson_date,
                               content: newHomeworkContent.trim(),
                             });

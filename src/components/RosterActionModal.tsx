@@ -191,8 +191,33 @@ export function RosterActionModal({
         }
       }
       
-      // If no record exists and user is assistant, we might need to create a draft
-      // For now, just load what exists
+      // If no record exists, create a draft (assistants can now insert for today)
+      if (!recordId) {
+        const { data: newRecord, error: createError } = await supabase
+          .from('lesson_records')
+          .insert({
+            teacher_id: context.teacher_id,
+            student_id: context.student_id,
+            class_id: context.class_id,
+            subject: context.subject as SubjectType,
+            lesson_date: context.date,
+            lesson_range: '',
+            understanding_score: 3,
+            homework_status: 'none_assigned',
+            learning_issues: [],
+            submitted: false,
+          })
+          .select()
+          .single();
+        
+        if (!createError && newRecord) {
+          recordId = newRecord.id;
+        } else if (createError) {
+          console.error('Error creating draft record:', createError);
+          // Continue without record - test fields will be disabled
+        }
+      }
+      
       if (recordId) {
         const { data: record } = await supabase
           .from('lesson_records')
@@ -367,7 +392,7 @@ export function RosterActionModal({
     try {
       let recordId = lessonRecord?.id;
       
-      // If no lesson record exists, we need to find or skip
+      // If no lesson record exists, create one (assistants can now insert for today)
       if (!recordId) {
         // Check again in case created by another process
         const { data: existing } = await supabase
@@ -382,18 +407,7 @@ export function RosterActionModal({
         if (existing) {
           recordId = existing.id;
         } else {
-          // For assistants, show message that lesson record is needed
-          if (isAssistant) {
-            toast({
-              title: '수업 기록 필요',
-              description: '선생님이 먼저 수업 기록을 생성해야 숙제를 추가할 수 있습니다.',
-              variant: 'destructive',
-            });
-            setIsSavingNewHomework(false);
-            return;
-          }
-          
-          // Create a draft record (only teacher/admin)
+          // Create a draft record (all roles can insert now)
           const { data: newRecord, error: createError } = await supabase
             .from('lesson_records')
             .insert({
@@ -601,7 +615,7 @@ export function RosterActionModal({
                 <CardContent className="space-y-4">
                   {!lessonRecord ? (
                     <p className="text-sm text-muted-foreground">
-                      수업 기록이 없어 테스트를 입력할 수 없습니다. 선생님이 먼저 수업 기록을 생성해야 합니다.
+                      수업 기록을 로드 중이거나 생성할 수 없습니다. 오늘 날짜의 수업만 새로 생성할 수 있습니다.
                     </p>
                   ) : (
                     <>
