@@ -43,7 +43,8 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 
@@ -335,6 +336,7 @@ export default function Lessons() {
   const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
   const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null); // Error state for resilient UI
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState<string>(getTodayKST());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -412,8 +414,8 @@ export default function Lessons() {
     fetchLessons();
     fetchStudents();
     fetchClasses();
-    // Fetch today's slots and holidays for teachers/admins
-    if (isTeacher || isAdmin) {
+    // Fetch today's slots and holidays for teachers/admins/assistants
+    if (isTeacher || isAdmin || isAssistant) {
       fetchTodaySlots();
       fetchTodayHolidays();
     }
@@ -562,13 +564,12 @@ export default function Lessons() {
       }));
 
       setLessons(formattedLessons);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching lessons:', error);
-      toast({
-        title: '오류',
-        description: '수업 기록을 불러오는데 실패했습니다',
-        variant: 'destructive',
-      });
+      const statusCode = error?.code || error?.status || 'UNKNOWN';
+      const message = error?.message || '알 수 없는 오류';
+      setLoadError(`수업 기록 로드 실패 (${statusCode}/${message}). 새로고침 후에도 동일하면 관리자에게 문의하세요.`);
+      // Don't throw - let the UI continue rendering
     } finally {
       setLoading(false);
     }
@@ -583,8 +584,9 @@ export default function Lessons() {
 
       if (error) throw error;
       setStudents(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching students:', error);
+      // Don't set loadError for this - page can still function partially
     }
   }
 
@@ -597,8 +599,9 @@ export default function Lessons() {
 
       if (error) throw error;
       setClasses(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching classes:', error);
+      // Don't set loadError for this - page can still function partially
     }
   }
 
@@ -1610,6 +1613,19 @@ export default function Lessons() {
 
   return (
     <div className="space-y-6">
+      {/* Visible marker for debugging */}
+      <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
+        ASSISTANT-TEST-OPEN-CHECK-V2
+      </div>
+
+      {/* Error banner - show inline error instead of crashing */}
+      {loadError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">수업 기록</h1>
@@ -1619,8 +1635,8 @@ export default function Lessons() {
         </div>
       </div>
 
-      {/* 오늘 수업 Section - For teachers and admins */}
-      {(isTeacher || isAdmin) && (
+      {/* 오늘 수업 Section - For teachers, admins, and assistants */}
+      {(isTeacher || isAdmin || isAssistant) && (
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">

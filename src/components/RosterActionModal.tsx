@@ -35,8 +35,10 @@ import {
   Calendar,
   User,
   BookOpen,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle
 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -122,6 +124,7 @@ export function RosterActionModal({
   const isAdmin = checkIsAdmin(role);
   
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null); // Error state for resilient UI
   const [lessonRecord, setLessonRecord] = useState<LessonRecord | null>(null);
   const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
   
@@ -152,6 +155,7 @@ export function RosterActionModal({
       // Reset state when modal closes
       setLessonRecord(null);
       setPreviousHomework(null);
+      setLoadError(null);
       setHomeworkCheckResult('');
       setHomeworkCheckNotes('');
       setNewHomeworkContent('');
@@ -171,6 +175,7 @@ export function RosterActionModal({
     if (!context || !user) return;
     
     setLoading(true);
+    setLoadError(null);
     try {
       // 1. Find or create lesson record for this date/student/class
       let recordId = context.existingRecordId;
@@ -285,13 +290,12 @@ export function RosterActionModal({
           setHomeworkCheckNotes(prevHw.notes || '');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching modal data:', error);
-      toast({
-        title: '데이터 로드 오류',
-        description: '데이터를 불러오는 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
+      const statusCode = error?.code || error?.status || 'UNKNOWN';
+      const message = error?.message || '알 수 없는 오류';
+      setLoadError(`데이터를 불러오지 못했습니다 (${statusCode}/${message}). 새로고침 후에도 동일하면 관리자에게 문의하세요.`);
+      // Don't throw - let the UI render with error state
     } finally {
       setLoading(false);
     }
@@ -506,6 +510,19 @@ export function RosterActionModal({
             <span>{dateFormatted}</span>
           </div>
         </div>
+
+        {/* Visible marker for debugging */}
+        <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
+          ASSISTANT-TEST-OPEN-CHECK-V2
+        </div>
+
+        {/* Error banner - show inline error instead of crashing */}
+        {loadError && (
+          <Alert variant="destructive" className="mt-2">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{loadError}</AlertDescription>
+          </Alert>
+        )}
 
         {loading ? (
           <div className="space-y-4 py-4">
