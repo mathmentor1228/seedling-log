@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { getKSTDateObject, getTodayKST } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -134,12 +135,7 @@ function getAttendanceStatusBadge(attendanceStatus: string[] | undefined) {
   );
 }
 
-// Get KST date
-function getKSTDate(): Date {
-  const now = new Date();
-  const kstOffset = 9 * 60 * 60 * 1000;
-  return new Date(now.getTime() + kstOffset);
-}
+
 
 export default function AssistantDashboard() {
   const { user } = useAuth();
@@ -152,7 +148,7 @@ export default function AssistantDashboard() {
   const [collapsedTeachers, setCollapsedTeachers] = useState<Set<string>>(new Set());
   
   // Date selection
-  const [selectedDate, setSelectedDate] = useState<Date>(getKSTDate());
+  const [selectedDate, setSelectedDate] = useState<Date>(getKSTDateObject());
   const [calendarOpen, setCalendarOpen] = useState(false);
   
   // Filters
@@ -419,7 +415,7 @@ export default function AssistantDashboard() {
   const activeTeachers = allTeachers.filter(t => t.hasLessonsOnDate).length;
 
   // Date helpers
-  const isToday = format(selectedDate, 'yyyy-MM-dd') === format(getKSTDate(), 'yyyy-MM-dd');
+  const isToday = format(selectedDate, 'yyyy-MM-dd') === getTodayKST();
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
   if (loading) {
@@ -491,23 +487,23 @@ export default function AssistantDashboard() {
           
           <div className="flex gap-1 ml-2">
             <Button
-              variant={format(subDays(getKSTDate(), 1), 'yyyy-MM-dd') === dateStr ? 'secondary' : 'ghost'}
+              variant={format(subDays(getKSTDateObject(), 1), 'yyyy-MM-dd') === dateStr ? 'secondary' : 'ghost'}
               size="sm"
-              onClick={() => setSelectedDate(subDays(getKSTDate(), 1))}
+              onClick={() => setSelectedDate(subDays(getKSTDateObject(), 1))}
             >
               어제
             </Button>
             <Button
               variant={isToday ? 'secondary' : 'ghost'}
               size="sm"
-              onClick={() => setSelectedDate(getKSTDate())}
+              onClick={() => setSelectedDate(getKSTDateObject())}
             >
               오늘
             </Button>
             <Button
-              variant={format(addDays(getKSTDate(), 1), 'yyyy-MM-dd') === dateStr ? 'secondary' : 'ghost'}
+              variant={format(addDays(getKSTDateObject(), 1), 'yyyy-MM-dd') === dateStr ? 'secondary' : 'ghost'}
               size="sm"
-              onClick={() => setSelectedDate(addDays(getKSTDate(), 1))}
+              onClick={() => setSelectedDate(addDays(getKSTDateObject(), 1))}
             >
               내일
             </Button>

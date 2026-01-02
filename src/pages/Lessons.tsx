@@ -45,6 +45,7 @@ import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
+import { getTodayKST } from '@/lib/utils';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -335,7 +336,7 @@ export default function Lessons() {
   const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterDate, setFilterDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [filterDate, setFilterDate] = useState<string>(getTodayKST());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -345,7 +346,7 @@ export default function Lessons() {
     student_id: '',
     class_id: '',
     subject: '',
-    lesson_date: format(new Date(), 'yyyy-MM-dd'),
+    lesson_date: getTodayKST(),
     lesson_range: '',
     understanding_score: '3',
     homework_status: 'none_assigned',
@@ -467,7 +468,7 @@ export default function Lessons() {
         });
       }
       
-      const finalDate = lessonDate || format(new Date(), 'yyyy-MM-dd');
+      const finalDate = lessonDate || getTodayKST();
       const finalSubject = subject || getLastSelectedSubject(user?.id);
       
       // Check for existing record before creating new draft
@@ -687,7 +688,7 @@ export default function Lessons() {
       }
 
       // Batch fetch previous homework status via RPC
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getTodayKST();
       
       // key: `${studentId}:${classId}` -> { status, debugReason, firstSubject, followup2wDue }
       let previousHomeworkMap: Record<string, { 
@@ -783,7 +784,7 @@ export default function Lessons() {
     if (!user) return;
     
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getTodayKST();
       
       // Fetch holidays for today (scope='all' or scope='teacher' for current user)
       const { data: holidays, error } = await supabase
@@ -862,7 +863,7 @@ export default function Lessons() {
       const defaultStudent = prefill?.student_id || students[0]?.id || '';
       const defaultSubject = prefill?.subject || getLastSelectedSubject(user.id);
       const defaultClassId = prefill?.class_id || null;
-      const defaultDate = prefill?.lesson_date || format(new Date(), 'yyyy-MM-dd');
+      const defaultDate = prefill?.lesson_date || getTodayKST();
 
       const { data, error } = await supabase
         .from('lesson_records')
@@ -1195,7 +1196,7 @@ export default function Lessons() {
       student_id: '',
       class_id: '',
       subject: lastSubject,
-      lesson_date: format(new Date(), 'yyyy-MM-dd'),
+      lesson_date: getTodayKST(),
       lesson_range: '',
       understanding_score: '3',
       homework_status: 'none_assigned',
@@ -1656,7 +1657,7 @@ export default function Lessons() {
                                 student_id: student.id,
                                 class_id: slot.class_id,
                                 subject: slot.subject,
-                                lesson_date: format(new Date(), 'yyyy-MM-dd'),
+                                lesson_date: getTodayKST(),
                               };
                               setFormData(prev => ({ ...prev, ...prefill }));
                               setEditingLesson(null);
@@ -1691,7 +1692,7 @@ export default function Lessons() {
                                     student_id: student.id,
                                     class_id: slot.class_id,
                                     subject: slot.subject,
-                                    lesson_date: format(new Date(), 'yyyy-MM-dd'),
+                                    lesson_date: getTodayKST(),
                                   };
                                   setFormData(prev => ({ ...prev, ...prefill }));
                                   setEditingLesson(null);
@@ -2461,11 +2462,11 @@ export default function Lessons() {
                 onChange={(e) => setFilterDate(e.target.value)}
                 className="w-[160px]"
               />
-              {filterDate && filterDate !== format(new Date(), 'yyyy-MM-dd') && (
+              {filterDate && filterDate !== getTodayKST() && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setFilterDate(format(new Date(), 'yyyy-MM-dd'))}
+                  onClick={() => setFilterDate(getTodayKST())}
                   className="text-xs text-muted-foreground"
                 >
                   오늘로

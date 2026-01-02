@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar as CalendarIcon, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { format, subDays, addDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, getTodayKST, getKSTDateObject } from '@/lib/utils';
 
 interface Holiday {
   id: string;
@@ -35,7 +35,7 @@ export default function HolidayManagement() {
   const { toast } = useToast();
   
   // Form state
-  const [holidayDate, setHolidayDate] = useState<Date>(new Date());
+  const [holidayDate, setHolidayDate] = useState<Date>(getKSTDateObject());
   const [holidayName, setHolidayName] = useState('');
   const [scope, setScope] = useState<'all' | 'teacher'>('all');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
@@ -229,7 +229,7 @@ export default function HolidayManagement() {
     }
   }
 
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = getTodayKST();
 
   return (
     <Card className="border-amber-500/30 bg-amber-500/5">
