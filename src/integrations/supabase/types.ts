@@ -322,6 +322,9 @@ export type Database = {
           lesson_types: string[] | null
           next_lesson_goal: string | null
           notes: string | null
+          prev_homework_override_at: string | null
+          prev_homework_override_by: string | null
+          prev_homework_override_text: string | null
           student_id: string
           subject: Database["public"]["Enums"]["subject_type"]
           submitted: boolean
@@ -351,6 +354,9 @@ export type Database = {
           lesson_types?: string[] | null
           next_lesson_goal?: string | null
           notes?: string | null
+          prev_homework_override_at?: string | null
+          prev_homework_override_by?: string | null
+          prev_homework_override_text?: string | null
           student_id: string
           subject: Database["public"]["Enums"]["subject_type"]
           submitted?: boolean
@@ -380,6 +386,9 @@ export type Database = {
           lesson_types?: string[] | null
           next_lesson_goal?: string | null
           notes?: string | null
+          prev_homework_override_at?: string | null
+          prev_homework_override_by?: string | null
+          prev_homework_override_text?: string | null
           student_id?: string
           subject?: Database["public"]["Enums"]["subject_type"]
           submitted?: boolean

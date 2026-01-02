@@ -93,6 +93,10 @@ interface LessonRecord {
   // Lesson type and attendance fields
   lesson_types?: string[];
   attendance_status?: string[];
+  // Previous homework override fields
+  prev_homework_override_text?: string | null;
+  prev_homework_override_by?: string | null;
+  prev_homework_override_at?: string | null;
 }
 
 interface Student {
@@ -395,6 +399,11 @@ export default function Lessons() {
   
   // Notice when opening existing record instead of creating new
   const [existingRecordNotice, setExistingRecordNotice] = useState(false);
+  
+  // Previous homework override state
+  const [prevHomeworkOverrideEditing, setPrevHomeworkOverrideEditing] = useState(false);
+  const [prevHomeworkOverrideText, setPrevHomeworkOverrideText] = useState('');
+  const [isSavingPrevHomeworkOverride, setIsSavingPrevHomeworkOverride] = useState(false);
 
   // Generate test time options (16:00 to 21:00, 30-min steps)
   const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
@@ -1226,6 +1235,8 @@ export default function Lessons() {
     });
     setPreviousLesson(null);
     setPreviousLessonHomework(null);
+    setPrevHomeworkOverrideEditing(false);
+    setPrevHomeworkOverrideText('');
   };
 
   // Fetch previous homework when student_id and subject change
@@ -1418,6 +1429,99 @@ export default function Lessons() {
     }
   };
 
+  // Save previous homework override (assistant/admin can edit)
+  const handleSavePrevHomeworkOverride = async () => {
+    const recordId = editingLesson?.id || currentDraftId;
+    if (!recordId || !user) return;
+
+    setIsSavingPrevHomeworkOverride(true);
+    try {
+      const { error } = await supabase
+        .from('lesson_records')
+        .update({
+          prev_homework_override_text: prevHomeworkOverrideText.trim() || null,
+          prev_homework_override_by: user.id,
+          prev_homework_override_at: new Date().toISOString(),
+        })
+        .eq('id', recordId);
+
+      if (error) throw error;
+
+      // Update the local editingLesson if it exists
+      if (editingLesson) {
+        setEditingLesson({
+          ...editingLesson,
+          prev_homework_override_text: prevHomeworkOverrideText.trim() || null,
+          prev_homework_override_by: user.id,
+          prev_homework_override_at: new Date().toISOString(),
+        });
+      }
+
+      toast({
+        title: '저장 완료',
+        description: '지난 숙제(확정)가 저장되었습니다',
+      });
+
+      setPrevHomeworkOverrideEditing(false);
+    } catch (error: any) {
+      console.error('Error saving prev homework override:', error);
+      toast({
+        title: '오류',
+        description: error.message || '지난 숙제 저장에 실패했습니다',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingPrevHomeworkOverride(false);
+    }
+  };
+
+  // Reset previous homework override to auto-loaded value
+  const handleResetPrevHomeworkOverride = async () => {
+    const recordId = editingLesson?.id || currentDraftId;
+    if (!recordId || !user) return;
+
+    setIsSavingPrevHomeworkOverride(true);
+    try {
+      const { error } = await supabase
+        .from('lesson_records')
+        .update({
+          prev_homework_override_text: null,
+          prev_homework_override_by: null,
+          prev_homework_override_at: null,
+        })
+        .eq('id', recordId);
+
+      if (error) throw error;
+
+      // Update the local editingLesson if it exists
+      if (editingLesson) {
+        setEditingLesson({
+          ...editingLesson,
+          prev_homework_override_text: null,
+          prev_homework_override_by: null,
+          prev_homework_override_at: null,
+        });
+      }
+
+      toast({
+        title: '초기화 완료',
+        description: '지난 숙제가 자동 값으로 복원되었습니다',
+      });
+
+      setPrevHomeworkOverrideText('');
+      setPrevHomeworkOverrideEditing(false);
+    } catch (error: any) {
+      console.error('Error resetting prev homework override:', error);
+      toast({
+        title: '오류',
+        description: error.message || '초기화에 실패했습니다',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingPrevHomeworkOverride(false);
+    }
+  };
+
   // Save test fields (uses RPC for assistant role)
   const handleSaveTestFields = async () => {
     const recordId = editingLesson?.id || currentDraftId;
@@ -1533,6 +1637,10 @@ export default function Lessons() {
       console.error('Error loading homework content:', error);
       setNewHomeworkContent('');
     }
+    
+    // Reset override editing state
+    setPrevHomeworkOverrideEditing(false);
+    setPrevHomeworkOverrideText('');
     
     setIsDialogOpen(true);
   };
@@ -1796,94 +1904,179 @@ export default function Lessons() {
                         <span className="font-medium text-foreground">{previousLesson.lesson_range}</span>
                       </div>
 
-                      {/* 지난 숙제 내용 + 상태 */}
+                      {/* 지난 숙제 내용 + 상태 (with editable override for assistant/admin) */}
                       <div className="p-3 bg-background rounded-lg border space-y-3">
-                        <div className="flex items-center gap-2">
-                          <Label className="text-sm font-medium">지난 숙제 내용</Label>
-                          {previousLessonHomework ? (
-                            (() => {
-                              const hw = previousLessonHomework;
-                              if (hw.check_status === 'checked') {
-                                const opt = HOMEWORK_RESULT_OPTIONS.find(o => o.value === hw.result);
-                                if (opt) {
-                                  const colorClass = hw.result === 'completed' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
-                                                     hw.result === 'partial' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
-                                                     hw.result === 'not_done' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
-                                                     'bg-muted text-muted-foreground';
-                                  const Icon = opt.icon;
-                                  return <Badge variant="outline" className={colorClass}><Icon className="w-3 h-3 mr-1" />{opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}</Badge>;
+                        {/* Header with label and edit button */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {/* Show different label based on override status */}
+                            {editingLesson?.prev_homework_override_text ? (
+                              <Label className="text-sm font-medium text-amber-700">지난숙제(확정)</Label>
+                            ) : (
+                              <Label className="text-sm font-medium">지난숙제(자동)</Label>
+                            )}
+                            {previousLessonHomework ? (
+                              (() => {
+                                const hw = previousLessonHomework;
+                                if (hw.check_status === 'checked') {
+                                  const opt = HOMEWORK_RESULT_OPTIONS.find(o => o.value === hw.result);
+                                  if (opt) {
+                                    const colorClass = hw.result === 'completed' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                                                       hw.result === 'partial' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                                                       hw.result === 'not_done' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                                                       'bg-muted text-muted-foreground';
+                                    const Icon = opt.icon;
+                                    return <Badge variant="outline" className={colorClass}><Icon className="w-3 h-3 mr-1" />{opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}</Badge>;
+                                  }
                                 }
-                              }
-                              return <Badge variant="outline" className="border-gray-300 text-gray-500">미확인</Badge>;
-                            })()
-                          ) : (
-                            <Badge variant="outline" className="border-gray-300 text-gray-500">없음</Badge>
+                                return <Badge variant="outline" className="border-gray-300 text-gray-500">미확인</Badge>;
+                              })()
+                            ) : (
+                              !editingLesson?.prev_homework_override_text && (
+                                <Badge variant="outline" className="border-gray-300 text-gray-500">없음</Badge>
+                              )
+                            )}
+                          </div>
+                          
+                          {/* Edit/Add button for assistant/admin */}
+                          {(isAssistant || isAdmin) && !prevHomeworkOverrideEditing && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // Prefill with override text, else auto text, else empty
+                                const prefillText = editingLesson?.prev_homework_override_text || 
+                                                   previousLessonHomework?.content || 
+                                                   '';
+                                setPrevHomeworkOverrideText(prefillText);
+                                setPrevHomeworkOverrideEditing(true);
+                              }}
+                            >
+                              <Edit2 className="w-3 h-3 mr-1" />
+                              {editingLesson?.prev_homework_override_text || previousLessonHomework?.content ? '수정' : '추가'}
+                            </Button>
                           )}
                         </div>
                         
-                        {previousLessonHomework ? (
+                        {/* Override editing mode */}
+                        {prevHomeworkOverrideEditing ? (
                           <div className="space-y-2">
-                            <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
-                            
-                            {/* If already checked, show result details */}
-                            {previousLessonHomework.check_status === 'checked' && (
-                              <div className="text-sm text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                                  <span>
-                                    확인됨 {previousLessonHomework.checker_name && `(${previousLessonHomework.checker_name})`}
-                                  </span>
-                                </div>
-                                {previousLessonHomework.notes && (
-                                  <p className="ml-6 mt-1 text-xs italic">{previousLessonHomework.notes}</p>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Check controls - only if not already checked, for assistant */}
-                            {previousLessonHomework.check_status !== 'checked' && (
-                              <div className="space-y-2 pt-2 border-t">
-                                <Label className="text-sm">숙제상태 확인</Label>
-                                <div className="flex flex-wrap gap-2">
-                                  {HOMEWORK_RESULT_OPTIONS.map((opt) => {
-                                    const Icon = opt.icon;
-                                    return (
-                                      <Button
-                                        key={opt.value}
-                                        type="button"
-                                        variant={homeworkCheckResult === opt.value ? 'default' : 'outline'}
-                                        size="sm"
-                                        onClick={() => setHomeworkCheckResult(opt.value)}
-                                        className="gap-1"
-                                      >
-                                        <Icon className="w-4 h-4" />
-                                        {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
-                                      </Button>
-                                    );
-                                  })}
-                                </div>
-                                <Textarea
-                                  placeholder="확인 메모 (선택)"
-                                  value={homeworkCheckNotes}
-                                  onChange={(e) => setHomeworkCheckNotes(e.target.value)}
-                                  rows={2}
-                                  className="text-sm"
-                                />
+                            <Textarea
+                              placeholder="지난 숙제 내용을 입력하세요..."
+                              value={prevHomeworkOverrideText}
+                              onChange={(e) => setPrevHomeworkOverrideText(e.target.value)}
+                              rows={3}
+                              className="text-sm"
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={handleSavePrevHomeworkOverride}
+                                disabled={isSavingPrevHomeworkOverride}
+                              >
+                                {isSavingPrevHomeworkOverride && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                                저장
+                              </Button>
+                              {editingLesson?.prev_homework_override_text && (
                                 <Button
                                   type="button"
+                                  variant="outline"
                                   size="sm"
-                                  onClick={handleSaveHomeworkCheck}
-                                  disabled={!homeworkCheckResult || isSavingHomeworkCheck}
+                                  onClick={handleResetPrevHomeworkOverride}
+                                  disabled={isSavingPrevHomeworkOverride}
                                 >
-                                  {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                                  <CheckCircle2 className="w-4 h-4 mr-1" />
-                                  확인 저장
+                                  초기화
                                 </Button>
-                              </div>
-                            )}
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setPrevHomeworkOverrideEditing(false);
+                                  setPrevHomeworkOverrideText('');
+                                }}
+                                disabled={isSavingPrevHomeworkOverride}
+                              >
+                                취소
+                              </Button>
+                            </div>
                           </div>
                         ) : (
-                          <p className="text-sm text-muted-foreground">숙제 없음</p>
+                          /* Display mode */
+                          <>
+                            {/* Show override text if exists, else show auto text */}
+                            {editingLesson?.prev_homework_override_text ? (
+                              <p className="text-sm whitespace-pre-wrap bg-amber-500/10 p-2 rounded border border-amber-500/20">
+                                {editingLesson.prev_homework_override_text}
+                              </p>
+                            ) : previousLessonHomework ? (
+                              <div className="space-y-2">
+                                <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
+                                
+                                {/* If already checked, show result details */}
+                                {previousLessonHomework.check_status === 'checked' && (
+                                  <div className="text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                      <span>
+                                        확인됨 {previousLessonHomework.checker_name && `(${previousLessonHomework.checker_name})`}
+                                      </span>
+                                    </div>
+                                    {previousLessonHomework.notes && (
+                                      <p className="ml-6 mt-1 text-xs italic">{previousLessonHomework.notes}</p>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Check controls - only if not already checked, for assistant */}
+                                {previousLessonHomework.check_status !== 'checked' && (
+                                  <div className="space-y-2 pt-2 border-t">
+                                    <Label className="text-sm">숙제상태 확인</Label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {HOMEWORK_RESULT_OPTIONS.map((opt) => {
+                                        const Icon = opt.icon;
+                                        return (
+                                          <Button
+                                            key={opt.value}
+                                            type="button"
+                                            variant={homeworkCheckResult === opt.value ? 'default' : 'outline'}
+                                            size="sm"
+                                            onClick={() => setHomeworkCheckResult(opt.value)}
+                                            className="gap-1"
+                                          >
+                                            <Icon className="w-4 h-4" />
+                                            {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
+                                          </Button>
+                                        );
+                                      })}
+                                    </div>
+                                    <Textarea
+                                      placeholder="확인 메모 (선택)"
+                                      value={homeworkCheckNotes}
+                                      onChange={(e) => setHomeworkCheckNotes(e.target.value)}
+                                      rows={2}
+                                      className="text-sm"
+                                    />
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      onClick={handleSaveHomeworkCheck}
+                                      disabled={!homeworkCheckResult || isSavingHomeworkCheck}
+                                    >
+                                      {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                                      <CheckCircle2 className="w-4 h-4 mr-1" />
+                                      확인 저장
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">지난 숙제가 없습니다.</p>
+                            )}
+                          </>
                         )}
                       </div>
 
