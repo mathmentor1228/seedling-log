@@ -182,7 +182,7 @@ export function RosterActionModal({
       
       if (!recordId) {
         // Check if record exists
-        const { data: existing } = await supabase
+        const { data: existing, error: existingError } = await supabase
           .from('lesson_records')
           .select('id')
           .eq('student_id', context.student_id)
@@ -190,6 +190,11 @@ export function RosterActionModal({
           .eq('lesson_date', context.date)
           .eq('subject', context.subject as SubjectType)
           .maybeSingle();
+        
+        if (existingError) {
+          console.error('[fetchData] lesson_records SELECT failed:', existingError.code, existingError.message);
+          throw existingError;
+        }
         
         if (existing) {
           recordId = existing.id;
@@ -215,20 +220,25 @@ export function RosterActionModal({
           .select()
           .single();
         
-        if (!createError && newRecord) {
-          recordId = newRecord.id;
-        } else if (createError) {
-          console.error('Error creating draft record:', createError);
+        if (createError) {
+          console.error('[fetchData] lesson_records INSERT failed:', createError.code, createError.message);
           // Continue without record - test fields will be disabled
+        } else if (newRecord) {
+          recordId = newRecord.id;
         }
       }
       
       if (recordId) {
-        const { data: record } = await supabase
+        const { data: record, error: recordError } = await supabase
           .from('lesson_records')
           .select('*')
           .eq('id', recordId)
           .single();
+        
+        if (recordError) {
+          console.error('[fetchData] lesson_records SELECT by id failed:', recordError.code, recordError.message);
+          throw recordError;
+        }
         
         if (record) {
           setLessonRecord(record as LessonRecord);
@@ -244,11 +254,15 @@ export function RosterActionModal({
           });
           
           // Fetch homework for this record
-          const { data: homework } = await supabase
+          const { data: homework, error: hwError } = await supabase
             .from('homework_assignments')
             .select('*')
             .eq('lesson_record_id', record.id)
             .maybeSingle();
+          
+          if (hwError) {
+            console.error('[fetchData] homework_assignments SELECT failed:', hwError.code, hwError.message);
+          }
           
           if (homework) {
             setNewHomeworkContent(homework.content || '');
@@ -257,7 +271,7 @@ export function RosterActionModal({
       }
       
       // 2. Fetch previous homework (most recent before this date)
-      const { data: prevHw } = await supabase
+      const { data: prevHw, error: prevHwError } = await supabase
         .from('homework_assignments')
         .select('*')
         .eq('student_id', context.student_id)
@@ -267,15 +281,22 @@ export function RosterActionModal({
         .limit(1)
         .maybeSingle();
       
+      if (prevHwError) {
+        console.error('[fetchData] prev homework SELECT failed:', prevHwError.code, prevHwError.message);
+      }
+      
       if (prevHw) {
         // Get checker name if checked
         let checkerName = '';
         if (prevHw.checked_by) {
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('full_name, email')
             .eq('id', prevHw.checked_by)
             .maybeSingle();
+          if (profileError) {
+            console.error('[fetchData] profiles SELECT failed:', profileError.code, profileError.message);
+          }
           checkerName = profile?.full_name || profile?.email || '';
         }
         
@@ -291,10 +312,10 @@ export function RosterActionModal({
         }
       }
     } catch (error: any) {
-      console.error('Error fetching modal data:', error);
+      console.error('[fetchData] FATAL ERROR:', error);
       const statusCode = error?.code || error?.status || 'UNKNOWN';
       const message = error?.message || '알 수 없는 오류';
-      setLoadError(`데이터를 불러오지 못했습니다 (${statusCode}/${message}). 새로고침 후에도 동일하면 관리자에게 문의하세요.`);
+      setLoadError(`TEST_SCREEN_ERROR: ${statusCode} ${message}`);
       // Don't throw - let the UI render with error state
     } finally {
       setLoading(false);
@@ -513,7 +534,7 @@ export function RosterActionModal({
 
         {/* Visible marker for debugging */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-          ASSISTANT-TEST-OPEN-CHECK-V2
+          TEST_SCREEN_MARKER_V3
         </div>
 
         {/* Error banner - show inline error instead of crashing */}
@@ -686,14 +707,14 @@ export function RosterActionModal({
                         <div className="space-y-2">
                           <Label>테스트 시간</Label>
                           <Select
-                            value={testFormData.test_time}
-                            onValueChange={(value) => setTestFormData(prev => ({ ...prev, test_time: value }))}
+                            value={testFormData.test_time || '__none__'}
+                            onValueChange={(value) => setTestFormData(prev => ({ ...prev, test_time: value === '__none__' ? '' : value }))}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="시간 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">미정</SelectItem>
+                              <SelectItem value="__none__">미정</SelectItem>
                               {TEST_TIME_OPTIONS.map((time) => (
                                 <SelectItem key={time} value={time}>{time}</SelectItem>
                               ))}
@@ -703,14 +724,14 @@ export function RosterActionModal({
                         <div className="space-y-2">
                           <Label>조교</Label>
                           <Select
-                            value={testFormData.test_assistant}
-                            onValueChange={(value) => setTestFormData(prev => ({ ...prev, test_assistant: value }))}
+                            value={testFormData.test_assistant || '__none__'}
+                            onValueChange={(value) => setTestFormData(prev => ({ ...prev, test_assistant: value === '__none__' ? '' : value }))}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="조교 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">미정</SelectItem>
+                              <SelectItem value="__none__">미정</SelectItem>
                               <SelectItem value="다인조교">다인조교</SelectItem>
                               <SelectItem value="유빈조교">유빈조교</SelectItem>
                             </SelectContent>
