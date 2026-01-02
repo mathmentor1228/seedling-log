@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useAuth, isAdmin } from '@/lib/auth';
+import { useAuth, isAdmin, isAssistant } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, Check, Search, ChevronDown, Calendar } from 'lucide-react';
+import { Copy, Check, Search, ChevronDown, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +51,8 @@ const DAY_COLORS: Record<number, string> = {
   5: 'bg-orange-50/50 dark:bg-orange-950/20',  // Friday
   6: 'bg-slate-50/50 dark:bg-slate-950/20',    // Saturday
 };
+
+const STUDENT_PAGE_SIZE = 50;
 
 interface ScheduleRow {
   classId: string;
@@ -87,6 +89,8 @@ export function Timetable() {
   const { user, role } = useAuth();
   const { toast } = useToast();
   const isAdminUser = isAdmin(role);
+  const isAssistantUser = isAssistant(role);
+  const canViewAllStudents = isAdminUser || isAssistantUser;
   
   // Teacher schedule states
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]);
@@ -97,10 +101,12 @@ export function Timetable() {
   const [copiedSlotId, setCopiedSlotId] = useState<string | null>(null);
   const [timetableCopied, setTimetableCopied] = useState(false);
 
-  // Student lookup states
+  // Student lookup states with pagination
   const [students, setStudents] = useState<Student[]>([]);
-  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
+  const [totalStudentCount, setTotalStudentCount] = useState(0);
+  const [studentPage, setStudentPage] = useState(1);
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedStudentName, setSelectedStudentName] = useState('');
   const [studentScheduleRows, setStudentScheduleRows] = useState<StudentScheduleRow[]>([]);
@@ -109,21 +115,14 @@ export function Timetable() {
 
   useEffect(() => {
     fetchScheduleData();
-    if (isAdminUser) {
-      fetchStudents();
-    }
   }, [user, isAdminUser]);
 
+  // Fetch students with pagination when search changes or page changes
   useEffect(() => {
-    if (studentSearchQuery.length > 0) {
-      const filtered = students.filter((s) =>
-        s.name.toLowerCase().includes(studentSearchQuery.toLowerCase())
-      );
-      setFilteredStudents(filtered.slice(0, 20));
-    } else {
-      setFilteredStudents(students.slice(0, 20));
+    if (canViewAllStudents) {
+      fetchStudents();
     }
-  }, [studentSearchQuery, students]);
+  }, [studentPage, studentSearchQuery, canViewAllStudents]);
 
   useEffect(() => {
     if (selectedStudentId) {
@@ -269,14 +268,36 @@ export function Timetable() {
   }
 
   async function fetchStudents() {
-    const { data, error } = await supabase
-      .from('students')
-      .select('id, name')
-      .order('name');
+    setStudentsLoading(true);
+    try {
+      const offset = (studentPage - 1) * STUDENT_PAGE_SIZE;
+      
+      // Build query with optional search filter
+      let query = supabase
+        .from('students')
+        .select('id, name', { count: 'exact' });
+      
+      // Apply search filter (partial match on name)
+      if (studentSearchQuery.trim()) {
+        query = query.ilike('name', `%${studentSearchQuery.trim()}%`);
+      }
+      
+      // Apply stable ordering and pagination
+      const { data, error, count } = await query
+        .order('name', { ascending: true })
+        .order('created_at', { ascending: true })
+        .range(offset, offset + STUDENT_PAGE_SIZE - 1);
 
-    if (!error && data) {
-      setStudents(data);
-      setFilteredStudents(data.slice(0, 20));
+      if (error) throw error;
+      
+      setStudents(data || []);
+      setTotalStudentCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      setStudents([]);
+      setTotalStudentCount(0);
+    } finally {
+      setStudentsLoading(false);
     }
   }
 
@@ -767,30 +788,65 @@ export function Timetable() {
           </TabsContent>
 
           <TabsContent value="student" className="space-y-4">
+            {/* Debug line */}
+            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded font-mono">
+              STUDENT_DEBUG: loaded={students.length}, total={totalStudentCount}, page={studentPage}/{Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || 1}, q='{studentSearchQuery}', role={role}
+            </div>
+
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">학생 검색</Label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative flex-1 max-w-xs">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="학생 이름 검색..."
                     value={studentSearchQuery}
-                    onChange={(e) => setStudentSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setStudentSearchQuery(e.target.value);
+                      setStudentPage(1); // Reset to first page on search
+                    }}
                     className="pl-9"
                   />
                 </div>
                 <Select value={selectedStudentId} onValueChange={handleStudentSelect}>
                   <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="학생 선택" />
+                    <SelectValue placeholder={studentsLoading ? '로딩중...' : '학생 선택'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredStudents.map((s) => (
+                    {students.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Pagination controls */}
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>총 {totalStudentCount}명 · {studentPage}/{Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || 1} 페이지</span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setStudentPage(p => Math.max(1, p - 1))}
+                    disabled={studentPage <= 1 || studentsLoading}
+                    className="h-7 px-2"
+                  >
+                    <ChevronLeft className="w-3 h-3" />
+                    이전
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setStudentPage(p => p + 1)}
+                    disabled={studentPage >= Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || studentsLoading}
+                    className="h-7 px-2"
+                  >
+                    다음
+                    <ChevronRight className="w-3 h-3" />
+                  </Button>
+                </div>
               </div>
             </div>
 
