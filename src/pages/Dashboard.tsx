@@ -1638,10 +1638,13 @@ export default function Dashboard() {
         <HolidayManagement />
       )}
 
-      {/* Pending Homework Section */}
-      {pendingHomework.length > 0 && (
+      {/* TEACHER-HIDE-HW-PENDING-V1: Pending Homework Section - Hidden for teachers */}
+      {pendingHomework.length > 0 && !isTeacher(role) && (
         <Card className="border-blue-500/50 bg-blue-500/5 animate-slide-up">
           <CardHeader>
+            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
+              TEACHER-HIDE-HW-PENDING-V1
+            </div>
             <CardTitle className="flex items-center gap-2 text-blue-600">
               <CheckSquare className="w-5 h-5" />
               숙제 확인 대기 ({pendingHomework.length}건)
