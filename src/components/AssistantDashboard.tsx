@@ -147,6 +147,9 @@ export default function AssistantDashboard() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [collapsedTeachers, setCollapsedTeachers] = useState<Set<string>>(new Set());
   
+  // DEBUG-MARKER-ASSISTANT-V1
+  const [fetchError, setFetchError] = useState<{ page: string; status: number | string; message: string } | null>(null);
+  
   // Date selection
   const [selectedDate, setSelectedDate] = useState<Date>(getKSTDateObject());
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -182,6 +185,7 @@ export default function AssistantDashboard() {
   async function fetchAllData() {
     try {
       setLoading(true);
+      setFetchError(null);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       console.log('[AssistantDashboard] fetchAllData started, date:', dateStr);
       // Call the RPC which returns teachers + roster in one shot
@@ -191,7 +195,9 @@ export default function AssistantDashboard() {
       );
 
       if (rpcError) {
-        console.error('RPC error:', rpcError);
+        const errInfo = { page: 'Assistant', status: rpcError.code || 'UNKNOWN', message: rpcError.message };
+        console.error('DEBUG_FETCH_ERROR: Assistant', errInfo);
+        setFetchError(errInfo);
         toast({
           title: '데이터 로드 오류',
           description: '로스터 데이터를 불러오는 중 오류가 발생했습니다.',
@@ -349,8 +355,13 @@ export default function AssistantDashboard() {
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(attendanceMap).length;
       console.log('[AssistantDashboard] fetchAllData complete - attendanceUpdated=true, rosterUpdated=true, attendanceRecords:', attendanceCount);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching data:', error);
+      const errInfo = { page: 'Assistant', status: error?.code || 'ERR', message: error?.message || 'Unknown error' };
+      console.error('DEBUG_FETCH_ERROR: Assistant', errInfo);
+      if (!fetchError) {
+        setFetchError(errInfo);
+      }
       toast({
         title: '데이터 로드 오류',
         description: '데이터를 불러오는 중 오류가 발생했습니다.',
@@ -437,6 +448,18 @@ export default function AssistantDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* DEBUG-MARKER-ASSISTANT-V1 */}
+      <div className="sticky top-0 z-50 bg-yellow-400 text-yellow-900 text-xs text-center py-1 font-mono">
+        DEBUG-MARKER-ASSISTANT-V1
+      </div>
+      
+      {/* Fetch error banner */}
+      {fetchError && (
+        <div className="bg-red-500 text-white text-xs py-2 px-4 font-mono rounded">
+          DEBUG_FETCH_ERROR: {fetchError.page} status={fetchError.status} message={fetchError.message}
+        </div>
+      )}
+      
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">조교 대시보드</h1>

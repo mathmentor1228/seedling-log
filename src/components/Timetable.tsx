@@ -92,6 +92,9 @@ export function Timetable() {
   const isAssistantUser = isAssistant(role);
   const canViewAllStudents = isAdminUser || isAssistantUser;
   
+  // DEBUG-MARKER-STUDENTS-V1
+  const [fetchError, setFetchError] = useState<{ page: string; status: number | string; message: string } | null>(null);
+  
   // Teacher schedule states
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -269,6 +272,7 @@ export function Timetable() {
 
   async function fetchStudents() {
     setStudentsLoading(true);
+    setFetchError(null);
     try {
       const offset = (studentPage - 1) * STUDENT_PAGE_SIZE;
       
@@ -288,12 +292,20 @@ export function Timetable() {
         .order('created_at', { ascending: true })
         .range(offset, offset + STUDENT_PAGE_SIZE - 1);
 
-      if (error) throw error;
+      if (error) {
+        const errInfo = { page: 'Students', status: error.code || 'UNKNOWN', message: error.message };
+        console.error('DEBUG_FETCH_ERROR: Students', errInfo);
+        setFetchError(errInfo);
+        throw error;
+      }
       
       setStudents(data || []);
       setTotalStudentCount(count || 0);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching students:', error);
+      if (!fetchError) {
+        setFetchError({ page: 'Students', status: error?.code || 'ERR', message: error?.message || 'Unknown error' });
+      }
       setStudents([]);
       setTotalStudentCount(0);
     } finally {
@@ -694,6 +706,18 @@ export function Timetable() {
   // Admin view: tabs for teacher/student timetables
   return (
     <Card>
+      {/* DEBUG-MARKER-STUDENTS-V1 */}
+      <div className="sticky top-0 z-50 bg-yellow-400 text-yellow-900 text-xs text-center py-1 font-mono">
+        DEBUG-MARKER-STUDENTS-V1
+      </div>
+      
+      {/* Fetch error banner */}
+      {fetchError && (
+        <div className="bg-red-500 text-white text-xs py-2 px-4 font-mono">
+          DEBUG_FETCH_ERROR: {fetchError.page} status={fetchError.status} message={fetchError.message}
+        </div>
+      )}
+      
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Calendar className="w-5 h-5" />
