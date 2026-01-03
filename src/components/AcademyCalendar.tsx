@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth, isAdmin as checkIsAdmin } from '@/lib/auth';
+import { useAuth, isAdmin as checkIsAdmin, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,10 +43,25 @@ import {
   MapPin,
   Bell,
   Pin,
-  Trash2
+  Trash2,
+  Upload,
+  Image,
+  Download,
+  X,
+  Paperclip
 } from 'lucide-react';
 import { format, addDays, startOfMonth, endOfMonth, isSameDay, isWithinInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
+
+interface EventAttachment {
+  id: string;
+  event_id: string;
+  storage_path: string;
+  original_name: string;
+  mime_type: string | null;
+  file_size: number | null;
+  created_at: string;
+}
 
 interface AcademyEvent {
   id: string;
@@ -63,6 +78,7 @@ interface AcademyEvent {
   category: string;
   is_announcement: boolean;
   pinned: boolean;
+  attachments?: EventAttachment[];
 }
 
 const CATEGORY_OPTIONS = [
@@ -85,6 +101,8 @@ export function AcademyCalendar() {
   const { user, role } = useAuth();
   const { toast } = useToast();
   const isAdmin = checkIsAdmin(role);
+  const isAssistant = checkIsAssistant(role);
+  const canUploadPosters = isAdmin || isAssistant;
   
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<AcademyEvent[]>([]);
@@ -111,7 +129,14 @@ export function AcademyCalendar() {
     is_announcement: false,
     pinned: false,
   });
+  const [posterFiles, setPosterFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit dialog for posters
+  const [editEvent, setEditEvent] = useState<AcademyEvent | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [additionalPosterFiles, setAdditionalPosterFiles] = useState<File[]>([]);
+  const [uploadingPosters, setUploadingPosters] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -132,7 +157,6 @@ export function AcademyCalendar() {
         query = query.eq('category', filterCategory);
       }
       
-      // Filter by date range (next 30 days for list view)
       const today = getTodayKST();
       const futureDate = format(addDays(getKSTDateObject(), 30), 'yyyy-MM-dd');
       query = query.gte('start_at', today + 'T00:00:00');
@@ -142,7 +166,6 @@ export function AcademyCalendar() {
       
       if (error) throw error;
       
-      // Fetch creator names
       const eventsWithDetails: AcademyEvent[] = [];
       
       for (const event of (data || [])) {
@@ -152,9 +175,16 @@ export function AcademyCalendar() {
           .eq('id', event.created_by)
           .maybeSingle();
         
+        // Fetch attachments
+        const { data: attachments } = await supabase
+          .from('event_attachments')
+          .select('*')
+          .eq('event_id', event.id);
+        
         eventsWithDetails.push({
           ...event,
           creator_name: creatorProfile?.full_name || creatorProfile?.email || '알 수 없음',
+          attachments: attachments || [],
         });
       }
       
@@ -168,6 +198,41 @@ export function AcademyCalendar() {
       });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function uploadPostersToEvent(eventId: string, files: File[]) {
+    if (!user || files.length === 0) return;
+    
+    for (const file of files) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const storagePath = `events/${eventId}/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('attachments')
+        .upload(storagePath, file);
+      
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        toast({ title: '포스터 업로드 실패', description: file.name, variant: 'destructive' });
+        continue;
+      }
+      
+      const { error: insertError } = await supabase
+        .from('event_attachments')
+        .insert({
+          event_id: eventId,
+          storage_path: storagePath,
+          original_name: file.name,
+          mime_type: file.type || null,
+          file_size: file.size,
+          uploaded_by: user.id,
+        });
+      
+      if (insertError) {
+        console.error('Insert error:', insertError);
+      }
     }
   }
 
@@ -187,7 +252,7 @@ export function AcademyCalendar() {
           : `${formData.end_date}T${formData.end_time || formData.start_time}:00`;
       }
       
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('academy_events')
         .insert({
           created_by: user.id,
@@ -201,9 +266,16 @@ export function AcademyCalendar() {
           category: formData.category,
           is_announcement: formData.is_announcement,
           pinned: formData.pinned,
-        });
+        })
+        .select()
+        .single();
       
       if (error) throw error;
+      
+      // Upload poster files if any (only admin/assistant can)
+      if (data && posterFiles.length > 0 && canUploadPosters) {
+        await uploadPostersToEvent(data.id, posterFiles);
+      }
       
       toast({
         title: '일정 생성 완료',
@@ -225,6 +297,7 @@ export function AcademyCalendar() {
         is_announcement: false,
         pinned: false,
       });
+      setPosterFiles([]);
       setIsCreateOpen(false);
       fetchEvents();
     } catch (error: any) {
@@ -261,6 +334,68 @@ export function AcademyCalendar() {
     }
   }
 
+  async function handleDeletePoster(attachmentId: string, storagePath: string) {
+    try {
+      await supabase.storage.from('attachments').remove([storagePath]);
+      await supabase.from('event_attachments').delete().eq('id', attachmentId);
+      
+      toast({ title: '포스터 삭제됨' });
+      
+      // Update local state
+      if (editEvent) {
+        setEditEvent(prev => prev ? {
+          ...prev,
+          attachments: (prev.attachments || []).filter(a => a.id !== attachmentId)
+        } : null);
+      }
+      
+      fetchEvents();
+    } catch (err) {
+      toast({ title: '삭제 오류', variant: 'destructive' });
+    }
+  }
+
+  async function handleAddPostersToEvent(eventId: string, files: File[]) {
+    if (files.length === 0) return;
+    
+    setUploadingPosters(true);
+    await uploadPostersToEvent(eventId, files);
+    setAdditionalPosterFiles([]);
+    await fetchEvents();
+    
+    // Update editEvent
+    const updatedEvent = events.find(e => e.id === eventId);
+    if (updatedEvent) {
+      const { data: attachments } = await supabase
+        .from('event_attachments')
+        .select('*')
+        .eq('event_id', eventId);
+      
+      setEditEvent({ ...updatedEvent, attachments: attachments || [] });
+    }
+    
+    setUploadingPosters(false);
+    toast({ title: '포스터 추가됨' });
+  }
+
+  async function getSignedUrl(storagePath: string): Promise<string | null> {
+    const { data, error } = await supabase.storage
+      .from('attachments')
+      .createSignedUrl(storagePath, 60 * 5);
+    
+    if (error || !data) return null;
+    return data.signedUrl;
+  }
+
+  async function handleDownloadPoster(attachment: EventAttachment) {
+    const url = await getSignedUrl(attachment.storage_path);
+    if (url) {
+      window.open(url, '_blank');
+    } else {
+      toast({ title: '다운로드 실패', variant: 'destructive' });
+    }
+  }
+
   function getCategoryBadge(category: string) {
     const option = CATEGORY_OPTIONS.find(o => o.value === category);
     if (!option) return null;
@@ -269,6 +404,10 @@ export function AcademyCalendar() {
         {option.label}
       </Badge>
     );
+  }
+
+  function isImageType(mimeType: string | null): boolean {
+    return mimeType?.startsWith('image/') || false;
   }
 
   // Get dates with events for calendar dots
@@ -283,6 +422,85 @@ export function AcademyCalendar() {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
   });
+
+  function renderEventCard(event: AcademyEvent, isAnnouncement: boolean = false) {
+    const hasPosters = (event.attachments || []).length > 0;
+    
+    return (
+      <div 
+        key={event.id}
+        className={`p-3 rounded-lg border ${isAnnouncement ? 'bg-blue-500/5 border-blue-500/20' : 'bg-secondary/50'}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              {event.pinned && <Pin className="w-4 h-4 text-blue-500" />}
+              <span className="font-medium">{event.title}</span>
+              {getCategoryBadge(event.category)}
+              {hasPosters && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <Image className="w-3 h-3" />
+                  {event.attachments?.length}
+                </Badge>
+              )}
+            </div>
+            {event.description && (
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                {event.description}
+              </p>
+            )}
+            
+            {/* Poster thumbnails */}
+            {hasPosters && (
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {event.attachments?.filter(a => isImageType(a.mime_type)).slice(0, 3).map(att => (
+                  <PosterThumbnail key={att.id} attachment={att} onClick={() => handleDownloadPoster(att)} />
+                ))}
+                {(event.attachments?.filter(a => isImageType(a.mime_type)).length || 0) > 3 && (
+                  <span className="text-xs text-muted-foreground self-end">
+                    +{(event.attachments?.filter(a => isImageType(a.mime_type)).length || 0) - 3}
+                  </span>
+                )}
+              </div>
+            )}
+            
+            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+              <span>
+                {format(new Date(event.start_at), event.all_day ? 'M/d (EEE)' : 'M/d (EEE) HH:mm', { locale: ko })}
+              </span>
+              {event.location && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {event.location}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-1">
+            {/* Edit posters button (admin/assistant only) */}
+            {canUploadPosters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setEditEvent(event); setEditDialogOpen(true); }}
+              >
+                <Image className="w-4 h-4 text-muted-foreground" />
+              </Button>
+            )}
+            {(isAdmin || event.created_by === user?.id) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteEvent(event.id)}
+              >
+                <Trash2 className="w-4 h-4 text-destructive" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -309,7 +527,7 @@ export function AcademyCalendar() {
                   <DialogHeader>
                     <DialogTitle>새 일정 추가</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4 mt-4">
+                  <div className="space-y-4 mt-4 max-h-[70vh] overflow-y-auto">
                     <div className="space-y-2">
                       <Label>제목 *</Label>
                       <Input
@@ -444,6 +662,40 @@ export function AcademyCalendar() {
                       )}
                     </div>
                     
+                    {/* Poster upload (admin/assistant only) */}
+                    {canUploadPosters && (
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                          <Image className="w-4 h-4" />
+                          포스터 이미지 업로드 (선택)
+                        </Label>
+                        <div className="bg-muted/30 text-muted-foreground text-xs text-center py-1 rounded mb-2">
+                          CALENDAR-POSTER-UPLOAD-V1
+                        </div>
+                        <div className="border rounded-md p-3 space-y-2">
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            onChange={e => setPosterFiles(Array.from(e.target.files || []))}
+                            className="text-sm"
+                          />
+                          {posterFiles.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {posterFiles.map((f, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {f.name}
+                                  <button onClick={() => setPosterFiles(prev => prev.filter((_, idx) => idx !== i))} className="ml-1">
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
                     <Button 
                       onClick={handleCreateEvent}
                       disabled={!formData.title.trim() || isSubmitting}
@@ -525,45 +777,7 @@ export function AcademyCalendar() {
                       <Bell className="w-4 h-4" />
                       공지사항
                     </h4>
-                    {sortedAnnouncements.map((event) => (
-                      <div 
-                        key={event.id}
-                        className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {event.pinned && <Pin className="w-4 h-4 text-blue-500" />}
-                              <span className="font-medium">{event.title}</span>
-                              {getCategoryBadge(event.category)}
-                            </div>
-                            {event.description && (
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                {event.description}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                              <span>{format(new Date(event.start_at), 'M/d (EEE)', { locale: ko })}</span>
-                              {event.location && (
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
-                                  {event.location}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {(isAdmin || event.created_by === user?.id) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteEvent(event.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                    {sortedAnnouncements.map((event) => renderEventCard(event, true))}
                   </div>
                 )}
                 
@@ -571,46 +785,7 @@ export function AcademyCalendar() {
                 {upcomingEvents.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="text-sm font-medium">다가오는 일정</h4>
-                    {upcomingEvents.map((event) => (
-                      <div 
-                        key={event.id}
-                        className="p-3 rounded-lg bg-secondary/50 border"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium">{event.title}</span>
-                              {getCategoryBadge(event.category)}
-                            </div>
-                            {event.description && (
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                {event.description}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                              <span>
-                                {format(new Date(event.start_at), event.all_day ? 'M/d (EEE)' : 'M/d (EEE) HH:mm', { locale: ko })}
-                              </span>
-                              {event.location && (
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
-                                  {event.location}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {(isAdmin || event.created_by === user?.id) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteEvent(event.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                    {upcomingEvents.map((event) => renderEventCard(event, false))}
                   </div>
                 )}
                 
@@ -625,6 +800,102 @@ export function AcademyCalendar() {
           </CardContent>
         </CollapsibleContent>
       </Card>
+
+      {/* Edit Event Posters Dialog (admin/assistant only) */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Image className="w-5 h-5" />
+              포스터 관리: {editEvent?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {editEvent && canUploadPosters && (
+            <div className="space-y-4 pt-2">
+              <div className="bg-muted/30 text-muted-foreground text-xs text-center py-1 rounded">
+                CALENDAR-POSTER-UPLOAD-V1
+              </div>
+              
+              {/* Existing posters */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Paperclip className="w-4 h-4" />
+                  현재 포스터 ({(editEvent.attachments || []).length})
+                </Label>
+                <div className="border rounded-md p-3 space-y-2 max-h-60 overflow-y-auto">
+                  {(editEvent.attachments || []).map(att => (
+                    <div key={att.id} className="flex items-center gap-2 p-2 bg-muted/50 rounded">
+                      {isImageType(att.mime_type) ? (
+                        <PosterThumbnail attachment={att} onClick={() => handleDownloadPoster(att)} />
+                      ) : null}
+                      <span className="flex-1 text-sm truncate">{att.original_name}</span>
+                      <Button variant="ghost" size="sm" onClick={() => handleDownloadPoster(att)}>
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeletePoster(att.id, att.storage_path)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                  {(editEvent.attachments || []).length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">포스터 없음</p>
+                  )}
+                </div>
+              </div>
+              
+              {/* Add more posters */}
+              <div className="space-y-2">
+                <Label>포스터 추가</Label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={e => setAdditionalPosterFiles(Array.from(e.target.files || []))}
+                    className="text-sm flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={additionalPosterFiles.length === 0 || uploadingPosters}
+                    onClick={() => handleAddPostersToEvent(editEvent.id, additionalPosterFiles)}
+                  >
+                    <Upload className="w-4 h-4 mr-1" />
+                    {uploadingPosters ? '업로드 중...' : '추가'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Collapsible>
+  );
+}
+
+// Poster thumbnail component
+function PosterThumbnail({ attachment, onClick }: { attachment: EventAttachment; onClick: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  
+  useEffect(() => {
+    async function loadUrl() {
+      const { data } = await supabase.storage
+        .from('attachments')
+        .createSignedUrl(attachment.storage_path, 60 * 5);
+      if (data) setUrl(data.signedUrl);
+    }
+    loadUrl();
+  }, [attachment.storage_path]);
+  
+  if (!url) {
+    return <div className="w-12 h-12 bg-muted rounded animate-pulse" />;
+  }
+  
+  return (
+    <img
+      src={url}
+      alt={attachment.original_name}
+      className="w-12 h-12 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+      onClick={onClick}
+    />
   );
 }
