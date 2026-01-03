@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { format, subDays } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -43,10 +44,14 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { format } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
+
+interface Teacher {
+  id: string;
+  full_name: string;
+}
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -342,7 +347,21 @@ export default function Lessons() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null); // Error state for resilient UI
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterDate, setFilterDate] = useState<string>(getTodayKST());
+  
+  // LESSONS-FILTER-V1: Advanced filters state
+  const [filterStartDate, setFilterStartDate] = useState<string>(() => format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+  const [filterEndDate, setFilterEndDate] = useState<string>(getTodayKST());
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterHomeworkStatus, setFilterHomeworkStatus] = useState<string>('all');
+  const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterTeacherId, setFilterTeacherId] = useState<string>('all');
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const PAGE_SIZE = 50;
+  
+  // For legacy single date filter (still used in header)
+  const filterDate = getTodayKST();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -420,15 +439,23 @@ export default function Lessons() {
   const canManage = canManageLessons(role);
   
   useEffect(() => {
-    fetchLessons();
     fetchStudents();
     fetchClasses();
+    // Fetch teachers for admin/assistant filter
+    if (isAdmin || isAssistant) {
+      fetchTeachers();
+    }
     // Fetch today's slots and holidays for teachers/admins/assistants
     if (isTeacher || isAdmin || isAssistant) {
       fetchTodaySlots();
       fetchTodayHolidays();
     }
   }, [user, role]);
+
+  // Fetch lessons when filters change
+  useEffect(() => {
+    fetchLessons();
+  }, [user, role, filterStartDate, filterEndDate, filterStatus, filterHomeworkStatus, filterSubject, filterTeacherId, searchQuery, currentPage]);
 
   // Check for existing lesson record (duplicate check)
   async function findExistingLessonRecord(
@@ -551,28 +578,74 @@ export default function Lessons() {
     if (!user) return;
 
     try {
+      // Build query with server-side filtering
       let query = supabase
         .from('lesson_records')
         .select(`
           *,
           students:student_id (name)
-        `)
-        .order('lesson_date', { ascending: false });
+        `, { count: 'exact' });
 
-      if (role === 'teacher') {
+      // Date range filter
+      if (filterStartDate) {
+        query = query.gte('lesson_date', filterStartDate);
+      }
+      if (filterEndDate) {
+        query = query.lte('lesson_date', filterEndDate);
+      }
+
+      // Status filter
+      if (filterStatus === 'submitted') {
+        query = query.eq('submitted', true);
+      } else if (filterStatus === 'draft') {
+        query = query.eq('submitted', false);
+      }
+
+      // Homework status filter
+      if (filterHomeworkStatus !== 'all' && filterHomeworkStatus !== 'pending_verification') {
+        query = query.eq('homework_status', filterHomeworkStatus);
+      }
+
+      // Subject filter
+      if (filterSubject !== 'all') {
+        query = query.eq('subject', filterSubject as '수학' | '과학' | '영어' | '국어');
+      }
+
+      // Teacher filter (admin/assistant only)
+      if ((isAdmin || isAssistant) && filterTeacherId !== 'all') {
+        query = query.eq('teacher_id', filterTeacherId);
+      } else if (role === 'teacher') {
         query = query.eq('teacher_id', user.id);
       }
 
-      const { data, error } = await query;
+      // Ordering
+      query = query.order('lesson_date', { ascending: false }).order('created_at', { ascending: false });
+
+      // Pagination
+      const from = (currentPage - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) throw error;
 
-      const formattedLessons = (data || []).map((l: any) => ({
+      let formattedLessons = (data || []).map((l: any) => ({
         ...l,
         student_name: l.students?.name,
       }));
 
+      // Client-side filter for student name search (partial match)
+      if (searchQuery) {
+        const lowerSearch = searchQuery.toLowerCase();
+        formattedLessons = formattedLessons.filter(lesson =>
+          lesson.student_name?.toLowerCase().includes(lowerSearch) ||
+          lesson.subject?.toLowerCase().includes(lowerSearch)
+        );
+      }
+
       setLessons(formattedLessons);
+      setTotalCount(count || 0);
     } catch (error: any) {
       console.error('Error fetching lessons:', error);
       const statusCode = error?.code || error?.status || 'UNKNOWN';
@@ -581,6 +654,39 @@ export default function Lessons() {
       // Don't throw - let the UI continue rendering
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchTeachers() {
+    try {
+      // Get teacher IDs from user_roles
+      const { data: roleData, error: roleError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'teacher');
+      
+      if (roleError) throw roleError;
+      
+      const teacherIds = (roleData || []).map(r => r.user_id);
+      if (teacherIds.length === 0) {
+        setTeachers([]);
+        return;
+      }
+      
+      // Get profiles for teachers
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', teacherIds);
+      
+      if (profileError) throw profileError;
+      
+      setTeachers((profiles || []).map(p => ({
+        id: p.id,
+        full_name: p.full_name || '알 수 없음',
+      })));
+    } catch (error) {
+      console.error('Error fetching teachers:', error);
     }
   }
 
@@ -1695,21 +1801,33 @@ export default function Lessons() {
     }));
   };
 
-  const filteredLessons = lessons.filter((lesson) => {
-    // Date filter
-    if (filterDate && lesson.lesson_date !== filterDate) {
-      return false;
-    }
-    // Search filter
-    const matchesSearch = !searchQuery || 
-      lesson.student_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lesson.subject.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  // With server-side filtering, we use lessons directly
+  const filteredLessons = lessons;
 
   const getHomeworkLabel = (status: string) => {
     return HOMEWORK_STATUS.find((s) => s.value === status)?.label || status;
   };
+
+  const resetFilters = () => {
+    setFilterStartDate(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+    setFilterEndDate(getTodayKST());
+    setFilterStatus('all');
+    setFilterHomeworkStatus('all');
+    setFilterSubject('all');
+    setFilterTeacherId('all');
+    setSearchQuery('');
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters = filterStartDate !== format(subDays(new Date(), 7), 'yyyy-MM-dd') ||
+    filterEndDate !== getTodayKST() ||
+    filterStatus !== 'all' ||
+    filterHomeworkStatus !== 'all' ||
+    filterSubject !== 'all' ||
+    filterTeacherId !== 'all' ||
+    searchQuery !== '';
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   if (loading) {
     return (
@@ -2657,40 +2775,151 @@ export default function Lessons() {
         </Dialog>
       </div>
 
+      {/* LESSONS-FILTER-V1 */}
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* Date Filter */}
-            <div className="flex items-center gap-2">
-              <Label htmlFor="filterDate" className="text-sm font-medium whitespace-nowrap">날짜별 수업 보기</Label>
-              <Input
-                id="filterDate"
-                type="date"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="w-[160px]"
-              />
-              {filterDate && filterDate !== getTodayKST() && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setFilterDate(getTodayKST())}
-                  className="text-xs text-muted-foreground"
-                >
-                  오늘로
-                </Button>
-              )}
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">필터</span>
+            <div className="text-xs text-muted-foreground">LESSONS-FILTER-V1</div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Date Range */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">기간</Label>
+              <div className="flex items-center gap-1">
+                <Input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
+                  className="text-sm h-9"
+                />
+                <span className="text-muted-foreground">~</span>
+                <Input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
+                  className="text-sm h-9"
+                />
+              </div>
             </div>
+
+            {/* Status Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">상태</Label>
+              <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setCurrentPage(1); }}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="submitted">제출됨</SelectItem>
+                  <SelectItem value="draft">임시저장</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Homework Status Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">숙제 상태</Label>
+              <Select value={filterHomeworkStatus} onValueChange={(v) => { setFilterHomeworkStatus(v); setCurrentPage(1); }}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="completed">완료</SelectItem>
+                  <SelectItem value="partial">부분 완료</SelectItem>
+                  <SelectItem value="not_done">미완료</SelectItem>
+                  <SelectItem value="none_assigned">미배정</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Subject Filter */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">과목</Label>
+              <Select value={filterSubject} onValueChange={(v) => { setFilterSubject(v); setCurrentPage(1); }}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {SUBJECTS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 mt-3">
+            {/* Teacher Filter (admin/assistant only) */}
+            {(isAdmin || isAssistant) && (
+              <div className="space-y-1 w-full sm:w-48">
+                <Label className="text-xs text-muted-foreground">선생님</Label>
+                <Select value={filterTeacherId} onValueChange={(v) => { setFilterTeacherId(v); setCurrentPage(1); }}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="전체" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    {teachers.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Search */}
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="학생 또는 과목으로 검색..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+              <Label className="text-xs text-muted-foreground block mb-1">검색</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="학생 또는 과목으로 검색..."
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                  className="pl-10 h-9"
+                />
+              </div>
             </div>
+          </div>
+
+          {/* Results summary and filter chips */}
+          <div className="flex items-center justify-between mt-4 pt-3 border-t">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium">총 {totalCount}건</span>
+              {hasActiveFilters && (
+                <>
+                  {filterStatus !== 'all' && (
+                    <Badge variant="secondary" className="text-xs">
+                      {filterStatus === 'submitted' ? '제출됨' : '임시저장'}
+                      <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setFilterStatus('all')} />
+                    </Badge>
+                  )}
+                  {filterSubject !== 'all' && (
+                    <Badge variant="secondary" className="text-xs">
+                      {filterSubject}
+                      <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setFilterSubject('all')} />
+                    </Badge>
+                  )}
+                  {filterHomeworkStatus !== 'all' && (
+                    <Badge variant="secondary" className="text-xs">
+                      {getHomeworkLabel(filterHomeworkStatus)}
+                      <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setFilterHomeworkStatus('all')} />
+                    </Badge>
+                  )}
+                </>
+              )}
+            </div>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs">
+                초기화
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -2772,6 +3001,31 @@ export default function Lessons() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {currentPage} / {totalPages} 페이지
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
           )}
         </CardContent>

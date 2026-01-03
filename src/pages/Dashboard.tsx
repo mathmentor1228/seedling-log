@@ -84,6 +84,7 @@ interface OverdueDraft {
   teacher_name: string;
   student_id: string;
   student_name: string;
+  class_id: string | null;
   subject: string;
   lesson_date: string;
   draft_created_at: string;
@@ -95,6 +96,20 @@ interface GroupedOverdueDrafts {
   teacher_id: string;
   count: number;
   drafts: OverdueDraft[];
+}
+
+// TEACHER-OVERDUE-WARN-V1: Teacher's own overdue unsubmitted lessons
+interface TeacherOverdueLesson {
+  id: string;
+  student_id: string;
+  student_name: string;
+  class_id: string | null;
+  class_name: string;
+  subject: string;
+  lesson_date: string;
+  submitted: boolean;
+  draft_created_at: string;
+  start_time?: string;
 }
 
 interface TodaySlotStudent {
@@ -279,6 +294,11 @@ export default function Dashboard() {
   const [todayAttendance, setTodayAttendance] = useState<TodayAttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [ignoreHoliday, setIgnoreHoliday] = useState(false); // Admin toggle to show roster despite holiday
+  
+  // TEACHER-OVERDUE-WARN-V1: Teacher's own overdue lessons
+  const [teacherOverdueLessons, setTeacherOverdueLessons] = useState<TeacherOverdueLesson[]>([]);
+  const [hasShownOverdueToast, setHasShownOverdueToast] = useState(false);
+  
   const navigate = useNavigate();
 
   // Admin roster data (grouped by teacher)
@@ -416,6 +436,11 @@ export default function Dashboard() {
             await fetchTodayAttendance();
             await fetchAdminRosterData();
           }
+          
+          // TEACHER-OVERDUE-WARN-V1: Fetch teacher's own overdue lessons
+          if (isTeacher(role)) {
+            await fetchTeacherOverdueLessons();
+          }
         }
 
         // Fetch today's slots for teacher, admin, or assistant
@@ -513,6 +538,7 @@ export default function Dashboard() {
           teacher_name: teacherName,
           student_id: draft.student_id,
           student_name: draft.student_name || '알 수 없음',
+          class_id: draft.class_id || null,
           subject: draft.subject || '-',
           lesson_date: draft.lesson_date,
           draft_created_at: draft.draft_created_at,
@@ -528,6 +554,87 @@ export default function Dashboard() {
         description: '미제출 기록을 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
+    }
+  }
+
+  // TEACHER-OVERDUE-WARN-V1: Fetch teacher's own overdue lessons
+  async function fetchTeacherOverdueLessons() {
+    if (!user) return;
+    
+    try {
+      const today = getTodayKST();
+      const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+      
+      // Fetch lesson records that are not submitted and lesson_date < today (last 7 days)
+      const { data: lessons, error } = await supabase
+        .from('lesson_records')
+        .select(`
+          id,
+          student_id,
+          class_id,
+          subject,
+          lesson_date,
+          submitted,
+          draft_created_at,
+          students:student_id (name),
+          classes:class_id (name)
+        `)
+        .eq('teacher_id', user.id)
+        .eq('submitted', false)
+        .lt('lesson_date', today)
+        .gte('lesson_date', sevenDaysAgo)
+        .order('lesson_date', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching teacher overdue lessons:', error);
+        return;
+      }
+      
+      // Get class schedules for start times
+      const classIds = [...new Set((lessons || []).map(l => l.class_id).filter(Boolean))] as string[];
+      let scheduleMap: Record<string, string> = {};
+      
+      if (classIds.length > 0) {
+        const { data: schedules } = await supabase
+          .from('class_schedules')
+          .select('class_id, start_time, day_of_week')
+          .in('class_id', classIds)
+          .eq('is_active', true);
+        
+        (schedules || []).forEach((s: any) => {
+          // Use first schedule found for each class
+          if (!scheduleMap[s.class_id]) {
+            scheduleMap[s.class_id] = s.start_time?.slice(0, 5) || '';
+          }
+        });
+      }
+      
+      const overdueLessons: TeacherOverdueLesson[] = (lessons || []).map((l: any) => ({
+        id: l.id,
+        student_id: l.student_id,
+        student_name: l.students?.name || '알 수 없음',
+        class_id: l.class_id,
+        class_name: l.classes?.name || '-',
+        subject: l.subject,
+        lesson_date: l.lesson_date,
+        submitted: l.submitted,
+        draft_created_at: l.draft_created_at,
+        start_time: l.class_id ? scheduleMap[l.class_id] : undefined,
+      }));
+      
+      setTeacherOverdueLessons(overdueLessons);
+      
+      // Show toast on first load if there are overdue lessons
+      if (overdueLessons.length > 0 && !hasShownOverdueToast) {
+        toast({
+          title: '미제출 수업일지',
+          description: `미제출 수업일지 ${overdueLessons.length}건이 있습니다.`,
+          variant: 'destructive',
+        });
+        setHasShownOverdueToast(true);
+      }
+    } catch (error) {
+      console.error('Error fetching teacher overdue lessons:', error);
     }
   }
 
@@ -1038,7 +1145,71 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Overdue Drafts Section - Admin Only */}
+      {/* TEACHER-OVERDUE-WARN-V1: Teacher's own overdue lessons warning */}
+      {isTeacher(role) && teacherOverdueLessons.length > 0 && (
+        <Card className="border-red-500/50 bg-red-500/5 animate-slide-up">
+          <CardHeader className="pb-3">
+            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
+              TEACHER-OVERDUE-WARN-V1
+            </div>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              미제출 수업일지 {teacherOverdueLessons.length}건 (수업일이 지났습니다)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">날짜</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">학생</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">과목</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">클래스(시간)</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">상태</th>
+                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">작업</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teacherOverdueLessons.map((lesson) => (
+                    <tr key={lesson.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="py-2 px-2 text-muted-foreground">
+                        {format(new Date(lesson.lesson_date), 'MM/dd')}
+                      </td>
+                      <td className="py-2 px-2 font-medium">{lesson.student_name}</td>
+                      <td className="py-2 px-2">
+                        <Badge variant="outline">{lesson.subject}</Badge>
+                      </td>
+                      <td className="py-2 px-2 text-muted-foreground">
+                        {lesson.class_name}
+                        {lesson.start_time && <span className="ml-1">({lesson.start_time})</span>}
+                      </td>
+                      <td className="py-2 px-2">
+                        <Badge variant="outline" className="border-amber-500/50 text-amber-600 text-xs">
+                          <FileEdit className="w-3 h-3 mr-1" />
+                          임시저장
+                        </Badge>
+                      </td>
+                      <td className="py-2 px-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => navigate(`/lessons?student_id=${lesson.student_id}&class_id=${lesson.class_id || ''}&subject=${encodeURIComponent(lesson.subject)}&lesson_date=${lesson.lesson_date}`)}
+                        >
+                          <FileEdit className="w-3 h-3 mr-1" />
+                          지금 작성
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isAdmin(role) && totalOverdueDrafts > 0 && (
         <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
           <CardHeader>
