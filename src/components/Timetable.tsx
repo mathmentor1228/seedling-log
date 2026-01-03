@@ -846,33 +846,47 @@ export function Timetable() {
                 </Select>
               </div>
 
-              {/* Pagination controls */}
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>총 {totalStudentCount}명 · {studentPage}/{Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || 1} 페이지</span>
-                <div className="flex items-center gap-1">
+            </div>
+
+            {/* Pagination controls - fixed at bottom of list section */}
+            {totalStudentCount > 0 && (
+              <div className="flex items-center justify-between border-t pt-4 mt-4">
+                <span className="text-sm text-muted-foreground">
+                  페이지 {studentPage} / {Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || 1} · 총 {totalStudentCount}명
+                </span>
+                <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setStudentPage(p => Math.max(1, p - 1))}
+                    onClick={() => {
+                      const newPage = studentPage - 1;
+                      if (newPage >= 1) {
+                        setStudentPage(newPage);
+                      }
+                    }}
                     disabled={studentPage <= 1 || studentsLoading}
-                    className="h-7 px-2"
                   >
-                    <ChevronLeft className="w-3 h-3" />
+                    <ChevronLeft className="w-4 h-4 mr-1" />
                     이전
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setStudentPage(p => p + 1)}
+                    onClick={() => {
+                      const totalPages = Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE);
+                      const newPage = studentPage + 1;
+                      if (newPage <= totalPages) {
+                        setStudentPage(newPage);
+                      }
+                    }}
                     disabled={studentPage >= Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || studentsLoading}
-                    className="h-7 px-2"
                   >
                     다음
-                    <ChevronRight className="w-3 h-3" />
+                    <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
               </div>
-            </div>
+            )}
 
             {selectedStudentId && (
               <div className="space-y-3">
