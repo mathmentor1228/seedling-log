@@ -65,6 +65,9 @@ export default function AdminStatsSection() {
   const [refreshing, setRefreshing] = useState(false);
   const [kpis, setKpis] = useState<AdminKpis | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  
+  // DEBUG-MARKER-ADMINSTATS-V1
+  const [fetchError, setFetchError] = useState<{ page: string; status: number | string; message: string } | null>(null);
 
   // Filters
   const today = getTodayKST();
@@ -86,31 +89,44 @@ export default function AdminStatsSection() {
   async function fetchTeachers() {
     try {
       // Get teachers from classes table (teachers who have classes)
-      const { data: classes } = await supabase
+      const { data: classes, error } = await supabase
         .from('classes')
         .select('teacher_id')
         .not('teacher_id', 'is', null);
 
+      if (error) {
+        const errInfo = { page: 'AdminStats-Teachers', status: error.code || 'UNKNOWN', message: error.message };
+        console.error('DEBUG_FETCH_ERROR: AdminStats-Teachers', errInfo);
+        return;
+      }
+
       const teacherIds = [...new Set((classes || []).map(c => c.teacher_id))] as string[];
 
       if (teacherIds.length > 0) {
-        const { data: profiles } = await supabase
+        const { data: profiles, error: profileError } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('id', teacherIds);
+
+        if (profileError) {
+          const errInfo = { page: 'AdminStats-Profiles', status: profileError.code || 'UNKNOWN', message: profileError.message };
+          console.error('DEBUG_FETCH_ERROR: AdminStats-Profiles', errInfo);
+          return;
+        }
 
         setTeachers((profiles || []).map((p: any) => ({
           id: p.id,
           full_name: p.full_name || '알 수 없음',
         })));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching teachers:', error);
     }
   }
 
   async function fetchKpis() {
     setLoading(true);
+    setFetchError(null);
     try {
       const { data, error } = await supabase.rpc('get_admin_kpis', {
         _start_date: startDate,
@@ -120,13 +136,17 @@ export default function AdminStatsSection() {
       });
 
       if (error) {
-        console.error('Error fetching admin KPIs:', error);
+        const errInfo = { page: 'AdminStats', status: error.code || 'UNKNOWN', message: error.message };
+        console.error('DEBUG_FETCH_ERROR: AdminStats', errInfo);
+        setFetchError(errInfo);
         return;
       }
 
       setKpis(data as unknown as AdminKpis);
-    } catch (error) {
-      console.error('Error fetching admin KPIs:', error);
+    } catch (error: any) {
+      const errInfo = { page: 'AdminStats', status: error?.code || 'ERR', message: error?.message || 'Unknown error' };
+      console.error('DEBUG_FETCH_ERROR: AdminStats', errInfo);
+      setFetchError(errInfo);
     } finally {
       setLoading(false);
     }
@@ -178,6 +198,18 @@ export default function AdminStatsSection() {
 
   return (
     <Card className="animate-slide-up border-primary/20">
+      {/* DEBUG-MARKER-ADMINSTATS-V1 */}
+      <div className="sticky top-0 z-50 bg-yellow-400 text-yellow-900 text-xs text-center py-1 font-mono rounded-t">
+        DEBUG-MARKER-ADMINSTATS-V1
+      </div>
+      
+      {/* Fetch error banner */}
+      {fetchError && (
+        <div className="bg-red-500 text-white text-xs py-2 px-4 font-mono">
+          DEBUG_FETCH_ERROR: {fetchError.page} status={fetchError.status} message={fetchError.message}
+        </div>
+      )}
+      
       <CardHeader>
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
           ADMIN-STATS-V1
