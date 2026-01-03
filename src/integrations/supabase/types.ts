@@ -778,6 +778,15 @@ export type Database = {
         Args: { _week_end: string; _week_start: string }
         Returns: undefined
       }
+      get_admin_kpis: {
+        Args: {
+          _end_date: string
+          _start_date: string
+          _subject?: string
+          _teacher_id?: string
+        }
+        Returns: Json
+      }
       get_prev_homework_status_for_roster: {
         Args: { _pairs: Json; _today?: string }
         Returns: {

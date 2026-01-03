@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, isAdmin, isTeacher, isAssistant } from '@/lib/auth';
 import AssistantDashboard from '@/components/AssistantDashboard';
+import AdminStatsSection from '@/components/AdminStatsSection';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
 import { RiskBadge } from '@/components/ui/risk-badge';
@@ -1625,6 +1626,11 @@ export default function Dashboard() {
             );
           })()}
         </>
+      )}
+
+      {/* Admin Statistics Section - Admin Only */}
+      {isAdmin(role) && (
+        <AdminStatsSection />
       )}
 
       {/* Holiday Management Section - Admin Only */}
