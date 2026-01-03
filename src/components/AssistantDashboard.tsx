@@ -37,6 +37,7 @@ import { format, addDays, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { RosterActionModal } from '@/components/RosterActionModal';
+import AssistantChecklist from '@/components/AssistantChecklist';
 
 interface Teacher {
   id: string;
@@ -554,6 +555,9 @@ export default function AssistantDashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* Assistant Checklist Section */}
+      <AssistantChecklist />
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
