@@ -65,6 +65,63 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_tasks: {
+        Row: {
+          assignee: string
+          created_at: string
+          id: string
+          notes: string | null
+          related_student_id: string | null
+          related_teacher_id: string | null
+          status: string
+          task_date: string
+          task_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          related_student_id?: string | null
+          related_teacher_id?: string | null
+          status?: string
+          task_date: string
+          task_type: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          related_student_id?: string | null
+          related_teacher_id?: string | null
+          status?: string
+          task_date?: string
+          task_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_tasks_related_student_id_fkey"
+            columns: ["related_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistant_tasks_related_teacher_id_fkey"
+            columns: ["related_teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           att_date: string
