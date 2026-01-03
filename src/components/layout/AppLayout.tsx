@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   UserCog,
-  Calendar
+  Calendar,
+  ClipboardCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
@@ -28,11 +29,13 @@ interface NavItem {
   href: string;
   icon: ReactNode;
   adminOnly?: boolean;
+  allowedRoles?: ('admin' | 'teacher' | 'assistant')[];
 }
 
 const navItems: NavItem[] = [
   { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
   { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
+  { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
   { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
   { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
   { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
@@ -52,7 +55,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
-  const filteredNavItems = navItems.filter(item => !item.adminOnly || role === 'admin');
+  const filteredNavItems = navItems.filter(item => {
+    // If allowedRoles is specified, check if current role is in the list
+    if (item.allowedRoles) {
+      return role && item.allowedRoles.includes(role);
+    }
+    // Otherwise use adminOnly logic
+    return !item.adminOnly || role === 'admin';
+  });
 
   // Show shared components (TeamNotesBoard, AcademyCalendar) on dashboard route only
   const isDashboard = location.pathname === '/dashboard';
