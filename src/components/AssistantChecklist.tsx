@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayKST } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, differenceInHours, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
   ClipboardList,
@@ -42,9 +43,28 @@ import {
   AlertCircle,
   Phone,
   Calendar,
+  Paperclip,
+  Clock,
+  AlertTriangle,
+  Upload,
+  X,
+  Download,
+  Image,
+  File,
 } from 'lucide-react';
 
 // ASSISTANT-CHECKLIST-V1
+// ASSISTANT-REQUESTS-FILES-DUE-V1
+
+interface TaskAttachment {
+  id: string;
+  task_id: string;
+  storage_path: string;
+  original_name: string;
+  mime_type: string | null;
+  file_size: number | null;
+  created_at: string;
+}
 
 interface AssistantTask {
   id: string;
@@ -58,6 +78,8 @@ interface AssistantTask {
   related_teacher_id: string | null;
   created_at: string;
   updated_at: string;
+  due_date: string | null;
+  priority: string;
 }
 
 interface TaskCounts {
@@ -85,9 +107,17 @@ const TEMPLATES = [
 
 const ASSIGNEES = ['유빈조교', '다인조교'];
 
+const PRIORITIES = [
+  { value: 'low', label: '낮음', className: 'bg-muted text-muted-foreground' },
+  { value: 'normal', label: '보통', className: 'bg-blue-500/15 text-blue-600 border-blue-500/30' },
+  { value: 'high', label: '높음', className: 'bg-red-500/15 text-red-600 border-red-500/30' },
+];
+
 export default function AssistantChecklist() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<AssistantTask[]>([]);
+  const [taskAttachments, setTaskAttachments] = useState<Record<string, TaskAttachment[]>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -100,7 +130,16 @@ export default function AssistantChecklist() {
     title: '',
     assignee: '유빈조교',
     notes: '',
+    due_date: '',
+    priority: 'normal',
   });
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  // Task detail dialog for viewing attachments
+  const [detailTask, setDetailTask] = useState<AssistantTask | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
 
   const todayStr = getTodayKST();
 
@@ -121,7 +160,23 @@ export default function AssistantChecklist() {
         console.error('Error fetching tasks:', error);
         return;
       }
-      setTasks(data || []);
+      const tasksData = (data || []) as AssistantTask[];
+      setTasks(tasksData);
+      
+      // Fetch attachments for all tasks
+      if (tasksData.length > 0) {
+        const { data: attachments } = await supabase
+          .from('task_attachments')
+          .select('*')
+          .in('task_id', tasksData.map(t => t.id));
+        
+        const attachmentMap: Record<string, TaskAttachment[]> = {};
+        (attachments || []).forEach((att: TaskAttachment) => {
+          if (!attachmentMap[att.task_id]) attachmentMap[att.task_id] = [];
+          attachmentMap[att.task_id].push(att);
+        });
+        setTaskAttachments(attachmentMap);
+      }
     } catch (err) {
       console.error('Error:', err);
     } finally {
@@ -131,9 +186,6 @@ export default function AssistantChecklist() {
 
   async function fetchCounts() {
     try {
-      // Homework pending - check lessons with homework_status that need verification
-      // Tests today - lessons with test entries
-      // Draft lessons - unsubmitted lessons
       const { data: lessonRecords } = await supabase
         .from('lesson_records')
         .select('id, homework_status, test_result_text, submitted')
@@ -161,9 +213,46 @@ export default function AssistantChecklist() {
     setRefreshing(false);
   }
 
-  async function createTask(taskData: { task_type: string; title: string; assignee: string; notes?: string }) {
+  async function uploadFilesToTask(taskId: string, files: File[]) {
+    if (!user || files.length === 0) return;
+    
+    for (const file of files) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const storagePath = `tasks/${taskId}/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('attachments')
+        .upload(storagePath, file);
+      
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        toast({ title: '파일 업로드 실패', description: file.name, variant: 'destructive' });
+        continue;
+      }
+      
+      const { error: insertError } = await supabase
+        .from('task_attachments')
+        .insert({
+          task_id: taskId,
+          storage_path: storagePath,
+          original_name: file.name,
+          mime_type: file.type || null,
+          file_size: file.size,
+          uploaded_by: user.id,
+        });
+      
+      if (insertError) {
+        console.error('Insert error:', insertError);
+      }
+    }
+  }
+
+  async function createTask(taskData: { task_type: string; title: string; assignee: string; notes?: string; due_date?: string; priority?: string }) {
     try {
-      const { error } = await supabase
+      setUploading(true);
+      
+      const { data, error } = await supabase
         .from('assistant_tasks')
         .insert({
           task_date: todayStr,
@@ -172,7 +261,11 @@ export default function AssistantChecklist() {
           assignee: taskData.assignee,
           notes: taskData.notes || null,
           status: 'todo',
-        });
+          due_date: taskData.due_date || null,
+          priority: taskData.priority || 'normal',
+        })
+        .select()
+        .single();
 
       if (error) {
         if (error.code === '23505') {
@@ -183,10 +276,18 @@ export default function AssistantChecklist() {
         return;
       }
 
+      // Upload files if any
+      if (data && selectedFiles.length > 0) {
+        await uploadFilesToTask(data.id, selectedFiles);
+      }
+
       toast({ title: '업무 추가됨', description: taskData.title });
+      setSelectedFiles([]);
       fetchTasks();
     } catch (err: any) {
       toast({ title: '오류', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -244,6 +345,42 @@ export default function AssistantChecklist() {
     }
   }
 
+  async function updateTaskPriority(taskId: string, newPriority: string) {
+    try {
+      const { error } = await supabase
+        .from('assistant_tasks')
+        .update({ priority: newPriority })
+        .eq('id', taskId);
+
+      if (error) {
+        toast({ title: '오류', description: error.message, variant: 'destructive' });
+        return;
+      }
+      
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priority: newPriority } : t));
+    } catch (err: any) {
+      toast({ title: '오류', description: err.message, variant: 'destructive' });
+    }
+  }
+
+  async function updateTaskDueDate(taskId: string, newDueDate: string) {
+    try {
+      const { error } = await supabase
+        .from('assistant_tasks')
+        .update({ due_date: newDueDate || null })
+        .eq('id', taskId);
+
+      if (error) {
+        toast({ title: '오류', description: error.message, variant: 'destructive' });
+        return;
+      }
+      
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: newDueDate || null } : t));
+    } catch (err: any) {
+      toast({ title: '오류', description: err.message, variant: 'destructive' });
+    }
+  }
+
   async function deleteTask(taskId: string) {
     try {
       const { error } = await supabase
@@ -263,6 +400,55 @@ export default function AssistantChecklist() {
     }
   }
 
+  async function deleteAttachment(attachmentId: string, storagePath: string) {
+    try {
+      await supabase.storage.from('attachments').remove([storagePath]);
+      await supabase.from('task_attachments').delete().eq('id', attachmentId);
+      
+      // Refresh attachments
+      setTaskAttachments(prev => {
+        const updated = { ...prev };
+        for (const taskId in updated) {
+          updated[taskId] = updated[taskId].filter(a => a.id !== attachmentId);
+        }
+        return updated;
+      });
+      
+      toast({ title: '첨부파일 삭제됨' });
+    } catch (err: any) {
+      toast({ title: '삭제 오류', variant: 'destructive' });
+    }
+  }
+
+  async function handleAddFilesToTask(taskId: string, files: File[]) {
+    if (files.length === 0) return;
+    
+    setUploading(true);
+    await uploadFilesToTask(taskId, files);
+    await fetchTasks();
+    setAdditionalFiles([]);
+    setUploading(false);
+    toast({ title: '파일 추가됨' });
+  }
+
+  async function getSignedUrl(storagePath: string): Promise<string | null> {
+    const { data, error } = await supabase.storage
+      .from('attachments')
+      .createSignedUrl(storagePath, 60 * 5); // 5 min
+    
+    if (error || !data) return null;
+    return data.signedUrl;
+  }
+
+  async function handleDownload(attachment: TaskAttachment) {
+    const url = await getSignedUrl(attachment.storage_path);
+    if (url) {
+      window.open(url, '_blank');
+    } else {
+      toast({ title: '다운로드 실패', variant: 'destructive' });
+    }
+  }
+
   function handleTemplateClick(template: typeof TEMPLATES[0]) {
     createTask({
       task_type: template.type,
@@ -277,8 +463,44 @@ export default function AssistantChecklist() {
       return;
     }
     createTask(newTask);
-    setNewTask({ task_type: 'etc', title: '', assignee: '유빈조교', notes: '' });
+    setNewTask({ task_type: 'etc', title: '', assignee: '유빈조교', notes: '', due_date: '', priority: 'normal' });
     setDialogOpen(false);
+  }
+
+  function getDueBadge(task: AssistantTask) {
+    if (!task.due_date) return null;
+    
+    const now = new Date();
+    const dueDate = parseISO(task.due_date + 'T23:59:59');
+    const hoursUntilDue = differenceInHours(dueDate, now);
+    
+    if (hoursUntilDue < 0) {
+      return (
+        <Badge variant="destructive" className="text-xs gap-1">
+          <AlertTriangle className="w-3 h-3" />
+          마감 지남
+        </Badge>
+      );
+    } else if (hoursUntilDue <= 24) {
+      return (
+        <Badge className="text-xs gap-1 bg-amber-500/15 text-amber-600 border-amber-500/30">
+          <Clock className="w-3 h-3" />
+          오늘 마감
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="text-xs gap-1">
+        <Calendar className="w-3 h-3" />
+        {format(dueDate, 'M/d', { locale: ko })}
+      </Badge>
+    );
+  }
+
+  function getPriorityBadge(priority: string) {
+    const p = PRIORITIES.find(x => x.value === priority);
+    if (!p || priority === 'normal') return null;
+    return <Badge className={`text-xs ${p.className}`}>{p.label}</Badge>;
   }
 
   const filteredTasks = tasks.filter(t => statusFilter === 'all' || t.status === statusFilter);
@@ -306,6 +528,10 @@ export default function AssistantChecklist() {
     }
   }
 
+  function isImageType(mimeType: string | null): boolean {
+    return mimeType?.startsWith('image/') || false;
+  }
+
   if (loading) {
     return (
       <Card>
@@ -328,7 +554,6 @@ export default function AssistantChecklist() {
 
   return (
     <Card className="border-primary/20">
-      {/* ASSISTANT-CHECKLIST-V1 marker */}
       <div className="bg-muted/30 text-muted-foreground text-xs text-center py-1 rounded-t">
         ASSISTANT-CHECKLIST-V1
       </div>
@@ -351,7 +576,7 @@ export default function AssistantChecklist() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Counters (read-only) */}
+        {/* Counters */}
         <div className="flex flex-wrap gap-2 text-xs">
           <Badge variant="outline" className="gap-1">
             <ClipboardCheck className="w-3 h-3" />
@@ -376,21 +601,34 @@ export default function AssistantChecklist() {
                 업무 추가
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>새 업무 추가</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label>업무 유형</Label>
-                  <Select value={newTask.task_type} onValueChange={v => setNewTask(p => ({ ...p, task_type: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {TASK_TYPES.map(t => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>업무 유형</Label>
+                    <Select value={newTask.task_type} onValueChange={v => setNewTask(p => ({ ...p, task_type: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {TASK_TYPES.map(t => (
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>우선순위</Label>
+                    <Select value={newTask.priority} onValueChange={v => setNewTask(p => ({ ...p, priority: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {PRIORITIES.map(p => (
+                          <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>제목</Label>
@@ -400,16 +638,26 @@ export default function AssistantChecklist() {
                     placeholder="업무 제목..."
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>담당자</Label>
-                  <Select value={newTask.assignee} onValueChange={v => setNewTask(p => ({ ...p, assignee: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {ASSIGNEES.map(a => (
-                        <SelectItem key={a} value={a}>{a}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>담당자</Label>
+                    <Select value={newTask.assignee} onValueChange={v => setNewTask(p => ({ ...p, assignee: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ASSIGNEES.map(a => (
+                          <SelectItem key={a} value={a}>{a}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>마감일 (선택)</Label>
+                    <Input
+                      type="date"
+                      value={newTask.due_date}
+                      onChange={e => setNewTask(p => ({ ...p, due_date: e.target.value }))}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>메모 (선택)</Label>
@@ -420,7 +668,32 @@ export default function AssistantChecklist() {
                     rows={2}
                   />
                 </div>
-                <Button onClick={handleAddTask} className="w-full">추가</Button>
+                <div className="space-y-2">
+                  <Label>첨부파일 (선택)</Label>
+                  <div className="border rounded-md p-3 space-y-2">
+                    <input
+                      type="file"
+                      multiple
+                      onChange={e => setSelectedFiles(Array.from(e.target.files || []))}
+                      className="text-sm"
+                    />
+                    {selectedFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {selectedFiles.map((f, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {f.name}
+                            <button onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))} className="ml-1">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <Button onClick={handleAddTask} className="w-full" disabled={uploading}>
+                  {uploading ? '업로드 중...' : '추가'}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -482,82 +755,201 @@ export default function AssistantChecklist() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredTasks.map(task => (
-              <div
-                key={task.id}
-                className={`flex items-center gap-3 p-3 rounded-lg border ${
-                  task.status === 'done' ? 'bg-muted/30 opacity-70' : 'bg-secondary/30'
-                }`}
-              >
-                {/* Done Checkbox */}
-                <Checkbox
-                  checked={task.status === 'done'}
-                  onCheckedChange={(checked) => {
-                    updateTaskStatus(task.id, checked ? 'done' : 'todo');
-                  }}
-                />
-
-                {/* Status Chip */}
-                <Badge className={`text-xs ${getStatusBadgeClass(task.status)}`}>
-                  {task.status === 'todo' ? 'TODO' : task.status === 'doing' ? '진행중' : '완료'}
-                </Badge>
-
-                {/* Task Type Icon */}
-                <span className="text-muted-foreground">
-                  {getTaskTypeIcon(task.task_type)}
-                </span>
-
-                {/* Title */}
-                <span className={`flex-1 ${task.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>
-                  {task.title}
-                </span>
-
-                {/* Assignee Dropdown */}
-                <Select value={task.assignee} onValueChange={v => updateTaskAssignee(task.id, v)}>
-                  <SelectTrigger className="w-[100px] h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ASSIGNEES.map(a => (
-                      <SelectItem key={a} value={a}>{a}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Notes (inline edit) */}
-                <Input
-                  value={task.notes || ''}
-                  onChange={e => updateTaskNotes(task.id, e.target.value)}
-                  placeholder="메모..."
-                  className="w-32 h-8 text-xs"
-                />
-
-                {/* Status Toggle (quick doing/todo) */}
-                {task.status !== 'done' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => updateTaskStatus(task.id, task.status === 'todo' ? 'doing' : 'todo')}
-                    className="h-8 px-2 text-xs"
-                  >
-                    {task.status === 'todo' ? '시작' : '대기'}
-                  </Button>
-                )}
-
-                {/* Delete */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteTask(task.id)}
-                  className="h-8 px-2 text-destructive hover:text-destructive"
+            {filteredTasks.map(task => {
+              const attachments = taskAttachments[task.id] || [];
+              
+              return (
+                <div
+                  key={task.id}
+                  className={`p-3 rounded-lg border ${
+                    task.status === 'done' ? 'bg-muted/30 opacity-70' : 'bg-secondary/30'
+                  }`}
                 >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            ))}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Done Checkbox */}
+                    <Checkbox
+                      checked={task.status === 'done'}
+                      onCheckedChange={(checked) => {
+                        updateTaskStatus(task.id, checked ? 'done' : 'todo');
+                      }}
+                    />
+
+                    {/* Status Chip */}
+                    <Badge className={`text-xs ${getStatusBadgeClass(task.status)}`}>
+                      {task.status === 'todo' ? 'TODO' : task.status === 'doing' ? '진행중' : '완료'}
+                    </Badge>
+
+                    {/* Priority Badge */}
+                    {getPriorityBadge(task.priority)}
+
+                    {/* Due Badge */}
+                    {getDueBadge(task)}
+
+                    {/* Task Type Icon */}
+                    <span className="text-muted-foreground">
+                      {getTaskTypeIcon(task.task_type)}
+                    </span>
+
+                    {/* Title */}
+                    <span 
+                      className={`flex-1 cursor-pointer hover:underline ${task.status === 'done' ? 'line-through text-muted-foreground' : ''}`}
+                      onClick={() => { setDetailTask(task); setDetailDialogOpen(true); }}
+                    >
+                      {task.title}
+                    </span>
+
+                    {/* Attachment indicator */}
+                    {attachments.length > 0 && (
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Paperclip className="w-3 h-3" />
+                        {attachments.length}
+                      </Badge>
+                    )}
+
+                    {/* Assignee Dropdown */}
+                    <Select value={task.assignee} onValueChange={v => updateTaskAssignee(task.id, v)}>
+                      <SelectTrigger className="w-[100px] h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ASSIGNEES.map(a => (
+                          <SelectItem key={a} value={a}>{a}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Status Toggle */}
+                    {task.status !== 'done' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => updateTaskStatus(task.id, task.status === 'todo' ? 'doing' : 'todo')}
+                        className="h-8 px-2 text-xs"
+                      >
+                        {task.status === 'todo' ? '시작' : '대기'}
+                      </Button>
+                    )}
+
+                    {/* Delete */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteTask(task.id)}
+                      className="h-8 px-2 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* Notes inline */}
+                  {task.notes && (
+                    <p className="text-xs text-muted-foreground mt-2 pl-8">{task.notes}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>
+
+      {/* Task Detail Dialog */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {detailTask && getTaskTypeIcon(detailTask.task_type)}
+              {detailTask?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {detailTask && (
+            <div className="space-y-4 pt-2">
+              {/* ASSISTANT-REQUESTS-FILES-DUE-V1 marker */}
+              <div className="bg-muted/30 text-muted-foreground text-xs text-center py-1 rounded">
+                ASSISTANT-REQUESTS-FILES-DUE-V1
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>우선순위</Label>
+                  <Select value={detailTask.priority} onValueChange={v => { updateTaskPriority(detailTask.id, v); setDetailTask(prev => prev ? {...prev, priority: v} : null); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PRIORITIES.map(p => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>마감일</Label>
+                  <Input
+                    type="date"
+                    value={detailTask.due_date || ''}
+                    onChange={e => { updateTaskDueDate(detailTask.id, e.target.value); setDetailTask(prev => prev ? {...prev, due_date: e.target.value || null} : null); }}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>메모</Label>
+                <Textarea
+                  value={detailTask.notes || ''}
+                  onChange={e => { updateTaskNotes(detailTask.id, e.target.value); setDetailTask(prev => prev ? {...prev, notes: e.target.value || null} : null); }}
+                  placeholder="메모..."
+                  rows={2}
+                />
+              </div>
+              
+              {/* Attachments */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Paperclip className="w-4 h-4" />
+                  첨부파일 ({(taskAttachments[detailTask.id] || []).length})
+                </Label>
+                <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                  {(taskAttachments[detailTask.id] || []).map(att => (
+                    <div key={att.id} className="flex items-center gap-2 p-2 bg-muted/50 rounded">
+                      {isImageType(att.mime_type) ? (
+                        <Image className="w-4 h-4 text-blue-500" />
+                      ) : (
+                        <File className="w-4 h-4 text-muted-foreground" />
+                      )}
+                      <span className="flex-1 text-sm truncate">{att.original_name}</span>
+                      <Button variant="ghost" size="sm" onClick={() => handleDownload(att)}>
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteAttachment(att.id, att.storage_path)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                  {(taskAttachments[detailTask.id] || []).length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">첨부파일 없음</p>
+                  )}
+                </div>
+                
+                {/* Add more files */}
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={e => setAdditionalFiles(Array.from(e.target.files || []))}
+                    className="text-sm flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={additionalFiles.length === 0 || uploading}
+                    onClick={() => handleAddFilesToTask(detailTask.id, additionalFiles)}
+                  >
+                    <Upload className="w-4 h-4 mr-1" />
+                    {uploading ? '업로드 중...' : '추가'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

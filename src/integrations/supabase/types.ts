@@ -69,8 +69,10 @@ export type Database = {
         Row: {
           assignee: string
           created_at: string
+          due_date: string | null
           id: string
           notes: string | null
+          priority: string
           related_student_id: string | null
           related_teacher_id: string | null
           status: string
@@ -82,8 +84,10 @@ export type Database = {
         Insert: {
           assignee: string
           created_at?: string
+          due_date?: string | null
           id?: string
           notes?: string | null
+          priority?: string
           related_student_id?: string | null
           related_teacher_id?: string | null
           status?: string
@@ -95,8 +99,10 @@ export type Database = {
         Update: {
           assignee?: string
           created_at?: string
+          due_date?: string | null
           id?: string
           notes?: string | null
+          priority?: string
           related_student_id?: string | null
           related_teacher_id?: string | null
           status?: string
@@ -266,6 +272,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      event_attachments: {
+        Row: {
+          created_at: string
+          event_id: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          original_name: string
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name: string
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name?: string
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_attachments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "academy_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       holidays: {
         Row: {
@@ -552,6 +599,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      task_attachments: {
+        Row: {
+          created_at: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          original_name: string
+          storage_path: string
+          task_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name: string
+          storage_path: string
+          task_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name?: string
+          storage_path?: string
+          task_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       team_note_attachments: {
         Row: {
