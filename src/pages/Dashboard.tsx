@@ -12,6 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import HolidayManagement from '@/components/HolidayManagement';
+import { AdminLessonModal } from '@/components/lessons/AdminLessonModal';
+import { RosterActionModal } from '@/components/RosterActionModal';
+import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { 
   Users, 
   BookOpen, 
@@ -25,7 +28,8 @@ import {
   GraduationCap,
   Eye,
   EyeOff,
-  UserCheck
+  UserCheck,
+  PenLine
 } from 'lucide-react';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
@@ -277,6 +281,34 @@ export default function Dashboard() {
   const [ignoreHoliday, setIgnoreHoliday] = useState(false); // Admin toggle to show roster despite holiday
   const navigate = useNavigate();
 
+  // Admin roster data (grouped by teacher)
+  const [adminRosterData, setAdminRosterData] = useState<{
+    teachers: { teacher_id: string; teacher_name: string }[];
+    roster_rows: {
+      teacher_id: string;
+      teacher_name: string;
+      student_id: string;
+      student_name: string;
+      class_id: string;
+      class_name: string;
+      subject: string;
+      start_time: string;
+      end_time: string;
+    }[];
+  } | null>(null);
+
+  // Admin lesson modal state
+  const [adminLessonModalOpen, setAdminLessonModalOpen] = useState(false);
+  const [adminLessonModalContext, setAdminLessonModalContext] = useState<LessonFormContext | null>(null);
+  const [adminLessonModalRecordId, setAdminLessonModalRecordId] = useState<string | null>(null);
+
+  // Roster action modal state (for homework quick actions)
+  const [rosterActionModalOpen, setRosterActionModalOpen] = useState(false);
+  const [rosterActionContext, setRosterActionContext] = useState<any>(null);
+
+  // Lesson status map for admin roster badges
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null }>>({});
+
   useEffect(() => {
     async function fetchDashboardData() {
       if (!user) return;
@@ -382,6 +414,7 @@ export default function Dashboard() {
           if (isAdmin(role)) {
             await fetchOverdueDrafts();
             await fetchTodayAttendance();
+            await fetchAdminRosterData();
           }
         }
 
@@ -495,6 +528,49 @@ export default function Dashboard() {
         description: '미제출 기록을 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
+    }
+  }
+
+  // Fetch admin roster data grouped by teacher (uses RPC)
+  async function fetchAdminRosterData() {
+    if (!user) return;
+    
+    try {
+      const today = getTodayKST();
+      const { data, error } = await supabase.rpc('get_teacher_roster_sheet', { _date: today });
+      
+      if (error) {
+        console.error('Error fetching admin roster data:', error);
+        return;
+      }
+      
+      setAdminRosterData(data as any);
+      
+      // Fetch lesson status for all student/class pairs
+      const rosterRows = (data as any)?.roster_rows || [];
+      if (rosterRows.length > 0) {
+        const studentIds = [...new Set(rosterRows.map((r: any) => r.student_id))] as string[];
+        const classIds = [...new Set(rosterRows.map((r: any) => r.class_id))] as string[];
+        
+        const { data: lessonRecords } = await supabase
+          .from('lesson_records')
+          .select('id, student_id, class_id, subject, submitted')
+          .eq('lesson_date', today)
+          .in('student_id', studentIds)
+          .in('class_id', classIds);
+        
+        const statusMap: Record<string, { submitted: boolean; recordId: string | null }> = {};
+        (lessonRecords || []).forEach((lr: any) => {
+          const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
+          statusMap[key] = { submitted: lr.submitted, recordId: lr.id };
+        });
+        
+        setLessonStatusMap(statusMap);
+      }
+      
+      console.log('[Dashboard] fetchAdminRosterData complete');
+    } catch (error) {
+      console.error('Error fetching admin roster data:', error);
     }
   }
 
@@ -1008,6 +1084,142 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* ADMIN-LESSON-MODAL-V1 - Admin Roster Section Grouped by Teacher */}
+      {isAdmin(role) && adminRosterData && (
+        <Card className="border-primary/30 bg-primary/5 animate-slide-up">
+          <CardHeader>
+            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
+              ADMIN-LESSON-MODAL-V1
+            </div>
+            <CardTitle className="flex items-center gap-2">
+              <PenLine className="w-5 h-5 text-primary" />
+              오늘 수업(원장) - 선생님별 ({adminRosterData.roster_rows.length}명)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {adminRosterData.teachers.length === 0 ? (
+              <div className="text-center py-8">
+                <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {adminRosterData.teachers.map((teacher) => {
+                  const teacherRows = adminRosterData.roster_rows.filter(r => r.teacher_id === teacher.teacher_id);
+                  if (teacherRows.length === 0) return null;
+                  
+                  return (
+                    <div key={teacher.teacher_id} className="border rounded-lg p-4 bg-background">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-foreground">{teacher.teacher_name}</h4>
+                        <Badge variant="secondary">{teacherRows.length}명</Badge>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">학생</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">시간/클래스</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">과목</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">수업일지</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">숙제</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">작업</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {teacherRows.map((row: any) => {
+                              const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
+                              const lessonStatus = lessonStatusMap[statusKey];
+                              
+                              // Lesson badge logic
+                              let lessonBadge;
+                              if (lessonStatus?.recordId) {
+                                if (lessonStatus.submitted) {
+                                  lessonBadge = <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">제출</Badge>;
+                                } else {
+                                  lessonBadge = <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">임시저장</Badge>;
+                                }
+                              } else {
+                                lessonBadge = <Badge variant="outline" className="text-muted-foreground text-xs">미작성</Badge>;
+                              }
+                              
+                              // Homework pending badge (숙제확인대기: prev homework exists but homework_status unknown)
+                              // For simplicity, showing "대기" if no lesson record or unchecked
+                              const homeworkBadge = <Badge variant="outline" className="text-muted-foreground text-xs">-</Badge>;
+                              
+                              return (
+                                <tr key={`${row.student_id}-${row.class_id}`} className="border-b last:border-0 hover:bg-muted/30">
+                                  <td className="py-2 px-2 font-medium">{row.student_name}</td>
+                                  <td className="py-2 px-2 text-muted-foreground">
+                                    <span className="font-medium">{row.start_time?.slice(0, 5)}</span>
+                                    <span className="mx-1">/</span>
+                                    <span>{row.class_name}</span>
+                                  </td>
+                                  <td className="py-2 px-2">
+                                    <Badge variant="outline">{row.subject}</Badge>
+                                  </td>
+                                  <td className="py-2 px-2">{lessonBadge}</td>
+                                  <td className="py-2 px-2">{homeworkBadge}</td>
+                                  <td className="py-2 px-2">
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={() => {
+                                          setAdminLessonModalContext({
+                                            student_id: row.student_id,
+                                            class_id: row.class_id,
+                                            subject: row.subject,
+                                            lesson_date: getTodayKST(),
+                                          });
+                                          setAdminLessonModalRecordId(lessonStatus?.recordId || null);
+                                          setAdminLessonModalOpen(true);
+                                        }}
+                                      >
+                                        <FileEdit className="w-3 h-3 mr-1" />
+                                        수업일지 작성
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={() => {
+                                          setRosterActionContext({
+                                            date: getTodayKST(),
+                                            student_id: row.student_id,
+                                            student_name: row.student_name,
+                                            class_id: row.class_id,
+                                            class_name: row.class_name,
+                                            subject: row.subject,
+                                            teacher_id: row.teacher_id,
+                                            teacher_name: row.teacher_name,
+                                            start_time: row.start_time,
+                                            existingRecordId: lessonStatus?.recordId || null,
+                                          });
+                                          setRosterActionModalOpen(true);
+                                        }}
+                                      >
+                                        <CheckSquare className="w-3 h-3 mr-1" />
+                                        숙제/테스트
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Today's Attendance Overview - Admin Only */}
       {isAdmin(role) && todayAttendance.length > 0 && (
         <Card className="animate-slide-up">
@@ -1362,6 +1574,29 @@ export default function Dashboard() {
           )}
         </div>
       )}
+
+      {/* Admin Lesson Modal */}
+      <AdminLessonModal
+        open={adminLessonModalOpen}
+        onOpenChange={setAdminLessonModalOpen}
+        context={adminLessonModalContext}
+        existingRecordId={adminLessonModalRecordId}
+        onSaved={async () => {
+          // Refresh roster data after save
+          await fetchAdminRosterData();
+        }}
+      />
+
+      {/* Roster Action Modal for homework/test */}
+      <RosterActionModal
+        open={rosterActionModalOpen}
+        onOpenChange={setRosterActionModalOpen}
+        context={rosterActionContext}
+        mode="HOMEWORK_TEST"
+        onSaved={async () => {
+          await fetchAdminRosterData();
+        }}
+      />
     </div>
   );
 }
