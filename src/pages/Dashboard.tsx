@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import HolidayManagement from '@/components/HolidayManagement';
+import { AssistantRequestsWidget } from '@/components/AssistantRequestsWidget';
 import { AdminLessonModal } from '@/components/lessons/AdminLessonModal';
 import { RosterActionModal } from '@/components/RosterActionModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
@@ -1636,6 +1637,11 @@ export default function Dashboard() {
       {/* Holiday Management Section - Admin Only */}
       {isAdmin(role) && (
         <HolidayManagement />
+      )}
+
+      {/* DASHBOARD-ASSISTANT-REQUESTS-WIDGET-V2: Assistant Requests Widget - Teacher & Admin */}
+      {(isAdmin(role) || isTeacher(role)) && (
+        <AssistantRequestsWidget />
       )}
 
       {/* TEACHER-HIDE-HW-PENDING-V1: Pending Homework Section - Hidden for teachers */}
