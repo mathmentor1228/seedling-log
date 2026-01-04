@@ -14,7 +14,8 @@ import {
   X,
   UserCog,
   Calendar,
-  ClipboardCheck
+  ClipboardCheck,
+  UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
@@ -35,6 +36,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
   { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
+  { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
   { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
   { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
   { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },

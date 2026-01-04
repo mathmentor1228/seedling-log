@@ -15,6 +15,7 @@ import WeeklyReportSendPage from "./pages/WeeklyReportSendPage";
 import UserManagementPage from "./pages/UserManagementPage";
 import TimetablePage from "./pages/TimetablePage";
 import AssistantRequestsPage from "./pages/AssistantRequestsPage";
+import AssistantPage from "./pages/AssistantPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/admin/users" element={<UserManagementPage />} />
             <Route path="/timetable" element={<TimetablePage />} />
             <Route path="/assistant-requests" element={<AssistantRequestsPage />} />
+            <Route path="/assistant" element={<AssistantPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

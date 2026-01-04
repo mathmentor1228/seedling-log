@@ -1,8 +1,9 @@
 // DASHBOARD-ASSISTANT-REQUESTS-WIDGET-V2
+// TEACHER-CANCEL-REQUEST-V1
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth, isAdmin } from '@/lib/auth';
+import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2 } from 'lucide-react';
+import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2, X } from 'lucide-react';
 import { format, differenceInHours, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { getTodayKST, cn } from '@/lib/utils';
@@ -44,6 +45,7 @@ export function AssistantRequestsWidget() {
   const [tasks, setTasks] = useState<AssistantTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   
   // Form state
   const [title, setTitle] = useState('');
@@ -183,6 +185,33 @@ export function AssistantRequestsWidget() {
     }
   };
 
+  const handleCancel = async (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCancellingId(taskId);
+
+    try {
+      const { error } = await supabase
+        .from('assistant_tasks')
+        .update({ status: 'cancelled' })
+        .eq('id', taskId)
+        .eq('created_by', user?.id);
+
+      if (error) throw error;
+
+      toast({ title: '요청이 취소되었습니다.' });
+      fetchTasks();
+    } catch (error) {
+      console.error('Error cancelling task:', error);
+      toast({
+        title: '취소 실패',
+        description: '다시 시도해주세요.',
+        variant: 'destructive'
+      });
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const getDueBadge = (dueDateStr: string | null) => {
     if (!dueDateStr) return null;
     
@@ -217,6 +246,11 @@ export function AssistantRequestsWidget() {
         {assignee}
       </Badge>
     );
+  };
+
+  // Check if current user is the owner (can cancel)
+  const canCancelTask = (task: AssistantTask) => {
+    return isTeacher(role) && task.created_by === user?.id && (task.status === 'todo' || task.status === 'doing');
   };
 
   return (
@@ -394,7 +428,24 @@ export function AssistantRequestsWidget() {
                       </span>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  {/* Cancel button for teachers on their own tasks */}
+                  {canCancelTask(task) ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive shrink-0 ml-2"
+                      onClick={(e) => handleCancel(task.id, e)}
+                      disabled={cancellingId === task.id}
+                    >
+                      {cancellingId === task.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                    </Button>
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  )}
                 </div>
               ))}
             </div>
