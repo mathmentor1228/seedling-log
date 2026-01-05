@@ -338,35 +338,63 @@ export function LessonRecordForm({
     }
   }
 
-  // Fetch previous lesson
-  const fetchPreviousLesson = useCallback(async (studentId: string, classId: string, currentDate: string) => {
-    if (!studentId || !classId) {
+  // PREV_HW_CHAIN_V2: Fetch previous lesson by student_id + subject only (not class_id/teacher_id)
+  const [prevHwDebugInfo, setPrevHwDebugInfo] = useState<{ found: boolean; srcDate: string; srcTeacher: string }>({ found: false, srcDate: '-', srcTeacher: '-' });
+  
+  const fetchPreviousLesson = useCallback(async (studentId: string, subject: string, currentDate: string) => {
+    if (!studentId || !subject) {
       setPreviousLesson(null);
       setPreviousLessonHomework(null);
+      setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
       return;
     }
 
     setLoadingPreviousLesson(true);
     try {
+      // PREV_HW_CHAIN_V2: Chain by student_id + subject only, ignore class_id/teacher_id
+      // Exclude 휴강/공지사항 lesson types
       const { data: lessonData } = await supabase
         .from('lesson_records')
         .select('*')
         .eq('student_id', studentId)
-        .eq('class_id', classId)
+        .eq('subject', subject as SubjectType)
         .lt('lesson_date', currentDate)
         .eq('submitted', true)
         .order('lesson_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(10); // Get more to filter out 휴강/공지사항
 
-      if (lessonData) {
-        setPreviousLesson(lessonData as LessonRecord);
-
-        const { data: homeworkData } = await supabase
+      // Filter out 휴강/공지사항 lesson types and find the first valid one with homework
+      let validLesson: LessonRecord | null = null;
+      let homeworkData: HomeworkAssignment | null = null;
+      
+      for (const lesson of (lessonData || [])) {
+        const lessonTypes = (lesson as any).lesson_types || [];
+        if (lessonTypes.includes('휴강') || lessonTypes.includes('공지사항')) {
+          continue; // Skip 휴강/공지사항 records
+        }
+        
+        // Check if this lesson has homework
+        const { data: hw } = await supabase
           .from('homework_assignments')
           .select('*')
-          .eq('lesson_record_id', lessonData.id)
+          .eq('lesson_record_id', lesson.id)
           .maybeSingle();
+        
+        if (hw && hw.content && hw.content.trim() !== '') {
+          validLesson = lesson as LessonRecord;
+          homeworkData = hw as HomeworkAssignment;
+          break;
+        }
+      }
+
+      if (validLesson) {
+        setPreviousLesson(validLesson);
+        setPrevHwDebugInfo({
+          found: true,
+          srcDate: validLesson.lesson_date,
+          srcTeacher: (validLesson as any).teacher_id?.substring(0, 8) || '-',
+        });
 
         if (homeworkData) {
           let checkerName = '';
@@ -388,20 +416,28 @@ export function LessonRecordForm({
             setHomeworkCheckResult(homeworkData.result || '');
             setHomeworkCheckNotes(homeworkData.notes || '');
           }
+        } else {
+          setPreviousLessonHomework(null);
         }
+      } else {
+        setPreviousLesson(null);
+        setPreviousLessonHomework(null);
+        setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
       }
     } catch (error) {
       console.error('Error fetching previous lesson:', error);
+      setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
     } finally {
       setLoadingPreviousLesson(false);
     }
   }, []);
 
+  // PREV_HW_CHAIN_V2: Effect to fetch previous lesson when student/subject/date changes
   useEffect(() => {
-    if (!loading && formData.student_id && formData.class_id && formData.lesson_date) {
-      fetchPreviousLesson(formData.student_id, formData.class_id, formData.lesson_date);
+    if (!loading && formData.student_id && formData.subject && formData.lesson_date) {
+      fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
     }
-  }, [loading, formData.student_id, formData.class_id, formData.lesson_date, fetchPreviousLesson]);
+  }, [loading, formData.student_id, formData.subject, formData.lesson_date, fetchPreviousLesson]);
 
   function buildPayload(includeTestFields: boolean = false) {
     const subject = formData.subject as SubjectType;
@@ -635,8 +671,8 @@ export function LessonRecordForm({
         )}
       </div>
 
-      {/* Previous lesson section */}
-      {formData.student_id && formData.class_id && (
+      {/* Previous lesson section - PREV_HW_CHAIN_V2: Now chains by student+subject only */}
+      {formData.student_id && formData.subject && (
         <div className="p-4 rounded-lg border-2 border-blue-500/30 bg-blue-500/5 space-y-4">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-blue-600" />
@@ -657,6 +693,10 @@ export function LessonRecordForm({
 
               {previousLessonHomework && (
                 <div className="p-3 bg-background rounded-lg border space-y-2">
+                  {/* PREV_HW_CHAIN_V2 debug marker */}
+                  <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
+                    PREV_HW_CHAIN_V2: subject={formData.subject} found={prevHwDebugInfo.found ? 1 : 0} srcDate={prevHwDebugInfo.srcDate} srcTeacher={prevHwDebugInfo.srcTeacher}
+                  </span>
                   <Label className="text-sm font-medium">지난숙제(자동)</Label>
                   <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
 
