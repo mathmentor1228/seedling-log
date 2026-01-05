@@ -1404,41 +1404,67 @@ export default function Lessons() {
     }
   }, []);
 
-  // Fetch previous lesson (for "지난 수업" section)
-  const fetchPreviousLesson = useCallback(async (studentId: string, classId: string, currentDate: string) => {
-    if (!studentId || !classId) {
+  // PREV_HW_CHAIN_V2: Fetch previous lesson by student_id + subject only (not class_id/teacher_id)
+  const [prevHwDebugInfo, setPrevHwDebugInfo] = useState<{ found: boolean; srcDate: string; srcTeacher: string }>({ found: false, srcDate: '-', srcTeacher: '-' });
+  
+  const fetchPreviousLesson = useCallback(async (studentId: string, subject: string, currentDate: string) => {
+    if (!studentId || !subject) {
       setPreviousLesson(null);
       setPreviousLessonHomework(null);
+      setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
       return;
     }
 
     setLoadingPreviousLesson(true);
     try {
-      // Fetch most recent lesson_record for same student & class before current date
+      // PREV_HW_CHAIN_V2: Chain by student_id + subject only, ignore class_id/teacher_id
+      // Exclude 휴강/공지사항 lesson types
       const { data: lessonData, error: lessonError } = await supabase
         .from('lesson_records')
         .select('*')
         .eq('student_id', studentId)
-        .eq('class_id', classId)
+        .eq('subject', subject as SubjectType)
         .lt('lesson_date', currentDate)
         .eq('submitted', true)
         .order('lesson_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('updated_at', { ascending: false })
+        .limit(10); // Get more to filter out 휴강/공지사항
 
       if (lessonError) throw lessonError;
 
-      if (lessonData) {
-        setPreviousLesson(lessonData as LessonRecord);
+      // Filter out 휴강/공지사항 lesson types and find the first valid one with homework
+      let validLesson: LessonRecord | null = null;
+      let homeworkData: HomeworkAssignment | null = null;
+      
+      for (const lesson of (lessonData || [])) {
+        const lessonTypes = (lesson as any).lesson_types || [];
+        if (lessonTypes.includes('휴강') || lessonTypes.includes('공지사항')) {
+          continue; // Skip 휴강/공지사항 records
+        }
         
-        // Fetch homework for this lesson
-        const { data: homeworkData, error: homeworkError } = await supabase
+        // Check if this lesson has homework
+        const { data: hw } = await supabase
           .from('homework_assignments')
           .select('*')
-          .eq('lesson_record_id', lessonData.id)
+          .eq('lesson_record_id', lesson.id)
           .maybeSingle();
+        
+        if (hw && hw.content && hw.content.trim() !== '') {
+          validLesson = lesson as LessonRecord;
+          homeworkData = hw as HomeworkAssignment;
+          break;
+        }
+      }
 
-        if (!homeworkError && homeworkData) {
+      if (validLesson) {
+        setPreviousLesson(validLesson);
+        setPrevHwDebugInfo({
+          found: true,
+          srcDate: validLesson.lesson_date,
+          srcTeacher: (validLesson as any).teacher_id?.substring(0, 8) || '-',
+        });
+        
+        if (homeworkData) {
           // Fetch checker name if checked
           let checkerName = '';
           if (homeworkData.checked_by) {
@@ -1473,29 +1499,24 @@ export default function Lessons() {
       } else {
         setPreviousLesson(null);
         setPreviousLessonHomework(null);
+        setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
       }
     } catch (error) {
       console.error('Error fetching previous lesson:', error);
       setPreviousLesson(null);
       setPreviousLessonHomework(null);
+      setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
     } finally {
       setLoadingPreviousLesson(false);
     }
   }, []);
 
-  // Effect to fetch previous lesson when student/class/date changes
+  // PREV_HW_CHAIN_V2: Effect to fetch previous lesson when student/subject/date changes
   useEffect(() => {
-    if (isDialogOpen && formData.student_id && formData.class_id && formData.lesson_date) {
-      fetchPreviousLesson(formData.student_id, formData.class_id, formData.lesson_date);
+    if (isDialogOpen && formData.student_id && formData.subject && formData.lesson_date) {
+      fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
     }
-  }, [isDialogOpen, formData.student_id, formData.class_id, formData.lesson_date, fetchPreviousLesson]);
-
-  // Effect to fetch homework when student/subject changes (for cases without class_id)
-  useEffect(() => {
-    if (isDialogOpen && formData.student_id && formData.subject && !formData.class_id) {
-      fetchPreviousHomework(formData.student_id, formData.subject);
-    }
-  }, [isDialogOpen, formData.student_id, formData.subject, formData.class_id, fetchPreviousHomework]);
+  }, [isDialogOpen, formData.student_id, formData.subject, formData.lesson_date, fetchPreviousLesson]);
 
   // Save homework check
   const handleSaveHomeworkCheck = async () => {
@@ -2027,6 +2048,10 @@ export default function Lessons() {
                         {/* Header with label and edit button */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
+                            {/* PREV_HW_CHAIN_V2 debug marker */}
+                            <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
+                              PREV_HW_CHAIN_V2: subject={formData.subject} found={prevHwDebugInfo.found ? 1 : 0} srcDate={prevHwDebugInfo.srcDate} srcTeacher={prevHwDebugInfo.srcTeacher}
+                            </span>
                             {/* Show different label based on override status */}
                             {editingLesson?.prev_homework_override_text ? (
                               <Label className="text-sm font-medium text-amber-700">지난숙제(확정)</Label>
