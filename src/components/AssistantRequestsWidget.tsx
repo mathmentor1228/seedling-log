@@ -1,5 +1,6 @@
 // DASHBOARD-ASSISTANT-REQUESTS-WIDGET-V2
 // TEACHER-CANCEL-REQUEST-V1
+// REQUESTER-AND-RELATEDTEACHER-V1
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -30,6 +31,10 @@ interface AssistantTask {
   created_at: string;
   created_by: string | null;
   created_by_role: string | null;
+  related_teacher_id: string | null;
+  // Joined profile data
+  requester_profile?: { full_name: string; email: string } | null;
+  related_teacher_profile?: { full_name: string; email: string } | null;
 }
 
 interface Teacher {
@@ -54,6 +59,7 @@ export function AssistantRequestsWidget() {
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [notes, setNotes] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [relatedTeacher, setRelatedTeacher] = useState<string>('');
   
   // Admin filters
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -87,7 +93,37 @@ export function AssistantRequestsWidget() {
       const { data, error } = await query;
       
       if (error) throw error;
-      setTasks(data || []);
+      
+      const rawTasks = data || [];
+      
+      // Collect unique user IDs for profile lookup
+      const userIds = new Set<string>();
+      rawTasks.forEach((t: any) => {
+        if (t.created_by) userIds.add(t.created_by);
+        if (t.related_teacher_id) userIds.add(t.related_teacher_id);
+      });
+      
+      // Fetch profiles for all users
+      let profilesMap: Record<string, { full_name: string; email: string }> = {};
+      if (userIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', Array.from(userIds));
+        
+        (profiles || []).forEach((p: any) => {
+          profilesMap[p.id] = { full_name: p.full_name, email: p.email };
+        });
+      }
+      
+      // Merge profile data into tasks
+      const tasksData: AssistantTask[] = rawTasks.map((t: any) => ({
+        ...t,
+        requester_profile: t.created_by ? profilesMap[t.created_by] || null : null,
+        related_teacher_profile: t.related_teacher_id ? profilesMap[t.related_teacher_id] || null : null,
+      }));
+      
+      setTasks(tasksData);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
@@ -99,17 +135,31 @@ export function AssistantRequestsWidget() {
     if (!isAdmin(role)) return;
     
     try {
-      // Get teachers from profiles joined with user_roles
-      const { data, error } = await supabase
+      // Get teacher user_ids
+      const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id, profiles!inner(id, full_name)')
+        .select('user_id')
         .eq('role', 'teacher');
       
-      if (error) throw error;
+      if (rolesError) throw rolesError;
       
-      const teacherList = (data || []).map((item: any) => ({
-        id: item.user_id,
-        full_name: item.profiles.full_name
+      const teacherIds = (rolesData || []).map(r => r.user_id);
+      if (teacherIds.length === 0) {
+        setTeachers([]);
+        return;
+      }
+      
+      // Fetch profiles for teacher IDs
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', teacherIds);
+      
+      if (profilesError) throw profilesError;
+      
+      const teacherList = (profilesData || []).map((p: any) => ({
+        id: p.id,
+        full_name: p.full_name
       }));
       
       setTeachers(teacherList);
@@ -150,6 +200,10 @@ export function AssistantRequestsWidget() {
     try {
       const todayKST = getTodayKST();
       
+      // Teachers set related_teacher_id to themselves
+      // Admins can optionally select a related teacher
+      const relatedTeacherId = isTeacher(role) ? user.id : (relatedTeacher || null);
+      
       const { error } = await supabase
         .from('assistant_tasks')
         .insert({
@@ -162,7 +216,8 @@ export function AssistantRequestsWidget() {
           task_date: todayKST,
           task_type: 'teacher_request',
           created_by: user.id,
-          created_by_role: role || 'teacher'
+          created_by_role: role || 'teacher',
+          related_teacher_id: relatedTeacherId,
         });
       
       if (error) {
@@ -180,6 +235,7 @@ export function AssistantRequestsWidget() {
       setAssignee('미배정');
       setDueDate(undefined);
       setNotes('');
+      setRelatedTeacher('');
       setShowForm(false);
       setCreateError(null);
       
@@ -357,6 +413,24 @@ export function AssistantRequestsWidget() {
               </div>
             </div>
             
+            {/* Admin: Related Teacher Dropdown */}
+            {isAdmin(role) && (
+              <div className="space-y-2">
+                <Label>관련 선생님 (선택)</Label>
+                <Select value={relatedTeacher} onValueChange={setRelatedTeacher}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택 안함" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">선택 안함</SelectItem>
+                    {teachers.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="notes">메모</Label>
               <Textarea
@@ -441,6 +515,16 @@ export function AssistantRequestsWidget() {
                       {getDueBadge(task.due_date)}
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(task.created_at), 'MM/dd HH:mm')}
+                      </span>
+                    </div>
+                    {/* Requester and Related Teacher Info */}
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="font-medium">
+                        요청자: {task.requester_profile?.full_name || task.created_by_role || '알 수 없음'}
+                        {task.created_by_role && <span className="text-muted-foreground"> ({task.created_by_role})</span>}
+                      </span>
+                      <span className="text-muted-foreground">
+                        관련 선생님: {task.related_teacher_profile?.full_name || '미지정'}
                       </span>
                     </div>
                   </div>

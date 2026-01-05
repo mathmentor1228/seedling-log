@@ -1,5 +1,6 @@
 // TEACHER-ASSISTANT-REQUESTS-V2
 // TEACHER-CANCEL-REQUEST-V1
+// REQUESTER-AND-RELATEDTEACHER-V1
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -95,6 +96,7 @@ export function TeacherAssistantRequestsView() {
     try {
       const todayKST = getTodayKST();
 
+      // Teachers set related_teacher_id to themselves
       const { error } = await supabase
         .from('assistant_tasks')
         .insert({
@@ -107,7 +109,8 @@ export function TeacherAssistantRequestsView() {
           task_date: todayKST,
           task_type: 'teacher_request',
           created_by: user.id,
-          created_by_role: role || 'teacher'
+          created_by_role: role || 'teacher',
+          related_teacher_id: user.id,
         });
 
       if (error) {
