@@ -39,6 +39,7 @@ export function TeacherAssistantRequestsView() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -74,11 +75,18 @@ export function TeacherAssistantRequestsView() {
   }, [user]);
 
   const handleSubmit = async () => {
+    setCreateError(null);
+    
     if (!title.trim()) {
       toast({
         title: '제목을 입력하세요',
         variant: 'destructive'
       });
+      return;
+    }
+
+    if (!user?.id) {
+      setCreateError('REQUEST_CREATE_ERROR: 로그인이 필요합니다');
       return;
     }
 
@@ -91,18 +99,21 @@ export function TeacherAssistantRequestsView() {
         .from('assistant_tasks')
         .insert({
           title: title.trim(),
-          assignee,
+          assignee: assignee || '미배정',
           due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
           notes: notes.trim() || null,
           status: 'todo',
           priority: 'normal',
           task_date: todayKST,
           task_type: 'teacher_request',
-          created_by: user?.id,
-          created_by_role: role
+          created_by: user.id,
+          created_by_role: role || 'teacher'
         });
 
-      if (error) throw error;
+      if (error) {
+        setCreateError(`REQUEST_CREATE_ERROR: ${error.message}`);
+        throw error;
+      }
 
       toast({
         title: '요청이 등록되었습니다.',
@@ -115,15 +126,14 @@ export function TeacherAssistantRequestsView() {
       setDueDate(undefined);
       setNotes('');
       setShowForm(false);
+      setCreateError(null);
 
       fetchTasks();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating task:', error);
-      toast({
-        title: '요청 등록 실패',
-        description: '다시 시도해주세요.',
-        variant: 'destructive'
-      });
+      if (!createError) {
+        setCreateError(`REQUEST_CREATE_ERROR: ${error?.message || '알 수 없는 오류'}`);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -239,6 +249,12 @@ export function TeacherAssistantRequestsView() {
           {/* Quick Create Form */}
           {showForm && (
             <div className="p-4 border rounded-lg bg-muted/30 space-y-4">
+              {/* REQUEST-CREATE-FIX-V1 Error Banner */}
+              {createError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
+                  {createError}
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="title">제목 *</Label>
                 <Input
