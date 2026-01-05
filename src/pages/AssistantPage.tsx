@@ -12,7 +12,7 @@ function AssistantContent() {
       <div className="space-y-4">
         {/* Marker for deployment confirmation */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-          ASSISTANT-DASHBOARD-V2
+          ASSISTANT-DASHBOARD-V2 | REQUESTER-AND-RELATEDTEACHER-V1
         </div>
         <AssistantDashboard />
       </div>

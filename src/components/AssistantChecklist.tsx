@@ -55,6 +55,7 @@ import {
 
 // ASSISTANT-CHECKLIST-V1
 // ASSISTANT-REQUESTS-FILES-DUE-V1
+// REQUESTER-AND-RELATEDTEACHER-V1
 
 interface TaskAttachment {
   id: string;
@@ -80,6 +81,11 @@ interface AssistantTask {
   updated_at: string;
   due_date: string | null;
   priority: string;
+  created_by: string | null;
+  created_by_role: string | null;
+  // Joined profile data
+  requester_profile?: { full_name: string; email: string } | null;
+  related_teacher_profile?: { full_name: string; email: string } | null;
 }
 
 interface TaskCounts {
@@ -132,9 +138,11 @@ export default function AssistantChecklist() {
     notes: '',
     due_date: '',
     priority: 'normal',
+    related_teacher_id: '',
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [teachersList, setTeachersList] = useState<{ id: string; full_name: string }[]>([]);
 
   // Task detail dialog for viewing attachments
   const [detailTask, setDetailTask] = useState<AssistantTask | null>(null);
@@ -146,10 +154,12 @@ export default function AssistantChecklist() {
   useEffect(() => {
     fetchTasks();
     fetchCounts();
+    fetchTeachers();
   }, []);
 
   async function fetchTasks() {
     try {
+      // Fetch tasks
       const { data, error } = await supabase
         .from('assistant_tasks')
         .select('*')
@@ -160,7 +170,36 @@ export default function AssistantChecklist() {
         console.error('Error fetching tasks:', error);
         return;
       }
-      const tasksData = (data || []) as AssistantTask[];
+      
+      const rawTasks = data || [];
+      
+      // Collect unique user IDs for profile lookup
+      const userIds = new Set<string>();
+      rawTasks.forEach(t => {
+        if (t.created_by) userIds.add(t.created_by);
+        if (t.related_teacher_id) userIds.add(t.related_teacher_id);
+      });
+      
+      // Fetch profiles for all users
+      let profilesMap: Record<string, { full_name: string; email: string }> = {};
+      if (userIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', Array.from(userIds));
+        
+        (profiles || []).forEach((p: any) => {
+          profilesMap[p.id] = { full_name: p.full_name, email: p.email };
+        });
+      }
+      
+      // Merge profile data into tasks
+      const tasksData: AssistantTask[] = rawTasks.map(t => ({
+        ...t,
+        requester_profile: t.created_by ? profilesMap[t.created_by] || null : null,
+        related_teacher_profile: t.related_teacher_id ? profilesMap[t.related_teacher_id] || null : null,
+      }));
+      
       setTasks(tasksData);
       
       // Fetch attachments for all tasks
@@ -206,6 +245,47 @@ export default function AssistantChecklist() {
     }
   }
 
+  async function fetchTeachers() {
+    try {
+      // Get teacher user_ids
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'teacher');
+      
+      if (rolesError) {
+        console.error('Error fetching teacher roles:', rolesError);
+        return;
+      }
+      
+      const teacherIds = (rolesData || []).map(r => r.user_id);
+      if (teacherIds.length === 0) {
+        setTeachersList([]);
+        return;
+      }
+      
+      // Fetch profiles for teacher IDs
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', teacherIds);
+      
+      if (profilesError) {
+        console.error('Error fetching teacher profiles:', profilesError);
+        return;
+      }
+      
+      const teacherList = (profilesData || []).map((p: any) => ({
+        id: p.id,
+        full_name: p.full_name
+      }));
+      
+      setTeachersList(teacherList);
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  }
+
   async function handleRefresh() {
     setRefreshing(true);
     await fetchTasks();
@@ -248,7 +328,7 @@ export default function AssistantChecklist() {
     }
   }
 
-  async function createTask(taskData: { task_type: string; title: string; assignee: string; notes?: string; due_date?: string; priority?: string }) {
+  async function createTask(taskData: { task_type: string; title: string; assignee: string; notes?: string; due_date?: string; priority?: string; related_teacher_id?: string }) {
     try {
       setUploading(true);
       
@@ -263,6 +343,7 @@ export default function AssistantChecklist() {
           status: 'todo',
           due_date: taskData.due_date || null,
           priority: taskData.priority || 'normal',
+          related_teacher_id: taskData.related_teacher_id || null,
         })
         .select()
         .single();
@@ -283,6 +364,7 @@ export default function AssistantChecklist() {
 
       toast({ title: '업무 추가됨', description: taskData.title });
       setSelectedFiles([]);
+      setNewTask(p => ({ ...p, related_teacher_id: '' }));
       fetchTasks();
     } catch (err: any) {
       toast({ title: '오류', description: err.message, variant: 'destructive' });
@@ -463,7 +545,7 @@ export default function AssistantChecklist() {
       return;
     }
     createTask(newTask);
-    setNewTask({ task_type: 'etc', title: '', assignee: '유빈조교', notes: '', due_date: '', priority: 'normal' });
+    setNewTask({ task_type: 'etc', title: '', assignee: '유빈조교', notes: '', due_date: '', priority: 'normal', related_teacher_id: '' });
     setDialogOpen(false);
   }
 
@@ -660,6 +742,18 @@ export default function AssistantChecklist() {
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label>관련 선생님 (선택)</Label>
+                  <Select value={newTask.related_teacher_id} onValueChange={v => setNewTask(p => ({ ...p, related_teacher_id: v }))}>
+                    <SelectTrigger><SelectValue placeholder="선택 안함" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">선택 안함</SelectItem>
+                      {teachersList.map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>메모 (선택)</Label>
                   <Textarea
                     value={newTask.notes}
@@ -797,6 +891,17 @@ export default function AssistantChecklist() {
                     >
                       {task.title}
                     </span>
+
+                    {/* Requester and Related Teacher Info */}
+                    <div className="flex flex-col text-xs ml-2">
+                      <span className="font-medium text-foreground">
+                        요청자: {task.requester_profile?.full_name || task.created_by_role || '알 수 없음'}
+                        {task.created_by_role && ` (${task.created_by_role})`}
+                      </span>
+                      <span className="text-muted-foreground">
+                        관련 선생님: {task.related_teacher_profile?.full_name || '미지정'}
+                      </span>
+                    </div>
 
                     {/* Attachment indicator */}
                     {attachments.length > 0 && (
