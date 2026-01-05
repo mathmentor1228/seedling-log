@@ -1404,20 +1404,20 @@ export default function Lessons() {
     }
   }, []);
 
-  // PREV_HW_CHAIN_V2: Fetch previous lesson by student_id + subject only (not class_id/teacher_id)
-  const [prevHwDebugInfo, setPrevHwDebugInfo] = useState<{ found: boolean; srcDate: string; srcTeacher: string }>({ found: false, srcDate: '-', srcTeacher: '-' });
+  // PREV_HW_RLS_FIX_V1: Fetch previous lesson by student_id + subject only (not class_id/teacher_id)
+  const [prevHwDebugInfo, setPrevHwDebugInfo] = useState<{ rows: number; found: boolean; srcDate: string; srcTeacher: string }>({ rows: 0, found: false, srcDate: '-', srcTeacher: '-' });
   
   const fetchPreviousLesson = useCallback(async (studentId: string, subject: string, currentDate: string) => {
     if (!studentId || !subject) {
       setPreviousLesson(null);
       setPreviousLessonHomework(null);
-      setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
+      setPrevHwDebugInfo({ rows: 0, found: false, srcDate: '-', srcTeacher: '-' });
       return;
     }
 
     setLoadingPreviousLesson(true);
     try {
-      // PREV_HW_CHAIN_V2: Chain by student_id + subject only, ignore class_id/teacher_id
+      // PREV_HW_RLS_FIX_V1: Chain by student_id + subject only, ignore class_id/teacher_id
       // Exclude 휴강/공지사항 lesson types
       const { data: lessonData, error: lessonError } = await supabase
         .from('lesson_records')
@@ -1456,9 +1456,11 @@ export default function Lessons() {
         }
       }
 
+      const totalRows = lessonData?.length || 0;
       if (validLesson) {
         setPreviousLesson(validLesson);
         setPrevHwDebugInfo({
+          rows: totalRows,
           found: true,
           srcDate: validLesson.lesson_date,
           srcTeacher: (validLesson as any).teacher_id?.substring(0, 8) || '-',
@@ -1499,13 +1501,13 @@ export default function Lessons() {
       } else {
         setPreviousLesson(null);
         setPreviousLessonHomework(null);
-        setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
+        setPrevHwDebugInfo({ rows: totalRows, found: false, srcDate: '-', srcTeacher: '-' });
       }
     } catch (error) {
       console.error('Error fetching previous lesson:', error);
       setPreviousLesson(null);
       setPreviousLessonHomework(null);
-      setPrevHwDebugInfo({ found: false, srcDate: '-', srcTeacher: '-' });
+      setPrevHwDebugInfo({ rows: 0, found: false, srcDate: '-', srcTeacher: '-' });
     } finally {
       setLoadingPreviousLesson(false);
     }
@@ -2048,9 +2050,9 @@ export default function Lessons() {
                         {/* Header with label and edit button */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            {/* PREV_HW_CHAIN_V2 debug marker */}
+                            {/* PREV_HW_RLS_FIX_V1 debug marker */}
                             <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-                              PREV_HW_CHAIN_V2: subject={formData.subject} found={prevHwDebugInfo.found ? 1 : 0} srcDate={prevHwDebugInfo.srcDate} srcTeacher={prevHwDebugInfo.srcTeacher}
+                              PREV_HW_RLS_FIX_V1: rows={prevHwDebugInfo.rows} subject={formData.subject} student={formData.student_id?.slice(0,8)} found={prevHwDebugInfo.found ? 1 : 0} srcDate={prevHwDebugInfo.srcDate} srcTeacher={prevHwDebugInfo.srcTeacher}
                             </span>
                             {/* Show different label based on override status */}
                             {editingLesson?.prev_homework_override_text ? (
