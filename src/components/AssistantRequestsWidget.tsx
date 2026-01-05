@@ -1,6 +1,7 @@
 // DASHBOARD-ASSISTANT-REQUESTS-WIDGET-V2
 // TEACHER-CANCEL-REQUEST-V1
 // REQUESTER-AND-RELATEDTEACHER-V1
+// REQUEST-CREATE-STABLE-V2
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -221,7 +222,7 @@ export function AssistantRequestsWidget() {
         });
       
       if (error) {
-        setCreateError(`REQUEST_CREATE_ERROR: ${error.message}`);
+        setCreateError(`REQUEST_CREATE_ERROR: ${error.code || ''} ${error.message}`);
         throw error;
       }
       

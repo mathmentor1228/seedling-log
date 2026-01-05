@@ -1,6 +1,7 @@
 // TEACHER-ASSISTANT-REQUESTS-V2
 // TEACHER-CANCEL-REQUEST-V1
 // REQUESTER-AND-RELATEDTEACHER-V1
+// REQUEST-CREATE-STABLE-V2
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -114,7 +115,7 @@ export function TeacherAssistantRequestsView() {
         });
 
       if (error) {
-        setCreateError(`REQUEST_CREATE_ERROR: ${error.message}`);
+        setCreateError(`REQUEST_CREATE_ERROR: ${error.code || ''} ${error.message}`);
         throw error;
       }
 

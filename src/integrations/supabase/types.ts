@@ -84,7 +84,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          assignee: string
+          assignee?: string
           created_at?: string
           created_by?: string | null
           created_by_role?: string | null
@@ -95,7 +95,7 @@ export type Database = {
           related_student_id?: string | null
           related_teacher_id?: string | null
           status?: string
-          task_date: string
+          task_date?: string
           task_type: string
           title: string
           updated_at?: string
