@@ -3,8 +3,8 @@
 // REQUESTER-AND-RELATEDTEACHER-V1
 // REQUEST-CREATE-STABLE-V2
 // REQ-ERROR-VISIBLE-V1
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+// DASHBOARD-REQUEST-WIDGET-SUBMIT-V3
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +21,56 @@ import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2, X } from 'lu
 import { format, differenceInHours, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { getTodayKST, cn } from '@/lib/utils';
+
+// ErrorBoundary for catching runtime crashes in the widget
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class WidgetErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('[DASH_REQ_FAIL] Widget runtime error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Card className="animate-slide-up">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardCheck className="w-5 h-5 text-primary" />
+              조교요청
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
+              DASH_REQ_RUNTIME_ERROR: {this.state.error?.message || 'Unknown error'}
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-3"
+              onClick={() => this.setState({ hasError: false, error: null })}
+            >
+              다시 시도
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface AssistantTask {
   id: string;
@@ -44,10 +94,9 @@ interface Teacher {
   full_name: string;
 }
 
-export function AssistantRequestsWidget() {
+function AssistantRequestsWidgetInner() {
   const { user, role } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
   
   const [tasks, setTasks] = useState<AssistantTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,19 +230,32 @@ export function AssistantRequestsWidget() {
     }
   }, [teacherFilter, assigneeFilter]);
 
-  const handleSubmit = async () => {
+  const handleCreateRequest = async () => {
+    // Clear previous error
     setCreateError(null);
     
+    // Validate title
     if (!title.trim()) {
       toast({
-        title: '제목을 입력하세요',
+        title: '제목을 입력해주세요',
         variant: 'destructive'
       });
       return;
     }
     
+    // Validate user exists
     if (!user?.id) {
-      setCreateError('REQUEST_CREATE_ERROR: 로그인이 필요합니다');
+      const errMsg = 'REQUEST_CREATE_ERROR: code=NO_AUTH message=로그인이 필요합니다 details=user.id is missing hint=Please login';
+      console.error('[DASH_REQ_FAIL]', { user });
+      setCreateError(errMsg);
+      return;
+    }
+    
+    // Validate role exists
+    if (!role) {
+      const errMsg = 'REQUEST_CREATE_ERROR: code=NO_ROLE message=역할 정보가 없습니다 details=role is missing hint=Please re-login';
+      console.error('[DASH_REQ_FAIL]', { role });
+      setCreateError(errMsg);
       return;
     }
     
@@ -206,35 +268,41 @@ export function AssistantRequestsWidget() {
       // Admins can optionally select a related teacher
       const relatedTeacherId = isTeacher(role) ? user.id : (relatedTeacher || null);
       
+      // Build safe payload with explicit defaults
+      const payload = {
+        title: title.trim(),
+        assignee: assignee || '미배정',
+        due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
+        notes: notes.trim() || null,
+        status: 'todo',
+        priority: 'normal',
+        task_date: todayKST,
+        task_type: 'teacher_request',
+        created_by: user.id,
+        created_by_role: role,
+        related_teacher_id: relatedTeacherId,
+      };
+      
+      console.log('[DASH_REQ_SUBMIT] Payload:', payload);
+      
       const { error } = await supabase
         .from('assistant_tasks')
-        .insert({
-          title: title.trim(),
-          assignee: assignee || '미배정',
-          due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
-          notes: notes.trim() || null,
-          status: 'todo',
-          priority: 'normal',
-          task_date: todayKST,
-          task_type: 'teacher_request',
-          created_by: user.id,
-          created_by_role: role || 'teacher',
-          related_teacher_id: relatedTeacherId,
-        });
+        .insert(payload);
       
       if (error) {
         const errMsg = `REQUEST_CREATE_ERROR: code=${error.code || 'unknown'} message=${error.message} details=${error.details || 'none'} hint=${error.hint || 'none'}`;
-        console.error('[REQ_CREATE_FAIL]', error);
+        console.error('[DASH_REQ_FAIL]', error);
         setCreateError(errMsg);
         return;
       }
       
+      // Success - show toast
       toast({
         title: '요청이 등록되었습니다.',
         description: assignee !== '미배정' ? `${assignee}에게 배정됨` : undefined
       });
       
-      // Reset form
+      // Reset form (stay on dashboard)
       setTitle('');
       setAssignee('미배정');
       setDueDate(undefined);
@@ -246,8 +314,8 @@ export function AssistantRequestsWidget() {
       // Refresh list
       fetchTasks();
     } catch (error: any) {
-      console.error('[REQ_CREATE_FAIL]', error);
-      const errMsg = `REQUEST_CREATE_ERROR: code=${error?.code || 'unknown'} message=${error?.message || '알 수 없는 오류'} details=${error?.details || 'none'} hint=${error?.hint || 'none'}`;
+      console.error('[DASH_REQ_FAIL]', error);
+      const errMsg = `REQUEST_CREATE_ERROR: code=${error?.code || 'runtime_error'} message=${error?.message || '알 수 없는 오류'} details=${error?.details || 'none'} hint=${error?.hint || 'none'}`;
       setCreateError(errMsg);
     } finally {
       setSubmitting(false);
@@ -327,7 +395,7 @@ export function AssistantRequestsWidget() {
       <CardHeader className="pb-3">
         {/* Marker for deployment confirmation */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-          DASHBOARD-ASSISTANT-REQUESTS-WIDGET-V2
+          DASHBOARD-REQUEST-WIDGET-SUBMIT-V3
         </div>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -343,14 +411,13 @@ export function AssistantRequestsWidget() {
               <Plus className="w-4 h-4 mr-1" />
               요청 생성
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/assistant-requests')}
+            <a
+              href="/assistant-requests"
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-3"
             >
               전체 보기
               <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
+            </a>
           </div>
         </div>
       </CardHeader>
@@ -449,7 +516,7 @@ export function AssistantRequestsWidget() {
               <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
                 취소
               </Button>
-              <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+              <Button size="sm" onClick={handleCreateRequest} disabled={submitting}>
                 {submitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
                 등록
               </Button>
@@ -505,10 +572,12 @@ export function AssistantRequestsWidget() {
               {tasks.map((task) => (
                 <div
                   key={task.id}
-                  className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg hover:bg-secondary/70 transition-colors cursor-pointer"
-                  onClick={() => navigate('/assistant-requests')}
+                  className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg hover:bg-secondary/70 transition-colors"
                 >
-                  <div className="flex-1 min-w-0 space-y-1">
+                  <a 
+                    href="/assistant-requests" 
+                    className="flex-1 min-w-0 space-y-1 cursor-pointer"
+                  >
                     <div className="flex items-center gap-2 flex-wrap">
                       {getStatusBadge(task.status)}
                       <span className="font-medium text-foreground truncate">{task.title}</span>
@@ -530,7 +599,7 @@ export function AssistantRequestsWidget() {
                         관련 선생님: {task.related_teacher_profile?.full_name || '미지정'}
                       </span>
                     </div>
-                  </div>
+                  </a>
                   {/* Cancel button for teachers on their own tasks */}
                   {canCancelTask(task) ? (
                     <Button
@@ -547,7 +616,9 @@ export function AssistantRequestsWidget() {
                       )}
                     </Button>
                   ) : (
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <a href="/assistant-requests" className="shrink-0">
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </a>
                   )}
                 </div>
               ))}
@@ -556,5 +627,14 @@ export function AssistantRequestsWidget() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Export wrapped in ErrorBoundary to prevent white screen
+export function AssistantRequestsWidget() {
+  return (
+    <WidgetErrorBoundary>
+      <AssistantRequestsWidgetInner />
+    </WidgetErrorBoundary>
   );
 }
