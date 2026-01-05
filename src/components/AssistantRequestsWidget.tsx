@@ -4,6 +4,7 @@
 // REQUEST-CREATE-STABLE-V2
 // REQ-ERROR-VISIBLE-V1
 // DASHBOARD-REQUEST-WIDGET-SUBMIT-V3
+// ASSIGNEE-SELECT-FIX-DASH-V1
 import { useState, useEffect, Component, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
@@ -106,11 +107,13 @@ function AssistantRequestsWidgetInner() {
   
   // Form state
   const [title, setTitle] = useState('');
-  const [assignee, setAssignee] = useState('미배정');
+  // UI uses 'unassigned' for 미배정, maps to '미배정' on submit
+  const [assignee, setAssignee] = useState('unassigned');
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [notes, setNotes] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [relatedTeacher, setRelatedTeacher] = useState<string>('');
+  // UI uses 'none' for empty related teacher, maps to null on submit
+  const [relatedTeacher, setRelatedTeacher] = useState<string>('none');
   
   // Admin filters
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -265,13 +268,16 @@ function AssistantRequestsWidgetInner() {
       const todayKST = getTodayKST();
       
       // Teachers set related_teacher_id to themselves
-      // Admins can optionally select a related teacher
-      const relatedTeacherId = isTeacher(role) ? user.id : (relatedTeacher || null);
+      // Admins can optionally select a related teacher (map 'none' to null)
+      const relatedTeacherId = isTeacher(role) ? user.id : (relatedTeacher === 'none' ? null : relatedTeacher || null);
+      
+      // Map UI assignee value to DB value: 'unassigned' => '미배정'
+      const dbAssignee = assignee === 'unassigned' ? '미배정' : assignee;
       
       // Build safe payload with explicit defaults
       const payload = {
         title: title.trim(),
-        assignee: assignee || '미배정',
+        assignee: dbAssignee || '미배정',
         due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
         notes: notes.trim() || null,
         status: 'todo',
@@ -304,10 +310,10 @@ function AssistantRequestsWidgetInner() {
       
       // Reset form (stay on dashboard)
       setTitle('');
-      setAssignee('미배정');
+      setAssignee('unassigned');
       setDueDate(undefined);
       setNotes('');
-      setRelatedTeacher('');
+      setRelatedTeacher('none');
       setShowForm(false);
       setCreateError(null);
       
@@ -395,7 +401,7 @@ function AssistantRequestsWidgetInner() {
       <CardHeader className="pb-3">
         {/* Marker for deployment confirmation */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-          DASHBOARD-REQUEST-WIDGET-SUBMIT-V3
+          ASSIGNEE-SELECT-FIX-DASH-V1
         </div>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -449,7 +455,7 @@ function AssistantRequestsWidgetInner() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="미배정">미배정</SelectItem>
+                    <SelectItem value="unassigned">미배정</SelectItem>
                     <SelectItem value="유빈조교">유빈조교</SelectItem>
                     <SelectItem value="다인조교">다인조교</SelectItem>
                   </SelectContent>
@@ -492,7 +498,7 @@ function AssistantRequestsWidgetInner() {
                     <SelectValue placeholder="선택 안함" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">선택 안함</SelectItem>
+                    <SelectItem value="none">선택 안함</SelectItem>
                     {teachers.map(t => (
                       <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
                     ))}
