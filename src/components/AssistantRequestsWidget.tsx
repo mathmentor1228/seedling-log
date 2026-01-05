@@ -2,6 +2,7 @@
 // TEACHER-CANCEL-REQUEST-V1
 // REQUESTER-AND-RELATEDTEACHER-V1
 // REQUEST-CREATE-STABLE-V2
+// REQ-ERROR-VISIBLE-V1
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -222,8 +223,10 @@ export function AssistantRequestsWidget() {
         });
       
       if (error) {
-        setCreateError(`REQUEST_CREATE_ERROR: ${error.code || ''} ${error.message}`);
-        throw error;
+        const errMsg = `REQUEST_CREATE_ERROR: code=${error.code || 'unknown'} message=${error.message} details=${error.details || 'none'} hint=${error.hint || 'none'}`;
+        console.error('[REQ_CREATE_FAIL]', error);
+        setCreateError(errMsg);
+        return;
       }
       
       toast({
@@ -243,10 +246,9 @@ export function AssistantRequestsWidget() {
       // Refresh list
       fetchTasks();
     } catch (error: any) {
-      console.error('Error creating task:', error);
-      if (!createError) {
-        setCreateError(`REQUEST_CREATE_ERROR: ${error?.message || '알 수 없는 오류'}`);
-      }
+      console.error('[REQ_CREATE_FAIL]', error);
+      const errMsg = `REQUEST_CREATE_ERROR: code=${error?.code || 'unknown'} message=${error?.message || '알 수 없는 오류'} details=${error?.details || 'none'} hint=${error?.hint || 'none'}`;
+      setCreateError(errMsg);
     } finally {
       setSubmitting(false);
     }

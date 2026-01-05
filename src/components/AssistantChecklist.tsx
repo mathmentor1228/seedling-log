@@ -57,6 +57,7 @@ import {
 // ASSISTANT-REQUESTS-FILES-DUE-V1
 // REQUESTER-AND-RELATEDTEACHER-V1
 // REQUEST-CREATE-STABLE-V2
+// REQ-ERROR-VISIBLE-V1
 
 interface TaskAttachment {
   id: string;
@@ -129,6 +130,7 @@ export default function AssistantChecklist() {
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [counts, setCounts] = useState<TaskCounts>({ homework_pending: 0, tests_today: 0, draft_lessons: 0 });
+  const [createError, setCreateError] = useState<string | null>(null);
   
   // Add task dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -330,6 +332,7 @@ export default function AssistantChecklist() {
   }
 
   async function createTask(taskData: { task_type: string; title: string; assignee: string; notes?: string; due_date?: string; priority?: string; related_teacher_id?: string }) {
+    setCreateError(null);
     try {
       setUploading(true);
       
@@ -350,6 +353,9 @@ export default function AssistantChecklist() {
         .single();
 
       if (error) {
+        const errMsg = `REQUEST_CREATE_ERROR: code=${error.code || 'unknown'} message=${error.message} details=${error.details || 'none'} hint=${error.hint || 'none'}`;
+        console.error('[REQ_CREATE_FAIL]', error);
+        setCreateError(errMsg);
         if (error.code === '23505') {
           toast({ title: '중복 업무', description: '이미 동일한 업무가 존재합니다.', variant: 'destructive' });
         } else {
@@ -366,8 +372,12 @@ export default function AssistantChecklist() {
       toast({ title: '업무 추가됨', description: taskData.title });
       setSelectedFiles([]);
       setNewTask(p => ({ ...p, related_teacher_id: '' }));
+      setCreateError(null);
       fetchTasks();
     } catch (err: any) {
+      console.error('[REQ_CREATE_FAIL]', err);
+      const errMsg = `REQUEST_CREATE_ERROR: code=${err?.code || 'unknown'} message=${err?.message || '알 수 없는 오류'} details=${err?.details || 'none'} hint=${err?.hint || 'none'}`;
+      setCreateError(errMsg);
       toast({ title: '오류', description: err.message, variant: 'destructive' });
     } finally {
       setUploading(false);
@@ -688,6 +698,12 @@ export default function AssistantChecklist() {
               <DialogHeader>
                 <DialogTitle>새 업무 추가</DialogTitle>
               </DialogHeader>
+              {/* REQ-ERROR-VISIBLE-V1 Error Banner */}
+              {createError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm break-all">
+                  {createError}
+                </div>
+              )}
               <div className="space-y-4 pt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
