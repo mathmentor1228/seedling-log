@@ -24,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import StudentSlotAssignment from '@/components/StudentSlotAssignment';
+import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentCsvImport from '@/components/StudentCsvImport';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { normalizePhone } from '@/lib/phoneUtils';
@@ -522,13 +523,16 @@ export default function Students() {
           
           {detailStudent && (
             <Tabs defaultValue="info" className="mt-4">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <TabsTrigger value="info">기본정보</TabsTrigger>
                 {(isAdmin(role) || isTeacher(role)) && (
                   <TabsTrigger value="slots">
                     <Calendar className="w-4 h-4 mr-2" />
                     수업 슬롯 배정
                   </TabsTrigger>
+                )}
+                {isAdmin(role) && (
+                  <TabsTrigger value="subject-teachers">과목별 담당</TabsTrigger>
                 )}
               </TabsList>
               
@@ -577,6 +581,14 @@ export default function Students() {
                     studentId={detailStudent.id}
                     studentName={detailStudent.name}
                     readOnly={!isAdmin(role)}
+                  />
+                </TabsContent>
+              )}
+              {isAdmin(role) && (
+                <TabsContent value="subject-teachers" className="mt-4">
+                  <StudentSubjectTeacherMapping
+                    studentId={detailStudent.id}
+                    studentName={detailStudent.name}
                   />
                 </TabsContent>
               )}
