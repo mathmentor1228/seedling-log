@@ -989,6 +989,16 @@ export type Database = {
       }
     }
     Functions: {
+      create_assistant_task: {
+        Args: {
+          _assignee: string
+          _due_date: string
+          _notes: string
+          _related_teacher_id: string
+          _title: string
+        }
+        Returns: Json
+      }
       generate_weekly_reports: {
         Args: { _week_end: string; _week_start: string }
         Returns: undefined

@@ -3,6 +3,7 @@
 // REQUESTER-AND-RELATEDTEACHER-V1
 // REQUEST-CREATE-STABLE-V2
 // REQ-ERROR-VISIBLE-V1
+// ASSISTANT-REQUEST-RPC-DEDUP-V2
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -20,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarIcon, ClipboardCheck, Plus, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { getTodayKST, getDueBadgeInfo, cn } from '@/lib/utils';
+import { getDueBadgeInfo, cn } from '@/lib/utils';
 
 interface AssistantTask {
   id: string;
@@ -78,6 +79,12 @@ export function TeacherAssistantRequestsView() {
   }, [user]);
 
   const handleSubmit = async () => {
+    // ASSISTANT-REQUEST-RPC-DEDUP-V2: Prevent double submit
+    if (submitting) {
+      console.log('[TEACHER_REQ_DEDUP] Already submitting, ignoring duplicate call');
+      return;
+    }
+    
     setCreateError(null);
     
     if (!title.trim()) {
@@ -96,36 +103,41 @@ export function TeacherAssistantRequestsView() {
     setSubmitting(true);
 
     try {
-      const todayKST = getTodayKST();
-
-      // Teachers set related_teacher_id to themselves
-      const { error } = await supabase
-        .from('assistant_tasks')
-        .insert({
-          title: title.trim(),
-          assignee: assignee || '미배정',
-          due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
-          notes: notes.trim() || null,
-          status: 'todo',
-          priority: 'normal',
-          task_date: todayKST,
-          task_type: 'teacher_request',
-          created_by: user.id,
-          created_by_role: role || 'teacher',
-          related_teacher_id: user.id,
-        });
+      console.log('[TEACHER_REQ_SUBMIT] Calling RPC create_assistant_task');
+      
+      // ASSISTANT-REQUEST-RPC-DEDUP-V2: Use RPC for proper ON CONFLICT ON CONSTRAINT handling
+      const { data, error } = await supabase.rpc('create_assistant_task', {
+        _title: title.trim(),
+        _assignee: assignee || '미배정',
+        _due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
+        _notes: notes.trim() || null,
+        _related_teacher_id: user.id,
+      });
 
       if (error) {
         const errMsg = `REQUEST_CREATE_ERROR: code=${error.code || 'unknown'} message=${error.message} details=${error.details || 'none'} hint=${error.hint || 'none'}`;
-        console.error('[REQ_CREATE_FAIL]', error);
+        console.error('[TEACHER_REQ_FAIL]', error);
         setCreateError(errMsg);
         return;
       }
 
-      toast({
-        title: '요청이 등록되었습니다.',
-        description: assignee !== '미배정' ? `${assignee}에게 배정됨` : undefined
-      });
+      // RPC returns jsonb with is_new field
+      const result = data as { id: string; is_new: boolean; assignee: string } | null;
+      
+      if (result && !result.is_new) {
+        // Duplicate detected
+        console.log('[TEACHER_REQ_DEDUP] Duplicate detected, existing row returned');
+        toast({
+          title: '이미 동일한 요청이 있어요',
+          description: '기존 요청을 표시했어요.',
+        });
+      } else {
+        // Success - new row created
+        toast({
+          title: '요청이 등록되었습니다.',
+          description: assignee !== '미배정' ? `${assignee}에게 배정됨` : undefined
+        });
+      }
 
       // Reset form
       setTitle('');
@@ -137,7 +149,7 @@ export function TeacherAssistantRequestsView() {
 
       fetchTasks();
     } catch (error: any) {
-      console.error('[REQ_CREATE_FAIL]', error);
+      console.error('[TEACHER_REQ_FAIL]', error);
       const errMsg = `REQUEST_CREATE_ERROR: code=${error?.code || 'unknown'} message=${error?.message || '알 수 없는 오류'} details=${error?.details || 'none'} hint=${error?.hint || 'none'}`;
       setCreateError(errMsg);
     } finally {
@@ -223,10 +235,7 @@ export function TeacherAssistantRequestsView() {
     <div className="space-y-6">
       {/* Marker for deployment confirmation */}
       <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        TEACHER-ASSISTANT-REQUESTS-V2
-      </div>
-      <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        TEACHER-CANCEL-REQUEST-V1
+        ASSISTANT-REQUEST-RPC-DEDUP-V2
       </div>
 
       <div className="flex items-center gap-3">
