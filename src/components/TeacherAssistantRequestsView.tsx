@@ -3,7 +3,7 @@
 // REQUESTER-AND-RELATEDTEACHER-V1
 // REQUEST-CREATE-STABLE-V2
 // REQ-ERROR-VISIBLE-V1
-// ASSISTANT-REQUEST-RPC-DEDUP-V3
+// ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -79,7 +79,7 @@ export function TeacherAssistantRequestsView() {
   }, [user]);
 
   const handleSubmit = async () => {
-    // ASSISTANT-REQUEST-RPC-DEDUP-V2: Prevent double submit
+    // ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4: Prevent double submit
     if (submitting) {
       console.log('[TEACHER_REQ_DEDUP] Already submitting, ignoring duplicate call');
       return;
@@ -105,7 +105,7 @@ export function TeacherAssistantRequestsView() {
     try {
       console.log('[TEACHER_REQ_SUBMIT] Calling RPC create_assistant_task');
       
-      // ASSISTANT-REQUEST-RPC-DEDUP-V3: Use RPC for proper ON CONFLICT ON CONSTRAINT handling
+      // ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4: Use RPC with manual dedup check
       const { data, error } = await supabase.rpc('create_assistant_task', {
         _title: title.trim(),
         _assignee: assignee || '미배정',
@@ -121,8 +121,8 @@ export function TeacherAssistantRequestsView() {
         return;
       }
 
-      // RPC returns jsonb with is_new field
-      const result = data as { id: string; is_new: boolean; assignee: string } | null;
+      // RPC returns jsonb with { task: {...}, is_new: boolean }
+      const result = data as { task: { id: string; assignee: string }; is_new: boolean } | null;
       
       if (result && !result.is_new) {
         // Duplicate detected
@@ -235,7 +235,7 @@ export function TeacherAssistantRequestsView() {
     <div className="space-y-6">
       {/* Marker for deployment confirmation */}
       <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        ASSISTANT-REQUEST-RPC-DEDUP-V3
+        ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4
       </div>
 
       <div className="flex items-center gap-3">
