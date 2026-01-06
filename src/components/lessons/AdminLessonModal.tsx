@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { LessonRecordForm, LessonFormContext } from './LessonRecordForm';
 import { supabase } from '@/integrations/supabase/client';
-import { useEffect } from 'react';
+import { useAuth, isAdmin as checkIsAdmin, isTeacher as checkIsTeacher } from '@/lib/auth';
 
 interface AdminLessonModalProps {
   open: boolean;
@@ -15,6 +15,7 @@ interface AdminLessonModalProps {
   context: LessonFormContext | null;
   existingRecordId?: string | null;
   onSaved?: () => void;
+  initialMode?: 'view' | 'edit';
 }
 
 interface StudentItem {
@@ -34,16 +35,25 @@ export function AdminLessonModal({
   context,
   existingRecordId,
   onSaved,
+  initialMode = 'view',
 }: AdminLessonModalProps) {
+  const { user, role } = useAuth();
+  const isAdmin = checkIsAdmin(role);
+  const isTeacher = checkIsTeacher(role);
+  
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
+  const [originalTeacherId, setOriginalTeacherId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       fetchData();
+      // Reset mode when opening
+      setMode(initialMode);
     }
-  }, [open]);
+  }, [open, initialMode]);
 
   async function fetchData() {
     setLoading(true);
@@ -55,6 +65,28 @@ export function AdminLessonModal({
 
       setStudents(studentsRes.data || []);
       setClasses(classesRes.data || []);
+
+      // Fetch original teacher_id if viewing existing record
+      if (existingRecordId) {
+        const { data: record } = await supabase
+          .from('lesson_records')
+          .select('teacher_id')
+          .eq('id', existingRecordId)
+          .single();
+        
+        if (record) {
+          setOriginalTeacherId(record.teacher_id);
+          
+          // Teachers can only edit their own records, otherwise view mode
+          if (isTeacher && !isAdmin && record.teacher_id !== user?.id) {
+            setMode('view');
+          }
+        }
+      } else {
+        // New record - always edit mode and current user is teacher
+        setOriginalTeacherId(null);
+        setMode('edit');
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -75,6 +107,10 @@ export function AdminLessonModal({
     onOpenChange(false);
   };
 
+  const handleRequestEdit = () => {
+    setMode('edit');
+  };
+
   if (!context) return null;
 
   return (
@@ -82,7 +118,7 @@ export function AdminLessonModal({
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            수업일지 작성 (원장)
+            {mode === 'view' ? '수업일지 상세' : '수업일지 작성'} (원장)
           </DialogTitle>
         </DialogHeader>
 
@@ -99,6 +135,9 @@ export function AdminLessonModal({
             onCancel={handleCancel}
             students={students}
             classes={classes}
+            mode={mode}
+            onRequestEdit={handleRequestEdit}
+            originalTeacherId={originalTeacherId}
           />
         )}
       </DialogContent>
