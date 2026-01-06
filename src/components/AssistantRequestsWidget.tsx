@@ -5,6 +5,7 @@
 // REQ-ERROR-VISIBLE-V1
 // DASHBOARD-REQUEST-WIDGET-SUBMIT-V3
 // ASSIGNEE-SELECT-FIX-DASH-V1
+// ASSISTANT-REQUEST-DEDUP-V1
 import { useState, useEffect, Component, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
@@ -234,6 +235,12 @@ function AssistantRequestsWidgetInner() {
   }, [teacherFilter, assigneeFilter]);
 
   const handleCreateRequest = async () => {
+    // ASSISTANT-REQUEST-DEDUP-V1: Prevent double submit
+    if (submitting) {
+      console.log('[DASH_REQ_DEDUP] Already submitting, ignoring duplicate call');
+      return;
+    }
+    
     // Clear previous error
     setCreateError(null);
     
@@ -291,14 +298,58 @@ function AssistantRequestsWidgetInner() {
       
       console.log('[DASH_REQ_SUBMIT] Payload:', payload);
       
-      const { error } = await supabase
+      // ASSISTANT-REQUEST-DEDUP-V1: Use upsert with ignoreDuplicates to handle unique constraint
+      // Conflict columns: task_date, task_type, related_student_id (null), related_teacher_id
+      const { data, error, count } = await supabase
         .from('assistant_tasks')
-        .insert(payload);
+        .upsert(payload, { 
+          onConflict: 'task_date,task_type,related_student_id,related_teacher_id',
+          ignoreDuplicates: true 
+        })
+        .select();
       
       if (error) {
+        // Check if it's a duplicate key error (shouldn't happen with ignoreDuplicates, but just in case)
+        if (error.code === '23505') {
+          console.log('[DASH_REQ_DEDUP] Duplicate detected by error code');
+          toast({
+            title: '이미 동일한 요청이 있어요',
+            description: '중복 등록을 막았어요.',
+          });
+          // Reset form and refresh to show existing request
+          setTitle('');
+          setAssignee('unassigned');
+          setDueDate(undefined);
+          setNotes('');
+          setRelatedTeacher('none');
+          setShowForm(false);
+          setCreateError(null);
+          fetchTasks();
+          return;
+        }
+        
         const errMsg = `REQUEST_CREATE_ERROR: code=${error.code || 'unknown'} message=${error.message} details=${error.details || 'none'} hint=${error.hint || 'none'}`;
         console.error('[DASH_REQ_FAIL]', error);
         setCreateError(errMsg);
+        return;
+      }
+      
+      // Check if insert was ignored due to duplicate (ignoreDuplicates returns empty array)
+      if (!data || data.length === 0) {
+        console.log('[DASH_REQ_DEDUP] Duplicate detected, insert was ignored');
+        toast({
+          title: '이미 동일한 요청이 있어요',
+          description: '중복 등록을 막았어요.',
+        });
+        // Reset form and refresh to show existing request
+        setTitle('');
+        setAssignee('unassigned');
+        setDueDate(undefined);
+        setNotes('');
+        setRelatedTeacher('none');
+        setShowForm(false);
+        setCreateError(null);
+        fetchTasks();
         return;
       }
       
@@ -400,7 +451,7 @@ function AssistantRequestsWidgetInner() {
       <CardHeader className="pb-3">
         {/* Marker for deployment confirmation */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-          ASSIGNEE-SELECT-FIX-DASH-V1
+          ASSISTANT-REQUEST-DEDUP-V1
         </div>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
