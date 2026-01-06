@@ -679,6 +679,38 @@ export type Database = {
           },
         ]
       }
+      teacher_student_links: {
+        Row: {
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          student_id: string
+          teacher_id: string
+        }
+        Insert: {
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          student_id: string
+          teacher_id: string
+        }
+        Update: {
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          student_id?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teacher_student_links_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_note_attachments: {
         Row: {
           created_at: string

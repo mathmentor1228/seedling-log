@@ -695,9 +695,9 @@ export function LessonRecordForm({
 
               {previousLessonHomework && (
                 <div className="p-3 bg-background rounded-lg border space-y-2">
-                  {/* PREV-HW-SUBJECT-MAP-V1 debug marker */}
+                  {/* PREV_HW_LINK_V1 debug marker */}
                   <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-                    PREV-HW-SUBJECT-MAP-V1: rows={prevHwDebugInfo.rows} subject={formData.subject} student={formData.student_id?.slice(0,8)} found={prevHwDebugInfo.found ? 1 : 0} srcDate={prevHwDebugInfo.srcDate} srcTeacher={prevHwDebugInfo.srcTeacher}
+                    PREV_HW_LINK_V1: subject={formData.subject} found={prevHwDebugInfo.found ? 1 : 0}
                   </span>
                   <Label className="text-sm font-medium">지난숙제(자동)</Label>
                   <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
