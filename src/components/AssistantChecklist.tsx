@@ -29,8 +29,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { getTodayKST } from '@/lib/utils';
-import { format, differenceInHours, parseISO } from 'date-fns';
+import { getTodayKST, getDueBadgeInfo } from '@/lib/utils';
+import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
   ClipboardList,
@@ -560,32 +560,31 @@ export default function AssistantChecklist() {
     setDialogOpen(false);
   }
 
+  // DUE-TODAY-END-OF-DAY-KST-V1
   function getDueBadge(task: AssistantTask) {
     if (!task.due_date) return null;
     
-    const now = new Date();
-    const dueDate = parseISO(task.due_date + 'T23:59:59');
-    const hoursUntilDue = differenceInHours(dueDate, now);
+    const info = getDueBadgeInfo(task.due_date);
     
-    if (hoursUntilDue < 0) {
+    if (info.type === 'overdue') {
       return (
         <Badge variant="destructive" className="text-xs gap-1">
           <AlertTriangle className="w-3 h-3" />
-          마감 지남
+          {info.label}
         </Badge>
       );
-    } else if (hoursUntilDue <= 24) {
+    } else if (info.type === 'today') {
       return (
         <Badge className="text-xs gap-1 bg-amber-500/15 text-amber-600 border-amber-500/30">
           <Clock className="w-3 h-3" />
-          오늘 마감
+          {info.label}
         </Badge>
       );
     }
     return (
       <Badge variant="outline" className="text-xs gap-1">
         <Calendar className="w-3 h-3" />
-        {format(dueDate, 'M/d', { locale: ko })}
+        {info.label}
       </Badge>
     );
   }

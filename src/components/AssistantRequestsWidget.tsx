@@ -19,9 +19,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2, X } from 'lucide-react';
-import { format, differenceInHours, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { getTodayKST, cn } from '@/lib/utils';
+import { getTodayKST, getDueBadgeInfo, cn } from '@/lib/utils';
 
 // ErrorBoundary for catching runtime crashes in the widget
 interface ErrorBoundaryState {
@@ -355,19 +355,18 @@ function AssistantRequestsWidgetInner() {
     }
   };
 
+  // DUE-TODAY-END-OF-DAY-KST-V1
   const getDueBadge = (dueDateStr: string | null) => {
     if (!dueDateStr) return null;
     
-    const dueDate = parseISO(dueDateStr);
-    const now = new Date();
-    const hoursUntilDue = differenceInHours(dueDate, now);
+    const info = getDueBadgeInfo(dueDateStr);
     
-    if (hoursUntilDue < 0) {
-      return <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">기한 초과</Badge>;
-    } else if (hoursUntilDue < 24) {
-      return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">오늘 마감</Badge>;
+    if (info.type === 'overdue') {
+      return <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">{info.label}</Badge>;
+    } else if (info.type === 'today') {
+      return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">{info.label}</Badge>;
     } else {
-      return <Badge variant="outline" className="text-xs">{format(dueDate, 'MM/dd')}</Badge>;
+      return <Badge variant="outline" className="text-xs">{info.label}</Badge>;
     }
   };
 
