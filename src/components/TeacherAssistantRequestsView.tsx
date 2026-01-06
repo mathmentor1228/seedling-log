@@ -3,7 +3,7 @@
 // REQUESTER-AND-RELATEDTEACHER-V1
 // REQUEST-CREATE-STABLE-V2
 // REQ-ERROR-VISIBLE-V1
-// ASSISTANT-REQUEST-RPC-DEDUP-V2
+// ASSISTANT-REQUEST-RPC-DEDUP-V3
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -105,7 +105,7 @@ export function TeacherAssistantRequestsView() {
     try {
       console.log('[TEACHER_REQ_SUBMIT] Calling RPC create_assistant_task');
       
-      // ASSISTANT-REQUEST-RPC-DEDUP-V2: Use RPC for proper ON CONFLICT ON CONSTRAINT handling
+      // ASSISTANT-REQUEST-RPC-DEDUP-V3: Use RPC for proper ON CONFLICT ON CONSTRAINT handling
       const { data, error } = await supabase.rpc('create_assistant_task', {
         _title: title.trim(),
         _assignee: assignee || '미배정',
@@ -235,7 +235,7 @@ export function TeacherAssistantRequestsView() {
     <div className="space-y-6">
       {/* Marker for deployment confirmation */}
       <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        ASSISTANT-REQUEST-RPC-DEDUP-V2
+        ASSISTANT-REQUEST-RPC-DEDUP-V3
       </div>
 
       <div className="flex items-center gap-3">
