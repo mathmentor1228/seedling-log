@@ -87,6 +87,7 @@ interface LessonRecord {
   submitted: boolean;
   submitted_at: string | null;
   draft_created_at: string;
+  teacher_id?: string; // LESSON-VIEW-MODE-V1: Added for ownership check
   // Test fields
   test_name?: string | null;
   test_result_text?: string | null;
@@ -367,6 +368,9 @@ export default function Lessons() {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [editingLesson, setEditingLesson] = useState<LessonRecord | null>(null);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  // LESSON-VIEW-MODE-V1: View/edit mode for lesson records
+  const [dialogMode, setDialogMode] = useState<'view' | 'edit'>('edit');
+  const [originalTeacherId, setOriginalTeacherId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     student_id: '',
     class_id: '',
@@ -1074,8 +1078,11 @@ export default function Lessons() {
     const lesson_types = formData.lesson_types.length > 0 ? formData.lesson_types : ['정규수업'];
     const attendance_status = formData.attendance_status.length > 0 ? formData.attendance_status : ['정상등원'];
     
+    // LESSON-EDIT-MODE-V1: Preserve original teacher_id when editing existing records
+    const teacherId = originalTeacherId || user!.id;
+    
     const basePayload = {
-      teacher_id: user!.id,
+      teacher_id: teacherId,
       student_id: formData.student_id,
       class_id: formData.class_id || null,
       subject,
@@ -1711,6 +1718,8 @@ export default function Lessons() {
   const handleOpenNewForm = async () => {
     setEditingLesson(null);
     resetForm();
+    setDialogMode('edit'); // New records always in edit mode
+    setOriginalTeacherId(null); // New record, current user is teacher
     setIsDialogOpen(true);
     // Create draft after dialog opens
     setTimeout(async () => {
@@ -1723,6 +1732,28 @@ export default function Lessons() {
   const handleEdit = async (lesson: LessonRecord) => {
     setEditingLesson(lesson);
     setCurrentDraftId(lesson.id);
+    
+    // LESSON-VIEW-MODE-V1: Determine view/edit mode
+    // Admin opens in view mode by default (can click to edit)
+    // Teacher opens in edit mode if own record, view mode if other's
+    const lessonTeacherId = lesson.teacher_id;
+    setOriginalTeacherId(lessonTeacherId || null);
+    
+    if (isAdmin) {
+      // Admin: always view mode first, can switch to edit
+      setDialogMode('view');
+    } else if (isTeacher) {
+      // Teacher: edit only own records
+      if (lessonTeacherId === user?.id) {
+        setDialogMode('edit');
+      } else {
+        setDialogMode('view');
+      }
+    } else {
+      // Assistant: view only
+      setDialogMode('view');
+    }
+    
     setFormData({
       student_id: lesson.student_id,
       class_id: lesson.class_id || '',
@@ -1772,6 +1803,11 @@ export default function Lessons() {
     setPrevHomeworkOverrideText('');
     
     setIsDialogOpen(true);
+  };
+
+  // LESSON-VIEW-MODE-V1: Handler to switch from view to edit mode
+  const handleRequestEditMode = () => {
+    setDialogMode('edit');
   };
 
   const handleDelete = async (id: string) => {
@@ -1999,19 +2035,45 @@ export default function Lessons() {
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {editingLesson ? (
+                {dialogMode === 'view' ? (
+                  '수업 기록 상세'
+                ) : editingLesson ? (
                   editingLesson.submitted ? '수업 기록 수정' : '임시저장 수정'
                 ) : (
                   '새 수업 기록'
                 )}
-                {currentDraftId && !editingLesson?.submitted && (
+                {currentDraftId && !editingLesson?.submitted && dialogMode === 'edit' && (
                   <Badge variant="outline" className="ml-2">
                     <FileEdit className="w-3 h-3 mr-1" />
                     임시저장
                   </Badge>
                 )}
+                {dialogMode === 'view' && (
+                  <Badge variant="outline" className="ml-2 bg-blue-500/10 text-blue-700 border-blue-500/30">
+                    보기 모드
+                  </Badge>
+                )}
               </DialogTitle>
             </DialogHeader>
+            
+            {/* LESSON-VIEW-MODE-V1 / LESSON-EDIT-MODE-V1 marker */}
+            <div className={`text-xs text-center py-1 rounded ${dialogMode === 'view' ? 'bg-blue-500/20 text-blue-700' : 'bg-muted/30 text-muted-foreground'}`}>
+              {dialogMode === 'view' ? 'LESSON-VIEW-MODE-V1' : 'LESSON-EDIT-MODE-V1'}
+            </div>
+            
+            {/* View mode: Edit button for admin */}
+            {dialogMode === 'view' && isAdmin && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="default"
+                  onClick={handleRequestEditMode}
+                >
+                  <FileEdit className="w-4 h-4 mr-1" />
+                  편집하기
+                </Button>
+              </div>
+            )}
             
             {/* Notice when existing record was opened */}
             {existingRecordNotice && (
@@ -2021,7 +2083,7 @@ export default function Lessons() {
               </div>
             )}
             
-            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <form onSubmit={handleSubmit} className={`space-y-4 mt-4 ${dialogMode === 'view' ? 'pointer-events-none opacity-90' : ''}`}>
               {/* 지난 수업 Section - At the very top */}
               {formData.student_id && formData.class_id && (
                 <div className="p-4 rounded-lg border-2 border-blue-500/30 bg-blue-500/5 space-y-4">
@@ -2768,32 +2830,55 @@ export default function Lessons() {
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleDialogClose(false)}
-                >
-                  {isAssistant ? '닫기' : '취소'}
-                </Button>
-                {/* Hide draft/submit buttons for assistants */}
-                {!isAssistant && (
+              <div className="flex justify-end gap-2 pt-4 pointer-events-auto">
+                {dialogMode === 'view' ? (
                   <>
                     <Button
                       type="button"
-                      variant="secondary"
-                      onClick={handleSaveDraft}
-                      disabled={isSavingDraft || isSubmitting}
+                      variant="outline"
+                      onClick={() => handleDialogClose(false)}
                     >
-                      {isSavingDraft && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      <Save className="w-4 h-4 mr-2" />
-                      임시저장
+                      닫기
                     </Button>
-                    <Button type="submit" disabled={isSubmitting || isSavingDraft}>
-                      {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      <Send className="w-4 h-4 mr-2" />
-                      제출
+                    {isAdmin && (
+                      <Button
+                        type="button"
+                        onClick={handleRequestEditMode}
+                      >
+                        <FileEdit className="w-4 h-4 mr-2" />
+                        편집하기
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleDialogClose(false)}
+                    >
+                      {isAssistant ? '닫기' : '취소'}
                     </Button>
+                    {/* Hide draft/submit buttons for assistants */}
+                    {!isAssistant && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveDraft}
+                          disabled={isSavingDraft || isSubmitting}
+                        >
+                          {isSavingDraft && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                          <Save className="w-4 h-4 mr-2" />
+                          임시저장
+                        </Button>
+                        <Button type="submit" disabled={isSubmitting || isSavingDraft}>
+                          {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                          <Send className="w-4 h-4 mr-2" />
+                          제출
+                        </Button>
+                      </>
+                    )}
                   </>
                 )}
               </div>

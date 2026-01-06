@@ -37,6 +37,9 @@ export interface LessonRecordFormProps {
   onCancel?: () => void;
   students: { id: string; name: string }[];
   classes: { id: string; name: string; subject: string }[];
+  mode?: 'view' | 'edit';
+  onRequestEdit?: () => void;
+  originalTeacherId?: string | null;
 }
 
 interface HomeworkAssignment {
@@ -166,9 +169,15 @@ export function LessonRecordForm({
   onCancel,
   students,
   classes,
+  mode = 'edit',
+  onRequestEdit,
+  originalTeacherId,
 }: LessonRecordFormProps) {
   const { user, role } = useAuth();
   const { toast } = useToast();
+  
+  // View mode: all inputs disabled, no auto-save, no mutations
+  const isViewMode = mode === 'view';
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isAssistant = checkIsAssistant(role);
@@ -446,8 +455,11 @@ export function LessonRecordForm({
     const lesson_types = formData.lesson_types.length > 0 ? formData.lesson_types : ['정규수업'];
     const attendance_status = formData.attendance_status.length > 0 ? formData.attendance_status : ['정상등원'];
 
+    // LESSON-EDIT-MODE-V1: Preserve original teacher_id in edit mode unless explicitly new record
+    const teacherId = originalTeacherId || user!.id;
+
     const basePayload = {
-      teacher_id: user!.id,
+      teacher_id: teacherId,
       student_id: formData.student_id,
       class_id: formData.class_id || null,
       subject,
@@ -642,14 +654,28 @@ export function LessonRecordForm({
   const className = classes.find(c => c.id === formData.class_id)?.name || '선택되지 않음';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* ADMIN-LESSON-MODAL-FORM-V1 marker */}
-      <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        ADMIN-LESSON-MODAL-FORM-V1
+    <form onSubmit={handleSubmit} className={`space-y-4 ${isViewMode ? 'pointer-events-none' : ''}`}>
+      {/* LESSON-VIEW-MODE-V1 / LESSON-EDIT-MODE-V1 marker */}
+      <div className={`text-xs text-center py-1 rounded ${isViewMode ? 'bg-blue-500/20 text-blue-700' : 'bg-muted/30 text-muted-foreground'}`}>
+        {isViewMode ? 'LESSON-VIEW-MODE-V1' : 'LESSON-EDIT-MODE-V1'}
       </div>
 
+      {/* View mode: re-enable pointer events for edit button */}
+      {isViewMode && isAdmin && onRequestEdit && (
+        <div className="pointer-events-auto flex justify-end">
+          <Button
+            type="button"
+            variant="default"
+            onClick={onRequestEdit}
+          >
+            <FileEdit className="w-4 h-4 mr-1" />
+            편집하기
+          </Button>
+        </div>
+      )}
+
       {/* Context info header */}
-      <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg">
+      <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">학생:</span>
           <span className="font-medium">{studentName}</span>
@@ -669,6 +695,11 @@ export function LessonRecordForm({
         {editingLesson && (
           <Badge variant={editingLesson.submitted ? 'default' : 'outline'} className="ml-auto">
             {editingLesson.submitted ? '제출됨' : '임시저장'}
+          </Badge>
+        )}
+        {isViewMode && (
+          <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-500/30">
+            보기 모드
           </Badge>
         )}
       </div>
@@ -1013,8 +1044,20 @@ export function LessonRecordForm({
         </div>
       </div>
 
-      {/* Action buttons */}
-      {canManage && (
+      {/* Action buttons - view mode shows only close button */}
+      {isViewMode ? (
+        <div className="flex items-center justify-between pt-4 border-t pointer-events-auto">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            닫기
+          </Button>
+          {isAdmin && onRequestEdit && (
+            <Button type="button" onClick={onRequestEdit}>
+              <FileEdit className="w-4 h-4 mr-1" />
+              편집하기
+            </Button>
+          )}
+        </div>
+      ) : canManage && (
         <div className="flex items-center justify-between pt-4 border-t">
           <Button type="button" variant="outline" onClick={onCancel}>
             취소
