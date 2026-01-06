@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 
@@ -88,6 +88,7 @@ interface LessonRecord {
   submitted_at: string | null;
   draft_created_at: string;
   teacher_id?: string; // LESSON-VIEW-MODE-V1: Added for ownership check
+  teacher_name?: string; // LESSON-VIEW-MODE-V1: For display in view mode
   // Test fields
   test_name?: string | null;
   test_result_text?: string | null;
@@ -634,9 +635,21 @@ export default function Lessons() {
 
       if (error) throw error;
 
+      // LESSON-VIEW-MODE-V1: Get teacher names for all lessons
+      const teacherIds = [...new Set((data || []).map((l: any) => l.teacher_id).filter(Boolean))];
+      let teacherNameMap: Record<string, string> = {};
+      if (teacherIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', teacherIds);
+        teacherNameMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name || '알 수 없음']));
+      }
+
       let formattedLessons = (data || []).map((l: any) => ({
         ...l,
         student_name: l.students?.name,
+        teacher_name: teacherNameMap[l.teacher_id] || '',
       }));
 
       // Client-side filter for student name search (partial match)
@@ -1729,55 +1742,64 @@ export default function Lessons() {
     }, 100);
   };
 
+  // LESSON-VIEW-MODE-V1: Open lesson in VIEW mode (read-only)
+  const handleView = async (lesson: LessonRecord) => {
+    await openLessonDialog(lesson, 'view');
+  };
+
+  // LESSON-VIEW-MODE-V1: Open lesson in EDIT mode (only for own records)
   const handleEdit = async (lesson: LessonRecord) => {
-    setEditingLesson(lesson);
-    setCurrentDraftId(lesson.id);
-    
-    // LESSON-VIEW-MODE-V1: Determine view/edit mode
-    // Admin opens in view mode by default (can click to edit)
-    // Teacher opens in edit mode if own record, view mode if other's
+    // Teacher can only edit own records directly
     const lessonTeacherId = lesson.teacher_id;
-    setOriginalTeacherId(lessonTeacherId || null);
-    
-    if (isAdmin) {
-      // Admin: always view mode first, can switch to edit
-      setDialogMode('view');
-    } else if (isTeacher) {
-      // Teacher: edit only own records
-      if (lessonTeacherId === user?.id) {
-        setDialogMode('edit');
-      } else {
-        setDialogMode('view');
-      }
-    } else {
-      // Assistant: view only
-      setDialogMode('view');
+    const canEditDirectly = isTeacher && lessonTeacherId === user?.id;
+    const mode = canEditDirectly ? 'edit' : 'view';
+    await openLessonDialog(lesson, mode);
+  };
+
+  // LESSON-VIEW-MODE-V1: Shared function to open lesson dialog
+  const openLessonDialog = async (lesson: LessonRecord, mode: 'view' | 'edit') => {
+    // Fetch teacher_name if not already present
+    let lessonWithTeacher = lesson;
+    if (!lesson.teacher_name && lesson.teacher_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', lesson.teacher_id)
+        .maybeSingle();
+      lessonWithTeacher = { ...lesson, teacher_name: profile?.full_name || '알 수 없음' };
     }
     
+    setEditingLesson(lessonWithTeacher);
+    setCurrentDraftId(lessonWithTeacher.id);
+    
+    const lessonTeacherId = lessonWithTeacher.teacher_id;
+    setOriginalTeacherId(lessonTeacherId || null);
+    setDialogMode(mode);
+    
     setFormData({
-      student_id: lesson.student_id,
-      class_id: lesson.class_id || '',
-      subject: lesson.subject,
-      lesson_date: lesson.lesson_date,
-      lesson_range: lesson.lesson_range,
-      understanding_score: lesson.understanding_score.toString(),
-      homework_status: lesson.homework_status,
-      learning_issues: lesson.learning_issues || [],
-      learning_issues_note: lesson.learning_issues_note || '',
-      next_lesson_goal: lesson.next_lesson_goal || '',
-      notes: lesson.notes || '',
-      lesson_types: lesson.lesson_types || ['정규수업'],
-      attendance_status: lesson.attendance_status || ['정상등원'],
+      student_id: lessonWithTeacher.student_id,
+      class_id: lessonWithTeacher.class_id || '',
+      subject: lessonWithTeacher.subject,
+      lesson_date: lessonWithTeacher.lesson_date,
+      lesson_range: lessonWithTeacher.lesson_range,
+      understanding_score: lessonWithTeacher.understanding_score.toString(),
+      homework_status: lessonWithTeacher.homework_status,
+      learning_issues: lessonWithTeacher.learning_issues || [],
+      learning_issues_note: lessonWithTeacher.learning_issues_note || '',
+      next_lesson_goal: lessonWithTeacher.next_lesson_goal || '',
+      notes: lessonWithTeacher.notes || '',
+      lesson_types: lessonWithTeacher.lesson_types || ['정규수업'],
+      attendance_status: lessonWithTeacher.attendance_status || ['정상등원'],
     });
     // Set test form data from lesson
     setTestFormData({
-      test_name: lesson.test_name || '',
-      test_result_text: lesson.test_result_text || '',
-      test_result: lesson.test_result || 'none',
-      test_notes: lesson.test_notes || '',
-      test_date: lesson.test_date || lesson.lesson_date,
-      test_time: lesson.test_time || '',
-      test_assistant: lesson.test_assistant || '',
+      test_name: lessonWithTeacher.test_name || '',
+      test_result_text: lessonWithTeacher.test_result_text || '',
+      test_result: lessonWithTeacher.test_result || 'none',
+      test_notes: lessonWithTeacher.test_notes || '',
+      test_date: lessonWithTeacher.test_date || lessonWithTeacher.lesson_date,
+      test_time: lessonWithTeacher.test_time || '',
+      test_assistant: lessonWithTeacher.test_assistant || '',
     });
     
     // Load existing homework content for this lesson record
@@ -1785,7 +1807,7 @@ export default function Lessons() {
       const { data: existingHw } = await supabase
         .from('homework_assignments')
         .select('content')
-        .eq('lesson_record_id', lesson.id)
+        .eq('lesson_record_id', lessonWithTeacher.id)
         .maybeSingle();
       
       if (existingHw?.content) {
@@ -2060,6 +2082,34 @@ export default function Lessons() {
             <div className={`text-xs text-center py-1 rounded ${dialogMode === 'view' ? 'bg-blue-500/20 text-blue-700' : 'bg-muted/30 text-muted-foreground'}`}>
               {dialogMode === 'view' ? 'LESSON-VIEW-MODE-V1' : 'LESSON-EDIT-MODE-V1'}
             </div>
+            
+            {/* LESSON-VIEW-MODE-V1: View mode metadata at top */}
+            {dialogMode === 'view' && editingLesson && (
+              <div className="flex flex-wrap gap-3 p-3 bg-muted/50 rounded-lg border text-sm">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">작성자:</span>
+                  <span className="font-medium">{editingLesson.teacher_name || '알 수 없음'}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">과목:</span>
+                  <Badge variant="secondary">{editingLesson.subject}</Badge>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">수업일:</span>
+                  <span className="font-medium">{format(new Date(editingLesson.lesson_date), 'yyyy-MM-dd')}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">상태:</span>
+                  {editingLesson.submitted ? (
+                    <Badge className="bg-green-500/10 text-green-600 border-green-500/20">제출됨</Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-amber-500/50 text-amber-600">
+                      <FileEdit className="w-3 h-3 mr-1" />임시저장
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
             
             {/* View mode: Edit button for admin */}
             {dialogMode === 'view' && isAdmin && (
@@ -3090,19 +3140,33 @@ export default function Lessons() {
                       </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
+                            {/* LESSON-VIEW-MODE-V1: 조회 button (always available) */}
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleEdit(lesson)}
+                              onClick={() => handleView(lesson)}
+                              title="조회"
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </Button>
+                            {/* 수정 button: only for teacher's own records */}
+                            {isTeacher && lesson.teacher_id === user?.id && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(lesson)}
+                                title="수정"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             {canManage && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleDelete(lesson.id)}
                                 className="text-destructive hover:text-destructive"
+                                title="삭제"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
