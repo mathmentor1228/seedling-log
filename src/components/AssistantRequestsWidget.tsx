@@ -5,7 +5,7 @@
 // REQ-ERROR-VISIBLE-V1
 // DASHBOARD-REQUEST-WIDGET-SUBMIT-V3
 // ASSIGNEE-SELECT-FIX-DASH-V1
-// ASSISTANT-REQUEST-RPC-DEDUP-V2
+// ASSISTANT-REQUEST-RPC-DEDUP-V3
 import { useState, useEffect, Component, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
@@ -281,7 +281,7 @@ function AssistantRequestsWidgetInner() {
       
       console.log('[DASH_REQ_SUBMIT] Calling RPC create_assistant_task');
       
-      // ASSISTANT-REQUEST-RPC-DEDUP-V2: Use RPC for proper ON CONFLICT ON CONSTRAINT handling
+      // ASSISTANT-REQUEST-RPC-DEDUP-V3: Use RPC for proper ON CONFLICT ON CONSTRAINT handling
       const { data, error } = await supabase.rpc('create_assistant_task', {
         _title: title.trim(),
         _assignee: dbAssignee || '미배정',
@@ -407,7 +407,7 @@ function AssistantRequestsWidgetInner() {
       <CardHeader className="pb-3">
         {/* Marker for deployment confirmation */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-          ASSISTANT-REQUEST-RPC-DEDUP-V2
+          ASSISTANT-REQUEST-RPC-DEDUP-V3
         </div>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
