@@ -5,7 +5,7 @@
 // REQ-ERROR-VISIBLE-V1
 // DASHBOARD-REQUEST-WIDGET-SUBMIT-V3
 // ASSIGNEE-SELECT-FIX-DASH-V1
-// ASSISTANT-REQUEST-DEDUP-V1
+// ASSISTANT-REQUEST-RPC-DEDUP-V2
 import { useState, useEffect, Component, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
@@ -235,7 +235,7 @@ function AssistantRequestsWidgetInner() {
   }, [teacherFilter, assigneeFilter]);
 
   const handleCreateRequest = async () => {
-    // ASSISTANT-REQUEST-DEDUP-V1: Prevent double submit
+    // ASSISTANT-REQUEST-RPC-DEDUP-V2: Prevent double submit
     if (submitting) {
       console.log('[DASH_REQ_DEDUP] Already submitting, ignoring duplicate call');
       return;
@@ -272,8 +272,6 @@ function AssistantRequestsWidgetInner() {
     setSubmitting(true);
     
     try {
-      const todayKST = getTodayKST();
-      
       // Teachers set related_teacher_id to themselves
       // Admins can optionally select a related teacher (map 'none' to null)
       const relatedTeacherId = isTeacher(role) ? user.id : (relatedTeacher === 'none' ? null : relatedTeacher || null);
@@ -281,83 +279,41 @@ function AssistantRequestsWidgetInner() {
       // Map UI assignee value to DB value: 'unassigned' => '미배정'
       const dbAssignee = assignee === 'unassigned' ? '미배정' : assignee;
       
-      // Build safe payload with explicit defaults
-      const payload = {
-        title: title.trim(),
-        assignee: dbAssignee || '미배정',
-        due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
-        notes: notes.trim() || null,
-        status: 'todo',
-        priority: 'normal',
-        task_date: todayKST,
-        task_type: 'teacher_request',
-        created_by: user.id,
-        created_by_role: role,
-        related_teacher_id: relatedTeacherId,
-      };
+      console.log('[DASH_REQ_SUBMIT] Calling RPC create_assistant_task');
       
-      console.log('[DASH_REQ_SUBMIT] Payload:', payload);
-      
-      // ASSISTANT-REQUEST-DEDUP-V1: Use upsert with ignoreDuplicates to handle unique constraint
-      // Conflict columns: task_date, task_type, related_student_id (null), related_teacher_id
-      const { data, error, count } = await supabase
-        .from('assistant_tasks')
-        .upsert(payload, { 
-          onConflict: 'task_date,task_type,related_student_id,related_teacher_id',
-          ignoreDuplicates: true 
-        })
-        .select();
+      // ASSISTANT-REQUEST-RPC-DEDUP-V2: Use RPC for proper ON CONFLICT ON CONSTRAINT handling
+      const { data, error } = await supabase.rpc('create_assistant_task', {
+        _title: title.trim(),
+        _assignee: dbAssignee || '미배정',
+        _due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
+        _notes: notes.trim() || null,
+        _related_teacher_id: relatedTeacherId,
+      });
       
       if (error) {
-        // Check if it's a duplicate key error (shouldn't happen with ignoreDuplicates, but just in case)
-        if (error.code === '23505') {
-          console.log('[DASH_REQ_DEDUP] Duplicate detected by error code');
-          toast({
-            title: '이미 동일한 요청이 있어요',
-            description: '중복 등록을 막았어요.',
-          });
-          // Reset form and refresh to show existing request
-          setTitle('');
-          setAssignee('unassigned');
-          setDueDate(undefined);
-          setNotes('');
-          setRelatedTeacher('none');
-          setShowForm(false);
-          setCreateError(null);
-          fetchTasks();
-          return;
-        }
-        
         const errMsg = `REQUEST_CREATE_ERROR: code=${error.code || 'unknown'} message=${error.message} details=${error.details || 'none'} hint=${error.hint || 'none'}`;
         console.error('[DASH_REQ_FAIL]', error);
         setCreateError(errMsg);
         return;
       }
       
-      // Check if insert was ignored due to duplicate (ignoreDuplicates returns empty array)
-      if (!data || data.length === 0) {
-        console.log('[DASH_REQ_DEDUP] Duplicate detected, insert was ignored');
+      // RPC returns jsonb with is_new field
+      const result = data as { id: string; is_new: boolean; assignee: string } | null;
+      
+      if (result && !result.is_new) {
+        // Duplicate detected
+        console.log('[DASH_REQ_DEDUP] Duplicate detected, existing row returned');
         toast({
           title: '이미 동일한 요청이 있어요',
-          description: '중복 등록을 막았어요.',
+          description: '기존 요청을 표시했어요.',
         });
-        // Reset form and refresh to show existing request
-        setTitle('');
-        setAssignee('unassigned');
-        setDueDate(undefined);
-        setNotes('');
-        setRelatedTeacher('none');
-        setShowForm(false);
-        setCreateError(null);
-        fetchTasks();
-        return;
+      } else {
+        // Success - new row created
+        toast({
+          title: '요청이 등록되었습니다.',
+          description: dbAssignee !== '미배정' ? `${dbAssignee}에게 배정됨` : undefined
+        });
       }
-      
-      // Success - show toast
-      toast({
-        title: '요청이 등록되었습니다.',
-        description: assignee !== '미배정' ? `${assignee}에게 배정됨` : undefined
-      });
       
       // Reset form (stay on dashboard)
       setTitle('');
@@ -451,7 +407,7 @@ function AssistantRequestsWidgetInner() {
       <CardHeader className="pb-3">
         {/* Marker for deployment confirmation */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-          ASSISTANT-REQUEST-DEDUP-V1
+          ASSISTANT-REQUEST-RPC-DEDUP-V2
         </div>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
