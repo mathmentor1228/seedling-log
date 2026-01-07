@@ -370,25 +370,22 @@ export default function Dashboard() {
             ? lessonsData.reduce((sum, l) => sum + l.understanding_score, 0) / lessonsData.length
             : 0;
 
-          // Fetch recent lessons with student names
-          let recentQuery = supabase
-            .from('lesson_records')
-            .select(`
-              id,
-              subject,
-              understanding_score,
-              lesson_date,
-              students:student_id (name)
-            `)
-            .order('lesson_date', { ascending: false })
-            .limit(5);
-
-          // Teachers only see their own recent lessons
-          if (isTeacher(role)) {
-            recentQuery = recentQuery.eq('teacher_id', user.id);
+          // TEACHER-RECENT-LESSONS-REMOVED-V1: Fetch recent lessons only for admin (removed for teacher)
+          let recentData: any[] = [];
+          if (isAdmin(role)) {
+            const { data } = await supabase
+              .from('lesson_records')
+              .select(`
+                id,
+                subject,
+                understanding_score,
+                lesson_date,
+                students:student_id (name)
+              `)
+              .order('lesson_date', { ascending: false })
+              .limit(5);
+            recentData = data || [];
           }
-
-          const { data: recentData } = await recentQuery;
 
           // Fetch weekly reports for at-risk students
           const { data: reportsData } = await supabase
@@ -1688,10 +1685,10 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Content Grid - Visible for admin and teacher */}
-      {!isAssistant(role) && (
+      {/* Content Grid - Admin only (TEACHER-RECENT-LESSONS-REMOVED-V1: removed 최근수업 for teachers) */}
+      {isAdmin(role) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Lessons */}
+          {/* Recent Lessons - Admin Only */}
           <Card className="animate-slide-up">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1724,40 +1721,38 @@ export default function Dashboard() {
           </Card>
 
           {/* At Risk Students - Admin Only */}
-          {isAdmin(role) && (
-            <Card className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  주의가 필요한 학생
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {atRiskStudents.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">
-                    위험 학생이 없습니다
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {(atRiskStudents || []).map((student) => (
-                      <div
-                        key={student.id}
-                        className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium text-foreground">{student.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            평균 점수: {student.avg_score.toFixed(1)}
-                          </p>
-                        </div>
-                        <RiskBadge level={student.risk_level} />
+          <Card className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                주의가 필요한 학생
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {atRiskStudents.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  위험 학생이 없습니다
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {(atRiskStudents || []).map((student) => (
+                    <div
+                      key={student.id}
+                      className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
+                    >
+                      <div>
+                        <p className="font-medium text-foreground">{student.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          평균 점수: {student.avg_score.toFixed(1)}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                      <RiskBadge level={student.risk_level} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
