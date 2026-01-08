@@ -4,6 +4,7 @@
 // REQUEST-CREATE-STABLE-V2
 // REQ-ERROR-VISIBLE-V1
 // ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4
+// TEACHER-REQUEST-DETAILS-ATTACH-V1
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -22,6 +23,8 @@ import { CalendarIcon, ClipboardCheck, Plus, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { getDueBadgeInfo, cn } from '@/lib/utils';
+import { useTaskAttachments } from '@/hooks/useTaskAttachments';
+import { TaskAttachmentBadge, TaskAttachmentList, TaskNotesPreview } from '@/components/TaskAttachmentList';
 
 interface AssistantTask {
   id: string;
@@ -55,6 +58,18 @@ export function TeacherAssistantRequestsView() {
   // Tab filter
   const [statusFilter, setStatusFilter] = useState<string>('active');
 
+  // Expanded notes state (separate from attachment expansion)
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+
+  // Attachment handling
+  const {
+    attachmentCounts,
+    expandedAttachments,
+    loadingAttachments,
+    loadAttachmentCounts,
+    toggleTaskAttachments
+  } = useTaskAttachments();
+
   const fetchTasks = async () => {
     if (!user) return;
 
@@ -66,7 +81,14 @@ export function TeacherAssistantRequestsView() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTasks(data || []);
+      const taskData = data || [];
+      setTasks(taskData);
+
+      // Load attachment counts for all tasks in batch
+      if (taskData.length > 0) {
+        const taskIds = taskData.map(t => t.id);
+        loadAttachmentCounts(taskIds);
+      }
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
@@ -235,7 +257,7 @@ export function TeacherAssistantRequestsView() {
     <div className="space-y-6">
       {/* Marker for deployment confirmation */}
       <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4
+        TEACHER-REQUEST-DETAILS-ATTACH-V1
       </div>
 
       <div className="flex items-center gap-3">
@@ -364,51 +386,74 @@ export function TeacherAssistantRequestsView() {
                   {statusFilter === 'cancelled' && '취소된 요청이 없습니다'}
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {filteredTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
-                    >
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {getStatusBadge(task.status)}
-                          <span className="font-medium text-foreground">{task.title}</span>
+                <div className="space-y-3">
+                  {filteredTasks.map((task) => {
+                    const attachCount = attachmentCounts[task.id] || 0;
+                    const attachments = expandedAttachments[task.id];
+                    const isNotesExpanded = expandedNotes[task.id] || false;
+                    const isAttachExpanded = !!attachments;
+                    
+                    return (
+                      <div
+                        key={task.id}
+                        className="p-3 bg-secondary/50 rounded-lg space-y-2"
+                      >
+                        {/* Row 1: Status + Title */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                            {getStatusBadge(task.status)}
+                            <span className="font-medium text-foreground">{task.title}</span>
+                          </div>
+                          {/* Cancel button for active tasks */}
+                          {(task.status === 'todo' || task.status === 'doing') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-muted-foreground hover:text-destructive shrink-0 ml-2"
+                              onClick={() => handleCancel(task.id)}
+                              disabled={cancellingId === task.id}
+                            >
+                              {cancellingId === task.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <X className="w-4 h-4 mr-1" />
+                                  취소
+                                </>
+                              )}
+                            </Button>
+                          )}
                         </div>
+                        
+                        {/* Row 2: Assignee + Due + Time + Attachments badge */}
                         <div className="flex items-center gap-2 flex-wrap">
                           {getAssigneeBadge(task.assignee)}
                           {getDueBadge(task.due_date)}
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(task.created_at), 'MM/dd HH:mm')}
                           </span>
+                          <TaskAttachmentBadge
+                            count={attachCount}
+                            expanded={isAttachExpanded}
+                            loading={loadingAttachments[task.id] || false}
+                            onToggle={() => toggleTaskAttachments(task.id)}
+                          />
                         </div>
-                        {task.notes && (
-                          <p className="text-xs text-muted-foreground mt-1 truncate">
-                            {task.notes}
-                          </p>
+                        
+                        {/* Row 3: Notes preview with expand toggle */}
+                        <TaskNotesPreview
+                          notes={task.notes}
+                          expanded={isNotesExpanded}
+                          onToggle={() => setExpandedNotes(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
+                        />
+                        
+                        {/* Row 4: Expanded attachments list */}
+                        {attachments && attachments.length > 0 && (
+                          <TaskAttachmentList attachments={attachments} className="mt-2" />
                         )}
                       </div>
-                      {/* Cancel button for active tasks */}
-                      {(task.status === 'todo' || task.status === 'doing') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground hover:text-destructive shrink-0 ml-2"
-                          onClick={() => handleCancel(task.id)}
-                          disabled={cancellingId === task.id}
-                        >
-                          {cancellingId === task.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <X className="w-4 h-4 mr-1" />
-                              취소
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </TabsContent>
