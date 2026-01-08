@@ -856,6 +856,56 @@ export type Database = {
           },
         ]
       }
+      test_visits: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          english_pass_fail: string | null
+          id: string
+          notes: string | null
+          student_id: string
+          subject: string
+          test_assistant: string | null
+          test_result_text: string | null
+          visit_date: string
+          visit_time: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          english_pass_fail?: string | null
+          id?: string
+          notes?: string | null
+          student_id: string
+          subject: string
+          test_assistant?: string | null
+          test_result_text?: string | null
+          visit_date?: string
+          visit_time: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          english_pass_fail?: string | null
+          id?: string
+          notes?: string | null
+          student_id?: string
+          subject?: string
+          test_assistant?: string | null
+          test_result_text?: string | null
+          visit_date?: string
+          visit_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_visits_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string

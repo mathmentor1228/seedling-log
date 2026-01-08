@@ -31,13 +31,16 @@ import {
   Phone,
   ChevronDown,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  FlaskConical
 } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { RosterActionModal } from '@/components/RosterActionModal';
 import AssistantChecklist from '@/components/AssistantChecklist';
+import { TestVisitModal } from '@/components/TestVisitModal';
+import { TestVisitsList } from '@/components/TestVisitsList';
 
 interface Teacher {
   id: string;
@@ -176,6 +179,9 @@ export default function AssistantDashboard() {
     start_time: string;
     existingRecordId: string | null;
   } | null>(null);
+
+  // Test visit modal state
+  const [testVisitModalOpen, setTestVisitModalOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -532,6 +538,16 @@ export default function AssistantDashboard() {
               내일
             </Button>
           </div>
+
+          {/* Test Visit Button */}
+          <Button
+            variant="outline"
+            className="border-blue-500/50 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+            onClick={() => setTestVisitModalOpen(true)}
+          >
+            <FlaskConical className="w-4 h-4 mr-2" />
+            테스트만 등록
+          </Button>
         </div>
       </div>
 
@@ -558,6 +574,9 @@ export default function AssistantDashboard() {
 
       {/* Assistant Checklist Section */}
       <AssistantChecklist />
+
+      {/* Test Visits List for the day */}
+      <TestVisitsList date={dateStr} />
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -817,6 +836,16 @@ export default function AssistantDashboard() {
         mode="HOMEWORK_TEST"
         onSaved={() => {
           console.log('[AssistantDashboard] Modal onSaved triggered - refetching roster data');
+          fetchAllData();
+        }}
+      />
+
+      {/* Test Visit Modal */}
+      <TestVisitModal
+        open={testVisitModalOpen}
+        onOpenChange={setTestVisitModalOpen}
+        onSaved={() => {
+          console.log('[AssistantDashboard] TestVisit onSaved triggered - refetching data');
           fetchAllData();
         }}
       />
