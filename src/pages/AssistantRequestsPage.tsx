@@ -1,14 +1,25 @@
+// TEACHER-REQUEST-DETAILS-ATTACH-V1
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { TeacherAssistantRequestsView } from '@/components/TeacherAssistantRequestsView';
+import { useAuth, isTeacher } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ClipboardCheck } from 'lucide-react';
 
-// ASSISTANT-REQUESTS-PAGE-V1
+// Full page view that reuses TeacherAssistantRequestsView for teachers
 function AssistantRequests() {
+  const { role } = useAuth();
+
+  // Teachers get the full requests view
+  if (isTeacher(role)) {
+    return <TeacherAssistantRequestsView />;
+  }
+
+  // Admin/Assistant fallback
   return (
     <div className="space-y-6">
       {/* Marker for deployment confirmation */}
       <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        ASSISTANT-REQUESTS-PAGE-V1
+        TEACHER-REQUEST-DETAILS-ATTACH-V1
       </div>
       
       <div className="flex items-center gap-3">

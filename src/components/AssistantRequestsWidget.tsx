@@ -6,6 +6,7 @@
 // DASHBOARD-REQUEST-WIDGET-SUBMIT-V3
 // ASSIGNEE-SELECT-FIX-DASH-V1
 // ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4
+// TEACHER-REQUEST-DETAILS-ATTACH-V1
 import { useState, useEffect, Component, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
@@ -22,7 +23,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { getTodayKST, getDueBadgeInfo, cn } from '@/lib/utils';
+import { getDueBadgeInfo, cn } from '@/lib/utils';
+import { useTaskAttachments } from '@/hooks/useTaskAttachments';
+import { TaskAttachmentBadge, TaskAttachmentList, TaskNotesPreview } from '@/components/TaskAttachmentList';
 
 // ErrorBoundary for catching runtime crashes in the widget
 interface ErrorBoundaryState {
@@ -121,6 +124,18 @@ function AssistantRequestsWidgetInner() {
   const [teacherFilter, setTeacherFilter] = useState<string>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
 
+  // Expanded notes state (for teachers only)
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+
+  // Attachment handling (for teachers only)
+  const {
+    attachmentCounts,
+    expandedAttachments,
+    loadingAttachments,
+    loadAttachmentCounts,
+    toggleTaskAttachments
+  } = useTaskAttachments();
+
   const fetchTasks = async () => {
     if (!user) return;
     
@@ -179,6 +194,12 @@ function AssistantRequestsWidgetInner() {
       }));
       
       setTasks(tasksData);
+
+      // Load attachment counts for teacher's own tasks (batch query)
+      if (isTeacher(role) && tasksData.length > 0) {
+        const taskIds = tasksData.map(t => t.id);
+        loadAttachmentCounts(taskIds);
+      }
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
@@ -407,7 +428,7 @@ function AssistantRequestsWidgetInner() {
       <CardHeader className="pb-3">
         {/* Marker for deployment confirmation */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-          ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4
+          TEACHER-REQUEST-DETAILS-ATTACH-V1
         </div>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -580,60 +601,96 @@ function AssistantRequestsWidgetInner() {
               미완료 요청이 없습니다
             </div>
           ) : (
-            <div className="space-y-2">
-              {tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg hover:bg-secondary/70 transition-colors"
-                >
-                  <a 
-                    href="/assistant-requests" 
-                    className="flex-1 min-w-0 space-y-1 cursor-pointer"
+            <div className="space-y-3">
+              {tasks.map((task) => {
+                const isTeacherView = isTeacher(role) && task.created_by === user?.id;
+                const attachCount = isTeacherView ? (attachmentCounts[task.id] || 0) : 0;
+                const attachments = expandedAttachments[task.id];
+                const isNotesExpanded = expandedNotes[task.id] || false;
+                const isAttachExpanded = !!attachments;
+
+                return (
+                  <div
+                    key={task.id}
+                    className="p-3 bg-secondary/50 rounded-lg hover:bg-secondary/70 transition-colors space-y-2"
                   >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {getStatusBadge(task.status)}
-                      <span className="font-medium text-foreground truncate">{task.title}</span>
+                    {/* Row 1: Status + Title */}
+                    <div className="flex items-center justify-between">
+                      <a 
+                        href="/assistant-requests" 
+                        className="flex items-center gap-2 flex-wrap flex-1 min-w-0 cursor-pointer"
+                      >
+                        {getStatusBadge(task.status)}
+                        <span className="font-medium text-foreground truncate">{task.title}</span>
+                      </a>
+                      {/* Cancel button for teachers on their own tasks */}
+                      {canCancelTask(task) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground hover:text-destructive shrink-0 ml-2"
+                          onClick={(e) => handleCancel(task.id, e)}
+                          disabled={cancellingId === task.id}
+                        >
+                          {cancellingId === task.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <X className="w-4 h-4" />
+                          )}
+                        </Button>
+                      ) : (
+                        <a href="/assistant-requests" className="shrink-0">
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        </a>
+                      )}
                     </div>
+                    
+                    {/* Row 2: Assignee + Due + Time + Attachments badge (for teacher) */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {getAssigneeBadge(task.assignee)}
                       {getDueBadge(task.due_date)}
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(task.created_at), 'MM/dd HH:mm')}
                       </span>
-                    </div>
-                    {/* Requester and Related Teacher Info */}
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      <span className="font-medium">
-                        요청자: {task.requester_profile?.full_name || task.created_by_role || '알 수 없음'}
-                        {task.created_by_role && <span className="text-muted-foreground"> ({task.created_by_role})</span>}
-                      </span>
-                      <span className="text-muted-foreground">
-                        관련 선생님: {task.related_teacher_profile?.full_name || '미지정'}
-                      </span>
-                    </div>
-                  </a>
-                  {/* Cancel button for teachers on their own tasks */}
-                  {canCancelTask(task) ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-destructive shrink-0 ml-2"
-                      onClick={(e) => handleCancel(task.id, e)}
-                      disabled={cancellingId === task.id}
-                    >
-                      {cancellingId === task.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <X className="w-4 h-4" />
+                      {isTeacherView && (
+                        <TaskAttachmentBadge
+                          count={attachCount}
+                          expanded={isAttachExpanded}
+                          loading={loadingAttachments[task.id] || false}
+                          onToggle={() => toggleTaskAttachments(task.id)}
+                        />
                       )}
-                    </Button>
-                  ) : (
-                    <a href="/assistant-requests" className="shrink-0">
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                    </a>
-                  )}
-                </div>
-              ))}
+                    </div>
+                    
+                    {/* Row 3: Requester and Related Teacher Info (Admin view) */}
+                    {isAdmin(role) && (
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <span className="font-medium">
+                          요청자: {task.requester_profile?.full_name || task.created_by_role || '알 수 없음'}
+                          {task.created_by_role && <span className="text-muted-foreground"> ({task.created_by_role})</span>}
+                        </span>
+                        <span className="text-muted-foreground">
+                          관련 선생님: {task.related_teacher_profile?.full_name || '미지정'}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Row 4: Notes preview with expand toggle (for teacher) */}
+                    {isTeacherView && (
+                      <TaskNotesPreview
+                        notes={task.notes}
+                        expanded={isNotesExpanded}
+                        onToggle={() => setExpandedNotes(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
+                      />
+                    )}
+                    
+                    {/* Row 5: Expanded attachments list (for teacher) */}
+                    {isTeacherView && attachments && attachments.length > 0 && (
+                      <TaskAttachmentList attachments={attachments} className="mt-2" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
