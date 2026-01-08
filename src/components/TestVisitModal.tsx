@@ -53,6 +53,8 @@ interface ExistingLessonRecord {
   lesson_date: string;
   teacher_id: string;
   class_id: string | null;
+  submitted: boolean;
+  updated_at: string;
 }
 
 interface TestVisitModalProps {
@@ -99,6 +101,9 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
   const [existingRecord, setExistingRecord] = useState<ExistingLessonRecord | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
 
+  // Ref for auto-scroll to test section
+  const testSectionRef = useRef<HTMLDivElement>(null);
+
   // Load students on open
   useEffect(() => {
     if (open) {
@@ -115,6 +120,18 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
       setExistingRecord(null);
     }
   }, [selectedStudentId, selectedSubject, selectedDate]);
+
+  // Auto-scroll to test section when existing record is found
+  useEffect(() => {
+    if (existingRecord && testSectionRef.current) {
+      setTimeout(() => {
+        testSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Also focus the test result input
+        const input = testSectionRef.current?.querySelector('input');
+        input?.focus();
+      }, 100);
+    }
+  }, [existingRecord]);
 
   async function fetchStudents() {
     setLoading(true);
@@ -139,14 +156,29 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       const { data } = await supabase
         .from('lesson_records')
-        .select('id, student_id, subject, lesson_date, teacher_id, class_id')
+        .select('id, student_id, subject, lesson_date, teacher_id, class_id, submitted, updated_at')
         .eq('student_id', selectedStudentId)
         .eq('subject', selectedSubject as SubjectType)
-        .eq('lesson_date', dateStr)
-        .limit(1);
+        .eq('lesson_date', dateStr);
       
       if (data && data.length > 0) {
-        setExistingRecord(data[0] as ExistingLessonRecord);
+        // Edge case: multiple records exist
+        if (data.length > 1) {
+          console.warn(
+            `[TestVisitModal] Multiple lesson_records found for student=${selectedStudentId}, subject=${selectedSubject}, date=${dateStr}. Count=${data.length}`
+          );
+        }
+        
+        // Prefer submitted record, else latest updated_at
+        const sorted = [...data].sort((a, b) => {
+          // submitted=true first
+          if (a.submitted && !b.submitted) return -1;
+          if (!a.submitted && b.submitted) return 1;
+          // then by updated_at desc
+          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+        });
+        
+        setExistingRecord(sorted[0] as ExistingLessonRecord);
       } else {
         setExistingRecord(null);
       }
@@ -256,12 +288,12 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Existing record warning */}
+          {/* Existing record warning with auto-scroll */}
           {existingRecord && (
             <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
               <AlertCircle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400">
-                해당 날짜에 {selectedSubject} 수업일지가 있어, 새 기록을 만들지 않고 기존 일지의 테스트란에 기록합니다.
+              <AlertDescription className="text-amber-700 dark:text-amber-400 font-medium">
+                이미 오늘 {selectedSubject} 수업일지가 있어, 새 기록을 만들지 않고 기존 일지의 테스트란에 기록합니다.
               </AlertDescription>
             </Alert>
           )}
@@ -376,13 +408,14 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
             </Select>
           </div>
 
-          {/* Test Result Text */}
-          <div className="space-y-2">
+          {/* Test Result Text - scrollable target */}
+          <div ref={testSectionRef} className="space-y-2">
             <Label>테스트 결과</Label>
             <Input
               placeholder="예: 85점, 8/10 등"
               value={testResultText}
               onChange={(e) => setTestResultText(e.target.value)}
+              autoFocus={!!existingRecord}
             />
           </div>
 
