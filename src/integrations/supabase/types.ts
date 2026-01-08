@@ -96,7 +96,7 @@ export type Database = {
           related_teacher_id?: string | null
           status?: string
           task_date?: string
-          task_type: string
+          task_type?: string
           title: string
           updated_at?: string
         }
