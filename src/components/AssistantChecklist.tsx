@@ -108,6 +108,7 @@ const TASK_TYPES = [
 const TEMPLATES = [
   { type: 'homework_verify', label: '숙제 확인대기 처리', title: '숙제 확인대기 처리' },
   { type: 'test_entry', label: '테스트 입력', title: '오늘 테스트 결과 입력' },
+  { type: 'test_only_visit', label: '테스트만 등록', title: '테스트만 등록', isAction: true },
   { type: 'attendance_check', label: '출결 특이사항 확인', title: '출결 특이사항 확인' },
   { type: 'teacher_remind', label: '미제출 일지 리마인드', title: '미제출 일지 선생님 리마인드' },
   { type: 'makeup_check', label: '보강 확인', title: '보강 수업 확인' },
@@ -121,7 +122,11 @@ const PRIORITIES = [
   { value: 'high', label: '높음', className: 'bg-red-500/15 text-red-600 border-red-500/30' },
 ];
 
-export default function AssistantChecklist() {
+interface AssistantChecklistProps {
+  onTestOnlyVisit?: () => void;
+}
+
+export default function AssistantChecklist({ onTestOnlyVisit }: AssistantChecklistProps = {}) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [tasks, setTasks] = useState<AssistantTask[]>([]);
@@ -543,6 +548,12 @@ export default function AssistantChecklist() {
   }
 
   function handleTemplateClick(template: typeof TEMPLATES[0]) {
+    // Handle test_only_visit as an action, not a task creation
+    if (template.type === 'test_only_visit' && (template as any).isAction) {
+      onTestOnlyVisit?.();
+      return;
+    }
+    
     createTask({
       task_type: template.type,
       title: template.title,
