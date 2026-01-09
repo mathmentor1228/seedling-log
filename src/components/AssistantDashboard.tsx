@@ -539,15 +539,16 @@ export default function AssistantDashboard() {
             </Button>
           </div>
 
-          {/* Test Visit Button */}
+          {/* Test Visit Button - ASSISTANT-TEST-ENTRYPOINT-V1 */}
           <Button
-            variant="outline"
-            className="border-blue-500/50 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+            variant="default"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
             onClick={() => setTestVisitModalOpen(true)}
           >
             <FlaskConical className="w-4 h-4 mr-2" />
             테스트만 등록
           </Button>
+          {/* ASSISTANT-TEST-ENTRYPOINT-V1 */}
         </div>
       </div>
 
@@ -572,8 +573,8 @@ export default function AssistantDashboard() {
         </Card>
       )}
 
-      {/* Assistant Checklist Section */}
-      <AssistantChecklist />
+      {/* Assistant Checklist Section - ASSISTANT-TEST-ENTRYPOINT-V1 */}
+      <AssistantChecklist onTestOnlyVisit={() => setTestVisitModalOpen(true)} />
 
       {/* Test Visits List for the day */}
       <TestVisitsList date={dateStr} />
