@@ -423,6 +423,7 @@ export type Database = {
           class_id: string | null
           created_at: string
           draft_created_at: string
+          english_pass_fail: string | null
           homework_status: string
           id: string
           learning_issues: string[] | null
@@ -455,6 +456,7 @@ export type Database = {
           class_id?: string | null
           created_at?: string
           draft_created_at?: string
+          english_pass_fail?: string | null
           homework_status: string
           id?: string
           learning_issues?: string[] | null
@@ -487,6 +489,7 @@ export type Database = {
           class_id?: string | null
           created_at?: string
           draft_created_at?: string
+          english_pass_fail?: string | null
           homework_status?: string
           id?: string
           learning_issues?: string[] | null
