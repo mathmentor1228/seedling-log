@@ -239,7 +239,8 @@ export function LessonRecordForm({
   // Initialize form
   useEffect(() => {
     initializeForm();
-  }, [existingRecordId, initialContext]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingRecordId, initialContext, isViewMode]);
 
   async function initializeForm() {
     if (!user) return;
@@ -311,26 +312,10 @@ export function LessonRecordForm({
           }
         }
       } else if (initialContext && canManage) {
-        // Create new draft
-        const { data: newRecord, error } = await supabase
-          .from('lesson_records')
-          .insert({
-            teacher_id: user.id,
-            student_id: initialContext.student_id,
-            class_id: initialContext.class_id || null,
-            subject: (initialContext.subject || getLastSelectedSubject(user.id)) as SubjectType,
-            lesson_date: initialContext.lesson_date || getTodayKST(),
-            lesson_range: '',
-            understanding_score: 3,
-            homework_status: 'none_assigned',
-            learning_issues: [],
-            submitted: false,
-          } as any)
-          .select()
-          .single();
-
-        if (!error && newRecord) {
-          setCurrentDraftId(newRecord.id);
+        // VIEW_MODE_WRITE_GUARD: Block draft creation in view mode
+        if (isViewMode) {
+          console.log('[VIEW_MODE_WRITE_GUARD]', 'blocked draft creation in view mode');
+          // Just populate form data from context without creating a draft
           setFormData(prev => ({
             ...prev,
             student_id: initialContext.student_id,
@@ -338,6 +323,35 @@ export function LessonRecordForm({
             subject: initialContext.subject || getLastSelectedSubject(user.id),
             lesson_date: initialContext.lesson_date || getTodayKST(),
           }));
+        } else {
+          // Create new draft only in edit mode
+          const { data: newRecord, error } = await supabase
+            .from('lesson_records')
+            .insert({
+              teacher_id: user.id,
+              student_id: initialContext.student_id,
+              class_id: initialContext.class_id || null,
+              subject: (initialContext.subject || getLastSelectedSubject(user.id)) as SubjectType,
+              lesson_date: initialContext.lesson_date || getTodayKST(),
+              lesson_range: '',
+              understanding_score: 3,
+              homework_status: 'none_assigned',
+              learning_issues: [],
+              submitted: false,
+            } as any)
+            .select()
+            .single();
+
+          if (!error && newRecord) {
+            setCurrentDraftId(newRecord.id);
+            setFormData(prev => ({
+              ...prev,
+              student_id: initialContext.student_id,
+              class_id: initialContext.class_id || '',
+              subject: initialContext.subject || getLastSelectedSubject(user.id),
+              lesson_date: initialContext.lesson_date || getTodayKST(),
+            }));
+          }
         }
       }
     } catch (error) {
@@ -492,6 +506,12 @@ export function LessonRecordForm({
   }
 
   const handleSaveDraft = async () => {
+    // VIEW_MODE_WRITE_GUARD: Block all writes in view mode
+    if (isViewMode) {
+      console.log('[VIEW_MODE_WRITE_GUARD]', 'blocked handleSaveDraft in view mode');
+      return;
+    }
+
     if (!user || !formData.student_id) {
       toast({ title: '학생을 선택해주세요', variant: 'destructive' });
       return;
@@ -553,6 +573,13 @@ export function LessonRecordForm({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
+
+    // VIEW_MODE_WRITE_GUARD: Block all writes in view mode
+    if (isViewMode) {
+      console.log('[VIEW_MODE_WRITE_GUARD]', 'blocked handleSubmit in view mode');
+      return;
+    }
+
     if (!user || !formData.student_id || !formData.subject || !formData.lesson_range) {
       toast({ title: '필수 항목을 모두 입력해주세요', variant: 'destructive' });
       return;
@@ -605,6 +632,12 @@ export function LessonRecordForm({
   };
 
   const handleSaveHomeworkCheck = async () => {
+    // VIEW_MODE_WRITE_GUARD: Block all writes in view mode
+    if (isViewMode) {
+      console.log('[VIEW_MODE_WRITE_GUARD]', 'blocked handleSaveHomeworkCheck in view mode');
+      return;
+    }
+
     if (!previousHomework || !homeworkCheckResult || !user) return;
 
     setIsSavingHomeworkCheck(true);
