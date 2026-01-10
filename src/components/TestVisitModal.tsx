@@ -76,7 +76,7 @@ for (let hour = 16; hour <= 21; hour++) {
   }
 }
 
-// MARKER: TESTONLY-VISIT-MODAL-V1
+// MARKER: ASSISTANT-TEST-FORM-V2
 export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -211,57 +211,81 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
       return;
     }
 
+    // Validate test content is provided
+    if (!testResultText.trim()) {
+      toast({
+        title: '테스트내용 누락',
+        description: '테스트내용을 입력해주세요.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const englishPassFailValue = selectedSubject === '영어' && englishPassFail ? englishPassFail : null;
 
       if (existingRecord) {
-        // Update existing lesson record's test fields
-        const { error } = await supabase.rpc('update_lesson_test_fields', {
-          _lesson_id: existingRecord.id,
-          _test_name: '재시험/테스트',
-          _test_result_text: testResultText || null,
-          _test_result: selectedSubject === '영어' && englishPassFail ? englishPassFail : 'none',
-          _test_notes: notes || null,
-          _test_date: dateStr,
-          _test_time: selectedTime,
-          _test_assistant: testAssistant || null,
-        });
+        // Update existing lesson record's test fields using direct update
+        const { error } = await supabase
+          .from('lesson_records')
+          .update({
+            test_name: '재시험/테스트',
+            test_result_text: testResultText.trim(),
+            test_result: selectedSubject === '영어' && englishPassFail ? englishPassFail : 'none',
+            test_notes: notes || null,
+            test_date: dateStr,
+            test_time: selectedTime,
+            test_assistant: testAssistant || null,
+            english_pass_fail: englishPassFailValue,
+          })
+          .eq('id', existingRecord.id);
 
         if (error) throw error;
 
         toast({
-          title: '테스트 정보 저장 완료',
+          title: '테스트 기록 저장 완료',
           description: '기존 수업일지의 테스트란에 기록되었습니다.',
         });
       } else {
-        // Create new test_visit record
+        // Create new lesson_record tagged as 테스트방문
         const { error } = await supabase
-          .from('test_visits')
+          .from('lesson_records')
           .insert({
             student_id: selectedStudentId,
-            subject: selectedSubject,
-            visit_date: dateStr,
-            visit_time: selectedTime,
-            test_result_text: testResultText || null,
-            english_pass_fail: selectedSubject === '영어' && englishPassFail ? englishPassFail : null,
+            subject: selectedSubject as SubjectType,
+            lesson_date: dateStr,
+            lesson_types: ['테스트방문'],
+            attendance_status: ['정상등원'],
+            teacher_id: user?.id || '', // Use current user or empty
+            homework_status: 'none',
+            lesson_range: '테스트만',
+            understanding_score: 0,
+            test_name: '재시험/테스트',
+            test_result_text: testResultText.trim(),
+            test_result: selectedSubject === '영어' && englishPassFail ? englishPassFail : 'none',
+            test_notes: notes || null,
+            test_date: dateStr,
+            test_time: selectedTime,
             test_assistant: testAssistant || null,
-            notes: notes || null,
-            created_by: user?.id,
+            english_pass_fail: englishPassFailValue,
+            submitted: true,
+            submitted_at: new Date().toISOString(),
           });
 
         if (error) throw error;
 
         toast({
-          title: '테스트 방문 등록 완료',
-          description: '새 테스트 방문이 등록되었습니다.',
+          title: '테스트 기록 저장 완료',
+          description: '새 테스트 기록이 수업일지에 등록되었습니다.',
         });
       }
 
       onOpenChange(false);
       onSaved?.();
     } catch (error: any) {
-      console.error('Error saving test visit:', error);
+      console.error('Error saving test record:', error);
       toast({
         title: '저장 오류',
         description: error.message || '저장 중 오류가 발생했습니다.',
@@ -408,15 +432,16 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
             </Select>
           </div>
 
-          {/* Test Result Text - scrollable target */}
+          {/* Test Result Text - scrollable target - ASSISTANT-TEST-FORM-V2 */}
           <div ref={testSectionRef} className="space-y-2">
-            <Label>테스트 결과</Label>
+            <Label>테스트내용 <span className="text-red-500">*</span></Label>
             <Input
-              placeholder="예: 85점, 8/10 등"
+              placeholder="예: 18/25, 단어 30개 중 27개, 85점 등"
               value={testResultText}
               onChange={(e) => setTestResultText(e.target.value)}
               autoFocus={!!existingRecord}
             />
+            <p className="text-xs text-muted-foreground">테스트 결과를 자세히 입력해주세요</p>
           </div>
 
           {/* English Pass/Fail (only for English) */}
