@@ -933,6 +933,39 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_jobs_log: {
+        Row: {
+          created_at: string
+          id: string
+          job_name: string
+          message: string | null
+          run_at: string
+          status: string
+          week_end: string | null
+          week_start: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_name: string
+          message?: string | null
+          run_at?: string
+          status?: string
+          week_end?: string | null
+          week_start?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_name?: string
+          message?: string | null
+          run_at?: string
+          status?: string
+          week_end?: string | null
+          week_start?: string | null
+        }
+        Relationships: []
+      }
       weekly_reports: {
         Row: {
           avg_understanding: number | null
