@@ -38,7 +38,7 @@ import { useAuth } from '@/lib/auth';
 import { getKSTDateObject, getTodayKST } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Calendar as CalendarIcon, Check, ChevronsUpDown, AlertCircle, FlaskConical } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, ChevronsUpDown, AlertCircle, FlaskConical, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Student {
@@ -76,7 +76,22 @@ for (let hour = 16; hour <= 21; hour++) {
   }
 }
 
-// MARKER: ASSISTANT-TEST-FORM-V2
+interface TestRow {
+  id: string;
+  subject: string;
+  testTitle: string;
+  testResultText: string;
+  testTime: string;
+  testAssistant: string;
+  englishPassFail: 'pass' | 'fail' | '';
+  existingRecord: ExistingLessonRecord | null;
+}
+
+function generateRowId() {
+  return Math.random().toString(36).substring(2, 9);
+}
+
+// MARKER: ASSISTANT-TEST-FORM-V3 (Multi-subject support)
 export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -88,22 +103,23 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
 
   // Form state
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>(getKSTDateObject());
-  const [selectedTime, setSelectedTime] = useState<string>('16:00');
-  const [testTitle, setTestTitle] = useState('');
-  const [testResultText, setTestResultText] = useState('');
-  const [englishPassFail, setEnglishPassFail] = useState<'pass' | 'fail' | ''>('');
-  const [testAssistant, setTestAssistant] = useState<string>('');
-  const [notes, setNotes] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [notes, setNotes] = useState('');
 
-  // Check for existing lesson record
-  const [existingRecord, setExistingRecord] = useState<ExistingLessonRecord | null>(null);
-  const [checkingExisting, setCheckingExisting] = useState(false);
-
-  // Ref for auto-scroll to test section
-  const testSectionRef = useRef<HTMLDivElement>(null);
+  // Multi-subject test rows
+  const [testRows, setTestRows] = useState<TestRow[]>([
+    {
+      id: generateRowId(),
+      subject: '',
+      testTitle: '',
+      testResultText: '',
+      testTime: '16:00',
+      testAssistant: '',
+      englishPassFail: '',
+      existingRecord: null,
+    },
+  ]);
 
   // Load students on open
   useEffect(() => {
@@ -113,26 +129,12 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
     }
   }, [open]);
 
-  // Check for existing record when student, subject, date change
+  // Check for existing records when student or date changes
   useEffect(() => {
-    if (selectedStudentId && selectedSubject && selectedDate) {
-      checkExistingRecord();
-    } else {
-      setExistingRecord(null);
+    if (selectedStudentId && selectedDate) {
+      checkExistingRecordsForRows();
     }
-  }, [selectedStudentId, selectedSubject, selectedDate]);
-
-  // Auto-scroll to test section when existing record is found
-  useEffect(() => {
-    if (existingRecord && testSectionRef.current) {
-      setTimeout(() => {
-        testSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Also focus the test result input
-        const input = testSectionRef.current?.querySelector('input');
-        input?.focus();
-      }, 100);
-    }
-  }, [existingRecord]);
+  }, [selectedStudentId, selectedDate, testRows.map(r => r.subject).join(',')]);
 
   async function fetchStudents() {
     setLoading(true);
@@ -149,157 +151,250 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
     }
   }
 
-  async function checkExistingRecord() {
-    if (!selectedStudentId || !selectedSubject || !selectedDate) return;
-    
-    setCheckingExisting(true);
+  async function checkExistingRecordsForRows() {
+    if (!selectedStudentId || !selectedDate) return;
+
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const subjects = testRows.map(r => r.subject).filter(Boolean);
+
+    if (subjects.length === 0) return;
+
     try {
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
       const { data } = await supabase
         .from('lesson_records')
         .select('id, student_id, subject, lesson_date, teacher_id, class_id, submitted, updated_at')
         .eq('student_id', selectedStudentId)
-        .eq('subject', selectedSubject as SubjectType)
-        .eq('lesson_date', dateStr);
-      
-      if (data && data.length > 0) {
-        // Edge case: multiple records exist
-        if (data.length > 1) {
-          console.warn(
-            `[TestVisitModal] Multiple lesson_records found for student=${selectedStudentId}, subject=${selectedSubject}, date=${dateStr}. Count=${data.length}`
+        .eq('lesson_date', dateStr)
+        .in('subject', subjects as SubjectType[]);
+
+      // Update test rows with existing record info
+      setTestRows(prev =>
+        prev.map(row => {
+          if (!row.subject) return { ...row, existingRecord: null };
+
+          const matching = (data || []).filter(
+            r => r.subject === row.subject
           );
-        }
-        
-        // Prefer submitted record, else latest updated_at
-        const sorted = [...data].sort((a, b) => {
-          // submitted=true first
-          if (a.submitted && !b.submitted) return -1;
-          if (!a.submitted && b.submitted) return 1;
-          // then by updated_at desc
-          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-        });
-        
-        setExistingRecord(sorted[0] as ExistingLessonRecord);
-      } else {
-        setExistingRecord(null);
-      }
+
+          if (matching.length > 0) {
+            // Prefer submitted, then latest
+            const sorted = [...matching].sort((a, b) => {
+              if (a.submitted && !b.submitted) return -1;
+              if (!a.submitted && b.submitted) return 1;
+              return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+            });
+            return { ...row, existingRecord: sorted[0] as ExistingLessonRecord };
+          }
+
+          return { ...row, existingRecord: null };
+        })
+      );
     } catch (error) {
-      console.error('Error checking existing record:', error);
-    } finally {
-      setCheckingExisting(false);
+      console.error('Error checking existing records:', error);
     }
   }
 
   function resetForm() {
     setSelectedStudentId('');
-    setSelectedSubject('');
     setSelectedDate(getKSTDateObject());
-    setSelectedTime('16:00');
-    setTestTitle('');
-    setTestResultText('');
-    setEnglishPassFail('');
-    setTestAssistant('');
     setNotes('');
-    setExistingRecord(null);
+    setTestRows([
+      {
+        id: generateRowId(),
+        subject: '',
+        testTitle: '',
+        testResultText: '',
+        testTime: '16:00',
+        testAssistant: '',
+        englishPassFail: '',
+        existingRecord: null,
+      },
+    ]);
+  }
+
+  function addTestRow() {
+    setTestRows(prev => [
+      ...prev,
+      {
+        id: generateRowId(),
+        subject: '',
+        testTitle: '',
+        testResultText: '',
+        testTime: '16:00',
+        testAssistant: '',
+        englishPassFail: '',
+        existingRecord: null,
+      },
+    ]);
+  }
+
+  function removeTestRow(rowId: string) {
+    if (testRows.length === 1) return;
+    setTestRows(prev => prev.filter(r => r.id !== rowId));
+  }
+
+  function updateTestRow(rowId: string, field: keyof TestRow, value: string) {
+    setTestRows(prev =>
+      prev.map(row =>
+        row.id === rowId ? { ...row, [field]: value } : row
+      )
+    );
   }
 
   async function handleSubmit() {
-    if (!selectedStudentId || !selectedSubject || !selectedDate || !selectedTime) {
+    if (!selectedStudentId || !selectedDate) {
       toast({
         title: '필수 항목 누락',
-        description: '학생, 과목, 날짜, 시간을 모두 선택해주세요.',
+        description: '학생과 날짜를 선택해주세요.',
         variant: 'destructive',
       });
       return;
     }
 
-    // Validate test title is provided
-    if (!testTitle.trim()) {
+    // Validate each row
+    const validRows = testRows.filter(r => r.subject);
+    if (validRows.length === 0) {
       toast({
-        title: '테스트제목 누락',
-        description: '테스트제목을 입력해주세요.',
+        title: '과목 선택 필요',
+        description: '최소 한 과목을 선택해주세요.',
         variant: 'destructive',
       });
       return;
     }
 
-    // Validate test content is provided
-    if (!testResultText.trim()) {
-      toast({
-        title: '테스트내용 누락',
-        description: '테스트내용을 입력해주세요.',
-        variant: 'destructive',
-      });
-      return;
+    for (const row of validRows) {
+      if (!row.testTitle.trim()) {
+        toast({
+          title: '테스트제목 누락',
+          description: `${row.subject} 과목의 테스트제목을 입력해주세요.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (!row.testResultText.trim()) {
+        toast({
+          title: '테스트내용 누락',
+          description: `${row.subject} 과목의 테스트내용을 입력해주세요.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    // Check for duplicate subjects
+    const subjectCounts: Record<string, number> = {};
+    for (const row of validRows) {
+      subjectCounts[row.subject] = (subjectCounts[row.subject] || 0) + 1;
+      if (subjectCounts[row.subject] > 1) {
+        toast({
+          title: '중복 과목',
+          description: `${row.subject}이(가) 중복되었습니다. 같은 과목은 하나만 등록해주세요.`,
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     setSaving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const englishPassFailValue = selectedSubject === '영어' && englishPassFail ? englishPassFail : null;
 
-      if (existingRecord) {
-        // Update existing lesson record's test fields using direct update
-        const { error } = await supabase
-          .from('lesson_records')
-          .update({
-            test_title: testTitle.trim(),
-            test_name: '재시험/테스트',
-            test_result_text: testResultText.trim(),
-            test_result: selectedSubject === '영어' && englishPassFail ? englishPassFail : 'none',
-            test_notes: notes || null,
-            test_date: dateStr,
-            test_time: selectedTime,
-            test_assistant: testAssistant || null,
-            english_pass_fail: englishPassFailValue,
-          })
-          .eq('id', existingRecord.id);
+      // Refresh existing records before saving
+      await checkExistingRecordsForRows();
 
-        if (error) throw error;
+      for (const row of validRows) {
+        const englishPassFailValue =
+          row.subject === '영어' && row.englishPassFail ? row.englishPassFail : null;
 
+        try {
+          // Re-check for existing record
+          const { data: existingData } = await supabase
+            .from('lesson_records')
+            .select('id')
+            .eq('student_id', selectedStudentId)
+            .eq('subject', row.subject as SubjectType)
+            .eq('lesson_date', dateStr)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+
+          const existingRecordId = existingData?.[0]?.id;
+
+          if (existingRecordId) {
+            // Update existing lesson record's test fields
+            const { error } = await supabase
+              .from('lesson_records')
+              .update({
+                test_title: row.testTitle.trim(),
+                test_name: '재시험/테스트',
+                test_result_text: row.testResultText.trim(),
+                test_result:
+                  row.subject === '영어' && row.englishPassFail
+                    ? row.englishPassFail
+                    : 'none',
+                test_notes: notes || null,
+                test_date: dateStr,
+                test_time: row.testTime,
+                test_assistant: row.testAssistant || null,
+                english_pass_fail: englishPassFailValue,
+              })
+              .eq('id', existingRecordId);
+
+            if (error) throw error;
+          } else {
+            // Create new lesson_record tagged as 테스트방문
+            const { error } = await supabase.from('lesson_records').insert({
+              student_id: selectedStudentId,
+              subject: row.subject as SubjectType,
+              lesson_date: dateStr,
+              lesson_types: ['테스트방문'],
+              attendance_status: ['정상등원'],
+              teacher_id: user?.id || '',
+              homework_status: 'none',
+              lesson_range: '테스트만',
+              understanding_score: 0,
+              test_title: row.testTitle.trim(),
+              test_name: '재시험/테스트',
+              test_result_text: row.testResultText.trim(),
+              test_result:
+                row.subject === '영어' && row.englishPassFail
+                  ? row.englishPassFail
+                  : 'none',
+              test_notes: notes || null,
+              test_date: dateStr,
+              test_time: row.testTime,
+              test_assistant: row.testAssistant || null,
+              english_pass_fail: englishPassFailValue,
+              submitted: true,
+              submitted_at: new Date().toISOString(),
+            });
+
+            if (error) throw error;
+          }
+
+          successCount++;
+        } catch (err: any) {
+          console.error(`Error saving ${row.subject}:`, err);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
         toast({
           title: '테스트 기록 저장 완료',
-          description: '기존 수업일지의 테스트란에 기록되었습니다.',
-        });
-      } else {
-        // Create new lesson_record tagged as 테스트방문
-        const { error } = await supabase
-          .from('lesson_records')
-          .insert({
-            student_id: selectedStudentId,
-            subject: selectedSubject as SubjectType,
-            lesson_date: dateStr,
-            lesson_types: ['테스트방문'],
-            attendance_status: ['정상등원'],
-            teacher_id: user?.id || '', // Use current user or empty
-            homework_status: 'none',
-            lesson_range: '테스트만',
-            understanding_score: 0,
-            test_title: testTitle.trim(),
-            test_name: '재시험/테스트',
-            test_result_text: testResultText.trim(),
-            test_result: selectedSubject === '영어' && englishPassFail ? englishPassFail : 'none',
-            test_notes: notes || null,
-            test_date: dateStr,
-            test_time: selectedTime,
-            test_assistant: testAssistant || null,
-            english_pass_fail: englishPassFailValue,
-            submitted: true,
-            submitted_at: new Date().toISOString(),
-          });
-
-        if (error) throw error;
-
-        toast({
-          title: '테스트 기록 저장 완료',
-          description: '새 테스트 기록이 수업일지에 등록되었습니다.',
+          description: `${successCount}개 과목 저장됨${errorCount > 0 ? `, ${errorCount}개 실패` : ''}`,
+          variant: errorCount > 0 ? 'destructive' : 'default',
         });
       }
 
-      onOpenChange(false);
-      onSaved?.();
+      if (errorCount === 0) {
+        onOpenChange(false);
+        onSaved?.();
+      }
     } catch (error: any) {
-      console.error('Error saving test record:', error);
+      console.error('Error saving test records:', error);
       toast({
         title: '저장 오류',
         description: error.message || '저장 중 오류가 발생했습니다.',
@@ -312,30 +407,23 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
 
+  // Get subjects already used in rows
+  const usedSubjects = testRows.map(r => r.subject).filter(Boolean);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FlaskConical className="w-5 h-5" />
-            테스트만 등록
+            테스트만 등록 (다과목)
           </DialogTitle>
           <DialogDescription>
-            재시험/테스트만 보러 온 학생을 등록합니다.
+            한 번 방문에서 여러 과목 테스트를 등록할 수 있습니다.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Existing record warning with auto-scroll */}
-          {existingRecord && (
-            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400 font-medium">
-                이미 오늘 {selectedSubject} 수업일지가 있어, 새 기록을 만들지 않고 기존 일지의 테스트란에 기록합니다.
-              </AlertDescription>
-            </Alert>
-          )}
-
           {/* Student Search */}
           <div className="space-y-2">
             <Label>학생 <span className="text-red-500">*</span></Label>
@@ -358,7 +446,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
                   <CommandList>
                     <CommandEmpty>검색 결과가 없습니다.</CommandEmpty>
                     <CommandGroup>
-                      {students.map((student) => (
+                      {students.map(student => (
                         <CommandItem
                           key={student.id}
                           value={student.name}
@@ -369,8 +457,8 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
                         >
                           <Check
                             className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedStudentId === student.id ? "opacity-100" : "opacity-0"
+                              'mr-2 h-4 w-4',
+                              selectedStudentId === student.id ? 'opacity-100' : 'opacity-0'
                             )}
                           />
                           {student.name}
@@ -383,32 +471,12 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
             </Popover>
           </div>
 
-          {/* Subject */}
-          <div className="space-y-2">
-            <Label>과목 <span className="text-red-500">*</span></Label>
-            <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-              <SelectTrigger>
-                <SelectValue placeholder="과목 선택..." />
-              </SelectTrigger>
-              <SelectContent>
-                {SUBJECTS.map((subject) => (
-                  <SelectItem key={subject} value={subject}>
-                    {subject}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Date */}
           <div className="space-y-2">
             <Label>날짜 <span className="text-red-500">*</span></Label>
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                >
+                <Button variant="outline" className="w-full justify-start text-left font-normal">
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {format(selectedDate, 'yyyy년 M월 d일 (EEE)', { locale: ko })}
                 </Button>
@@ -417,7 +485,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
                 <Calendar
                   mode="single"
                   selected={selectedDate}
-                  onSelect={(date) => {
+                  onSelect={date => {
                     if (date) {
                       setSelectedDate(date);
                       setCalendarOpen(false);
@@ -429,85 +497,169 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
             </Popover>
           </div>
 
-          {/* Time */}
-          <div className="space-y-2">
-            <Label>시간 <span className="text-red-500">*</span></Label>
-            <Select value={selectedTime} onValueChange={setSelectedTime}>
-              <SelectTrigger>
-                <SelectValue placeholder="시간 선택..." />
-              </SelectTrigger>
-              <SelectContent>
-                {TIME_OPTIONS.map((time) => (
-                  <SelectItem key={time} value={time}>
-                    {time}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* TEST-TITLE-FIELD-V1 */}
-          <div ref={testSectionRef} className="space-y-2">
-            <Label>테스트제목 <span className="text-red-500">*</span></Label>
-            <Input
-              placeholder="예: 중2 1단원 단원평가 / 영어 단어 재시험"
-              value={testTitle}
-              onChange={(e) => setTestTitle(e.target.value)}
-              autoFocus={!!existingRecord}
-            />
-          </div>
-
-          {/* Test Result Text - ASSISTANT-TEST-FORM-V2 */}
-          <div className="space-y-2">
-            <Label>테스트내용 <span className="text-red-500">*</span></Label>
-            <Input
-              placeholder="예: 18/25, 단어 30개 중 27개, 85점 등"
-              value={testResultText}
-              onChange={(e) => setTestResultText(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">테스트 결과를 자세히 입력해주세요</p>
-          </div>
-
-          {/* English Pass/Fail (only for English) */}
-          {selectedSubject === '영어' && (
-            <div className="space-y-2">
-              <Label>합격 여부</Label>
-              <Select value={englishPassFail} onValueChange={(v) => setEnglishPassFail(v as 'pass' | 'fail' | '')}>
-                <SelectTrigger>
-                  <SelectValue placeholder="선택 (선택사항)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pass">통과 (Pass)</SelectItem>
-                  <SelectItem value="fail">불통과 (Fail)</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Test Rows */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-medium">과목별 테스트</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addTestRow}
+                disabled={testRows.length >= 4}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                과목 추가
+              </Button>
             </div>
-          )}
 
-          {/* Assistant */}
-          <div className="space-y-2">
-            <Label>담당 조교</Label>
-            <Select value={testAssistant} onValueChange={setTestAssistant}>
-              <SelectTrigger>
-                <SelectValue placeholder="조교 선택 (선택사항)" />
-              </SelectTrigger>
-              <SelectContent>
-                {ASSISTANTS.map((assistant) => (
-                  <SelectItem key={assistant} value={assistant}>
-                    {assistant}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {testRows.map((row, idx) => (
+              <div
+                key={row.id}
+                className="border rounded-lg p-4 space-y-3 bg-muted/30"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    테스트 #{idx + 1}
+                  </span>
+                  {testRows.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                      onClick={() => removeTestRow(row.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* Existing record warning */}
+                {row.existingRecord && (
+                  <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 py-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-700 dark:text-amber-400 text-xs">
+                      기존 {row.subject} 수업일지에 테스트 정보를 추가합니다.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Subject */}
+                <div className="space-y-1">
+                  <Label className="text-xs">과목 <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={row.subject}
+                    onValueChange={v => updateTestRow(row.id, 'subject', v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="과목 선택..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.filter(
+                        s => !usedSubjects.includes(s) || s === row.subject
+                      ).map(subject => (
+                        <SelectItem key={subject} value={subject}>
+                          {subject}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* TEST-TITLE-FIELD-V1 */}
+                <div className="space-y-1">
+                  <Label className="text-xs">테스트제목 <span className="text-red-500">*</span></Label>
+                  <Input
+                    placeholder="예: 중2 1단원 단원평가 / 영어 단어 재시험"
+                    value={row.testTitle}
+                    onChange={e => updateTestRow(row.id, 'testTitle', e.target.value)}
+                  />
+                </div>
+
+                {/* Test Result Text */}
+                <div className="space-y-1">
+                  <Label className="text-xs">테스트내용 <span className="text-red-500">*</span></Label>
+                  <Input
+                    placeholder="예: 18/25, 단어 30개 중 27개, 85점 등"
+                    value={row.testResultText}
+                    onChange={e => updateTestRow(row.id, 'testResultText', e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Time */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">시간</Label>
+                    <Select
+                      value={row.testTime}
+                      onValueChange={v => updateTestRow(row.id, 'testTime', v)}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIME_OPTIONS.map(time => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Assistant */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">담당 조교</Label>
+                    <Select
+                      value={row.testAssistant}
+                      onValueChange={v => updateTestRow(row.id, 'testAssistant', v)}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ASSISTANTS.map(assistant => (
+                          <SelectItem key={assistant} value={assistant}>
+                            {assistant}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* English Pass/Fail (only for English) */}
+                {row.subject === '영어' && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">합격 여부</Label>
+                    <Select
+                      value={row.englishPassFail}
+                      onValueChange={v =>
+                        updateTestRow(row.id, 'englishPassFail', v as 'pass' | 'fail' | '')
+                      }
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="선택 (선택사항)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pass">통과 (Pass)</SelectItem>
+                        <SelectItem value="fail">불통과 (Fail)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label>메모</Label>
+            <Label>메모 (전체 공통)</Label>
             <Textarea
               placeholder="추가 메모..."
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={e => setNotes(e.target.value)}
               rows={2}
             />
           </div>
@@ -517,8 +669,8 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               취소
             </Button>
-            <Button onClick={handleSubmit} disabled={saving || checkingExisting}>
-              {saving ? '저장 중...' : existingRecord ? '기존 일지에 저장' : '등록'}
+            <Button onClick={handleSubmit} disabled={saving}>
+              {saving ? '저장 중...' : `${testRows.filter(r => r.subject).length}개 과목 저장`}
             </Button>
           </div>
         </div>
