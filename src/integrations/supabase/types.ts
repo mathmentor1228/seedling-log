@@ -448,6 +448,7 @@ export type Database = {
           test_result: string
           test_result_text: string | null
           test_time: string | null
+          test_title: string | null
           understanding_score: number
           updated_at: string
         }
@@ -481,6 +482,7 @@ export type Database = {
           test_result?: string
           test_result_text?: string | null
           test_time?: string | null
+          test_title?: string | null
           understanding_score: number
           updated_at?: string
         }
@@ -514,6 +516,7 @@ export type Database = {
           test_result?: string
           test_result_text?: string | null
           test_time?: string | null
+          test_title?: string | null
           understanding_score?: number
           updated_at?: string
         }

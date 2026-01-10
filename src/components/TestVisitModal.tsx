@@ -91,6 +91,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>(getKSTDateObject());
   const [selectedTime, setSelectedTime] = useState<string>('16:00');
+  const [testTitle, setTestTitle] = useState('');
   const [testResultText, setTestResultText] = useState('');
   const [englishPassFail, setEnglishPassFail] = useState<'pass' | 'fail' | ''>('');
   const [testAssistant, setTestAssistant] = useState<string>('');
@@ -194,6 +195,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
     setSelectedSubject('');
     setSelectedDate(getKSTDateObject());
     setSelectedTime('16:00');
+    setTestTitle('');
     setTestResultText('');
     setEnglishPassFail('');
     setTestAssistant('');
@@ -206,6 +208,16 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
       toast({
         title: '필수 항목 누락',
         description: '학생, 과목, 날짜, 시간을 모두 선택해주세요.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate test title is provided
+    if (!testTitle.trim()) {
+      toast({
+        title: '테스트제목 누락',
+        description: '테스트제목을 입력해주세요.',
         variant: 'destructive',
       });
       return;
@@ -231,6 +243,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
         const { error } = await supabase
           .from('lesson_records')
           .update({
+            test_title: testTitle.trim(),
             test_name: '재시험/테스트',
             test_result_text: testResultText.trim(),
             test_result: selectedSubject === '영어' && englishPassFail ? englishPassFail : 'none',
@@ -262,6 +275,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
             homework_status: 'none',
             lesson_range: '테스트만',
             understanding_score: 0,
+            test_title: testTitle.trim(),
             test_name: '재시험/테스트',
             test_result_text: testResultText.trim(),
             test_result: selectedSubject === '영어' && englishPassFail ? englishPassFail : 'none',
@@ -432,14 +446,24 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
             </Select>
           </div>
 
-          {/* Test Result Text - scrollable target - ASSISTANT-TEST-FORM-V2 */}
+          {/* TEST-TITLE-FIELD-V1 */}
           <div ref={testSectionRef} className="space-y-2">
+            <Label>테스트제목 <span className="text-red-500">*</span></Label>
+            <Input
+              placeholder="예: 중2 1단원 단원평가 / 영어 단어 재시험"
+              value={testTitle}
+              onChange={(e) => setTestTitle(e.target.value)}
+              autoFocus={!!existingRecord}
+            />
+          </div>
+
+          {/* Test Result Text - ASSISTANT-TEST-FORM-V2 */}
+          <div className="space-y-2">
             <Label>테스트내용 <span className="text-red-500">*</span></Label>
             <Input
               placeholder="예: 18/25, 단어 30개 중 27개, 85점 등"
               value={testResultText}
               onChange={(e) => setTestResultText(e.target.value)}
-              autoFocus={!!existingRecord}
             />
             <p className="text-xs text-muted-foreground">테스트 결과를 자세히 입력해주세요</p>
           </div>
