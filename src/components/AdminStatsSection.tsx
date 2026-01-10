@@ -208,22 +208,14 @@ export default function AdminStatsSection() {
 
   return (
     <Card className="animate-slide-up border-primary/20">
-      {/* DEBUG-MARKER-ADMINSTATS-V1 */}
-      <div className="sticky top-0 z-50 bg-yellow-400 text-yellow-900 text-xs text-center py-1 font-mono rounded-t">
-        DEBUG-MARKER-ADMINSTATS-V1
-      </div>
-      
       {/* Fetch error banner */}
       {fetchError && (
-        <div className="bg-red-500 text-white text-xs py-2 px-4 font-mono">
-          DEBUG_FETCH_ERROR: {fetchError.page} status={fetchError.status} message={fetchError.message}
+        <div className="bg-destructive text-destructive-foreground text-xs py-2 px-4">
+          오류: {fetchError.message}
         </div>
       )}
       
       <CardHeader>
-        <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-          ADMIN-STATS-V1
-        </div>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-primary" />

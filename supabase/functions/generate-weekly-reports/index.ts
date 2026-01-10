@@ -44,37 +44,8 @@ Deno.serve(async (req) => {
 
     console.log(`[generate-weekly-reports] Generating for week: ${weekStart} to ${weekEnd}`);
 
-    // Log job start
-    await supabase.from('weekly_jobs_log').insert({
-      job_name: 'generate_weekly_reports',
-      week_start: weekStart,
-      week_end: weekEnd,
-      status: 'started',
-      message: `Started at ${new Date().toISOString()}`,
-    });
-
-    // Find an admin user to impersonate for the RPC call
-    const { data: adminRole } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'admin')
-      .limit(1)
-      .single();
-
-    if (!adminRole) {
-      throw new Error('No admin user found to execute report generation');
-    }
-
-    // Create a client impersonating the admin user
-    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(adminRole.user_id);
-    
-    if (userError || !userData?.user) {
-      throw new Error(`Failed to get admin user: ${userError?.message}`);
-    }
-
-    // Generate reports using direct SQL since we're using service role
-    // We bypass the has_role check by using service role
-    const { error: rpcError } = await supabase.rpc('generate_weekly_reports', {
+    // Generate reports using the scheduled function (no auth check)
+    const { error: rpcError } = await supabase.rpc('generate_weekly_reports_scheduled', {
       _week_start: weekStart,
       _week_end: weekEnd,
     });

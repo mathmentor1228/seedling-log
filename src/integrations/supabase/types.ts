@@ -1092,6 +1092,10 @@ export type Database = {
         Args: { _week_end: string; _week_start: string }
         Returns: undefined
       }
+      generate_weekly_reports_scheduled: {
+        Args: { _week_end: string; _week_start: string }
+        Returns: undefined
+      }
       get_admin_kpis: {
         Args: {
           _end_date: string
