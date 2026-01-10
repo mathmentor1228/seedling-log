@@ -13,12 +13,20 @@ import {
   ClipboardList,
   AlertTriangle,
   Users,
-  RefreshCw
+  RefreshCw,
+  FlaskConical
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 
-// ADMIN-STATS-V1
+// ADMIN-STATS-V2 (with test stats)
+
+interface TestStat {
+  subject: string;
+  test_count: number;
+  pass_count: number;
+  fail_count: number;
+}
 
 interface AdminKpis {
   lesson_stats: {
@@ -33,6 +41,7 @@ interface AdminKpis {
     not_done: number;
     none_assigned: number;
     total: number;
+    pending_verification: number;
   };
   attendance_stats: {
     지각: number;
@@ -42,6 +51,7 @@ interface AdminKpis {
     보충불가: number;
     total: number;
   };
+  test_stats: TestStat[];
   top_exception_students: {
     student_id: string;
     student_name: string;
@@ -286,7 +296,7 @@ export default function AdminStatsSection() {
         {kpis && (
           <>
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Lesson Submission Rate */}
               <Card className="bg-background">
                 <CardContent className="pt-4">
@@ -387,7 +397,44 @@ export default function AdminStatsSection() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Test Stats */}
+              <Card className="bg-background">
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                      <FlaskConical className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">테스트 현황</p>
+                      <p className="text-2xl font-bold text-purple-600">
+                        {(kpis.test_stats || []).reduce((sum, t) => sum + t.test_count, 0)}건
+                      </p>
+                    </div>
+                  </div>
+                  {(kpis.test_stats || []).length > 0 ? (
+                    <div className="space-y-1.5">
+                      {kpis.test_stats.map((ts) => (
+                        <div key={ts.subject} className="flex items-center justify-between text-xs">
+                          <span className="font-medium">{ts.subject}</span>
+                          <div className="flex items-center gap-2">
+                            <span>{ts.test_count}건</span>
+                            {ts.subject === '영어' && (ts.pass_count > 0 || ts.fail_count > 0) && (
+                              <span className="text-muted-foreground">
+                                (통과 {ts.pass_count} / 불통과 {ts.fail_count})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">해당 기간 테스트 없음</p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
+
 
             {/* Tables Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
