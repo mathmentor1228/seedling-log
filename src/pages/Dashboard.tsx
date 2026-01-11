@@ -16,6 +16,7 @@ import HolidayManagement from '@/components/HolidayManagement';
 import { AssistantRequestsWidget } from '@/components/AssistantRequestsWidget';
 import { AdminLessonModal } from '@/components/lessons/AdminLessonModal';
 import { RosterActionModal } from '@/components/RosterActionModal';
+import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { 
   Users, 
@@ -1754,6 +1755,11 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* WEEKLY-SCHED-VERIFY-V1: Weekly Schedule Verification Panel - Admin Only */}
+      {isAdmin(role) && (
+        <WeeklyScheduleVerification />
       )}
 
       {/* Admin Lesson Modal */}
