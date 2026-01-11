@@ -5,13 +5,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// WEEKLY-SCHED-VERIFY-V1: Schedule configuration
+const SCHEDULE_CONFIG = {
+  schedule_text: 'Sat 22:00 KST',
+  cron_utc: '0 13 * * 6',
+};
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('[generate-weekly-reports] Starting scheduled weekly report generation');
+  let isManual = false;
+  try {
+    const body = await req.json().catch(() => ({}));
+    isManual = body.manual === true;
+  } catch {
+    // Ignore JSON parse errors
+  }
+
+  const schedulerSource = isManual ? 'manual' : 'pg_cron';
+  console.log(`[generate-weekly-reports] Starting ${schedulerSource} weekly report generation`);
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -21,7 +36,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Calculate week dates (Monday to Saturday of current week)
-    // Saturday 10:00 KST = Saturday 01:00 UTC
+    // Saturday 22:00 KST = Saturday 13:00 UTC
     const now = new Date();
     
     // Get KST time
@@ -53,13 +68,15 @@ Deno.serve(async (req) => {
     if (rpcError) {
       console.error('[generate-weekly-reports] RPC error:', rpcError);
       
-      // Log failure
+      // Log failure with schedule_text
       await supabase.from('weekly_jobs_log').insert({
         job_name: 'generate_weekly_reports',
         week_start: weekStart,
         week_end: weekEnd,
         status: 'failed',
         message: rpcError.message,
+        scheduler_source: schedulerSource,
+        schedule_text: SCHEDULE_CONFIG.schedule_text,
       });
       
       throw rpcError;
@@ -67,13 +84,15 @@ Deno.serve(async (req) => {
 
     console.log('[generate-weekly-reports] Reports generated successfully');
 
-    // Log success
+    // Log success with schedule_text
     await supabase.from('weekly_jobs_log').insert({
       job_name: 'generate_weekly_reports',
       week_start: weekStart,
       week_end: weekEnd,
       status: 'completed',
       message: `Completed at ${new Date().toISOString()}`,
+      scheduler_source: schedulerSource,
+      schedule_text: SCHEDULE_CONFIG.schedule_text,
     });
 
     return new Response(
@@ -82,6 +101,7 @@ Deno.serve(async (req) => {
         weekStart,
         weekEnd,
         message: 'Weekly reports generated successfully',
+        schedulerSource,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
