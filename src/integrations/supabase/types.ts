@@ -940,6 +940,7 @@ export type Database = {
           job_name: string
           message: string | null
           run_at: string
+          scheduler_source: string | null
           status: string
           week_end: string | null
           week_start: string | null
@@ -950,6 +951,7 @@ export type Database = {
           job_name: string
           message?: string | null
           run_at?: string
+          scheduler_source?: string | null
           status?: string
           week_end?: string | null
           week_start?: string | null
@@ -960,6 +962,7 @@ export type Database = {
           job_name?: string
           message?: string | null
           run_at?: string
+          scheduler_source?: string | null
           status?: string
           week_end?: string | null
           week_start?: string | null
