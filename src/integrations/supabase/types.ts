@@ -279,6 +279,51 @@ export type Database = {
         }
         Relationships: []
       }
+      curriculum_map: {
+        Row: {
+          course: string
+          created_at: string
+          curriculum_version: string
+          flow_summary: string
+          id: string
+          keywords: string[] | null
+          next_summary: string | null
+          next_unit_key: string | null
+          school_level: string
+          subject: string
+          unit_key: string
+          unit_title: string
+        }
+        Insert: {
+          course: string
+          created_at?: string
+          curriculum_version: string
+          flow_summary: string
+          id?: string
+          keywords?: string[] | null
+          next_summary?: string | null
+          next_unit_key?: string | null
+          school_level: string
+          subject: string
+          unit_key: string
+          unit_title: string
+        }
+        Update: {
+          course?: string
+          created_at?: string
+          curriculum_version?: string
+          flow_summary?: string
+          id?: string
+          keywords?: string[] | null
+          next_summary?: string | null
+          next_unit_key?: string | null
+          school_level?: string
+          subject?: string
+          unit_key?: string
+          unit_title?: string
+        }
+        Relationships: []
+      }
       event_attachments: {
         Row: {
           created_at: string
@@ -421,7 +466,10 @@ export type Database = {
         Row: {
           attendance_status: string[] | null
           class_id: string | null
+          course: string | null
           created_at: string
+          curriculum_unit_key: string | null
+          curriculum_version: string | null
           draft_created_at: string
           english_pass_fail: string | null
           homework_status: string
@@ -455,7 +503,10 @@ export type Database = {
         Insert: {
           attendance_status?: string[] | null
           class_id?: string | null
+          course?: string | null
           created_at?: string
+          curriculum_unit_key?: string | null
+          curriculum_version?: string | null
           draft_created_at?: string
           english_pass_fail?: string | null
           homework_status: string
@@ -489,7 +540,10 @@ export type Database = {
         Update: {
           attendance_status?: string[] | null
           class_id?: string | null
+          course?: string | null
           created_at?: string
+          curriculum_unit_key?: string | null
+          curriculum_version?: string | null
           draft_created_at?: string
           english_pass_fail?: string | null
           homework_status?: string
