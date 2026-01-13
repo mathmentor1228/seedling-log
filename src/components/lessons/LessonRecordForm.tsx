@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
+import { MathCurriculumTag } from './MathCurriculumTag';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -86,6 +87,10 @@ interface LessonRecord {
   prev_homework_override_text?: string | null;
   prev_homework_override_by?: string | null;
   prev_homework_override_at?: string | null;
+  // MATH-CURRICULUM-TAG-V1: Curriculum fields
+  curriculum_version?: string | null;
+  course?: string | null;
+  curriculum_unit_key?: string | null;
 }
 
 const SUBJECTS = [
@@ -205,6 +210,10 @@ export function LessonRecordForm({
     notes: '',
     lesson_types: ['정규수업'] as string[],
     attendance_status: ['정상등원'] as string[],
+    // MATH-CURRICULUM-TAG-V1: Curriculum fields
+    curriculum_version: '',
+    course: '',
+    curriculum_unit_key: '',
   });
 
   // Previous lesson state
@@ -290,6 +299,10 @@ export function LessonRecordForm({
             notes: record.notes || '',
             lesson_types: record.lesson_types || ['정규수업'],
             attendance_status: record.attendance_status || ['정상등원'],
+            // MATH-CURRICULUM-TAG-V1: Load curriculum fields
+            curriculum_version: (record as any).curriculum_version || '',
+            course: (record as any).course || '',
+            curriculum_unit_key: (record as any).curriculum_unit_key || '',
           });
           setTestFormData({
             test_name: record.test_name || '',
@@ -472,6 +485,17 @@ export function LessonRecordForm({
     // LESSON-EDIT-MODE-V1: Preserve original teacher_id in edit mode unless explicitly new record
     const teacherId = originalTeacherId || user!.id;
 
+    // MATH-CURRICULUM-TAG-V1: Include curriculum fields for Math subject
+    const curriculumFields = subject === '수학' ? {
+      curriculum_version: formData.curriculum_version || null,
+      course: formData.course || null,
+      curriculum_unit_key: formData.curriculum_unit_key || null,
+    } : {
+      curriculum_version: null,
+      course: null,
+      curriculum_unit_key: null,
+    };
+
     const basePayload = {
       teacher_id: teacherId,
       student_id: formData.student_id,
@@ -487,6 +511,7 @@ export function LessonRecordForm({
       notes: formData.notes.trim() || null,
       lesson_types,
       attendance_status,
+      ...curriculumFields,
     };
 
     if (includeTestFields) {
@@ -897,6 +922,24 @@ export function LessonRecordForm({
             required={!formData.lesson_types.includes('휴강')}
           />
         </div>
+
+        {/* MATH-CURRICULUM-TAG-V1: Curriculum tagging for Math only */}
+        {formData.subject === '수학' && (
+          <MathCurriculumTag
+            curriculumVersion={formData.curriculum_version}
+            course={formData.course}
+            unitKey={formData.curriculum_unit_key}
+            onChange={(version, course, unitKey) => {
+              setFormData(prev => ({
+                ...prev,
+                curriculum_version: version,
+                course: course,
+                curriculum_unit_key: unitKey,
+              }));
+            }}
+            disabled={isViewMode}
+          />
+        )}
 
         <div className="space-y-2">
           <Label>이해도 점수 *</Label>
