@@ -324,6 +324,51 @@ export type Database = {
         }
         Relationships: []
       }
+      curriculum_map_backup_math: {
+        Row: {
+          course: string | null
+          created_at: string | null
+          curriculum_version: string | null
+          flow_summary: string | null
+          id: string | null
+          keywords: string[] | null
+          next_summary: string | null
+          next_unit_key: string | null
+          school_level: string | null
+          subject: string | null
+          unit_key: string | null
+          unit_title: string | null
+        }
+        Insert: {
+          course?: string | null
+          created_at?: string | null
+          curriculum_version?: string | null
+          flow_summary?: string | null
+          id?: string | null
+          keywords?: string[] | null
+          next_summary?: string | null
+          next_unit_key?: string | null
+          school_level?: string | null
+          subject?: string | null
+          unit_key?: string | null
+          unit_title?: string | null
+        }
+        Update: {
+          course?: string | null
+          created_at?: string | null
+          curriculum_version?: string | null
+          flow_summary?: string | null
+          id?: string | null
+          keywords?: string[] | null
+          next_summary?: string | null
+          next_unit_key?: string | null
+          school_level?: string | null
+          subject?: string | null
+          unit_key?: string | null
+          unit_title?: string | null
+        }
+        Relationships: []
+      }
       event_attachments: {
         Row: {
           created_at: string

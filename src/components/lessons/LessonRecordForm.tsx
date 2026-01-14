@@ -713,6 +713,11 @@ export function LessonRecordForm({
 
   return (
     <form onSubmit={handleSubmit} className={`space-y-4 ${isViewMode ? 'pointer-events-none' : ''}`}>
+      {/* LESSON-SHARED-FORM-V1: Unified form component used by both Dashboard and Lessons page */}
+      <div className="text-xs text-center py-1 rounded bg-green-500/20 text-green-700">
+        LESSON-SHARED-FORM-V1
+      </div>
+      
       {/* LESSON-VIEW-MODE-V1 / LESSON-EDIT-MODE-V1 marker */}
       <div className={`text-xs text-center py-1 rounded ${isViewMode ? 'bg-blue-500/20 text-blue-700' : 'bg-muted/30 text-muted-foreground'}`}>
         {isViewMode ? 'LESSON-VIEW-MODE-V1' : 'LESSON-EDIT-MODE-V1'}

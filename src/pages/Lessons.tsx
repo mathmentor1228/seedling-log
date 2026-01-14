@@ -1,32 +1,13 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth, isAssistant as checkIsAssistant, isTeacher as checkIsTeacher, isAdmin as checkIsAdmin, canManageLessons } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { format, subDays } from 'date-fns';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -44,9 +25,11 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, ClipboardList, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, FileEdit, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
+import { LessonModal } from '@/components/lessons/LessonModal';
+import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 
 interface Teacher {
   id: string;
@@ -54,21 +37,6 @@ interface Teacher {
 }
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
-
-interface HomeworkAssignment {
-  id: string;
-  student_id: string;
-  subject: SubjectType;
-  lesson_record_id: string | null;
-  assigned_date: string;
-  content: string;
-  check_status: 'unchecked' | 'checked';
-  result: 'completed' | 'partial' | 'not_done' | 'unable_to_verify' | null;
-  checked_by: string | null;
-  checked_at: string | null;
-  notes: string | null;
-  checker_name?: string;
-}
 
 interface LessonRecord {
   id: string;
@@ -87,23 +55,8 @@ interface LessonRecord {
   submitted: boolean;
   submitted_at: string | null;
   draft_created_at: string;
-  teacher_id?: string; // LESSON-VIEW-MODE-V1: Added for ownership check
-  teacher_name?: string; // LESSON-VIEW-MODE-V1: For display in view mode
-  // Test fields
-  test_name?: string | null;
-  test_result_text?: string | null;
-  test_result?: 'pass' | 'fail' | 'none';
-  test_notes?: string | null;
-  test_date?: string | null;
-  test_time?: string | null;
-  test_assistant?: string | null;
-  // Lesson type and attendance fields
-  lesson_types?: string[];
-  attendance_status?: string[];
-  // Previous homework override fields
-  prev_homework_override_text?: string | null;
-  prev_homework_override_by?: string | null;
-  prev_homework_override_at?: string | null;
+  teacher_id?: string;
+  teacher_name?: string;
 }
 
 interface Student {
@@ -124,7 +77,7 @@ interface TodaySlotStudent {
   debugReason?: 'no_prev_record' | 'found' | 'blocked_by_access' | null;
   firstSubject?: boolean;
   followup2wDue?: boolean;
-  hyugangRecordId?: string | null; // lesson_record id if 휴강 record exists for today
+  hyugangRecordId?: string | null;
 }
 
 interface TodaySlot {
@@ -145,7 +98,7 @@ interface Holiday {
   teacher_id: string | null;
 }
 
-// Normalize homework status values from DB (handles both English and Korean)
+// Normalize homework status values from DB
 function normalizeHomeworkStatus(status: string | null | undefined): TodaySlotStudent['previousHomeworkStatus'] {
   if (!status) return null;
   const normalized = status.toLowerCase().trim();
@@ -156,7 +109,7 @@ function normalizeHomeworkStatus(status: string | null | undefined): TodaySlotSt
   return null;
 }
 
-// Helper function to render roster badges (homework, first subject, followup)
+// Helper function to render roster badges
 function getRosterBadges(
   status: TodaySlotStudent['previousHomeworkStatus'],
   debugReason: TodaySlotStudent['debugReason'],
@@ -168,7 +121,6 @@ function getRosterBadges(
 ) {
   const badges: React.ReactNode[] = [];
   
-  // Priority 1: Homework badges
   if (status === 'not_done') {
     badges.push(
       <Badge key="hw" className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
@@ -182,7 +134,6 @@ function getRosterBadges(
       </Badge>
     );
   } else if (firstSubject) {
-    // Priority 2: First subject badge (only if no homework issues)
     badges.push(
       <Badge key="first" variant="outline" className="text-muted-foreground border-muted text-xs">
         첫 {subject} 수업
@@ -190,7 +141,6 @@ function getRosterBadges(
     );
   }
   
-  // Additional: 2-week followup badge (can show alongside)
   if (followup2wDue) {
     badges.push(
       <Badge key="followup" className="bg-purple-500/15 text-purple-600 border-purple-500/30 text-xs">
@@ -218,71 +168,6 @@ function getRosterBadges(
   return badges.length > 0 ? badges : null;
 }
 
-const SUBJECTS = [
-  { value: '수학', label: '수학' },
-  { value: '과학', label: '과학' },
-  { value: '영어', label: '영어' },
-  { value: '국어', label: '국어' },
-] as const;
-
-const SUBJECT_VALUES: SubjectType[] = ['수학', '과학', '영어', '국어'];
-
-function subjectStorageKey(userId?: string | null) {
-  return userId ? `lesson_records:lastSelectedSubject:${userId}` : 'lesson_records:lastSelectedSubject';
-}
-
-function getLastSelectedSubject(userId?: string | null): SubjectType {
-  const raw = localStorage.getItem(subjectStorageKey(userId));
-  if (raw && SUBJECT_VALUES.includes(raw as SubjectType)) return raw as SubjectType;
-  return '수학';
-}
-
-function setLastSelectedSubject(userId: string | null | undefined, subject: SubjectType) {
-  localStorage.setItem(subjectStorageKey(userId), subject);
-}
-
-
-// Subject-specific learning issues (refined options)
-const SUBJECT_SPECIFIC_ISSUES: Record<SubjectType, string[]> = {
-  '수학': [
-    '개념 이해 부족',
-    '계산 실수 잦음',
-    '문제 해석 미흡',
-    '풀이 과정 정리 필요',
-    '응용·서술형 약함',
-    '시간 관리 어려움',
-  ],
-  '과학': [
-    '개념 연결 미흡',
-    '암기 부족',
-    '자료 해석 어려움',
-    '실험·탐구 서술 약함',
-    '단원 간 개념 혼동',
-  ],
-  '영어': [
-    '단어 이해 부족',
-    '문법 개념 혼동',
-    '독해 속도 느림',
-    '근거 문장 찾기 어려움',
-    '듣기 이해 부족',
-  ],
-  '국어': [
-    '지문 독해 어려움',
-    '핵심 개념어 정리 미흡',
-    '서술형 논리 부족',
-    '문학 표현 분석 미흡',
-    '시간 배분 문제',
-  ],
-};
-
-// Get learning issues for a specific subject (only subject-specific, no common issues)
-function getLearningIssuesForSubject(subject: SubjectType | ''): string[] {
-  if (!subject || !SUBJECT_VALUES.includes(subject as SubjectType)) {
-    return [];
-  }
-  return SUBJECT_SPECIFIC_ISSUES[subject as SubjectType];
-}
-
 const HOMEWORK_STATUS = [
   { value: 'completed', label: '완료' },
   { value: 'partial', label: '부분 완료' },
@@ -290,56 +175,8 @@ const HOMEWORK_STATUS = [
   { value: 'none_assigned', label: '미배정' },
 ];
 
-// Lesson type options for 종류 checkbox group
-const LESSON_TYPE_OPTIONS = [
-  { value: '정규수업', label: '정규수업' },
-  { value: '보충수업', label: '보충수업' },
-  { value: '시험특강', label: '시험특강' },
-  { value: '방학특강', label: '방학특강' },
-  { value: '공지사항', label: '공지사항' },
-  { value: '휴강', label: '휴강' },
-];
-
-// Attendance status options for 출결사항 checkbox group
-const ATTENDANCE_STATUS_OPTIONS = [
-  { value: '정상등원', label: '정상등원' },
-  { value: '지각', label: '지각' },
-  { value: '조퇴', label: '조퇴' },
-  { value: '인정결석', label: '인정결석' },
-  { value: '무단결석', label: '무단결석' },
-  { value: '보충불가', label: '보충불가' },
-];
-
-// Homework result options
-const HOMEWORK_RESULT_OPTIONS = [
-  { value: 'completed', label: '완료', icon: CheckCircle2, color: 'text-green-600' },
-  { value: 'partial', label: '부분', icon: Clock, color: 'text-amber-600' },
-  { value: 'not_done', label: '미완', icon: XCircle, color: 'text-red-600' },
-  { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle, color: 'text-muted-foreground' },
-];
-
-function getHomeworkStatusBadge(homework: HomeworkAssignment | null) {
-  if (!homework) return null;
-  
-  if (homework.check_status === 'unchecked') {
-    return <Badge variant="outline" className="border-amber-500/50 text-amber-600"><AlertCircle className="w-3 h-3 mr-1" />미확인</Badge>;
-  }
-  
-  const option = HOMEWORK_RESULT_OPTIONS.find(o => o.value === homework.result);
-  if (!option) return null;
-  
-  const Icon = option.icon;
-  const colorClass = homework.result === 'completed' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
-                     homework.result === 'partial' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
-                     homework.result === 'not_done' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
-                     'bg-muted text-muted-foreground';
-  
-  return <Badge variant="outline" className={colorClass}><Icon className="w-3 h-3 mr-1" />{option.label}</Badge>;
-}
-
 export default function Lessons() {
   const { user, role } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [lessons, setLessons] = useState<LessonRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -347,10 +184,10 @@ export default function Lessons() {
   const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
   const [todayHolidays, setTodayHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null); // Error state for resilient UI
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // LESSONS-FILTER-V1: Advanced filters state
+  // Filters
   const [filterStartDate, setFilterStartDate] = useState<string>(() => format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [filterEndDate, setFilterEndDate] = useState<string>(getTodayKST());
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -362,145 +199,45 @@ export default function Lessons() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const PAGE_SIZE = 50;
   
-  // For legacy single date filter (still used in header)
-  const filterDate = getTodayKST();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const [editingLesson, setEditingLesson] = useState<LessonRecord | null>(null);
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
-  // LESSON-VIEW-MODE-V1: View/edit mode for lesson records
-  const [dialogMode, setDialogMode] = useState<'view' | 'edit'>('edit');
-  const [originalTeacherId, setOriginalTeacherId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    student_id: '',
-    class_id: '',
-    subject: '',
-    lesson_date: getTodayKST(),
-    lesson_range: '',
-    understanding_score: '3',
-    homework_status: 'none_assigned',
-    learning_issues: [] as string[],
-    learning_issues_note: '',
-    next_lesson_goal: '',
-    notes: '',
-    lesson_types: ['정규수업'] as string[],
-    attendance_status: ['정상등원'] as string[],
-  });
   const { toast } = useToast();
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Subject change confirmation dialog state
-  const [pendingSubject, setPendingSubject] = useState<SubjectType | null>(null);
-  const [showSubjectChangeDialog, setShowSubjectChangeDialog] = useState(false);
+  // Modal state - uses LessonModal with LessonRecordForm
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalContext, setModalContext] = useState<LessonFormContext | null>(null);
+  const [modalExistingRecordId, setModalExistingRecordId] = useState<string | null>(null);
+  const [modalMode, setModalMode] = useState<'view' | 'edit'>('edit');
   
-  // Previous lesson state (for "지난 수업" section)
-  const [previousLesson, setPreviousLesson] = useState<LessonRecord | null>(null);
-  const [previousLessonHomework, setPreviousLessonHomework] = useState<HomeworkAssignment | null>(null);
-  const [loadingPreviousLesson, setLoadingPreviousLesson] = useState(false);
-  
-  // Previous homework state (for current check)
-  const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
-  const [loadingHomework, setLoadingHomework] = useState(false);
-  const [homeworkCheckResult, setHomeworkCheckResult] = useState<string>('');
-  const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
-  const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
-  
-  // New homework state
-  const [newHomeworkContent, setNewHomeworkContent] = useState('');
-
-  // Test fields state
-  const [testFormData, setTestFormData] = useState({
-    test_name: '',
-    test_result_text: '',
-    test_result: 'none' as 'pass' | 'fail' | 'none',
-    test_notes: '',
-    test_date: '',
-    test_time: '',
-    test_assistant: '',
-  });
-  const [isSavingTestFields, setIsSavingTestFields] = useState(false);
-  
-  // Notice when opening existing record instead of creating new
-  const [existingRecordNotice, setExistingRecordNotice] = useState(false);
-  
-  // Previous homework override state
-  const [prevHomeworkOverrideEditing, setPrevHomeworkOverrideEditing] = useState(false);
-  const [prevHomeworkOverrideText, setPrevHomeworkOverrideText] = useState('');
-  const [isSavingPrevHomeworkOverride, setIsSavingPrevHomeworkOverride] = useState(false);
-
-  // Generate test time options (16:00 to 21:00, 30-min steps)
-  const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
-    const hour = 16 + Math.floor(i / 2);
-    const minute = (i % 2) * 30;
-    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  });
-
-  // Check if user is assistant (can only update test fields and homework check)
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
   const isAdmin = checkIsAdmin(role);
-  // Check if user can create/edit/delete lessons
   const canManage = canManageLessons(role);
   
   useEffect(() => {
     fetchStudents();
     fetchClasses();
-    // Fetch teachers for admin/assistant filter
     if (isAdmin || isAssistant) {
       fetchTeachers();
     }
-    // Fetch today's slots and holidays for teachers/admins/assistants
     if (isTeacher || isAdmin || isAssistant) {
       fetchTodaySlots();
       fetchTodayHolidays();
     }
   }, [user, role]);
 
-  // Fetch lessons when filters change
   useEffect(() => {
     fetchLessons();
   }, [user, role, filterStartDate, filterEndDate, filterStatus, filterHomeworkStatus, filterSubject, filterTeacherId, searchQuery, currentPage]);
 
-  // Check for existing lesson record (duplicate check)
-  async function findExistingLessonRecord(
-    studentId: string,
-    lessonDate: string,
-    subject: string,
-    classId: string | null
-  ): Promise<LessonRecord | null> {
-    if (!studentId || !lessonDate || !subject || !classId) return null;
-    
-    const { data, error } = await supabase
-      .from('lesson_records')
-      .select('*')
-      .eq('student_id', studentId)
-      .eq('lesson_date', lessonDate)
-      .eq('subject', subject as SubjectType)
-      .eq('class_id', classId)
-      .maybeSingle();
-    
-    if (error) {
-      console.error('Error checking for existing record:', error);
-      return null;
-    }
-    
-    return data as LessonRecord | null;
-  }
-
-  // Deep link handling - auto-open dialog with student_id, class_id, subject, lesson_date from URL
+  // Deep link handling
   useEffect(() => {
     const studentId = searchParams.get('student_id');
     const subject = searchParams.get('subject');
     const classId = searchParams.get('class_id');
     const lessonDate = searchParams.get('lesson_date');
     
-    // Need students and classes to be loaded before prefilling
     if (studentId && !loading && students.length > 0 && classes.length > 0) {
-      // Clear URL params
       setSearchParams({});
       
-      // Validate class_id exists in loaded classes
       const validClassId = classId && classes.some(c => c.id === classId) ? classId : '';
       
       if (classId && !validClassId) {
@@ -512,78 +249,64 @@ export default function Lessons() {
       }
       
       const finalDate = lessonDate || getTodayKST();
-      const finalSubject = subject || getLastSelectedSubject(user?.id);
+      const finalSubject = subject || '수학';
       
-      // Check for existing record before creating new draft
+      // Check for existing record
       (async () => {
-        const existingRecord = await findExistingLessonRecord(
-          studentId,
-          finalDate,
-          finalSubject,
-          validClassId || null
-        );
+        const { data: existing } = await supabase
+          .from('lesson_records')
+          .select('id')
+          .eq('student_id', studentId)
+          .eq('class_id', validClassId || null)
+          .eq('lesson_date', finalDate)
+          .eq('subject', finalSubject as SubjectType)
+          .maybeSingle();
         
-        if (existingRecord) {
-          // Open existing record instead of creating new one
-          setExistingRecordNotice(true);
-          handleEdit(existingRecord);
-          return;
-        }
-        
-        // No existing record - create new draft
-        setExistingRecordNotice(false);
-        
-        // Pre-fill form with all available params
-        setFormData(prev => ({
-          ...prev,
-          student_id: studentId,
-          class_id: validClassId,
-          subject: finalSubject,
-          lesson_date: finalDate,
-        }));
-        
-        // Reset editing state and open dialog
-        setEditingLesson(null);
-        setCurrentDraftId(null);
-        setIsDialogOpen(true);
-        
-        // Create draft with prefilled values after a short delay
-        setTimeout(async () => {
-          await createInitialDraft({
+        if (existing) {
+          // Open existing record
+          openModal({
             student_id: studentId,
             class_id: validClassId,
             subject: finalSubject,
             lesson_date: finalDate,
-          });
-        }, 100);
+          }, existing.id, 'edit');
+        } else {
+          // Open new record
+          openModal({
+            student_id: studentId,
+            class_id: validClassId,
+            subject: finalSubject,
+            lesson_date: finalDate,
+          }, null, 'edit');
+        }
       })();
     }
-  }, [searchParams, loading, students, classes, toast, user]);
+  }, [searchParams, loading, students, classes]);
 
-  // Auto-save effect
-  useEffect(() => {
-    if (!currentDraftId || !isDialogOpen) return;
+  function openModal(context: LessonFormContext | null, existingId: string | null, mode: 'view' | 'edit') {
+    setModalContext(context);
+    setModalExistingRecordId(existingId);
+    setModalMode(mode);
+    setIsModalOpen(true);
+  }
 
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
+  function handleModalClose(open: boolean) {
+    if (!open) {
+      setIsModalOpen(false);
+      setModalContext(null);
+      setModalExistingRecordId(null);
+      fetchLessons(); // Refresh list after closing
     }
+  }
 
-    autoSaveTimeoutRef.current = setTimeout(() => {
-      handleAutoSave();
-    }, 2000); // Auto-save after 2 seconds of inactivity
-
-    return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-    };
-  }, [formData, currentDraftId, isDialogOpen]);
+  function handleModalSaved() {
+    fetchLessons();
+  }
 
   async function fetchLessons() {
     if (!user) return;
 
     try {
-      // Build query with server-side filtering
       let query = supabase
         .from('lesson_records')
         .select(`
@@ -591,7 +314,6 @@ export default function Lessons() {
           students:student_id (name)
         `, { count: 'exact' });
 
-      // Date range filter
       if (filterStartDate) {
         query = query.gte('lesson_date', filterStartDate);
       }
@@ -599,34 +321,28 @@ export default function Lessons() {
         query = query.lte('lesson_date', filterEndDate);
       }
 
-      // Status filter
       if (filterStatus === 'submitted') {
         query = query.eq('submitted', true);
       } else if (filterStatus === 'draft') {
         query = query.eq('submitted', false);
       }
 
-      // Homework status filter
       if (filterHomeworkStatus !== 'all' && filterHomeworkStatus !== 'pending_verification') {
         query = query.eq('homework_status', filterHomeworkStatus);
       }
 
-      // Subject filter
       if (filterSubject !== 'all') {
-        query = query.eq('subject', filterSubject as '수학' | '과학' | '영어' | '국어');
+        query = query.eq('subject', filterSubject as SubjectType);
       }
 
-      // Teacher filter (admin/assistant only)
       if ((isAdmin || isAssistant) && filterTeacherId !== 'all') {
         query = query.eq('teacher_id', filterTeacherId);
       } else if (role === 'teacher') {
         query = query.eq('teacher_id', user.id);
       }
 
-      // Ordering
       query = query.order('lesson_date', { ascending: false }).order('created_at', { ascending: false });
 
-      // Pagination
       const from = (currentPage - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
       query = query.range(from, to);
@@ -635,7 +351,6 @@ export default function Lessons() {
 
       if (error) throw error;
 
-      // LESSON-VIEW-MODE-V1: Get teacher names for all lessons
       const teacherIds = [...new Set((data || []).map((l: any) => l.teacher_id).filter(Boolean))];
       let teacherNameMap: Record<string, string> = {};
       if (teacherIds.length > 0) {
@@ -652,7 +367,6 @@ export default function Lessons() {
         teacher_name: teacherNameMap[l.teacher_id] || '',
       }));
 
-      // Client-side filter for student name search (partial match)
       if (searchQuery) {
         const lowerSearch = searchQuery.toLowerCase();
         formattedLessons = formattedLessons.filter(lesson =>
@@ -668,7 +382,6 @@ export default function Lessons() {
       const statusCode = error?.code || error?.status || 'UNKNOWN';
       const message = error?.message || '알 수 없는 오류';
       setLoadError(`수업 기록 로드 실패 (${statusCode}/${message}). 새로고침 후에도 동일하면 관리자에게 문의하세요.`);
-      // Don't throw - let the UI continue rendering
     } finally {
       setLoading(false);
     }
@@ -676,13 +389,10 @@ export default function Lessons() {
 
   async function fetchTeachers() {
     try {
-      // Get teacher IDs from user_roles
-      const { data: roleData, error: roleError } = await supabase
+      const { data: roleData } = await supabase
         .from('user_roles')
         .select('user_id')
         .eq('role', 'teacher');
-      
-      if (roleError) throw roleError;
       
       const teacherIds = (roleData || []).map(r => r.user_id);
       if (teacherIds.length === 0) {
@@ -690,13 +400,10 @@ export default function Lessons() {
         return;
       }
       
-      // Get profiles for teachers
-      const { data: profiles, error: profileError } = await supabase
+      const { data: profiles } = await supabase
         .from('profiles')
         .select('id, full_name')
         .in('id', teacherIds);
-      
-      if (profileError) throw profileError;
       
       setTeachers((profiles || []).map(p => ({
         id: p.id,
@@ -716,9 +423,8 @@ export default function Lessons() {
 
       if (error) throw error;
       setStudents(data || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching students:', error);
-      // Don't set loadError for this - page can still function partially
     }
   }
 
@@ -731,24 +437,20 @@ export default function Lessons() {
 
       if (error) throw error;
       setClasses(data || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching classes:', error);
-      // Don't set loadError for this - page can still function partially
     }
   }
 
-  // Fetch today's class slots for the current teacher
   async function fetchTodaySlots() {
     if (!user) return;
 
     try {
-      // Get today's day of week (0=Sunday, 1=Monday, etc.) using KST
       const now = new Date();
       const kstOffset = 9 * 60 * 60 * 1000;
       const kstDate = new Date(now.getTime() + kstOffset);
       const dayOfWeek = kstDate.getUTCDay();
 
-      // Fetch class schedules for today
       let schedulesQuery = supabase
         .from('class_schedules')
         .select(`
@@ -769,7 +471,6 @@ export default function Lessons() {
         .eq('is_active', true)
         .order('start_time', { ascending: true });
 
-      // For teachers, only show their own schedules
       if (checkIsTeacher(role)) {
         schedulesQuery = schedulesQuery.eq('teacher_id', user.id);
       }
@@ -781,7 +482,6 @@ export default function Lessons() {
         return;
       }
 
-      // Get students for each class - also build a map of class_id -> subject for RPC
       const classIds = schedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
       const classSubjectMap: Record<string, string> = {};
       (schedules || []).forEach((s: any) => {
@@ -822,10 +522,8 @@ export default function Lessons() {
         }
       }
 
-      // Batch fetch previous homework status via RPC
       const today = getTodayKST();
       
-      // key: `${studentId}:${classId}` -> { status, debugReason, firstSubject, followup2wDue }
       let previousHomeworkMap: Record<string, { 
         status: TodaySlotStudent['previousHomeworkStatus']; 
         debugReason: TodaySlotStudent['debugReason'];
@@ -833,7 +531,6 @@ export default function Lessons() {
         followup2wDue: boolean;
       }> = {};
       
-      // key: `${studentId}:${classId}` -> lesson_record_id if 휴강 exists for today
       let hyugangMap: Record<string, string> = {};
       
       if (allStudentClassPairs.length > 0) {
@@ -860,7 +557,6 @@ export default function Lessons() {
           });
         }
         
-        // Fetch 휴강 records for today (batch for all students in classes)
         const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
         const classIdsForHyugang = [...new Set(allStudentClassPairs.map(p => p.classId))];
         
@@ -882,7 +578,6 @@ export default function Lessons() {
         }
       }
 
-      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue, hyugangRecordId
       Object.keys(studentsMap).forEach(classId => {
         studentsMap[classId] = studentsMap[classId].map(student => {
           const key = `${student.id}:${classId}`;
@@ -898,7 +593,6 @@ export default function Lessons() {
         });
       });
 
-      // Build slots array
       const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
         id: s.id,
         class_id: s.classes?.id || '',
@@ -921,7 +615,6 @@ export default function Lessons() {
     try {
       const today = getTodayKST();
       
-      // Fetch holidays for today (scope='all' or scope='teacher' for current user)
       const { data: holidays, error } = await supabase
         .from('holidays')
         .select('*')
@@ -932,7 +625,6 @@ export default function Lessons() {
         return;
       }
       
-      // Filter: scope='all' OR (scope='teacher' AND teacher_id=current user)
       const relevantHolidays = (holidays || []).filter((h: any) => 
         h.scope === 'all' || (h.scope === 'teacher' && h.teacher_id === user.id)
       );
@@ -943,10 +635,8 @@ export default function Lessons() {
     }
   }
 
-  // Mark a subject as followup done for a student (admin only)
   async function markFollowupDone(studentId: string, subject: string) {
     try {
-      // Get current done subjects
       const { data: student, error: fetchError } = await supabase
         .from('students')
         .select('followup_2w_done_subjects')
@@ -956,7 +646,7 @@ export default function Lessons() {
       if (fetchError) throw fetchError;
       
       const currentDone = (student?.followup_2w_done_subjects as string[]) || [];
-      if (currentDone.includes(subject)) return; // Already done
+      if (currentDone.includes(subject)) return;
       
       const { error: updateError } = await supabase
         .from('students')
@@ -970,7 +660,6 @@ export default function Lessons() {
         description: `${subject} 과목 첫등록 2주 연락이 완료 처리되었습니다.`,
       });
       
-      // Refresh today's slots to update badges
       await fetchTodaySlots();
     } catch (error) {
       console.error('Error marking followup done:', error);
@@ -982,857 +671,31 @@ export default function Lessons() {
     }
   }
 
-  // Create initial draft when opening form for new record
-  // If prefill is provided, use those values instead of defaults
-  interface DraftPrefill {
-    student_id?: string;
-    class_id?: string;
-    subject?: string;
-    lesson_date?: string;
-  }
-  
-  async function createInitialDraft(prefill?: DraftPrefill) {
-    if (!user) return;
-
-    try {
-      const defaultStudent = prefill?.student_id || students[0]?.id || '';
-      const defaultSubject = prefill?.subject || getLastSelectedSubject(user.id);
-      const defaultClassId = prefill?.class_id || null;
-      const defaultDate = prefill?.lesson_date || getTodayKST();
-
-      const { data, error } = await supabase
-        .from('lesson_records')
-        .insert({
-          teacher_id: user.id,
-          student_id: defaultStudent,
-          class_id: defaultClassId,
-          subject: defaultSubject as SubjectType,
-          lesson_date: defaultDate,
-          lesson_range: '',
-          understanding_score: 3,
-          homework_status: 'none_assigned',
-          learning_issues: [],
-          submitted: false,
-        } as any)
-        .select()
-        .single();
-
-      if (error) {
-        // Check for unique constraint violation (duplicate record)
-        if (error.code === '23505' && defaultClassId) {
-          // Re-fetch the existing record and open it
-          const existingRecord = await findExistingLessonRecord(
-            defaultStudent,
-            defaultDate,
-            defaultSubject,
-            defaultClassId
-          );
-          if (existingRecord) {
-            setExistingRecordNotice(true);
-            handleEdit(existingRecord);
-            return existingRecord.id;
-          }
-        }
-        throw error;
-      }
-
-      setCurrentDraftId(data.id);
-      setFormData({
-        student_id: defaultStudent,
-        class_id: defaultClassId || '',
-        subject: defaultSubject,
-        lesson_date: defaultDate,
-        lesson_range: '',
-        understanding_score: '3',
-        homework_status: 'none_assigned',
-        learning_issues: [],
-        learning_issues_note: '',
-        next_lesson_goal: '',
-        notes: '',
-        lesson_types: ['정규수업'],
-        attendance_status: ['정상등원'],
-      });
-
-      return data.id;
-    } catch (error: any) {
-      console.error('Error creating draft:', error);
-      toast({
-        title: '오류',
-        description: '임시저장 생성에 실패했습니다',
-        variant: 'destructive',
-      });
-      return null;
-    }
+  function handleOpenNewForm() {
+    openModal(null, null, 'edit');
   }
 
-  // Auto-save to existing draft
-  const handleAutoSave = useCallback(async () => {
-    if (!currentDraftId || !user) return;
-
-    try {
-      const payload = buildPayload();
-      if (!payload.student_id) return; // Don't save if no student selected
-
-      await supabase
-        .from('lesson_records')
-        .update({
-          ...payload,
-          submitted: false,
-        })
-        .eq('id', currentDraftId);
-    } catch (error) {
-      console.error('Auto-save error:', error);
-    }
-  }, [currentDraftId, formData, user]);
-
-  function buildPayload(includeTestFields: boolean = false) {
-    const subject = formData.subject as SubjectType;
-    // Ensure at least one value is selected for lesson_types and attendance_status
-    const lesson_types = formData.lesson_types.length > 0 ? formData.lesson_types : ['정규수업'];
-    const attendance_status = formData.attendance_status.length > 0 ? formData.attendance_status : ['정상등원'];
-    
-    // LESSON-EDIT-MODE-V1: Preserve original teacher_id when editing existing records
-    const teacherId = originalTeacherId || user!.id;
-    
-    const basePayload = {
-      teacher_id: teacherId,
-      student_id: formData.student_id,
-      class_id: formData.class_id || null,
-      subject,
-      lesson_date: formData.lesson_date,
-      lesson_range: formData.lesson_range.trim(),
-      understanding_score: parseInt(formData.understanding_score),
-      homework_status: formData.homework_status,
-      learning_issues: formData.learning_issues,
-      learning_issues_note: formData.learning_issues_note.trim() || null,
-      next_lesson_goal: formData.next_lesson_goal.trim() || null,
-      notes: formData.notes.trim() || null,
-      lesson_types,
-      attendance_status,
-    };
-    
-    // Include test fields if requested (for draft save and submit)
-    if (includeTestFields) {
-      return {
-        ...basePayload,
-        test_name: testFormData.test_name || null,
-        test_result_text: testFormData.test_result_text || null,
-        test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
-        test_notes: testFormData.test_notes || null,
-        test_date: testFormData.test_date || null,
-        test_time: testFormData.test_time || null,
-        test_assistant: testFormData.test_assistant || null,
-      };
-    }
-    
-    return basePayload;
+  function handleView(lesson: LessonRecord) {
+    openModal({
+      student_id: lesson.student_id,
+      class_id: lesson.class_id || '',
+      subject: lesson.subject,
+      lesson_date: lesson.lesson_date,
+    }, lesson.id, 'view');
   }
 
-  // Manual save as draft - includes test fields and homework
-  const handleSaveDraft = async () => {
-    if (!user) return;
+  function handleEdit(lesson: LessonRecord) {
+    const canEditDirectly = isTeacher && lesson.teacher_id === user?.id;
+    const mode = canEditDirectly || isAdmin ? 'edit' : 'view';
+    openModal({
+      student_id: lesson.student_id,
+      class_id: lesson.class_id || '',
+      subject: lesson.subject,
+      lesson_date: lesson.lesson_date,
+    }, lesson.id, mode);
+  }
 
-    if (!formData.student_id) {
-      toast({
-        title: '유효성 오류',
-        description: '학생을 선택해주세요',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSavingDraft(true);
-
-    try {
-      // Include test fields in payload
-      const payload = buildPayload(true);
-      const draftId = currentDraftId || editingLesson?.id;
-      
-      // Debug log for payload keys
-      console.log('[DRAFT_SAVE_KEYS]', Object.keys(payload));
-
-      let finalDraftId = draftId;
-
-      if (draftId) {
-        const { error } = await supabase
-          .from('lesson_records')
-          .update({
-            ...payload,
-            submitted: false,
-          })
-          .eq('id', draftId);
-
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from('lesson_records')
-          .insert({
-            ...payload,
-            submitted: false,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        setCurrentDraftId(data.id);
-        finalDraftId = data.id;
-      }
-
-      // Save/update homework if content provided
-      if (newHomeworkContent.trim() && finalDraftId) {
-        // Check if homework already exists for this lesson_record
-        const { data: existingHw } = await supabase
-          .from('homework_assignments')
-          .select('id')
-          .eq('lesson_record_id', finalDraftId)
-          .maybeSingle();
-        
-        if (existingHw) {
-          // Update existing homework
-          await supabase
-            .from('homework_assignments')
-            .update({ content: newHomeworkContent.trim() })
-            .eq('id', existingHw.id);
-        } else {
-          // Insert new homework
-          await supabase
-            .from('homework_assignments')
-            .insert({
-              student_id: formData.student_id,
-              subject: formData.subject as SubjectType,
-              lesson_record_id: finalDraftId,
-              assigned_date: formData.lesson_date,
-              content: newHomeworkContent.trim(),
-            });
-        }
-      }
-
-      toast({
-        title: '임시저장 완료 (오늘숙제/테스트 포함)',
-        description: '수업 기록이 임시저장되었습니다',
-      });
-
-      fetchLessons();
-    } catch (error: any) {
-      console.error('Error saving draft:', error);
-      toast({
-        title: '오류',
-        description: error.message || '임시저장에 실패했습니다',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSavingDraft(false);
-    }
-  };
-
-  // Submit record
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!user) return;
-
-    if (!formData.student_id || !formData.subject || !formData.lesson_range) {
-      toast({
-        title: '유효성 오류',
-        description: '필수 항목을 모두 입력해주세요',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // Include test fields in submit payload
-      const payload = {
-        ...buildPayload(true),
-        submitted: true,
-        submitted_at: new Date().toISOString(),
-      };
-
-      const recordId = currentDraftId || editingLesson?.id;
-      let finalRecordId = recordId;
-
-      if (recordId) {
-        const { error } = await supabase
-          .from('lesson_records')
-          .update(payload)
-          .eq('id', recordId);
-
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from('lesson_records')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw error;
-        finalRecordId = data.id;
-      }
-
-      // Save/update homework if content provided
-      if (newHomeworkContent.trim() && finalRecordId) {
-        // Check if homework already exists for this lesson_record
-        const { data: existingHw } = await supabase
-          .from('homework_assignments')
-          .select('id')
-          .eq('lesson_record_id', finalRecordId)
-          .maybeSingle();
-        
-        if (existingHw) {
-          // Update existing homework
-          const { error: homeworkError } = await supabase
-            .from('homework_assignments')
-            .update({ content: newHomeworkContent.trim() })
-            .eq('id', existingHw.id);
-
-          if (homeworkError) {
-            console.error('Error updating homework:', homeworkError);
-          }
-        } else {
-          // Insert new homework
-          const { error: homeworkError } = await supabase
-            .from('homework_assignments')
-            .insert({
-              student_id: formData.student_id,
-              subject: formData.subject as SubjectType,
-              lesson_record_id: finalRecordId,
-              assigned_date: formData.lesson_date,
-              content: newHomeworkContent.trim(),
-            });
-
-          if (homeworkError) {
-            console.error('Error inserting homework:', homeworkError);
-          }
-        }
-      }
-
-      toast({
-        title: '제출 완료',
-        description: '수업 기록이 제출되었습니다',
-      });
-
-      setIsDialogOpen(false);
-      setEditingLesson(null);
-      setCurrentDraftId(null);
-      resetForm();
-      fetchLessons();
-    } catch (error: any) {
-      console.error('Error submitting lesson:', error);
-      toast({
-        title: '오류',
-        description: error.message || '수업 기록 제출에 실패했습니다',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const resetForm = () => {
-    const lastSubject = getLastSelectedSubject(user?.id);
-    setFormData({
-      student_id: '',
-      class_id: '',
-      subject: lastSubject,
-      lesson_date: getTodayKST(),
-      lesson_range: '',
-      understanding_score: '3',
-      homework_status: 'none_assigned',
-      learning_issues: [],
-      learning_issues_note: '',
-      next_lesson_goal: '',
-      notes: '',
-      lesson_types: ['정규수업'],
-      attendance_status: ['정상등원'],
-    });
-    setCurrentDraftId(null);
-    setPreviousHomework(null);
-    setHomeworkCheckResult('');
-    setHomeworkCheckNotes('');
-    setNewHomeworkContent('');
-    setTestFormData({
-      test_name: '',
-      test_result_text: '',
-      test_result: 'none',
-      test_notes: '',
-      test_date: '',
-      test_time: '',
-      test_assistant: '',
-    });
-    setPreviousLesson(null);
-    setPreviousLessonHomework(null);
-    setPrevHomeworkOverrideEditing(false);
-    setPrevHomeworkOverrideText('');
-  };
-
-  // Fetch previous homework when student_id and subject change
-  const fetchPreviousHomework = useCallback(async (studentId: string, subject: string) => {
-    if (!studentId || !subject) {
-      setPreviousHomework(null);
-      return;
-    }
-
-    setLoadingHomework(true);
-    try {
-      const { data, error } = await supabase
-        .from('homework_assignments')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('subject', subject as SubjectType)
-        .order('assigned_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      
-      if (data) {
-        // Fetch checker name if checked
-        let checkerName = '';
-        if (data.checked_by) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name, email')
-            .eq('id', data.checked_by)
-            .maybeSingle();
-          checkerName = profile?.full_name || profile?.email || '';
-        }
-        
-        setPreviousHomework({
-          ...data,
-          checker_name: checkerName,
-        } as HomeworkAssignment);
-        
-        // Pre-fill check fields if already checked
-        if (data.check_status === 'checked') {
-          setHomeworkCheckResult(data.result || '');
-          setHomeworkCheckNotes(data.notes || '');
-        } else {
-          setHomeworkCheckResult('');
-          setHomeworkCheckNotes('');
-        }
-      } else {
-        setPreviousHomework(null);
-        setHomeworkCheckResult('');
-        setHomeworkCheckNotes('');
-      }
-    } catch (error) {
-      console.error('Error fetching previous homework:', error);
-      setPreviousHomework(null);
-    } finally {
-      setLoadingHomework(false);
-    }
-  }, []);
-
-  // PREV_HW_RLS_FIX_V1: Fetch previous lesson by student_id + subject only (not class_id/teacher_id)
-  const [prevHwDebugInfo, setPrevHwDebugInfo] = useState<{ rows: number; found: boolean; srcDate: string; srcTeacher: string }>({ rows: 0, found: false, srcDate: '-', srcTeacher: '-' });
-  
-  const fetchPreviousLesson = useCallback(async (studentId: string, subject: string, currentDate: string) => {
-    if (!studentId || !subject) {
-      setPreviousLesson(null);
-      setPreviousLessonHomework(null);
-      setPrevHwDebugInfo({ rows: 0, found: false, srcDate: '-', srcTeacher: '-' });
-      return;
-    }
-
-    setLoadingPreviousLesson(true);
-    try {
-      // PREV_HW_RLS_FIX_V1: Chain by student_id + subject only, ignore class_id/teacher_id
-      // Exclude 휴강/공지사항 lesson types
-      const { data: lessonData, error: lessonError } = await supabase
-        .from('lesson_records')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('subject', subject as SubjectType)
-        .lt('lesson_date', currentDate)
-        .eq('submitted', true)
-        .order('lesson_date', { ascending: false })
-        .order('updated_at', { ascending: false })
-        .limit(10); // Get more to filter out 휴강/공지사항
-
-      if (lessonError) throw lessonError;
-
-      // Filter out 휴강/공지사항 lesson types and find the first valid one with homework
-      let validLesson: LessonRecord | null = null;
-      let homeworkData: HomeworkAssignment | null = null;
-      
-      for (const lesson of (lessonData || [])) {
-        const lessonTypes = (lesson as any).lesson_types || [];
-        if (lessonTypes.includes('휴강') || lessonTypes.includes('공지사항')) {
-          continue; // Skip 휴강/공지사항 records
-        }
-        
-        // Check if this lesson has homework
-        const { data: hw } = await supabase
-          .from('homework_assignments')
-          .select('*')
-          .eq('lesson_record_id', lesson.id)
-          .maybeSingle();
-        
-        if (hw && hw.content && hw.content.trim() !== '') {
-          validLesson = lesson as LessonRecord;
-          homeworkData = hw as HomeworkAssignment;
-          break;
-        }
-      }
-
-      const totalRows = lessonData?.length || 0;
-      if (validLesson) {
-        setPreviousLesson(validLesson);
-        setPrevHwDebugInfo({
-          rows: totalRows,
-          found: true,
-          srcDate: validLesson.lesson_date,
-          srcTeacher: (validLesson as any).teacher_id?.substring(0, 8) || '-',
-        });
-        
-        if (homeworkData) {
-          // Fetch checker name if checked
-          let checkerName = '';
-          if (homeworkData.checked_by) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('full_name, email')
-              .eq('id', homeworkData.checked_by)
-              .maybeSingle();
-            checkerName = profile?.full_name || profile?.email || '';
-          }
-          setPreviousLessonHomework({
-            ...homeworkData,
-            checker_name: checkerName,
-          } as HomeworkAssignment);
-          
-          // Pre-fill homework check if unchecked
-          if (homeworkData.check_status !== 'checked') {
-            setHomeworkCheckResult('');
-            setHomeworkCheckNotes('');
-          } else {
-            setHomeworkCheckResult(homeworkData.result || '');
-            setHomeworkCheckNotes(homeworkData.notes || '');
-          }
-          // Update previousHomework for the check controls
-          setPreviousHomework({
-            ...homeworkData,
-            checker_name: checkerName,
-          } as HomeworkAssignment);
-        } else {
-          setPreviousLessonHomework(null);
-        }
-      } else {
-        setPreviousLesson(null);
-        setPreviousLessonHomework(null);
-        setPrevHwDebugInfo({ rows: totalRows, found: false, srcDate: '-', srcTeacher: '-' });
-      }
-    } catch (error) {
-      console.error('Error fetching previous lesson:', error);
-      setPreviousLesson(null);
-      setPreviousLessonHomework(null);
-      setPrevHwDebugInfo({ rows: 0, found: false, srcDate: '-', srcTeacher: '-' });
-    } finally {
-      setLoadingPreviousLesson(false);
-    }
-  }, []);
-
-  // PREV_HW_CHAIN_V2: Effect to fetch previous lesson when student/subject/date changes
-  useEffect(() => {
-    if (isDialogOpen && formData.student_id && formData.subject && formData.lesson_date) {
-      fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
-    }
-  }, [isDialogOpen, formData.student_id, formData.subject, formData.lesson_date, fetchPreviousLesson]);
-
-  // Save homework check
-  const handleSaveHomeworkCheck = async () => {
-    if (!previousHomework || !homeworkCheckResult || !user) return;
-
-    setIsSavingHomeworkCheck(true);
-    try {
-      const { error } = await supabase
-        .from('homework_assignments')
-        .update({
-          check_status: 'checked',
-          result: homeworkCheckResult,
-          notes: homeworkCheckNotes.trim() || null,
-          checked_by: user.id,
-          checked_at: new Date().toISOString(),
-        })
-        .eq('id', previousHomework.id);
-
-      if (error) throw error;
-
-      toast({
-        title: '확인 완료',
-        description: '숙제 확인이 저장되었습니다',
-      });
-
-      // Refresh the homework data
-      await fetchPreviousHomework(formData.student_id, formData.subject);
-    } catch (error: any) {
-      console.error('Error saving homework check:', error);
-      toast({
-        title: '오류',
-        description: error.message || '숙제 확인 저장에 실패했습니다',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSavingHomeworkCheck(false);
-    }
-  };
-
-  // Save previous homework override (assistant/admin can edit)
-  const handleSavePrevHomeworkOverride = async () => {
-    const recordId = editingLesson?.id || currentDraftId;
-    if (!recordId || !user) return;
-
-    setIsSavingPrevHomeworkOverride(true);
-    try {
-      const { error } = await supabase
-        .from('lesson_records')
-        .update({
-          prev_homework_override_text: prevHomeworkOverrideText.trim() || null,
-          prev_homework_override_by: user.id,
-          prev_homework_override_at: new Date().toISOString(),
-        })
-        .eq('id', recordId);
-
-      if (error) throw error;
-
-      // Update the local editingLesson if it exists
-      if (editingLesson) {
-        setEditingLesson({
-          ...editingLesson,
-          prev_homework_override_text: prevHomeworkOverrideText.trim() || null,
-          prev_homework_override_by: user.id,
-          prev_homework_override_at: new Date().toISOString(),
-        });
-      }
-
-      toast({
-        title: '저장 완료',
-        description: '지난 숙제(확정)가 저장되었습니다',
-      });
-
-      setPrevHomeworkOverrideEditing(false);
-    } catch (error: any) {
-      console.error('Error saving prev homework override:', error);
-      toast({
-        title: '오류',
-        description: error.message || '지난 숙제 저장에 실패했습니다',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSavingPrevHomeworkOverride(false);
-    }
-  };
-
-  // Reset previous homework override to auto-loaded value
-  const handleResetPrevHomeworkOverride = async () => {
-    const recordId = editingLesson?.id || currentDraftId;
-    if (!recordId || !user) return;
-
-    setIsSavingPrevHomeworkOverride(true);
-    try {
-      const { error } = await supabase
-        .from('lesson_records')
-        .update({
-          prev_homework_override_text: null,
-          prev_homework_override_by: null,
-          prev_homework_override_at: null,
-        })
-        .eq('id', recordId);
-
-      if (error) throw error;
-
-      // Update the local editingLesson if it exists
-      if (editingLesson) {
-        setEditingLesson({
-          ...editingLesson,
-          prev_homework_override_text: null,
-          prev_homework_override_by: null,
-          prev_homework_override_at: null,
-        });
-      }
-
-      toast({
-        title: '초기화 완료',
-        description: '지난 숙제가 자동 값으로 복원되었습니다',
-      });
-
-      setPrevHomeworkOverrideText('');
-      setPrevHomeworkOverrideEditing(false);
-    } catch (error: any) {
-      console.error('Error resetting prev homework override:', error);
-      toast({
-        title: '오류',
-        description: error.message || '초기화에 실패했습니다',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSavingPrevHomeworkOverride(false);
-    }
-  };
-
-  // Save test fields (uses RPC for assistant role)
-  const handleSaveTestFields = async () => {
-    const recordId = editingLesson?.id || currentDraftId;
-    if (!recordId || !user) return;
-
-    setIsSavingTestFields(true);
-    try {
-      // Use RPC for assistants (security definer function)
-      if (isAssistant) {
-        const { error } = await supabase.rpc('update_lesson_test_fields', {
-          _lesson_id: recordId,
-          _test_name: testFormData.test_name || null,
-          _test_result_text: testFormData.test_result_text || null,
-          _test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
-          _test_notes: testFormData.test_notes || null,
-          _test_date: testFormData.test_date || null,
-          _test_time: testFormData.test_time || null,
-          _test_assistant: testFormData.test_assistant || null,
-        });
-
-        if (error) throw error;
-      } else {
-        // Direct update for teachers/admins
-        const { error } = await supabase
-          .from('lesson_records')
-          .update({
-            test_name: testFormData.test_name || null,
-            test_result_text: testFormData.test_result_text || null,
-            test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
-            test_notes: testFormData.test_notes || null,
-            test_date: testFormData.test_date || null,
-            test_time: testFormData.test_time || null,
-            test_assistant: testFormData.test_assistant || null,
-          })
-          .eq('id', recordId);
-
-        if (error) throw error;
-      }
-
-      toast({
-        title: '저장 완료',
-        description: '테스트 결과가 저장되었습니다',
-      });
-
-      fetchLessons();
-    } catch (error: any) {
-      console.error('Error saving test fields:', error);
-      toast({
-        title: '오류',
-        description: error.message || '테스트 결과 저장에 실패했습니다',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSavingTestFields(false);
-    }
-  };
-
-  const handleOpenNewForm = async () => {
-    setEditingLesson(null);
-    resetForm();
-    setDialogMode('edit'); // New records always in edit mode
-    setOriginalTeacherId(null); // New record, current user is teacher
-    setIsDialogOpen(true);
-    // Create draft after dialog opens
-    setTimeout(async () => {
-      if (students.length > 0) {
-        await createInitialDraft();
-      }
-    }, 100);
-  };
-
-  // LESSON-VIEW-MODE-V1: Open lesson in VIEW mode (read-only)
-  const handleView = async (lesson: LessonRecord) => {
-    await openLessonDialog(lesson, 'view');
-  };
-
-  // LESSON-VIEW-MODE-V1: Open lesson in EDIT mode (only for own records)
-  const handleEdit = async (lesson: LessonRecord) => {
-    // Teacher can only edit own records directly
-    const lessonTeacherId = lesson.teacher_id;
-    const canEditDirectly = isTeacher && lessonTeacherId === user?.id;
-    const mode = canEditDirectly ? 'edit' : 'view';
-    await openLessonDialog(lesson, mode);
-  };
-
-  // LESSON-VIEW-MODE-V1: Shared function to open lesson dialog
-  const openLessonDialog = async (lesson: LessonRecord, mode: 'view' | 'edit') => {
-    // Fetch teacher_name if not already present
-    let lessonWithTeacher = lesson;
-    if (!lesson.teacher_name && lesson.teacher_id) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', lesson.teacher_id)
-        .maybeSingle();
-      lessonWithTeacher = { ...lesson, teacher_name: profile?.full_name || '알 수 없음' };
-    }
-    
-    setEditingLesson(lessonWithTeacher);
-    setCurrentDraftId(lessonWithTeacher.id);
-    
-    const lessonTeacherId = lessonWithTeacher.teacher_id;
-    setOriginalTeacherId(lessonTeacherId || null);
-    setDialogMode(mode);
-    
-    setFormData({
-      student_id: lessonWithTeacher.student_id,
-      class_id: lessonWithTeacher.class_id || '',
-      subject: lessonWithTeacher.subject,
-      lesson_date: lessonWithTeacher.lesson_date,
-      lesson_range: lessonWithTeacher.lesson_range,
-      understanding_score: lessonWithTeacher.understanding_score.toString(),
-      homework_status: lessonWithTeacher.homework_status,
-      learning_issues: lessonWithTeacher.learning_issues || [],
-      learning_issues_note: lessonWithTeacher.learning_issues_note || '',
-      next_lesson_goal: lessonWithTeacher.next_lesson_goal || '',
-      notes: lessonWithTeacher.notes || '',
-      lesson_types: lessonWithTeacher.lesson_types || ['정규수업'],
-      attendance_status: lessonWithTeacher.attendance_status || ['정상등원'],
-    });
-    // Set test form data from lesson
-    setTestFormData({
-      test_name: lessonWithTeacher.test_name || '',
-      test_result_text: lessonWithTeacher.test_result_text || '',
-      test_result: lessonWithTeacher.test_result || 'none',
-      test_notes: lessonWithTeacher.test_notes || '',
-      test_date: lessonWithTeacher.test_date || lessonWithTeacher.lesson_date,
-      test_time: lessonWithTeacher.test_time || '',
-      test_assistant: lessonWithTeacher.test_assistant || '',
-    });
-    
-    // Load existing homework content for this lesson record
-    try {
-      const { data: existingHw } = await supabase
-        .from('homework_assignments')
-        .select('content')
-        .eq('lesson_record_id', lessonWithTeacher.id)
-        .maybeSingle();
-      
-      if (existingHw?.content) {
-        setNewHomeworkContent(existingHw.content);
-      } else {
-        setNewHomeworkContent('');
-      }
-    } catch (error) {
-      console.error('Error loading homework content:', error);
-      setNewHomeworkContent('');
-    }
-    
-    // Reset override editing state
-    setPrevHomeworkOverrideEditing(false);
-    setPrevHomeworkOverrideText('');
-    
-    setIsDialogOpen(true);
-  };
-
-  // LESSON-VIEW-MODE-V1: Handler to switch from view to edit mode
-  const handleRequestEditMode = () => {
-    setDialogMode('edit');
-  };
-
-  const handleDelete = async (id: string) => {
+  async function handleDelete(id: string) {
     if (!confirm('이 수업 기록을 삭제하시겠습니까?')) return;
 
     try {
@@ -1852,38 +715,17 @@ export default function Lessons() {
         variant: 'destructive',
       });
     }
-  };
+  }
 
-  const handleDialogClose = async (open: boolean) => {
-    if (!open) {
-      // If closing and there's an empty draft, delete it
-      if (currentDraftId && !formData.student_id && !formData.subject && !formData.lesson_range) {
-        try {
-          await supabase.from('lesson_records').delete().eq('id', currentDraftId);
-        } catch (error) {
-          console.error('Error cleaning up empty draft:', error);
-        }
-      }
-      setEditingLesson(null);
-      setCurrentDraftId(null);
-      setExistingRecordNotice(false);
-      resetForm();
-      fetchLessons();
-    }
-    setIsDialogOpen(open);
-  };
-
-  const toggleIssue = (issue: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      learning_issues: prev.learning_issues.includes(issue)
-        ? prev.learning_issues.filter((i) => i !== issue)
-        : [...prev.learning_issues, issue],
-    }));
-  };
-
-  // With server-side filtering, we use lessons directly
-  const filteredLessons = lessons;
+  function handleTodaySlotClick(student: TodaySlotStudent, slot: TodaySlot) {
+    const prefill: LessonFormContext = {
+      student_id: student.id,
+      class_id: slot.class_id,
+      subject: slot.subject,
+      lesson_date: getTodayKST(),
+    };
+    openModal(prefill, null, 'edit');
+  }
 
   const getHomeworkLabel = (status: string) => {
     return HOMEWORK_STATUS.find((s) => s.value === status)?.label || status;
@@ -1920,12 +762,11 @@ export default function Lessons() {
 
   return (
     <div className="space-y-6">
-      {/* Visible marker for debugging */}
+      {/* Visible marker for debugging - now uses shared form */}
       <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        ASSISTANT-TEST-OPEN-CHECK-V2
+        LESSONS-PAGE-V2 (uses LESSON-SHARED-FORM-V1)
       </div>
 
-      {/* Error banner - show inline error instead of crashing */}
       {loadError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -1940,9 +781,25 @@ export default function Lessons() {
             {role === 'admin' ? '전체 수업 기록' : '수업 내용을 기록하고 관리하세요'}
           </p>
         </div>
+        {canManage && (
+          <Button onClick={handleOpenNewForm}>
+            <Plus className="w-4 h-4 mr-2" />
+            수업 기록 작성
+          </Button>
+        )}
       </div>
 
-      {/* 오늘 수업 Section - For teachers, admins, and assistants */}
+      {/* LessonModal - shared form component */}
+      <LessonModal
+        open={isModalOpen}
+        onOpenChange={handleModalClose}
+        context={modalContext}
+        existingRecordId={modalExistingRecordId}
+        onSaved={handleModalSaved}
+        initialMode={modalMode}
+      />
+
+      {/* 오늘 수업 Section */}
       {(isTeacher || isAdmin || isAssistant) && (
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader className="pb-3">
@@ -1975,35 +832,22 @@ export default function Lessons() {
                         {slot.students.map((student) => (
                           <div 
                             key={student.id} 
-                            className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${student.hyugangRecordId ? 'bg-muted/50 hover:bg-muted' : 'bg-secondary/50 hover:bg-secondary'}`}
-                            onClick={() => {
-                              const prefill = {
-                                student_id: student.id,
-                                class_id: slot.class_id,
-                                subject: slot.subject,
-                                lesson_date: getTodayKST(),
-                              };
-                              setFormData(prev => ({ ...prev, ...prefill }));
-                              setEditingLesson(null);
-                              setCurrentDraftId(null);
-                              setIsDialogOpen(true);
-                              setTimeout(() => createInitialDraft(prefill), 100);
-                            }}
+                            className={`flex items-center justify-between p-2 rounded-lg hover:bg-secondary/50 cursor-pointer transition-colors ${student.hyugangRecordId ? 'bg-muted/50 opacity-60' : ''}`}
+                            onClick={() => handleTodaySlotClick(student, slot)}
                           >
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
-                              {student.hyugangRecordId ? (
-                                <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
-                              ) : (
-                                getRosterBadges(
-                                  student.previousHomeworkStatus,
-                                  student.debugReason,
-                                  student.firstSubject,
-                                  student.followup2wDue,
-                                  slot.subject,
-                                  isAdmin,
-                                  () => markFollowupDone(student.id, slot.subject)
-                                )
+                              <span className="text-sm font-medium">{student.name}</span>
+                              {student.hyugangRecordId && (
+                                <Badge variant="outline" className="text-xs bg-muted">휴강</Badge>
+                              )}
+                              {getRosterBadges(
+                                student.previousHomeworkStatus,
+                                student.debugReason,
+                                student.firstSubject,
+                                student.followup2wDue,
+                                slot.subject,
+                                isAdmin,
+                                () => markFollowupDone(student.id, slot.subject)
                               )}
                             </div>
                             <div className="flex items-center gap-2">
@@ -2012,17 +856,7 @@ export default function Lessons() {
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const prefill = {
-                                    student_id: student.id,
-                                    class_id: slot.class_id,
-                                    subject: slot.subject,
-                                    lesson_date: getTodayKST(),
-                                  };
-                                  setFormData(prev => ({ ...prev, ...prefill }));
-                                  setEditingLesson(null);
-                                  setCurrentDraftId(null);
-                                  setIsDialogOpen(true);
-                                  setTimeout(() => createInitialDraft(prefill), 100);
+                                  handleTodaySlotClick(student, slot);
                                 }}
                               >
                                 <FileEdit className="w-3.5 h-3.5 mr-1" />
@@ -2043,901 +877,7 @@ export default function Lessons() {
         </Card>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
-
-        <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
-          {canManage && (
-            <DialogTrigger asChild>
-              <Button onClick={handleOpenNewForm}>
-                <Plus className="w-4 h-4 mr-2" />
-                수업 기록 작성
-              </Button>
-            </DialogTrigger>
-          )}
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                {dialogMode === 'view' ? (
-                  '수업 기록 상세'
-                ) : editingLesson ? (
-                  editingLesson.submitted ? '수업 기록 수정' : '임시저장 수정'
-                ) : (
-                  '새 수업 기록'
-                )}
-                {currentDraftId && !editingLesson?.submitted && dialogMode === 'edit' && (
-                  <Badge variant="outline" className="ml-2">
-                    <FileEdit className="w-3 h-3 mr-1" />
-                    임시저장
-                  </Badge>
-                )}
-                {dialogMode === 'view' && (
-                  <Badge variant="outline" className="ml-2 bg-blue-500/10 text-blue-700 border-blue-500/30">
-                    보기 모드
-                  </Badge>
-                )}
-              </DialogTitle>
-            </DialogHeader>
-            
-            {/* LESSON-VIEW-MODE-V1 / LESSON-EDIT-MODE-V1 marker */}
-            <div className={`text-xs text-center py-1 rounded ${dialogMode === 'view' ? 'bg-blue-500/20 text-blue-700' : 'bg-muted/30 text-muted-foreground'}`}>
-              {dialogMode === 'view' ? 'LESSON-VIEW-MODE-V1' : 'LESSON-EDIT-MODE-V1'}
-            </div>
-            
-            {/* LESSON-VIEW-MODE-V1: View mode metadata at top */}
-            {dialogMode === 'view' && editingLesson && (
-              <div className="flex flex-wrap gap-3 p-3 bg-muted/50 rounded-lg border text-sm">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">작성자:</span>
-                  <span className="font-medium">{editingLesson.teacher_name || '알 수 없음'}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">과목:</span>
-                  <Badge variant="secondary">{editingLesson.subject}</Badge>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">수업일:</span>
-                  <span className="font-medium">{format(new Date(editingLesson.lesson_date), 'yyyy-MM-dd')}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">상태:</span>
-                  {editingLesson.submitted ? (
-                    <Badge className="bg-green-500/10 text-green-600 border-green-500/20">제출됨</Badge>
-                  ) : (
-                    <Badge variant="outline" className="border-amber-500/50 text-amber-600">
-                      <FileEdit className="w-3 h-3 mr-1" />임시저장
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* View mode: Edit button for admin */}
-            {dialogMode === 'view' && isAdmin && (
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="default"
-                  onClick={handleRequestEditMode}
-                >
-                  <FileEdit className="w-4 h-4 mr-1" />
-                  편집하기
-                </Button>
-              </div>
-            )}
-            
-            {/* Notice when existing record was opened */}
-            {existingRecordNotice && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-700 text-sm">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>이미 오늘 수업 기록이 있어 기존 기록을 열었습니다.</span>
-              </div>
-            )}
-            
-            <form onSubmit={handleSubmit} className={`space-y-4 mt-4 ${dialogMode === 'view' ? 'pointer-events-none opacity-90' : ''}`}>
-              {/* 지난 수업 Section - At the very top */}
-              {formData.student_id && formData.class_id && (
-                <div className="p-4 rounded-lg border-2 border-blue-500/30 bg-blue-500/5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <ClipboardList className="w-5 h-5 text-blue-600" />
-                    <Label className="text-base font-semibold text-blue-700">지난 수업</Label>
-                    {loadingPreviousLesson && (
-                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                    )}
-                  </div>
-                  
-                  {loadingPreviousLesson ? (
-                    <div className="text-sm text-muted-foreground">불러오는 중...</div>
-                  ) : previousLesson ? (
-                    <div className="space-y-4">
-                      {/* Previous lesson date and range */}
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="w-4 h-4" />
-                        <span>{format(new Date(previousLesson.lesson_date), 'yyyy-MM-dd')}</span>
-                        <span className="mx-1">|</span>
-                        <span className="font-medium text-foreground">{previousLesson.lesson_range}</span>
-                      </div>
-
-                      {/* 지난 숙제 내용 + 상태 (with editable override for assistant/admin) */}
-                      <div className="p-3 bg-background rounded-lg border space-y-3">
-                        {/* Header with label and edit button */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {/* PREV_HW_RLS_FIX_V1 debug marker */}
-                            <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-                              PREV_HW_RLS_FIX_V1: rows={prevHwDebugInfo.rows} subject={formData.subject} student={formData.student_id?.slice(0,8)} found={prevHwDebugInfo.found ? 1 : 0} srcDate={prevHwDebugInfo.srcDate} srcTeacher={prevHwDebugInfo.srcTeacher}
-                            </span>
-                            {/* Show different label based on override status */}
-                            {editingLesson?.prev_homework_override_text ? (
-                              <Label className="text-sm font-medium text-amber-700">지난숙제(확정)</Label>
-                            ) : (
-                              <Label className="text-sm font-medium">지난숙제(자동)</Label>
-                            )}
-                            {previousLessonHomework ? (
-                              (() => {
-                                const hw = previousLessonHomework;
-                                if (hw.check_status === 'checked') {
-                                  const opt = HOMEWORK_RESULT_OPTIONS.find(o => o.value === hw.result);
-                                  if (opt) {
-                                    const colorClass = hw.result === 'completed' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
-                                                       hw.result === 'partial' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
-                                                       hw.result === 'not_done' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
-                                                       'bg-muted text-muted-foreground';
-                                    const Icon = opt.icon;
-                                    return <Badge variant="outline" className={colorClass}><Icon className="w-3 h-3 mr-1" />{opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}</Badge>;
-                                  }
-                                }
-                                return <Badge variant="outline" className="border-gray-300 text-gray-500">미확인</Badge>;
-                              })()
-                            ) : (
-                              !editingLesson?.prev_homework_override_text && (
-                                <Badge variant="outline" className="border-gray-300 text-gray-500">없음</Badge>
-                              )
-                            )}
-                          </div>
-                          
-                          {/* Edit/Add button for assistant/admin */}
-                          {(isAssistant || isAdmin) && !prevHomeworkOverrideEditing && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                // Prefill with override text, else auto text, else empty
-                                const prefillText = editingLesson?.prev_homework_override_text || 
-                                                   previousLessonHomework?.content || 
-                                                   '';
-                                setPrevHomeworkOverrideText(prefillText);
-                                setPrevHomeworkOverrideEditing(true);
-                              }}
-                            >
-                              <Edit2 className="w-3 h-3 mr-1" />
-                              {editingLesson?.prev_homework_override_text || previousLessonHomework?.content ? '수정' : '추가'}
-                            </Button>
-                          )}
-                        </div>
-                        
-                        {/* Override editing mode */}
-                        {prevHomeworkOverrideEditing ? (
-                          <div className="space-y-2">
-                            <Textarea
-                              placeholder="지난 숙제 내용을 입력하세요..."
-                              value={prevHomeworkOverrideText}
-                              onChange={(e) => setPrevHomeworkOverrideText(e.target.value)}
-                              rows={3}
-                              className="text-sm"
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={handleSavePrevHomeworkOverride}
-                                disabled={isSavingPrevHomeworkOverride}
-                              >
-                                {isSavingPrevHomeworkOverride && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                                저장
-                              </Button>
-                              {editingLesson?.prev_homework_override_text && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={handleResetPrevHomeworkOverride}
-                                  disabled={isSavingPrevHomeworkOverride}
-                                >
-                                  초기화
-                                </Button>
-                              )}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setPrevHomeworkOverrideEditing(false);
-                                  setPrevHomeworkOverrideText('');
-                                }}
-                                disabled={isSavingPrevHomeworkOverride}
-                              >
-                                취소
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Display mode */
-                          <>
-                            {/* Show override text if exists, else show auto text */}
-                            {editingLesson?.prev_homework_override_text ? (
-                              <p className="text-sm whitespace-pre-wrap bg-amber-500/10 p-2 rounded border border-amber-500/20">
-                                {editingLesson.prev_homework_override_text}
-                              </p>
-                            ) : previousLessonHomework ? (
-                              <div className="space-y-2">
-                                <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
-                                
-                                {/* If already checked, show result details */}
-                                {previousLessonHomework.check_status === 'checked' && (
-                                  <div className="text-sm text-muted-foreground">
-                                    <div className="flex items-center gap-2">
-                                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                                      <span>
-                                        확인됨 {previousLessonHomework.checker_name && `(${previousLessonHomework.checker_name})`}
-                                      </span>
-                                    </div>
-                                    {previousLessonHomework.notes && (
-                                      <p className="ml-6 mt-1 text-xs italic">{previousLessonHomework.notes}</p>
-                                    )}
-                                  </div>
-                                )}
-                                
-                                {/* Check controls - only if not already checked, for assistant */}
-                                {previousLessonHomework.check_status !== 'checked' && (
-                                  <div className="space-y-2 pt-2 border-t">
-                                    <Label className="text-sm">숙제상태 확인</Label>
-                                    <div className="flex flex-wrap gap-2">
-                                      {HOMEWORK_RESULT_OPTIONS.map((opt) => {
-                                        const Icon = opt.icon;
-                                        return (
-                                          <Button
-                                            key={opt.value}
-                                            type="button"
-                                            variant={homeworkCheckResult === opt.value ? 'default' : 'outline'}
-                                            size="sm"
-                                            onClick={() => setHomeworkCheckResult(opt.value)}
-                                            className="gap-1"
-                                          >
-                                            <Icon className="w-4 h-4" />
-                                            {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
-                                          </Button>
-                                        );
-                                      })}
-                                    </div>
-                                    <Textarea
-                                      placeholder="확인 메모 (선택)"
-                                      value={homeworkCheckNotes}
-                                      onChange={(e) => setHomeworkCheckNotes(e.target.value)}
-                                      rows={2}
-                                      className="text-sm"
-                                    />
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      onClick={handleSaveHomeworkCheck}
-                                      disabled={!homeworkCheckResult || isSavingHomeworkCheck}
-                                    >
-                                      {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                                      <CheckCircle2 className="w-4 h-4 mr-1" />
-                                      확인 저장
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">지난 숙제가 없습니다.</p>
-                            )}
-                          </>
-                        )}
-                      </div>
-
-                      {/* 지난 테스트 summary */}
-                      {(previousLesson.test_result_text || previousLesson.test_name) && (
-                        <div className="p-3 bg-background rounded-lg border space-y-2">
-                          <div className="flex items-center gap-2">
-                            <ClipboardCheck className="w-4 h-4 text-amber-600" />
-                            <Label className="text-sm font-medium">지난 테스트</Label>
-                            {/* 영어 과목일 경우 합/불 badge */}
-                            {previousLesson.subject === '영어' && previousLesson.test_result && previousLesson.test_result !== 'none' && (
-                              <Badge 
-                                variant="outline" 
-                                className={previousLesson.test_result === 'pass' 
-                                  ? 'bg-green-500/10 text-green-600 border-green-500/20' 
-                                  : 'bg-red-500/10 text-red-600 border-red-500/20'}
-                              >
-                                {previousLesson.test_result === 'pass' ? '통과' : '불통과'}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                            {previousLesson.test_name && (
-                              <div>
-                                <span className="text-muted-foreground">이름: </span>
-                                <span className="font-medium">{previousLesson.test_name}</span>
-                              </div>
-                            )}
-                            {previousLesson.test_result_text && (
-                              <div>
-                                <span className="text-muted-foreground">결과: </span>
-                                <span className="font-medium">{previousLesson.test_result_text}</span>
-                              </div>
-                            )}
-                            {previousLesson.test_time && (
-                              <div>
-                                <span className="text-muted-foreground">시간: </span>
-                                <span className="font-medium">{previousLesson.test_time}</span>
-                              </div>
-                            )}
-                            {previousLesson.test_assistant && (
-                              <div>
-                                <span className="text-muted-foreground">담당자: </span>
-                                <span className="font-medium">{previousLesson.test_assistant}</span>
-                              </div>
-                            )}
-                          </div>
-                          {previousLesson.test_notes && (
-                            <p className="text-xs text-muted-foreground italic">{previousLesson.test_notes}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground">이전 수업 기록 없음</div>
-                  )}
-                </div>
-              )}
-
-              {/* Main form fields - disabled for assistants */}
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAssistant ? 'opacity-60 pointer-events-none' : ''}`}>
-                <div className="space-y-2">
-                  <Label htmlFor="student">학생 *</Label>
-                  <Select
-                    value={formData.student_id}
-                    onValueChange={(value) => setFormData({ ...formData, student_id: value })}
-                    disabled={isAssistant}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="학생 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {students.map((student) => (
-                        <SelectItem key={student.id} value={student.id}>
-                          {student.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="class">클래스 (선택)</Label>
-                  <Select
-                    value={formData.class_id}
-                    onValueChange={(value) => setFormData({ ...formData, class_id: value })}
-                    disabled={isAssistant}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="클래스 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {classes.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} - {c.subject}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* 휴강 badge indicator */}
-              {formData.lesson_types.includes('휴강') && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-muted">
-                  <Badge variant="secondary" className="bg-muted text-muted-foreground">휴강 기록</Badge>
-                  <span className="text-sm text-muted-foreground">수업 범위, 이해도, 학습 이슈 등 수업 관련 필드가 비활성화됩니다.</span>
-                </div>
-              )}
-
-              {/* 종류 and 출결사항 checkbox groups - disabled for assistants */}
-              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAssistant ? 'opacity-60 pointer-events-none' : ''}`}>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">종류</Label>
-                  <div className="p-3 bg-secondary/50 rounded-lg space-y-2">
-                    {LESSON_TYPE_OPTIONS.map((opt) => (
-                      <div key={opt.value} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`lesson_type_${opt.value}`}
-                          checked={formData.lesson_types.includes(opt.value)}
-                          onCheckedChange={(checked) => {
-                            if (opt.value === '휴강') {
-                              // 휴강 is exclusive - when checked, only 휴강 is selected
-                              if (checked) {
-                                setFormData({ 
-                                  ...formData, 
-                                  lesson_types: ['휴강'],
-                                  homework_status: 'none_assigned',
-                                });
-                              } else {
-                                setFormData({ ...formData, lesson_types: ['정규수업'] });
-                              }
-                            } else {
-                              if (checked) {
-                                // When checking other types, remove 휴강 if present
-                                const newTypes = formData.lesson_types.filter(t => t !== '휴강');
-                                setFormData({ ...formData, lesson_types: [...newTypes, opt.value] });
-                              } else {
-                                // Prevent unchecking if it would leave empty array
-                                const newTypes = formData.lesson_types.filter(t => t !== opt.value);
-                                if (newTypes.length === 0) {
-                                  setFormData({ ...formData, lesson_types: ['정규수업'] });
-                                } else {
-                                  setFormData({ ...formData, lesson_types: newTypes });
-                                }
-                              }
-                            }
-                          }}
-                        />
-                        <label htmlFor={`lesson_type_${opt.value}`} className="text-sm cursor-pointer">{opt.label}</label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">출결사항</Label>
-                  <div className="p-3 bg-secondary/50 rounded-lg space-y-2">
-                    {ATTENDANCE_STATUS_OPTIONS.map((opt) => (
-                      <div key={opt.value} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`attendance_${opt.value}`}
-                          checked={formData.attendance_status.includes(opt.value)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setFormData({ ...formData, attendance_status: [...formData.attendance_status, opt.value] });
-                            } else {
-                              // Prevent unchecking if it would leave empty array
-                              const newStatus = formData.attendance_status.filter(s => s !== opt.value);
-                              if (newStatus.length === 0) {
-                                setFormData({ ...formData, attendance_status: ['정상등원'] });
-                              } else {
-                                setFormData({ ...formData, attendance_status: newStatus });
-                              }
-                            }
-                          }}
-                        />
-                        <label htmlFor={`attendance_${opt.value}`} className="text-sm cursor-pointer">{opt.label}</label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Instructional fields - disabled for assistants or when 휴강 */}
-              <div className={`space-y-4 ${isAssistant || formData.lesson_types.includes('휴강') ? 'opacity-60 pointer-events-none' : ''}`}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="subject">과목 *</Label>
-                    <Select
-                      value={formData.subject}
-                      onValueChange={(value) => {
-                        const newSubject = SUBJECT_VALUES.includes(value as SubjectType)
-                          ? (value as SubjectType)
-                          : '수학';
-                        if (formData.subject && formData.subject !== newSubject && formData.learning_issues.length > 0) {
-                          setPendingSubject(newSubject);
-                          setShowSubjectChangeDialog(true);
-                        } else {
-                          setFormData({ ...formData, subject: newSubject, learning_issues: [] });
-                          setLastSelectedSubject(user?.id, newSubject);
-                        }
-                      }}
-                      disabled={isAssistant}
-                    >
-                      <SelectTrigger className="cursor-pointer bg-secondary/50 border-2 border-input hover:border-primary/50 focus:border-primary transition-colors">
-                        <SelectValue placeholder="과목 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SUBJECTS.map((subject) => (
-                          <SelectItem key={subject.value} value={subject.value}>
-                            {subject.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">수학/과학/영어/국어 중 선택</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lesson_date">수업 날짜 *</Label>
-                    <Input
-                      id="lesson_date"
-                      type="date"
-                      value={formData.lesson_date}
-                      onChange={(e) => setFormData({ ...formData, lesson_date: e.target.value })}
-                      required
-                      disabled={isAssistant}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="lesson_range">수업 범위/내용 *</Label>
-                  <Input
-                    id="lesson_range"
-                    value={formData.lesson_range}
-                    onChange={(e) => setFormData({ ...formData, lesson_range: e.target.value })}
-                    placeholder="예: 5장 이차방정식 (120-135페이지)"
-                    required
-                    disabled={isAssistant}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>이해도 (1-5) *</Label>
-                    <Select
-                      value={formData.understanding_score}
-                      onValueChange={(value) => setFormData({ ...formData, understanding_score: value })}
-                      disabled={isAssistant}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5].map((score) => (
-                          <SelectItem key={score} value={score.toString()}>
-                            {score} - {score === 1 ? '매우 낮음' : score === 2 ? '낮음' : score === 3 ? '보통' : score === 4 ? '높음' : '매우 높음'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>숙제 상태 *</Label>
-                    <Select
-                      value={formData.homework_status}
-                      onValueChange={(value) => setFormData({ ...formData, homework_status: value })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {HOMEWORK_STATUS.map((status) => (
-                          <SelectItem key={status.value} value={status.value}>
-                            {status.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>학습 이슈 (해당 항목 선택)</Label>
-                  {formData.subject ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-2 p-4 bg-secondary/50 rounded-lg">
-                        {getLearningIssuesForSubject(formData.subject as SubjectType).map((issue) => (
-                          <div key={issue} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={issue}
-                              checked={formData.learning_issues.includes(issue)}
-                              onCheckedChange={() => toggleIssue(issue)}
-                              disabled={isAssistant}
-                            />
-                            <label htmlFor={issue} className="text-sm cursor-pointer">{issue}</label>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="space-y-1 pt-2">
-                        <Label htmlFor="learning_issues_note" className="text-sm">기타 학습 이슈</Label>
-                        <Textarea
-                          id="learning_issues_note"
-                          value={formData.learning_issues_note}
-                          onChange={(e) => setFormData({ ...formData, learning_issues_note: e.target.value })}
-                          placeholder="체크 항목 외에 보완이 필요한 부분이 있으면 간단히 적어주세요."
-                          rows={2}
-                          disabled={isAssistant}
-                          className="text-sm"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">과목을 먼저 선택하세요</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="next_goal">다음 수업 목표</Label>
-                <Input
-                  id="next_goal"
-                  value={formData.next_lesson_goal}
-                  onChange={(e) => setFormData({ ...formData, next_lesson_goal: e.target.value })}
-                  placeholder="다음 수업에서 집중할 내용"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">추가 메모</Label>
-                <Textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="기타 관찰 사항이나 코멘트"
-                  rows={3}
-                />
-              </div>
-
-              
-              {/* 테스트/결과 Section - Always visible */}
-              <div className="space-y-3 p-4 rounded-lg border-2 border-amber-500/20 bg-amber-500/5">
-                  <div className="flex items-center gap-2">
-                    <ClipboardCheck className="w-5 h-5 text-amber-600" />
-                    <Label className="text-base font-semibold">테스트/결과</Label>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="test_name" className="text-sm">테스트 이름</Label>
-                      <Input
-                        id="test_name"
-                        value={testFormData.test_name}
-                        onChange={(e) => setTestFormData({ ...testFormData, test_name: e.target.value })}
-                        placeholder="예: 1단원 테스트"
-                        className="text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="test_date" className="text-sm">테스트 날짜</Label>
-                      <Input
-                        id="test_date"
-                        type="date"
-                        value={testFormData.test_date}
-                        onChange={(e) => setTestFormData({ ...testFormData, test_date: e.target.value })}
-                        className="text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="test_time" className="text-sm">테스트 시간</Label>
-                      <Select
-                        value={testFormData.test_time}
-                        onValueChange={(value) => setTestFormData({ ...testFormData, test_time: value })}
-                      >
-                        <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="시간 선택" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TEST_TIME_OPTIONS.map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="test_result_text" className="text-sm">결과 (자유형식)</Label>
-                    <Input
-                      id="test_result_text"
-                      value={testFormData.test_result_text}
-                      onChange={(e) => setTestFormData({ ...testFormData, test_result_text: e.target.value })}
-                      placeholder="예: 18/25, 10문제 중 7개"
-                      className="text-sm"
-                    />
-                  </div>
-
-                  {/* Pass/Fail - Only for English subject */}
-                  {formData.subject === '영어' && (
-                    <div className="space-y-1">
-                      <Label className="text-sm">통과 여부 (영어 전용)</Label>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant={testFormData.test_result === 'pass' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setTestFormData({ ...testFormData, test_result: 'pass' })}
-                          className="gap-1"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          통과
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={testFormData.test_result === 'fail' ? 'destructive' : 'outline'}
-                          size="sm"
-                          onClick={() => setTestFormData({ ...testFormData, test_result: 'fail' })}
-                          className="gap-1"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          불통과
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={testFormData.test_result === 'none' ? 'secondary' : 'outline'}
-                          size="sm"
-                          onClick={() => setTestFormData({ ...testFormData, test_result: 'none' })}
-                          className="gap-1"
-                        >
-                          해당없음
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="test_notes" className="text-sm">테스트 메모</Label>
-                      <Textarea
-                        id="test_notes"
-                        value={testFormData.test_notes}
-                        onChange={(e) => setTestFormData({ ...testFormData, test_notes: e.target.value })}
-                        placeholder="테스트 관련 메모"
-                        rows={2}
-                        className="text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="test_assistant" className="text-sm">테스트 담당자</Label>
-                      <Select
-                        value={testFormData.test_assistant}
-                        onValueChange={(value) => setTestFormData({ ...testFormData, test_assistant: value })}
-                      >
-                        <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="담당자 선택" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="다인조교">다인조교</SelectItem>
-                          <SelectItem value="유빈조교">유빈조교</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleSaveTestFields}
-                    disabled={isSavingTestFields}
-                    className="w-full"
-                  >
-                    {isSavingTestFields && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                    <CheckCircle2 className="w-4 h-4 mr-1" />
-                    테스트 결과 저장
-                  </Button>
-                </div>
-
-              {/* 오늘 숙제 Section - Visible for all (assistants can edit too) */}
-              <div className="space-y-2 p-4 rounded-lg border-2 border-secondary bg-secondary/30">
-                <Label htmlFor="new_homework" className="text-base font-semibold">오늘 숙제</Label>
-                <Textarea
-                  id="new_homework"
-                  value={newHomeworkContent}
-                  onChange={(e) => setNewHomeworkContent(e.target.value)}
-                  placeholder="오늘 수업에서 배정할 숙제 내용을 입력하세요"
-                  rows={2}
-                  className="text-sm"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {isAssistant ? '저장 버튼을 눌러 숙제를 저장하세요' : '제출 시 숙제가 자동으로 저장됩니다'}
-                </p>
-                {isAssistant && (editingLesson?.id || currentDraftId) && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={async () => {
-                      const recordId = editingLesson?.id || currentDraftId;
-                      if (!newHomeworkContent.trim() || !recordId) return;
-                      setIsSavingDraft(true);
-                      try {
-                        // Check if homework already exists for this record
-                        const { data: existingHw } = await supabase
-                          .from('homework_assignments')
-                          .select('id')
-                          .eq('lesson_record_id', recordId)
-                          .maybeSingle();
-                        
-                        if (existingHw) {
-                          await supabase
-                            .from('homework_assignments')
-                            .update({ content: newHomeworkContent.trim() })
-                            .eq('id', existingHw.id);
-                        } else {
-                          await supabase
-                            .from('homework_assignments')
-                            .insert({
-                              student_id: formData.student_id,
-                              subject: formData.subject as SubjectType,
-                              lesson_record_id: recordId,
-                              assigned_date: formData.lesson_date,
-                              content: newHomeworkContent.trim(),
-                            });
-                        }
-                        
-                        toast({
-                          title: '저장 완료',
-                          description: '오늘 숙제가 저장되었습니다',
-                        });
-                      } catch (error: any) {
-                        console.error('Error saving homework:', error);
-                        toast({
-                          title: '오류',
-                          description: error.message || '숙제 저장에 실패했습니다',
-                          variant: 'destructive',
-                        });
-                      } finally {
-                        setIsSavingDraft(false);
-                      }
-                    }}
-                    disabled={!newHomeworkContent.trim() || isSavingDraft}
-                    className="w-full"
-                  >
-                    {isSavingDraft && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                    <Save className="w-4 h-4 mr-1" />
-                    오늘 숙제 저장
-                  </Button>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 pointer-events-auto">
-                {dialogMode === 'view' ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleDialogClose(false)}
-                    >
-                      닫기
-                    </Button>
-                    {isAdmin && (
-                      <Button
-                        type="button"
-                        onClick={handleRequestEditMode}
-                      >
-                        <FileEdit className="w-4 h-4 mr-2" />
-                        편집하기
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleDialogClose(false)}
-                    >
-                      {isAssistant ? '닫기' : '취소'}
-                    </Button>
-                    {/* Hide draft/submit buttons for assistants */}
-                    {!isAssistant && (
-                      <>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={handleSaveDraft}
-                          disabled={isSavingDraft || isSubmitting}
-                        >
-                          {isSavingDraft && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                          <Save className="w-4 h-4 mr-2" />
-                          임시저장
-                        </Button>
-                        <Button type="submit" disabled={isSubmitting || isSavingDraft}>
-                          {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                          <Send className="w-4 h-4 mr-2" />
-                          제출
-                        </Button>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* LESSONS-FILTER-V1 */}
+      {/* Filters */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2 mb-3">
@@ -2947,7 +887,6 @@ export default function Lessons() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Date Range */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">기간</Label>
               <div className="flex items-center gap-1">
@@ -2967,7 +906,6 @@ export default function Lessons() {
               </div>
             </div>
 
-            {/* Status Filter */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">상태</Label>
               <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setCurrentPage(1); }}>
@@ -2982,7 +920,6 @@ export default function Lessons() {
               </Select>
             </div>
 
-            {/* Homework Status Filter */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">숙제 상태</Label>
               <Select value={filterHomeworkStatus} onValueChange={(v) => { setFilterHomeworkStatus(v); setCurrentPage(1); }}>
@@ -2999,7 +936,6 @@ export default function Lessons() {
               </Select>
             </div>
 
-            {/* Subject Filter */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">과목</Label>
               <Select value={filterSubject} onValueChange={(v) => { setFilterSubject(v); setCurrentPage(1); }}>
@@ -3008,22 +944,22 @@ export default function Lessons() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">전체</SelectItem>
-                  {SUBJECTS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
+                  <SelectItem value="수학">수학</SelectItem>
+                  <SelectItem value="과학">과학</SelectItem>
+                  <SelectItem value="영어">영어</SelectItem>
+                  <SelectItem value="국어">국어</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mt-3">
-            {/* Teacher Filter (admin/assistant only) */}
-            {(isAdmin || isAssistant) && (
-              <div className="space-y-1 w-full sm:w-48">
+          {(isAdmin || isAssistant) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+              <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">선생님</Label>
                 <Select value={filterTeacherId} onValueChange={(v) => { setFilterTeacherId(v); setCurrentPage(1); }}>
                   <SelectTrigger className="h-9">
-                    <SelectValue placeholder="전체" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체</SelectItem>
@@ -3033,67 +969,40 @@ export default function Lessons() {
                   </SelectContent>
                 </Select>
               </div>
-            )}
-
-            {/* Search */}
-            <div className="relative flex-1">
-              <Label className="text-xs text-muted-foreground block mb-1">검색</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">검색</Label>
                 <Input
-                  placeholder="학생 또는 과목으로 검색..."
+                  placeholder="학생 이름 검색..."
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="pl-10 h-9"
+                  className="h-9"
                 />
               </div>
             </div>
-          </div>
-
-          {/* Results summary and filter chips */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium">총 {totalCount}건</span>
-              {hasActiveFilters && (
-                <>
-                  {filterStatus !== 'all' && (
-                    <Badge variant="secondary" className="text-xs">
-                      {filterStatus === 'submitted' ? '제출됨' : '임시저장'}
-                      <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setFilterStatus('all')} />
-                    </Badge>
-                  )}
-                  {filterSubject !== 'all' && (
-                    <Badge variant="secondary" className="text-xs">
-                      {filterSubject}
-                      <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setFilterSubject('all')} />
-                    </Badge>
-                  )}
-                  {filterHomeworkStatus !== 'all' && (
-                    <Badge variant="secondary" className="text-xs">
-                      {getHomeworkLabel(filterHomeworkStatus)}
-                      <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setFilterHomeworkStatus('all')} />
-                    </Badge>
-                  )}
-                </>
-              )}
-            </div>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs">
-                초기화
+          )}
+          
+          {hasActiveFilters && (
+            <div className="flex justify-end mt-3">
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="text-muted-foreground">
+                <X className="w-4 h-4 mr-1" />
+                필터 초기화
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </CardHeader>
+        
         <CardContent>
-          {filteredLessons.length === 0 ? (
+          <div className="text-sm text-muted-foreground mb-3">
+            총 {totalCount}개 기록
+          </div>
+          
+          {lessons.length === 0 ? (
             <div className="text-center py-12">
-              <ClipboardList className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">
-                {searchQuery ? '검색 결과가 없습니다' : '수업 기록이 없습니다. 첫 번째 수업을 기록해보세요!'}
-              </p>
+              <p className="text-muted-foreground">해당 조건의 수업 기록이 없습니다.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -3108,7 +1017,7 @@ export default function Lessons() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLessons.map((lesson) => (
+                  {lessons.map((lesson) => (
                     <TableRow key={lesson.id}>
                       <TableCell className="text-muted-foreground">
                         {format(new Date(lesson.lesson_date), 'MM/dd')}
@@ -3138,41 +1047,39 @@ export default function Lessons() {
                           </Badge>
                         )}
                       </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {/* LESSON-VIEW-MODE-V1: 조회 button (always available) */}
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleView(lesson)}
+                            title="조회"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {isTeacher && lesson.teacher_id === user?.id && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleView(lesson)}
-                              title="조회"
+                              onClick={() => handleEdit(lesson)}
+                              title="수정"
                             >
-                              <Eye className="w-4 h-4" />
+                              <Edit2 className="w-4 h-4" />
                             </Button>
-                            {/* 수정 button: only for teacher's own records */}
-                            {isTeacher && lesson.teacher_id === user?.id && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(lesson)}
-                                title="수정"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {canManage && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(lesson.id)}
-                                className="text-destructive hover:text-destructive"
-                                title="삭제"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
+                          )}
+                          {canManage && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(lesson.id)}
+                              className="text-destructive hover:text-destructive"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -3180,7 +1087,6 @@ export default function Lessons() {
             </div>
           )}
           
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 pt-4 border-t">
               <Button
@@ -3206,35 +1112,6 @@ export default function Lessons() {
           )}
         </CardContent>
       </Card>
-      {/* Subject Change Confirmation Dialog */}
-      <AlertDialog open={showSubjectChangeDialog} onOpenChange={setShowSubjectChangeDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>과목 변경 확인</AlertDialogTitle>
-            <AlertDialogDescription>
-              과목을 변경하면 선택한 학습이슈가 초기화됩니다. 변경할까요?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setPendingSubject(null);
-              setShowSubjectChangeDialog(false);
-            }}>
-              취소
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              if (pendingSubject) {
-                setFormData({ ...formData, subject: pendingSubject, learning_issues: [] });
-                setLastSelectedSubject(user?.id, pendingSubject);
-              }
-              setPendingSubject(null);
-              setShowSubjectChangeDialog(false);
-            }}>
-              변경
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
