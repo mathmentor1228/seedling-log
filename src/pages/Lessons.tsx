@@ -672,7 +672,14 @@ export default function Lessons() {
   }
 
   function handleOpenNewForm() {
-    openModal(null, null, 'edit');
+    console.log('[LESSONS_CREATE_CLICK]');
+    // For new record, provide empty context (not null) so modal renders the form
+    openModal({
+      student_id: '',
+      class_id: '',
+      subject: '수학',
+      lesson_date: getTodayKST(),
+    }, null, 'edit');
   }
 
   function handleView(lesson: LessonRecord) {
@@ -764,7 +771,7 @@ export default function Lessons() {
     <div className="space-y-6">
       {/* Visible marker for debugging - now uses shared form */}
       <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        LESSONS-PAGE-V2 (uses LESSON-SHARED-FORM-V1)
+        LESSONS-PAGE-V2 (uses LESSON-SHARED-FORM-V1) | LESSONS-CREATE-CLICKABLE-V1
       </div>
 
       {loadError && (
@@ -782,9 +789,10 @@ export default function Lessons() {
           </p>
         </div>
         {canManage && (
-          <Button onClick={handleOpenNewForm}>
+          <Button onClick={handleOpenNewForm} className="relative z-10" style={{ pointerEvents: 'auto' }}>
             <Plus className="w-4 h-4 mr-2" />
-            수업 기록 작성
+            + 수업기록 생성
+            <span className="sr-only">LESSONS-CREATE-CLICKABLE-V1</span>
           </Button>
         )}
       </div>
