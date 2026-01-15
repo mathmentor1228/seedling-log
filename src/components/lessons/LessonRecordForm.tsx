@@ -725,6 +725,10 @@ export function LessonRecordForm({
 
   const studentName = students.find(s => s.id === formData.student_id)?.name || '선택되지 않음';
   const className = classes.find(c => c.id === formData.class_id)?.name || '선택되지 않음';
+  
+  // FORM-SELECTABLE-V1: Determine if this is a new record where student/class should be selectable
+  const isNewRecord = !existingRecordId && !editingLesson;
+  const canSelectStudentClass = isNewRecord && !isViewMode && (isAdmin || isTeacher || isAssistant);
 
   return (
     <form onSubmit={handleSubmit} className={`space-y-4 ${isViewMode ? 'pointer-events-none' : ''}`}>
@@ -737,6 +741,18 @@ export function LessonRecordForm({
       <div className={`text-xs text-center py-1 rounded ${isViewMode ? 'bg-blue-500/20 text-blue-700' : 'bg-muted/30 text-muted-foreground'}`}>
         {isViewMode ? 'LESSON-VIEW-MODE-V1' : 'LESSON-EDIT-MODE-V1'}
       </div>
+      
+      {/* FORM_DEBUG marker for troubleshooting */}
+      <div className="text-xs text-center py-1 rounded bg-yellow-500/20 text-yellow-700 font-mono">
+        FORM_DEBUG: students={students.length}, classes={classes.length}, role={role}, isNewRecord={isNewRecord ? 1 : 0}, canSelect={canSelectStudentClass ? 1 : 0}
+      </div>
+
+      {/* Error banner if no students/classes loaded */}
+      {students.length === 0 && classes.length === 0 && (
+        <div className="p-3 bg-destructive/20 text-destructive rounded-lg text-sm font-medium">
+          FORM_LOAD_ERROR: 학생 및 클래스 목록을 불러오지 못했습니다.
+        </div>
+      )}
 
       {/* View mode: re-enable pointer events for edit button */}
       {isViewMode && isAdmin && onRequestEdit && (
@@ -752,24 +768,102 @@ export function LessonRecordForm({
         </div>
       )}
 
-      {/* Context info header */}
+      {/* Context info header - FORM-SELECTABLE-V1: Use Select for new records */}
       <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg flex-wrap">
+        {/* Student field */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">학생:</span>
-          <span className="font-medium">{studentName}</span>
+          {canSelectStudentClass ? (
+            <Select
+              value={formData.student_id || '_placeholder_'}
+              onValueChange={(value) => {
+                if (value !== '_placeholder_') {
+                  setFormData({ ...formData, student_id: value });
+                }
+              }}
+            >
+              <SelectTrigger className="w-[180px] h-8">
+                <SelectValue placeholder="학생 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_placeholder_" disabled>학생 선택</SelectItem>
+                {students.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="font-medium">{studentName}</span>
+          )}
         </div>
+        
+        {/* Class field */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">클래스:</span>
-          <span className="font-medium">{className}</span>
+          {canSelectStudentClass ? (
+            <Select
+              value={formData.class_id || '_placeholder_'}
+              onValueChange={(value) => {
+                if (value !== '_placeholder_') {
+                  setFormData({ ...formData, class_id: value });
+                }
+              }}
+            >
+              <SelectTrigger className="w-[180px] h-8">
+                <SelectValue placeholder="클래스 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_placeholder_" disabled>클래스 선택</SelectItem>
+                {classes.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name} ({c.subject})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="font-medium">{className}</span>
+          )}
         </div>
+        
+        {/* Subject field */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">과목:</span>
-          <Badge variant="outline">{formData.subject}</Badge>
+          {canSelectStudentClass ? (
+            <Select
+              value={formData.subject}
+              onValueChange={(value) => {
+                setFormData({ ...formData, subject: value });
+                if (user?.id) setLastSelectedSubject(user.id, value as SubjectType);
+              }}
+            >
+              <SelectTrigger className="w-[100px] h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SUBJECTS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Badge variant="outline">{formData.subject}</Badge>
+          )}
         </div>
+        
+        {/* Date field */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">날짜:</span>
-          <span className="font-medium">{formData.lesson_date}</span>
+          {canSelectStudentClass ? (
+            <Input
+              type="date"
+              value={formData.lesson_date}
+              onChange={(e) => setFormData({ ...formData, lesson_date: e.target.value })}
+              className="w-[140px] h-8"
+            />
+          ) : (
+            <span className="font-medium">{formData.lesson_date}</span>
+          )}
         </div>
+        
         {editingLesson && (
           <Badge variant={editingLesson.submitted ? 'default' : 'outline'} className="ml-auto">
             {editingLesson.submitted ? '제출됨' : '임시저장'}

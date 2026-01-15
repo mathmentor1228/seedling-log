@@ -49,6 +49,7 @@ export function LessonModal({
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
   const [originalTeacherId, setOriginalTeacherId] = useState<string | null>(null);
 
@@ -62,14 +63,26 @@ export function LessonModal({
 
   async function fetchData() {
     setLoading(true);
+    setFetchError(null);
     try {
       const [studentsRes, classesRes] = await Promise.all([
         supabase.from('students').select('id, name').order('name'),
         supabase.from('classes').select('id, name, subject').order('name'),
       ]);
 
+      if (studentsRes.error) {
+        console.error('[LESSON_MODAL_FETCH_ERROR] students:', studentsRes.error);
+        setFetchError(`학생 목록 로드 실패: ${studentsRes.error.message}`);
+      }
+      if (classesRes.error) {
+        console.error('[LESSON_MODAL_FETCH_ERROR] classes:', classesRes.error);
+        setFetchError((prev) => (prev ? `${prev}, 클래스 목록 로드 실패: ${classesRes.error.message}` : `클래스 목록 로드 실패: ${classesRes.error.message}`));
+      }
+
       setStudents(studentsRes.data || []);
       setClasses(classesRes.data || []);
+
+      console.log('[LESSON_MODAL_FETCH] students:', studentsRes.data?.length || 0, 'classes:', classesRes.data?.length || 0);
 
       // Fetch original teacher_id if viewing existing record
       if (existingRecordId) {
@@ -93,7 +106,8 @@ export function LessonModal({
         setMode('edit');
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('[LESSON_MODAL_FETCH_ERROR] catch:', error);
+      setFetchError(`데이터 로드 중 오류: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
     }
@@ -142,6 +156,11 @@ export function LessonModal({
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </div>
+        ) : fetchError ? (
+          <div className="p-4 bg-destructive/20 text-destructive rounded-lg">
+            <p className="font-medium">FORM_LOAD_ERROR:</p>
+            <p className="text-sm">{fetchError}</p>
           </div>
         ) : (
           <LessonRecordForm
