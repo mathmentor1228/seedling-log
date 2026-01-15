@@ -769,6 +769,11 @@ export default function Lessons() {
 
   return (
     <div className="space-y-6">
+      {/* Fixed debug banner at top */}
+      <div className="fixed top-0 left-0 right-0 z-[9998] bg-yellow-500 text-black text-xs text-center py-0.5">
+        LESSONS-CLICK-DEBUG-V1
+      </div>
+
       {/* Visible marker for debugging - now uses shared form */}
       <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
         LESSONS-PAGE-V2 (uses LESSON-SHARED-FORM-V1) | LESSONS-CREATE-CLICKABLE-V1
@@ -789,7 +794,11 @@ export default function Lessons() {
           </p>
         </div>
         {canManage && (
-          <Button onClick={handleOpenNewForm} className="relative z-10" style={{ pointerEvents: 'auto' }}>
+          <Button 
+            onClick={handleOpenNewForm} 
+            className="relative" 
+            style={{ zIndex: 9999, pointerEvents: 'auto', position: 'relative' }}
+          >
             <Plus className="w-4 h-4 mr-2" />
             + 수업기록 생성
             <span className="sr-only">LESSONS-CREATE-CLICKABLE-V1</span>
@@ -797,15 +806,17 @@ export default function Lessons() {
         )}
       </div>
 
-      {/* LessonModal - shared form component */}
-      <LessonModal
-        open={isModalOpen}
-        onOpenChange={handleModalClose}
-        context={modalContext}
-        existingRecordId={modalExistingRecordId}
-        onSaved={handleModalSaved}
-        initialMode={modalMode}
-      />
+      {/* LessonModal - only render when open to prevent backdrop blocking clicks */}
+      {isModalOpen && (
+        <LessonModal
+          open={isModalOpen}
+          onOpenChange={handleModalClose}
+          context={modalContext}
+          existingRecordId={modalExistingRecordId}
+          onSaved={handleModalSaved}
+          initialMode={modalMode}
+        />
+      )}
 
       {/* 오늘 수업 Section */}
       {(isTeacher || isAdmin || isAssistant) && (
