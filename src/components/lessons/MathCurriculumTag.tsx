@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -11,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { RotateCcw, BookOpen } from 'lucide-react';
 
-// MATH-CURRICULUM-TAG-V1
+// MATH-CURRICULUM-TAG-V2 - Added custom course input option
 
 interface CurriculumUnit {
   unit_key: string;
@@ -25,6 +26,7 @@ interface MathCurriculumTagProps {
   unitKey: string;
   onChange: (version: string, course: string, unitKey: string) => void;
   disabled?: boolean;
+  onValidationError?: (hasError: boolean) => void;
 }
 
 const VERSION_OPTIONS = [
@@ -52,15 +54,41 @@ const COURSE_OPTIONS: Record<string, { value: string; label: string }[]> = {
   ],
 };
 
+const CUSTOM_COURSE_VALUE = '__custom_course__';
+
 export function MathCurriculumTag({
   curriculumVersion,
   course,
   unitKey,
   onChange,
   disabled = false,
+  onValidationError,
 }: MathCurriculumTagProps) {
   const [units, setUnits] = useState<CurriculumUnit[]>([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
+  const [isCustomCourse, setIsCustomCourse] = useState(false);
+  const [customCourseText, setCustomCourseText] = useState('');
+
+  // Determine if current course is a predefined option or custom
+  const courseOptions = curriculumVersion ? COURSE_OPTIONS[curriculumVersion] || [] : [];
+  const isPredefinedCourse = courseOptions.some(opt => opt.value === course);
+
+  // Sync custom course state when course prop changes (e.g., loading existing record)
+  useEffect(() => {
+    if (course && curriculumVersion && !isPredefinedCourse) {
+      setIsCustomCourse(true);
+      setCustomCourseText(course);
+    } else if (isPredefinedCourse) {
+      setIsCustomCourse(false);
+      setCustomCourseText('');
+    }
+  }, [course, curriculumVersion, isPredefinedCourse]);
+
+  // Report validation error for empty custom course
+  useEffect(() => {
+    const hasError = isCustomCourse && !customCourseText.trim();
+    onValidationError?.(hasError);
+  }, [isCustomCourse, customCourseText, onValidationError]);
 
   // Load units when version+course changes
   const fetchUnits = useCallback(async (version: string, courseVal: string) => {
@@ -99,12 +127,27 @@ export function MathCurriculumTag({
 
   const handleVersionChange = (value: string) => {
     // Reset course and unit when version changes
+    setIsCustomCourse(false);
+    setCustomCourseText('');
     onChange(value === '__none__' ? '' : value, '', '');
   };
 
   const handleCourseChange = (value: string) => {
     // Reset unit when course changes
-    onChange(curriculumVersion, value === '__none__' ? '' : value, '');
+    if (value === CUSTOM_COURSE_VALUE) {
+      setIsCustomCourse(true);
+      setCustomCourseText('');
+      onChange(curriculumVersion, '', '');
+    } else {
+      setIsCustomCourse(false);
+      setCustomCourseText('');
+      onChange(curriculumVersion, value === '__none__' ? '' : value, '');
+    }
+  };
+
+  const handleCustomCourseInput = (text: string) => {
+    setCustomCourseText(text);
+    onChange(curriculumVersion, text, '');
   };
 
   const handleUnitChange = (value: string) => {
@@ -112,12 +155,18 @@ export function MathCurriculumTag({
   };
 
   const handleReset = () => {
+    setIsCustomCourse(false);
+    setCustomCourseText('');
     onChange('', '', '');
     setUnits([]);
   };
 
-  const courseOptions = curriculumVersion ? COURSE_OPTIONS[curriculumVersion] || [] : [];
   const selectedUnit = units.find(u => u.unit_key === unitKey);
+  
+  // For the select value, show custom marker if in custom mode, otherwise show course
+  const courseSelectValue = isCustomCourse 
+    ? CUSTOM_COURSE_VALUE 
+    : (course || '__none__');
 
   return (
     <div className="p-4 rounded-lg border-2 border-orange-500/30 bg-orange-500/5 space-y-3">
@@ -171,7 +220,7 @@ export function MathCurriculumTag({
         <div className="space-y-1">
           <Label className="text-sm">과정</Label>
           <Select
-            value={course || '__none__'}
+            value={courseSelectValue}
             onValueChange={handleCourseChange}
             disabled={disabled || !curriculumVersion}
           >
@@ -183,8 +232,25 @@ export function MathCurriculumTag({
               {courseOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
+              <SelectItem value={CUSTOM_COURSE_VALUE}>기타(직접입력)</SelectItem>
             </SelectContent>
           </Select>
+          
+          {/* Custom course text input */}
+          {isCustomCourse && !disabled && (
+            <div className="mt-2">
+              <Input
+                type="text"
+                placeholder="과정명 직접입력"
+                value={customCourseText}
+                onChange={(e) => handleCustomCourseInput(e.target.value)}
+                className={!customCourseText.trim() ? 'border-destructive' : ''}
+              />
+              {!customCourseText.trim() && (
+                <p className="text-xs text-destructive mt-1">과정명을 입력해주세요</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Unit Select */}
@@ -220,7 +286,7 @@ export function MathCurriculumTag({
 
       {/* Debug marker */}
       <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-        MATH-CURRICULUM-TAG-V1
+        MATH-CURRICULUM-TAG-V2
       </span>
     </div>
   );

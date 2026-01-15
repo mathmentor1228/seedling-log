@@ -210,11 +210,14 @@ export function LessonRecordForm({
     notes: '',
     lesson_types: ['정규수업'] as string[],
     attendance_status: ['정상등원'] as string[],
-    // MATH-CURRICULUM-TAG-V1: Curriculum fields
+    // MATH-CURRICULUM-TAG-V2: Curriculum fields
     curriculum_version: '',
     course: '',
     curriculum_unit_key: '',
   });
+
+  // MATH-CURRICULUM-TAG-V2: Validation state for custom course
+  const [hasCustomCourseError, setHasCustomCourseError] = useState(false);
 
   // Previous lesson state
   const [previousLesson, setPreviousLesson] = useState<LessonRecord | null>(null);
@@ -542,6 +545,12 @@ export function LessonRecordForm({
       return;
     }
 
+    // MATH-CURRICULUM-TAG-V2: Block save if custom course is empty
+    if (formData.subject === '수학' && hasCustomCourseError) {
+      toast({ title: '수학 과정명을 입력해주세요', variant: 'destructive' });
+      return;
+    }
+
     setIsSavingDraft(true);
     try {
       const payload = buildPayload(true);
@@ -607,6 +616,12 @@ export function LessonRecordForm({
 
     if (!user || !formData.student_id || !formData.subject || !formData.lesson_range) {
       toast({ title: '필수 항목을 모두 입력해주세요', variant: 'destructive' });
+      return;
+    }
+
+    // MATH-CURRICULUM-TAG-V2: Block submit if custom course is empty
+    if (formData.subject === '수학' && hasCustomCourseError) {
+      toast({ title: '수학 과정명을 입력해주세요', variant: 'destructive' });
       return;
     }
 
@@ -928,7 +943,7 @@ export function LessonRecordForm({
           />
         </div>
 
-        {/* MATH-CURRICULUM-TAG-V1: Curriculum tagging for Math only */}
+        {/* MATH-CURRICULUM-TAG-V2: Curriculum tagging for Math only */}
         {formData.subject === '수학' && (
           <MathCurriculumTag
             curriculumVersion={formData.curriculum_version}
@@ -942,6 +957,7 @@ export function LessonRecordForm({
                 curriculum_unit_key: unitKey,
               }));
             }}
+            onValidationError={setHasCustomCourseError}
             disabled={isViewMode}
           />
         )}
