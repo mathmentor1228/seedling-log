@@ -127,8 +127,9 @@ export function LessonModal({
     return '수업일지 작성';
   };
 
-  if (!context && !existingRecordId) return null;
-
+  // Allow modal to render with empty context for new records
+  // Only block if explicitly null and no existing record
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
