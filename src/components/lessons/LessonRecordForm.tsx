@@ -1091,6 +1091,7 @@ export function LessonRecordForm({
           </Select>
         </div>
 
+        {/* FORM-WORKFLOW-REFINE-V2: Updated learning issues labels */}
         <div className="space-y-2">
           <Label>학습 이슈</Label>
           <div className="flex flex-wrap gap-2">
@@ -1105,12 +1106,19 @@ export function LessonRecordForm({
               </Badge>
             ))}
           </div>
-          <Textarea
-            placeholder="추가 학습 이슈 메모"
-            value={formData.learning_issues_note}
-            onChange={(e) => setFormData({ ...formData, learning_issues_note: e.target.value })}
-            rows={2}
-          />
+          {/* FORM-WORKFLOW-REFINE-V2: D) Updated learning_issues_note label and placeholder */}
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">학습 상황 상세(리포트 근거)</Label>
+            <Textarea
+              placeholder={`※ 꼭 문제가 아니어도 좋습니다.
+이번 주 학습태도/집중/이해 흐름/실수 패턴/질문 태도/시간 관리 등
+관찰된 내용을 최대한 구체적으로 적어주세요.
+(이 내용이 주간 리포트의 핵심 근거가 됩니다.)`}
+              value={formData.learning_issues_note}
+              onChange={(e) => setFormData({ ...formData, learning_issues_note: e.target.value })}
+              rows={4}
+            />
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -1123,15 +1131,19 @@ export function LessonRecordForm({
           />
         </div>
 
+        {/* FORM-WORKFLOW-REFINE-V2: F) Renamed notes field */}
         <div className="space-y-2">
-          <Label htmlFor="form_notes">메모</Label>
+          <Label htmlFor="form_notes">원장/학습기록용 메모 (학부모 미전달)</Label>
           <Textarea
             id="form_notes"
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            placeholder="추가 메모사항"
+            placeholder="학부모에게 전송되지 않으며 내부 기록으로 남깁니다."
             rows={3}
           />
+          <p className="text-xs text-muted-foreground">
+            학부모에게 전송되지 않으며 내부 기록으로 남깁니다.
+          </p>
         </div>
       </div>
 
