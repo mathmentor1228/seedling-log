@@ -440,6 +440,55 @@ export type Database = {
         }
         Relationships: []
       }
+      homework_alert_ack: {
+        Row: {
+          acknowledged_at: string
+          id: string
+          source_lesson_id: string
+          student_id: string
+          subject: string
+          teacher_id: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          id?: string
+          source_lesson_id: string
+          student_id: string
+          subject: string
+          teacher_id: string
+        }
+        Update: {
+          acknowledged_at?: string
+          id?: string
+          source_lesson_id?: string
+          student_id?: string
+          subject?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "homework_alert_ack_source_lesson_id_fkey"
+            columns: ["source_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "homework_alert_ack_source_lesson_id_fkey"
+            columns: ["source_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_lesson_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "homework_alert_ack_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       homework_assignments: {
         Row: {
           assigned_date: string
@@ -517,6 +566,7 @@ export type Database = {
           curriculum_version: string | null
           draft_created_at: string
           english_pass_fail: string | null
+          homework_check_note: string | null
           homework_status: string
           id: string
           learning_issues: string[] | null
@@ -554,6 +604,7 @@ export type Database = {
           curriculum_version?: string | null
           draft_created_at?: string
           english_pass_fail?: string | null
+          homework_check_note?: string | null
           homework_status: string
           id?: string
           learning_issues?: string[] | null
@@ -591,6 +642,7 @@ export type Database = {
           curriculum_version?: string | null
           draft_created_at?: string
           english_pass_fail?: string | null
+          homework_check_note?: string | null
           homework_status?: string
           id?: string
           learning_issues?: string[] | null

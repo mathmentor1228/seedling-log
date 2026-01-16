@@ -131,6 +131,8 @@ export function RosterActionModal({
   // Form states
   const [homeworkCheckResult, setHomeworkCheckResult] = useState('');
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState('');
+  // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records
+  const [homeworkCheckNote, setHomeworkCheckNote] = useState('');
   const [newHomeworkContent, setNewHomeworkContent] = useState('');
   const [testFormData, setTestFormData] = useState({
     test_name: '',
@@ -322,7 +324,7 @@ export function RosterActionModal({
     }
   }
 
-  // Save homework check
+  // TEACHER-HW-ALERT-V2: Save homework check including homework_check_note to lesson_records
   async function handleSaveHomeworkCheck() {
     if (!previousHomework || !homeworkCheckResult || !user) return;
     
@@ -337,6 +339,17 @@ export function RosterActionModal({
           _notes: homeworkCheckNotes.trim() || null,
         });
         if (error) throw error;
+        
+        // Also save homework_check_note to lesson_records if there's a note
+        if (lessonRecord?.id && homeworkCheckNote.trim()) {
+          const { error: noteError } = await supabase
+            .from('lesson_records')
+            .update({ homework_check_note: homeworkCheckNote.trim() })
+            .eq('id', lessonRecord.id);
+          if (noteError) {
+            console.error('Error saving homework_check_note:', noteError);
+          }
+        }
       } else {
         const { error } = await supabase
           .from('homework_assignments')
@@ -349,6 +362,17 @@ export function RosterActionModal({
           })
           .eq('id', previousHomework.id);
         if (error) throw error;
+        
+        // Also save homework_check_note to lesson_records if there's a note
+        if (lessonRecord?.id && homeworkCheckNote.trim()) {
+          const { error: noteError } = await supabase
+            .from('lesson_records')
+            .update({ homework_check_note: homeworkCheckNote.trim() })
+            .eq('id', lessonRecord.id);
+          if (noteError) {
+            console.error('Error saving homework_check_note:', noteError);
+          }
+        }
       }
       
       toast({
@@ -608,16 +632,30 @@ export function RosterActionModal({
                         </div>
                         
                         <div className="space-y-2">
-                          <Label>메모 (선택)</Label>
+                          <Label>확인 메모 (선택)</Label>
                           <Textarea
                             value={homeworkCheckNotes}
                             onChange={(e) => setHomeworkCheckNotes(e.target.value)}
-                            placeholder="추가 메모..."
+                            placeholder="확인 메모 (학생에게 알림용)..."
                             rows={2}
                           />
                         </div>
                         
-                        <Button 
+                        {/* TEACHER-HW-ALERT-V2: homework_check_note for teacher alert */}
+                        <div className="space-y-2 p-3 border border-amber-500/30 bg-amber-500/5 rounded-lg">
+                          <Label className="text-amber-700">🔔 선생님 별도 확인 요청 메모</Label>
+                          <Textarea
+                            value={homeworkCheckNote}
+                            onChange={(e) => setHomeworkCheckNote(e.target.value)}
+                            placeholder="선생님께서 별도로 확인해야 할 사항이 있으면 적어주세요 (대시보드에 알림 표시됨)"
+                            rows={2}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            TEACHER-HW-ALERT-V2
+                          </span>
+                        </div>
+                        
+                        <Button
                           onClick={handleSaveHomeworkCheck}
                           disabled={!homeworkCheckResult || isSavingHomework}
                         >

@@ -16,6 +16,7 @@ import HolidayManagement from '@/components/HolidayManagement';
 import { AssistantRequestsWidget } from '@/components/AssistantRequestsWidget';
 import { AdminLessonModal } from '@/components/lessons/AdminLessonModal';
 import { RosterActionModal } from '@/components/RosterActionModal';
+import { HomeworkAlertModal } from '@/components/HomeworkAlertModal';
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { 
@@ -125,6 +126,10 @@ interface TodaySlotStudent {
   hyugangRecordId?: string | null;
   attendanceStatus?: string[];
   lessonRecordId?: string | null;
+  // TEACHER-HW-ALERT-V2: Homework check note and previous goal
+  homeworkCheckNote?: string | null;
+  homeworkCheckLessonId?: string | null;
+  prevNextLessonGoal?: string | null;
 }
 
 interface TodaySlot {
@@ -331,6 +336,19 @@ export default function Dashboard() {
 
   // Lesson status map for admin roster badges
   const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null }>>({});
+
+  // TEACHER-HW-ALERT-V2: Homework alert modal state
+  const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
+  const [hwAlertContext, setHwAlertContext] = useState<{
+    studentName: string;
+    subject: string;
+    lessonId: string;
+    noteText: string;
+    studentId: string;
+  } | null>(null);
+  
+  // TEACHER-HW-ALERT-V2: Map for acknowledged alerts to hide badges
+  const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -896,12 +914,17 @@ export default function Dashboard() {
         followup2wDue: boolean;
       }> = {};
       
-      // key: `${studentId}:${classId}` -> { hyugangRecordId, attendanceStatus, lessonRecordId }
+      // key: `${studentId}:${classId}` -> { hyugangRecordId, attendanceStatus, lessonRecordId, homeworkCheckNote, homeworkCheckLessonId }
       let lessonRecordMap: Record<string, { 
         hyugangRecordId: string | null; 
         attendanceStatus: string[]; 
         lessonRecordId: string | null;
+        homeworkCheckNote: string | null;
+        homeworkCheckLessonId: string | null;
       }> = {};
+      
+      // TEACHER-HW-ALERT-V2: Fetch recent lesson record with next_lesson_goal for "지난 목표"
+      let prevGoalMap: Record<string, string | null> = {};
       
       if (allStudentClassPairs.length > 0) {
         const pairs = allStudentClassPairs.map(p => ({
@@ -931,9 +954,10 @@ export default function Dashboard() {
         const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
         const classIdsForRecords = [...new Set(allStudentClassPairs.map(p => p.classId))];
         
+        // TEACHER-HW-ALERT-V2: Include homework_check_note in query
         const { data: todayRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, lesson_types, attendance_status')
+          .select('id, student_id, class_id, lesson_types, attendance_status, homework_check_note')
           .eq('lesson_date', today)
           .in('student_id', studentIds)
           .in('class_id', classIdsForRecords);
@@ -946,17 +970,61 @@ export default function Dashboard() {
               hyugangRecordId: isHyugang ? lr.id : null,
               attendanceStatus: lr.attendance_status || ['정상등원'],
               lessonRecordId: lr.id,
+              homeworkCheckNote: lr.homework_check_note || null,
+              homeworkCheckLessonId: lr.homework_check_note ? lr.id : null,
             };
           });
         }
+        
+        // TEACHER-HW-ALERT-V2: Fetch recent lesson records with next_lesson_goal for "지난 목표"
+        // For each student/subject pair, find the most recent submitted lesson
+        const subjects = [...new Set(allStudentClassPairs.map(p => p.subject))].filter(Boolean);
+        
+        if (studentIds.length > 0 && subjects.length > 0) {
+          const { data: prevLessons } = await supabase
+            .from('lesson_records')
+            .select('student_id, subject, next_lesson_goal, lesson_date')
+            .lt('lesson_date', today)
+            .eq('submitted', true)
+            .in('student_id', studentIds)
+            .in('subject', subjects as any)
+            .order('lesson_date', { ascending: false });
+          
+          if (prevLessons) {
+            // Group by student_id:subject and take the first (most recent)
+            const seen = new Set<string>();
+            prevLessons.forEach((pl: any) => {
+              const key = `${pl.student_id}:${pl.subject}`;
+              if (!seen.has(key) && pl.next_lesson_goal) {
+                prevGoalMap[key] = pl.next_lesson_goal;
+                seen.add(key);
+              }
+            });
+          }
+        }
+        
+        // TEACHER-HW-ALERT-V2: Fetch acknowledged alerts to hide badges
+        if (user && isTeacher(role)) {
+          const { data: acks } = await supabase
+            .from('homework_alert_ack')
+            .select('source_lesson_id')
+            .eq('teacher_id', user.id);
+          
+          if (acks) {
+            const ackSet = new Set(acks.map(a => a.source_lesson_id));
+            setAcknowledgedAlerts(ackSet);
+          }
+        }
       }
 
-      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue, hyugangRecordId, attendanceStatus
+      // Update studentsMap with previousHomeworkStatus, debugReason, firstSubject, followup2wDue, hyugangRecordId, attendanceStatus, homeworkCheckNote, prevNextLessonGoal
       Object.keys(studentsMap).forEach(classId => {
+        const subject = classSubjectMap[classId] || '';
         studentsMap[classId] = studentsMap[classId].map(student => {
           const key = `${student.id}:${classId}`;
           const mapped = previousHomeworkMap[key];
           const recordInfo = lessonRecordMap[key];
+          const goalKey = `${student.id}:${subject}`;
           return {
             ...student,
             previousHomeworkStatus: mapped?.status || null,
@@ -966,6 +1034,10 @@ export default function Dashboard() {
             hyugangRecordId: recordInfo?.hyugangRecordId || null,
             attendanceStatus: recordInfo?.attendanceStatus || ['정상등원'],
             lessonRecordId: recordInfo?.lessonRecordId || null,
+            // TEACHER-HW-ALERT-V2: Add homework check note and previous goal
+            homeworkCheckNote: recordInfo?.homeworkCheckNote || null,
+            homeworkCheckLessonId: recordInfo?.homeworkCheckLessonId || null,
+            prevNextLessonGoal: prevGoalMap[goalKey] || null,
           };
         });
       });
@@ -1528,6 +1600,10 @@ export default function Dashboard() {
             return (
               <Card className="border-primary/30 bg-primary/5 animate-slide-up">
                 <CardHeader>
+                  {/* TEACHER-HW-ALERT-V2 + FORM-WORKFLOW-REFINE-V2 markers */}
+                  <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
+                    TEACHER-HW-ALERT-V2 | FORM-WORKFLOW-REFINE-V2
+                  </div>
                   <CardTitle className="flex items-center gap-2">
                     <GraduationCap className="w-5 h-5 text-primary" />
                     오늘 수업 ({todaySlots.length}개)
@@ -1557,59 +1633,89 @@ export default function Dashboard() {
                               {(slot?.students || []).map((student) => (
                                 <div 
                                   key={student.id} 
-                                  className={`flex items-center justify-between p-2 rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
+                                  className={`p-2 rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
                                 >
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
-                                    {student.hyugangRecordId ? (
-                                      <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
-                                    ) : (
-                                      <>
-                                        {/* Attendance badge - show first for visibility */}
-                                        {getAttendanceStatusBadge(student.attendanceStatus)}
-                                        {getRosterBadges(
-                                          student.previousHomeworkStatus,
-                                          student.debugReason,
-                                          student.firstSubject,
-                                          student.followup2wDue,
-                                          slot.subject,
-                                          isAdmin(role),
-                                          () => markFollowupDone(student.id, slot.subject)
-                                        )}
-                                      </>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    {student.hyugangRecordId ? (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
-                                      >
-                                        <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                        휴강 기록 보기
-                                      </Button>
-                                    ) : (
-                                      <>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
+                                      {student.hyugangRecordId ? (
+                                        <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
+                                      ) : (
+                                        <>
+                                          {/* Attendance badge - show first for visibility */}
+                                          {getAttendanceStatusBadge(student.attendanceStatus)}
+                                          {getRosterBadges(
+                                            student.previousHomeworkStatus,
+                                            student.debugReason,
+                                            student.firstSubject,
+                                            student.followup2wDue,
+                                            slot.subject,
+                                            isAdmin(role),
+                                            () => markFollowupDone(student.id, slot.subject)
+                                          )}
+                                          {/* TEACHER-HW-ALERT-V2: 별도 확인 badge */}
+                                          {student.homeworkCheckNote && 
+                                           student.homeworkCheckLessonId && 
+                                           !acknowledgedAlerts.has(student.homeworkCheckLessonId) && (
+                                            <Badge 
+                                              className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-xs cursor-pointer hover:bg-amber-500/25"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setHwAlertContext({
+                                                  studentName: student.name,
+                                                  subject: slot.subject,
+                                                  lessonId: student.homeworkCheckLessonId!,
+                                                  noteText: student.homeworkCheckNote!,
+                                                  studentId: student.id,
+                                                });
+                                                setHwAlertModalOpen(true);
+                                              }}
+                                            >
+                                              <AlertTriangle className="w-3 h-3 mr-1" />
+                                              별도 확인
+                                            </Badge>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {student.hyugangRecordId ? (
                                         <Button
                                           variant="outline"
                                           size="sm"
                                           onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
                                         >
                                           <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                          수업기록
+                                          휴강 기록 보기
                                         </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}&focus=test`)}
-                                        >
-                                          <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                                          숙제/테스트
-                                        </Button>
-                                      </>
-                                    )}
+                                      ) : (
+                                        <>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                          >
+                                            <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                            수업기록
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}&focus=test`)}
+                                          >
+                                            <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                                            숙제/테스트
+                                          </Button>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
+                                  {/* TEACHER-HW-ALERT-V2: E) 지난 목표 display */}
+                                  {!student.hyugangRecordId && student.prevNextLessonGoal && (
+                                    <div className="mt-1 text-xs text-muted-foreground pl-2 border-l-2 border-muted">
+                                      <span className="font-medium">지난 목표:</span> {student.prevNextLessonGoal}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -1784,6 +1890,24 @@ export default function Dashboard() {
           await fetchAdminRosterData();
         }}
       />
+
+      {/* TEACHER-HW-ALERT-V2: Homework Alert Modal */}
+      {hwAlertContext && user && (
+        <HomeworkAlertModal
+          open={hwAlertModalOpen}
+          onOpenChange={setHwAlertModalOpen}
+          studentName={hwAlertContext.studentName}
+          subject={hwAlertContext.subject}
+          lessonId={hwAlertContext.lessonId}
+          noteText={hwAlertContext.noteText}
+          teacherId={user.id}
+          studentId={hwAlertContext.studentId}
+          onAcknowledged={() => {
+            setAcknowledgedAlerts(prev => new Set([...prev, hwAlertContext.lessonId]));
+            setHwAlertContext(null);
+          }}
+        />
+      )}
     </div>
   );
 }
