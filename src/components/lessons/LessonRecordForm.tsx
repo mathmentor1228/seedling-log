@@ -506,7 +506,8 @@ export function LessonRecordForm({
       subject,
       lesson_date: formData.lesson_date,
       lesson_range: formData.lesson_range.trim(),
-      understanding_score: parseInt(formData.understanding_score),
+      // TESTVISIT-SCORE-V1: Set understanding_score to NULL for test-only visits (like absences)
+      understanding_score: lesson_types.includes('테스트방문') ? null : parseInt(formData.understanding_score),
       homework_status: formData.homework_status,
       learning_issues: formData.learning_issues,
       learning_issues_note: formData.learning_issues_note.trim() || null,
@@ -967,6 +968,14 @@ export function LessonRecordForm({
         </div>
       )}
 
+      {/* TESTVISIT-SCORE-V1: 테스트방문 indicator */}
+      {formData.lesson_types.includes('테스트방문') && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+          <Badge variant="outline" className="border-amber-500 text-amber-700">테스트방문</Badge>
+          <span className="text-sm text-amber-700">테스트방문 기록은 이해도를 입력하지 않습니다.</span>
+        </div>
+      )}
+
       {/* 종류 and 출결사항 */}
       <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${isAssistant ? 'opacity-60 pointer-events-none' : ''}`}>
         <div className="space-y-2">
@@ -1056,7 +1065,8 @@ export function LessonRecordForm({
           />
         )}
 
-        <div className="space-y-2">
+        {/* TESTVISIT-SCORE-V1: Disable understanding_score for test-only visits */}
+        <div className={`space-y-2 ${formData.lesson_types.includes('테스트방문') ? 'opacity-60 pointer-events-none' : ''}`}>
           <Label>이해도 점수 *</Label>
           <div className="flex gap-2">
             {[1, 2, 3, 4, 5].map((score) => (
@@ -1067,11 +1077,15 @@ export function LessonRecordForm({
                 size="sm"
                 onClick={() => setFormData({ ...formData, understanding_score: score.toString() })}
                 className="w-12 h-12 text-lg"
+                disabled={formData.lesson_types.includes('테스트방문')}
               >
                 {score}
               </Button>
             ))}
           </div>
+          {formData.lesson_types.includes('테스트방문') && (
+            <p className="text-sm text-amber-600">테스트방문 기록은 이해도를 입력하지 않습니다.</p>
+          )}
         </div>
 
         <div className="space-y-2">
