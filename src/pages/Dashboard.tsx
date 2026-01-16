@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import HolidayManagement from '@/components/HolidayManagement';
 import { AssistantRequestsWidget } from '@/components/AssistantRequestsWidget';
-import { AdminLessonModal } from '@/components/lessons/AdminLessonModal';
+import { LessonModal } from '@/components/lessons/LessonModal';
 import { RosterActionModal } from '@/components/RosterActionModal';
 import { HomeworkAlertModal } from '@/components/HomeworkAlertModal';
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
@@ -1868,8 +1868,8 @@ export default function Dashboard() {
         <WeeklyScheduleVerification />
       )}
 
-      {/* Admin Lesson Modal */}
-      <AdminLessonModal
+      {/* LESSON-SHARED-FORM-V2: Unified Lesson Modal (replaced AdminLessonModal) */}
+      <LessonModal
         open={adminLessonModalOpen}
         onOpenChange={setAdminLessonModalOpen}
         context={adminLessonModalContext}
@@ -1878,6 +1878,7 @@ export default function Dashboard() {
           // Refresh roster data after save
           await fetchAdminRosterData();
         }}
+        initialMode="edit"
       />
 
       {/* Roster Action Modal for homework/test */}

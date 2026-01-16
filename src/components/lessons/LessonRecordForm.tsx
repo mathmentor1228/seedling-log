@@ -166,6 +166,11 @@ const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
   return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 });
 
+/**
+ * LessonRecordForm - Shared component for lesson record creation and editing
+ * Used by both Dashboard and Lessons pages via LessonModal wrapper.
+ * LESSON-SHARED-FORM-V2
+ */
 export function LessonRecordForm({
   initialContext,
   existingRecordId,

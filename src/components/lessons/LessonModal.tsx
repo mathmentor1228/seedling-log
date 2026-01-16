@@ -32,7 +32,7 @@ interface ClassItem {
 /**
  * LessonModal - Shared modal wrapper for LessonRecordForm
  * Used by both Dashboard and Lessons pages to ensure consistent behavior
- * LESSON-SHARED-FORM-V1
+ * LESSON-SHARED-FORM-V2
  */
 export function LessonModal({
   open,
