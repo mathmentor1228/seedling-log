@@ -5,135 +5,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// The detailed system prompt for report generation - focused on personally observed narratives
-const REPORT_SYSTEM_PROMPT = `Generate weekly learning reports that feel personally observed, not summarized.
+// Fallback prompts in case DB is unreachable
+const FALLBACK_PARENT_PROMPT = `Generate weekly learning reports that feel personally observed, not summarized.
+Write as a teacher speaking to a parent who genuinely cares about the child's growth.
+Output must be in Korean.`;
 
-════════════════════════
-ABSOLUTE RULE (VALIDATION CRITERIA)
-════════════════════════
-Do NOT generate reports in summary or checklist style.
-If any subject contains keyword-style phrases or bullet-point evaluations,
-the output is considered INVALID.
+const FALLBACK_STUDENT_PROMPT = `Generate a brief, encouraging weekly learning message for a student.
+Be warm but specific. Keep it brief (3-5 sentences total).
+Output must be in Korean.`;
 
-────────────────────────
-MANDATORY WRITING CONSTRAINTS (Non-negotiable)
-────────────────────────
-
-1. Opening Sentence Override
-   - The report MUST start with a concrete observation,
-     NOT an evaluation or summary.
-   - FORBIDDEN openings (never use these):
-     • "전반적으로 ~"
-     • "안정적인 흐름"
-     • "향상되었습니다"
-     • "잘 따라오고 있습니다"
-
-2. Learning Point Expansion Rule
-   - Every learning issue must be written as:
-     a) What specific situation it appeared in
-     b) How the student responded in class
-     c) What the teacher is intentionally adjusting because of it
-   - Keyword lists are STRICTLY FORBIDDEN.
-   - BAD: "계산 실수 잦음, 개념 이해 부족"
-   - GOOD: "계산 과정에서 서두르다 보니 중간 계산을 놓치는 경우가 반복적으로 관찰되었습니다.
-           이는 개념을 모른다기보다는 문제를 끝까지 점검하는 습관이 아직 안정되지 않은 단계로 보입니다."
-
-3. Test Interpretation Rule
-   - Test scores must be embedded inside explanation.
-   - NEVER write: "테스트 – 14/33" alone.
-   - GOOD: "이번 주 진행한 확인 테스트에서 33문제 중 14문제를 맞췄는데, 
-           대부분의 오답이 문제 조건을 끝까지 읽지 않아 발생한 것으로 보입니다."
-
-4. Attendance Meaning Rule
-   - Attendance events must include learning impact or follow-up,
-     not just dates.
-   - BAD: "결석: 1/15"
-   - GOOD: "지난 수요일 결석으로 인해 분수 계산 단원 도입부를 놓쳤으며, 
-           다음 수업에서 해당 내용을 개별적으로 보충할 예정입니다."
-
-────────────────────────
-FAILURE HANDLING
-────────────────────────
-If the system cannot generate a narrative that meets the above constraints,
-output EXACTLY: "이번 주 학습 내용을 충분히 설명하기 위해 교사 추가 관찰이 필요합니다."
-and mark the report as RED (추가 입력 필요).
-
-────────────────────────
-A) SUBJECT NARRATIVE STRUCTURE (MANDATORY)
-────────────────────────
-For each subject, write 4 short paragraphs (1–2 sentences each):
-
-1. Learning Context
-   - What content the student worked on this week
-   - Where this content sits in the overall curriculum flow
-
-2. Observed Student Behavior
-   - How the student approached the learning
-   - Include pace, hesitation, confidence, or focus if observed
-
-3. Interpretation (Teacher's Insight)
-   - Explain WHY the student struggled or succeeded
-   - Avoid judgment words like "부족", "미흡" alone
-   - Example: instead of "개념 이해 부족",
-     explain what kind of misunderstanding appeared
-
-4. Next Instructional Direction
-   - What the teacher will focus on next week
-   - Why that focus matters now
-
-Select ONE narrative tone based on data:
-- 안정형: steady progress and stable understanding
-- 개선형: visible improvement through repetition or effort
-- 관리형: understanding exists but needs tighter guidance
-- 주의형: focus, consistency, or foundational gaps need attention
-
-────────────────────────
-B) STUDENT REPORT (Emotional Engagement)
-────────────────────────
-- Never use generic praise like "잘했어요"
-- Speak directly to the student (but politely)
-- Mention ONE concrete moment or behavior
-- End with ONE clear next action
-
-Example tone (do not copy literally):
-"문제를 끝까지 읽고 다시 생각하려는 태도가 보였습니다.
-다음 시간에는 같은 방식으로 새로운 유형에도 도전해봅시다."
-
-────────────────────────
-C) PARENT REPORT TONE RULE
-────────────────────────
-- Write as if explaining the child's learning to a caring adult, not reporting performance.
-- Make parents understand: "아, 지금 이걸 배우는 단계구나."
-- Attendance issues must be described with educational impact, not just listed.
-- The report should feel written by a teacher who truly knows the student.
-
-────────────────────────
-D) DATA USAGE RULES
-────────────────────────
-- Homework: Explain patterns (e.g., hesitation, inconsistency), not counts.
-- Tests: Use scores only to support explanation, never as the main point.
-- Low data weeks: Be honest, but still provide direction.
-- If data is insufficient: Do NOT exaggerate. Explain limited data honestly.
-
-────────────────────────
-E) REVIEW TAGGING
-────────────────────────
-Assign one status tag per report:
-- GREEN (발송 OK): sufficient data + meaningful narrative
-- YELLOW (보완 권장): limited data but acceptable
-- RED (추가 입력 필요): content too shallow to send
-
-────────────────────────
-TONE PRINCIPLE (Most Important)
-────────────────────────
-Write as a teacher speaking to a parent who genuinely cares
-about the child's growth, not performance.
-
-OUTPUT FORMAT:
-- Output must be in Korean.
-- Generate TWO separate reports: one for parents (parent_message) and one for students (student_message).
-- Structure each subject report with the 4 paragraphs: Learning Context → Observed Behavior → Interpretation → Next Direction
-- Include the review_status tag (GREEN/YELLOW/RED) in your response.`;
+interface ReportTemplate {
+  id: string;
+  template_name: string;
+  prompt_text: string;
+  version: string;
+  is_active: boolean;
+}
 
 interface LessonRecord {
   id: string;
@@ -168,8 +55,45 @@ interface GenerateReportRequest {
   student_name: string;
   week_start: string;
   week_end: string;
-  // Previous weeks data for context
   previous_week_lessons?: LessonRecord[];
+}
+
+// Load prompts from database
+async function loadPrompts(supabase: any): Promise<{ parentPrompt: string; studentPrompt: string; parentVersion: string; studentVersion: string }> {
+  try {
+    const { data: templates, error } = await supabase
+      .from('report_templates')
+      .select('*')
+      .eq('is_active', true);
+
+    if (error) {
+      console.error('[generate-ai-report] Error loading prompts from DB:', error);
+      return {
+        parentPrompt: FALLBACK_PARENT_PROMPT,
+        studentPrompt: FALLBACK_STUDENT_PROMPT,
+        parentVersion: 'fallback',
+        studentVersion: 'fallback',
+      };
+    }
+
+    const parentTemplate = templates?.find((t: ReportTemplate) => t.template_name === 'parent');
+    const studentTemplate = templates?.find((t: ReportTemplate) => t.template_name === 'student');
+
+    return {
+      parentPrompt: parentTemplate?.prompt_text || FALLBACK_PARENT_PROMPT,
+      studentPrompt: studentTemplate?.prompt_text || FALLBACK_STUDENT_PROMPT,
+      parentVersion: parentTemplate?.version || 'fallback',
+      studentVersion: studentTemplate?.version || 'fallback',
+    };
+  } catch (err) {
+    console.error('[generate-ai-report] Exception loading prompts:', err);
+    return {
+      parentPrompt: FALLBACK_PARENT_PROMPT,
+      studentPrompt: FALLBACK_STUDENT_PROMPT,
+      parentVersion: 'fallback',
+      studentVersion: 'fallback',
+    };
+  }
 }
 
 Deno.serve(async (req) => {
@@ -190,6 +114,10 @@ Deno.serve(async (req) => {
     const { student_id, student_name, week_start, week_end } = await req.json() as GenerateReportRequest;
 
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
+
+    // Load prompts from database
+    const { parentPrompt, studentPrompt, parentVersion, studentVersion } = await loadPrompts(supabase);
+    console.log(`[generate-ai-report] Using prompts - parent: ${parentVersion}, student: ${studentVersion}`);
 
     // Fetch this week's lesson records
     const { data: currentWeekLessons, error: lessonsError } = await supabase
@@ -213,6 +141,7 @@ Deno.serve(async (req) => {
           parent_message: null,
           student_message: null,
           draft_status: 'no_lessons',
+          prompt_versions: { parent: parentVersion, student: studentVersion },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -281,9 +210,9 @@ Deno.serve(async (req) => {
     // Build the user prompt with structured data
     const userPrompt = buildUserPrompt(student_name, week_start, week_end, subjectData);
 
-    console.log('[generate-ai-report] Calling AI gateway...');
+    console.log('[generate-ai-report] Calling AI gateway for parent report...');
 
-    // Call Lovable AI Gateway
+    // Call Lovable AI Gateway for parent report
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -293,7 +222,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: 'google/gemini-3-flash-preview',
         messages: [
-          { role: 'system', content: REPORT_SYSTEM_PROMPT },
+          { role: 'system', content: parentPrompt },
           { role: 'user', content: userPrompt },
         ],
       }),
@@ -318,9 +247,9 @@ Deno.serve(async (req) => {
     }
 
     const aiResult = await aiResponse.json();
-    const parentMessage = aiResult.choices?.[0]?.message?.content || '';
+    const parentMessageContent = aiResult.choices?.[0]?.message?.content || '';
 
-    console.log('[generate-ai-report] AI response received, length:', parentMessage.length);
+    console.log('[generate-ai-report] AI response received, length:', parentMessageContent.length);
 
     // Determine draft status based on data completeness
     const hasSufficientData = currentWeekLessons.some(l => 
@@ -333,22 +262,34 @@ Deno.serve(async (req) => {
       : 'ready';
 
     // Generate a shorter student-focused message
-    const studentMessage = await generateStudentMessage(
+    const studentMessageContent = await generateStudentMessage(
       LOVABLE_API_KEY,
+      studentPrompt,
       student_name,
       week_start,
       week_end,
       subjectData
     );
 
+    // Format final messages with version marker for admin
+    const parentHeader = formatParentHeader(student_name, week_start, week_end);
+    const versionMarker = `[PROMPT_VERSION: parent=${parentVersion}, student=${studentVersion}]\n\n`;
+    
     return new Response(
       JSON.stringify({
         success: true,
-        parent_message: formatParentHeader(student_name, week_start, week_end) + '\n\n' + parentMessage,
-        student_message: studentMessage,
+        parent_message: parentHeader + '\n\n' + parentMessageContent,
+        student_message: studentMessageContent,
         draft_status: draftStatus,
         lesson_count: currentWeekLessons.length,
         subjects: Object.keys(subjectData),
+        prompt_versions: { parent: parentVersion, student: studentVersion },
+        // Admin-only debug info with version marker
+        _debug: {
+          version_marker: versionMarker.trim(),
+          parent_prompt_version: parentVersion,
+          student_prompt_version: studentVersion,
+        },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -458,20 +399,21 @@ function buildUserPrompt(
   }
 
   prompt += `\n위 데이터를 바탕으로 학부모용 주간 리포트를 작성해주세요.
-각 과목별로 지침에 따라 [1]~[6] 섹션을 작성하되,
-테스트가 없으면 [5] 섹션은 생략하세요.`;
+각 과목별로 지침에 따라 작성하되,
+테스트가 없으면 테스트 관련 섹션은 생략하세요.`;
 
   return prompt;
 }
 
 async function generateStudentMessage(
   apiKey: string,
+  systemPrompt: string,
   studentName: string,
   weekStart: string,
   weekEnd: string,
   subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
 ): Promise<string> {
-  const studentPrompt = `학생 이름: ${studentName}
+  const studentUserPrompt = `학생 이름: ${studentName}
 기간: ${weekStart} ~ ${weekEnd}
 
 이번 주 수업 요약:
@@ -481,11 +423,7 @@ ${Object.entries(subjectData).map(([subject, data]) => {
   return `- ${subject}: ${data.lessons.length}회 수업, 평균 이해도 ${avgScore.toFixed(1)}/5${goals.length > 0 ? `, 다음 목표: ${goals[0]}` : ''}`;
 }).join('\n')}
 
-위 데이터로 학생에게 보내는 짧은 격려 메시지를 작성해주세요.
-- 친근하고 격려하는 톤
-- 이모지 1-2개 사용 가능
-- 구체적인 "다음 미션" 1-2개 제시
-- 3-5문장으로 간결하게`;
+위 데이터로 학생에게 보내는 짧은 격려 메시지를 작성해주세요.`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -497,15 +435,15 @@ ${Object.entries(subjectData).map(([subject, data]) => {
       body: JSON.stringify({
         model: 'google/gemini-3-flash-preview',
         messages: [
-          { role: 'system', content: '당신은 학원 선생님입니다. 학생에게 격려하는 짧은 메시지를 작성합니다.' },
-          { role: 'user', content: studentPrompt },
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: studentUserPrompt },
         ],
       }),
     });
 
     if (!response.ok) {
       console.error('[generate-ai-report] Student message AI error:', response.status);
-      return generateFallbackStudentMessage(studentName, subjectData);
+      return generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData);
     }
 
     const result = await response.json();
@@ -513,21 +451,28 @@ ${Object.entries(subjectData).map(([subject, data]) => {
     const endDate = new Date(weekEnd);
     const header = `[더멘토] 이번 주 체크 (${startDate.getMonth() + 1}/${startDate.getDate()}~${endDate.getMonth() + 1}/${endDate.getDate()})`;
     
-    return header + '\n\n' + (result.choices?.[0]?.message?.content || generateFallbackStudentMessage(studentName, subjectData));
+    return header + '\n\n' + (result.choices?.[0]?.message?.content || generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData));
   } catch (error) {
     console.error('[generate-ai-report] Student message error:', error);
-    return generateFallbackStudentMessage(studentName, subjectData);
+    return generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData);
   }
 }
 
 function generateFallbackStudentMessage(
   studentName: string,
+  weekStart: string,
+  weekEnd: string,
   subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
 ): string {
   const subjects = Object.keys(subjectData);
   const totalLessons = Object.values(subjectData).reduce((sum, d) => sum + d.lessons.length, 0);
   
-  let message = `${studentName} 학생, 이번 주도 수고했어요! 🌟\n\n`;
+  const startDate = new Date(weekStart);
+  const endDate = new Date(weekEnd);
+  const header = `[더멘토] 이번 주 체크 (${startDate.getMonth() + 1}/${startDate.getDate()}~${endDate.getMonth() + 1}/${endDate.getDate()})`;
+  
+  let message = `${header}\n\n`;
+  message += `${studentName} 학생, 이번 주도 수고했어요! 🌟\n\n`;
   message += `총 ${totalLessons}회 수업을 잘 따라왔어요.\n\n`;
   
   message += '📋 다음 주 미션:\n';
