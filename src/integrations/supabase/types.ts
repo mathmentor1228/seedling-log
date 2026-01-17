@@ -176,6 +176,8 @@ export type Database = {
           day_of_week: number
           end_time: string
           id: string
+          inactive_reason: string | null
+          inactive_until: string | null
           is_active: boolean
           start_time: string
           teacher_id: string
@@ -187,6 +189,8 @@ export type Database = {
           day_of_week: number
           end_time: string
           id?: string
+          inactive_reason?: string | null
+          inactive_until?: string | null
           is_active?: boolean
           start_time: string
           teacher_id: string
@@ -198,6 +202,8 @@ export type Database = {
           day_of_week?: number
           end_time?: string
           id?: string
+          inactive_reason?: string | null
+          inactive_until?: string | null
           is_active?: boolean
           start_time?: string
           teacher_id?: string
@@ -1276,7 +1282,7 @@ export type Database = {
           subject: string
         }[]
       }
-      get_teacher_roster_sheet: { Args: { _date: string }; Returns: Json }
+      get_teacher_roster_sheet: { Args: { _date?: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -451,6 +451,9 @@ export default function Lessons() {
       const kstDate = new Date(now.getTime() + kstOffset);
       const dayOfWeek = kstDate.getUTCDay();
 
+      // CLASS-ACTIVE-TOGGLE-V1: Include inactive_until filter
+      const todayKSTDate = getTodayKST();
+      
       let schedulesQuery = supabase
         .from('class_schedules')
         .select(`
@@ -460,6 +463,7 @@ export default function Lessons() {
           end_time,
           day_of_week,
           teacher_id,
+          inactive_until,
           classes:class_id (
             id,
             name,
@@ -482,9 +486,15 @@ export default function Lessons() {
         return;
       }
 
-      const classIds = schedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
+      // CLASS-ACTIVE-TOGGLE-V1: Filter out schedules that are inactive until today or later
+      const activeSchedules = (schedules || []).filter((s: any) => {
+        if (!s.inactive_until) return true;
+        return s.inactive_until < todayKSTDate;
+      });
+
+      const classIds = activeSchedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
       const classSubjectMap: Record<string, string> = {};
-      (schedules || []).forEach((s: any) => {
+      (activeSchedules || []).forEach((s: any) => {
         if (s.classes?.id && s.classes?.subject) {
           classSubjectMap[s.classes.id] = s.classes.subject;
         }
@@ -593,7 +603,8 @@ export default function Lessons() {
         });
       });
 
-      const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
+      // Build slots from activeSchedules
+      const slots: TodaySlot[] = (activeSchedules || []).map((s: any) => ({
         id: s.id,
         class_id: s.classes?.id || '',
         class_name: s.classes?.name || '알 수 없음',

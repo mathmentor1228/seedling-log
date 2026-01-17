@@ -34,7 +34,9 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, BookOpen, Edit2, Trash2, Loader2, Users, Copy, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, BookOpen, Edit2, Trash2, Loader2, Users, Copy, Calendar, ChevronDown, ChevronRight, Power, PowerOff } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { getTodayKST } from '@/lib/utils';
 import { ClassScheduleManager, type Schedule } from '@/components/ClassScheduleManager';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
 import { TeacherScheduleTable } from '@/components/TeacherScheduleTable';
@@ -60,6 +62,7 @@ const DAYS_OF_WEEK = [
   { value: 6, label: '토' },
 ];
 
+// CLASS-ACTIVE-TOGGLE-V1: Extended schedule row with inactive_until
 interface ClassScheduleRow {
   classId: string;
   className: string;
@@ -71,6 +74,8 @@ interface ClassScheduleRow {
   startTime: string;
   endTime: string;
   isActive: boolean;
+  inactiveUntil: string | null;
+  inactiveReason: string | null;
   studentCount: number;
 }
 
@@ -131,6 +136,21 @@ export default function Classes() {
     selectedDays: [] as number[],
   });
 
+  // CLASS-ACTIVE-TOGGLE-V1: Deactivation state
+  const [deactivateDialog, setDeactivateDialog] = useState<{
+    open: boolean;
+    scheduleId: string | null;
+    currentIsActive: boolean;
+    inactiveUntil: string;
+    inactiveReason: string;
+  }>({
+    open: false,
+    scheduleId: null,
+    currentIsActive: true,
+    inactiveUntil: '',
+    inactiveReason: '',
+  });
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -145,7 +165,7 @@ export default function Classes() {
         .select(`
           *,
           class_students (count),
-          class_schedules (id, day_of_week, start_time, end_time, is_active, teacher_id)
+          class_schedules (id, day_of_week, start_time, end_time, is_active, inactive_until, inactive_reason, teacher_id)
         `)
         .order('name');
 
@@ -194,6 +214,8 @@ export default function Classes() {
         schedules: (c.class_schedules || []).map((s: any) => ({
           ...s,
           teacher_name: s.teacher_id ? teacherMap[s.teacher_id]?.name : null,
+          inactive_until: s.inactive_until || null,
+          inactive_reason: s.inactive_reason || null,
         })),
       }));
 
@@ -253,6 +275,8 @@ export default function Classes() {
           startTime: sch.start_time,
           endTime: sch.end_time,
           isActive: sch.is_active,
+          inactiveUntil: sch.inactive_until || null,
+          inactiveReason: sch.inactive_reason || null,
           studentCount: cls.student_count || 0,
         });
       });
@@ -423,6 +447,108 @@ export default function Classes() {
   const handleOpenDetail = (classId: string) => {
     const cls = classes.find((c) => c.id === classId);
     if (cls) setDetailClass(cls);
+  };
+
+  // CLASS-ACTIVE-TOGGLE-V1: Open deactivation dialog for a schedule
+  const handleOpenDeactivateDialog = (row: ClassScheduleRow) => {
+    const todayKST = getTodayKST();
+    // Compute effective active status
+    const effectivelyActive = row.isActive && (!row.inactiveUntil || row.inactiveUntil < todayKST);
+    
+    setDeactivateDialog({
+      open: true,
+      scheduleId: row.scheduleId,
+      currentIsActive: effectivelyActive,
+      inactiveUntil: row.inactiveUntil || '',
+      inactiveReason: row.inactiveReason || '',
+    });
+  };
+
+  // CLASS-ACTIVE-TOGGLE-V1: Toggle schedule active status
+  const handleToggleScheduleActive = async () => {
+    if (!deactivateDialog.scheduleId) return;
+
+    setIsSubmitting(true);
+    try {
+      const todayKST = getTodayKST();
+      const effectivelyActive = deactivateDialog.currentIsActive;
+
+      if (effectivelyActive) {
+        // Deactivating: set is_active=false OR set inactive_until
+        const updateData: any = {
+          is_active: !deactivateDialog.inactiveUntil, // if has inactive_until, keep is_active=true
+          inactive_until: deactivateDialog.inactiveUntil || null,
+          inactive_reason: deactivateDialog.inactiveReason || null,
+        };
+        
+        // If we have an inactive_until date, keep is_active=true (will auto-reactivate)
+        if (deactivateDialog.inactiveUntil) {
+          updateData.is_active = true;
+        }
+
+        const { error } = await supabase
+          .from('class_schedules')
+          .update(updateData)
+          .eq('id', deactivateDialog.scheduleId);
+
+        if (error) throw error;
+
+        toast({
+          title: '비활성화 완료',
+          description: deactivateDialog.inactiveUntil 
+            ? `${deactivateDialog.inactiveUntil}까지 비활성화됩니다.` 
+            : '슬롯이 비활성화되었습니다.',
+        });
+      } else {
+        // Reactivating: clear inactive_until and set is_active=true
+        const { error } = await supabase
+          .from('class_schedules')
+          .update({
+            is_active: true,
+            inactive_until: null,
+            inactive_reason: null,
+          })
+          .eq('id', deactivateDialog.scheduleId);
+
+        if (error) throw error;
+
+        toast({
+          title: '활성화 완료',
+          description: '슬롯이 다시 활성화되었습니다.',
+        });
+      }
+
+      setDeactivateDialog({ ...deactivateDialog, open: false, scheduleId: null });
+      fetchClasses();
+    } catch (error: any) {
+      console.error('Error toggling schedule active:', error);
+      toast({
+        title: '오류',
+        description: error.message || '상태 변경 실패',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // CLASS-ACTIVE-TOGGLE-V1: Get status badge for a schedule
+  const getScheduleStatusBadge = (row: ClassScheduleRow) => {
+    const todayKST = getTodayKST();
+    
+    if (!row.isActive) {
+      return { label: '비활성(종료일 미정)', variant: 'outline' as const, isInactive: true };
+    }
+    
+    if (row.inactiveUntil && row.inactiveUntil >= todayKST) {
+      return { 
+        label: `비활성(~${row.inactiveUntil.slice(5).replace('-', '/')})`, 
+        variant: 'outline' as const, 
+        isInactive: true 
+      };
+    }
+    
+    return { label: '활성', variant: 'default' as const, isInactive: false };
   };
 
   // Bulk creation handler
@@ -1006,9 +1132,14 @@ export default function Classes() {
                           </span>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant={row.isActive ? 'default' : 'outline'}>
-                            {row.isActive ? '활성' : '비활성'}
-                          </Badge>
+                          {(() => {
+                            const status = getScheduleStatusBadge(row);
+                            return (
+                              <Badge variant={status.variant} className={status.isInactive ? 'text-muted-foreground' : ''}>
+                                {status.label}
+                              </Badge>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
@@ -1169,12 +1300,29 @@ export default function Classes() {
                         </span>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={row.isActive ? 'default' : 'outline'}>
-                          {row.isActive ? '활성' : '비활성'}
-                        </Badge>
+                        {(() => {
+                          const status = getScheduleStatusBadge(row);
+                          return (
+                            <Badge variant={status.variant} className={status.isInactive ? 'text-muted-foreground' : ''}>
+                              {status.label}
+                            </Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenDeactivateDialog(row)}
+                            title={getScheduleStatusBadge(row).isInactive ? '활성화' : '비활성화'}
+                          >
+                            {getScheduleStatusBadge(row).isInactive ? (
+                              <Power className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <PowerOff className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1239,6 +1387,88 @@ export default function Classes() {
                 }}
               />
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CLASS-ACTIVE-TOGGLE-V1: Deactivation Dialog */}
+      <Dialog 
+        open={deactivateDialog.open} 
+        onOpenChange={(open) => !open && setDeactivateDialog({ ...deactivateDialog, open: false })}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {deactivateDialog.currentIsActive ? (
+                <>
+                  <PowerOff className="w-5 h-5" />
+                  슬롯 비활성화
+                </>
+              ) : (
+                <>
+                  <Power className="w-5 h-5 text-green-600" />
+                  슬롯 활성화
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            {deactivateDialog.currentIsActive ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  비활성화하면 오늘 출석부(로스터)에서 이 슬롯이 숨겨집니다.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="inactive_until">비활성 종료일 (재활성 예정일)</Label>
+                  <Input
+                    id="inactive_until"
+                    type="date"
+                    value={deactivateDialog.inactiveUntil}
+                    onChange={(e) => setDeactivateDialog({ 
+                      ...deactivateDialog, 
+                      inactiveUntil: e.target.value 
+                    })}
+                    min={getTodayKST()}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    이 날짜까지 비활성 상태이며, 다음 날부터 자동 활성화됩니다. 비워두면 수동으로 활성화해야 합니다.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="inactive_reason">사유 (선택)</Label>
+                  <Textarea
+                    id="inactive_reason"
+                    placeholder="예: 방학 기간, 선생님 휴가"
+                    value={deactivateDialog.inactiveReason}
+                    onChange={(e) => setDeactivateDialog({ 
+                      ...deactivateDialog, 
+                      inactiveReason: e.target.value 
+                    })}
+                    rows={2}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                이 슬롯을 다시 활성화하시겠습니까? 활성화하면 오늘 출석부에 다시 표시됩니다.
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setDeactivateDialog({ ...deactivateDialog, open: false })}
+              >
+                취소
+              </Button>
+              <Button 
+                onClick={handleToggleScheduleActive}
+                disabled={isSubmitting}
+                variant={deactivateDialog.currentIsActive ? 'destructive' : 'default'}
+              >
+                {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {deactivateDialog.currentIsActive ? '비활성화' : '활성화'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
