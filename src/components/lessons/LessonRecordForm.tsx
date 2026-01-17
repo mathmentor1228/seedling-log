@@ -170,7 +170,31 @@ const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
  * LessonRecordForm - Shared component for lesson record creation and editing
  * Used by both Dashboard and Lessons pages via LessonModal wrapper.
  * LESSON-SHARED-FORM-V3
+ * TAG-PREFILL-STUDENT-V1
  */
+
+// TAG-PREFILL-STUDENT-V1: Track source of curriculum tag prefill
+type TagSource = 'student_last' | 'user_default' | 'empty' | 'existing_record';
+
+// TAG-PREFILL-STUDENT-V1: LocalStorage key for user-level curriculum defaults
+function curriculumDefaultsKey(userId?: string | null) {
+  return userId ? `lesson_records:curriculumDefaults:${userId}` : 'lesson_records:curriculumDefaults';
+}
+
+function getUserCurriculumDefaults(userId?: string | null): { version: string; course: string; unitKey: string } | null {
+  try {
+    const raw = localStorage.getItem(curriculumDefaultsKey(userId));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.version || parsed.course || parsed.unitKey) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Error reading curriculum defaults:', e);
+  }
+  return null;
+}
 
 // SHARED-FORM-V3: Helper to check if understanding_score should be disabled
 const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
@@ -234,6 +258,11 @@ export function LessonRecordForm({
   // MATH-CURRICULUM-TAG-V2: Validation state for custom course
   const [hasCustomCourseError, setHasCustomCourseError] = useState(false);
 
+  // TAG-PREFILL-STUDENT-V1: Track curriculum tag prefill source
+  const [tagSource, setTagSource] = useState<TagSource>('empty');
+  const [tagPrefillOccurred, setTagPrefillOccurred] = useState(false);
+  const tagUserChangedRef = useRef(false); // Track if user manually changed tags
+
   // Previous lesson state
   const [previousLesson, setPreviousLesson] = useState<LessonRecord | null>(null);
   const [previousLessonHomework, setPreviousLessonHomework] = useState<HomeworkAssignment | null>(null);
@@ -262,6 +291,67 @@ export function LessonRecordForm({
   const [prevHomeworkOverrideEditing, setPrevHomeworkOverrideEditing] = useState(false);
   const [prevHomeworkOverrideText, setPrevHomeworkOverrideText] = useState('');
   const [isSavingPrevHomeworkOverride, setIsSavingPrevHomeworkOverride] = useState(false);
+
+  // TAG-PREFILL-STUDENT-V1: Prefill math curriculum tags from student's most recent record
+  const prefillStudentCurriculumTags = useCallback(async (studentId: string, userId: string) => {
+    if (!studentId) {
+      setTagSource('empty');
+      return;
+    }
+
+    try {
+      // Query most recent math lesson for this student with curriculum tags
+      const { data: recentMathLesson } = await supabase
+        .from('lesson_records')
+        .select('curriculum_version, course, curriculum_unit_key, lesson_date, submitted')
+        .eq('student_id', studentId)
+        .eq('subject', '수학')
+        .not('curriculum_unit_key', 'is', null)
+        .order('submitted', { ascending: false }) // Prefer submitted first
+        .order('lesson_date', { ascending: false })
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentMathLesson && (recentMathLesson.curriculum_version || recentMathLesson.course || recentMathLesson.curriculum_unit_key)) {
+        // Use student's most recent curriculum tags
+        setFormData(prev => ({
+          ...prev,
+          curriculum_version: recentMathLesson.curriculum_version || '',
+          course: recentMathLesson.course || '',
+          curriculum_unit_key: recentMathLesson.curriculum_unit_key || '',
+        }));
+        setTagSource('student_last');
+        setTagPrefillOccurred(true);
+        tagUserChangedRef.current = false;
+        console.log('[TAG-PREFILL-STUDENT-V1] Prefilled from student last record:', recentMathLesson);
+        return;
+      }
+
+      // Fallback: Try user-level localStorage defaults
+      const userDefaults = getUserCurriculumDefaults(userId);
+      if (userDefaults && (userDefaults.version || userDefaults.course || userDefaults.unitKey)) {
+        setFormData(prev => ({
+          ...prev,
+          curriculum_version: userDefaults.version || '',
+          course: userDefaults.course || '',
+          curriculum_unit_key: userDefaults.unitKey || '',
+        }));
+        setTagSource('user_default');
+        setTagPrefillOccurred(true);
+        tagUserChangedRef.current = false;
+        console.log('[TAG-PREFILL-STUDENT-V1] Prefilled from user defaults:', userDefaults);
+        return;
+      }
+
+      // No prefill source found
+      setTagSource('empty');
+      setTagPrefillOccurred(false);
+    } catch (error) {
+      console.error('[TAG-PREFILL-STUDENT-V1] Error fetching curriculum tags:', error);
+      setTagSource('empty');
+    }
+  }, []);
 
   // Initialize form
   useEffect(() => {
@@ -322,6 +412,9 @@ export function LessonRecordForm({
             course: (record as any).course || '',
             curriculum_unit_key: (record as any).curriculum_unit_key || '',
           });
+          // TAG-PREFILL-STUDENT-V1: Existing record - mark source
+          setTagSource('existing_record');
+          setTagPrefillOccurred(false);
           setTestFormData({
             test_name: record.test_name || '',
             test_result_text: record.test_result_text || '',
@@ -375,13 +468,19 @@ export function LessonRecordForm({
 
           if (!error && newRecord) {
             setCurrentDraftId(newRecord.id);
+            const newSubject = initialContext.subject || getLastSelectedSubject(user.id);
             setFormData(prev => ({
               ...prev,
               student_id: initialContext.student_id,
               class_id: initialContext.class_id || '',
-              subject: initialContext.subject || getLastSelectedSubject(user.id),
+              subject: newSubject,
               lesson_date: initialContext.lesson_date || getTodayKST(),
             }));
+
+            // TAG-PREFILL-STUDENT-V1: Prefill math curriculum tags for new record
+            if (newSubject === '수학') {
+              await prefillStudentCurriculumTags(initialContext.student_id, user.id);
+            }
           }
         }
       }
@@ -1062,22 +1161,39 @@ export function LessonRecordForm({
         </div>
 
         {/* MATH-CURRICULUM-TAG-V2: Curriculum tagging for Math only */}
+        {/* TAG-PREFILL-STUDENT-V1: Show prefill indicator and debug info */}
         {formData.subject === '수학' && (
-          <MathCurriculumTag
-            curriculumVersion={formData.curriculum_version}
-            course={formData.course}
-            unitKey={formData.curriculum_unit_key}
-            onChange={(version, course, unitKey) => {
-              setFormData(prev => ({
-                ...prev,
-                curriculum_version: version,
-                course: course,
-                curriculum_unit_key: unitKey,
-              }));
-            }}
-            onValidationError={setHasCustomCourseError}
-            disabled={isViewMode}
-          />
+          <div className="space-y-2">
+            <MathCurriculumTag
+              curriculumVersion={formData.curriculum_version}
+              course={formData.course}
+              unitKey={formData.curriculum_unit_key}
+              onChange={(version, course, unitKey) => {
+                tagUserChangedRef.current = true; // Mark that user changed tags
+                setTagPrefillOccurred(false); // Hide prefill message after user change
+                setFormData(prev => ({
+                  ...prev,
+                  curriculum_version: version,
+                  course: course,
+                  curriculum_unit_key: unitKey,
+                }));
+              }}
+              onValidationError={setHasCustomCourseError}
+              disabled={isViewMode}
+            />
+            {/* TAG-PREFILL-STUDENT-V1: Show helper text when prefill occurred */}
+            {tagPrefillOccurred && !tagUserChangedRef.current && (
+              <p className="text-xs text-muted-foreground">
+                ✓ 최근 입력 태그를 불러왔습니다.
+              </p>
+            )}
+            {/* TAG-PREFILL-STUDENT-V1: Admin debug info */}
+            {isAdmin && (
+              <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
+                TAG-PREFILL-STUDENT-V1: tagSource={tagSource}
+              </span>
+            )}
+          </div>
         )}
 
         {/* SHARED-FORM-V3: Disable understanding_score for test visits AND absences */}
