@@ -1868,7 +1868,7 @@ export default function Dashboard() {
         <WeeklyScheduleVerification />
       )}
 
-      {/* LESSON-SHARED-FORM-V2: Unified Lesson Modal (replaced AdminLessonModal) */}
+      {/* LESSON-SHARED-FORM-V3: Unified Lesson Modal (Dashboard + Lessons use same form) */}
       <LessonModal
         open={adminLessonModalOpen}
         onOpenChange={setAdminLessonModalOpen}

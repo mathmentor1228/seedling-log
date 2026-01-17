@@ -169,8 +169,18 @@ const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
 /**
  * LessonRecordForm - Shared component for lesson record creation and editing
  * Used by both Dashboard and Lessons pages via LessonModal wrapper.
- * LESSON-SHARED-FORM-V2
+ * LESSON-SHARED-FORM-V3
  */
+
+// SHARED-FORM-V3: Helper to check if understanding_score should be disabled
+const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
+function shouldDisableUnderstandingScore(lessonTypes: string[], attendanceStatus: string[]): boolean {
+  // Disable for test-only visits
+  if (lessonTypes.includes('테스트방문')) return true;
+  // Disable for absences
+  if (attendanceStatus.some(s => ABSENCE_STATUSES.includes(s))) return true;
+  return false;
+}
 export function LessonRecordForm({
   initialContext,
   existingRecordId,
@@ -511,8 +521,8 @@ export function LessonRecordForm({
       subject,
       lesson_date: formData.lesson_date,
       lesson_range: formData.lesson_range.trim(),
-      // TESTVISIT-SCORE-V1: Set understanding_score to NULL for test-only visits (like absences)
-      understanding_score: lesson_types.includes('테스트방문') ? null : parseInt(formData.understanding_score),
+      // SHARED-FORM-V3: Set understanding_score to NULL for test visits AND absences
+      understanding_score: shouldDisableUnderstandingScore(lesson_types, attendance_status) ? null : parseInt(formData.understanding_score),
       homework_status: formData.homework_status,
       learning_issues: formData.learning_issues,
       learning_issues_note: formData.learning_issues_note.trim() || null,
@@ -738,9 +748,9 @@ export function LessonRecordForm({
 
   return (
     <form onSubmit={handleSubmit} className={`space-y-4 ${isViewMode ? 'pointer-events-none' : ''}`}>
-      {/* LESSON-SHARED-FORM-V1: Unified form component used by both Dashboard and Lessons page */}
+      {/* LESSON-SHARED-FORM-V3: Unified form component used by both Dashboard and Lessons page */}
       <div className="text-xs text-center py-1 rounded bg-green-500/20 text-green-700">
-        LESSON-SHARED-FORM-V1
+        LESSON-SHARED-FORM-V3
       </div>
       
       {/* LESSON-VIEW-MODE-V1 / LESSON-EDIT-MODE-V1 marker */}
@@ -973,7 +983,7 @@ export function LessonRecordForm({
         </div>
       )}
 
-      {/* TESTVISIT-SCORE-V1: 테스트방문 indicator */}
+      {/* SHARED-FORM-V3: 테스트방문 indicator */}
       {formData.lesson_types.includes('테스트방문') && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <Badge variant="outline" className="border-amber-500 text-amber-700">테스트방문</Badge>
@@ -1070,28 +1080,38 @@ export function LessonRecordForm({
           />
         )}
 
-        {/* TESTVISIT-SCORE-V1: Disable understanding_score for test-only visits */}
-        <div className={`space-y-2 ${formData.lesson_types.includes('테스트방문') ? 'opacity-60 pointer-events-none' : ''}`}>
-          <Label>이해도 점수 *</Label>
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5].map((score) => (
-              <Button
-                key={score}
-                type="button"
-                variant={formData.understanding_score === score.toString() ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFormData({ ...formData, understanding_score: score.toString() })}
-                className="w-12 h-12 text-lg"
-                disabled={formData.lesson_types.includes('테스트방문')}
-              >
-                {score}
-              </Button>
-            ))}
-          </div>
-          {formData.lesson_types.includes('테스트방문') && (
-            <p className="text-sm text-amber-600">테스트방문 기록은 이해도를 입력하지 않습니다.</p>
-          )}
-        </div>
+        {/* SHARED-FORM-V3: Disable understanding_score for test visits AND absences */}
+        {(() => {
+          const isDisabled = shouldDisableUnderstandingScore(formData.lesson_types, formData.attendance_status);
+          const isTestVisit = formData.lesson_types.includes('테스트방문');
+          const isAbsence = formData.attendance_status.some(s => ABSENCE_STATUSES.includes(s));
+          return (
+            <div className={`space-y-2 ${isDisabled ? 'opacity-60 pointer-events-none' : ''}`}>
+              <Label>이해도 점수 *</Label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((score) => (
+                  <Button
+                    key={score}
+                    type="button"
+                    variant={formData.understanding_score === score.toString() ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFormData({ ...formData, understanding_score: score.toString() })}
+                    className="w-12 h-12 text-lg"
+                    disabled={isDisabled}
+                  >
+                    {score}
+                  </Button>
+                ))}
+              </div>
+              {isTestVisit && (
+                <p className="text-sm text-amber-600">테스트방문 기록은 이해도를 입력하지 않습니다.</p>
+              )}
+              {isAbsence && !isTestVisit && (
+                <p className="text-sm text-amber-600">결석 기록은 이해도를 입력하지 않습니다.</p>
+              )}
+            </div>
+          );
+        })()}
 
         <div className="space-y-2">
           <Label>숙제 상태 *</Label>
