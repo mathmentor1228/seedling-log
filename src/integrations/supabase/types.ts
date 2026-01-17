@@ -571,7 +571,9 @@ export type Database = {
           curriculum_unit_key: string | null
           curriculum_version: string | null
           draft_created_at: string
+          english_grammar_unit: string | null
           english_pass_fail: string | null
+          english_reading_units: string[] | null
           homework_check_note: string | null
           homework_status: string
           id: string
@@ -609,7 +611,9 @@ export type Database = {
           curriculum_unit_key?: string | null
           curriculum_version?: string | null
           draft_created_at?: string
+          english_grammar_unit?: string | null
           english_pass_fail?: string | null
+          english_reading_units?: string[] | null
           homework_check_note?: string | null
           homework_status: string
           id?: string
@@ -647,7 +651,9 @@ export type Database = {
           curriculum_unit_key?: string | null
           curriculum_version?: string | null
           draft_created_at?: string
+          english_grammar_unit?: string | null
           english_pass_fail?: string | null
+          english_reading_units?: string[] | null
           homework_check_note?: string | null
           homework_status?: string
           id?: string

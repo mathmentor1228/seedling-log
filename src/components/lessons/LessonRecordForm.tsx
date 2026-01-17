@@ -20,6 +20,7 @@ import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircl
 import { format } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import { MathCurriculumTag } from './MathCurriculumTag';
+import { EnglishCurriculumTag } from './EnglishCurriculumTag';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -91,6 +92,9 @@ interface LessonRecord {
   curriculum_version?: string | null;
   course?: string | null;
   curriculum_unit_key?: string | null;
+  // ENGLISH-CURRICULUM-V1: English curriculum fields
+  english_grammar_unit?: string | null;
+  english_reading_units?: string[] | null;
 }
 
 const SUBJECTS = [
@@ -253,6 +257,9 @@ export function LessonRecordForm({
     curriculum_version: '',
     course: '',
     curriculum_unit_key: '',
+    // ENGLISH-CURRICULUM-V1: English curriculum fields
+    english_grammar_unit: '' as string | null,
+    english_reading_units: [] as string[],
   });
 
   // MATH-CURRICULUM-TAG-V2: Validation state for custom course
@@ -353,6 +360,39 @@ export function LessonRecordForm({
     }
   }, []);
 
+  // ENGLISH-CURRICULUM-V1: Prefill English curriculum tags from student's most recent English record
+  const prefillEnglishCurriculumTags = useCallback(async (studentId: string) => {
+    if (!studentId) return;
+
+    try {
+      const { data: recentEnglishLesson } = await supabase
+        .from('lesson_records')
+        .select('english_grammar_unit, english_reading_units, lesson_date, submitted')
+        .eq('student_id', studentId)
+        .eq('subject', '영어')
+        .or('english_grammar_unit.not.is.null,english_reading_units.not.is.null')
+        .order('submitted', { ascending: false })
+        .order('lesson_date', { ascending: false })
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentEnglishLesson && (recentEnglishLesson.english_grammar_unit || (recentEnglishLesson.english_reading_units && recentEnglishLesson.english_reading_units.length > 0))) {
+        setFormData(prev => ({
+          ...prev,
+          english_grammar_unit: recentEnglishLesson.english_grammar_unit || null,
+          english_reading_units: recentEnglishLesson.english_reading_units || [],
+        }));
+        setTagSource('student_last');
+        setTagPrefillOccurred(true);
+        tagUserChangedRef.current = false;
+        console.log('[ENGLISH-CURRICULUM-V1] Prefilled from student last English record:', recentEnglishLesson);
+      }
+    } catch (error) {
+      console.error('[ENGLISH-CURRICULUM-V1] Error fetching English curriculum tags:', error);
+    }
+  }, []);
+
   // Initialize form
   useEffect(() => {
     initializeForm();
@@ -411,6 +451,9 @@ export function LessonRecordForm({
             curriculum_version: (record as any).curriculum_version || '',
             course: (record as any).course || '',
             curriculum_unit_key: (record as any).curriculum_unit_key || '',
+            // ENGLISH-CURRICULUM-V1: Load English curriculum fields
+            english_grammar_unit: (record as any).english_grammar_unit || null,
+            english_reading_units: (record as any).english_reading_units || [],
           });
           // TAG-PREFILL-STUDENT-V1: Existing record - mark source
           setTagSource('existing_record');
@@ -480,6 +523,10 @@ export function LessonRecordForm({
             // TAG-PREFILL-STUDENT-V1: Prefill math curriculum tags for new record
             if (newSubject === '수학') {
               await prefillStudentCurriculumTags(initialContext.student_id, user.id);
+            }
+            // ENGLISH-CURRICULUM-V1: Prefill English curriculum tags for new record
+            if (newSubject === '영어') {
+              await prefillEnglishCurriculumTags(initialContext.student_id);
             }
           }
         }
@@ -607,10 +654,23 @@ export function LessonRecordForm({
       curriculum_version: formData.curriculum_version || null,
       course: formData.course || null,
       curriculum_unit_key: formData.curriculum_unit_key || null,
+      english_grammar_unit: null,
+      english_reading_units: null,
+    } : subject === '영어' ? {
+      // ENGLISH-CURRICULUM-V1: Include English curriculum fields
+      curriculum_version: null,
+      course: null,
+      curriculum_unit_key: null,
+      english_grammar_unit: formData.english_grammar_unit || null,
+      english_reading_units: formData.english_reading_units && formData.english_reading_units.length > 0 
+        ? formData.english_reading_units 
+        : null,
     } : {
       curriculum_version: null,
       course: null,
       curriculum_unit_key: null,
+      english_grammar_unit: null,
+      english_reading_units: null,
     };
 
     const basePayload = {
@@ -1192,6 +1252,33 @@ export function LessonRecordForm({
               <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
                 TAG-PREFILL-STUDENT-V1: tagSource={tagSource}
               </span>
+            )}
+          </div>
+        )}
+
+        {/* ENGLISH-CURRICULUM-V1: English curriculum tagging */}
+        {formData.subject === '영어' && (
+          <div className="space-y-2">
+            <EnglishCurriculumTag
+              grammarUnit={formData.english_grammar_unit}
+              readingUnits={formData.english_reading_units}
+              studentGrade={null} // Grade not available in form context; user selects level manually
+              onChange={(grammarUnit, readingUnits) => {
+                tagUserChangedRef.current = true;
+                setTagPrefillOccurred(false);
+                setFormData(prev => ({
+                  ...prev,
+                  english_grammar_unit: grammarUnit,
+                  english_reading_units: readingUnits,
+                }));
+              }}
+              disabled={isViewMode}
+            />
+            {/* ENGLISH-CURRICULUM-V1: Show helper text when prefill occurred */}
+            {tagPrefillOccurred && !tagUserChangedRef.current && (
+              <p className="text-xs text-muted-foreground">
+                ✓ 최근 입력 태그를 불러왔습니다.
+              </p>
             )}
           </div>
         )}
