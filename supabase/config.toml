@@ -2,3 +2,6 @@ project_id = "uovpjsxqyiwjplnfwcel"
 
 [functions.generate-weekly-reports]
 verify_jwt = false
+
+[functions.generate-ai-report]
+verify_jwt = false
