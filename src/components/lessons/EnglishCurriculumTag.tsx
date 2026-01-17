@@ -135,11 +135,13 @@ function gradeToGrammarLevel(grade: string | null): GrammarLevel {
 
 export function EnglishCurriculumTag({
   grammarUnit,
-  readingUnits,
+  readingUnits: readingUnitsProp,
   studentGrade,
   onChange,
   disabled = false,
 }: EnglishCurriculumTagProps) {
+  // Defensive: ensure readingUnits is always an array
+  const readingUnits = readingUnitsProp ?? [];
   const [selectedLevel, setSelectedLevel] = useState<GrammarLevel>(() => gradeToGrammarLevel(studentGrade));
 
   // Update level when student grade changes
@@ -303,11 +305,13 @@ export function EnglishCurriculumTag({
 // Export for View mode badge display
 export function EnglishCurriculumBadges({
   grammarUnit,
-  readingUnits,
+  readingUnits: readingUnitsProp,
 }: {
   grammarUnit: string | null;
-  readingUnits: string[];
+  readingUnits: string[] | null | undefined;
 }) {
+  // Defensive: ensure readingUnits is always an array
+  const readingUnits = readingUnitsProp ?? [];
   if (!grammarUnit && readingUnits.length === 0) return null;
 
   return (
