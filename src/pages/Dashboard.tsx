@@ -817,7 +817,9 @@ export default function Dashboard() {
       
       console.log('fetchTodaySlots: user.id =', user.id, ', dayOfWeek (KST) =', dayOfWeek);
 
-      // Fetch class schedules for today for this teacher
+      // CLASS-ACTIVE-TOGGLE-V1: Include inactive_until filter
+      const todayKSTDate = getTodayKST();
+      
       const { data: schedules, error: schedulesError } = await supabase
         .from('class_schedules')
         .select(`
@@ -827,6 +829,7 @@ export default function Dashboard() {
           end_time,
           day_of_week,
           teacher_id,
+          inactive_until,
           classes:class_id (
             id,
             name,
@@ -839,6 +842,12 @@ export default function Dashboard() {
         .eq('is_active', true)
         .order('start_time', { ascending: true });
 
+      // Filter out schedules that are inactive until today or later
+      const activeSchedules = (schedules || []).filter((s: any) => {
+        if (!s.inactive_until) return true;
+        return s.inactive_until < todayKSTDate;
+      });
+
       if (schedulesError) {
         console.error('Error fetching today slots:', schedulesError);
         toast({
@@ -849,12 +858,12 @@ export default function Dashboard() {
         return;
       }
 
-      console.log('fetchTodaySlots: schedules returned =', schedules?.length || 0, schedules);
+      console.log('fetchTodaySlots: schedules returned =', activeSchedules?.length || 0, 'active of', schedules?.length || 0, 'total');
 
       // Get students for each class - also build a map of class_id -> subject for RPC
-      const classIds = schedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
+      const classIds = activeSchedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
       const classSubjectMap: Record<string, string> = {};
-      (schedules || []).forEach((s: any) => {
+      (activeSchedules || []).forEach((s: any) => {
         if (s.classes?.id && s.classes?.subject) {
           classSubjectMap[s.classes.id] = s.classes.subject;
         }
@@ -1042,8 +1051,8 @@ export default function Dashboard() {
         });
       });
 
-      // Build slots array
-      const slots: TodaySlot[] = (schedules || []).map((s: any) => ({
+      // Build slots array from activeSchedules
+      const slots: TodaySlot[] = (activeSchedules || []).map((s: any) => ({
         id: s.id,
         class_id: s.classes?.id || '',
         class_name: s.classes?.name || '알 수 없음',
