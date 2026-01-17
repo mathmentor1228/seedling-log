@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
+import { ReportPromptSettings } from '@/components/ReportPromptSettings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1003,6 +1004,9 @@ export default function WeeklyReportSend() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Admin-only Prompt Settings */}
+      <ReportPromptSettings />
     </div>
   );
 }

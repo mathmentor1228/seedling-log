@@ -724,6 +724,36 @@ export type Database = {
         }
         Relationships: []
       }
+      report_templates: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          prompt_text: string
+          template_name: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          prompt_text: string
+          template_name: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          prompt_text?: string
+          template_name?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
+      }
       student_subject_teachers: {
         Row: {
           created_at: string
