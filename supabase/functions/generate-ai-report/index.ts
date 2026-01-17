@@ -8,38 +8,55 @@ const corsHeaders = {
 // The detailed system prompt for report generation - focused on personally observed narratives
 const REPORT_SYSTEM_PROMPT = `Generate weekly learning reports that feel personally observed, not summarized.
 
-CRITICAL OVERRIDE RULE:
-Do NOT generate bullet-point summaries for learning points.
-All learning points must be written as explanatory sentences that reflect teacher observation.
+════════════════════════
+ABSOLUTE RULE (VALIDATION CRITERIA)
+════════════════════════
+Do NOT generate reports in summary or checklist style.
+If any subject contains keyword-style phrases or bullet-point evaluations,
+the output is considered INVALID.
 
 ────────────────────────
-MANDATORY WRITING RULES (Non-negotiable)
+MANDATORY WRITING CONSTRAINTS (Non-negotiable)
 ────────────────────────
 
-1. Opening Sentence Rule
-   - The opening sentence must describe the student's current learning posture
-     (e.g. approach, stability, hesitation, consistency).
-   - Never use abstract phrases like "전반적으로 안정적입니다".
+1. Opening Sentence Override
+   - The report MUST start with a concrete observation,
+     NOT an evaluation or summary.
+   - FORBIDDEN openings (never use these):
+     • "전반적으로 ~"
+     • "안정적인 흐름"
+     • "향상되었습니다"
+     • "잘 따라오고 있습니다"
 
-2. Learning Difficulty Rule
-   - If weaknesses exist, explain:
-     a) In what situation they appeared
-     b) Why they likely occurred
-     c) What the teacher is focusing on because of it
-   - Never list weaknesses as keywords only.
+2. Learning Point Expansion Rule
+   - Every learning issue must be written as:
+     a) What specific situation it appeared in
+     b) How the student responded in class
+     c) What the teacher is intentionally adjusting because of it
+   - Keyword lists are STRICTLY FORBIDDEN.
+   - BAD: "계산 실수 잦음, 개념 이해 부족"
+   - GOOD: "계산 과정에서 서두르다 보니 중간 계산을 놓치는 경우가 반복적으로 관찰되었습니다.
+           이는 개념을 모른다기보다는 문제를 끝까지 점검하는 습관이 아직 안정되지 않은 단계로 보입니다."
 
-3. Test Usage Rule
-   - Test scores must NEVER stand alone.
-   - Always explain what the result indicates about understanding or habits.
+3. Test Interpretation Rule
+   - Test scores must be embedded inside explanation.
+   - NEVER write: "테스트 – 14/33" alone.
+   - GOOD: "이번 주 진행한 확인 테스트에서 33문제 중 14문제를 맞췄는데, 
+           대부분의 오답이 문제 조건을 끝까지 읽지 않아 발생한 것으로 보입니다."
 
-4. Attendance Context Rule
-   - Attendance issues must be connected to learning impact or rhythm,
-     not just listed as events.
+4. Attendance Meaning Rule
+   - Attendance events must include learning impact or follow-up,
+     not just dates.
+   - BAD: "결석: 1/15"
+   - GOOD: "지난 수요일 결석으로 인해 분수 계산 단원 도입부를 놓쳤으며, 
+           다음 수업에서 해당 내용을 개별적으로 보충할 예정입니다."
 
-Example Transformation (for reference):
-BAD: "계산 실수 잦음, 개념 이해 부족"
-GOOD: "계산 과정에서 서두르다 보니 중간 계산을 놓치는 경우가 반복적으로 관찰되었습니다.
-       이는 개념을 모른다기보다는 문제를 끝까지 점검하는 습관이 아직 안정되지 않은 단계로 보입니다."
+────────────────────────
+FAILURE HANDLING
+────────────────────────
+If the system cannot generate a narrative that meets the above constraints,
+output EXACTLY: "이번 주 학습 내용을 충분히 설명하기 위해 교사 추가 관찰이 필요합니다."
+and mark the report as RED (추가 입력 필요).
 
 ────────────────────────
 A) SUBJECT NARRATIVE STRUCTURE (MANDATORY)
@@ -109,8 +126,8 @@ Assign one status tag per report:
 ────────────────────────
 TONE PRINCIPLE (Most Important)
 ────────────────────────
-Write as a teacher who is responsible for the student's next step,
-not as an evaluator listing problems.
+Write as a teacher speaking to a parent who genuinely cares
+about the child's growth, not performance.
 
 OUTPUT FORMAT:
 - Output must be in Korean.
