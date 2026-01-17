@@ -1495,21 +1495,22 @@ export default function Dashboard() {
                 <tbody>
                   {todayAttendance.map((record) => {
                     // Determine badge color based on attendance status
-                    const getAttendanceBadge = (status: string[]) => {
-                      const hasAbsent = status.includes('무단결석') || status.includes('인정결석');
-                      const hasLateOrEarly = status.includes('지각') || status.includes('조퇴');
-                      const hasNoShow = status.includes('보충불가');
+                    const getAttendanceBadge = (status: string[] | null | undefined) => {
+                      const safeStatus = status ?? [];
+                      const hasAbsent = safeStatus.includes('무단결석') || safeStatus.includes('인정결석');
+                      const hasLateOrEarly = safeStatus.includes('지각') || safeStatus.includes('조퇴');
+                      const hasNoShow = safeStatus.includes('보충불가');
                       
                       if (hasAbsent || hasNoShow) {
                         return (
                           <Badge className="bg-red-500/15 text-red-600 border-red-500/30">
-                            {status.filter(s => s !== '정상등원').join(', ') || '정상등원'}
+                            {safeStatus.filter(s => s !== '정상등원').join(', ') || '정상등원'}
                           </Badge>
                         );
                       } else if (hasLateOrEarly) {
                         return (
                           <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30">
-                            {status.filter(s => s !== '정상등원').join(', ') || '정상등원'}
+                            {safeStatus.filter(s => s !== '정상등원').join(', ') || '정상등원'}
                           </Badge>
                         );
                       } else {
