@@ -225,21 +225,25 @@ function getRosterBadges(
 
 // Helper function to render attendance badge with high visibility
 // 미등원: red, 지각: amber, 등원: neutral gray
-function getAttendanceStatusBadge(attendanceStatus: string[] | undefined) {
-  if (!attendanceStatus || attendanceStatus.length === 0) return null;
+function getAttendanceStatusBadge(attendanceStatus: unknown) {
+  const safeStatus: string[] = Array.isArray(attendanceStatus)
+    ? (attendanceStatus as string[])
+    : [];
+
+  if (safeStatus.length === 0) return null;
   
   // Check for various non-normal statuses
-  const hasAbsent = attendanceStatus.includes('무단결석') || attendanceStatus.includes('인정결석');
-  const hasNoShow = attendanceStatus.includes('보충불가') || attendanceStatus.includes('미등원');
-  const hasLateOrEarly = attendanceStatus.includes('지각') || attendanceStatus.includes('조퇴');
+  const hasAbsent = safeStatus.includes('무단결석') || safeStatus.includes('인정결석');
+  const hasNoShow = safeStatus.includes('보충불가') || safeStatus.includes('미등원');
+  const hasLateOrEarly = safeStatus.includes('지각') || safeStatus.includes('조퇴');
   
   // Filter out '정상등원' and '등원' for display
-  const displayStatus = attendanceStatus.filter(s => s !== '정상등원' && s !== '등원');
+  const displayStatus = safeStatus.filter(s => s !== '정상등원' && s !== '등원');
   
   // If only normal status, show neutral badge
   if (displayStatus.length === 0) {
     // Check if it's explicitly marked as '등원'
-    if (attendanceStatus.includes('등원')) {
+    if (safeStatus.includes('등원')) {
       return (
         <Badge variant="secondary" className="bg-muted/50 text-muted-foreground border-muted text-xs">
           등원
@@ -1345,19 +1349,19 @@ export default function Dashboard() {
             </div>
             <CardTitle className="flex items-center gap-2">
               <PenLine className="w-5 h-5 text-primary" />
-              오늘 수업(원장) - 선생님별 ({adminRosterData.roster_rows.length}명)
+              오늘 수업(원장) - 선생님별 ({adminRosterData.roster_rows?.length ?? 0}명)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {adminRosterData.teachers.length === 0 ? (
+            {(adminRosterData.teachers?.length ?? 0) === 0 ? (
               <div className="text-center py-8">
                 <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
               </div>
             ) : (
               <div className="space-y-6">
-                {adminRosterData.teachers.map((teacher) => {
-                  const teacherRows = adminRosterData.roster_rows.filter(r => r.teacher_id === teacher.teacher_id);
+                {(adminRosterData.teachers ?? []).map((teacher) => {
+                  const teacherRows = (adminRosterData.roster_rows ?? []).filter(r => r.teacher_id === teacher.teacher_id);
                   if (teacherRows.length === 0) return null;
                   
                   return (
