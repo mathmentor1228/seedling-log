@@ -1169,6 +1169,7 @@ export type Database = {
         Row: {
           avg_understanding: number | null
           common_issues: string[] | null
+          debug_info: string | null
           generated_at: string
           homework_completion_rate: number | null
           id: string
@@ -1194,6 +1195,7 @@ export type Database = {
         Insert: {
           avg_understanding?: number | null
           common_issues?: string[] | null
+          debug_info?: string | null
           generated_at?: string
           homework_completion_rate?: number | null
           id?: string
@@ -1219,6 +1221,7 @@ export type Database = {
         Update: {
           avg_understanding?: number | null
           common_issues?: string[] | null
+          debug_info?: string | null
           generated_at?: string
           homework_completion_rate?: number | null
           id?: string
