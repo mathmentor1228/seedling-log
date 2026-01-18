@@ -1287,32 +1287,22 @@ export type Database = {
         }
         Returns: Json
       }
-      generate_weekly_reports:
-        | {
-            Args: { _week_end: string; _week_start: string }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              _student_ids?: string[]
-              _week_end: string
-              _week_start: string
-            }
-            Returns: undefined
-          }
-      generate_weekly_reports_scheduled:
-        | {
-            Args: { _week_end: string; _week_start: string }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              _student_ids?: string[]
-              _week_end: string
-              _week_start: string
-            }
-            Returns: undefined
-          }
+      generate_weekly_reports: {
+        Args: {
+          _student_ids?: string[]
+          _week_end: string
+          _week_start: string
+        }
+        Returns: undefined
+      }
+      generate_weekly_reports_scheduled: {
+        Args: {
+          _student_ids?: string[]
+          _week_end: string
+          _week_start: string
+        }
+        Returns: undefined
+      }
       get_admin_kpis: {
         Args: {
           _end_date: string
