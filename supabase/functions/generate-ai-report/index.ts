@@ -5,8 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// v2.3-narrative-lock: Final save validation with strict narrative enforcement
-const TEMPLATE_VERSION = 'v2.3-narrative-lock';
+// v2.4-engine-debug: Add debug header to saved report text + debug_info column
+// REPORT-ENGINE-DEBUG-V1
+const TEMPLATE_VERSION = 'v2.4-engine-debug';
+const FORMATTER_NAME = 'renderReportFromJson-v2.4';
 
 // Forbidden patterns for FINAL text validation (runs before save)
 const FORBIDDEN_PATTERNS = {
@@ -439,7 +441,7 @@ Deno.serve(async (req) => {
 
     const { student_id, student_name, week_start, week_end } = await req.json() as GenerateReportRequest;
 
-    console.log(`[REPORT_GEN_DEBUG_V2.3] templateVersion=${TEMPLATE_VERSION}`);
+    console.log(`[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} formatter=${FORMATTER_NAME}`);
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
 
     // Fetch this week's lesson records
@@ -546,7 +548,8 @@ Deno.serve(async (req) => {
       console.log('[generate-ai-report] Insufficient narrative data - marking as RED');
       
       const parentHeader = formatParentHeader(student_name, week_start, week_end);
-      const debugMarker = `[REPORT_GEN_DEBUG_V2.3] templateVersion=${TEMPLATE_VERSION} retries=0 validator=fail tag=RED`;
+      const debugInfo = `[REPORT_ENGINE_DEBUG] source=edge_function templateVersion=${TEMPLATE_VERSION} formatter=${FORMATTER_NAME} validator=fail retries=0`;
+      const debugMarker = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} retries=0 validator=fail tag=RED`;
       
       // Generate fallback student message
       const studentMessageContent = await generateStudentMessage(
@@ -558,19 +561,24 @@ Deno.serve(async (req) => {
         subjectData
       );
       
+      // Embed debug header in saved report text (admin can see it)
+      const parentMessageWithDebug = parentHeader + '\n\n' + debugInfo + '\n\n' + INSUFFICIENT_DATA_MESSAGE;
+      
       return new Response(
         JSON.stringify({
           success: true,
-          parent_message: parentHeader + '\n\n' + INSUFFICIENT_DATA_MESSAGE,
+          parent_message: parentMessageWithDebug,
           student_message: studentMessageContent,
           draft_status: 'needs_input',
           risk_level: 'high',
           lesson_count: currentWeekLessons.length,
           subjects: Object.keys(subjectData),
           template_version: TEMPLATE_VERSION,
+          debug_info: debugInfo,
           _debug: {
             debug_marker: debugMarker,
             template_version: TEMPLATE_VERSION,
+            formatter: FORMATTER_NAME,
             validation_passed: false,
             validation_attempts: 0,
             violations: ['INSUFFICIENT_NARRATIVE_DATA'],
@@ -627,21 +635,27 @@ Deno.serve(async (req) => {
 
     // Format final messages with version marker for admin
     const parentHeader = formatParentHeader(student_name, week_start, week_end);
-    const debugMarker = `[REPORT_GEN_DEBUG_V2.3] templateVersion=${TEMPLATE_VERSION} retries=${parentResult.attempts} validator=${parentResult.isValid ? 'pass' : 'fail'} tag=${parentResult.adminTag}`;
+    const debugInfo = `[REPORT_ENGINE_DEBUG] source=edge_function templateVersion=${TEMPLATE_VERSION} formatter=${FORMATTER_NAME} validator=${parentResult.isValid ? 'pass' : 'fail'} retries=${parentResult.attempts}`;
+    const debugMarker = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} retries=${parentResult.attempts} validator=${parentResult.isValid ? 'pass' : 'fail'} tag=${parentResult.adminTag}`;
+    
+    // Embed debug header in saved report text (at the start, after header)
+    const parentMessageWithDebug = parentHeader + '\n\n' + debugInfo + '\n\n' + parentMessageContent;
     
     return new Response(
       JSON.stringify({
         success: true,
-        parent_message: parentHeader + '\n\n' + parentMessageContent,
+        parent_message: parentMessageWithDebug,
         student_message: studentMessageContent,
         draft_status: draftStatus,
         risk_level: riskLevel,
         lesson_count: currentWeekLessons.length,
         subjects: Object.keys(subjectData),
         template_version: TEMPLATE_VERSION,
+        debug_info: debugInfo,
         _debug: {
           debug_marker: debugMarker,
           template_version: TEMPLATE_VERSION,
+          formatter: FORMATTER_NAME,
           validation_passed: parentResult.isValid,
           validation_attempts: parentResult.attempts,
           violations: parentResult.violations,
