@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,12 +38,14 @@ import {
   Clock,
   XCircle,
   AlertTriangle,
-  MessageSquare
+  MessageSquare,
+  RefreshCw,
+  Users
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface WeeklyReport {
@@ -77,6 +79,12 @@ interface SendTarget {
   sendParent: boolean;
 }
 
+interface StudentForGeneration {
+  id: string;
+  name: string;
+  grade: string | null;
+}
+
 export default function Reports() {
   const { user } = useAuth();
   const [reports, setReports] = useState<WeeklyReport[]>([]);
@@ -98,9 +106,115 @@ export default function Reports() {
   const [principalCommentEnabled, setPrincipalCommentEnabled] = useState(false);
   const [principalComment, setPrincipalComment] = useState('');
 
+  // Per-student generation state
+  const [allStudents, setAllStudents] = useState<StudentForGeneration[]>([]);
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [generating, setGenerating] = useState(false);
+
   useEffect(() => {
     fetchReports();
+    fetchAllStudents();
   }, []);
+
+  async function fetchAllStudents() {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, name, grade')
+        .order('name');
+      
+      if (error) throw error;
+      setAllStudents(data || []);
+    } catch (error) {
+      console.error('Error fetching students:', error);
+    }
+  }
+
+  // Compute week range (last week by default)
+  const weekRange = useMemo(() => {
+    const now = new Date();
+    const lastWeek = subWeeks(now, 1);
+    const weekStart = startOfWeek(lastWeek, { weekStartsOn: 1 }); // Monday
+    const weekEnd = endOfWeek(lastWeek, { weekStartsOn: 1 }); // Sunday
+    return {
+      start: format(weekStart, 'yyyy-MM-dd'),
+      end: format(weekEnd, 'yyyy-MM-dd'),
+    };
+  }, []);
+
+  // Filter students by search
+  const filteredStudents = useMemo(() => {
+    if (!studentSearchQuery.trim()) return allStudents;
+    const q = studentSearchQuery.toLowerCase();
+    return allStudents.filter(s => s.name.toLowerCase().includes(q));
+  }, [allStudents, studentSearchQuery]);
+
+  function toggleStudentSelection(studentId: string) {
+    setSelectedStudentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(studentId)) {
+        next.delete(studentId);
+      } else {
+        next.add(studentId);
+      }
+      return next;
+    });
+  }
+
+  function selectAllFilteredStudents() {
+    setSelectedStudentIds(prev => {
+      const next = new Set(prev);
+      filteredStudents.forEach(s => next.add(s.id));
+      return next;
+    });
+  }
+
+  function clearSelectedStudents() {
+    setSelectedStudentIds(new Set());
+  }
+
+  async function handleGenerateReports(scope: 'all' | 'selected') {
+    setGenerating(true);
+    
+    try {
+      const studentIds = scope === 'selected' ? Array.from(selectedStudentIds) : null;
+      const count = scope === 'selected' ? selectedStudentIds.size : allStudents.length;
+      
+      console.log(`[REPORT_GEN_DEBUG_V2] scope=${scope} count=${count} templateVersion=v2.0`);
+      
+      const { error } = await supabase.rpc('generate_weekly_reports', {
+        _week_start: weekRange.start,
+        _week_end: weekRange.end,
+        _student_ids: studentIds,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: scope === 'selected' ? '선택 학생 생성 완료' : '전체 생성 완료',
+        description: scope === 'selected' 
+          ? `선택 학생 ${count}명 생성 완료`
+          : `전체 학생 ${count}명 생성 완료`,
+      });
+
+      // Refresh reports list
+      await fetchReports();
+      
+      if (scope === 'selected') {
+        clearSelectedStudents();
+      }
+    } catch (error: any) {
+      console.error('Error generating reports:', error);
+      toast({
+        title: '생성 실패',
+        description: error.message || '리포트 생성에 실패했습니다.',
+        variant: 'destructive',
+      });
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function fetchReports() {
     try {
@@ -374,6 +488,113 @@ export default function Reports() {
           </Button>
         </div>
       </div>
+
+      {/* Per-Student Report Generation Section - REPORT-PER-STUDENT-V1 */}
+      <Card className="border-primary/30">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              <CardTitle className="text-lg">학생별 생성</CardTitle>
+              <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
+                REPORT-PER-STUDENT-V1
+              </span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              기간: {weekRange.start} ~ {weekRange.end}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="학생명 검색..."
+                value={studentSearchQuery}
+                onChange={(e) => setStudentSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={selectAllFilteredStudents}
+              disabled={filteredStudents.length === 0}
+            >
+              전체 선택
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSelectedStudents}
+              disabled={selectedStudentIds.size === 0}
+            >
+              선택 해제
+            </Button>
+          </div>
+
+          <ScrollArea className="h-48 border rounded-md">
+            <div className="p-2 space-y-1">
+              {filteredStudents.map((student) => (
+                <div
+                  key={student.id}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors",
+                    selectedStudentIds.has(student.id) && "bg-primary/10 hover:bg-primary/20"
+                  )}
+                  onClick={() => toggleStudentSelection(student.id)}
+                >
+                  <Checkbox
+                    checked={selectedStudentIds.has(student.id)}
+                    onCheckedChange={() => toggleStudentSelection(student.id)}
+                  />
+                  <span className="font-medium">{student.name}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {student.grade || '학년 미지정'}
+                  </span>
+                </div>
+              ))}
+              {filteredStudents.length === 0 && (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  검색 결과가 없습니다
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          <div className="flex items-center justify-between pt-2 border-t">
+            <div className="text-sm text-muted-foreground">
+              선택된 학생: <span className="font-medium text-foreground">{selectedStudentIds.size}명</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleGenerateReports('selected')}
+                disabled={generating || selectedStudentIds.size === 0}
+              >
+                {generating ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                선택 생성
+              </Button>
+              <Button
+                onClick={() => handleGenerateReports('all')}
+                disabled={generating}
+              >
+                {generating ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                전체 생성
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Test Mode Warning */}
       <Card className="border-amber-500/50 bg-amber-500/10">
