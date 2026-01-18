@@ -324,7 +324,8 @@ function renderReportFromJson(json: JsonReportOutput, studentName: string): stri
 async function generateParentReportWithRetry(
   apiKey: string,
   userPrompt: string,
-  maxRetries: number = 2
+  maxRetries: number = 2,
+  forceStrictNarrative: boolean = false
 ): Promise<{ content: string; jsonOutput: JsonReportOutput | null; isValid: boolean; violations: string[]; attempts: number; adminTag: string }> {
   let attempts = 0;
   let lastContent = '';
@@ -334,7 +335,7 @@ async function generateParentReportWithRetry(
   while (attempts < maxRetries) {
     attempts++;
     const isRetry = attempts > 1;
-    const systemPrompt = (attempts === 1 && options?.forceStrictNarrative)
+    const systemPrompt = (attempts === 1 && forceStrictNarrative)
       ? (RETRY_SYSTEM_PROMPT + "\n\nNo bullets. No bracket headings. Only narrative paragraphs.")
       : (isRetry ? RETRY_SYSTEM_PROMPT : JSON_PARENT_PROMPT);
 
@@ -601,7 +602,7 @@ Deno.serve(async (req) => {
       LOVABLE_API_KEY,
       userPrompt,
       2, // max 2 attempts
-      { forceStrictNarrative: strictNarrative }
+      strictNarrative
     );
 
     let parentMessageContent = parentResult.content;
