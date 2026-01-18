@@ -158,6 +158,8 @@ interface GenerateReportRequest {
   week_start: string;
   week_end: string;
   previous_week_lessons?: LessonRecord[];
+  // When true, we force the stricter narrative-only system message even on the first attempt.
+  strict_narrative?: boolean;
 }
 
 interface ValidationResult {
@@ -332,8 +334,10 @@ async function generateParentReportWithRetry(
   while (attempts < maxRetries) {
     attempts++;
     const isRetry = attempts > 1;
-    const systemPrompt = isRetry ? RETRY_SYSTEM_PROMPT : JSON_PARENT_PROMPT;
-    
+    const systemPrompt = (attempts === 1 && options?.forceStrictNarrative)
+      ? (RETRY_SYSTEM_PROMPT + "\n\nNo bullets. No bracket headings. Only narrative paragraphs.")
+      : (isRetry ? RETRY_SYSTEM_PROMPT : JSON_PARENT_PROMPT);
+
     console.log(`[generate-ai-report] Parent report attempt ${attempts}/${maxRetries}, isRetry=${isRetry}`);
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -439,7 +443,9 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { student_id, student_name, week_start, week_end } = await req.json() as GenerateReportRequest;
+    const reqBody = await req.json() as GenerateReportRequest;
+    const { student_id, student_name, week_start, week_end } = reqBody;
+    const strictNarrative = reqBody.strict_narrative === true;
 
     console.log(`[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} formatter=${FORMATTER_NAME}`);
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
@@ -594,7 +600,8 @@ Deno.serve(async (req) => {
     const parentResult = await generateParentReportWithRetry(
       LOVABLE_API_KEY,
       userPrompt,
-      2 // max 2 attempts
+      2, // max 2 attempts
+      { forceStrictNarrative: strictNarrative }
     );
 
     let parentMessageContent = parentResult.content;

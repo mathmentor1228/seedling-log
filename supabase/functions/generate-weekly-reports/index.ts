@@ -14,6 +14,40 @@ const SCHEDULE_CONFIG = {
 
 const TEMPLATE_VERSION = 'v2.1-narrative-render';
 
+// v2.1: hard marker so we can verify the narrative saver is the one writing the row
+const NARRATIVE_RENDER_PREFIX = '[NARRATIVE_RENDER_ACTIVE v2.1]';
+
+// Reject any legacy formatter output (【subject】 headings, bullets, and label-style sections)
+const LEGACY_FORMAT_REGEX = /【|[·•]|(학습\s*포인트|다음\s*주\s*계획)\s*[:：]/;
+
+function stripInternalDebugBlocks(text: string): string {
+  // generate-ai-report may embed internal debug blocks for admin; we strip them at save time
+  // so the saved parent_message is the clean, ready-to-send narrative.
+  const parts = text
+    .split('\n\n')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .filter((p) => !p.startsWith('[REPORT_ENGINE_DEBUG]'))
+    .filter((p) => !p.startsWith('[REPORT_GEN_DEBUG'));
+
+  return parts.join('\n\n').trim();
+}
+
+function containsLegacyFormat(text: string): boolean {
+  return LEGACY_FORMAT_REGEX.test(text);
+}
+
+function formatParentHeader(studentName: string, weekStart: string, weekEnd: string): string {
+  const startDate = new Date(weekStart);
+  const endDate = new Date(weekEnd);
+  const startMonth = startDate.getMonth() + 1;
+  const startDay = startDate.getDate();
+  const endMonth = endDate.getMonth() + 1;
+  const endDay = endDate.getDate();
+
+  return `[더멘토] ${studentName} 주간 학습 리포트 (${startMonth}/${startDay}~${endMonth}/${endDay})`;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -86,21 +120,24 @@ Deno.serve(async (req) => {
     const studentCount = studentIds?.length || 'all';
     console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: Generating for week: ${weekStart} to ${weekEnd}, scope=${scope}, count=${studentCount}, direct_save=${useDirectSave}`);
 
-    // Load template version for debug info
+    // Load DB template version ONLY for legacy mode debug.
+    // In direct_save mode, this was confusing (it could show v2.0) even though we are using TEMPLATE_VERSION.
     let templateVersion = TEMPLATE_VERSION;
-    try {
-      const { data: templates } = await supabase
-        .from('report_templates')
-        .select('version')
-        .eq('template_name', 'parent')
-        .eq('is_active', true)
-        .limit(1);
-      if (templates?.[0]?.version) {
-        templateVersion = templates[0].version;
+    if (!useDirectSave) {
+      try {
+        const { data: templates } = await supabase
+          .from('report_templates')
+          .select('version')
+          .eq('template_name', 'parent')
+          .eq('is_active', true)
+          .limit(1);
+        if (templates?.[0]?.version) {
+          templateVersion = templates[0].version;
+        }
+        console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: DB templateVersion=${templateVersion}`);
+      } catch (e) {
+        console.error(`[generate-weekly-reports] REPORT_GEN_DEBUG: Failed to load template version`, e);
       }
-      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: DB templateVersion=${templateVersion}`);
-    } catch (e) {
-      console.error(`[generate-weekly-reports] REPORT_GEN_DEBUG: Failed to load template version`, e);
     }
 
     // ============================================================
@@ -136,22 +173,85 @@ Deno.serve(async (req) => {
       for (const student of studentsToGenerate) {
         try {
           console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: Generating for ${student.name} (${student.id})`);
-          
-          // Call generate-ai-report edge function
-          const { data: aiReportData, error: aiError } = await supabase.functions.invoke('generate-ai-report', {
-            body: {
-              student_id: student.id,
-              student_name: student.name,
-              week_start: weekStart,
-              week_end: weekEnd,
-            },
-          });
 
-          if (aiError) {
-            console.error(`[generate-weekly-reports] AI report error for ${student.name}:`, aiError);
-            errorCount++;
-            errors.push(`${student.name}: ${aiError.message}`);
-            continue;
+          // ------------------------------------------------------------
+          // FINAL-SAVE NARRATIVE PIPELINE (v2.1)
+          // - No legacy bracket headings (【...】)
+          // - No bullets (·)
+          // - Prefix added at FINAL save step so it's undeniable in DB
+          // ------------------------------------------------------------
+          const invokeAiReport = async (strictNarrative: boolean) => {
+            return await supabase.functions.invoke('generate-ai-report', {
+              body: {
+                student_id: student.id,
+                student_name: student.name,
+                week_start: weekStart,
+                week_end: weekEnd,
+                strict_narrative: strictNarrative,
+              },
+            });
+          };
+
+          let aiReportData: any = null;
+          let aiAttempts = 0;
+          let saveValidatorStatus: 'pass' | 'fail' = 'pass';
+          let saveValidatorReason: string | null = null;
+
+          // Try once, then retry once with stricter system message (strict_narrative=true)
+          for (const strict of [false, true]) {
+            aiAttempts++;
+            const { data, error } = await invokeAiReport(strict);
+
+            if (error || !data) {
+              saveValidatorReason = error?.message || 'AI_CALL_FAILED';
+              console.error(`[generate-weekly-reports] AI report error (strict=${strict}) for ${student.name}:`, error);
+              continue;
+            }
+
+            const rawParent = typeof data.parent_message === 'string' ? data.parent_message : '';
+            const cleanedParent = rawParent ? stripInternalDebugBlocks(rawParent) : '';
+
+            // Final-output validator (right before save): reject legacy format and retry once
+            if (!cleanedParent) {
+              saveValidatorReason = 'NO_PARENT_MESSAGE';
+              continue;
+            }
+
+            if (containsLegacyFormat(cleanedParent) || cleanedParent.includes('【') || cleanedParent.includes('·')) {
+              saveValidatorReason = 'LEGACY_FORMAT_DETECTED';
+              console.warn(`[generate-weekly-reports] Legacy formatting detected (strict=${strict}) for ${student.name} — retrying...`);
+              continue;
+            }
+
+            // Accept this AI result (cleaned)
+            aiReportData = {
+              ...data,
+              parent_message: cleanedParent,
+            };
+            break;
+          }
+
+          const RED_PARENT_NOTE = '문장형 리포트 생성에 실패하여 담당 교사의 추가 관찰이 필요합니다.';
+
+          let finalParentMessageToSave: string | null = null;
+          let finalStudentMessageToSave: string | null = null;
+          let draftStatusToSave: string = 'generated';
+          let riskLevelFromAi: string | null = 'high';
+
+          if (!aiReportData) {
+            // Retry exhausted -> mark RED + store short parent-facing note
+            saveValidatorStatus = 'fail';
+            riskLevelFromAi = 'high';
+            draftStatusToSave = 'needs_input';
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${formatParentHeader(student.name, weekStart, weekEnd)}\n\n${RED_PARENT_NOTE}`;
+            finalStudentMessageToSave = null;
+          } else {
+            riskLevelFromAi = aiReportData?.risk_level || 'low';
+            draftStatusToSave = aiReportData?.draft_status || 'ready';
+
+            // IMPORTANT: Prefix is added at FINAL save step (after all formatting/cleanup)
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${aiReportData.parent_message}`;
+            finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
           // Get lesson count for this student
@@ -164,52 +264,56 @@ Deno.serve(async (req) => {
             .eq('submitted', true);
 
           const lessonCount = lessons?.length || 0;
-          
+
           // Calculate stats
           let avgUnderstanding: number | null = null;
           let homeworkCompletionRate: number | null = null;
           const commonIssues: string[] = [];
-          
+
           if (lessons && lessons.length > 0) {
-            const scores = lessons.map(l => l.understanding_score).filter(s => s !== null);
+            const scores = lessons.map((l) => l.understanding_score).filter((s) => s !== null);
             if (scores.length > 0) {
               avgUnderstanding = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
             }
-            
-            const homeworkDone = lessons.filter(l => l.homework_status === 'done' || l.homework_status === 'done_all').length;
+
+            const homeworkDone = lessons.filter(
+              (l) => l.homework_status === 'done' || l.homework_status === 'done_all'
+            ).length;
             homeworkCompletionRate = Math.round((homeworkDone / lessons.length) * 100);
           }
 
           // Determine risk level
-          let riskLevel = aiReportData?.risk_level || 'low';
+          let riskLevel: string | null = riskLevelFromAi || 'low';
           if (lessonCount === 0) {
             riskLevel = null;
           }
 
-          // Build debug_info string
-          const debugInfoStr = aiReportData?.debug_info || 
-            `[REPORT_ENGINE_DEBUG] source=edge_function templateVersion=${TEMPLATE_VERSION} formatter=direct_save validator=unknown retries=0`;
+          // Build debug_info string (this is the canonical debug marker for the saved row)
+          const debugInfoStr = `[REPORT_GEN_DEBUG_V1] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${saveValidatorStatus} retries=${Math.max(0, aiAttempts - 1)} reason=${saveValidatorReason || 'none'}`;
 
           // Upsert report directly to DB
           const { error: upsertError } = await supabase
             .from('weekly_reports')
-            .upsert({
-              student_id: student.id,
-              week_start: weekStart,
-              week_end: weekEnd,
-              total_lessons: lessonCount,
-              avg_understanding: avgUnderstanding,
-              homework_completion_rate: homeworkCompletionRate,
-              common_issues: commonIssues,
-              risk_level: riskLevel,
-              summary: aiReportData?.draft_status || 'generated',
-              parent_message: aiReportData?.parent_message || null,
-              student_message: aiReportData?.student_message || null,
-              generated_at: new Date().toISOString(),
-              debug_info: debugInfoStr,
-            }, {
-              onConflict: 'student_id,week_start,week_end',
-            });
+            .upsert(
+              {
+                student_id: student.id,
+                week_start: weekStart,
+                week_end: weekEnd,
+                total_lessons: lessonCount,
+                avg_understanding: avgUnderstanding,
+                homework_completion_rate: homeworkCompletionRate,
+                common_issues: commonIssues,
+                risk_level: riskLevel,
+                summary: draftStatusToSave,
+                parent_message: finalParentMessageToSave,
+                student_message: finalStudentMessageToSave,
+                generated_at: new Date().toISOString(),
+                debug_info: debugInfoStr,
+              },
+              {
+                onConflict: 'student_id,week_start,week_end',
+              }
+            );
 
           if (upsertError) {
             console.error(`[generate-weekly-reports] Upsert error for ${student.name}:`, upsertError);
