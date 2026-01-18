@@ -212,11 +212,11 @@ export default function WeeklyReportSend() {
     
     // REPORT_GEN_DEBUG: Mark button click
     const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
-    console.log(`REPORT_GEN_DEBUG: handler_file=src/pages/WeeklyReportSend.tsx, handler_fn=handleGenerateReports, scope=${scope}, count=${count}`);
+    console.log(`REPORT_GEN_DEBUG: handler_file=src/pages/WeeklyReportSend.tsx, handler_fn=handleGenerateReports, scope=${scope}, count=${count}, mode=direct_save`);
     
     toast({
       title: 'REPORT_GEN_DEBUG: button_clicked',
-      description: `Source: WeeklyReportSend.handleGenerateReports scope=${scope} count=${count} at ${nowKST} KST`,
+      description: `Source: WeeklyReportSend.handleGenerateReports scope=${scope} count=${count} mode=direct_save at ${nowKST} KST`,
     });
 
     setLastDebugInfo({
@@ -233,49 +233,37 @@ export default function WeeklyReportSend() {
       const startStr = format(weekStart, 'yyyy-MM-dd');
       const endStr = format(weekEnd, 'yyyy-MM-dd');
 
-      // Call the database function with optional student_ids
-      const { error } = studentIds && studentIds.length > 0
-        ? await supabase.rpc('generate_weekly_reports', {
-            _week_start: startStr,
-            _week_end: endStr,
-            _student_ids: studentIds,
-          })
-        : await supabase.rpc('generate_weekly_reports', {
-            _week_start: startStr,
-            _week_end: endStr,
-          });
+      // BYPASS LEGACY DB RPC: Call edge function with direct_save=true
+      const { data, error } = await supabase.functions.invoke('generate-weekly-reports', {
+        body: {
+          manual: true,
+          direct_save: true, // KEY: bypasses legacy DB RPC formatter
+          week_start: startStr,
+          week_end: endStr,
+          student_ids: studentIds && studentIds.length > 0 ? studentIds : null,
+        },
+      });
 
       if (error) throw error;
 
       // Load template version for debug
-      let templateVersion = 'unknown';
-      try {
-        const { data: templates } = await supabase
-          .from('report_templates')
-          .select('version')
-          .eq('template_name', 'parent')
-          .eq('is_active', true)
-          .limit(1);
-        templateVersion = templates?.[0]?.version || 'no_active_template';
-      } catch (e) {
-        console.error('Failed to load template version for debug:', e);
-      }
+      let templateVersion = data?._debug?.templateVersion || 'unknown';
 
       setLastDebugInfo({
         timestamp: nowKST,
-        source: 'rpc:generate_weekly_reports',
+        source: data?._debug?.source || 'edge_function_direct_save',
         templateVersion,
-        status: 'success',
+        status: data?.success ? 'success' : 'partial',
         scope,
         count,
-        message: `${startStr} ~ ${endStr}`,
+        message: `${startStr} ~ ${endStr} | ${data?.successCount || 0} success, ${data?.errorCount || 0} errors`,
       });
 
       toast({
         title: '리포트 생성 완료',
         description: scope === 'selected' 
-          ? `${count}명의 학생 리포트가 생성되었습니다.`
-          : `${startStr} ~ ${endStr} 기간의 주간 리포트가 생성되었습니다.`,
+          ? `${count}명의 학생 리포트가 생성되었습니다. (direct_save)`
+          : `${startStr} ~ ${endStr} 기간의 주간 리포트가 생성되었습니다. (direct_save)`,
       });
 
       // Fetch the generated reports
@@ -290,7 +278,7 @@ export default function WeeklyReportSend() {
       
       setLastDebugInfo(prev => prev ? {
         ...prev,
-        source: 'rpc:generate_weekly_reports',
+        source: 'edge_function_direct_save',
         status: 'error',
         message: error.message,
       } : null);
@@ -304,7 +292,6 @@ export default function WeeklyReportSend() {
       setGenerating(false);
     }
   }
-
   // Handler for generating reports for selected students only
   function handleGenerateSelectedReports() {
     if (selectedStudentIds.size === 0) {

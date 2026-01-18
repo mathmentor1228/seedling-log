@@ -181,12 +181,17 @@ export default function Reports() {
       const studentIds = scope === 'selected' ? Array.from(selectedStudentIds) : null;
       const count = scope === 'selected' ? selectedStudentIds.size : allStudents.length;
       
-      console.log(`[REPORT_GEN_DEBUG_V2] scope=${scope} count=${count} templateVersion=v2.0`);
+      console.log(`[REPORT_GEN_DEBUG_V2.1] scope=${scope} count=${count} templateVersion=v2.1-narrative-render mode=direct_save`);
       
-      const { error } = await supabase.rpc('generate_weekly_reports', {
-        _week_start: weekRange.start,
-        _week_end: weekRange.end,
-        _student_ids: studentIds,
+      // BYPASS LEGACY DB RPC: Call edge function with direct_save=true
+      const { data, error } = await supabase.functions.invoke('generate-weekly-reports', {
+        body: {
+          manual: true,
+          direct_save: true, // KEY: bypasses legacy DB RPC formatter
+          week_start: weekRange.start,
+          week_end: weekRange.end,
+          student_ids: studentIds,
+        },
       });
 
       if (error) throw error;
@@ -194,8 +199,8 @@ export default function Reports() {
       toast({
         title: scope === 'selected' ? '선택 학생 생성 완료' : '전체 생성 완료',
         description: scope === 'selected' 
-          ? `선택 학생 ${count}명 생성 완료`
-          : `전체 학생 ${count}명 생성 완료`,
+          ? `선택 학생 ${count}명 생성 완료 (direct_save)`
+          : `전체 학생 ${count}명 생성 완료 (direct_save)`,
       });
 
       // Refresh reports list
@@ -215,7 +220,6 @@ export default function Reports() {
       setGenerating(false);
     }
   }
-
   async function fetchReports() {
     try {
       const { data, error } = await supabase
