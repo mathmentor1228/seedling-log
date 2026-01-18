@@ -18,15 +18,18 @@ Deno.serve(async (req) => {
   }
 
   let isManual = false;
+  let includeDebug = false;
   try {
     const body = await req.json().catch(() => ({}));
     isManual = body.manual === true;
+    includeDebug = body.include_debug === true;
   } catch {
     // Ignore JSON parse errors
   }
 
   const schedulerSource = isManual ? 'manual' : 'pg_cron';
-  console.log(`[generate-weekly-reports] Starting ${schedulerSource} weekly report generation`);
+  console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: Starting ${schedulerSource} weekly report generation`);
+  console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: source=edge_function, file=supabase/functions/generate-weekly-reports/index.ts`);
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -57,7 +60,22 @@ Deno.serve(async (req) => {
     const weekStart = mondayDate.toISOString().split('T')[0];
     const weekEnd = saturdayDate.toISOString().split('T')[0];
 
-    console.log(`[generate-weekly-reports] Generating for week: ${weekStart} to ${weekEnd}`);
+    console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: Generating for week: ${weekStart} to ${weekEnd}`);
+
+    // Load template version for debug info
+    let templateVersion = 'unknown';
+    try {
+      const { data: templates } = await supabase
+        .from('report_templates')
+        .select('version')
+        .eq('template_name', 'parent')
+        .eq('is_active', true)
+        .limit(1);
+      templateVersion = templates?.[0]?.version || 'no_active_template';
+      console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: templateVersion=${templateVersion}`);
+    } catch (e) {
+      console.error(`[generate-weekly-reports] REPORT_GEN_DEBUG: Failed to load template version`, e);
+    }
 
     // Generate reports using the scheduled function (no auth check)
     const { error: rpcError } = await supabase.rpc('generate_weekly_reports_scheduled', {
@@ -82,7 +100,7 @@ Deno.serve(async (req) => {
       throw rpcError;
     }
 
-    console.log('[generate-weekly-reports] Reports generated successfully');
+    console.log('[generate-weekly-reports] REPORT_GEN_DEBUG: Reports generated successfully');
 
     // Log success with schedule_text
     await supabase.from('weekly_jobs_log').insert({
@@ -95,6 +113,9 @@ Deno.serve(async (req) => {
       schedule_text: SCHEDULE_CONFIG.schedule_text,
     });
 
+    // Generate KST timestamp for debug
+    const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -102,6 +123,13 @@ Deno.serve(async (req) => {
         weekEnd,
         message: 'Weekly reports generated successfully',
         schedulerSource,
+        // Debug info for admin
+        _debug: {
+          source: 'edge_function',
+          templateVersion,
+          time: nowKST,
+          handler: 'generate-weekly-reports/index.ts',
+        },
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

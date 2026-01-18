@@ -166,7 +166,32 @@ export default function WeeklyReportSend() {
     }
   }
 
+  // REPORT_GEN_DEBUG: State for debug info from last run
+  const [lastDebugInfo, setLastDebugInfo] = useState<{
+    timestamp: string;
+    source: string;
+    templateVersion: string;
+    status: string;
+    message?: string;
+  } | null>(null);
+
   async function handleGenerateReports() {
+    // REPORT_GEN_DEBUG: Mark button click
+    const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    console.log(`REPORT_GEN_DEBUG: handler_file=src/pages/WeeklyReportSend.tsx, handler_fn=handleGenerateReports`);
+    
+    toast({
+      title: 'REPORT_GEN_DEBUG: button_clicked',
+      description: `Source: WeeklyReportSend.handleGenerateReports at ${nowKST} KST`,
+    });
+
+    setLastDebugInfo({
+      timestamp: nowKST,
+      source: 'pending...',
+      templateVersion: 'pending...',
+      status: 'pending',
+    });
+
     setGenerating(true);
     try {
       const startStr = format(weekStart, 'yyyy-MM-dd');
@@ -180,6 +205,28 @@ export default function WeeklyReportSend() {
 
       if (error) throw error;
 
+      // Load template version for debug
+      let templateVersion = 'unknown';
+      try {
+        const { data: templates } = await supabase
+          .from('report_templates')
+          .select('version')
+          .eq('template_name', 'parent')
+          .eq('is_active', true)
+          .limit(1);
+        templateVersion = templates?.[0]?.version || 'no_active_template';
+      } catch (e) {
+        console.error('Failed to load template version for debug:', e);
+      }
+
+      setLastDebugInfo({
+        timestamp: nowKST,
+        source: 'rpc:generate_weekly_reports',
+        templateVersion,
+        status: 'success',
+        message: `${startStr} ~ ${endStr}`,
+      });
+
       toast({
         title: '리포트 생성 완료',
         description: `${startStr} ~ ${endStr} 기간의 주간 리포트가 생성되었습니다.`,
@@ -189,6 +236,14 @@ export default function WeeklyReportSend() {
       await fetchReports();
     } catch (error: any) {
       console.error('Error generating reports:', error);
+      
+      setLastDebugInfo(prev => prev ? {
+        ...prev,
+        source: 'rpc:generate_weekly_reports',
+        status: 'error',
+        message: error.message,
+      } : null);
+
       toast({
         title: '오류',
         description: error.message || '리포트 생성에 실패했습니다.',
@@ -579,6 +634,22 @@ export default function WeeklyReportSend() {
               리포트 생성
             </Button>
           </div>
+          
+          {/* REPORT_GEN_DEBUG: Debug info panel - Admin only */}
+          {lastDebugInfo && (
+            <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg font-mono text-xs">
+              <div className="font-bold text-yellow-800 dark:text-yellow-200 mb-1">
+                [REPORT_GEN_DEBUG_V1]
+              </div>
+              <div className="text-yellow-700 dark:text-yellow-300 space-y-0.5">
+                <div>source={lastDebugInfo.source}</div>
+                <div>templateVersion={lastDebugInfo.templateVersion}</div>
+                <div>time={lastDebugInfo.timestamp} (KST)</div>
+                <div>status={lastDebugInfo.status}</div>
+                {lastDebugInfo.message && <div>msg={lastDebugInfo.message}</div>}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -1,4 +1,5 @@
 // WEEKLY-SCHED-VERIFY-V1: Admin verification panel for weekly report schedule
+// REPORT_GEN_DEBUG: Button handler in handleManualTrigger()
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Clock, RefreshCw, Play, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+
+// Debug info type for tracking generation source
+interface DebugInfo {
+  timestamp: string;
+  source: string;
+  templateVersion: string;
+  status: 'pending' | 'success' | 'error';
+  message?: string;
+}
 import { format } from 'date-fns';
 
 interface JobLogEntry {
@@ -32,6 +42,7 @@ export function WeeklyScheduleVerification() {
   const [logs, setLogs] = useState<JobLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
+  const [lastDebugInfo, setLastDebugInfo] = useState<DebugInfo | null>(null);
   const { toast } = useToast();
 
   const fetchLogs = async () => {
@@ -62,13 +73,42 @@ export function WeeklyScheduleVerification() {
   }, []);
 
   const handleManualTrigger = async () => {
+    // REPORT_GEN_DEBUG: Mark button click
+    const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    console.log(`REPORT_GEN_DEBUG: handler_file=src/components/WeeklyScheduleVerification.tsx, handler_fn=handleManualTrigger`);
+    
+    toast({
+      title: 'REPORT_GEN_DEBUG: button_clicked',
+      description: `Source: WeeklyScheduleVerification.handleManualTrigger at ${nowKST} KST`,
+    });
+
+    setLastDebugInfo({
+      timestamp: nowKST,
+      source: 'pending...',
+      templateVersion: 'pending...',
+      status: 'pending',
+    });
+
     setTriggering(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-weekly-reports', {
-        body: { scheduled: false, manual: true },
+        body: { scheduled: false, manual: true, include_debug: true },
       });
 
       if (error) throw error;
+
+      // Extract debug info from response
+      const debugSource = data?._debug?.source || 'edge_function';
+      const templateVersion = data?._debug?.templateVersion || data?.prompt_versions?.parent || 'unknown';
+      
+      const debugInfo: DebugInfo = {
+        timestamp: nowKST,
+        source: debugSource,
+        templateVersion: templateVersion,
+        status: 'success',
+        message: `weekStart=${data?.weekStart}, weekEnd=${data?.weekEnd}`,
+      };
+      setLastDebugInfo(debugInfo);
 
       toast({
         title: '수동 실행 완료',
@@ -79,6 +119,13 @@ export function WeeklyScheduleVerification() {
       await fetchLogs();
     } catch (error: any) {
       console.error('Error triggering weekly reports:', error);
+      
+      setLastDebugInfo(prev => prev ? {
+        ...prev,
+        status: 'error',
+        message: error.message,
+      } : null);
+
       toast({
         title: '수동 실행 실패',
         description: error.message || '주간 리포트 생성에 실패했습니다.',
@@ -181,6 +228,22 @@ export function WeeklyScheduleVerification() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* REPORT_GEN_DEBUG: Debug info panel - Admin only */}
+        {lastDebugInfo && (
+          <div className="p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg font-mono text-xs">
+            <div className="font-bold text-yellow-800 dark:text-yellow-200 mb-1">
+              [REPORT_GEN_DEBUG_V1]
+            </div>
+            <div className="text-yellow-700 dark:text-yellow-300 space-y-0.5">
+              <div>source={lastDebugInfo.source}</div>
+              <div>templateVersion={lastDebugInfo.templateVersion}</div>
+              <div>time={lastDebugInfo.timestamp} (KST)</div>
+              <div>status={lastDebugInfo.status}</div>
+              {lastDebugInfo.message && <div>msg={lastDebugInfo.message}</div>}
+            </div>
+          </div>
+        )}
+
         {/* Schedule Info */}
         <div className="p-4 bg-secondary/50 rounded-lg border">
           <h4 className="font-medium mb-2 text-sm text-muted-foreground">현재 스케줄 설정</h4>
