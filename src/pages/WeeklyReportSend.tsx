@@ -51,8 +51,12 @@ import {
   AlertTriangle,
   Eye,
   FileEdit,
-  Copy
+  Copy,
+  Users,
+  Search,
+  UserCheck
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { format, startOfWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -107,6 +111,12 @@ interface ExcludedDraftInfo {
   lesson_date: string;
 }
 
+interface StudentOption {
+  id: string;
+  name: string;
+  grade: string | null;
+}
+
 export default function WeeklyReportSend() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -147,10 +157,29 @@ export default function WeeklyReportSend() {
   // Excluded drafts panel
   const [excludedDrafts, setExcludedDrafts] = useState<ExcludedDraftInfo[]>([]);
   const [excludedDraftsTeacherFilter, setExcludedDraftsTeacherFilter] = useState<string>('all');
+  
+  // Student selection for per-student generation
+  const [allStudents, setAllStudents] = useState<StudentOption[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [studentSearchTerm, setStudentSearchTerm] = useState<string>('');
 
   useEffect(() => {
     fetchFiltersData();
+    fetchAllStudents();
   }, []);
+
+  async function fetchAllStudents() {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, name, grade')
+        .order('name');
+      if (data) setAllStudents(data);
+      if (error) console.error('Error fetching students:', error);
+    } catch (e) {
+      console.error('Error fetching students:', e);
+    }
+  }
 
   async function fetchFiltersData() {
     try {
@@ -172,17 +201,22 @@ export default function WeeklyReportSend() {
     source: string;
     templateVersion: string;
     status: string;
+    scope?: string;
+    count?: number | string;
     message?: string;
   } | null>(null);
 
-  async function handleGenerateReports() {
+  async function handleGenerateReports(studentIds?: string[]) {
+    const scope = studentIds && studentIds.length > 0 ? 'selected' : 'all';
+    const count = studentIds?.length || 'all';
+    
     // REPORT_GEN_DEBUG: Mark button click
     const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
-    console.log(`REPORT_GEN_DEBUG: handler_file=src/pages/WeeklyReportSend.tsx, handler_fn=handleGenerateReports`);
+    console.log(`REPORT_GEN_DEBUG: handler_file=src/pages/WeeklyReportSend.tsx, handler_fn=handleGenerateReports, scope=${scope}, count=${count}`);
     
     toast({
       title: 'REPORT_GEN_DEBUG: button_clicked',
-      description: `Source: WeeklyReportSend.handleGenerateReports at ${nowKST} KST`,
+      description: `Source: WeeklyReportSend.handleGenerateReports scope=${scope} count=${count} at ${nowKST} KST`,
     });
 
     setLastDebugInfo({
@@ -190,6 +224,8 @@ export default function WeeklyReportSend() {
       source: 'pending...',
       templateVersion: 'pending...',
       status: 'pending',
+      scope,
+      count,
     });
 
     setGenerating(true);
@@ -197,11 +233,17 @@ export default function WeeklyReportSend() {
       const startStr = format(weekStart, 'yyyy-MM-dd');
       const endStr = format(weekEnd, 'yyyy-MM-dd');
 
-      // Call the database function
-      const { error } = await supabase.rpc('generate_weekly_reports', {
-        _week_start: startStr,
-        _week_end: endStr,
-      });
+      // Call the database function with optional student_ids
+      const { error } = studentIds && studentIds.length > 0
+        ? await supabase.rpc('generate_weekly_reports', {
+            _week_start: startStr,
+            _week_end: endStr,
+            _student_ids: studentIds,
+          })
+        : await supabase.rpc('generate_weekly_reports', {
+            _week_start: startStr,
+            _week_end: endStr,
+          });
 
       if (error) throw error;
 
@@ -224,16 +266,25 @@ export default function WeeklyReportSend() {
         source: 'rpc:generate_weekly_reports',
         templateVersion,
         status: 'success',
+        scope,
+        count,
         message: `${startStr} ~ ${endStr}`,
       });
 
       toast({
         title: '리포트 생성 완료',
-        description: `${startStr} ~ ${endStr} 기간의 주간 리포트가 생성되었습니다.`,
+        description: scope === 'selected' 
+          ? `${count}명의 학생 리포트가 생성되었습니다.`
+          : `${startStr} ~ ${endStr} 기간의 주간 리포트가 생성되었습니다.`,
       });
 
       // Fetch the generated reports
       await fetchReports();
+      
+      // Clear selection after successful generation
+      if (studentIds && studentIds.length > 0) {
+        setSelectedStudentIds(new Set());
+      }
     } catch (error: any) {
       console.error('Error generating reports:', error);
       
@@ -251,6 +302,51 @@ export default function WeeklyReportSend() {
       });
     } finally {
       setGenerating(false);
+    }
+  }
+
+  // Handler for generating reports for selected students only
+  function handleGenerateSelectedReports() {
+    if (selectedStudentIds.size === 0) {
+      toast({
+        title: '학생을 선택해주세요',
+        description: '리포트를 생성할 학생을 1명 이상 선택해야 합니다.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    handleGenerateReports(Array.from(selectedStudentIds));
+  }
+
+  // Filter students by search term
+  const filteredStudents = allStudents.filter(s => 
+    s.name.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+    (s.grade && s.grade.toLowerCase().includes(studentSearchTerm.toLowerCase()))
+  );
+
+  // Toggle student selection
+  function toggleStudentSelection(studentId: string) {
+    setSelectedStudentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(studentId)) {
+        next.delete(studentId);
+      } else {
+        next.add(studentId);
+      }
+      return next;
+    });
+  }
+
+  // Select/deselect all visible students
+  function toggleAllVisibleStudents(select: boolean) {
+    if (select) {
+      const newIds = new Set(selectedStudentIds);
+      filteredStudents.forEach(s => newIds.add(s.id));
+      setSelectedStudentIds(newIds);
+    } else {
+      const newIds = new Set(selectedStudentIds);
+      filteredStudents.forEach(s => newIds.delete(s.id));
+      setSelectedStudentIds(newIds);
     }
   }
 
@@ -624,14 +720,28 @@ export default function WeeklyReportSend() {
               </Popover>
             </div>
 
-            {/* Generate Button */}
-            <Button onClick={handleGenerateReports} disabled={generating}>
+            {/* Generate All Button */}
+            <Button onClick={() => handleGenerateReports()} disabled={generating} variant="default">
               {generating ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
+                <Users className="mr-2 h-4 w-4" />
               )}
-              리포트 생성
+              전체 생성
+            </Button>
+
+            {/* Generate Selected Button */}
+            <Button 
+              onClick={handleGenerateSelectedReports} 
+              disabled={generating || selectedStudentIds.size === 0}
+              variant="secondary"
+            >
+              {generating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <UserCheck className="mr-2 h-4 w-4" />
+              )}
+              선택 생성 ({selectedStudentIds.size}명)
             </Button>
           </div>
           
@@ -639,17 +749,96 @@ export default function WeeklyReportSend() {
           {lastDebugInfo && (
             <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg font-mono text-xs">
               <div className="font-bold text-yellow-800 dark:text-yellow-200 mb-1">
-                [REPORT_GEN_DEBUG_V1]
+                [REPORT_GEN_DEBUG_V2] scope={lastDebugInfo.scope || 'all'} count={lastDebugInfo.count || 'all'} templateVersion={lastDebugInfo.templateVersion}
               </div>
               <div className="text-yellow-700 dark:text-yellow-300 space-y-0.5">
                 <div>source={lastDebugInfo.source}</div>
-                <div>templateVersion={lastDebugInfo.templateVersion}</div>
                 <div>time={lastDebugInfo.timestamp} (KST)</div>
                 <div>status={lastDebugInfo.status}</div>
                 {lastDebugInfo.message && <div>msg={lastDebugInfo.message}</div>}
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Student Selection for Per-Student Generation */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <UserCheck className="h-5 w-5" />
+            학생 선택 (선택 생성용)
+            {selectedStudentIds.size > 0 && (
+              <span className="text-sm font-normal text-muted-foreground">
+                — {selectedStudentIds.size}명 선택됨
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="이름 또는 학년으로 검색..."
+              value={studentSearchTerm}
+              onChange={(e) => setStudentSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          
+          {/* Select All / Deselect All */}
+          <div className="flex items-center gap-4 text-sm">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => toggleAllVisibleStudents(true)}
+              disabled={filteredStudents.length === 0}
+            >
+              전체 선택
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => toggleAllVisibleStudents(false)}
+              disabled={selectedStudentIds.size === 0}
+            >
+              선택 해제
+            </Button>
+            <span className="text-muted-foreground">
+              {filteredStudents.length}명 표시 중
+            </span>
+          </div>
+
+          {/* Student List */}
+          <ScrollArea className="h-[200px] border rounded-md p-2">
+            <div className="space-y-1">
+              {filteredStudents.map(student => (
+                <div 
+                  key={student.id}
+                  className={cn(
+                    "flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors",
+                    selectedStudentIds.has(student.id) && "bg-primary/10"
+                  )}
+                  onClick={() => toggleStudentSelection(student.id)}
+                >
+                  <Checkbox 
+                    checked={selectedStudentIds.has(student.id)}
+                    onCheckedChange={() => toggleStudentSelection(student.id)}
+                  />
+                  <span className="font-medium">{student.name}</span>
+                  {student.grade && (
+                    <span className="text-sm text-muted-foreground">({student.grade})</span>
+                  )}
+                </div>
+              ))}
+              {filteredStudents.length === 0 && (
+                <div className="text-center text-muted-foreground py-4">
+                  검색 결과가 없습니다
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
