@@ -5,17 +5,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// v2.2-narrative-json: Enforced structured JSON output with strict validation
-const TEMPLATE_VERSION = 'v2.2-narrative-json';
+// v2.3-narrative-lock: Final save validation with strict narrative enforcement
+const TEMPLATE_VERSION = 'v2.3-narrative-lock';
 
-// Forbidden patterns for strict validation
+// Forbidden patterns for FINAL text validation (runs before save)
 const FORBIDDEN_PATTERNS = {
-  bulletPoints: /[·\-•]\s+/g,
+  bulletPoints: /[·•]\s+/g,
   newlineBullets: /\n[-•·]\s+/g,
+  dashBullets: /\n-\s+/g,
   keywordLists: /(학습\s*포인트|포인트|요약|정리|체크\s*리스트|다음\s*주\s*계획)\s*[:：]/gi,
   abstractEvaluations: /(전반적으로\s*(안정|양호|좋은|괜찮)|(잘\s*따라[오옴]|열심히\s*했|잘\s*했|노력\s*했|수고\s*했)|안정적인\s*흐름|안정적\s*학습|무난\s*하게|순조롭게|문제\s*없)/gi,
   forbiddenOpenings: /^(전반적으로|안정적인\s*흐름|이번\s*주\s*학습이\s*안정|전반적\s*학습)/i,
   genericClosings: /(지속\s*점검하겠습니다|계속\s*지켜보겠습니다|잘\s*이끌어|꾸준히\s*지도|앞으로도\s*잘)$/i,
+  bracketHeaders: /【[^】]+】/g, // Legacy bracket format like 【수학】
+  summaryBlocks: /수업\s*\d+회[,，]\s*(평균\s*)?이해도/g, // Summary blocks like "수업 3회, 평균 이해도"
 };
 
 // v2.2 JSON-first system prompt - forces structured JSON output
@@ -160,24 +163,33 @@ interface ValidationResult {
   violations: string[];
 }
 
-// Strict validation for final text output
-function validateNarrativeOutput(content: string): ValidationResult {
+// FINAL TEXT VALIDATOR - runs on the string that will be saved to DB
+// v2.3: Added bracket and summary block detection
+function validateFinalReportText(content: string): ValidationResult {
   const violations: string[] = [];
 
   // Reset regex lastIndex to avoid issues with global flags
-  FORBIDDEN_PATTERNS.bulletPoints.lastIndex = 0;
-  FORBIDDEN_PATTERNS.newlineBullets.lastIndex = 0;
-  FORBIDDEN_PATTERNS.keywordLists.lastIndex = 0;
-  FORBIDDEN_PATTERNS.abstractEvaluations.lastIndex = 0;
+  Object.values(FORBIDDEN_PATTERNS).forEach(pattern => {
+    if (pattern instanceof RegExp) {
+      pattern.lastIndex = 0;
+    }
+  });
 
-  // Check for bullet points
+  // Check for bullet points (·, •)
   if (FORBIDDEN_PATTERNS.bulletPoints.test(content)) {
     violations.push('BULLET_POINTS_DETECTED');
   }
 
   // Check for newline bullets
+  FORBIDDEN_PATTERNS.newlineBullets.lastIndex = 0;
   if (FORBIDDEN_PATTERNS.newlineBullets.test(content)) {
     violations.push('NEWLINE_BULLETS_DETECTED');
+  }
+
+  // Check for dash bullets ("\n- ")
+  FORBIDDEN_PATTERNS.dashBullets.lastIndex = 0;
+  if (FORBIDDEN_PATTERNS.dashBullets.test(content)) {
+    violations.push('DASH_BULLETS_DETECTED');
   }
 
   // Check for keyword lists
@@ -202,6 +214,23 @@ function validateNarrativeOutput(content: string): ValidationResult {
   const closing = content.slice(-150);
   if (FORBIDDEN_PATTERNS.genericClosings.test(closing)) {
     violations.push('GENERIC_CLOSING_DETECTED');
+  }
+
+  // NEW v2.3: Check for legacy bracket headers 【...】
+  FORBIDDEN_PATTERNS.bracketHeaders.lastIndex = 0;
+  if (FORBIDDEN_PATTERNS.bracketHeaders.test(content)) {
+    violations.push('BRACKET_HEADER_DETECTED');
+  }
+
+  // NEW v2.3: Check for summary blocks like "수업 3회, 평균 이해도"
+  FORBIDDEN_PATTERNS.summaryBlocks.lastIndex = 0;
+  if (FORBIDDEN_PATTERNS.summaryBlocks.test(content)) {
+    violations.push('SUMMARY_BLOCK_DETECTED');
+  }
+
+  // Check if content starts with 【
+  if (content.trim().startsWith('【')) {
+    violations.push('STARTS_WITH_BRACKET');
   }
 
   return {
@@ -253,37 +282,35 @@ function parseJsonResponse(content: string): JsonReportOutput | null {
   }
 }
 
-// Render final report text from JSON structure
+// v2.3 Narrative renderer - NO bullets, NO brackets, pure paragraphs
 function renderReportFromJson(json: JsonReportOutput, studentName: string): string {
   let report = '';
 
-  // Opening note
+  // Opening note as first paragraph
   report += json.openingNote + '\n\n';
 
-  // Each subject section
+  // Each subject section - use ■ instead of 【】
   for (const subject of json.subjects) {
-    report += `【${subject.subject}】\n`;
+    report += `■ ${subject.subject}\n\n`;
     
-    // Add 3 paragraphs
+    // Add 3 paragraphs as continuous narrative text
     for (const paragraph of subject.paragraphs) {
-      report += paragraph + '\n';
+      report += paragraph + '\n\n';
     }
 
-    // Add optional summaries if present
+    // Add optional summaries as embedded sentences (not bullets)
     if (subject.testsSummary) {
-      report += subject.testsSummary + '\n';
+      report += subject.testsSummary + '\n\n';
     }
     if (subject.homeworkSummary) {
-      report += subject.homeworkSummary + '\n';
+      report += subject.homeworkSummary + '\n\n';
     }
     if (subject.attendanceImpact) {
-      report += subject.attendanceImpact + '\n';
+      report += subject.attendanceImpact + '\n\n';
     }
-
-    report += '\n';
   }
 
-  // Closing note
+  // Closing note as final paragraph
   report += json.closingNote;
 
   return report.trim();
@@ -358,7 +385,7 @@ async function generateParentReportWithRetry(
     const renderedText = renderReportFromJson(lastJson, '');
     
     // Validate rendered text
-    const validation = validateNarrativeOutput(renderedText);
+    const validation = validateFinalReportText(renderedText);
     lastViolations = validation.violations;
 
     console.log(`[generate-ai-report] Attempt ${attempts} validation:`, validation.isValid ? 'PASSED' : `FAILED (${lastViolations.join(', ')})`);
@@ -412,7 +439,7 @@ Deno.serve(async (req) => {
 
     const { student_id, student_name, week_start, week_end } = await req.json() as GenerateReportRequest;
 
-    console.log(`[REPORT_GEN_DEBUG_V2.2] templateVersion=${TEMPLATE_VERSION}`);
+    console.log(`[REPORT_GEN_DEBUG_V2.3] templateVersion=${TEMPLATE_VERSION}`);
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
 
     // Fetch this week's lesson records
@@ -519,7 +546,7 @@ Deno.serve(async (req) => {
       console.log('[generate-ai-report] Insufficient narrative data - marking as RED');
       
       const parentHeader = formatParentHeader(student_name, week_start, week_end);
-      const debugMarker = `[REPORT_GEN_DEBUG_V2.2] templateVersion=${TEMPLATE_VERSION} retries=0 tag=RED`;
+      const debugMarker = `[REPORT_GEN_DEBUG_V2.3] templateVersion=${TEMPLATE_VERSION} retries=0 validator=fail tag=RED`;
       
       // Generate fallback student message
       const studentMessageContent = await generateStudentMessage(
@@ -600,7 +627,7 @@ Deno.serve(async (req) => {
 
     // Format final messages with version marker for admin
     const parentHeader = formatParentHeader(student_name, week_start, week_end);
-    const debugMarker = `[REPORT_GEN_DEBUG_V2.2] templateVersion=${TEMPLATE_VERSION} retries=${parentResult.attempts} tag=${parentResult.adminTag}`;
+    const debugMarker = `[REPORT_GEN_DEBUG_V2.3] templateVersion=${TEMPLATE_VERSION} retries=${parentResult.attempts} validator=${parentResult.isValid ? 'pass' : 'fail'} tag=${parentResult.adminTag}`;
     
     return new Response(
       JSON.stringify({
@@ -682,7 +709,7 @@ function buildJsonUserPrompt(
 === 이번 주 수업 데이터 ===\n\n`;
 
   for (const [subject, data] of Object.entries(subjectData)) {
-    prompt += `【${subject}】 수업 ${data.lessons.length}회\n`;
+    prompt += `[${subject}] 수업 ${data.lessons.length}회\n`;
     
     for (const lesson of data.lessons) {
       prompt += `날짜: ${lesson.lesson_date}\n`;
@@ -826,7 +853,7 @@ ${Object.entries(subjectData).map(([subject, data]) => {
     const content = result.choices?.[0]?.message?.content || '';
     
     // Validate student message too
-    const validation = validateNarrativeOutput(content);
+    const validation = validateFinalReportText(content);
     if (!validation.isValid) {
       console.warn('[generate-ai-report] Student message validation failed:', validation.violations);
     }
