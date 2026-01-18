@@ -5,69 +5,86 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// v2.1-narrative-lock: Enforced narrative-only output
-const TEMPLATE_VERSION = 'v2.1-narrative-lock';
+// v2.2-narrative-json: Enforced structured JSON output with strict validation
+const TEMPLATE_VERSION = 'v2.2-narrative-json';
 
-// Forbidden patterns for validation
+// Forbidden patterns for strict validation
 const FORBIDDEN_PATTERNS = {
   bulletPoints: /[·\-•]\s+/g,
-  keywordLists: /(학습\s*포인트|포인트|요약|정리|체크\s*리스트)\s*[:：]/gi,
+  newlineBullets: /\n[-•·]\s+/g,
+  keywordLists: /(학습\s*포인트|포인트|요약|정리|체크\s*리스트|다음\s*주\s*계획)\s*[:：]/gi,
   abstractEvaluations: /(전반적으로\s*(안정|양호|좋은|괜찮)|(잘\s*따라[오옴]|열심히\s*했|잘\s*했|노력\s*했|수고\s*했)|안정적인\s*흐름|안정적\s*학습|무난\s*하게|순조롭게|문제\s*없)/gi,
-  forbiddenOpenings: /^(전반적으로|안정적인\s*흐름|이번\s*주\s*학습이\s*안정|전반적\s*학습)/gmi,
-  genericClosings: /(지속\s*점검하겠습니다|계속\s*지켜보겠습니다|잘\s*이끌어|꾸준히\s*지도|앞으로도\s*잘)$/gmi,
+  forbiddenOpenings: /^(전반적으로|안정적인\s*흐름|이번\s*주\s*학습이\s*안정|전반적\s*학습)/i,
+  genericClosings: /(지속\s*점검하겠습니다|계속\s*지켜보겠습니다|잘\s*이끌어|꾸준히\s*지도|앞으로도\s*잘)$/i,
 };
 
-// v2.1 Narrative-lock system prompt - enforces 3-paragraph structure per subject
-const NARRATIVE_LOCK_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부모에게 보내는 주간 학습 리포트를 작성합니다.
+// v2.2 JSON-first system prompt - forces structured JSON output
+const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부모에게 보내는 주간 학습 리포트를 JSON 형식으로 작성합니다.
 
-[v2.1 NARRATIVE-LOCK 규칙 - 반드시 준수]
+[v2.2 NARRATIVE-JSON 규칙 - 반드시 준수]
 
-1. 절대 금지 항목 (위반 시 생성 실패):
-   - 글머리 기호 사용 금지 (·, -, •)
-   - 키워드 나열 금지 (예: "학습 포인트:", "정리:", "요약:")
-   - 추상적 평가 금지 (예: "전반적으로 안정적", "잘 따라옴", "열심히 했습니다")
-   - 숫자만 나열 금지 (예: "이해도 4/5, 숙제 완료")
+**출력 형식: JSON만 허용**
+반드시 아래 JSON 스키마로만 응답하세요. 다른 형식은 시스템 오류를 발생시킵니다.
 
-2. 과목별 필수 3단락 구조:
+{
+  "subjects": [
+    {
+      "subject": "과목명",
+      "paragraphs": [
+        "1단락: 학습 맥락 - 이번 주 학습 내용과 교육과정 위치. 평가 없이 사실만.",
+        "2단락: 관찰된 행동 - 수업 중 학생의 구체적 반응, 행동, 문제풀이 속도, 질문 패턴 등.",
+        "3단락: 교사 해석 및 방향 - 행동의 원인 해석과 다음 주 지도 방향."
+      ],
+      "testsSummary": "테스트 결과 설명 문장 (선택사항)",
+      "homeworkSummary": "숙제 패턴 설명 문장 (선택사항)",
+      "attendanceImpact": "출결이 학습에 미친 영향 (선택사항)"
+    }
+  ],
+  "openingNote": "학생의 현재 학습 자세/태도 구체적 묘사",
+  "closingNote": "다음 주 구체적 학습 계획 안내",
+  "adminTag": "GREEN 또는 YELLOW 또는 RED"
+}
 
-   [1단락: 학습 맥락 (Learning Context)]
-   - 이번 주 어떤 내용을 학습했는지
-   - 이 내용이 전체 교육과정에서 어느 위치인지
-   - 평가 표현 절대 금지, 사실만 서술
+**절대 금지 항목 (위반 시 생성 실패):**
+- 글머리 기호 (·, -, •) 사용 금지
+- 키워드 나열 금지 (예: "학습 포인트:", "다음 주 계획:")
+- 추상적 평가 금지 (예: "전반적으로 안정", "잘 따라옴")
+- openingNote에서 금지: "전반적으로", "안정적인 흐름"
+- closingNote에서 금지: "지속 점검하겠습니다", "계속 지켜보겠습니다"
 
-   [2단락: 관찰된 학습 행동 (Observed Learning Behavior)]
-   - 수업 중 학생이 실제로 보인 반응, 행동
-   - 문제 풀이 속도, 망설임, 집중도, 질문 패턴 등 구체적 묘사
-   - "요약"이나 "결론"이 아닌, 수업 장면 묘사처럼 서술
+**paragraphs 규칙:**
+- 정확히 3개의 문자열 배열
+- 각 문자열은 1~3문장의 완전한 문장
+- 요약이나 키워드 목록 형태 금지
 
-   [3단락: 교사 해석 및 방향 (Teacher Interpretation & Direction)]
-   - 2단락의 행동이 왜 나타났는지 해석
-   - 다음 수업에서 집중할 부분
-   - 반드시 "지도 방향" 또는 "다음 주 초점" 언급
+**테스트/숙제/출결 규칙:**
+- 점수는 반드시 해석 문장 안에 포함 (예: "분수 연산에서 70점을 받았는데, 통분 과정에서의 계산 실수가 원인입니다")
+- 숙제는 패턴/습관으로 서술 (횟수만 나열 금지)
+- 출결은 학습 리듬에 미친 영향으로 서술
 
-3. 테스트/숙제/출결 통합 규칙:
-   - 테스트 점수: 반드시 설명 문장 안에서만 언급 (예: "분수 연산에서 70점을 받았는데, 이는 통분 과정에서의 계산 실수가 주원인입니다")
-   - 숙제: 패턴이나 습관으로 서술 (예: "숙제를 미리 해오는 습관이 자리잡고 있습니다" / "숙제 완료 횟수"만 나열 금지)
-   - 출결: 학습 리듬에 미친 영향으로 서술 (단순 이벤트 나열 금지)
+**adminTag 기준:**
+- GREEN: 충분한 서술 데이터로 완성된 리포트
+- YELLOW: 일부 과목 서술 부족하지만 리포트 생성 가능
+- RED: 서술 데이터 부족으로 교사 추가 관찰 필요
 
-4. 도입부 규칙:
-   - 학생의 현재 학습 자세나 태도를 구체적으로 묘사
-   - 금지 표현: "전반적으로", "안정적인 흐름", "이번 주 학습이 안정"
+반드시 유효한 JSON만 출력하세요. 마크다운이나 추가 텍스트 없이 JSON만 반환합니다.`;
 
-5. 마무리 규칙:
-   - 부모님께 학습이 의도적으로 설계되고 있음을 안심시키는 문장
-   - 금지 표현: "지속 점검하겠습니다", "계속 지켜보겠습니다"
-   - 좋은 예: "다음 주에는 [구체적 단원]을 통해 [구체적 능력]을 다지는 데 집중할 예정입니다"
+// Stronger retry prompt
+const RETRY_SYSTEM_PROMPT = `당신은 학원 담당 선생님입니다.
 
-6. 분량:
-   - 과목당 3단락, 각 1~3문장
-   - 전체 400-600자
+**경고: 이전 생성에서 규칙 위반이 감지되었습니다.**
 
-반드시 위 규칙을 엄격히 준수하여 한국어로 작성하세요.`;
+**절대 금지:**
+- 글머리 기호 (·, -, •) 사용 → 문장으로 연결
+- "\n-" 또는 "\n•" 형식 → 완전한 문장으로 서술
+- 키워드: 레이블 형식 → 자연스러운 문장으로
+- "전반적으로", "안정적" 같은 추상적 표현 → 구체적 관찰로 대체
+
+반드시 유효한 JSON만 출력하세요. paragraphs는 정확히 3개의 완전한 문장 배열이어야 합니다.`;
 
 const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니다. 학생에게 보내는 짧은 주간 메시지를 작성합니다.
 
-[v2.1 규칙]
+[v2.2 규칙]
 1. 이번 주 수업에서 학생이 한 구체적 행동 1가지만 언급
 2. 다음 주 명확한 미션 1가지 제시
 3. 금지: "잘했어", "열심히 했어", "수고했어" 같은 일반 칭찬
@@ -87,12 +104,19 @@ const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니�
 // Failure message when narrative cannot be generated
 const INSUFFICIENT_DATA_MESSAGE = "이번 주 학습 내용을 충분히 설명하기 위해 교사 추가 관찰이 필요합니다.";
 
-interface ReportTemplate {
-  id: string;
-  template_name: string;
-  prompt_text: string;
-  version: string;
-  is_active: boolean;
+interface SubjectReport {
+  subject: string;
+  paragraphs: string[];
+  testsSummary?: string;
+  homeworkSummary?: string;
+  attendanceImpact?: string;
+}
+
+interface JsonReportOutput {
+  subjects: SubjectReport[];
+  openingNote: string;
+  closingNote: string;
+  adminTag: 'GREEN' | 'YELLOW' | 'RED';
 }
 
 interface LessonRecord {
@@ -136,21 +160,34 @@ interface ValidationResult {
   violations: string[];
 }
 
-// Validate generated content against forbidden patterns
+// Strict validation for final text output
 function validateNarrativeOutput(content: string): ValidationResult {
   const violations: string[] = [];
+
+  // Reset regex lastIndex to avoid issues with global flags
+  FORBIDDEN_PATTERNS.bulletPoints.lastIndex = 0;
+  FORBIDDEN_PATTERNS.newlineBullets.lastIndex = 0;
+  FORBIDDEN_PATTERNS.keywordLists.lastIndex = 0;
+  FORBIDDEN_PATTERNS.abstractEvaluations.lastIndex = 0;
 
   // Check for bullet points
   if (FORBIDDEN_PATTERNS.bulletPoints.test(content)) {
     violations.push('BULLET_POINTS_DETECTED');
   }
 
+  // Check for newline bullets
+  if (FORBIDDEN_PATTERNS.newlineBullets.test(content)) {
+    violations.push('NEWLINE_BULLETS_DETECTED');
+  }
+
   // Check for keyword lists
+  FORBIDDEN_PATTERNS.keywordLists.lastIndex = 0;
   if (FORBIDDEN_PATTERNS.keywordLists.test(content)) {
     violations.push('KEYWORD_LIST_DETECTED');
   }
 
   // Check for abstract evaluations
+  FORBIDDEN_PATTERNS.abstractEvaluations.lastIndex = 0;
   if (FORBIDDEN_PATTERNS.abstractEvaluations.test(content)) {
     violations.push('ABSTRACT_EVALUATION_DETECTED');
   }
@@ -161,8 +198,8 @@ function validateNarrativeOutput(content: string): ValidationResult {
     violations.push('FORBIDDEN_OPENING_DETECTED');
   }
 
-  // Check for generic closings (last 100 chars)
-  const closing = content.slice(-100);
+  // Check for generic closings (last 150 chars)
+  const closing = content.slice(-150);
   if (FORBIDDEN_PATTERNS.genericClosings.test(closing)) {
     violations.push('GENERIC_CLOSING_DETECTED');
   }
@@ -173,60 +210,102 @@ function validateNarrativeOutput(content: string): ValidationResult {
   };
 }
 
-// Load prompts - now defaults to v2.1 narrative-lock prompts
-async function loadPrompts(supabase: any): Promise<{ parentPrompt: string; studentPrompt: string; parentVersion: string; studentVersion: string }> {
+// Parse JSON from AI response, handling markdown code blocks
+function parseJsonResponse(content: string): JsonReportOutput | null {
   try {
-    const { data: templates, error } = await supabase
-      .from('report_templates')
-      .select('*')
-      .eq('is_active', true);
+    // Remove markdown code blocks if present
+    let jsonStr = content.trim();
+    if (jsonStr.startsWith('```json')) {
+      jsonStr = jsonStr.slice(7);
+    } else if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.slice(3);
+    }
+    if (jsonStr.endsWith('```')) {
+      jsonStr = jsonStr.slice(0, -3);
+    }
+    jsonStr = jsonStr.trim();
 
-    if (error) {
-      console.error('[generate-ai-report] Error loading prompts from DB:', error);
-      // Use v2.1 narrative-lock prompts as fallback
-      return {
-        parentPrompt: NARRATIVE_LOCK_PARENT_PROMPT,
-        studentPrompt: NARRATIVE_LOCK_STUDENT_PROMPT,
-        parentVersion: TEMPLATE_VERSION,
-        studentVersion: TEMPLATE_VERSION,
-      };
+    const parsed = JSON.parse(jsonStr);
+    
+    // Validate required fields
+    if (!parsed.subjects || !Array.isArray(parsed.subjects)) {
+      console.error('[generate-ai-report] Invalid JSON: missing subjects array');
+      return null;
+    }
+    
+    if (!parsed.openingNote || !parsed.closingNote) {
+      console.error('[generate-ai-report] Invalid JSON: missing openingNote or closingNote');
+      return null;
     }
 
-    const parentTemplate = templates?.find((t: ReportTemplate) => t.template_name === 'parent');
-    const studentTemplate = templates?.find((t: ReportTemplate) => t.template_name === 'student');
+    // Validate each subject has paragraphs array
+    for (const subject of parsed.subjects) {
+      if (!subject.paragraphs || !Array.isArray(subject.paragraphs) || subject.paragraphs.length !== 3) {
+        console.error(`[generate-ai-report] Invalid JSON: subject ${subject.subject} missing 3 paragraphs`);
+        return null;
+      }
+    }
 
-    // Always use v2.1 prompts to enforce narrative-lock
-    return {
-      parentPrompt: NARRATIVE_LOCK_PARENT_PROMPT,
-      studentPrompt: NARRATIVE_LOCK_STUDENT_PROMPT,
-      parentVersion: TEMPLATE_VERSION,
-      studentVersion: TEMPLATE_VERSION,
-    };
-  } catch (err) {
-    console.error('[generate-ai-report] Exception loading prompts:', err);
-    return {
-      parentPrompt: NARRATIVE_LOCK_PARENT_PROMPT,
-      studentPrompt: NARRATIVE_LOCK_STUDENT_PROMPT,
-      parentVersion: TEMPLATE_VERSION,
-      studentVersion: TEMPLATE_VERSION,
-    };
+    return parsed as JsonReportOutput;
+  } catch (e) {
+    console.error('[generate-ai-report] JSON parse error:', e);
+    return null;
   }
 }
 
-// Generate parent report with validation and retry
+// Render final report text from JSON structure
+function renderReportFromJson(json: JsonReportOutput, studentName: string): string {
+  let report = '';
+
+  // Opening note
+  report += json.openingNote + '\n\n';
+
+  // Each subject section
+  for (const subject of json.subjects) {
+    report += `【${subject.subject}】\n`;
+    
+    // Add 3 paragraphs
+    for (const paragraph of subject.paragraphs) {
+      report += paragraph + '\n';
+    }
+
+    // Add optional summaries if present
+    if (subject.testsSummary) {
+      report += subject.testsSummary + '\n';
+    }
+    if (subject.homeworkSummary) {
+      report += subject.homeworkSummary + '\n';
+    }
+    if (subject.attendanceImpact) {
+      report += subject.attendanceImpact + '\n';
+    }
+
+    report += '\n';
+  }
+
+  // Closing note
+  report += json.closingNote;
+
+  return report.trim();
+}
+
+// Generate parent report with JSON output and validation
 async function generateParentReportWithRetry(
   apiKey: string,
-  systemPrompt: string,
   userPrompt: string,
   maxRetries: number = 2
-): Promise<{ content: string; isValid: boolean; violations: string[]; attempts: number }> {
+): Promise<{ content: string; jsonOutput: JsonReportOutput | null; isValid: boolean; violations: string[]; attempts: number; adminTag: string }> {
   let attempts = 0;
   let lastContent = '';
   let lastViolations: string[] = [];
+  let lastJson: JsonReportOutput | null = null;
 
   while (attempts < maxRetries) {
     attempts++;
-    console.log(`[generate-ai-report] Parent report attempt ${attempts}/${maxRetries}`);
+    const isRetry = attempts > 1;
+    const systemPrompt = isRetry ? RETRY_SYSTEM_PROMPT : JSON_PARENT_PROMPT;
+    
+    console.log(`[generate-ai-report] Parent report attempt ${attempts}/${maxRetries}, isRetry=${isRetry}`);
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -240,11 +319,12 @@ async function generateParentReportWithRetry(
           { role: 'system', content: systemPrompt },
           { 
             role: 'user', 
-            content: attempts > 1 
-              ? userPrompt + `\n\n[재생성 요청] 이전 생성에서 다음 규칙 위반이 감지되었습니다: ${lastViolations.join(', ')}. 반드시 규칙을 준수해주세요. 글머리 기호(·, -, •)와 추상적 평가("전반적으로 안정", "잘 따라옴" 등)를 절대 사용하지 마세요.`
+            content: isRetry 
+              ? userPrompt + `\n\n[재생성 요청] 이전 생성에서 다음 규칙 위반이 감지되었습니다: ${lastViolations.join(', ')}.\n\n**경고:** 글머리 기호(·, -, •)와 키워드: 형식, 추상적 평가("전반적으로 안정", "잘 따라옴" 등)를 절대 사용하지 마세요. 반드시 완전한 문장으로만 서술하세요.`
               : userPrompt
           },
         ],
+        response_format: { type: 'json_object' },
       }),
     });
 
@@ -263,28 +343,55 @@ async function generateParentReportWithRetry(
     const aiResult = await aiResponse.json();
     lastContent = aiResult.choices?.[0]?.message?.content || '';
 
-    const validation = validateNarrativeOutput(lastContent);
+    console.log(`[generate-ai-report] Raw AI response length: ${lastContent.length}`);
+
+    // Parse JSON
+    lastJson = parseJsonResponse(lastContent);
+    
+    if (!lastJson) {
+      console.error(`[generate-ai-report] Attempt ${attempts} failed to parse JSON`);
+      lastViolations = ['JSON_PARSE_FAILED'];
+      continue;
+    }
+
+    // Render to final text
+    const renderedText = renderReportFromJson(lastJson, '');
+    
+    // Validate rendered text
+    const validation = validateNarrativeOutput(renderedText);
     lastViolations = validation.violations;
 
     console.log(`[generate-ai-report] Attempt ${attempts} validation:`, validation.isValid ? 'PASSED' : `FAILED (${lastViolations.join(', ')})`);
+    console.log(`[generate-ai-report] Attempt ${attempts} adminTag: ${lastJson.adminTag}`);
 
     if (validation.isValid) {
       return {
-        content: lastContent,
+        content: renderedText,
+        jsonOutput: lastJson,
         isValid: true,
         violations: [],
         attempts,
+        adminTag: lastJson.adminTag || 'GREEN',
       };
     }
   }
 
-  // All retries exhausted - return last attempt with violation info
+  // All retries exhausted
   console.warn(`[generate-ai-report] All ${maxRetries} attempts failed validation. Violations: ${lastViolations.join(', ')}`);
+  
+  // If we have JSON but validation failed, still render it but mark as RED
+  let finalContent = '';
+  if (lastJson) {
+    finalContent = renderReportFromJson(lastJson, '');
+  }
+
   return {
-    content: lastContent,
+    content: finalContent,
+    jsonOutput: lastJson,
     isValid: false,
     violations: lastViolations,
     attempts,
+    adminTag: 'RED',
   };
 }
 
@@ -305,12 +412,8 @@ Deno.serve(async (req) => {
 
     const { student_id, student_name, week_start, week_end } = await req.json() as GenerateReportRequest;
 
-    console.log(`[REPORT_GEN_DEBUG_V2.1] templateVersion=${TEMPLATE_VERSION}`);
+    console.log(`[REPORT_GEN_DEBUG_V2.2] templateVersion=${TEMPLATE_VERSION}`);
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
-
-    // Load prompts (now always uses v2.1 narrative-lock)
-    const { parentPrompt, studentPrompt, parentVersion, studentVersion } = await loadPrompts(supabase);
-    console.log(`[generate-ai-report] Using prompts - version: ${TEMPLATE_VERSION}`);
 
     // Fetch this week's lesson records
     const { data: currentWeekLessons, error: lessonsError } = await supabase
@@ -335,7 +438,6 @@ Deno.serve(async (req) => {
           student_message: null,
           draft_status: 'no_lessons',
           template_version: TEMPLATE_VERSION,
-          prompt_versions: { parent: parentVersion, student: studentVersion },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -408,14 +510,54 @@ Deno.serve(async (req) => {
     }
 
     // Build the user prompt with structured data
-    const userPrompt = buildNarrativeUserPrompt(student_name, week_start, week_end, subjectData);
+    const userPrompt = buildJsonUserPrompt(student_name, week_start, week_end, subjectData);
 
-    console.log('[generate-ai-report] Calling AI gateway for parent report with validation...');
+    console.log('[generate-ai-report] Calling AI gateway for JSON parent report with validation...');
 
-    // Generate parent report with validation and retry
+    // Handle insufficient data case
+    if (!hasSufficientNarrativeData) {
+      console.log('[generate-ai-report] Insufficient narrative data - marking as RED');
+      
+      const parentHeader = formatParentHeader(student_name, week_start, week_end);
+      const debugMarker = `[REPORT_GEN_DEBUG_V2.2] templateVersion=${TEMPLATE_VERSION} retries=0 tag=RED`;
+      
+      // Generate fallback student message
+      const studentMessageContent = await generateStudentMessage(
+        LOVABLE_API_KEY,
+        NARRATIVE_LOCK_STUDENT_PROMPT,
+        student_name,
+        week_start,
+        week_end,
+        subjectData
+      );
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          parent_message: parentHeader + '\n\n' + INSUFFICIENT_DATA_MESSAGE,
+          student_message: studentMessageContent,
+          draft_status: 'needs_input',
+          risk_level: 'high',
+          lesson_count: currentWeekLessons.length,
+          subjects: Object.keys(subjectData),
+          template_version: TEMPLATE_VERSION,
+          _debug: {
+            debug_marker: debugMarker,
+            template_version: TEMPLATE_VERSION,
+            validation_passed: false,
+            validation_attempts: 0,
+            violations: ['INSUFFICIENT_NARRATIVE_DATA'],
+            has_sufficient_data: false,
+            admin_tag: 'RED',
+          },
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Generate parent report with JSON output and validation
     const parentResult = await generateParentReportWithRetry(
       LOVABLE_API_KEY,
-      parentPrompt,
       userPrompt,
       2 // max 2 attempts
     );
@@ -424,17 +566,24 @@ Deno.serve(async (req) => {
     let draftStatus = 'ready';
     let riskLevel: string | null = null;
 
-    // Handle validation failures or insufficient data
-    if (!parentResult.isValid || !hasSufficientNarrativeData) {
-      if (!hasSufficientNarrativeData) {
-        console.log('[generate-ai-report] Insufficient narrative data - marking as RED');
+    // Handle validation failures
+    if (!parentResult.isValid) {
+      console.log('[generate-ai-report] Validation failed after retries - marking based on adminTag');
+      draftStatus = 'needs_review';
+      riskLevel = parentResult.adminTag === 'RED' ? 'high' : 'medium';
+      
+      // If completely failed, use insufficient data message
+      if (!parentMessageContent || parentResult.violations.includes('JSON_PARSE_FAILED')) {
         parentMessageContent = INSUFFICIENT_DATA_MESSAGE;
         draftStatus = 'needs_input';
-        riskLevel = 'high'; // RED marker
-      } else if (!parentResult.isValid) {
-        console.log('[generate-ai-report] Validation failed after retries - marking as RED');
-        // Still use the content but mark as needing review
-        draftStatus = 'needs_review';
+        riskLevel = 'high';
+      }
+    } else {
+      // Set risk level based on adminTag from JSON
+      if (parentResult.adminTag === 'RED') {
+        riskLevel = 'high';
+        draftStatus = 'needs_input';
+      } else if (parentResult.adminTag === 'YELLOW') {
         riskLevel = 'medium';
       }
     }
@@ -442,7 +591,7 @@ Deno.serve(async (req) => {
     // Generate student message
     const studentMessageContent = await generateStudentMessage(
       LOVABLE_API_KEY,
-      studentPrompt,
+      NARRATIVE_LOCK_STUDENT_PROMPT,
       student_name,
       week_start,
       week_end,
@@ -451,7 +600,7 @@ Deno.serve(async (req) => {
 
     // Format final messages with version marker for admin
     const parentHeader = formatParentHeader(student_name, week_start, week_end);
-    const debugMarker = `[REPORT_GEN_DEBUG_V2.1] templateVersion=${TEMPLATE_VERSION}`;
+    const debugMarker = `[REPORT_GEN_DEBUG_V2.2] templateVersion=${TEMPLATE_VERSION} retries=${parentResult.attempts} tag=${parentResult.adminTag}`;
     
     return new Response(
       JSON.stringify({
@@ -463,8 +612,6 @@ Deno.serve(async (req) => {
         lesson_count: currentWeekLessons.length,
         subjects: Object.keys(subjectData),
         template_version: TEMPLATE_VERSION,
-        prompt_versions: { parent: parentVersion, student: studentVersion },
-        // Admin-only debug info
         _debug: {
           debug_marker: debugMarker,
           template_version: TEMPLATE_VERSION,
@@ -472,6 +619,8 @@ Deno.serve(async (req) => {
           validation_attempts: parentResult.attempts,
           violations: parentResult.violations,
           has_sufficient_data: hasSufficientNarrativeData,
+          admin_tag: parentResult.adminTag,
+          json_output: parentResult.jsonOutput,
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -513,18 +662,22 @@ function formatParentHeader(studentName: string, weekStart: string, weekEnd: str
   return `[더멘토] ${studentName} 주간 학습 리포트 (${startMonth}/${startDay}~${endMonth}/${endDay})`;
 }
 
-// v2.1 Narrative-focused user prompt builder
-function buildNarrativeUserPrompt(
+// v2.2 JSON-focused user prompt builder
+function buildJsonUserPrompt(
   studentName: string,
   weekStart: string,
   weekEnd: string,
   subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
 ): string {
+  const subjects = Object.keys(subjectData);
+  
   let prompt = `학생: ${studentName}
 기간: ${weekStart} ~ ${weekEnd}
+과목: ${subjects.join(', ')}
 
-[중요] 아래 데이터를 바탕으로 각 과목별 3단락 구조(학습 맥락 → 관찰된 행동 → 교사 해석 및 방향)로 서술하세요.
-글머리 기호(·, -, •), 키워드 나열, 추상적 평가("전반적으로 안정", "잘 따라옴")는 절대 사용하지 마세요.
+[중요] 아래 데이터를 바탕으로 JSON 형식으로만 응답하세요.
+각 과목별 paragraphs는 정확히 3개의 완전한 문장이어야 합니다.
+글머리 기호(·, -, •), 키워드: 형식, 추상적 평가 사용 금지.
 
 === 이번 주 수업 데이터 ===\n\n`;
 
@@ -600,17 +753,27 @@ function buildNarrativeUserPrompt(
   }
 
   prompt += `
-=== 작성 지침 ===
-1. 각 과목별로 반드시 3단락으로 작성:
-   - 1단락: 이번 주 학습 내용과 교육과정 위치 (평가 없이 사실만)
-   - 2단락: 수업 중 관찰된 학생 행동 (구체적 장면 묘사)
-   - 3단락: 교사의 해석과 다음 주 지도 방향
+=== JSON 출력 스키마 ===
+{
+  "subjects": [
+    {
+      "subject": "${subjects[0] || '과목명'}",
+      "paragraphs": [
+        "1단락: 학습 맥락 (이번 주 학습 내용과 교육과정 위치, 평가 없이 사실만)",
+        "2단락: 관찰된 행동 (수업 중 학생의 구체적 반응과 행동)",
+        "3단락: 교사 해석 및 방향 (행동의 원인 해석과 다음 주 지도 방향)"
+      ],
+      "testsSummary": "테스트 결과 해석 문장 (선택)",
+      "homeworkSummary": "숙제 패턴 설명 (선택)",
+      "attendanceImpact": "출결 영향 설명 (선택)"
+    }
+  ],
+  "openingNote": "학생의 현재 학습 자세 구체적 묘사 (전반적으로/안정적 금지)",
+  "closingNote": "다음 주 구체적 학습 계획 (지속 점검하겠습니다 금지)",
+  "adminTag": "GREEN|YELLOW|RED"
+}
 
-2. 테스트 점수는 반드시 해석과 함께 문장 안에서 언급
-
-3. 도입부에서 학생의 현재 학습 자세를 구체적으로 묘사 (금지: "전반적으로", "안정적")
-
-4. 마무리에서 다음 주 구체적 학습 계획 언급 (금지: "지속 점검하겠습니다")`;
+반드시 유효한 JSON만 출력하세요.`;
 
   return prompt;
 }
@@ -666,7 +829,6 @@ ${Object.entries(subjectData).map(([subject, data]) => {
     const validation = validateNarrativeOutput(content);
     if (!validation.isValid) {
       console.warn('[generate-ai-report] Student message validation failed:', validation.violations);
-      // Use content anyway for student message, less critical
     }
     
     const startDate = new Date(weekStart);
