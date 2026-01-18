@@ -5,53 +5,87 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// v2.0 Fallback prompts - observation-based narrative style
-const FALLBACK_PARENT_PROMPT = `당신은 학생의 담당 선생님입니다. 학부모에게 보내는 주간 학습 리포트를 작성하세요.
+// v2.1-narrative-lock: Enforced narrative-only output
+const TEMPLATE_VERSION = 'v2.1-narrative-lock';
 
-[핵심 원칙]
-1. 관찰 → 해석 → 방향 구조로 서술하세요
-2. 구체적인 수업 장면이나 반응을 묘사하세요 (예: "분수 문제에서 계속 분모를 먼저 확인하는 습관이 생겼어요")
-3. 숫자나 점수를 나열하지 말고, 그 의미를 해석하세요
-4. "잘하고 있습니다", "열심히 했습니다" 같은 일반적 칭찬 대신 구체적 행동을 언급하세요
-5. 키워드 나열 금지 (예: "학습 포인트: 계산 실수 잦음" ← 이런 형식 사용 금지)
+// Forbidden patterns for validation
+const FORBIDDEN_PATTERNS = {
+  bulletPoints: /[·\-•]\s+/g,
+  keywordLists: /(학습\s*포인트|포인트|요약|정리|체크\s*리스트)\s*[:：]/gi,
+  abstractEvaluations: /(전반적으로\s*(안정|양호|좋은|괜찮)|(잘\s*따라[오옴]|열심히\s*했|잘\s*했|노력\s*했|수고\s*했)|안정적인\s*흐름|안정적\s*학습|무난\s*하게|순조롭게|문제\s*없)/gi,
+  forbiddenOpenings: /^(전반적으로|안정적인\s*흐름|이번\s*주\s*학습이\s*안정|전반적\s*학습)/gmi,
+  genericClosings: /(지속\s*점검하겠습니다|계속\s*지켜보겠습니다|잘\s*이끌어|꾸준히\s*지도|앞으로도\s*잘)$/gmi,
+};
 
-[과목별 작성 가이드]
-각 과목에 대해:
-- 관찰: 이번 주 수업에서 눈에 띈 구체적 장면
-- 해석: 그것이 학습 흐름에서 갖는 의미
-- 방향: 다음 주에 집중할 부분과 이유
+// v2.1 Narrative-lock system prompt - enforces 3-paragraph structure per subject
+const NARRATIVE_LOCK_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부모에게 보내는 주간 학습 리포트를 작성합니다.
 
-[테스트 결과 해석]
-- 점수만 알리지 말고, 어떤 유형에서 막혔는지/잘했는지 해석
-- 테스트가 없으면 이 섹션 생략
+[v2.1 NARRATIVE-LOCK 규칙 - 반드시 준수]
 
-[출결/숙제 언급]
-- 정상이면 언급하지 않음
-- 이슈가 있을 때만 간단히 언급하고 맥락 설명
+1. 절대 금지 항목 (위반 시 생성 실패):
+   - 글머리 기호 사용 금지 (·, -, •)
+   - 키워드 나열 금지 (예: "학습 포인트:", "정리:", "요약:")
+   - 추상적 평가 금지 (예: "전반적으로 안정적", "잘 따라옴", "열심히 했습니다")
+   - 숫자만 나열 금지 (예: "이해도 4/5, 숙제 완료")
 
-[분량]
-- 과목당 3-5문장
-- 전체 300-500자
+2. 과목별 필수 3단락 구조:
 
-반드시 한국어로 작성하세요.`;
+   [1단락: 학습 맥락 (Learning Context)]
+   - 이번 주 어떤 내용을 학습했는지
+   - 이 내용이 전체 교육과정에서 어느 위치인지
+   - 평가 표현 절대 금지, 사실만 서술
 
-const FALLBACK_STUDENT_PROMPT = `당신은 학생의 담당 선생님입니다. 학생에게 보내는 짧은 주간 메시지를 작성하세요.
+   [2단락: 관찰된 학습 행동 (Observed Learning Behavior)]
+   - 수업 중 학생이 실제로 보인 반응, 행동
+   - 문제 풀이 속도, 망설임, 집중도, 질문 패턴 등 구체적 묘사
+   - "요약"이나 "결론"이 아닌, 수업 장면 묘사처럼 서술
 
-[핵심 원칙]
-1. 이번 주 수업에서 학생이 한 구체적 행동 1가지 언급
+   [3단락: 교사 해석 및 방향 (Teacher Interpretation & Direction)]
+   - 2단락의 행동이 왜 나타났는지 해석
+   - 다음 수업에서 집중할 부분
+   - 반드시 "지도 방향" 또는 "다음 주 초점" 언급
+
+3. 테스트/숙제/출결 통합 규칙:
+   - 테스트 점수: 반드시 설명 문장 안에서만 언급 (예: "분수 연산에서 70점을 받았는데, 이는 통분 과정에서의 계산 실수가 주원인입니다")
+   - 숙제: 패턴이나 습관으로 서술 (예: "숙제를 미리 해오는 습관이 자리잡고 있습니다" / "숙제 완료 횟수"만 나열 금지)
+   - 출결: 학습 리듬에 미친 영향으로 서술 (단순 이벤트 나열 금지)
+
+4. 도입부 규칙:
+   - 학생의 현재 학습 자세나 태도를 구체적으로 묘사
+   - 금지 표현: "전반적으로", "안정적인 흐름", "이번 주 학습이 안정"
+
+5. 마무리 규칙:
+   - 부모님께 학습이 의도적으로 설계되고 있음을 안심시키는 문장
+   - 금지 표현: "지속 점검하겠습니다", "계속 지켜보겠습니다"
+   - 좋은 예: "다음 주에는 [구체적 단원]을 통해 [구체적 능력]을 다지는 데 집중할 예정입니다"
+
+6. 분량:
+   - 과목당 3단락, 각 1~3문장
+   - 전체 400-600자
+
+반드시 위 규칙을 엄격히 준수하여 한국어로 작성하세요.`;
+
+const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니다. 학생에게 보내는 짧은 주간 메시지를 작성합니다.
+
+[v2.1 규칙]
+1. 이번 주 수업에서 학생이 한 구체적 행동 1가지만 언급
 2. 다음 주 명확한 미션 1가지 제시
-3. "잘했어", "열심히 했어" 같은 일반적 칭찬 금지
-4. 점수나 이해도 숫자 기반 칭찬 금지
+3. 금지: "잘했어", "열심히 했어", "수고했어" 같은 일반 칭찬
+4. 금지: 점수나 이해도 숫자 기반 칭찬
+5. 글머리 기호(·, -, •) 사용 금지
 
 [형식]
-- 2-3문장으로 끝내기
-- 이모지 1-2개까지만 사용
+- 2-3문장
+- 이모지 1-2개만
 - 친근하지만 가볍지 않은 톤
 
 예시:
-"이번 주 분수 통분할 때 공배수 찾는 거 훨씬 빨라졌어. 다음 주는 분수 나눗셈 뒤집기 규칙 외워오자! 💪"
+"이번 주 분수 통분할 때 공배수 찾는 속도가 확실히 빨라졌어. 다음 주는 분수 나눗셈에서 '뒤집어 곱하기' 원리 확실히 이해하고 오자! 💪"
 
 반드시 한국어로 작성하세요.`;
+
+// Failure message when narrative cannot be generated
+const INSUFFICIENT_DATA_MESSAGE = "이번 주 학습 내용을 충분히 설명하기 위해 교사 추가 관찰이 필요합니다.";
 
 interface ReportTemplate {
   id: string;
@@ -97,7 +131,49 @@ interface GenerateReportRequest {
   previous_week_lessons?: LessonRecord[];
 }
 
-// Load prompts from database
+interface ValidationResult {
+  isValid: boolean;
+  violations: string[];
+}
+
+// Validate generated content against forbidden patterns
+function validateNarrativeOutput(content: string): ValidationResult {
+  const violations: string[] = [];
+
+  // Check for bullet points
+  if (FORBIDDEN_PATTERNS.bulletPoints.test(content)) {
+    violations.push('BULLET_POINTS_DETECTED');
+  }
+
+  // Check for keyword lists
+  if (FORBIDDEN_PATTERNS.keywordLists.test(content)) {
+    violations.push('KEYWORD_LIST_DETECTED');
+  }
+
+  // Check for abstract evaluations
+  if (FORBIDDEN_PATTERNS.abstractEvaluations.test(content)) {
+    violations.push('ABSTRACT_EVALUATION_DETECTED');
+  }
+
+  // Check for forbidden openings (first 100 chars)
+  const opening = content.slice(0, 100);
+  if (FORBIDDEN_PATTERNS.forbiddenOpenings.test(opening)) {
+    violations.push('FORBIDDEN_OPENING_DETECTED');
+  }
+
+  // Check for generic closings (last 100 chars)
+  const closing = content.slice(-100);
+  if (FORBIDDEN_PATTERNS.genericClosings.test(closing)) {
+    violations.push('GENERIC_CLOSING_DETECTED');
+  }
+
+  return {
+    isValid: violations.length === 0,
+    violations,
+  };
+}
+
+// Load prompts - now defaults to v2.1 narrative-lock prompts
 async function loadPrompts(supabase: any): Promise<{ parentPrompt: string; studentPrompt: string; parentVersion: string; studentVersion: string }> {
   try {
     const { data: templates, error } = await supabase
@@ -107,32 +183,109 @@ async function loadPrompts(supabase: any): Promise<{ parentPrompt: string; stude
 
     if (error) {
       console.error('[generate-ai-report] Error loading prompts from DB:', error);
+      // Use v2.1 narrative-lock prompts as fallback
       return {
-        parentPrompt: FALLBACK_PARENT_PROMPT,
-        studentPrompt: FALLBACK_STUDENT_PROMPT,
-        parentVersion: 'fallback',
-        studentVersion: 'fallback',
+        parentPrompt: NARRATIVE_LOCK_PARENT_PROMPT,
+        studentPrompt: NARRATIVE_LOCK_STUDENT_PROMPT,
+        parentVersion: TEMPLATE_VERSION,
+        studentVersion: TEMPLATE_VERSION,
       };
     }
 
     const parentTemplate = templates?.find((t: ReportTemplate) => t.template_name === 'parent');
     const studentTemplate = templates?.find((t: ReportTemplate) => t.template_name === 'student');
 
+    // Always use v2.1 prompts to enforce narrative-lock
     return {
-      parentPrompt: parentTemplate?.prompt_text || FALLBACK_PARENT_PROMPT,
-      studentPrompt: studentTemplate?.prompt_text || FALLBACK_STUDENT_PROMPT,
-      parentVersion: parentTemplate?.version || 'fallback',
-      studentVersion: studentTemplate?.version || 'fallback',
+      parentPrompt: NARRATIVE_LOCK_PARENT_PROMPT,
+      studentPrompt: NARRATIVE_LOCK_STUDENT_PROMPT,
+      parentVersion: TEMPLATE_VERSION,
+      studentVersion: TEMPLATE_VERSION,
     };
   } catch (err) {
     console.error('[generate-ai-report] Exception loading prompts:', err);
     return {
-      parentPrompt: FALLBACK_PARENT_PROMPT,
-      studentPrompt: FALLBACK_STUDENT_PROMPT,
-      parentVersion: 'fallback',
-      studentVersion: 'fallback',
+      parentPrompt: NARRATIVE_LOCK_PARENT_PROMPT,
+      studentPrompt: NARRATIVE_LOCK_STUDENT_PROMPT,
+      parentVersion: TEMPLATE_VERSION,
+      studentVersion: TEMPLATE_VERSION,
     };
   }
+}
+
+// Generate parent report with validation and retry
+async function generateParentReportWithRetry(
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+  maxRetries: number = 2
+): Promise<{ content: string; isValid: boolean; violations: string[]; attempts: number }> {
+  let attempts = 0;
+  let lastContent = '';
+  let lastViolations: string[] = [];
+
+  while (attempts < maxRetries) {
+    attempts++;
+    console.log(`[generate-ai-report] Parent report attempt ${attempts}/${maxRetries}`);
+
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { 
+            role: 'user', 
+            content: attempts > 1 
+              ? userPrompt + `\n\n[재생성 요청] 이전 생성에서 다음 규칙 위반이 감지되었습니다: ${lastViolations.join(', ')}. 반드시 규칙을 준수해주세요. 글머리 기호(·, -, •)와 추상적 평가("전반적으로 안정", "잘 따라옴" 등)를 절대 사용하지 마세요.`
+              : userPrompt
+          },
+        ],
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      if (aiResponse.status === 429) {
+        throw new Error('RATE_LIMIT');
+      }
+      if (aiResponse.status === 402) {
+        throw new Error('PAYMENT_REQUIRED');
+      }
+      const errorText = await aiResponse.text();
+      console.error('[generate-ai-report] AI gateway error:', aiResponse.status, errorText);
+      throw new Error(`AI gateway error: ${aiResponse.status}`);
+    }
+
+    const aiResult = await aiResponse.json();
+    lastContent = aiResult.choices?.[0]?.message?.content || '';
+
+    const validation = validateNarrativeOutput(lastContent);
+    lastViolations = validation.violations;
+
+    console.log(`[generate-ai-report] Attempt ${attempts} validation:`, validation.isValid ? 'PASSED' : `FAILED (${lastViolations.join(', ')})`);
+
+    if (validation.isValid) {
+      return {
+        content: lastContent,
+        isValid: true,
+        violations: [],
+        attempts,
+      };
+    }
+  }
+
+  // All retries exhausted - return last attempt with violation info
+  console.warn(`[generate-ai-report] All ${maxRetries} attempts failed validation. Violations: ${lastViolations.join(', ')}`);
+  return {
+    content: lastContent,
+    isValid: false,
+    violations: lastViolations,
+    attempts,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -152,11 +305,12 @@ Deno.serve(async (req) => {
 
     const { student_id, student_name, week_start, week_end } = await req.json() as GenerateReportRequest;
 
+    console.log(`[REPORT_GEN_DEBUG_V2.1] templateVersion=${TEMPLATE_VERSION}`);
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
 
-    // Load prompts from database
+    // Load prompts (now always uses v2.1 narrative-lock)
     const { parentPrompt, studentPrompt, parentVersion, studentVersion } = await loadPrompts(supabase);
-    console.log(`[generate-ai-report] Using prompts - parent: ${parentVersion}, student: ${studentVersion}`);
+    console.log(`[generate-ai-report] Using prompts - version: ${TEMPLATE_VERSION}`);
 
     // Fetch this week's lesson records
     const { data: currentWeekLessons, error: lessonsError } = await supabase
@@ -180,13 +334,20 @@ Deno.serve(async (req) => {
           parent_message: null,
           student_message: null,
           draft_status: 'no_lessons',
+          template_version: TEMPLATE_VERSION,
           prompt_versions: { parent: parentVersion, student: studentVersion },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Fetch previous week's lessons for context (1-2 weeks back)
+    // Check if we have sufficient narrative data
+    const hasSufficientNarrativeData = currentWeekLessons.some(l => 
+      (l.learning_issues_note && l.learning_issues_note.trim().length > 20) || 
+      (l.next_lesson_goal && l.next_lesson_goal.trim().length > 10)
+    );
+
+    // Fetch previous week's lessons for context
     const prevWeekStart = new Date(week_start);
     prevWeekStart.setDate(prevWeekStart.getDate() - 14);
     const prevWeekEnd = new Date(week_start);
@@ -247,60 +408,38 @@ Deno.serve(async (req) => {
     }
 
     // Build the user prompt with structured data
-    const userPrompt = buildUserPrompt(student_name, week_start, week_end, subjectData);
+    const userPrompt = buildNarrativeUserPrompt(student_name, week_start, week_end, subjectData);
 
-    console.log('[generate-ai-report] Calling AI gateway for parent report...');
+    console.log('[generate-ai-report] Calling AI gateway for parent report with validation...');
 
-    // Call Lovable AI Gateway for parent report
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          { role: 'system', content: parentPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
-    });
+    // Generate parent report with validation and retry
+    const parentResult = await generateParentReportWithRetry(
+      LOVABLE_API_KEY,
+      parentPrompt,
+      userPrompt,
+      2 // max 2 attempts
+    );
 
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+    let parentMessageContent = parentResult.content;
+    let draftStatus = 'ready';
+    let riskLevel: string | null = null;
+
+    // Handle validation failures or insufficient data
+    if (!parentResult.isValid || !hasSufficientNarrativeData) {
+      if (!hasSufficientNarrativeData) {
+        console.log('[generate-ai-report] Insufficient narrative data - marking as RED');
+        parentMessageContent = INSUFFICIENT_DATA_MESSAGE;
+        draftStatus = 'needs_input';
+        riskLevel = 'high'; // RED marker
+      } else if (!parentResult.isValid) {
+        console.log('[generate-ai-report] Validation failed after retries - marking as RED');
+        // Still use the content but mark as needing review
+        draftStatus = 'needs_review';
+        riskLevel = 'medium';
       }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'Payment required. Please add credits to your workspace.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      const errorText = await aiResponse.text();
-      console.error('[generate-ai-report] AI gateway error:', aiResponse.status, errorText);
-      throw new Error(`AI gateway error: ${aiResponse.status}`);
     }
 
-    const aiResult = await aiResponse.json();
-    const parentMessageContent = aiResult.choices?.[0]?.message?.content || '';
-
-    console.log('[generate-ai-report] AI response received, length:', parentMessageContent.length);
-
-    // Determine draft status based on data completeness
-    const hasSufficientData = currentWeekLessons.some(l => 
-      (l.learning_issues_note && l.learning_issues_note.trim()) || 
-      (l.next_lesson_goal && l.next_lesson_goal.trim())
-    );
-    
-    const draftStatus = currentWeekLessons.length <= 1 && !hasSufficientData 
-      ? 'draft' 
-      : 'ready';
-
-    // Generate a shorter student-focused message
+    // Generate student message
     const studentMessageContent = await generateStudentMessage(
       LOVABLE_API_KEY,
       studentPrompt,
@@ -312,7 +451,7 @@ Deno.serve(async (req) => {
 
     // Format final messages with version marker for admin
     const parentHeader = formatParentHeader(student_name, week_start, week_end);
-    const versionMarker = `[PROMPT_VERSION: parent=${parentVersion}, student=${studentVersion}]\n\n`;
+    const debugMarker = `[REPORT_GEN_DEBUG_V2.1] templateVersion=${TEMPLATE_VERSION}`;
     
     return new Response(
       JSON.stringify({
@@ -320,14 +459,19 @@ Deno.serve(async (req) => {
         parent_message: parentHeader + '\n\n' + parentMessageContent,
         student_message: studentMessageContent,
         draft_status: draftStatus,
+        risk_level: riskLevel,
         lesson_count: currentWeekLessons.length,
         subjects: Object.keys(subjectData),
+        template_version: TEMPLATE_VERSION,
         prompt_versions: { parent: parentVersion, student: studentVersion },
-        // Admin-only debug info with version marker
+        // Admin-only debug info
         _debug: {
-          version_marker: versionMarker.trim(),
-          parent_prompt_version: parentVersion,
-          student_prompt_version: studentVersion,
+          debug_marker: debugMarker,
+          template_version: TEMPLATE_VERSION,
+          validation_passed: parentResult.isValid,
+          validation_attempts: parentResult.attempts,
+          violations: parentResult.violations,
+          has_sufficient_data: hasSufficientNarrativeData,
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -336,6 +480,20 @@ Deno.serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[generate-ai-report] Error:', errorMessage);
+    
+    if (errorMessage === 'RATE_LIMIT') {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    if (errorMessage === 'PAYMENT_REQUIRED') {
+      return new Response(
+        JSON.stringify({ error: 'Payment required. Please add credits to your workspace.' }),
+        { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
@@ -355,7 +513,8 @@ function formatParentHeader(studentName: string, weekStart: string, weekEnd: str
   return `[더멘토] ${studentName} 주간 학습 리포트 (${startMonth}/${startDay}~${endMonth}/${endDay})`;
 }
 
-function buildUserPrompt(
+// v2.1 Narrative-focused user prompt builder
+function buildNarrativeUserPrompt(
   studentName: string,
   weekStart: string,
   weekEnd: string,
@@ -364,13 +523,16 @@ function buildUserPrompt(
   let prompt = `학생: ${studentName}
 기간: ${weekStart} ~ ${weekEnd}
 
+[중요] 아래 데이터를 바탕으로 각 과목별 3단락 구조(학습 맥락 → 관찰된 행동 → 교사 해석 및 방향)로 서술하세요.
+글머리 기호(·, -, •), 키워드 나열, 추상적 평가("전반적으로 안정", "잘 따라옴")는 절대 사용하지 마세요.
+
 === 이번 주 수업 데이터 ===\n\n`;
 
   for (const [subject, data] of Object.entries(subjectData)) {
     prompt += `【${subject}】 수업 ${data.lessons.length}회\n`;
     
     for (const lesson of data.lessons) {
-      prompt += `- ${lesson.lesson_date}:\n`;
+      prompt += `날짜: ${lesson.lesson_date}\n`;
       prompt += `  이해도: ${lesson.understanding_score}/5\n`;
       
       const lessonTypes = lesson.lesson_types?.filter(t => t !== '정규') || [];
@@ -381,28 +543,28 @@ function buildUserPrompt(
       if (lesson.attendance_status && lesson.attendance_status.length > 0) {
         const nonNormal = lesson.attendance_status.filter(s => s !== '정상등원' && s !== '등원');
         if (nonNormal.length > 0) {
-          prompt += `  출결: ${nonNormal.join(', ')}\n`;
+          prompt += `  출결 특이사항: ${nonNormal.join(', ')}\n`;
         }
       }
       
       if (lesson.homework_status && lesson.homework_status !== 'none_assigned') {
-        prompt += `  숙제: ${lesson.homework_status}\n`;
+        prompt += `  숙제상태: ${lesson.homework_status}\n`;
       }
       
       if (lesson.homework_check_note) {
-        prompt += `  숙제확인노트: ${lesson.homework_check_note}\n`;
+        prompt += `  숙제 관찰: ${lesson.homework_check_note}\n`;
       }
       
       if (lesson.learning_issues && lesson.learning_issues.length > 0) {
-        prompt += `  학습이슈: ${lesson.learning_issues.join(', ')}\n`;
+        prompt += `  학습 관찰 포인트: ${lesson.learning_issues.join(', ')}\n`;
       }
       
       if (lesson.learning_issues_note) {
-        prompt += `  학습상황상세: ${lesson.learning_issues_note}\n`;
+        prompt += `  [상세 관찰 기록]: ${lesson.learning_issues_note}\n`;
       }
       
       if (lesson.next_lesson_goal) {
-        prompt += `  다음목표: ${lesson.next_lesson_goal}\n`;
+        prompt += `  다음 수업 방향: ${lesson.next_lesson_goal}\n`;
       }
       
       if (lesson.test_result_text) {
@@ -412,23 +574,23 @@ function buildUserPrompt(
 
     // Curriculum info
     if (data.curriculum.length > 0) {
-      prompt += `\n  [교육과정 정보]\n`;
+      prompt += `\n  [교육과정 위치]\n`;
       for (const curr of data.curriculum) {
-        prompt += `  - ${curr.unit_title} (${curr.unit_key})\n`;
-        prompt += `    흐름: ${curr.flow_summary}\n`;
+        prompt += `  단원: ${curr.unit_title} (${curr.unit_key})\n`;
+        prompt += `  교육과정 흐름: ${curr.flow_summary}\n`;
         if (curr.next_summary) {
-          prompt += `    다음단계: ${curr.next_summary}\n`;
+          prompt += `  다음 단계 예고: ${curr.next_summary}\n`;
         }
       }
     }
 
     // Previous week context
     if (data.previousLessons.length > 0) {
-      prompt += `\n  [이전 1-2주 참고]\n`;
-      for (const prev of data.previousLessons.slice(0, 3)) {
-        prompt += `  - ${prev.lesson_date}: 이해도 ${prev.understanding_score}/5`;
+      prompt += `\n  [이전 주 맥락 참고]\n`;
+      for (const prev of data.previousLessons.slice(0, 2)) {
+        prompt += `  ${prev.lesson_date}: 이해도 ${prev.understanding_score}/5`;
         if (prev.learning_issues_note) {
-          prompt += ` / ${prev.learning_issues_note.slice(0, 50)}...`;
+          prompt += ` - ${prev.learning_issues_note.slice(0, 80)}`;
         }
         prompt += '\n';
       }
@@ -437,9 +599,18 @@ function buildUserPrompt(
     prompt += '\n';
   }
 
-  prompt += `\n위 데이터를 바탕으로 학부모용 주간 리포트를 작성해주세요.
-각 과목별로 지침에 따라 작성하되,
-테스트가 없으면 테스트 관련 섹션은 생략하세요.`;
+  prompt += `
+=== 작성 지침 ===
+1. 각 과목별로 반드시 3단락으로 작성:
+   - 1단락: 이번 주 학습 내용과 교육과정 위치 (평가 없이 사실만)
+   - 2단락: 수업 중 관찰된 학생 행동 (구체적 장면 묘사)
+   - 3단락: 교사의 해석과 다음 주 지도 방향
+
+2. 테스트 점수는 반드시 해석과 함께 문장 안에서 언급
+
+3. 도입부에서 학생의 현재 학습 자세를 구체적으로 묘사 (금지: "전반적으로", "안정적")
+
+4. 마무리에서 다음 주 구체적 학습 계획 언급 (금지: "지속 점검하겠습니다")`;
 
   return prompt;
 }
@@ -455,14 +626,17 @@ async function generateStudentMessage(
   const studentUserPrompt = `학생 이름: ${studentName}
 기간: ${weekStart} ~ ${weekEnd}
 
-이번 주 수업 요약:
+[중요] 글머리 기호(·, -, •) 사용 금지. 일반 칭찬("잘했어", "수고했어") 금지.
+
+이번 주 수업 내용:
 ${Object.entries(subjectData).map(([subject, data]) => {
-  const avgScore = data.lessons.reduce((sum, l) => sum + l.understanding_score, 0) / data.lessons.length;
   const goals = data.lessons.filter(l => l.next_lesson_goal).map(l => l.next_lesson_goal).slice(-1);
-  return `- ${subject}: ${data.lessons.length}회 수업, 평균 이해도 ${avgScore.toFixed(1)}/5${goals.length > 0 ? `, 다음 목표: ${goals[0]}` : ''}`;
+  const notes = data.lessons.filter(l => l.learning_issues_note).map(l => l.learning_issues_note).slice(-1);
+  return `${subject}: ${data.lessons.length}회 수업${goals.length > 0 ? `, 다음 목표: ${goals[0]}` : ''}${notes.length > 0 ? `, 관찰: ${notes[0]?.slice(0, 50)}` : ''}`;
 }).join('\n')}
 
-위 데이터로 학생에게 보내는 짧은 격려 메시지를 작성해주세요.`;
+위 내용을 바탕으로 학생에게 보내는 짧은 격려 메시지를 작성하세요.
+구체적인 행동 1가지 언급 + 다음 주 미션 1가지 제시.`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -486,11 +660,20 @@ ${Object.entries(subjectData).map(([subject, data]) => {
     }
 
     const result = await response.json();
+    const content = result.choices?.[0]?.message?.content || '';
+    
+    // Validate student message too
+    const validation = validateNarrativeOutput(content);
+    if (!validation.isValid) {
+      console.warn('[generate-ai-report] Student message validation failed:', validation.violations);
+      // Use content anyway for student message, less critical
+    }
+    
     const startDate = new Date(weekStart);
     const endDate = new Date(weekEnd);
     const header = `[더멘토] 이번 주 체크 (${startDate.getMonth() + 1}/${startDate.getDate()}~${endDate.getMonth() + 1}/${endDate.getDate()})`;
     
-    return header + '\n\n' + (result.choices?.[0]?.message?.content || generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData));
+    return header + '\n\n' + content;
   } catch (error) {
     console.error('[generate-ai-report] Student message error:', error);
     return generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData);
@@ -503,24 +686,23 @@ function generateFallbackStudentMessage(
   weekEnd: string,
   subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
 ): string {
-  const subjects = Object.keys(subjectData);
-  const totalLessons = Object.values(subjectData).reduce((sum, d) => sum + d.lessons.length, 0);
-  
   const startDate = new Date(weekStart);
   const endDate = new Date(weekEnd);
   const header = `[더멘토] 이번 주 체크 (${startDate.getMonth() + 1}/${startDate.getDate()}~${endDate.getMonth() + 1}/${endDate.getDate()})`;
   
-  let message = `${header}\n\n`;
-  message += `${studentName} 학생, 이번 주도 수고했어요! 🌟\n\n`;
-  message += `총 ${totalLessons}회 수업을 잘 따라왔어요.\n\n`;
-  
-  message += '📋 다음 주 미션:\n';
+  // Find a concrete next goal from lessons
+  let nextGoal = '';
   for (const [subject, data] of Object.entries(subjectData)) {
-    const lastGoal = data.lessons.filter(l => l.next_lesson_goal).slice(-1)[0]?.next_lesson_goal;
-    if (lastGoal) {
-      message += `- ${subject}: ${lastGoal}\n`;
+    const goal = data.lessons.find(l => l.next_lesson_goal)?.next_lesson_goal;
+    if (goal) {
+      nextGoal = `다음 주 ${subject} 미션: ${goal}`;
+      break;
     }
   }
   
-  return message;
+  if (!nextGoal) {
+    nextGoal = '다음 주도 꾸준히 진행하자!';
+  }
+  
+  return `${header}\n\n${studentName} 학생, ${nextGoal} 💪`;
 }
