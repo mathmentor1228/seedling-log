@@ -19,17 +19,26 @@ Deno.serve(async (req) => {
 
   let isManual = false;
   let includeDebug = false;
+  let studentIds: string[] | null = null;
+  let customWeekStart: string | null = null;
+  let customWeekEnd: string | null = null;
+  
   try {
     const body = await req.json().catch(() => ({}));
     isManual = body.manual === true;
     includeDebug = body.include_debug === true;
+    studentIds = body.student_ids || null;
+    customWeekStart = body.week_start || null;
+    customWeekEnd = body.week_end || null;
   } catch {
     // Ignore JSON parse errors
   }
 
+  const scope = studentIds && studentIds.length > 0 ? 'selected' : 'all';
   const schedulerSource = isManual ? 'manual' : 'pg_cron';
   console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: Starting ${schedulerSource} weekly report generation`);
-  console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: source=edge_function, file=supabase/functions/generate-weekly-reports/index.ts`);
+  console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: source=edge_function, scope=${scope}, count=${studentIds?.length || 'all'}`);
+  console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: file=supabase/functions/generate-weekly-reports/index.ts`);
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -39,28 +48,38 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Calculate week dates (Monday to Saturday of current week)
-    // Saturday 22:00 KST = Saturday 13:00 UTC
-    const now = new Date();
+    // Or use custom dates if provided
+    let weekStart: string;
+    let weekEnd: string;
     
-    // Get KST time
-    const kstOffset = 9 * 60 * 60 * 1000;
-    const kstNow = new Date(now.getTime() + kstOffset);
-    
-    // Find Monday of current week
-    const dayOfWeek = kstNow.getUTCDay();
-    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const mondayDate = new Date(kstNow);
-    mondayDate.setUTCDate(mondayDate.getUTCDate() - daysFromMonday);
-    mondayDate.setUTCHours(0, 0, 0, 0);
-    
-    // Saturday is Monday + 5
-    const saturdayDate = new Date(mondayDate);
-    saturdayDate.setUTCDate(saturdayDate.getUTCDate() + 5);
-    
-    const weekStart = mondayDate.toISOString().split('T')[0];
-    const weekEnd = saturdayDate.toISOString().split('T')[0];
+    if (customWeekStart && customWeekEnd) {
+      weekStart = customWeekStart;
+      weekEnd = customWeekEnd;
+    } else {
+      // Saturday 22:00 KST = Saturday 13:00 UTC
+      const now = new Date();
+      
+      // Get KST time
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const kstNow = new Date(now.getTime() + kstOffset);
+      
+      // Find Monday of current week
+      const dayOfWeek = kstNow.getUTCDay();
+      const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const mondayDate = new Date(kstNow);
+      mondayDate.setUTCDate(mondayDate.getUTCDate() - daysFromMonday);
+      mondayDate.setUTCHours(0, 0, 0, 0);
+      
+      // Saturday is Monday + 5
+      const saturdayDate = new Date(mondayDate);
+      saturdayDate.setUTCDate(saturdayDate.getUTCDate() + 5);
+      
+      weekStart = mondayDate.toISOString().split('T')[0];
+      weekEnd = saturdayDate.toISOString().split('T')[0];
+    }
 
-    console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: Generating for week: ${weekStart} to ${weekEnd}`);
+    const studentCount = studentIds?.length || 'all';
+    console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG: Generating for week: ${weekStart} to ${weekEnd}, scope=${scope}, count=${studentCount}`);
 
     // Load template version for debug info
     let templateVersion = 'unknown';
@@ -78,10 +97,16 @@ Deno.serve(async (req) => {
     }
 
     // Generate reports using the scheduled function (no auth check)
-    const { error: rpcError } = await supabase.rpc('generate_weekly_reports_scheduled', {
+    // Pass student_ids if provided for selective generation
+    const rpcParams: Record<string, unknown> = {
       _week_start: weekStart,
       _week_end: weekEnd,
-    });
+    };
+    if (studentIds && studentIds.length > 0) {
+      rpcParams._student_ids = studentIds;
+    }
+    
+    const { error: rpcError } = await supabase.rpc('generate_weekly_reports_scheduled', rpcParams);
 
     if (rpcError) {
       console.error('[generate-weekly-reports] RPC error:', rpcError);
@@ -123,9 +148,13 @@ Deno.serve(async (req) => {
         weekEnd,
         message: 'Weekly reports generated successfully',
         schedulerSource,
+        scope,
+        count: studentIds?.length || 'all',
         // Debug info for admin
         _debug: {
           source: 'edge_function',
+          scope,
+          count: studentIds?.length || 'all',
           templateVersion,
           time: nowKST,
           handler: 'generate-weekly-reports/index.ts',
