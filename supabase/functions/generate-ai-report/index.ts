@@ -581,16 +581,21 @@ Deno.serve(async (req) => {
           lesson_count: currentWeekLessons.length,
           subjects: Object.keys(subjectData),
           template_version: TEMPLATE_VERSION,
-          debug_info: debugInfo,
+          debug_info: `[REPORT_ENGINE_DEBUG] marker=REPORT-DEBUG-DETAIL-V1 source=edge_function templateVersion=${TEMPLATE_VERSION} renderer=narrative validator=fail retries=0 tag=RED subjectsIncluded=[${Object.keys(subjectData).join(',')}] reason=insufficient_data`,
           _debug: {
-            debug_marker: debugMarker,
+            debug_marker: `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} renderer=narrative retries=0 validator=fail tag=RED subjects=[${Object.keys(subjectData).join(',')}]`,
+            marker: 'REPORT-DEBUG-DETAIL-V1',
             template_version: TEMPLATE_VERSION,
+            renderer: 'narrative',
             formatter: FORMATTER_NAME,
+            validator: 'fail',
             validation_passed: false,
             validation_attempts: 0,
             violations: ['INSUFFICIENT_NARRATIVE_DATA'],
             has_sufficient_data: false,
             admin_tag: 'RED',
+            subjects_included: Object.keys(subjectData),
+            reason: 'insufficient_data',
           },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -641,13 +646,35 @@ Deno.serve(async (req) => {
       subjectData
     );
 
-    // Format final messages with version marker for admin
+    // REPORT-DEBUG-DETAIL-V1: Format final messages with explicit debug fields
     const parentHeader = formatParentHeader(student_name, week_start, week_end);
-    const debugInfo = `[REPORT_ENGINE_DEBUG] source=edge_function templateVersion=${TEMPLATE_VERSION} formatter=${FORMATTER_NAME} validator=${parentResult.isValid ? 'pass' : 'fail'} retries=${parentResult.attempts}`;
-    const debugMarker = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} retries=${parentResult.attempts} validator=${parentResult.isValid ? 'pass' : 'fail'} tag=${parentResult.adminTag}`;
+    const subjectsIncluded = Object.keys(subjectData);
+    const renderer = 'narrative'; // Always narrative in v2.1+
+    const validatorStatus = parentResult.isValid ? 'pass' : 'fail';
+    const failureReason = !parentResult.isValid 
+      ? (parentResult.violations.includes('JSON_PARSE_FAILED') ? 'json_parse_failed' : 'validator_failed')
+      : null;
+    
+    // Explicit debug info with all diagnostic fields
+    const debugInfo = [
+      `[REPORT_ENGINE_DEBUG]`,
+      `marker=REPORT-DEBUG-DETAIL-V1`,
+      `source=edge_function`,
+      `templateVersion=${TEMPLATE_VERSION}`,
+      `renderer=${renderer}`,
+      `validator=${validatorStatus}`,
+      `retries=${parentResult.attempts}`,
+      `tag=${parentResult.adminTag}`,
+      `subjectsIncluded=[${subjectsIncluded.join(',')}]`,
+      failureReason ? `reason=${failureReason}` : null,
+    ].filter(Boolean).join(' ');
+    
+    const debugMarker = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} renderer=${renderer} retries=${parentResult.attempts} validator=${validatorStatus} tag=${parentResult.adminTag} subjects=[${subjectsIncluded.join(',')}]`;
     
     // Embed debug header in saved report text (at the start, after header)
     const parentMessageWithDebug = parentHeader + '\n\n' + debugInfo + '\n\n' + parentMessageContent;
+    
+    console.log(`[generate-ai-report] REPORT-DEBUG-DETAIL-V1: student=${student_name} subjects=${subjectsIncluded.join(',')} validator=${validatorStatus} tag=${parentResult.adminTag} retries=${parentResult.attempts}`);
     
     return new Response(
       JSON.stringify({
@@ -657,18 +684,23 @@ Deno.serve(async (req) => {
         draft_status: draftStatus,
         risk_level: riskLevel,
         lesson_count: currentWeekLessons.length,
-        subjects: Object.keys(subjectData),
+        subjects: subjectsIncluded,
         template_version: TEMPLATE_VERSION,
         debug_info: debugInfo,
         _debug: {
           debug_marker: debugMarker,
+          marker: 'REPORT-DEBUG-DETAIL-V1',
           template_version: TEMPLATE_VERSION,
+          renderer: renderer,
           formatter: FORMATTER_NAME,
+          validator: validatorStatus,
           validation_passed: parentResult.isValid,
           validation_attempts: parentResult.attempts,
           violations: parentResult.violations,
           has_sufficient_data: hasSufficientNarrativeData,
           admin_tag: parentResult.adminTag,
+          subjects_included: subjectsIncluded,
+          reason: failureReason,
           json_output: parentResult.jsonOutput,
         },
       }),
