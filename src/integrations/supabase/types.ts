@@ -600,7 +600,7 @@ export type Database = {
           test_result_text: string | null
           test_time: string | null
           test_title: string | null
-          understanding_score: number
+          understanding_score: number | null
           updated_at: string
         }
         Insert: {
@@ -640,7 +640,7 @@ export type Database = {
           test_result_text?: string | null
           test_time?: string | null
           test_title?: string | null
-          understanding_score: number
+          understanding_score?: number | null
           updated_at?: string
         }
         Update: {
@@ -680,7 +680,7 @@ export type Database = {
           test_result_text?: string | null
           test_time?: string | null
           test_title?: string | null
-          understanding_score?: number
+          understanding_score?: number | null
           updated_at?: string
         }
         Relationships: [
