@@ -151,8 +151,13 @@ export default function AssistantDashboard() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [collapsedTeachers, setCollapsedTeachers] = useState<Set<string>>(new Set());
   
-  // DEBUG-MARKER-ASSISTANT-V1
+  // ASSISTANT-ROSTER-RESTORE-V1
   const [fetchError, setFetchError] = useState<{ page: string; status: number | string; message: string } | null>(null);
+  const [debugCounts, setDebugCounts] = useState<{ scheduledSlots: number; rosterStudents: number; extraSessions: number }>({
+    scheduledSlots: 0,
+    rosterStudents: 0,
+    extraSessions: 0,
+  });
   
   // Date selection
   const [selectedDate, setSelectedDate] = useState<Date>(getKSTDateObject());
@@ -195,7 +200,8 @@ export default function AssistantDashboard() {
       setFetchError(null);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       console.log('[AssistantDashboard] fetchAllData started, date:', dateStr);
-      // Call the RPC which returns teachers + roster in one shot
+      
+      // ASSISTANT-ROSTER-RESTORE-V1: Call the RPC which returns flat array of roster rows
       const { data: rpcData, error: rpcError } = await supabase.rpc(
         'get_teacher_roster_sheet',
         { _date: dateStr }
@@ -203,8 +209,9 @@ export default function AssistantDashboard() {
 
       if (rpcError) {
         const errInfo = { page: 'Assistant', status: rpcError.code || 'UNKNOWN', message: rpcError.message };
-        console.error('DEBUG_FETCH_ERROR: Assistant', errInfo);
+        console.error('ASSISTANT_ROSTER_ERROR:', errInfo);
         setFetchError(errInfo);
+        setDebugCounts({ scheduledSlots: 0, rosterStudents: 0, extraSessions: 0 });
         toast({
           title: '데이터 로드 오류',
           description: '로스터 데이터를 불러오는 중 오류가 발생했습니다.',
@@ -216,8 +223,9 @@ export default function AssistantDashboard() {
         return;
       }
 
-      // Cast RPC result
-      const rpcResult = rpcData as { teachers: { teacher_id: string; teacher_name: string }[]; roster_rows: {
+      // ASSISTANT-ROSTER-RESTORE-V1: RPC returns flat array, NOT { teachers, roster_rows }
+      // Transform flat array into the structure we need
+      const rosterRowsRaw = (Array.isArray(rpcData) ? rpcData : []) as {
         teacher_id: string;
         teacher_name: string;
         student_id: string;
@@ -227,19 +235,26 @@ export default function AssistantDashboard() {
         subject: string;
         start_time: string;
         end_time: string;
-      }[] } | null;
+      }[];
 
-      const teachersRaw = rpcResult?.teachers || [];
-      const rosterRowsRaw = rpcResult?.roster_rows || [];
+      console.log('[AssistantDashboard] RPC returned', rosterRowsRaw.length, 'roster rows');
+
+      // Extract unique teachers from roster rows
+      const teacherMap = new Map<string, string>();
+      rosterRowsRaw.forEach(r => {
+        if (r.teacher_id && r.teacher_name) {
+          teacherMap.set(r.teacher_id, r.teacher_name);
+        }
+      });
 
       // Determine which teachers have lessons
       const teacherIdsWithLessons = new Set(rosterRowsRaw.map(r => r.teacher_id));
 
-      // Build teacher list
-      const teachersList: Teacher[] = teachersRaw.map(t => ({
-        id: t.teacher_id,
-        name: t.teacher_name,
-        hasLessonsOnDate: teacherIdsWithLessons.has(t.teacher_id),
+      // Build teacher list from extracted data
+      const teachersList: Teacher[] = Array.from(teacherMap.entries()).map(([id, name]) => ({
+        id,
+        name,
+        hasLessonsOnDate: teacherIdsWithLessons.has(id),
       }));
 
       // Sort: teachers with lessons first
@@ -354,6 +369,14 @@ export default function AssistantDashboard() {
         .filter(t => !t.hasLessonsOnDate)
         .map(t => t.id);
 
+      // ASSISTANT-ROSTER-RESTORE-V1: Update debug counts
+      const uniqueClassIds = new Set(rosterRowsRaw.map(r => r.class_id));
+      setDebugCounts({
+        scheduledSlots: uniqueClassIds.size,
+        rosterStudents: rosterRowsRaw.length,
+        extraSessions: 0, // Not implemented yet
+      });
+
       setAllTeachers(teachersList);
       setRoster(rosterData);
       setHolidays((holidaysData || []) as Holiday[]);
@@ -361,7 +384,7 @@ export default function AssistantDashboard() {
       
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(attendanceMap).length;
-      console.log('[AssistantDashboard] fetchAllData complete - attendanceUpdated=true, rosterUpdated=true, attendanceRecords:', attendanceCount);
+      console.log('[AssistantDashboard] fetchAllData complete - attendanceUpdated=true, rosterUpdated=true, attendanceRecords:', attendanceCount, 'teachersFound:', teachersList.length);
     } catch (error: any) {
       console.error('Error fetching data:', error);
       const errInfo = { page: 'Assistant', status: error?.code || 'ERR', message: error?.message || 'Unknown error' };
@@ -455,21 +478,26 @@ export default function AssistantDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* DEBUG-MARKER-ASSISTANT-V1 */}
-      <div className="sticky top-0 z-50 bg-yellow-400 text-yellow-900 text-xs text-center py-1 font-mono">
-        DEBUG-MARKER-ASSISTANT-V1
+      {/* ASSISTANT-ROSTER-RESTORE-V1 */}
+      <div className="sticky top-0 z-50 bg-green-400 text-green-900 text-xs text-center py-1 font-mono">
+        ASSISTANT-ROSTER-RESTORE-V1
+      </div>
+      
+      {/* Debug counts banner */}
+      <div className="bg-muted/50 text-muted-foreground text-xs py-2 px-4 font-mono rounded text-center">
+        ROSTER_DEBUG: scheduledSlots={debugCounts.scheduledSlots} rosterStudents={debugCounts.rosterStudents} extraSessions={debugCounts.extraSessions}
       </div>
       
       {/* Fetch error banner */}
       {fetchError && (
         <div className="bg-red-500 text-white text-xs py-2 px-4 font-mono rounded">
-          DEBUG_FETCH_ERROR: {fetchError.page} status={fetchError.status} message={fetchError.message}
+          ASSISTANT_ROSTER_ERROR: status={fetchError.status} message={fetchError.message}
         </div>
       )}
       
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">조교 대시보드</h1>
+          <h1 className="text-2xl font-bold text-foreground">오늘 수업(조교)</h1>
           <p className="text-muted-foreground mt-1">
             {isToday ? '오늘' : format(selectedDate, 'M월 d일', { locale: ko })} 수업 전체 현황 및 숙제/테스트 관리
           </p>
