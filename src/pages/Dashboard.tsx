@@ -353,6 +353,21 @@ export default function Dashboard() {
   
   // TEACHER-HW-ALERT-V2: Map for acknowledged alerts to hide badges
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<Set<string>>(new Set());
+  
+  // ADMIN-ROSTER-DEBUG-V1: Fallback today's lesson records (grouped by teacher)
+  const [todayLessonRecordsFallback, setTodayLessonRecordsFallback] = useState<{
+    teacher_id: string;
+    teacher_name: string;
+    records: {
+      id: string;
+      student_id: string;
+      student_name: string;
+      class_id: string | null;
+      class_name: string;
+      subject: string;
+      submitted: boolean;
+    }[];
+  }[]>([]);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -660,23 +675,68 @@ export default function Dashboard() {
     }
   }
 
-  // Fetch admin roster data grouped by teacher (uses RPC)
+  // ADMIN-ROSTER-DEBUG-V1: Fetch admin roster data grouped by teacher (uses RPC)
   async function fetchAdminRosterData() {
     if (!user) return;
     
     try {
       const today = getTodayKST();
-      const { data, error } = await supabase.rpc('get_teacher_roster_sheet', { _date: today });
+      
+      // Get day of week for debugging
+      const now = new Date();
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const kstDate = new Date(now.getTime() + kstOffset);
+      const dayOfWeek = kstDate.getUTCDay();
+      
+      const { data: rpcData, error } = await supabase.rpc('get_teacher_roster_sheet', { _date: today });
       
       if (error) {
         console.error('Error fetching admin roster data:', error);
         return;
       }
       
-      setAdminRosterData(data as any);
+      // The RPC returns an array of rows, transform into expected structure
+      const rosterRows: any[] = Array.isArray(rpcData) ? rpcData : [];
+      
+      // Build teachers array from unique teacher_id/teacher_name pairs
+      const teacherMap = new Map<string, { teacher_id: string; teacher_name: string }>();
+      rosterRows.forEach((row: any) => {
+        if (row.teacher_id && !teacherMap.has(row.teacher_id)) {
+          teacherMap.set(row.teacher_id, {
+            teacher_id: row.teacher_id,
+            teacher_name: row.teacher_name || '알 수 없음',
+          });
+        }
+      });
+      const teachers = Array.from(teacherMap.values());
+      
+      // ADMIN-ROSTER-DEBUG-V1: Fetch debug counts
+      const { count: scheduledSlotsCount } = await supabase
+        .from('class_schedules')
+        .select('*', { count: 'exact', head: true })
+        .eq('day_of_week', dayOfWeek)
+        .eq('is_active', true);
+      
+      const { count: todayLessonRecordsCount } = await supabase
+        .from('lesson_records')
+        .select('*', { count: 'exact', head: true })
+        .eq('lesson_date', today);
+      
+      console.log(`[Dashboard] ADMIN-ROSTER-DEBUG-V1: today=${today}, dayOfWeek=${dayOfWeek}, scheduledSlots=${scheduledSlotsCount}, rosterStudents=${rosterRows.length}, todayLessonRecords=${todayLessonRecordsCount}`);
+      
+      setAdminRosterData({
+        teachers,
+        roster_rows: rosterRows,
+        _debug: {
+          today,
+          dayOfWeek,
+          scheduledSlots: scheduledSlotsCount || 0,
+          rosterStudents: rosterRows.length,
+          todayLessonRecords: todayLessonRecordsCount || 0,
+        },
+      } as any);
       
       // Fetch lesson status for all student/class pairs
-      const rosterRows = (data as any)?.roster_rows || [];
       if (rosterRows.length > 0) {
         const studentIds = [...new Set(rosterRows.map((r: any) => r.student_id))] as string[];
         const classIds = [...new Set(rosterRows.map((r: any) => r.class_id))] as string[];
@@ -697,9 +757,88 @@ export default function Dashboard() {
         setLessonStatusMap(statusMap);
       }
       
-      console.log('[Dashboard] fetchAdminRosterData complete');
+      // ADMIN-ROSTER-DEBUG-V1: Fetch fallback lesson records when roster is empty
+      if (rosterRows.length === 0) {
+        await fetchTodayLessonRecordsFallback();
+      }
+      
+      console.log('[Dashboard] fetchAdminRosterData complete - teachers:', teachers.length, 'rows:', rosterRows.length);
     } catch (error) {
       console.error('Error fetching admin roster data:', error);
+    }
+  }
+  
+  // ADMIN-ROSTER-DEBUG-V1: Fetch today's lesson records as fallback (when roster is empty)
+  async function fetchTodayLessonRecordsFallback() {
+    try {
+      const today = getTodayKST();
+      
+      const { data: lessonRecords, error } = await supabase
+        .from('lesson_records')
+        .select(`
+          id,
+          student_id,
+          teacher_id,
+          class_id,
+          subject,
+          submitted,
+          students:student_id (name),
+          classes:class_id (name)
+        `)
+        .eq('lesson_date', today)
+        .order('teacher_id', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching today lesson records fallback:', error);
+        return;
+      }
+      
+      // Get teacher names
+      const teacherIds = [...new Set((lessonRecords || []).map((r: any) => r.teacher_id).filter(Boolean))];
+      let teacherNameMap: Record<string, string> = {};
+      
+      if (teacherIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', teacherIds);
+        
+        (profiles || []).forEach((p: any) => {
+          teacherNameMap[p.id] = p.full_name || '알 수 없음';
+        });
+      }
+      
+      // Group by teacher
+      const grouped: Record<string, {
+        teacher_id: string;
+        teacher_name: string;
+        records: any[];
+      }> = {};
+      
+      (lessonRecords || []).forEach((lr: any) => {
+        const teacherId = lr.teacher_id || 'unknown';
+        if (!grouped[teacherId]) {
+          grouped[teacherId] = {
+            teacher_id: teacherId,
+            teacher_name: teacherNameMap[teacherId] || '알 수 없음',
+            records: [],
+          };
+        }
+        grouped[teacherId].records.push({
+          id: lr.id,
+          student_id: lr.student_id,
+          student_name: lr.students?.name || '알 수 없음',
+          class_id: lr.class_id,
+          class_name: lr.classes?.name || '-',
+          subject: lr.subject,
+          submitted: lr.submitted,
+        });
+      });
+      
+      setTodayLessonRecordsFallback(Object.values(grouped));
+      console.log('[Dashboard] fetchTodayLessonRecordsFallback complete - groups:', Object.keys(grouped).length);
+    } catch (error) {
+      console.error('Error fetching today lesson records fallback:', error);
     }
   }
 
@@ -1340,12 +1479,12 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* ADMIN-LESSON-MODAL-V1 - Admin Roster Section Grouped by Teacher */}
+      {/* ADMIN-LESSON-MODAL-V1 + ADMIN-ROSTER-DEBUG-V1 - Admin Roster Section Grouped by Teacher */}
       {isAdmin(role) && adminRosterData && (
         <Card className="border-primary/30 bg-primary/5 animate-slide-up">
           <CardHeader>
             <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-              ADMIN-LESSON-MODAL-V1
+              ADMIN-LESSON-MODAL-V1 | ADMIN-ROSTER-DEBUG-V1
             </div>
             <CardTitle className="flex items-center gap-2">
               <PenLine className="w-5 h-5 text-primary" />
@@ -1357,6 +1496,12 @@ export default function Dashboard() {
               <div className="text-center py-8">
                 <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
+                {/* ADMIN-ROSTER-DEBUG-V1: Show debug counts when roster is empty */}
+                {(adminRosterData as any)._debug && (
+                  <div className="mt-4 p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground font-mono">
+                    <p>ROSTER_DEBUG: scheduledSlots={(adminRosterData as any)._debug.scheduledSlots}, rosterStudents={(adminRosterData as any)._debug.rosterStudents}, todayLessonRecords={(adminRosterData as any)._debug.todayLessonRecords}, dayOfWeek={(adminRosterData as any)._debug.dayOfWeek}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-6">
@@ -1472,6 +1617,68 @@ export default function Dashboard() {
                 })}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ADMIN-ROSTER-DEBUG-V1: Fallback - Today's Lesson Records when roster is empty */}
+      {isAdmin(role) && (adminRosterData?.teachers?.length ?? 0) === 0 && todayLessonRecordsFallback.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5 animate-slide-up">
+          <CardHeader>
+            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
+              ADMIN-ROSTER-DEBUG-V1 | FALLBACK
+            </div>
+            <CardTitle className="flex items-center gap-2 text-amber-700">
+              <FileEdit className="w-5 h-5" />
+              오늘 작성된 수업일지 (Fallback)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              정규 로스터가 비어 있어 오늘 날짜로 작성된 수업일지를 표시합니다.
+            </p>
+            <div className="space-y-4">
+              {todayLessonRecordsFallback.map((group) => (
+                <div key={group.teacher_id} className="border rounded-lg p-4 bg-background">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-foreground">{group.teacher_name}</h4>
+                    <Badge variant="secondary">{group.records.length}건</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {group.records.map((record) => (
+                      <div 
+                        key={record.id}
+                        className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm cursor-pointer hover:bg-secondary/70"
+                        onClick={() => {
+                          setAdminLessonModalContext({
+                            student_id: record.student_id,
+                            class_id: record.class_id,
+                            subject: record.subject,
+                            lesson_date: getTodayKST(),
+                          });
+                          setAdminLessonModalRecordId(record.id);
+                          setAdminLessonModalOpen(true);
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="font-medium">{record.student_name}</span>
+                          <Badge variant="outline">{record.subject}</Badge>
+                          <span className="text-muted-foreground text-xs">{record.class_name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {record.submitted ? (
+                            <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">제출</Badge>
+                          ) : (
+                            <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">임시저장</Badge>
+                          )}
+                          <FileEdit className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
