@@ -95,6 +95,8 @@ interface LessonRecord {
   // ENGLISH-CURRICULUM-V1: English curriculum fields
   english_grammar_unit?: string | null;
   english_reading_units?: string[] | null;
+  // KOREAN-CATEGORY-V1: Korean curriculum categories
+  korean_categories?: string[] | null;
 }
 
 const SUBJECTS = [
@@ -106,11 +108,12 @@ const SUBJECTS = [
 
 const SUBJECT_VALUES: SubjectType[] = ['수학', '과학', '영어', '국어'];
 
+// LEARNING-ISSUE-ROUTINE-V1: Added '풀이 루틴을 지키지 않음' to all subjects
 const SUBJECT_SPECIFIC_ISSUES: Record<SubjectType, string[]> = {
-  '수학': ['개념 이해 부족', '계산 실수 잦음', '문제 해석 미흡', '풀이 과정 정리 필요', '응용·서술형 약함', '시간 관리 어려움'],
-  '과학': ['개념 연결 미흡', '암기 부족', '자료 해석 어려움', '실험·탐구 서술 약함', '단원 간 개념 혼동'],
-  '영어': ['단어 이해 부족', '문법 개념 혼동', '독해 속도 느림', '근거 문장 찾기 어려움', '듣기 이해 부족'],
-  '국어': ['지문 독해 어려움', '핵심 개념어 정리 미흡', '서술형 논리 부족', '문학 표현 분석 미흡', '시간 배분 문제'],
+  '수학': ['개념 이해 부족', '계산 실수 잦음', '문제 해석 미흡', '풀이 과정 정리 필요', '응용·서술형 약함', '시간 관리 어려움', '풀이 루틴을 지키지 않음'],
+  '과학': ['개념 연결 미흡', '암기 부족', '자료 해석 어려움', '실험·탐구 서술 약함', '단원 간 개념 혼동', '풀이 루틴을 지키지 않음'],
+  '영어': ['단어 이해 부족', '문법 개념 혼동', '독해 속도 느림', '근거 문장 찾기 어려움', '듣기 이해 부족', '풀이 루틴을 지키지 않음'],
+  '국어': ['지문 독해 어려움', '핵심 개념어 정리 미흡', '서술형 논리 부족', '문학 표현 분석 미흡', '시간 배분 문제', '풀이 루틴을 지키지 않음'],
 };
 
 const HOMEWORK_STATUS = [
@@ -143,6 +146,20 @@ const HOMEWORK_RESULT_OPTIONS = [
   { value: 'partial', label: '부분', icon: Clock, color: 'text-amber-600' },
   { value: 'not_done', label: '미완', icon: XCircle, color: 'text-red-600' },
   { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle, color: 'text-muted-foreground' },
+];
+
+// KOREAN-CATEGORY-V1: Korean subject categories for multi-select
+const KOREAN_CATEGORY_OPTIONS = [
+  '고1 문학',
+  '고1 어법',
+  '고2 문학',
+  '고2 독서와 작문',
+  '평가원 기출 문학',
+  '평가원 기출 독서',
+  '화법과 작문',
+  '모의고사 해설',
+  'EBS 수능특강 문학',
+  'EBS 수능특강 독서',
 ];
 
 function getLearningIssuesForSubject(subject: SubjectType | ''): string[] {
@@ -261,6 +278,8 @@ export function LessonRecordForm({
     // ENGLISH-CURRICULUM-V1: English curriculum fields
     english_grammar_unit: '' as string | null,
     english_reading_units: [] as string[],
+    // KOREAN-CATEGORY-V1: Korean curriculum categories
+    korean_categories: [] as string[],
   });
 
   // MATH-CURRICULUM-TAG-V2: Validation state for custom course
@@ -440,7 +459,7 @@ export function LessonRecordForm({
             subject: record.subject,
             lesson_date: record.lesson_date,
             lesson_range: record.lesson_range,
-            understanding_score: record.understanding_score.toString(),
+            understanding_score: record.understanding_score?.toString() || '3',
             homework_status: record.homework_status,
             learning_issues: record.learning_issues || [],
             learning_issues_note: record.learning_issues_note || '',
@@ -455,6 +474,8 @@ export function LessonRecordForm({
             // ENGLISH-CURRICULUM-V1: Load English curriculum fields
             english_grammar_unit: (record as any).english_grammar_unit || null,
             english_reading_units: (record as any).english_reading_units || [],
+            // KOREAN-CATEGORY-V1: Load Korean curriculum categories
+            korean_categories: (record as any).korean_categories || [],
           });
           // TAG-PREFILL-STUDENT-V1: Existing record - mark source
           setTagSource('existing_record');
@@ -651,12 +672,14 @@ export function LessonRecordForm({
     const teacherId = originalTeacherId || user!.id;
 
     // MATH-CURRICULUM-TAG-V1: Include curriculum fields for Math subject
+    // KOREAN-CATEGORY-V1: Include korean_categories for 국어 subject
     const curriculumFields = subject === '수학' ? {
       curriculum_version: formData.curriculum_version || null,
       course: formData.course || null,
       curriculum_unit_key: formData.curriculum_unit_key || null,
       english_grammar_unit: null,
       english_reading_units: null,
+      korean_categories: null,
     } : subject === '영어' ? {
       // ENGLISH-CURRICULUM-V1: Include English curriculum fields
       curriculum_version: null,
@@ -666,12 +689,24 @@ export function LessonRecordForm({
       english_reading_units: formData.english_reading_units && formData.english_reading_units.length > 0 
         ? formData.english_reading_units 
         : null,
+      korean_categories: null,
+    } : subject === '국어' ? {
+      // KOREAN-CATEGORY-V1: Include Korean curriculum categories
+      curriculum_version: null,
+      course: null,
+      curriculum_unit_key: null,
+      english_grammar_unit: null,
+      english_reading_units: null,
+      korean_categories: formData.korean_categories && formData.korean_categories.length > 0
+        ? formData.korean_categories
+        : null,
     } : {
       curriculum_version: null,
       course: null,
       curriculum_unit_key: null,
       english_grammar_unit: null,
       english_reading_units: null,
+      korean_categories: null,
     };
 
     const basePayload = {
@@ -1284,7 +1319,39 @@ export function LessonRecordForm({
           </div>
         )}
 
-        {/* SHARED-FORM-V3: Disable understanding_score for test visits AND absences */}
+        {/* KOREAN-CATEGORY-V1: Korean subject categories multi-select */}
+        {formData.subject === '국어' && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">국어 수업 카테고리(복수 선택)</Label>
+            <div className="p-3 bg-secondary/50 rounded-lg grid grid-cols-2 gap-2">
+              {KOREAN_CATEGORY_OPTIONS.map((category) => (
+                <div key={category} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`korean_category_${category}`}
+                    checked={formData.korean_categories.includes(category)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setFormData({ ...formData, korean_categories: [...formData.korean_categories, category] });
+                      } else {
+                        setFormData({ ...formData, korean_categories: formData.korean_categories.filter(c => c !== category) });
+                      }
+                    }}
+                    disabled={isViewMode}
+                  />
+                  <label htmlFor={`korean_category_${category}`} className="text-sm cursor-pointer">{category}</label>
+                </div>
+              ))}
+            </div>
+            {/* View mode: show as badges */}
+            {isViewMode && formData.korean_categories.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {formData.korean_categories.map((cat) => (
+                  <Badge key={cat} variant="secondary" className="text-xs">{cat}</Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {(() => {
           const isDisabled = shouldDisableUnderstandingScore(formData.lesson_types, formData.attendance_status);
           const isTestVisit = formData.lesson_types.includes('테스트방문');

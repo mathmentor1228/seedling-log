@@ -142,6 +142,8 @@ interface LessonRecord {
   course: string | null;
   english_grammar_unit: string | null;
   english_reading_units: string[] | null;
+  // KOREAN-CATEGORY-V1: Korean subject categories
+  korean_categories: string[] | null;
 }
 
 interface CurriculumInfo {
@@ -803,6 +805,27 @@ function buildJsonUserPrompt(
       
       if (lesson.test_result_text) {
         prompt += `  테스트: ${lesson.test_title || '테스트'} - ${lesson.test_result_text}\n`;
+      }
+      
+      // KOREAN-CATEGORY-V1: Include Korean subject categories
+      if (lesson.korean_categories && lesson.korean_categories.length > 0) {
+        prompt += `  국어 학습 영역: ${lesson.korean_categories.join(', ')}\n`;
+      }
+    }
+
+    // KOREAN-CATEGORY-V1: Aggregate unique Korean categories for the week
+    if (subject === '국어') {
+      const allKoreanCategories = new Set<string>();
+      for (const lesson of data.lessons) {
+        if (lesson.korean_categories) {
+          for (const cat of lesson.korean_categories) {
+            allKoreanCategories.add(cat);
+          }
+        }
+      }
+      if (allKoreanCategories.size > 0) {
+        prompt += `\n  [이번 주 국어 학습 영역]: ${Array.from(allKoreanCategories).join(', ')}\n`;
+        prompt += `  ※ 국어 리포트 시 자연스럽게 언급: "이번 주 국어는 {카테고리} 중심으로 학습했습니다."\n`;
       }
     }
 
