@@ -202,9 +202,10 @@ function getUserCurriculumDefaults(userId?: string | null): { version: string; c
 
 // SHARED-FORM-V3: Helper to check if understanding_score should be disabled
 const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
+const DISABLE_SCORE_LESSON_TYPES = ['테스트방문', '휴강'];
 function shouldDisableUnderstandingScore(lessonTypes: string[], attendanceStatus: string[]): boolean {
-  // Disable for test-only visits
-  if (lessonTypes.includes('테스트방문')) return true;
+  // Disable for test-only visits and holidays
+  if (lessonTypes.some(lt => DISABLE_SCORE_LESSON_TYPES.includes(lt))) return true;
   // Disable for absences
   if (attendanceStatus.some(s => ABSENCE_STATUSES.includes(s))) return true;
   return false;
