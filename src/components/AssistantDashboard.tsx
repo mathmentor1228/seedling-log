@@ -65,6 +65,9 @@ interface RosterStudent {
   hasTest: boolean;
   hyugangRecordId: string | null;
   attendanceStatus: string[];
+  // HW-ISSUE-BADGE-TODAY-V1: Track if homework_check_note exists for today
+  hasHomeworkIssue: boolean;
+  homeworkCheckNote: string | null;
 }
 
 interface Holiday {
@@ -304,11 +307,13 @@ export default function AssistantDashboard() {
       let hyugangMap: Record<string, string> = {};
       let hasTestMap: Record<string, boolean> = {};
       let attendanceMap: Record<string, string[]> = {};
+      // HW-ISSUE-BADGE-TODAY-V1: Track homework_check_note for today
+      let homeworkIssueMap: Record<string, string | null> = {};
 
       if (studentIds.length > 0 && classIds.length > 0) {
         const { data: dateRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, lesson_types, test_result_text, attendance_status')
+          .select('id, student_id, class_id, lesson_types, test_result_text, attendance_status, homework_check_note')
           .eq('lesson_date', dateStr)
           .in('student_id', studentIds)
           .in('class_id', classIds);
@@ -323,6 +328,10 @@ export default function AssistantDashboard() {
             hasTestMap[key] = true;
           }
           attendanceMap[key] = lr.attendance_status || ['정상등원'];
+          // HW-ISSUE-BADGE-TODAY-V1: Check for homework_check_note
+          if (lr.homework_check_note && lr.homework_check_note.trim() !== '') {
+            homeworkIssueMap[key] = lr.homework_check_note;
+          }
         });
       }
 
@@ -347,6 +356,9 @@ export default function AssistantDashboard() {
           hasTest: hasTestMap[key] || false,
           hyugangRecordId: hyugangMap[key] || null,
           attendanceStatus: attendanceMap[key] || ['정상등원'],
+          // HW-ISSUE-BADGE-TODAY-V1
+          hasHomeworkIssue: !!homeworkIssueMap[key],
+          homeworkCheckNote: homeworkIssueMap[key] || null,
         };
       });
 
@@ -813,6 +825,30 @@ export default function AssistantDashboard() {
                                     {student.hasTest && (
                                       <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
                                         테스트
+                                      </Badge>
+                                    )}
+                                    {/* HW-ISSUE-BADGE-TODAY-V1: Show issue badge when homework_check_note exists */}
+                                    {student.hasHomeworkIssue && (
+                                      <Badge 
+                                        className="bg-orange-500/15 text-orange-600 border-orange-500/30 text-xs cursor-pointer hover:bg-orange-500/25"
+                                        onClick={() => {
+                                          setModalContext({
+                                            date: dateStr,
+                                            student_id: student.student_id,
+                                            student_name: student.student_name,
+                                            class_id: student.class_id,
+                                            class_name: student.class_name,
+                                            subject: student.subject,
+                                            teacher_id: student.teacher_id,
+                                            teacher_name: student.teacher_name,
+                                            start_time: student.start_time,
+                                            existingRecordId: student.existingRecordId,
+                                          });
+                                          setModalOpen(true);
+                                        }}
+                                        title={student.homeworkCheckNote || '이슈 있음'}
+                                      >
+                                        이슈
                                       </Badge>
                                     )}
                                   </>
