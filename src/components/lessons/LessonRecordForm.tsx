@@ -191,13 +191,13 @@ const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
  * LessonRecordForm - Shared component for lesson record creation and editing
  * Used by both Dashboard and Lessons pages via LessonModal wrapper.
  * LESSON-SHARED-FORM-V3
- * TAG-PREFILL-STUDENT-V1
+ * TAG-PREFILL-MATH-ENGLISH-V1: Student-specific prefill for Math and English
  */
 
-// TAG-PREFILL-STUDENT-V1: Track source of curriculum tag prefill
+// TAG-PREFILL-MATH-ENGLISH-V1: Track source of curriculum tag prefill
 type TagSource = 'student_last' | 'user_default' | 'empty' | 'existing_record';
 
-// TAG-PREFILL-STUDENT-V1: LocalStorage key for user-level curriculum defaults
+// TAG-PREFILL-MATH-ENGLISH-V1: LocalStorage key for user-level curriculum defaults
 function curriculumDefaultsKey(userId?: string | null) {
   return userId ? `lesson_records:curriculumDefaults:${userId}` : 'lesson_records:curriculumDefaults';
 }
@@ -285,13 +285,18 @@ export function LessonRecordForm({
   // MATH-CURRICULUM-TAG-V2: Validation state for custom course
   const [hasCustomCourseError, setHasCustomCourseError] = useState(false);
 
-  // TAG-PREFILL-STUDENT-V1: Track curriculum tag prefill source
+  // TAG-PREFILL-MATH-ENGLISH-V1: Track curriculum tag prefill source (separate for Math and English)
   const [tagSource, setTagSource] = useState<TagSource>('empty');
+  const [englishTagSource, setEnglishTagSource] = useState<TagSource>('empty');
   const [tagPrefillOccurred, setTagPrefillOccurred] = useState(false);
-  const tagUserChangedRef = useRef(false); // Track if user manually changed tags
-  // TAG_PREFILL_DEBUG_V2: Guard flag to prevent subsequent resets from wiping prefilled values
-  const hasAppliedPrefillRef = useRef(false);
+  const [englishTagPrefillOccurred, setEnglishTagPrefillOccurred] = useState(false);
+  // TAG-PREFILL-MATH-ENGLISH-V1: Guard flags to prevent wipes
+  const tagUserChangedRef = useRef(false); // Track if user manually changed math tags
+  const englishTagUserChangedRef = useRef(false); // Track if user manually changed english tags
+  const hasAppliedMathPrefillRef = useRef(false); // Guard for math prefill
+  const hasAppliedEnglishPrefillRef = useRef(false); // Guard for english prefill
   const [prefillDebugRecordId, setPrefillDebugRecordId] = useState<string | null>(null);
+  const [englishPrefillDebugRecordId, setEnglishPrefillDebugRecordId] = useState<string | null>(null);
 
   // Previous lesson state
   const [previousLesson, setPreviousLesson] = useState<LessonRecord | null>(null);
@@ -322,8 +327,7 @@ export function LessonRecordForm({
   const [prevHomeworkOverrideText, setPrevHomeworkOverrideText] = useState('');
   const [isSavingPrevHomeworkOverride, setIsSavingPrevHomeworkOverride] = useState(false);
 
-  // TAG-PREFILL-STUDENT-V1: Prefill math curriculum tags from student's most recent record
-  // TAG_PREFILL_DEBUG_V2: Improved prefill logic with guard flag
+  // TAG-PREFILL-MATH-ENGLISH-V1: Prefill math curriculum tags from student's most recent record
   const prefillStudentCurriculumTags = useCallback(async (studentId: string, userId: string) => {
     if (!studentId) {
       setTagSource('empty');
@@ -331,15 +335,14 @@ export function LessonRecordForm({
       return;
     }
 
-    // TAG_PREFILL_DEBUG_V2: Skip if prefill already applied in this session
-    if (hasAppliedPrefillRef.current) {
-      console.log('[TAG_PREFILL_DEBUG_V2] Skipping prefill - already applied in session');
+    // TAG-PREFILL-MATH-ENGLISH-V1: Skip if prefill already applied in this session
+    if (hasAppliedMathPrefillRef.current) {
+      console.log('[TAG_PREFILL_DEBUG_V3] Skipping math prefill - already applied in session');
       return;
     }
 
     try {
-      // TAG_PREFILL_DEBUG_V2: Query most recent math lesson - removed strict curriculum_unit_key requirement
-      // Now allows prefill if ANY of curriculum_version OR course OR curriculum_unit_key is set
+      // Query most recent math lesson - allows prefill if ANY of curriculum_version OR course OR curriculum_unit_key is set
       const { data: recentMathLesson } = await supabase
         .from('lesson_records')
         .select('id, curriculum_version, course, curriculum_unit_key, lesson_date, submitted')
@@ -363,9 +366,9 @@ export function LessonRecordForm({
         setTagSource('student_last');
         setTagPrefillOccurred(true);
         tagUserChangedRef.current = false;
-        hasAppliedPrefillRef.current = true; // TAG_PREFILL_DEBUG_V2: Mark prefill applied
+        hasAppliedMathPrefillRef.current = true;
         setPrefillDebugRecordId(recentMathLesson.id);
-        console.log('[TAG_PREFILL_DEBUG_V2] Prefilled from student last record:', recentMathLesson);
+        console.log('[TAG_PREFILL_DEBUG_V3] Math prefilled from student last record:', recentMathLesson);
         return;
       }
 
@@ -381,9 +384,9 @@ export function LessonRecordForm({
         setTagSource('user_default');
         setTagPrefillOccurred(true);
         tagUserChangedRef.current = false;
-        hasAppliedPrefillRef.current = true; // TAG_PREFILL_DEBUG_V2: Mark prefill applied
+        hasAppliedMathPrefillRef.current = true;
         setPrefillDebugRecordId(null);
-        console.log('[TAG_PREFILL_DEBUG_V2] Prefilled from user defaults:', userDefaults);
+        console.log('[TAG_PREFILL_DEBUG_V3] Math prefilled from user defaults:', userDefaults);
         return;
       }
 
@@ -392,20 +395,31 @@ export function LessonRecordForm({
       setTagPrefillOccurred(false);
       setPrefillDebugRecordId(null);
     } catch (error) {
-      console.error('[TAG_PREFILL_DEBUG_V2] Error fetching curriculum tags:', error);
+      console.error('[TAG_PREFILL_DEBUG_V3] Error fetching math curriculum tags:', error);
       setTagSource('empty');
       setPrefillDebugRecordId(null);
     }
   }, []);
 
-  // ENGLISH-CURRICULUM-V1: Prefill English curriculum tags from student's most recent English record
+  // TAG-PREFILL-MATH-ENGLISH-V1: Prefill English curriculum tags from student's most recent English record
   const prefillEnglishCurriculumTags = useCallback(async (studentId: string) => {
-    if (!studentId) return;
+    if (!studentId) {
+      setEnglishTagSource('empty');
+      setEnglishPrefillDebugRecordId(null);
+      return;
+    }
+
+    // Skip if prefill already applied in this session
+    if (hasAppliedEnglishPrefillRef.current) {
+      console.log('[TAG_PREFILL_DEBUG_V3] Skipping english prefill - already applied in session');
+      return;
+    }
 
     try {
+      // Query most recent English lesson - qualifies if grammar_unit OR reading_units has values
       const { data: recentEnglishLesson } = await supabase
         .from('lesson_records')
-        .select('english_grammar_unit, english_reading_units, lesson_date, submitted')
+        .select('id, english_grammar_unit, english_reading_units, lesson_date, submitted')
         .eq('student_id', studentId)
         .eq('subject', '영어')
         .or('english_grammar_unit.not.is.null,english_reading_units.not.is.null')
@@ -421,13 +435,23 @@ export function LessonRecordForm({
           english_grammar_unit: recentEnglishLesson.english_grammar_unit || null,
           english_reading_units: recentEnglishLesson.english_reading_units || [],
         }));
-        setTagSource('student_last');
-        setTagPrefillOccurred(true);
-        tagUserChangedRef.current = false;
-        console.log('[ENGLISH-CURRICULUM-V1] Prefilled from student last English record:', recentEnglishLesson);
+        setEnglishTagSource('student_last');
+        setEnglishTagPrefillOccurred(true);
+        englishTagUserChangedRef.current = false;
+        hasAppliedEnglishPrefillRef.current = true;
+        setEnglishPrefillDebugRecordId(recentEnglishLesson.id);
+        console.log('[TAG_PREFILL_DEBUG_V3] English prefilled from student last record:', recentEnglishLesson);
+        return;
       }
+
+      // No prefill source found for English
+      setEnglishTagSource('empty');
+      setEnglishTagPrefillOccurred(false);
+      setEnglishPrefillDebugRecordId(null);
     } catch (error) {
-      console.error('[ENGLISH-CURRICULUM-V1] Error fetching English curriculum tags:', error);
+      console.error('[TAG_PREFILL_DEBUG_V3] Error fetching English curriculum tags:', error);
+      setEnglishTagSource('empty');
+      setEnglishPrefillDebugRecordId(null);
     }
   }, []);
 
@@ -495,11 +519,15 @@ export function LessonRecordForm({
             // KOREAN-CATEGORY-V1: Load Korean curriculum categories
             korean_categories: (record as any).korean_categories || [],
           });
-          // TAG_PREFILL_DEBUG_V2: Existing record - mark source and prevent prefill
+          // TAG-PREFILL-MATH-ENGLISH-V1: Existing record - mark source and prevent prefill
           setTagSource('existing_record');
+          setEnglishTagSource('existing_record');
           setTagPrefillOccurred(false);
-          hasAppliedPrefillRef.current = true; // Prevent prefill from running for existing records
+          setEnglishTagPrefillOccurred(false);
+          hasAppliedMathPrefillRef.current = true; // Prevent prefill from running for existing records
+          hasAppliedEnglishPrefillRef.current = true;
           setPrefillDebugRecordId(record.id);
+          setEnglishPrefillDebugRecordId(record.id);
           setTestFormData({
             test_name: record.test_name || '',
             test_result_text: record.test_result_text || '',
@@ -1278,7 +1306,7 @@ export function LessonRecordForm({
         </div>
 
         {/* MATH-CURRICULUM-TAG-V2: Curriculum tagging for Math only */}
-        {/* TAG-PREFILL-STUDENT-V1: Show prefill indicator and debug info */}
+        {/* TAG-PREFILL-MATH-ENGLISH-V1: Show prefill indicator and debug info */}
         {formData.subject === '수학' && (
           <div className="space-y-2">
             <MathCurriculumTag
@@ -1298,22 +1326,23 @@ export function LessonRecordForm({
               onValidationError={setHasCustomCourseError}
               disabled={isViewMode}
             />
-            {/* TAG-PREFILL-STUDENT-V1: Show helper text when prefill occurred */}
+            {/* TAG-PREFILL-MATH-ENGLISH-V1: Show helper text when prefill occurred */}
             {tagPrefillOccurred && !tagUserChangedRef.current && (
               <p className="text-xs text-muted-foreground">
                 ✓ 최근 입력 태그를 불러왔습니다.
               </p>
             )}
-            {/* TAG_PREFILL_DEBUG_V2: Admin debug info with record ID */}
+            {/* TAG_PREFILL_DEBUG_V3: Admin debug info with record ID */}
             {isAdmin && (
               <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-                TAG_PREFILL_DEBUG_V2: source={tagSource} recordId={prefillDebugRecordId || 'none'}
+                TAG_PREFILL_DEBUG_V3: source={tagSource} recordId={prefillDebugRecordId || 'none'}
               </span>
             )}
           </div>
         )}
 
         {/* ENGLISH-CURRICULUM-V1: English curriculum tagging */}
+        {/* TAG-PREFILL-MATH-ENGLISH-V1 */}
         {formData.subject === '영어' && (
           <div className="space-y-2">
             <EnglishCurriculumTag
@@ -1321,8 +1350,8 @@ export function LessonRecordForm({
               readingUnits={formData.english_reading_units}
               studentGrade={null} // Grade not available in form context; user selects level manually
               onChange={(grammarUnit, readingUnits) => {
-                tagUserChangedRef.current = true;
-                setTagPrefillOccurred(false);
+                englishTagUserChangedRef.current = true;
+                setEnglishTagPrefillOccurred(false);
                 setFormData(prev => ({
                   ...prev,
                   english_grammar_unit: grammarUnit,
@@ -1331,11 +1360,17 @@ export function LessonRecordForm({
               }}
               disabled={isViewMode}
             />
-            {/* ENGLISH-CURRICULUM-V1: Show helper text when prefill occurred */}
-            {tagPrefillOccurred && !tagUserChangedRef.current && (
+            {/* TAG-PREFILL-MATH-ENGLISH-V1: Show helper text when prefill occurred */}
+            {englishTagPrefillOccurred && !englishTagUserChangedRef.current && (
               <p className="text-xs text-muted-foreground">
                 ✓ 최근 입력 태그를 불러왔습니다.
               </p>
+            )}
+            {/* TAG_PREFILL_DEBUG_V3: Admin debug info for English */}
+            {isAdmin && (
+              <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
+                TAG_PREFILL_DEBUG_V3: source={englishTagSource} recordId={englishPrefillDebugRecordId || 'none'}
+              </span>
             )}
           </div>
         )}
