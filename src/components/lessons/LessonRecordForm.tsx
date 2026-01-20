@@ -1122,6 +1122,7 @@ export function LessonRecordForm({
                       <span>확인됨 {previousLessonHomework.checker_name && `(${previousLessonHomework.checker_name})`}</span>
                     </div>
                   ) : (
+                    // HOMEWORK-STATUS-SINGLE-SOURCE-V2: This is the ONLY homework status control in the shared form
                     <div className="space-y-2 pt-2 border-t">
                       <Label className="text-sm">숙제상태 확인</Label>
                       <div className="flex flex-wrap gap-2">
@@ -1384,22 +1385,8 @@ export function LessonRecordForm({
           );
         })()}
 
-        <div className="space-y-2">
-          <Label>숙제 상태 *</Label>
-          <Select
-            value={formData.homework_status}
-            onValueChange={(value) => setFormData({ ...formData, homework_status: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="상태 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              {HOMEWORK_STATUS.map((status) => (
-                <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* HOMEWORK-STATUS-SINGLE-SOURCE-V2: Duplicate homework_status block removed. 
+            homework_status is managed via the assistant homework-check area above (lines 1125-1163). */}
 
         {/* FORM-WORKFLOW-REFINE-V2: Updated learning issues labels */}
         <div className="space-y-2">
