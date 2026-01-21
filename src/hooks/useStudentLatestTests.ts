@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
-interface LatestTest {
+export interface LatestTest {
   subject: SubjectType;
   lesson_date: string;
   test_title: string | null;
@@ -18,6 +18,35 @@ interface StudentLatestTests {
   tests: LatestTest[];
   loading: boolean;
   error: string | null;
+}
+
+// DASH-ROW-TEST-SNIPPET-V1: Helper to format compact test snippet for roster row
+export function formatTestSnippet(test: LatestTest, maxLength: number = 35): string {
+  const titlePart = test.test_title || '';
+  const resultPart = test.test_result_text || '';
+  
+  let snippet = '테스트: ';
+  if (titlePart) {
+    snippet += titlePart;
+  }
+  if (resultPart) {
+    snippet += titlePart ? ` – ${resultPart}` : resultPart;
+  }
+  
+  // English: append pass/fail if present
+  if (test.subject === '영어' && test.english_pass_fail) {
+    const passFail = test.english_pass_fail === 'pass' ? '통과' : test.english_pass_fail === 'fail' ? '불통과' : '';
+    if (passFail) {
+      snippet += ` (${passFail})`;
+    }
+  }
+  
+  // Truncate if too long
+  if (snippet.length > maxLength) {
+    return snippet.slice(0, maxLength - 1) + '…';
+  }
+  
+  return snippet;
 }
 
 // Cache for fetched tests - keyed by studentId
