@@ -43,7 +43,7 @@ import { RosterActionModal } from '@/components/RosterActionModal';
 import AssistantChecklist from '@/components/AssistantChecklist';
 import { TestVisitModal } from '@/components/TestVisitModal';
 import { TestVisitsList } from '@/components/TestVisitsList';
-import { useStudentLatestTests, formatTestLine } from '@/hooks/useStudentLatestTests';
+import { useStudentLatestTests, formatTestLine, formatTestSnippet, LatestTest } from '@/hooks/useStudentLatestTests';
 
 interface Teacher {
   id: string;
@@ -71,6 +71,12 @@ interface RosterStudent {
   // HW-ISSUE-BADGE-TODAY-V1: Track if homework_check_note exists for today
   hasHomeworkIssue: boolean;
   homeworkCheckNote: string | null;
+  // DASH-ROW-TEST-SNIPPET-V1: Today's test data for inline display
+  todayTestData: {
+    test_title: string | null;
+    test_result_text: string | null;
+    english_pass_fail: string | null;
+  } | null;
 }
 
 interface Holiday {
@@ -316,11 +322,13 @@ export default function AssistantDashboard() {
       let attendanceMap: Record<string, string[]> = {};
       // HW-ISSUE-BADGE-TODAY-V1: Track homework_check_note for today
       let homeworkIssueMap: Record<string, string | null> = {};
+      // DASH-ROW-TEST-SNIPPET-V1: Track today's test data for inline display
+      let todayTestDataMap: Record<string, { test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null> = {};
 
       if (studentIds.length > 0 && classIds.length > 0) {
         const { data: dateRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, lesson_types, test_result_text, attendance_status, homework_check_note')
+          .select('id, student_id, class_id, subject, lesson_types, test_title, test_result_text, english_pass_fail, attendance_status, homework_check_note')
           .eq('lesson_date', dateStr)
           .in('student_id', studentIds)
           .in('class_id', classIds);
@@ -338,6 +346,14 @@ export default function AssistantDashboard() {
           // HW-ISSUE-BADGE-TODAY-V1: Check for homework_check_note
           if (lr.homework_check_note && lr.homework_check_note.trim() !== '') {
             homeworkIssueMap[key] = lr.homework_check_note;
+          }
+          // DASH-ROW-TEST-SNIPPET-V1: Track today's test data
+          if ((lr.test_title && lr.test_title.trim() !== '') || (lr.test_result_text && lr.test_result_text.trim() !== '')) {
+            todayTestDataMap[key] = {
+              test_title: lr.test_title || null,
+              test_result_text: lr.test_result_text || null,
+              english_pass_fail: lr.english_pass_fail || null,
+            };
           }
         });
       }
@@ -366,6 +382,8 @@ export default function AssistantDashboard() {
           // HW-ISSUE-BADGE-TODAY-V1
           hasHomeworkIssue: !!homeworkIssueMap[key],
           homeworkCheckNote: homeworkIssueMap[key] || null,
+          // DASH-ROW-TEST-SNIPPET-V1
+          todayTestData: todayTestDataMap[key] || null,
         };
       });
 
@@ -864,6 +882,19 @@ export default function AssistantDashboard() {
                                       </Badge>
                                     )}
                                   </>
+                                )}
+                                
+                                {/* DASH-ROW-TEST-SNIPPET-V1: Show today's test snippet inline */}
+                                {!student.hyugangRecordId && student.todayTestData && (
+                                  <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={`테스트: ${student.todayTestData.test_title || ''} ${student.todayTestData.test_result_text || ''}`}>
+                                    {formatTestSnippet({
+                                      subject: student.subject as '수학' | '과학' | '영어' | '국어',
+                                      lesson_date: dateStr,
+                                      test_title: student.todayTestData.test_title,
+                                      test_result_text: student.todayTestData.test_result_text,
+                                      english_pass_fail: student.todayTestData.english_pass_fail,
+                                    })}
+                                  </span>
                                 )}
                               </div>
 
