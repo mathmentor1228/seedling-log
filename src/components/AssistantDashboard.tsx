@@ -43,7 +43,7 @@ import { RosterActionModal } from '@/components/RosterActionModal';
 import AssistantChecklist from '@/components/AssistantChecklist';
 import { TestVisitModal } from '@/components/TestVisitModal';
 import { TestVisitsList } from '@/components/TestVisitsList';
-import { useStudentLatestTests, formatTestLine, formatTestSnippet, LatestTest } from '@/hooks/useStudentLatestTests';
+import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
 
 interface Teacher {
   id: string;
@@ -884,18 +884,23 @@ export default function AssistantDashboard() {
                                   </>
                                 )}
                                 
-                                {/* DASH-ROW-TEST-SNIPPET-V1: Show today's test snippet inline */}
-                                {!student.hyugangRecordId && student.todayTestData && (
-                                  <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={`테스트: ${student.todayTestData.test_title || ''} ${student.todayTestData.test_result_text || ''}`}>
-                                    {formatTestSnippet({
-                                      subject: student.subject as '수학' | '과학' | '영어' | '국어',
-                                      lesson_date: dateStr,
-                                      test_title: student.todayTestData.test_title,
-                                      test_result_text: student.todayTestData.test_result_text,
-                                      english_pass_fail: student.todayTestData.english_pass_fail,
-                                    })}
-                                  </span>
-                                )}
+                                {/* DASH-LATEST-TEST-CONTENT-FIRST-V1: Show today's test snippet inline (only if content exists) */}
+                                {!student.hyugangRecordId && student.todayTestData && student.todayTestData.test_title && (() => {
+                                  const testObj = {
+                                    subject: student.subject as '수학' | '과학' | '영어' | '국어',
+                                    lesson_date: dateStr,
+                                    test_title: student.todayTestData.test_title,
+                                    test_result_text: student.todayTestData.test_result_text,
+                                    english_pass_fail: student.todayTestData.english_pass_fail,
+                                  };
+                                  const snippet = formatTestSnippet(testObj);
+                                  const tooltip = formatTestTooltip(testObj);
+                                  return snippet ? (
+                                    <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={tooltip}>
+                                      {snippet}
+                                    </span>
+                                  ) : null;
+                                })()}
                               </div>
 
                               {/* Actions - Open Modal instead of navigating */}
