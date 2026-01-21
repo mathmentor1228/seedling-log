@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useAuth, isAdmin as checkIsAdmin } from '@/lib/auth';
 import { getKSTDateObject, getTodayKST } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
@@ -32,7 +32,9 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronLeft,
-  FlaskConical
+  FlaskConical,
+  TestTube2,
+  Loader2
 } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -41,6 +43,7 @@ import { RosterActionModal } from '@/components/RosterActionModal';
 import AssistantChecklist from '@/components/AssistantChecklist';
 import { TestVisitModal } from '@/components/TestVisitModal';
 import { TestVisitsList } from '@/components/TestVisitsList';
+import { useStudentLatestTests, formatTestLine } from '@/hooks/useStudentLatestTests';
 
 interface Teacher {
   id: string;
@@ -145,8 +148,9 @@ function getAttendanceStatusBadge(attendanceStatus: string[] | undefined) {
 
 
 export default function AssistantDashboard() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { toast } = useToast();
+  const isAdmin = checkIsAdmin(role);
 
   const [loading, setLoading] = useState(true);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
@@ -190,6 +194,9 @@ export default function AssistantDashboard() {
 
   // Test visit modal state
   const [testVisitModalOpen, setTestVisitModalOpen] = useState(false);
+
+  // DASH-LATEST-TEST-TOGGLE-V1: Latest test toggle hook
+  const latestTests = useStudentLatestTests();
 
   useEffect(() => {
     if (user) {
@@ -778,13 +785,18 @@ export default function AssistantDashboard() {
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {group.students.map((student) => (
+                          {group.students.map((student) => {
+                            const testState = latestTests.getStudentState(student.student_id);
+                            const isTestExpanded = latestTests.isExpanded(student.student_id);
+                            
+                            return (
                             <div
                               key={`${student.student_id}-${student.class_id}`}
-                              className={`flex items-center justify-between p-3 rounded-lg ${
+                              className={`rounded-lg ${
                                 student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'
                               }`}
                             >
+                              <div className="flex items-center justify-between p-3">
                               <div className="flex items-center gap-3 flex-wrap flex-1 min-w-0">
                                 <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>
                                   {student.student_name}
@@ -803,7 +815,7 @@ export default function AssistantDashboard() {
                                     {/* Attendance badge - show first for visibility */}
                                     {getAttendanceStatusBadge(student.attendanceStatus)}
                                     {student.previousHomeworkStatus === 'not_done' && (
-                                      <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+                                      <Badge className="bg-destructive/15 text-destructive border-destructive/30 text-xs">
                                         지난 숙제 미이행
                                       </Badge>
                                     )}
@@ -823,7 +835,7 @@ export default function AssistantDashboard() {
                                       </Badge>
                                     )}
                                     {student.hasTest && (
-                                      <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
+                                      <Badge className="bg-primary/15 text-primary border-primary/30 text-xs">
                                         테스트
                                       </Badge>
                                     )}
@@ -857,6 +869,22 @@ export default function AssistantDashboard() {
 
                               {/* Actions - Open Modal instead of navigating */}
                               <div className="flex items-center gap-2 shrink-0">
+                                {/* DASH-LATEST-TEST-TOGGLE-V1: Latest test toggle button */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs h-7 px-2"
+                                  onClick={() => latestTests.toggleStudent(student.student_id)}
+                                >
+                                  {testState?.loading ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <TestTube2 className="w-3.5 h-3.5 mr-1" />
+                                      {isTestExpanded ? '접기' : '최근 테스트'}
+                                    </>
+                                  )}
+                                </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -880,8 +908,40 @@ export default function AssistantDashboard() {
                                   숙제/테스트
                                 </Button>
                               </div>
+                              </div>
+                              
+                              {/* DASH-LATEST-TEST-TOGGLE-V1: Latest test expanded section */}
+                              {isTestExpanded && testState && !testState.loading && (
+                                <div className="px-3 pb-3">
+                                  {testState.error ? (
+                                    <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                                      {testState.error}
+                                    </div>
+                                  ) : testState.tests.length === 0 ? (
+                                    <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                                      최근 테스트 기록이 없습니다.
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs bg-muted/30 p-2 rounded">
+                                      {testState.tests.map((test) => (
+                                        <div key={test.subject} className="flex items-center gap-2">
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{test.subject}</Badge>
+                                          <span className="text-muted-foreground truncate">{formatTestLine(test)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {/* DASH-LATEST-TEST-TOGGLE-V1 admin debug */}
+                                  {isAdmin && (
+                                    <div className="text-[10px] text-muted-foreground font-mono mt-1">
+                                      DASH-LATEST-TEST-TOGGLE-V1: count={testState.tests.length}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          ))}
+                          );
+                          })}
                         </div>
                       )}
                     </CardContent>

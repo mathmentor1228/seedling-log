@@ -19,6 +19,7 @@ import { RosterActionModal } from '@/components/RosterActionModal';
 import { HomeworkAlertModal } from '@/components/HomeworkAlertModal';
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
+import { useStudentLatestTests, formatTestLine } from '@/hooks/useStudentLatestTests';
 import { 
   Users, 
   BookOpen, 
@@ -33,7 +34,9 @@ import {
   Eye,
   EyeOff,
   UserCheck,
-  PenLine
+  PenLine,
+  TestTube2,
+  Loader2
 } from 'lucide-react';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
@@ -283,6 +286,10 @@ function getAttendanceStatusBadge(attendanceStatus: unknown) {
 export default function Dashboard() {
   const { role, user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  
+  // DASH-LATEST-TEST-TOGGLE-V1: Latest test toggle hook - must be called before any early returns
+  const latestTests = useStudentLatestTests();
 
   // Assistants get their own dedicated dashboard
   if (isAssistant(role)) {
@@ -310,8 +317,6 @@ export default function Dashboard() {
   // TEACHER-OVERDUE-WARN-V1: Teacher's own overdue lessons
   const [teacherOverdueLessons, setTeacherOverdueLessons] = useState<TeacherOverdueLesson[]>([]);
   const [hasShownOverdueToast, setHasShownOverdueToast] = useState(false);
-  
-  const navigate = useNavigate();
 
   // Admin roster data (grouped by teacher)
   const [adminRosterData, setAdminRosterData] = useState<{
@@ -1849,14 +1854,18 @@ export default function Dashboard() {
                               {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
                             </span>
                           </div>
-                          {(slot?.students || []).length > 0 ? (
+{(slot?.students || []).length > 0 ? (
                             <div className="space-y-2">
-                              {(slot?.students || []).map((student) => (
+                              {(slot?.students || []).map((student) => {
+                                const testState = latestTests.getStudentState(student.id);
+                                const isTestExpanded = latestTests.isExpanded(student.id);
+                                
+                                return (
                                 <div 
                                   key={student.id} 
-                                  className={`p-2 rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
+                                  className={`rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
                                 >
-                                  <div className="flex items-center justify-between">
+                                  <div className="flex items-center justify-between p-2">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
                                       {student.hyugangRecordId ? (
@@ -1900,6 +1909,22 @@ export default function Dashboard() {
                                       )}
                                     </div>
                                     <div className="flex items-center gap-2">
+                                      {/* DASH-LATEST-TEST-TOGGLE-V1: Latest test toggle button */}
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-xs h-7 px-2"
+                                        onClick={() => latestTests.toggleStudent(student.id)}
+                                      >
+                                        {testState?.loading ? (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          <>
+                                            <TestTube2 className="w-3.5 h-3.5 mr-1" />
+                                            {isTestExpanded ? '접기' : '최근 테스트'}
+                                          </>
+                                        )}
+                                      </Button>
                                       {student.hyugangRecordId ? (
                                         <Button
                                           variant="outline"
@@ -1931,14 +1956,46 @@ export default function Dashboard() {
                                       )}
                                     </div>
                                   </div>
+                                  
+                                  {/* DASH-LATEST-TEST-TOGGLE-V1: Latest test expanded section */}
+                                  {isTestExpanded && testState && !testState.loading && (
+                                    <div className="px-2 pb-2">
+                                      {testState.error ? (
+                                        <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                                          {testState.error}
+                                        </div>
+                                      ) : testState.tests.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                                          최근 테스트 기록이 없습니다.
+                                        </div>
+                                      ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs bg-muted/30 p-2 rounded">
+                                          {testState.tests.map((test) => (
+                                            <div key={test.subject} className="flex items-center gap-2">
+                                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">{test.subject}</Badge>
+                                              <span className="text-muted-foreground truncate">{formatTestLine(test)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {/* DASH-LATEST-TEST-TOGGLE-V1 admin debug */}
+                                      {isAdmin(role) && (
+                                        <div className="text-[10px] text-muted-foreground font-mono mt-1">
+                                          DASH-LATEST-TEST-TOGGLE-V1: count={testState.tests.length}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
                                   {/* TEACHER-HW-ALERT-V2: E) 지난 목표 display */}
                                   {!student.hyugangRecordId && student.prevNextLessonGoal && (
-                                    <div className="mt-1 text-xs text-muted-foreground pl-2 border-l-2 border-muted">
+                                    <div className="mt-1 mb-2 mx-2 text-xs text-muted-foreground pl-2 border-l-2 border-muted">
                                       <span className="font-medium">지난 목표:</span> {student.prevNextLessonGoal}
                                     </div>
                                   )}
                                 </div>
-                              ))}
+                              );
+                              })}
                             </div>
                           ) : (
                             <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
