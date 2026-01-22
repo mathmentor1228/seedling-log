@@ -42,6 +42,8 @@ export interface LessonRecordFormProps {
   mode?: 'view' | 'edit';
   onRequestEdit?: () => void;
   originalTeacherId?: string | null;
+  /** PREFILL-FIX-V5: Force new record mode - skip DB lookup for existing drafts */
+  forceNewRecord?: boolean;
 }
 
 interface HomeworkAssignment {
@@ -239,6 +241,7 @@ export function LessonRecordForm({
   mode = 'edit',
   onRequestEdit,
   originalTeacherId,
+  forceNewRecord = false,
 }: LessonRecordFormProps) {
   const { user, role } = useAuth();
   const { toast } = useToast();
@@ -299,9 +302,11 @@ export function LessonRecordForm({
   const lastEnglishPrefillKeyRef = useRef<string>('');
   const [prefillDebugRecordId, setPrefillDebugRecordId] = useState<string | null>(null);
   const [englishPrefillDebugRecordId, setEnglishPrefillDebugRecordId] = useState<string | null>(null);
-  // PREFILL-FIX-V4: Track if this is a NEW record (not existing) - survives draft creation
+  // PREFILL-FIX-V5: Track if this is a NEW record (not existing) - survives draft creation
   const [isNewRecordMode, setIsNewRecordMode] = useState<boolean>(false);
-  // PREFILL-FIX-V4: Track initial load completion for prefill timing
+  // PREFILL-FIX-V5: Track if this is a newly created draft (allows prefill even with recordId)
+  const [isNewDraft, setIsNewDraft] = useState<boolean>(false);
+  // PREFILL-FIX-V5: Track initial load completion for prefill timing
   const [initialLoadComplete, setInitialLoadComplete] = useState<boolean>(false);
 
   // Previous lesson state
@@ -477,11 +482,12 @@ export function LessonRecordForm({
     }
   }, []);
 
-  // PREFILL-FIX-V4: Reset prefill state when form context changes
+  // PREFILL-FIX-V5: Reset prefill state when form context changes
   useEffect(() => {
     // Reset all prefill guards when form is re-initialized
     setInitialLoadComplete(false);
     setIsNewRecordMode(false);
+    setIsNewDraft(false);
     tagUserChangedRef.current = false;
     englishTagUserChangedRef.current = false;
     lastMathPrefillKeyRef.current = '';
@@ -490,7 +496,7 @@ export function LessonRecordForm({
     setEnglishTagPrefillOccurred(false);
     initializeForm();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingRecordId, initialContext, isViewMode]);
+  }, [existingRecordId, initialContext, isViewMode, forceNewRecord]);
 
   async function initializeForm() {
     if (!user) return;
@@ -499,8 +505,9 @@ export function LessonRecordForm({
     try {
       let recordId = existingRecordId;
 
-      // If no existing record ID, check if one exists for this context
-      if (!recordId && initialContext?.student_id && initialContext?.class_id) {
+      // PREFILL-FIX-V5: Skip DB lookup when forceNewRecord is true (user explicitly clicked "+ 수업기록 생성")
+      // This prevents reusing a previous draft and ensures prefill runs correctly
+      if (!forceNewRecord && !recordId && initialContext?.student_id && initialContext?.class_id) {
         const { data: existing } = await supabase
           .from('lesson_records')
           .select('id')
@@ -512,7 +519,10 @@ export function LessonRecordForm({
 
         if (existing) {
           recordId = existing.id;
+          console.log('[PREFILL-FIX-V5] Found existing record for context:', existing.id);
         }
+      } else if (forceNewRecord) {
+        console.log('[PREFILL-FIX-V5] forceNewRecord=true, skipping DB lookup for existing drafts');
       }
 
       if (recordId) {
@@ -550,7 +560,7 @@ export function LessonRecordForm({
             // KOREAN-CATEGORY-V1: Load Korean curriculum categories
             korean_categories: (record as any).korean_categories || [],
           });
-          // PREFILL-FIX-V4: Existing record - mark source and prevent prefill
+          // PREFILL-FIX-V5: Existing record - mark source and prevent prefill
           setTagSource('existing_record');
           setEnglishTagSource('existing_record');
           setTagPrefillOccurred(false);
@@ -561,6 +571,7 @@ export function LessonRecordForm({
           setPrefillDebugRecordId(record.id);
           setEnglishPrefillDebugRecordId(record.id);
           setIsNewRecordMode(false); // This is an existing record
+          setIsNewDraft(false);
           setTestFormData({
             test_name: record.test_name || '',
             test_result_text: record.test_result_text || '',
@@ -623,28 +634,37 @@ export function LessonRecordForm({
               subject: newSubject,
               lesson_date: initialContext.lesson_date || getTodayKST(),
             }));
-            // PREFILL-FIX-V4: Mark as new record mode for prefill to run
+            // PREFILL-FIX-V5: Mark as new record mode AND new draft for prefill to run
             setIsNewRecordMode(true);
-            console.log('[PREFILL-FIX-V4] New draft created, isNewRecordMode=true, subject=', newSubject);
+            setIsNewDraft(true);
+            console.log('[PREFILL-FIX-V5] New draft created, isNewRecordMode=true, isNewDraft=true, subject=', newSubject);
           }
         }
       } else {
-        // PREFILL-FIX-V4: Form opened without initialContext (e.g., blank new form)
+        // PREFILL-FIX-V5: Form opened without initialContext (e.g., blank new form)
         setIsNewRecordMode(true);
-        console.log('[PREFILL-FIX-V4] No initialContext, marking as new record mode');
+        setIsNewDraft(true);
+        console.log('[PREFILL-FIX-V5] No initialContext, marking as new record mode');
       }
     } catch (error) {
       console.error('Error initializing form:', error);
     } finally {
       setLoading(false);
       setInitialLoadComplete(true);
-      console.log('[PREFILL-FIX-V4] Initial load complete');
+      console.log('[PREFILL-FIX-V5] Initial load complete');
     }
   }
 
-  // PREFILL-FIX-V4: useEffect to trigger prefill when student_id + subject + loading state settle
+  // PREFILL-FIX-V5: useEffect to trigger prefill when student_id + subject + loading state settle
+  // Allow prefill for new records OR new drafts (even if recordId exists)
   useEffect(() => {
-    if (!initialLoadComplete || !isNewRecordMode || !user?.id) {
+    if (!initialLoadComplete || !user?.id) {
+      return;
+    }
+    
+    // PREFILL-FIX-V5: Allow prefill if isNewRecordMode OR isNewDraft
+    if (!isNewRecordMode && !isNewDraft) {
+      console.log('[PREFILL-FIX-V5] Not new record/draft, skipping prefill');
       return;
     }
     
@@ -652,18 +672,18 @@ export function LessonRecordForm({
     const subject = formData.subject;
     
     if (!studentId) {
-      console.log('[PREFILL-FIX-V4] No student_id, skipping prefill');
+      console.log('[PREFILL-FIX-V5] No student_id, skipping prefill');
       return;
     }
 
-    console.log('[PREFILL-FIX-V4] Prefill trigger: student=', studentId, 'subject=', subject);
+    console.log('[PREFILL-FIX-V5] Prefill trigger: student=', studentId, 'subject=', subject, 'newMode=', isNewRecordMode, 'newDraft=', isNewDraft);
 
     if (subject === '수학') {
       prefillStudentCurriculumTags(studentId, user.id);
     } else if (subject === '영어') {
       prefillEnglishCurriculumTags(studentId);
     }
-  }, [initialLoadComplete, isNewRecordMode, formData.student_id, formData.subject, user?.id, prefillStudentCurriculumTags, prefillEnglishCurriculumTags]);
+  }, [initialLoadComplete, isNewRecordMode, isNewDraft, formData.student_id, formData.subject, user?.id, prefillStudentCurriculumTags, prefillEnglishCurriculumTags]);
 
   // PREV_HW_RLS_FIX_V1: Fetch previous lesson by student_id + subject only (not class_id/teacher_id)
   const [prevHwDebugInfo, setPrevHwDebugInfo] = useState<{ rows: number; found: boolean; srcDate: string; srcTeacher: string }>({ rows: 0, found: false, srcDate: '-', srcTeacher: '-' });
@@ -1400,10 +1420,10 @@ export function LessonRecordForm({
                 ✓ 최근 입력 태그를 불러왔습니다.
               </p>
             )}
-            {/* PREFILL-FIX-V4: Admin debug info with record ID and state */}
+            {/* PREFILL-FIX-V5: Admin debug info with record ID and state */}
             {isAdmin && (
               <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-                PREFILL-FIX-V4: source={tagSource} recordId={prefillDebugRecordId || 'none'} newMode={isNewRecordMode ? 1 : 0} loadDone={initialLoadComplete ? 1 : 0}
+                PREFILL-FIX-V5: source={tagSource} newMode={isNewRecordMode ? 1 : 0} isNewDraft={isNewDraft ? 1 : 0} recordId={currentDraftId?.slice(0, 8) || 'none'}
               </span>
             )}
           </div>
@@ -1434,10 +1454,10 @@ export function LessonRecordForm({
                 ✓ 최근 입력 태그를 불러왔습니다.
               </p>
             )}
-            {/* PREFILL-FIX-V4: Admin debug info for English */}
+            {/* PREFILL-FIX-V5: Admin debug info for English */}
             {isAdmin && (
               <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-                PREFILL-FIX-V4: source={englishTagSource} recordId={englishPrefillDebugRecordId || 'none'} newMode={isNewRecordMode ? 1 : 0}
+                PREFILL-FIX-V5: source={englishTagSource} newMode={isNewRecordMode ? 1 : 0} isNewDraft={isNewDraft ? 1 : 0} recordId={currentDraftId?.slice(0, 8) || 'none'}
               </span>
             )}
           </div>

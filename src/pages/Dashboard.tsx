@@ -366,6 +366,8 @@ export default function Dashboard() {
   const [adminLessonModalOpen, setAdminLessonModalOpen] = useState(false);
   const [adminLessonModalContext, setAdminLessonModalContext] = useState<LessonFormContext | null>(null);
   const [adminLessonModalRecordId, setAdminLessonModalRecordId] = useState<string | null>(null);
+  // PREFILL-FIX-V5: Track if opening for new record creation
+  const [adminLessonModalForceNew, setAdminLessonModalForceNew] = useState(false);
 
   // Roster action modal state (for homework quick actions)
   const [rosterActionModalOpen, setRosterActionModalOpen] = useState(false);
@@ -1634,6 +1636,8 @@ export default function Dashboard() {
                                             lesson_date: getTodayKST(),
                                           });
                                           setAdminLessonModalRecordId(lessonStatus?.recordId || null);
+                                          // PREFILL-FIX-V5: Force new record mode if no existing record
+                                          setAdminLessonModalForceNew(!lessonStatus?.recordId);
                                           setAdminLessonModalOpen(true);
                                         }}
                                       >
@@ -1716,6 +1720,8 @@ export default function Dashboard() {
                             lesson_date: getTodayKST(),
                           });
                           setAdminLessonModalRecordId(record.id);
+                          // PREFILL-FIX-V5: This is opening an existing record, not forcing new
+                          setAdminLessonModalForceNew(false);
                           setAdminLessonModalOpen(true);
                         }}
                       >
@@ -2221,7 +2227,12 @@ export default function Dashboard() {
       {/* LESSON-SHARED-FORM-V3: Unified Lesson Modal (Dashboard + Lessons use same form) */}
       <LessonModal
         open={adminLessonModalOpen}
-        onOpenChange={setAdminLessonModalOpen}
+        onOpenChange={(open) => {
+          setAdminLessonModalOpen(open);
+          if (!open) {
+            setAdminLessonModalForceNew(false);
+          }
+        }}
         context={adminLessonModalContext}
         existingRecordId={adminLessonModalRecordId}
         onSaved={async () => {
@@ -2229,6 +2240,7 @@ export default function Dashboard() {
           await fetchAdminRosterData();
         }}
         initialMode="edit"
+        forceNewRecord={adminLessonModalForceNew}
       />
 
       {/* Roster Action Modal for homework/test */}
