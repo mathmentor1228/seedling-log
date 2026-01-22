@@ -333,12 +333,27 @@ export function RosterActionModal({
     }
   }
 
-  // TEACHER-HW-ALERT-V2: Save homework check including homework_check_note to lesson_records
+  // HOMEWORK-STATUS-PERSIST-V1: Map homework check result to lesson_records.homework_status
+  // This maps from homework_assignments.result values to lesson_records.homework_status values
+  const mapHomeworkResultToStatus = (result: string): string => {
+    switch (result) {
+      case 'completed': return 'completed';
+      case 'partial': return 'partial';
+      case 'not_done': return 'not_done';
+      case 'unable_to_verify': return 'none_assigned'; // Fallback - unable to verify means we can't determine
+      default: return 'none_assigned';
+    }
+  };
+
+  // TEACHER-HW-ALERT-V2 + HOMEWORK-STATUS-PERSIST-V1: Save homework check including homework_status to lesson_records
   async function handleSaveHomeworkCheck() {
     if (!previousHomework || !homeworkCheckResult || !user) return;
     
     setIsSavingHomework(true);
     try {
+      // HOMEWORK-STATUS-PERSIST-V1: Calculate the homework_status to persist
+      const homeworkStatusToSave = mapHomeworkResultToStatus(homeworkCheckResult);
+      
       // Use RPC for assistants
       if (isAssistant) {
         const { error } = await supabase.rpc('update_homework_check', {
@@ -349,14 +364,35 @@ export function RosterActionModal({
         });
         if (error) throw error;
         
-        // Also save homework_check_note to lesson_records if there's a note
-        if (lessonRecord?.id && homeworkCheckNote.trim()) {
-          const { error: noteError } = await supabase
+        // HOMEWORK-STATUS-PERSIST-V1: Also save homework_status + homework_check_note to lesson_records
+        if (lessonRecord?.id) {
+          const updatePayload: Record<string, any> = {
+            homework_status: homeworkStatusToSave,
+          };
+          if (homeworkCheckNote.trim()) {
+            updatePayload.homework_check_note = homeworkCheckNote.trim();
+          }
+          
+          // Debug log for admin
+          console.log('[HOMEWORK-STATUS-PERSIST-V1] Saving to lesson_records:', {
+            recordId: lessonRecord.id,
+            sent: updatePayload,
+          });
+          
+          const { data: updatedRecord, error: noteError } = await supabase
             .from('lesson_records')
-            .update({ homework_check_note: homeworkCheckNote.trim() })
-            .eq('id', lessonRecord.id);
+            .update(updatePayload)
+            .eq('id', lessonRecord.id)
+            .select('homework_status')
+            .maybeSingle();
+          
           if (noteError) {
-            console.error('Error saving homework_check_note:', noteError);
+            console.error('[HOMEWORK-STATUS-PERSIST-V1] Error saving:', noteError);
+          } else {
+            console.log('[HOMEWORK-STATUS-PERSIST-V1] Saved to DB:', {
+              recordId: lessonRecord.id,
+              saved: updatedRecord?.homework_status,
+            });
           }
         }
       } else {
@@ -372,24 +408,42 @@ export function RosterActionModal({
           .eq('id', previousHomework.id);
         if (error) throw error;
         
-        // Also save homework_check_note to lesson_records if there's a note
-        if (lessonRecord?.id && homeworkCheckNote.trim()) {
-          const { error: noteError } = await supabase
+        // HOMEWORK-STATUS-PERSIST-V1: Also save homework_status + homework_check_note to lesson_records
+        if (lessonRecord?.id) {
+          const updatePayload: Record<string, any> = {
+            homework_status: homeworkStatusToSave,
+          };
+          if (homeworkCheckNote.trim()) {
+            updatePayload.homework_check_note = homeworkCheckNote.trim();
+          }
+          
+          const { data: updatedRecord, error: noteError } = await supabase
             .from('lesson_records')
-            .update({ homework_check_note: homeworkCheckNote.trim() })
-            .eq('id', lessonRecord.id);
+            .update(updatePayload)
+            .eq('id', lessonRecord.id)
+            .select('homework_status')
+            .maybeSingle();
+          
           if (noteError) {
-            console.error('Error saving homework_check_note:', noteError);
+            console.error('[HOMEWORK-STATUS-PERSIST-V1] Error saving:', noteError);
           }
         }
       }
       
+      // HOMEWORK-STATUS-PERSIST-V1: Show saved status in toast
+      const statusLabel = {
+        'completed': '완료',
+        'partial': '일부완료',
+        'not_done': '미이행',
+        'none_assigned': '없음',
+      }[homeworkStatusToSave] || homeworkStatusToSave;
+      
       toast({
         title: '확인 완료',
-        description: '숙제 확인이 저장되었습니다',
+        description: `숙제상태 저장됨: ${statusLabel}`,
       });
       
-      // Refresh data
+      // Refresh data from DB (single source of truth)
       await fetchData();
       onSaved?.();
     } catch (error: any) {
@@ -568,6 +622,12 @@ export function RosterActionModal({
         {/* Visible marker for debugging */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
           TEST_SCREEN_MARKER_V3
+          {/* HOMEWORK-STATUS-PERSIST-V1: Admin debug for homework_status */}
+          {isAdmin && lessonRecord && (
+            <span className="ml-2 font-mono">
+              | HW_SAVE_DEBUG: recordId={lessonRecord.id?.slice(0, 8)} current_status={lessonRecord.homework_status || 'null'}
+            </span>
+          )}
         </div>
 
         {/* Error banner - show inline error instead of crashing */}
