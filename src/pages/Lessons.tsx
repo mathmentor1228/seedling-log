@@ -168,11 +168,12 @@ function getRosterBadges(
   return badges.length > 0 ? badges : null;
 }
 
+// HOMEWORK-STATUS-DISPLAY-FIX-V1: Correct labels (없음 not 미배정)
 const HOMEWORK_STATUS = [
   { value: 'completed', label: '완료' },
-  { value: 'partial', label: '부분 완료' },
-  { value: 'not_done', label: '미완료' },
-  { value: 'none_assigned', label: '미배정' },
+  { value: 'partial', label: '일부완료' },
+  { value: 'not_done', label: '미이행' },
+  { value: 'none_assigned', label: '없음' },
 ];
 
 export default function Lessons() {
