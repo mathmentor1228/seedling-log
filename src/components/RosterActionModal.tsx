@@ -155,11 +155,13 @@ export function RosterActionModal({
       fetchData();
     } else {
       // Reset state when modal closes
+      // ASSISTANT-HW-NO-CARRYOVER-V1: Explicitly reset homework_check_note to prevent carryover
       setLessonRecord(null);
       setPreviousHomework(null);
       setLoadError(null);
       setHomeworkCheckResult('');
       setHomeworkCheckNotes('');
+      setHomeworkCheckNote(''); // ASSISTANT-HW-NO-CARRYOVER-V1: Reset assistant note
       setNewHomeworkContent('');
       setTestFormData({
         test_name: '',
@@ -205,6 +207,9 @@ export function RosterActionModal({
       
       // If no record exists, create a draft (assistants can now insert for today)
       if (!recordId) {
+        // ASSISTANT-HW-NO-CARRYOVER-V1: Explicitly reset note for new records
+        setHomeworkCheckNote('');
+        
         const { data: newRecord, error: createError } = await supabase
           .from('lesson_records')
           .insert({
@@ -218,6 +223,7 @@ export function RosterActionModal({
             homework_status: 'none_assigned',
             learning_issues: [],
             submitted: false,
+            // ASSISTANT-HW-NO-CARRYOVER-V1: homework_check_note is NOT included - starts empty
           })
           .select()
           .single();
@@ -244,6 +250,9 @@ export function RosterActionModal({
         
         if (record) {
           setLessonRecord(record as LessonRecord);
+          // ASSISTANT-HW-NO-CARRYOVER-V1: Load homework_check_note for CURRENT record only (lesson-scoped)
+          // This is intentionally loaded from the current record, not carried over from previous lessons
+          setHomeworkCheckNote(record.homework_check_note || '');
           // Pre-fill test fields
           setTestFormData({
             test_name: record.test_name || '',
