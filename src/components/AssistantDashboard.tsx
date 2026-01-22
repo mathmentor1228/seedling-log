@@ -88,13 +88,14 @@ interface Holiday {
 }
 
 // Normalize homework status values from DB
+// HOMEWORK-STATUS-DISPLAY-FIX-V1: Normalize homework status (없음 not 미배정)
 function normalizeHomeworkStatus(status: string | null | undefined): RosterStudent['previousHomeworkStatus'] {
   if (!status) return null;
   const normalized = status.toLowerCase().trim();
   if (['not_done', '미이행', '미완료'].includes(normalized)) return 'not_done';
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return 'partial';
   if (['completed', '완료'].includes(normalized)) return 'completed';
-  if (['none_assigned', '없음', '미배정'].includes(normalized)) return 'none_assigned';
+  if (['none_assigned', '없음'].includes(normalized)) return 'none_assigned';
   return null;
 }
 

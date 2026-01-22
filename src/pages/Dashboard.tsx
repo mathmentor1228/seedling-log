@@ -170,6 +170,28 @@ function normalizeHomeworkStatus(status: string | null | undefined): TodaySlotSt
   return null;
 }
 
+// HOMEWORK-STATUS-DISPLAY-FIX-V1: Helper to get display label for homework status
+function getHomeworkStatusLabel(status: string | null | undefined): string {
+  if (!status) return '확인대기';
+  const normalized = status.toLowerCase().trim();
+  if (['not_done', '미이행', '미완료'].includes(normalized)) return '미이행';
+  if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return '일부완료';
+  if (['completed', '완료'].includes(normalized)) return '완료';
+  if (['none_assigned', '없음'].includes(normalized)) return '없음';
+  return '확인대기';
+}
+
+// HOMEWORK-STATUS-DISPLAY-FIX-V1: Get badge variant based on status
+function getHomeworkStatusBadgeClass(status: string | null | undefined): string {
+  if (!status) return 'bg-muted text-muted-foreground';
+  const normalized = status.toLowerCase().trim();
+  if (['not_done', '미이행', '미완료'].includes(normalized)) return 'bg-red-500/15 text-red-600 border-red-500/30';
+  if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
+  if (['completed', '완료'].includes(normalized)) return 'bg-green-500/15 text-green-600 border-green-500/30';
+  if (['none_assigned', '없음'].includes(normalized)) return 'bg-muted text-muted-foreground';
+  return 'bg-muted text-muted-foreground';
+}
+
 // Helper function to render roster badges (homework, first subject, followup)
 function getRosterBadges(
   status: TodaySlotStudent['previousHomeworkStatus'],
@@ -350,7 +372,8 @@ export default function Dashboard() {
   const [rosterActionContext, setRosterActionContext] = useState<any>(null);
 
   // Lesson status map for admin roster badges
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null }>>({});
+  // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
@@ -752,17 +775,18 @@ export default function Dashboard() {
         const studentIds = [...new Set(rosterRows.map((r: any) => r.student_id))] as string[];
         const classIds = [...new Set(rosterRows.map((r: any) => r.class_id))] as string[];
         
+        // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homework_status in select
         const { data: lessonRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, subject, submitted')
+          .select('id, student_id, class_id, subject, submitted, homework_status')
           .eq('lesson_date', today)
           .in('student_id', studentIds)
           .in('class_id', classIds);
         
-        const statusMap: Record<string, { submitted: boolean; recordId: string | null }> = {};
+        const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null }> = {};
         (lessonRecords || []).forEach((lr: any) => {
           const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
-          statusMap[key] = { submitted: lr.submitted, recordId: lr.id };
+          statusMap[key] = { submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null };
         });
         
         setLessonStatusMap(statusMap);
@@ -1573,9 +1597,15 @@ export default function Dashboard() {
                                 lessonBadge = <Badge variant="outline" className="text-muted-foreground text-xs">미작성</Badge>;
                               }
                               
-                              // Homework pending badge (숙제확인대기: prev homework exists but homework_status unknown)
-                              // For simplicity, showing "대기" if no lesson record or unchecked
-                              const homeworkBadge = <Badge variant="outline" className="text-muted-foreground text-xs">-</Badge>;
+                              // HOMEWORK-STATUS-DISPLAY-FIX-V1: Use actual homework_status from lesson record
+                              const rawHwStatus = lessonStatus?.homeworkStatus || null;
+                              const hwLabel = getHomeworkStatusLabel(rawHwStatus);
+                              const hwBadgeClass = getHomeworkStatusBadgeClass(rawHwStatus);
+                              const homeworkBadge = (
+                                <Badge className={`${hwBadgeClass} text-xs`} title={isAdmin ? `HW_STATUS_DEBUG: raw=${rawHwStatus} rendered=${hwLabel} recordId=${lessonStatus?.recordId || 'none'}` : undefined}>
+                                  {hwLabel}
+                                </Badge>
+                              );
                               
                               return (
                                 <tr key={`${row.student_id}-${row.class_id}`} className="border-b last:border-0 hover:bg-muted/30">

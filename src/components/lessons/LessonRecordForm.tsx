@@ -116,11 +116,12 @@ const SUBJECT_SPECIFIC_ISSUES: Record<SubjectType, string[]> = {
   '국어': ['지문 독해 어려움', '핵심 개념어 정리 미흡', '서술형 논리 부족', '문학 표현 분석 미흡', '시간 배분 문제', '풀이 루틴을 지키지 않음'],
 };
 
+// HOMEWORK-STATUS-DISPLAY-FIX-V1: Correct labels (없음 not 미배정)
 const HOMEWORK_STATUS = [
   { value: 'completed', label: '완료' },
-  { value: 'partial', label: '부분 완료' },
-  { value: 'not_done', label: '미완료' },
-  { value: 'none_assigned', label: '미배정' },
+  { value: 'partial', label: '일부완료' },
+  { value: 'not_done', label: '미이행' },
+  { value: 'none_assigned', label: '없음' },
 ];
 
 const LESSON_TYPE_OPTIONS = [
