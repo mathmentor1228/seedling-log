@@ -16,6 +16,8 @@ interface LessonModalProps {
   existingRecordId?: string | null;
   onSaved?: () => void;
   initialMode?: 'view' | 'edit';
+  /** PREFILL-FIX-V5: Force new record mode - skip DB lookup for existing drafts */
+  forceNewRecord?: boolean;
 }
 
 interface StudentItem {
@@ -41,6 +43,7 @@ export function LessonModal({
   existingRecordId,
   onSaved,
   initialMode = 'edit',
+  forceNewRecord = false,
 }: LessonModalProps) {
   const { user, role } = useAuth();
   const isAdmin = checkIsAdmin(role);
@@ -174,6 +177,7 @@ export function LessonModal({
             mode={mode}
             onRequestEdit={handleRequestEdit}
             originalTeacherId={originalTeacherId}
+            forceNewRecord={forceNewRecord}
           />
         )}
       </DialogContent>

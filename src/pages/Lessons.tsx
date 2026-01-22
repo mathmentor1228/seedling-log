@@ -207,6 +207,8 @@ export default function Lessons() {
   const [modalContext, setModalContext] = useState<LessonFormContext | null>(null);
   const [modalExistingRecordId, setModalExistingRecordId] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<'view' | 'edit'>('edit');
+  // PREFILL-FIX-V5: Track if opening for new record creation
+  const [modalForceNewRecord, setModalForceNewRecord] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
@@ -284,10 +286,11 @@ export default function Lessons() {
     }
   }, [searchParams, loading, students, classes]);
 
-  function openModal(context: LessonFormContext | null, existingId: string | null, mode: 'view' | 'edit') {
+  function openModal(context: LessonFormContext | null, existingId: string | null, mode: 'view' | 'edit', forceNew: boolean = false) {
     setModalContext(context);
     setModalExistingRecordId(existingId);
     setModalMode(mode);
+    setModalForceNewRecord(forceNew);
     setIsModalOpen(true);
   }
 
@@ -296,6 +299,7 @@ export default function Lessons() {
       setIsModalOpen(false);
       setModalContext(null);
       setModalExistingRecordId(null);
+      setModalForceNewRecord(false);
       fetchLessons(); // Refresh list after closing
     }
   }
@@ -684,14 +688,14 @@ export default function Lessons() {
   }
 
   function handleOpenNewForm() {
-    console.log('[LESSONS_CREATE_CLICK]');
-    // For new record, provide empty context (not null) so modal renders the form
+    console.log('[LESSONS_CREATE_CLICK] forceNewRecord=true');
+    // PREFILL-FIX-V5: For new record, set forceNewRecord=true to skip DB lookup
     openModal({
       student_id: '',
       class_id: '',
       subject: '수학',
       lesson_date: getTodayKST(),
-    }, null, 'edit');
+    }, null, 'edit', true); // forceNewRecord = true
   }
 
   function handleView(lesson: LessonRecord) {
@@ -743,7 +747,8 @@ export default function Lessons() {
       subject: slot.subject,
       lesson_date: getTodayKST(),
     };
-    openModal(prefill, null, 'edit');
+    // PREFILL-FIX-V5: Today slot click should also force new record mode
+    openModal(prefill, null, 'edit', true);
   }
 
   const getHomeworkLabel = (status: string) => {
@@ -819,6 +824,7 @@ export default function Lessons() {
           existingRecordId={modalExistingRecordId}
           onSaved={handleModalSaved}
           initialMode={modalMode}
+          forceNewRecord={modalForceNewRecord}
         />
       )}
 
