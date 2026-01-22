@@ -1309,6 +1309,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_admin_enrollment_stats: {
+        Args: {
+          _grade_filter?: string
+          _subject_filter?: string
+          _teacher_id_filter?: string
+        }
+        Returns: Json
+      }
       get_admin_kpis: {
         Args: {
           _end_date: string

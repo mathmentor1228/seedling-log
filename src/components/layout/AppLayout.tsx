@@ -15,7 +15,8 @@ import {
   UserCog,
   Calendar,
   ClipboardCheck,
-  UserCheck
+  UserCheck,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
@@ -43,6 +44,7 @@ const navItems: NavItem[] = [
   { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
   { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
   { label: '리포트 발송', href: '/reports/send', icon: <Send className="w-4 h-4" />, adminOnly: true },
+  { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
   { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, adminOnly: true },
 ];
 
