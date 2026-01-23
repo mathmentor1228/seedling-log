@@ -1181,6 +1181,7 @@ export type Database = {
           parent_sent_status: string | null
           principal_comment: string | null
           principal_comment_enabled: boolean | null
+          report_quality_tag: string | null
           risk_level: string | null
           sent_at: string | null
           sent_by: string | null
@@ -1207,6 +1208,7 @@ export type Database = {
           parent_sent_status?: string | null
           principal_comment?: string | null
           principal_comment_enabled?: boolean | null
+          report_quality_tag?: string | null
           risk_level?: string | null
           sent_at?: string | null
           sent_by?: string | null
@@ -1233,6 +1235,7 @@ export type Database = {
           parent_sent_status?: string | null
           principal_comment?: string | null
           principal_comment_enabled?: boolean | null
+          report_quality_tag?: string | null
           risk_level?: string | null
           sent_at?: string | null
           sent_by?: string | null
