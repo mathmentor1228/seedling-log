@@ -71,7 +71,10 @@ interface WeeklyReport {
   student_phone?: string;
   principal_comment?: string | null;
   principal_comment_enabled?: boolean | null;
+  report_quality_tag?: 'GREEN' | 'YELLOW' | 'RED' | null;
 }
+
+type QualityFilter = 'all' | 'sendable' | 'RED';
 
 interface SendTarget {
   reportId: string;
@@ -111,6 +114,9 @@ export default function Reports() {
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
+  
+  // Quality tag filter state - default to sendable (GREEN + YELLOW)
+  const [qualityFilter, setQualityFilter] = useState<QualityFilter>('sendable');
 
   useEffect(() => {
     fetchReports();
@@ -241,12 +247,13 @@ export default function Reports() {
 
       setReports(formattedReports);
       
-      // Initialize send targets
+      // Initialize send targets - disable for RED quality tag
       const newTargets = new Map<string, SendTarget>();
       formattedReports.forEach(r => {
         const hasLessons = r.total_lessons > 0;
-        const canSendStudent = hasLessons && (r.student_sent_status !== 'sent' || resendEnabled);
-        const canSendParent = hasLessons && (r.parent_sent_status !== 'sent' || resendEnabled);
+        const isRed = r.report_quality_tag === 'RED';
+        const canSendStudent = hasLessons && !isRed && (r.student_sent_status !== 'sent' || resendEnabled);
+        const canSendParent = hasLessons && !isRed && (r.parent_sent_status !== 'sent' || resendEnabled);
         
         newTargets.set(r.id, {
           reportId: r.id,
@@ -425,19 +432,40 @@ export default function Reports() {
     }
   }
 
-  const filteredReports = reports.filter((report) =>
-    report.student_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter by search query and quality tag
+  const filteredReports = reports.filter((report) => {
+    // Name filter
+    const matchesName = report.student_name?.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesName) return false;
+    
+    // Quality tag filter
+    if (qualityFilter === 'sendable') {
+      // GREEN + YELLOW only (sendable reports)
+      return report.report_quality_tag === 'GREEN' || report.report_quality_tag === 'YELLOW' || !report.report_quality_tag;
+    } else if (qualityFilter === 'RED') {
+      // RED only (needs follow-up)
+      return report.report_quality_tag === 'RED';
+    }
+    // 'all' - show everything
+    return true;
+  });
+  
+  // Count reports by quality tag
+  const qualityCounts = {
+    GREEN: reports.filter(r => r.report_quality_tag === 'GREEN').length,
+    YELLOW: reports.filter(r => r.report_quality_tag === 'YELLOW').length,
+    RED: reports.filter(r => r.report_quality_tag === 'RED').length,
+  };
 
-  // Count selected targets
+  // Count selected targets - exclude RED reports
   const selectedStudentCount = [...sendTargets.values()].filter(t => {
     const report = reports.find(r => r.id === t.reportId);
-    return t.sendStudent && report && report.total_lessons > 0 && (report.student_sent_status !== 'sent' || resendEnabled);
+    return t.sendStudent && report && report.total_lessons > 0 && report.report_quality_tag !== 'RED' && (report.student_sent_status !== 'sent' || resendEnabled);
   }).length;
   
   const selectedParentCount = [...sendTargets.values()].filter(t => {
     const report = reports.find(r => r.id === t.reportId);
-    return t.sendParent && report && report.total_lessons > 0 && (report.parent_sent_status !== 'sent' || resendEnabled);
+    return t.sendParent && report && report.total_lessons > 0 && report.report_quality_tag !== 'RED' && (report.parent_sent_status !== 'sent' || resendEnabled);
   }).length;
 
   const getSentStatusIcon = (status: string | null) => {
@@ -651,19 +679,88 @@ export default function Reports() {
 
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="학생 이름으로 검색..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="학생 이름으로 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="w-4 h-4" />
+                <span>리포트 생성: 매주 금요일 22:00 KST</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="w-4 h-4" />
-              <span>리포트 생성: 매주 금요일 22:00 KST</span>
+            
+            {/* Quality Tag Filter Chips - REPORT-QUALITY-FILTER-V1 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted-foreground mr-1">품질:</span>
+              <Button
+                variant={qualityFilter === 'sendable' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setQualityFilter('sendable')}
+                className="h-7 text-xs"
+              >
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                전송 가능 ({qualityCounts.GREEN + qualityCounts.YELLOW})
+              </Button>
+              <Button
+                variant={qualityFilter === 'RED' ? 'destructive' : 'outline'}
+                size="sm"
+                onClick={() => setQualityFilter('RED')}
+                className={cn("h-7 text-xs", qualityFilter !== 'RED' && "text-destructive border-destructive/50 hover:bg-destructive/10")}
+              >
+                <XCircle className="w-3 h-3 mr-1" />
+                팔로업 필요 ({qualityCounts.RED})
+              </Button>
+              <Button
+                variant={qualityFilter === 'all' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setQualityFilter('all')}
+                className="h-7 text-xs"
+              >
+                전체 ({reports.length})
+              </Button>
+              
+              {/* RED report follow-up helper */}
+              {qualityFilter === 'RED' && qualityCounts.RED > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Generate follow-up message template for RED reports
+                    const redReports = filteredReports.filter(r => r.report_quality_tag === 'RED');
+                    const studentList = redReports.map(r => r.student_name).filter(Boolean).join(', ');
+                    const message = `[추가 관찰 요청]\n\n다음 학생의 주간 리포트에 추가 코멘트가 필요합니다:\n\n${studentList}\n\n상세 관찰 내용을 기록해주세요.`;
+                    navigator.clipboard.writeText(message);
+                    toast({ title: '팔로업 템플릿 복사 완료', description: `${redReports.length}명 학생 목록이 복사되었습니다.` });
+                  }}
+                  className="h-7 text-xs ml-2"
+                >
+                  <MessageSquare className="w-3 h-3 mr-1" />
+                  추가 코멘트 요청 복사
+                </Button>
+              )}
+              
+              {/* Quality Tag Legend */}
+              <div className="ml-auto flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  GREEN: {qualityCounts.GREEN}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                  YELLOW: {qualityCounts.YELLOW}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  RED: {qualityCounts.RED}
+                </span>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -689,6 +786,7 @@ export default function Reports() {
                     <TableHead>수업 수</TableHead>
                     <TableHead>평균 점수</TableHead>
                     <TableHead>주요 이슈</TableHead>
+                    <TableHead>품질</TableHead>
                     <TableHead>위험도</TableHead>
                     <TableHead>학생 상태</TableHead>
                     <TableHead>학부모 상태</TableHead>
@@ -698,14 +796,18 @@ export default function Reports() {
                 <TableBody>
                   {filteredReports.map((report) => {
                     const hasNoLessons = report.total_lessons === 0;
+                    const isRed = report.report_quality_tag === 'RED';
                     const target = sendTargets.get(report.id);
-                    const studentDisabled = hasNoLessons || (report.student_sent_status === 'sent' && !resendEnabled);
-                    const parentDisabled = hasNoLessons || (report.parent_sent_status === 'sent' && !resendEnabled);
+                    const studentDisabled = hasNoLessons || isRed || (report.student_sent_status === 'sent' && !resendEnabled);
+                    const parentDisabled = hasNoLessons || isRed || (report.parent_sent_status === 'sent' && !resendEnabled);
                     
                     return (
                       <TableRow 
                         key={report.id}
-                        className={cn(hasNoLessons && 'bg-amber-500/5')}
+                        className={cn(
+                          hasNoLessons && 'bg-amber-500/5',
+                          isRed && 'bg-destructive/5'
+                        )}
                       >
                         <TableCell>
                           <Checkbox
@@ -769,6 +871,23 @@ export default function Reports() {
                             </div>
                           ) : (
                             '-'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {report.report_quality_tag ? (
+                            <span className={cn(
+                              "inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium",
+                              report.report_quality_tag === 'GREEN' && "bg-green-500/15 text-green-600 border border-green-500/30",
+                              report.report_quality_tag === 'YELLOW' && "bg-yellow-500/15 text-yellow-600 border border-yellow-500/30",
+                              report.report_quality_tag === 'RED' && "bg-red-500/15 text-red-600 border border-red-500/30"
+                            )}>
+                              {report.report_quality_tag === 'GREEN' && <CheckCircle2 className="w-3 h-3" />}
+                              {report.report_quality_tag === 'YELLOW' && <AlertTriangle className="w-3 h-3" />}
+                              {report.report_quality_tag === 'RED' && <XCircle className="w-3 h-3" />}
+                              {report.report_quality_tag}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
                           )}
                         </TableCell>
                         <TableCell>
