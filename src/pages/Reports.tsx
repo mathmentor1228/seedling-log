@@ -90,6 +90,18 @@ interface StudentForGeneration {
   grade: string | null;
 }
 
+// REPORT-ERROR-PANEL-V1: Error structure from edge function
+interface GenerationError {
+  student_id: string;
+  student_name: string;
+  stage: string;
+  message: string;
+  code: string | null;
+  fetched_total: number;
+  fetched_submitted: number;
+  fetched_draft: number;
+}
+
 export default function Reports() {
   const { user } = useAuth();
   const [reports, setReports] = useState<WeeklyReport[]>([]);
@@ -116,6 +128,9 @@ export default function Reports() {
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
+  
+  // REPORT-ERROR-PANEL-V1: Store last generation errors for visible panel
+  const [lastGenerationErrors, setLastGenerationErrors] = useState<GenerationError[]>([]);
   
   // Quality tag filter state - default to sendable (GREEN + YELLOW)
   const [qualityFilter, setQualityFilter] = useState<QualityFilter>('sendable');
@@ -184,6 +199,7 @@ export default function Reports() {
 
   async function handleGenerateReports(scope: 'all' | 'selected') {
     setGenerating(true);
+    setLastGenerationErrors([]); // Clear previous errors
     
     try {
       const studentIds = scope === 'selected' ? Array.from(selectedStudentIds) : null;
@@ -204,32 +220,22 @@ export default function Reports() {
 
       if (error) throw error;
 
-      // REPORT-ERROR-DETAIL-V1: Show detailed error info
+      // REPORT-ERROR-PANEL-V1: Use new structured errors array
       const successCount = data?.successCount ?? count;
       const errorCount = data?.errorCount ?? 0;
-      const errorDetails = data?.errorDetails ?? [];
+      const errors: GenerationError[] = data?.errors ?? [];
+      
+      // Store errors for visible panel
+      setLastGenerationErrors(errors);
       
       if (errorCount > 0) {
-        // Build error summary for toast
-        const errorSummary = errorDetails.slice(0, 3).map((e: any) => 
-          `${e.student_name}: [${e.error_stage}] ${e.error_message.slice(0, 50)}${e.error_message.length > 50 ? '...' : ''}`
-        ).join('\n');
-        
-        console.error('[REPORT_GEN_ERROR_DETAILS]', errorDetails);
+        console.error('[REPORT_GEN_ERROR_PANEL_V1]', errors);
         
         toast({
           title: `생성 완료 (${successCount}건 성공, ${errorCount}건 실패)`,
-          description: (
-            <div className="text-sm">
-              <p className="font-medium text-destructive mb-1">실패 상세:</p>
-              <pre className="text-xs whitespace-pre-wrap bg-destructive/10 p-2 rounded max-h-40 overflow-y-auto">
-                {errorSummary}
-                {errorDetails.length > 3 ? `\n...외 ${errorDetails.length - 3}건` : ''}
-              </pre>
-            </div>
-          ),
+          description: '하단 오류 패널에서 상세 정보를 확인하세요.',
           variant: 'destructive',
-          duration: 10000,
+          duration: 8000,
         });
       } else {
         toast({
@@ -658,6 +664,66 @@ export default function Reports() {
           </div>
         </CardContent>
       </Card>
+
+      {/* REPORT-ERROR-PANEL-V1: Visible error panel when generation has errors */}
+      {lastGenerationErrors.length > 0 && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-destructive" />
+                <CardTitle className="text-lg text-destructive">
+                  생성 실패 상세
+                </CardTitle>
+                <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
+                  REPORT-ERROR-PANEL-V1
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLastGenerationErrors([])}
+                className="h-7 text-xs"
+              >
+                닫기
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {lastGenerationErrors.slice(0, 5).map((err, idx) => (
+              <div
+                key={`${err.student_id}-${idx}`}
+                className="p-3 bg-background rounded-lg border border-destructive/30"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-medium">{err.student_name}</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-destructive/10 text-destructive font-mono">
+                    stage={err.stage}
+                  </span>
+                  {err.code && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-muted font-mono">
+                      code={err.code}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {err.message}
+                </p>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>fetched_total={err.fetched_total}</span>
+                  <span>submitted={err.fetched_submitted}</span>
+                  <span>draft={err.fetched_draft}</span>
+                </div>
+              </div>
+            ))}
+            {lastGenerationErrors.length > 5 && (
+              <p className="text-sm text-muted-foreground text-center">
+                ...외 {lastGenerationErrors.length - 5}건 더 있음
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Test Mode Warning */}
       <Card className="border-amber-500/50 bg-amber-500/10">
