@@ -339,9 +339,39 @@ export default function Reports() {
     setShowPreview(true);
   }
 
+  // REPORT_COPY_CLEAN_V1: Strip debug markers from message for clean copy
+  function stripDebugMarkers(text: string): string {
+    if (!text) return '';
+    return text
+      .split('\n')
+      .filter(line => {
+        const trimmed = line.trim();
+        // Exclude debug markers
+        if (trimmed.startsWith('[NARRATIVE_RENDER_ACTIVE')) return false;
+        if (trimmed.startsWith('[REPORT_GEN_DEBUG')) return false;
+        if (trimmed.startsWith('[REPORT-')) return false;
+        return true;
+      })
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n') // Collapse multiple blank lines
+      .trim();
+  }
+
+  // REPORT_COPY_CLEAN_V1: Check if line is a debug marker
+  function isDebugMarker(line: string): boolean {
+    const trimmed = line.trim();
+    return (
+      trimmed.startsWith('[NARRATIVE_RENDER_ACTIVE') ||
+      trimmed.startsWith('[REPORT_GEN_DEBUG') ||
+      trimmed.startsWith('[REPORT-')
+    );
+  }
+
   async function copyToClipboard(text: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      // REPORT_COPY_CLEAN_V1: Always strip debug markers before copying
+      const cleanText = stripDebugMarkers(text);
+      await navigator.clipboard.writeText(cleanText);
       toast({ title: '클립보드에 복사되었습니다.' });
     } catch (err) {
       toast({ title: '복사 실패', variant: 'destructive' });
@@ -1121,30 +1151,47 @@ export default function Reports() {
                 <div className="bg-muted/50 rounded-md p-4">
                   {previewReport?.student_message ? (
                     <div className="text-sm space-y-3">
-                      {previewReport.student_message.split('\n').map((line, idx) => {
-                        // Subject headers get special styling
-                        if (line.startsWith('■')) {
-                          return (
-                            <div key={idx} className="font-semibold text-primary border-l-2 border-primary pl-2 mt-4 first:mt-0">
+                      {/* REPORT_COPY_CLEAN_V1: Debug markers section (non-selectable) */}
+                      {previewReport.student_message.split('\n').some(line => isDebugMarker(line)) && (
+                        <div 
+                          className="bg-amber-500/10 border border-amber-500/30 rounded-md p-2 mb-3 select-none"
+                          style={{ userSelect: 'none' }}
+                        >
+                          <div className="text-xs text-amber-600 font-medium mb-1">🔧 Debug Info (복사 제외)</div>
+                          {previewReport.student_message.split('\n').filter(line => isDebugMarker(line)).map((line, idx) => (
+                            <div key={`debug-${idx}`} className="text-xs font-mono text-muted-foreground">
                               {line}
                             </div>
-                          );
-                        }
-                        // Header line
-                        if (line.startsWith('[더멘토]')) {
-                          return (
-                            <div key={idx} className="font-bold text-base mb-2">
-                              {line}
-                            </div>
-                          );
-                        }
-                        // Empty lines
-                        if (line.trim() === '') {
-                          return <div key={idx} className="h-1" />;
-                        }
-                        // Regular lines
-                        return <div key={idx}>{line}</div>;
-                      })}
+                          ))}
+                        </div>
+                      )}
+                      {/* REPORT_COPY_CLEAN_V1: Copyable content section */}
+                      <div id="student-report-copy-content">
+                        {previewReport.student_message.split('\n').filter(line => !isDebugMarker(line)).map((line, idx) => {
+                          // Subject headers get special styling
+                          if (line.startsWith('■')) {
+                            return (
+                              <div key={idx} className="font-semibold text-primary border-l-2 border-primary pl-2 mt-4 first:mt-0">
+                                {line}
+                              </div>
+                            );
+                          }
+                          // Header line
+                          if (line.startsWith('[더멘토]')) {
+                            return (
+                              <div key={idx} className="font-bold text-base mb-2">
+                                {line}
+                              </div>
+                            );
+                          }
+                          // Empty lines
+                          if (line.trim() === '') {
+                            return <div key={idx} className="h-1" />;
+                          }
+                          // Regular lines
+                          return <div key={idx}>{line}</div>;
+                        })}
+                      </div>
                     </div>
                   ) : (
                     <p className="text-muted-foreground">메시지가 없습니다. 리포트를 다시 생성해주세요.</p>
@@ -1194,54 +1241,79 @@ export default function Reports() {
                             msgToRender = msgToRender + `\n\n💬 원장 코멘트: ${principalComment.trim()}`;
                           }
                         }
-                        return msgToRender.split('\n').map((line, idx) => {
-                          // Principal comment styling
-                          if (line.startsWith('💬 원장 코멘트:')) {
-                            return (
-                              <div key={idx} className="bg-blue-500/10 border border-blue-500/30 rounded-md p-3 my-2">
-                                <span className="font-medium text-blue-600 dark:text-blue-400">{line}</span>
+                        const lines = msgToRender.split('\n');
+                        const debugLines = lines.filter(line => isDebugMarker(line));
+                        const contentLines = lines.filter(line => !isDebugMarker(line));
+                        
+                        return (
+                          <>
+                            {/* REPORT_COPY_CLEAN_V1: Debug markers section (non-selectable) */}
+                            {debugLines.length > 0 && (
+                              <div 
+                                className="bg-amber-500/10 border border-amber-500/30 rounded-md p-2 mb-3 select-none"
+                                style={{ userSelect: 'none' }}
+                              >
+                                <div className="text-xs text-amber-600 font-medium mb-1">🔧 Debug Info (복사 제외)</div>
+                                {debugLines.map((line, idx) => (
+                                  <div key={`debug-${idx}`} className="text-xs font-mono text-muted-foreground">
+                                    {line}
+                                  </div>
+                                ))}
                               </div>
-                            );
-                          }
-                          // Comparison sentence styling (emoji prefixed lines after header)
-                          if (line.startsWith('📈') || line.startsWith('📊') || line.startsWith('📋')) {
-                            return (
-                              <div key={idx} className="bg-secondary/50 rounded-md p-2 my-2 text-sm">
-                                {line}
-                              </div>
-                            );
-                          }
-                          // Subject headers get special styling
-                          if (line.startsWith('■')) {
-                            return (
-                              <div key={idx} className="font-semibold text-primary border-l-2 border-primary pl-2 mt-4 first:mt-0 bg-primary/5 py-1 rounded-r">
-                                {line}
-                              </div>
-                            );
-                          }
-                          // Header line
-                          if (line.startsWith('[더멘토]')) {
-                            return (
-                              <div key={idx} className="font-bold text-base mb-3 pb-2 border-b border-border">
-                                {line}
-                              </div>
-                            );
-                          }
-                          // Bullet points
-                          if (line.startsWith('- ')) {
-                            return (
-                              <div key={idx} className="pl-4 text-muted-foreground">
-                                {line}
-                              </div>
-                            );
-                          }
-                          // Empty lines
-                          if (line.trim() === '') {
-                            return <div key={idx} className="h-1" />;
-                          }
-                          // Regular lines (closing message)
-                          return <div key={idx} className="mt-2">{line}</div>;
-                        });
+                            )}
+                            {/* REPORT_COPY_CLEAN_V1: Copyable content section */}
+                            <div id="parent-report-copy-content">
+                              {contentLines.map((line, idx) => {
+                                // Principal comment styling
+                                if (line.startsWith('💬 원장 코멘트:')) {
+                                  return (
+                                    <div key={idx} className="bg-blue-500/10 border border-blue-500/30 rounded-md p-3 my-2">
+                                      <span className="font-medium text-blue-600 dark:text-blue-400">{line}</span>
+                                    </div>
+                                  );
+                                }
+                                // Comparison sentence styling (emoji prefixed lines after header)
+                                if (line.startsWith('📈') || line.startsWith('📊') || line.startsWith('📋')) {
+                                  return (
+                                    <div key={idx} className="bg-secondary/50 rounded-md p-2 my-2 text-sm">
+                                      {line}
+                                    </div>
+                                  );
+                                }
+                                // Subject headers get special styling
+                                if (line.startsWith('■')) {
+                                  return (
+                                    <div key={idx} className="font-semibold text-primary border-l-2 border-primary pl-2 mt-4 first:mt-0 bg-primary/5 py-1 rounded-r">
+                                      {line}
+                                    </div>
+                                  );
+                                }
+                                // Header line
+                                if (line.startsWith('[더멘토]')) {
+                                  return (
+                                    <div key={idx} className="font-bold text-base mb-3 pb-2 border-b border-border">
+                                      {line}
+                                    </div>
+                                  );
+                                }
+                                // Bullet points
+                                if (line.startsWith('- ')) {
+                                  return (
+                                    <div key={idx} className="pl-4 text-muted-foreground">
+                                      {line}
+                                    </div>
+                                  );
+                                }
+                                // Empty lines
+                                if (line.trim() === '') {
+                                  return <div key={idx} className="h-1" />;
+                                }
+                                // Regular lines (closing message)
+                                return <div key={idx} className="mt-2">{line}</div>;
+                              })}
+                            </div>
+                          </>
+                        );
                       })()}
                     </div>
                   ) : (
