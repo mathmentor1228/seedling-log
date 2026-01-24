@@ -453,7 +453,39 @@ Deno.serve(async (req) => {
     console.log(`[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} formatter=${FORMATTER_NAME}`);
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
 
-    // Fetch this week's lesson records
+    // DATA_DEBUG: Fetch ALL lesson records first (no filters except student + date range)
+    const { data: allLessonsRaw, error: allLessonsError } = await supabase
+      .from('lesson_records')
+      .select('id, student_id, lesson_date, subject, submitted, submitted_at, teacher_id')
+      .eq('student_id', student_id)
+      .gte('lesson_date', week_start)
+      .lte('lesson_date', week_end);
+
+    // Debug counters
+    const totalFetched = allLessonsRaw?.length || 0;
+    const submittedCount = allLessonsRaw?.filter(l => l.submitted === true)?.length || 0;
+    const draftCount = allLessonsRaw?.filter(l => l.submitted === false || l.submitted === null)?.length || 0;
+    const hasSubmittedAt = allLessonsRaw?.filter(l => l.submitted_at !== null)?.length || 0;
+    
+    // Per-subject breakdown
+    const subjectCounts: Record<string, { total: number; submitted: number }> = {};
+    allLessonsRaw?.forEach(l => {
+      if (!subjectCounts[l.subject]) {
+        subjectCounts[l.subject] = { total: 0, submitted: 0 };
+      }
+      subjectCounts[l.subject].total++;
+      if (l.submitted === true) {
+        subjectCounts[l.subject].submitted++;
+      }
+    });
+
+    console.log(`[DATA_DEBUG] student=${student_id.slice(0, 8)} week=${week_start}~${week_end} fetched=${totalFetched} submitted=${submittedCount} draft=${draftCount} hasSubmittedAt=${hasSubmittedAt} subjects=${JSON.stringify(subjectCounts)}`);
+
+    if (allLessonsError) {
+      console.error(`[DATA_DEBUG] Error fetching lessons: ${allLessonsError.message}`);
+    }
+
+    // Now fetch the full lesson records for submitted only
     const { data: currentWeekLessons, error: lessonsError } = await supabase
       .from('lesson_records')
       .select('*')
@@ -467,8 +499,10 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to fetch lesson records: ${lessonsError.message}`);
     }
 
+    console.log(`[DATA_DEBUG] Final submitted lessons for AI: ${currentWeekLessons?.length || 0}`);
+
     if (!currentWeekLessons || currentWeekLessons.length === 0) {
-      console.log('[generate-ai-report] No lessons found for this week');
+      console.log(`[generate-ai-report] No submitted lessons found. DATA_DEBUG: fetched=${totalFetched} submitted=${submittedCount} draft=${draftCount}`);
       return new Response(
         JSON.stringify({
           success: true,
@@ -476,6 +510,9 @@ Deno.serve(async (req) => {
           student_message: null,
           draft_status: 'no_lessons',
           template_version: TEMPLATE_VERSION,
+          _debug: {
+            data_debug: `fetched=${totalFetched} submitted=${submittedCount} draft=${draftCount} subjects=${JSON.stringify(subjectCounts)}`,
+          },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
