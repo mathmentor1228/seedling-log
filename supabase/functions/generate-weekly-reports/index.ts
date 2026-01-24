@@ -520,8 +520,21 @@ Deno.serve(async (req) => {
 
       const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
 
+      // REPORT-ERROR-PANEL-V1: Always return structured errors array for UI consumption
+      const structuredErrors = errorDetails.map((e) => ({
+        student_id: e.student_id,
+        student_name: e.student_name,
+        stage: e.error_stage,
+        message: e.error_message,
+        code: e.error_code || null,
+        fetched_total: e.fetched_lesson_records_count,
+        fetched_submitted: e.submitted_count,
+        fetched_draft: e.draft_count,
+      }));
+
       return new Response(
         JSON.stringify({
+          status: errorCount === 0 ? 'success' : 'partial',
           success: errorCount === 0,
           weekStart,
           weekEnd,
@@ -531,9 +544,8 @@ Deno.serve(async (req) => {
           count: studentIds?.length || 'all',
           successCount,
           errorCount,
-          errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
-          // REPORT-ERROR-DETAIL-V1: Full error details in response
-          errorDetails: errorDetails.length > 0 ? errorDetails : undefined,
+          // REPORT-ERROR-PANEL-V1: Always include errors array (empty if none)
+          errors: structuredErrors,
           _debug: {
             source: 'edge_function_direct_save_v2.4',
             scope,
@@ -542,7 +554,7 @@ Deno.serve(async (req) => {
             time: nowKST,
             handler: 'generate-weekly-reports/index.ts',
             mode: 'direct_save_sendable_lock',
-            marker: 'REPORT-ERROR-DETAIL-V1',
+            marker: 'REPORT-ERROR-PANEL-V1',
           },
         }),
         {
