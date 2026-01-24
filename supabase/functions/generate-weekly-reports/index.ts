@@ -429,7 +429,7 @@ Deno.serve(async (req) => {
                 report_quality_tag: qualityTag,
               },
               {
-                onConflict: 'student_id,week_start,week_end',
+                onConflict: 'student_id,week_start',
               }
             );
 
@@ -493,7 +493,7 @@ Deno.serve(async (req) => {
                   debug_info: errorDebugStr,
                   report_quality_tag: 'RED',
                 },
-                { onConflict: 'student_id,week_start,week_end' }
+                { onConflict: 'student_id,week_start' }
               );
           } catch (saveErr) {
             console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
