@@ -5,10 +5,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// v2.4-engine-debug: Add debug header to saved report text + debug_info column
+// v2.5-subject-isolation: Subject-isolated generation with vocabulary constraints
 // REPORT-ENGINE-DEBUG-V1
-const TEMPLATE_VERSION = 'v2.4-engine-debug';
-const FORMATTER_NAME = 'renderReportFromJson-v2.4';
+// REPORT_SUBJECT_ISOLATION_V1: Per-subject generation with terminology validation
+const TEMPLATE_VERSION = 'v2.5-subject-isolation';
+const FORMATTER_NAME = 'renderReportFromJson-v2.5';
 
 // Forbidden patterns for FINAL text validation (runs before save)
 const FORBIDDEN_PATTERNS = {
@@ -22,6 +23,74 @@ const FORBIDDEN_PATTERNS = {
   bracketHeaders: /【[^】]+】/g, // Legacy bracket format like 【수학】
   summaryBlocks: /수업\s*\d+회[,，]\s*(평균\s*)?이해도/g, // Summary blocks like "수업 3회, 평균 이해도"
 };
+
+// REPORT_SUBJECT_ISOLATION_V1: Subject-specific vocabulary constraints
+const SUBJECT_VOCABULARY_CONSTRAINTS: Record<string, { allowed: string[]; disallowed: RegExp[] }> = {
+  '영어': {
+    allowed: ['문장', '주어', '동사', '문법', '독해', '어휘', '구조', '해석', 'reading', 'grammar', '리딩'],
+    disallowed: [
+      /계산/g,
+      /풀이/g,
+      /공식/g,
+      /식\s*(을|이|의|에)/g, // "식을", "식이" but not "형식"
+      /단계적\s*접근/g,
+      /연산/g,
+      /수식/g,
+    ],
+  },
+  '수학': {
+    allowed: ['개념', '풀이', '계산', '접근', '식', '적용', '공식', '연산', '문제풀이'],
+    disallowed: [
+      /문장\s*해석/g,
+      /독해/g,
+      /어휘/g,
+      /문법/g,
+      /reading/gi,
+      /grammar/gi,
+    ],
+  },
+  '과학': {
+    allowed: ['실험', '관찰', '현상', '원리', '탐구', '가설', '결과', '분석'],
+    disallowed: [
+      /문법/g,
+      /독해/g,
+      /어휘/g,
+    ],
+  },
+  '국어': {
+    allowed: ['독해', '어휘', '문법', '작문', '서술', '문학', '비문학', '글'],
+    disallowed: [
+      /연산/g,
+      /수식/g,
+      /방정식/g,
+    ],
+  },
+};
+
+// REPORT_SUBJECT_ISOLATION_V1: Fixed subject order for assembly
+const SUBJECT_ORDER = ['수학', '영어', '국어', '과학'];
+
+// REPORT_SUBJECT_ISOLATION_V1: Validate subject-specific vocabulary
+function validateSubjectVocabulary(subject: string, content: string): { isValid: boolean; violations: string[] } {
+  const constraints = SUBJECT_VOCABULARY_CONSTRAINTS[subject];
+  if (!constraints) {
+    return { isValid: true, violations: [] };
+  }
+
+  const violations: string[] = [];
+  
+  for (const pattern of constraints.disallowed) {
+    pattern.lastIndex = 0;
+    if (pattern.test(content)) {
+      violations.push(`DISALLOWED_TERM_${subject.toUpperCase()}: ${pattern.source}`);
+    }
+  }
+
+  return {
+    isValid: violations.length === 0,
+    violations,
+  };
+}
 
 // v2.2 JSON-first system prompt - forces structured JSON output
 const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부모에게 보내는 주간 학습 리포트를 JSON 형식으로 작성합니다.
@@ -641,38 +710,76 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Generate parent report with JSON output and validation
-    const parentResult = await generateParentReportWithRetry(
+    // REPORT_SUBJECT_ISOLATION_V1: Generate subjects in isolation with vocabulary constraints
+    console.log('[generate-ai-report] SUBJECT_ISOLATION: Starting per-subject generation');
+    
+    const isolatedResult = await generateIsolatedSubjectsReport(
       LOVABLE_API_KEY,
-      userPrompt,
-      2, // max 2 attempts
-      strictNarrative
+      student_name,
+      week_start,
+      week_end,
+      subjectData
     );
 
-    let parentMessageContent = parentResult.content;
+    // Generate opening and closing notes separately
+    const openingClosingResult = await generateOpeningClosingNotes(
+      LOVABLE_API_KEY,
+      student_name,
+      week_start,
+      week_end,
+      subjectData
+    );
+
+    // Assemble final report from isolated subjects
+    let parentMessageContent = '';
+    
+    // Add opening note
+    if (openingClosingResult.openingNote) {
+      parentMessageContent += openingClosingResult.openingNote + '\n\n';
+    }
+    
+    // Add each subject in order (subjects already sorted by SUBJECT_ORDER in generateIsolatedSubjectsReport)
+    for (const subjectReport of isolatedResult.subjects) {
+      parentMessageContent += `■ ${subjectReport.subject}\n\n`;
+      
+      for (const paragraph of subjectReport.paragraphs) {
+        parentMessageContent += paragraph + '\n\n';
+      }
+      
+      if (subjectReport.testsSummary) {
+        parentMessageContent += subjectReport.testsSummary + '\n\n';
+      }
+      if (subjectReport.homeworkSummary) {
+        parentMessageContent += subjectReport.homeworkSummary + '\n\n';
+      }
+      if (subjectReport.attendanceImpact) {
+        parentMessageContent += subjectReport.attendanceImpact + '\n\n';
+      }
+    }
+    
+    // Add closing note
+    if (openingClosingResult.closingNote) {
+      parentMessageContent += openingClosingResult.closingNote;
+    }
+    
+    parentMessageContent = parentMessageContent.trim();
+
+    // Determine quality based on results
     let draftStatus = 'ready';
     let riskLevel: string | null = null;
+    let adminTag: 'GREEN' | 'YELLOW' | 'RED' = 'GREEN';
 
-    // Handle validation failures
-    if (!parentResult.isValid) {
-      console.log('[generate-ai-report] Validation failed after retries - marking based on adminTag');
+    if (!isolatedResult.allValid || isolatedResult.totalViolations.length > 0) {
+      adminTag = 'YELLOW';
       draftStatus = 'needs_review';
-      riskLevel = parentResult.adminTag === 'RED' ? 'high' : 'medium';
-      
-      // If completely failed, use insufficient data message
-      if (!parentMessageContent || parentResult.violations.includes('JSON_PARSE_FAILED')) {
-        parentMessageContent = INSUFFICIENT_DATA_MESSAGE;
-        draftStatus = 'needs_input';
-        riskLevel = 'high';
-      }
-    } else {
-      // Set risk level based on adminTag from JSON
-      if (parentResult.adminTag === 'RED') {
-        riskLevel = 'high';
-        draftStatus = 'needs_input';
-      } else if (parentResult.adminTag === 'YELLOW') {
-        riskLevel = 'medium';
-      }
+      riskLevel = 'medium';
+    }
+
+    if (isolatedResult.subjects.length === 0) {
+      adminTag = 'RED';
+      draftStatus = 'needs_input';
+      riskLevel = 'high';
+      parentMessageContent = INSUFFICIENT_DATA_MESSAGE;
     }
 
     // Generate student message
@@ -687,33 +794,36 @@ Deno.serve(async (req) => {
 
     // REPORT-DEBUG-DETAIL-V1: Format final messages with explicit debug fields
     const parentHeader = formatParentHeader(student_name, week_start, week_end);
-    const subjectsIncluded = Object.keys(subjectData);
-    const renderer = 'narrative'; // Always narrative in v2.1+
-    const validatorStatus = parentResult.isValid ? 'pass' : 'fail';
-    const failureReason = !parentResult.isValid 
-      ? (parentResult.violations.includes('JSON_PARSE_FAILED') ? 'json_parse_failed' : 'validator_failed')
-      : null;
+    const subjectsIncluded = isolatedResult.subjects.map(s => s.subject);
+    const renderer = 'subject-isolated-v2.5';
+    const validatorStatus = isolatedResult.allValid ? 'pass' : 'fail';
+    const totalAttempts = Object.values(isolatedResult.subjectAttempts).reduce((a, b) => a + b, 0);
+    
+    // REPORT_SUBJECT_ISOLATION_V1: Include per-subject attempt counts
+    const subjectAttemptsStr = Object.entries(isolatedResult.subjectAttempts)
+      .map(([s, a]) => `${s}:${a}`)
+      .join(',');
     
     // Explicit debug info with all diagnostic fields
     const debugInfo = [
       `[REPORT_ENGINE_DEBUG]`,
-      `marker=REPORT-DEBUG-DETAIL-V1`,
+      `marker=REPORT_SUBJECT_ISOLATION_V1`,
       `source=edge_function`,
       `templateVersion=${TEMPLATE_VERSION}`,
       `renderer=${renderer}`,
       `validator=${validatorStatus}`,
-      `retries=${parentResult.attempts}`,
-      `tag=${parentResult.adminTag}`,
+      `subjectAttempts=${subjectAttemptsStr}`,
+      `tag=${adminTag}`,
       `subjectsIncluded=[${subjectsIncluded.join(',')}]`,
-      failureReason ? `reason=${failureReason}` : null,
+      isolatedResult.totalViolations.length > 0 ? `violations=${isolatedResult.totalViolations.slice(0, 3).join(';')}` : null,
     ].filter(Boolean).join(' ');
     
-    const debugMarker = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} renderer=${renderer} retries=${parentResult.attempts} validator=${validatorStatus} tag=${parentResult.adminTag} subjects=[${subjectsIncluded.join(',')}]`;
+    const debugMarker = `[REPORT_GEN_DEBUG_V2.5] templateVersion=${TEMPLATE_VERSION} renderer=${renderer} subjectAttempts=${subjectAttemptsStr} validator=${validatorStatus} tag=${adminTag} subjects=[${subjectsIncluded.join(',')}]`;
     
     // Embed debug header in saved report text (at the start, after header)
     const parentMessageWithDebug = parentHeader + '\n\n' + debugInfo + '\n\n' + parentMessageContent;
     
-    console.log(`[generate-ai-report] REPORT-DEBUG-DETAIL-V1: student=${student_name} subjects=${subjectsIncluded.join(',')} validator=${validatorStatus} tag=${parentResult.adminTag} retries=${parentResult.attempts}`);
+    console.log(`[generate-ai-report] REPORT_SUBJECT_ISOLATION_V1: student=${student_name} subjects=${subjectsIncluded.join(',')} validator=${validatorStatus} tag=${adminTag} attempts=${subjectAttemptsStr}`);
     
     return new Response(
       JSON.stringify({
@@ -726,21 +836,21 @@ Deno.serve(async (req) => {
         subjects: subjectsIncluded,
         template_version: TEMPLATE_VERSION,
         debug_info: debugInfo,
+        admin_tag: adminTag,
         _debug: {
           debug_marker: debugMarker,
-          marker: 'REPORT-DEBUG-DETAIL-V1',
+          marker: 'REPORT_SUBJECT_ISOLATION_V1',
           template_version: TEMPLATE_VERSION,
           renderer: renderer,
           formatter: FORMATTER_NAME,
           validator: validatorStatus,
-          validation_passed: parentResult.isValid,
-          validation_attempts: parentResult.attempts,
-          violations: parentResult.violations,
+          validation_passed: isolatedResult.allValid,
+          subject_attempts: isolatedResult.subjectAttempts,
+          total_violations: isolatedResult.totalViolations,
           has_sufficient_data: hasSufficientNarrativeData,
-          admin_tag: parentResult.adminTag,
+          admin_tag: adminTag,
           subjects_included: subjectsIncluded,
-          reason: failureReason,
-          json_output: parentResult.jsonOutput,
+          subject_order: SUBJECT_ORDER,
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -917,6 +1027,435 @@ function buildJsonUserPrompt(
 반드시 유효한 JSON만 출력하세요.`;
 
   return prompt;
+}
+
+// REPORT_SUBJECT_ISOLATION_V1: Build subject-specific prompt for isolated generation
+function buildSubjectIsolatedPrompt(
+  subject: string,
+  studentName: string,
+  weekStart: string,
+  weekEnd: string,
+  subjectLessons: LessonRecord[],
+  curriculum: CurriculumInfo[],
+  previousLessons: LessonRecord[]
+): string {
+  const constraints = SUBJECT_VOCABULARY_CONSTRAINTS[subject];
+  const allowedTerms = constraints?.allowed?.join(', ') || '';
+  const disallowedTermsDesc = subject === '영어' 
+    ? '계산, 풀이, 공식, 식, 단계적 접근, 연산, 수식' 
+    : subject === '수학' 
+    ? '문장 해석, 독해, 어휘, 문법, reading, grammar'
+    : '';
+
+  let prompt = `학생: ${studentName}
+기간: ${weekStart} ~ ${weekEnd}
+과목: ${subject} (이 과목만 작성)
+
+[REPORT_SUBJECT_ISOLATION_V1 - ${subject} 전용 지침]
+
+**이 응답은 ${subject} 과목에 대해서만 작성합니다.**
+
+${allowedTerms ? `**사용 가능한 용어**: ${allowedTerms}` : ''}
+${disallowedTermsDesc ? `**절대 사용 금지 용어 (다른 과목 용어)**: ${disallowedTermsDesc}` : ''}
+
+[필수 준수]
+- ${subject} 과목의 학습 내용만 언급
+- 다른 과목(${subject === '수학' ? '영어, 국어, 과학' : subject === '영어' ? '수학, 국어, 과학' : '수학, 영어'})의 용어 혼용 금지
+- 글머리 기호(·, -, •) 사용 금지
+- 추상적 평가("전반적으로 안정", "잘 따라옴") 금지
+
+=== ${subject} 수업 데이터 ===
+
+[${subject}] 수업 ${subjectLessons.length}회
+`;
+
+  for (const lesson of subjectLessons) {
+    prompt += `날짜: ${lesson.lesson_date}\n`;
+    prompt += `  이해도: ${lesson.understanding_score}/5\n`;
+    
+    const lessonTypes = lesson.lesson_types?.filter(t => t !== '정규') || [];
+    if (lessonTypes.length > 0) {
+      prompt += `  수업유형: ${lessonTypes.join(', ')}\n`;
+    }
+    
+    if (lesson.attendance_status && lesson.attendance_status.length > 0) {
+      const nonNormal = lesson.attendance_status.filter(s => s !== '정상등원' && s !== '등원');
+      if (nonNormal.length > 0) {
+        prompt += `  출결 특이사항: ${nonNormal.join(', ')}\n`;
+      }
+    }
+    
+    if (lesson.homework_status && lesson.homework_status !== 'none_assigned') {
+      prompt += `  숙제상태: ${lesson.homework_status}\n`;
+    }
+    
+    if (lesson.homework_check_note) {
+      prompt += `  숙제 관찰: ${lesson.homework_check_note}\n`;
+    }
+    
+    if (lesson.learning_issues && lesson.learning_issues.length > 0) {
+      prompt += `  학습 관찰 포인트: ${lesson.learning_issues.join(', ')}\n`;
+    }
+    
+    if (lesson.learning_issues_note) {
+      prompt += `  [상세 관찰 기록]: ${lesson.learning_issues_note}\n`;
+    }
+    
+    if (lesson.next_lesson_goal) {
+      prompt += `  다음 수업 방향: ${lesson.next_lesson_goal}\n`;
+    }
+    
+    if (lesson.test_result_text) {
+      prompt += `  테스트: ${lesson.test_title || '테스트'} - ${lesson.test_result_text}\n`;
+    }
+    
+    // Korean categories
+    if (subject === '국어' && lesson.korean_categories && lesson.korean_categories.length > 0) {
+      prompt += `  국어 학습 영역: ${lesson.korean_categories.join(', ')}\n`;
+    }
+  }
+
+  // Curriculum info
+  if (curriculum.length > 0) {
+    prompt += `\n[교육과정 위치]\n`;
+    for (const curr of curriculum) {
+      prompt += `  단원: ${curr.unit_title} (${curr.unit_key})\n`;
+      prompt += `  교육과정 흐름: ${curr.flow_summary}\n`;
+      if (curr.next_summary) {
+        prompt += `  다음 단계 예고: ${curr.next_summary}\n`;
+      }
+    }
+  }
+
+  // Previous week context
+  if (previousLessons.length > 0) {
+    prompt += `\n[이전 주 맥락 참고]\n`;
+    for (const prev of previousLessons.slice(0, 2)) {
+      prompt += `  ${prev.lesson_date}: 이해도 ${prev.understanding_score}/5`;
+      if (prev.learning_issues_note) {
+        prompt += ` - ${prev.learning_issues_note.slice(0, 80)}`;
+      }
+      prompt += '\n';
+    }
+  }
+
+  prompt += `
+
+=== JSON 출력 스키마 (${subject}만) ===
+{
+  "subject": "${subject}",
+  "paragraphs": [
+    "1단락: 학습 맥락 (이번 주 학습 내용과 교육과정 위치, 평가 없이 사실만)",
+    "2단락: 관찰된 행동 (수업 중 학생의 구체적 반응과 행동)",
+    "3단락: 교사 해석 및 방향 (행동의 원인 해석과 다음 주 지도 방향)"
+  ],
+  "testsSummary": "테스트 결과 해석 문장 (선택)",
+  "homeworkSummary": "숙제 패턴 설명 (선택)",
+  "attendanceImpact": "출결 영향 설명 (선택)"
+}
+
+반드시 유효한 JSON만 출력하세요. ${subject} 과목 용어만 사용하세요.`;
+
+  return prompt;
+}
+
+// REPORT_SUBJECT_ISOLATION_V1: Generate single subject report with vocabulary validation
+async function generateSingleSubjectReport(
+  apiKey: string,
+  subject: string,
+  studentName: string,
+  weekStart: string,
+  weekEnd: string,
+  subjectLessons: LessonRecord[],
+  curriculum: CurriculumInfo[],
+  previousLessons: LessonRecord[],
+  maxRetries: number = 2
+): Promise<{ 
+  subjectReport: SubjectReport | null; 
+  isValid: boolean; 
+  vocabViolations: string[]; 
+  formatViolations: string[];
+  attempts: number;
+}> {
+  const userPrompt = buildSubjectIsolatedPrompt(
+    subject,
+    studentName,
+    weekStart,
+    weekEnd,
+    subjectLessons,
+    curriculum,
+    previousLessons
+  );
+
+  const systemPrompt = `당신은 학원 담당 선생님입니다. ${subject} 과목 학습 리포트를 JSON 형식으로 작성합니다.
+
+[REPORT_SUBJECT_ISOLATION_V1 규칙]
+- ${subject} 과목 전용 용어만 사용
+- 다른 과목 용어 혼용 절대 금지
+- 글머리 기호(·, -, •) 사용 금지
+- 추상적 평가 금지
+
+반드시 유효한 JSON만 출력하세요.`;
+
+  let attempts = 0;
+  let lastVocabViolations: string[] = [];
+  let lastFormatViolations: string[] = [];
+  let lastSubjectReport: SubjectReport | null = null;
+
+  while (attempts < maxRetries) {
+    attempts++;
+    const isRetry = attempts > 1;
+
+    console.log(`[generate-ai-report] SUBJECT_ISOLATION: ${subject} attempt ${attempts}/${maxRetries}`);
+
+    try {
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { 
+              role: 'user', 
+              content: isRetry 
+                ? userPrompt + `\n\n[재생성 요청] 이전 생성에서 용어 위반 감지: ${lastVocabViolations.join(', ')}. ${subject} 과목 용어만 사용하세요.`
+                : userPrompt
+            },
+          ],
+          response_format: { type: 'json_object' },
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        console.error(`[generate-ai-report] SUBJECT_ISOLATION ${subject}: AI error ${aiResponse.status}`);
+        continue;
+      }
+
+      const aiResult = await aiResponse.json();
+      const content = aiResult.choices?.[0]?.message?.content || '';
+
+      // Parse JSON
+      let jsonStr = content.trim();
+      if (jsonStr.startsWith('```json')) jsonStr = jsonStr.slice(7);
+      else if (jsonStr.startsWith('```')) jsonStr = jsonStr.slice(3);
+      if (jsonStr.endsWith('```')) jsonStr = jsonStr.slice(0, -3);
+      jsonStr = jsonStr.trim();
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        
+        if (!parsed.paragraphs || !Array.isArray(parsed.paragraphs) || parsed.paragraphs.length !== 3) {
+          console.error(`[generate-ai-report] SUBJECT_ISOLATION ${subject}: Invalid paragraphs`);
+          lastFormatViolations = ['INVALID_PARAGRAPHS'];
+          continue;
+        }
+
+        lastSubjectReport = {
+          subject: parsed.subject || subject,
+          paragraphs: parsed.paragraphs,
+          testsSummary: parsed.testsSummary,
+          homeworkSummary: parsed.homeworkSummary,
+          attendanceImpact: parsed.attendanceImpact,
+        };
+
+        // Validate vocabulary for this subject
+        const fullText = parsed.paragraphs.join(' ') + ' ' + (parsed.testsSummary || '') + ' ' + (parsed.homeworkSummary || '');
+        const vocabValidation = validateSubjectVocabulary(subject, fullText);
+        lastVocabViolations = vocabValidation.violations;
+
+        // Also check format
+        const formatValidation = validateFinalReportText(fullText);
+        lastFormatViolations = formatValidation.violations;
+
+        if (vocabValidation.isValid && formatValidation.isValid) {
+          console.log(`[generate-ai-report] SUBJECT_ISOLATION ${subject}: PASSED (attempt ${attempts})`);
+          return {
+            subjectReport: lastSubjectReport,
+            isValid: true,
+            vocabViolations: [],
+            formatViolations: [],
+            attempts,
+          };
+        }
+
+        console.warn(`[generate-ai-report] SUBJECT_ISOLATION ${subject}: Violations detected - vocab: ${lastVocabViolations.join(',')} format: ${lastFormatViolations.join(',')}`);
+
+      } catch (parseError) {
+        console.error(`[generate-ai-report] SUBJECT_ISOLATION ${subject}: JSON parse error`);
+        lastFormatViolations = ['JSON_PARSE_FAILED'];
+      }
+
+    } catch (fetchError) {
+      console.error(`[generate-ai-report] SUBJECT_ISOLATION ${subject}: Fetch error`, fetchError);
+    }
+  }
+
+  // Return last result even if invalid
+  return {
+    subjectReport: lastSubjectReport,
+    isValid: false,
+    vocabViolations: lastVocabViolations,
+    formatViolations: lastFormatViolations,
+    attempts,
+  };
+}
+
+// REPORT_SUBJECT_ISOLATION_V1: Generate all subjects with isolation and assemble
+async function generateIsolatedSubjectsReport(
+  apiKey: string,
+  studentName: string,
+  weekStart: string,
+  weekEnd: string,
+  subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
+): Promise<{
+  subjects: SubjectReport[];
+  allValid: boolean;
+  totalViolations: string[];
+  subjectAttempts: Record<string, number>;
+}> {
+  const results: SubjectReport[] = [];
+  const totalViolations: string[] = [];
+  const subjectAttempts: Record<string, number> = {};
+  let allValid = true;
+
+  // Generate each subject in isolation, following SUBJECT_ORDER
+  const subjectsToGenerate = SUBJECT_ORDER.filter(s => subjectData[s]);
+  // Add any subjects not in the standard order
+  for (const s of Object.keys(subjectData)) {
+    if (!subjectsToGenerate.includes(s)) {
+      subjectsToGenerate.push(s);
+    }
+  }
+
+  console.log(`[generate-ai-report] SUBJECT_ISOLATION: Generating ${subjectsToGenerate.length} subjects in order: ${subjectsToGenerate.join(' → ')}`);
+
+  for (const subject of subjectsToGenerate) {
+    const data = subjectData[subject];
+    if (!data) continue;
+
+    const result = await generateSingleSubjectReport(
+      apiKey,
+      subject,
+      studentName,
+      weekStart,
+      weekEnd,
+      data.lessons,
+      data.curriculum,
+      data.previousLessons
+    );
+
+    subjectAttempts[subject] = result.attempts;
+
+    if (result.subjectReport) {
+      results.push(result.subjectReport);
+    }
+
+    if (!result.isValid) {
+      allValid = false;
+      totalViolations.push(...result.vocabViolations.map(v => `${subject}:${v}`));
+      totalViolations.push(...result.formatViolations.map(v => `${subject}:${v}`));
+    }
+  }
+
+  return {
+    subjects: results,
+    allValid,
+    totalViolations,
+    subjectAttempts,
+  };
+}
+
+// REPORT_SUBJECT_ISOLATION_V1: Generate opening and closing notes separately
+async function generateOpeningClosingNotes(
+  apiKey: string,
+  studentName: string,
+  weekStart: string,
+  weekEnd: string,
+  subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
+): Promise<{ openingNote: string; closingNote: string }> {
+  const subjects = Object.keys(subjectData);
+  const totalLessons = Object.values(subjectData).reduce((sum, d) => sum + d.lessons.length, 0);
+  
+  const systemPrompt = `당신은 학원 담당 선생님입니다. 주간 리포트의 도입부와 마무리를 JSON 형식으로 작성합니다.
+
+[규칙]
+- 도입부: 학생의 이번 주 전반적 학습 태도/자세를 구체적으로 묘사
+- 마무리: 다음 주 구체적 학습 방향 안내
+- 금지: "전반적으로", "안정적", "지속 점검하겠습니다", "계속 지켜보겠습니다"
+- 글머리 기호 사용 금지
+
+반드시 유효한 JSON만 출력하세요.`;
+
+  const userPrompt = `학생: ${studentName}
+기간: ${weekStart} ~ ${weekEnd}
+과목: ${subjects.join(', ')}
+총 수업: ${totalLessons}회
+
+{
+  "openingNote": "학생의 이번 주 학습 태도 구체적 묘사 (전반적으로/안정적 금지)",
+  "closingNote": "다음 주 구체적 학습 방향 (지속 점검하겠습니다 금지)"
+}
+
+JSON만 출력하세요.`;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[generate-ai-report] Opening/closing notes AI error:', response.status);
+      return {
+        openingNote: `${studentName} 학생의 이번 주 학습 내용을 정리했습니다.`,
+        closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
+      };
+    }
+
+    const result = await response.json();
+    let content = result.choices?.[0]?.message?.content || '';
+    
+    // Parse JSON
+    if (content.startsWith('```json')) content = content.slice(7);
+    else if (content.startsWith('```')) content = content.slice(3);
+    if (content.endsWith('```')) content = content.slice(0, -3);
+    content = content.trim();
+
+    try {
+      const parsed = JSON.parse(content);
+      return {
+        openingNote: parsed.openingNote || `${studentName} 학생의 이번 주 학습 내용을 정리했습니다.`,
+        closingNote: parsed.closingNote || '다음 주도 꾸준히 학습을 이어가겠습니다.',
+      };
+    } catch {
+      console.error('[generate-ai-report] Opening/closing notes JSON parse error');
+      return {
+        openingNote: `${studentName} 학생의 이번 주 학습 내용을 정리했습니다.`,
+        closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
+      };
+    }
+  } catch (error) {
+    console.error('[generate-ai-report] Opening/closing notes error:', error);
+    return {
+      openingNote: `${studentName} 학생의 이번 주 학습 내용을 정리했습니다.`,
+      closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
+    };
+  }
 }
 
 async function generateStudentMessage(
