@@ -298,7 +298,26 @@ Deno.serve(async (req) => {
           let riskLevelFromAi: string | null = 'high';
           let qualityTag: 'GREEN' | 'YELLOW' | 'RED' = 'RED';
 
-          // Get lesson count and subjects
+          // Get lesson count and subjects with debug info
+          // First get ALL lessons for debug
+          const { data: allLessonsDebug } = await supabase
+            .from('lesson_records')
+            .select('id, subject, submitted, submitted_at')
+            .eq('student_id', student.id)
+            .gte('lesson_date', weekStart)
+            .lte('lesson_date', weekEnd);
+
+          const debugTotal = allLessonsDebug?.length || 0;
+          const debugSubmitted = allLessonsDebug?.filter(l => l.submitted === true)?.length || 0;
+          const debugDraft = allLessonsDebug?.filter(l => l.submitted === false || l.submitted === null)?.length || 0;
+          const debugSubjects: Record<string, number> = {};
+          allLessonsDebug?.forEach(l => {
+            debugSubjects[l.subject] = (debugSubjects[l.subject] || 0) + 1;
+          });
+
+          console.log(`[DATA_DEBUG] ${student.name}: fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`);
+
+          // Now get the actual submitted lessons
           const { data: lessons } = await supabase
             .from('lesson_records')
             .select('id, subject, understanding_score, homework_status')
@@ -358,7 +377,8 @@ Deno.serve(async (req) => {
             riskLevel = null;
           }
 
-          const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'}`;
+          const dataDebugStr = `DATA_DEBUG: fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft} subjects=${JSON.stringify(debugSubjects)}`;
+          const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} | ${dataDebugStr}`;
 
           // Upsert with quality tag
           const { error: upsertError } = await supabase
