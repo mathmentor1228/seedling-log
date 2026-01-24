@@ -5,11 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// v2.5-subject-isolation: Subject-isolated generation with vocabulary constraints
+// v2.6-teacher-grounded: Teacher-grounded narrative with source validation
 // REPORT-ENGINE-DEBUG-V1
 // REPORT_SUBJECT_ISOLATION_V1: Per-subject generation with terminology validation
-const TEMPLATE_VERSION = 'v2.5-subject-isolation';
-const FORMATTER_NAME = 'renderReportFromJson-v2.5';
+// REPORT_TEACHER_GROUNDED_NARRATIVE_V1: AI must ONLY rephrase teacher-written content
+const TEMPLATE_VERSION = 'v2.6-teacher-grounded';
+const FORMATTER_NAME = 'renderReportFromJson-v2.6';
 
 // Forbidden patterns for FINAL text validation (runs before save)
 const FORBIDDEN_PATTERNS = {
@@ -22,6 +23,9 @@ const FORBIDDEN_PATTERNS = {
   genericClosings: /(지속\s*점검하겠습니다|계속\s*지켜보겠습니다|잘\s*이끌어|꾸준히\s*지도|앞으로도\s*잘)$/i,
   bracketHeaders: /【[^】]+】/g, // Legacy bracket format like 【수학】
   summaryBlocks: /수업\s*\d+회[,，]\s*(평균\s*)?이해도/g, // Summary blocks like "수업 3회, 평균 이해도"
+  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Detect speculative/invented content
+  speculativeProgression: /(심화\s*(학습|과정|단계)|확장\s*(학습|활동)|고난도\s*(문제|과정)|다음\s*단계로\s*넘어|상위\s*개념으로)/gi,
+  inventedPedagogy: /(학습\s*전략을\s*세워|체계적인\s*접근을\s*통해|단계별\s*학습\s*계획|맞춤형\s*커리큘럼)/gi,
 };
 
 // REPORT_SUBJECT_ISOLATION_V1: Subject-specific vocabulary constraints
@@ -92,69 +96,85 @@ function validateSubjectVocabulary(subject: string, content: string): { isValid:
   };
 }
 
-// v2.2 JSON-first system prompt - forces structured JSON output
+// REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Teacher-grounded system prompt
 const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부모에게 보내는 주간 학습 리포트를 JSON 형식으로 작성합니다.
 
-[v2.2 NARRATIVE-JSON 규칙 - 반드시 준수]
+[v2.6 TEACHER-GROUNDED NARRATIVE 규칙 - 핵심 원칙]
+
+**[REPORT_TEACHER_GROUNDED_NARRATIVE_V1] 교사 기록 기반 원칙**
+
+당신의 역할:
+1. 교사가 작성한 내용을 학부모가 이해하기 쉽게 다시 표현
+2. 관찰 기록을 자연스러운 문장으로 정리
+3. 명확성과 어조 개선
+
+당신이 절대 해서는 안 되는 것:
+- 교사가 명시적으로 기록하지 않은 교육적 의도를 추측
+- 진도/심화/확장 등 학습 방향을 임의로 언급
+- 교사가 기록한 next_lesson_goal 외의 다음 단계를 창작
+
+**정보 출처 (Source of Truth):**
+반드시 아래 필드에서 직접 확인된 내용만 서술:
+- learning_issues_note (교사의 상세 관찰 기록)
+- next_lesson_goal (교사가 명시한 다음 수업 방향)
+- homework_check_note (숙제 관찰 메모)
+- test_result_text (테스트 결과 기록)
 
 **출력 형식: JSON만 허용**
-반드시 아래 JSON 스키마로만 응답하세요. 다른 형식은 시스템 오류를 발생시킵니다.
-
 {
   "subjects": [
     {
       "subject": "과목명",
       "paragraphs": [
-        "1단락: 학습 맥락 - 이번 주 학습 내용과 교육과정 위치. 평가 없이 사실만.",
-        "2단락: 관찰된 행동 - 수업 중 학생의 구체적 반응, 행동, 문제풀이 속도, 질문 패턴 등.",
-        "3단락: 교사 해석 및 방향 - 행동의 원인 해석과 다음 주 지도 방향."
+        "1단락: 이번 수업에서 무엇을 했는지 (교사 기록 기반)",
+        "2단락: 학생이 어떤 반응을 보였는지 (관찰 사실)",
+        "3단락: 교사가 기록한 방향 또는 '기본 학습 점검 위주로 수업 진행'"
       ],
-      "testsSummary": "테스트 결과 설명 문장 (선택사항)",
-      "homeworkSummary": "숙제 패턴 설명 문장 (선택사항)",
-      "attendanceImpact": "출결이 학습에 미친 영향 (선택사항)"
+      "testsSummary": "테스트 결과 (기록된 경우만)",
+      "homeworkSummary": "숙제 상태 (기록된 경우만)"
     }
   ],
-  "openingNote": "학생의 현재 학습 자세/태도 구체적 묘사",
-  "closingNote": "다음 주 구체적 학습 계획 안내",
-  "adminTag": "GREEN 또는 YELLOW 또는 RED"
+  "openingNote": "학생의 수업 참여 모습 (관찰 기반)",
+  "closingNote": "교사가 기록한 다음 수업 방향 요약",
+  "adminTag": "GREEN|YELLOW|RED"
 }
 
-**절대 금지 항목 (위반 시 생성 실패):**
+**절대 금지 항목:**
 - 글머리 기호 (·, -, •) 사용 금지
-- 키워드 나열 금지 (예: "학습 포인트:", "다음 주 계획:")
-- 추상적 평가 금지 (예: "전반적으로 안정", "잘 따라옴")
-- openingNote에서 금지: "전반적으로", "안정적인 흐름"
-- closingNote에서 금지: "지속 점검하겠습니다", "계속 지켜보겠습니다"
+- "심화", "확장", "고난도", "다음 단계로" 등 진도 추측 금지
+- "전반적으로 안정", "잘 따라옴" 같은 추상적 평가 금지
+- "체계적인 접근", "맞춤형 커리큘럼" 같은 창작된 교육 전략 금지
 
-**paragraphs 규칙:**
-- 정확히 3개의 문자열 배열
-- 각 문자열은 1~3문장의 완전한 문장
-- 요약이나 키워드 목록 형태 금지
+**교사 기록이 부족한 경우:**
+- 해당 과목에 대해: "이번 주에는 기본 학습 점검 위주로 수업이 진행되었습니다."
+- adminTag를 YELLOW로 설정
 
-**테스트/숙제/출결 규칙:**
-- 점수는 반드시 해석 문장 안에 포함 (예: "분수 연산에서 70점을 받았는데, 통분 과정에서의 계산 실수가 원인입니다")
-- 숙제는 패턴/습관으로 서술 (횟수만 나열 금지)
-- 출결은 학습 리듬에 미친 영향으로 서술
+**어조 가이드:**
+- "이번 수업에서는 ~을 중심으로 진행했습니다."
+- "수업 중에는 ~한 반응을 보였습니다."
+- "선생님은 ~한 방식으로 다시 지도했습니다."
 
-**adminTag 기준:**
-- GREEN: 충분한 서술 데이터로 완성된 리포트
-- YELLOW: 일부 과목 서술 부족하지만 리포트 생성 가능
-- RED: 서술 데이터 부족으로 교사 추가 관찰 필요
+반드시 유효한 JSON만 출력하세요.`;
 
-반드시 유효한 JSON만 출력하세요. 마크다운이나 추가 텍스트 없이 JSON만 반환합니다.`;
-
-// Stronger retry prompt
+// REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Stricter retry prompt
 const RETRY_SYSTEM_PROMPT = `당신은 학원 담당 선생님입니다.
 
 **경고: 이전 생성에서 규칙 위반이 감지되었습니다.**
 
+**[REPORT_TEACHER_GROUNDED_NARRATIVE_V1] 핵심 원칙:**
+- 교사가 기록한 내용만 다시 표현 (추측/창작 금지)
+- learning_issues_note, next_lesson_goal 필드 내용만 사용
+- 교사가 기록하지 않은 "심화", "확장", "다음 단계" 언급 금지
+
 **절대 금지:**
 - 글머리 기호 (·, -, •) 사용 → 문장으로 연결
-- "\n-" 또는 "\n•" 형식 → 완전한 문장으로 서술
-- 키워드: 레이블 형식 → 자연스러운 문장으로
 - "전반적으로", "안정적" 같은 추상적 표현 → 구체적 관찰로 대체
+- 교사 기록에 없는 교육적 의도 추측 → 사실만 서술
 
-반드시 유효한 JSON만 출력하세요. paragraphs는 정확히 3개의 완전한 문장 배열이어야 합니다.`;
+**교사 기록 부족 시:**
+- "이번 주에는 기본 학습 점검 위주로 수업이 진행되었습니다."
+
+반드시 유효한 JSON만 출력하세요.`;
 
 const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니다. 학생에게 보내는 짧은 주간 메시지를 작성합니다.
 
@@ -175,8 +195,9 @@ const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니�
 
 반드시 한국어로 작성하세요.`;
 
-// Failure message when narrative cannot be generated
+// REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Fallback message when teacher notes are insufficient
 const INSUFFICIENT_DATA_MESSAGE = "이번 주 학습 내용을 충분히 설명하기 위해 교사 추가 관찰이 필요합니다.";
+const BASIC_LESSON_FALLBACK = "이번 주에는 해당 과목에서 기본 학습 점검 위주로 수업이 진행되었습니다.";
 
 interface SubjectReport {
   subject: string;
@@ -239,7 +260,7 @@ interface ValidationResult {
 }
 
 // FINAL TEXT VALIDATOR - runs on the string that will be saved to DB
-// v2.3: Added bracket and summary block detection
+// v2.6: Added teacher-grounded validation
 function validateFinalReportText(content: string): ValidationResult {
   const violations: string[] = [];
 
@@ -291,13 +312,13 @@ function validateFinalReportText(content: string): ValidationResult {
     violations.push('GENERIC_CLOSING_DETECTED');
   }
 
-  // NEW v2.3: Check for legacy bracket headers 【...】
+  // Check for legacy bracket headers 【...】
   FORBIDDEN_PATTERNS.bracketHeaders.lastIndex = 0;
   if (FORBIDDEN_PATTERNS.bracketHeaders.test(content)) {
     violations.push('BRACKET_HEADER_DETECTED');
   }
 
-  // NEW v2.3: Check for summary blocks like "수업 3회, 평균 이해도"
+  // Check for summary blocks like "수업 3회, 평균 이해도"
   FORBIDDEN_PATTERNS.summaryBlocks.lastIndex = 0;
   if (FORBIDDEN_PATTERNS.summaryBlocks.test(content)) {
     violations.push('SUMMARY_BLOCK_DETECTED');
@@ -306,6 +327,18 @@ function validateFinalReportText(content: string): ValidationResult {
   // Check if content starts with 【
   if (content.trim().startsWith('【')) {
     violations.push('STARTS_WITH_BRACKET');
+  }
+
+  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Check for speculative progression terms
+  FORBIDDEN_PATTERNS.speculativeProgression.lastIndex = 0;
+  if (FORBIDDEN_PATTERNS.speculativeProgression.test(content)) {
+    violations.push('SPECULATIVE_PROGRESSION_DETECTED');
+  }
+
+  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Check for invented pedagogy
+  FORBIDDEN_PATTERNS.inventedPedagogy.lastIndex = 0;
+  if (FORBIDDEN_PATTERNS.inventedPedagogy.test(content)) {
+    violations.push('INVENTED_PEDAGOGY_DETECTED');
   }
 
   return {
@@ -1029,7 +1062,7 @@ function buildJsonUserPrompt(
   return prompt;
 }
 
-// REPORT_SUBJECT_ISOLATION_V1: Build subject-specific prompt for isolated generation
+// REPORT_SUBJECT_ISOLATION_V1 + REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Build subject-specific prompt
 function buildSubjectIsolatedPrompt(
   subject: string,
   studentName: string,
@@ -1047,24 +1080,48 @@ function buildSubjectIsolatedPrompt(
     ? '문장 해석, 독해, 어휘, 문법, reading, grammar'
     : '';
 
+  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Check if teacher has sufficient notes
+  const hasTeacherNotes = subjectLessons.some(l => 
+    (l.learning_issues_note && l.learning_issues_note.trim().length > 15) ||
+    (l.next_lesson_goal && l.next_lesson_goal.trim().length > 10)
+  );
+
   let prompt = `학생: ${studentName}
 기간: ${weekStart} ~ ${weekEnd}
 과목: ${subject} (이 과목만 작성)
 
-[REPORT_SUBJECT_ISOLATION_V1 - ${subject} 전용 지침]
+[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 - ${subject} 전용 지침]
 
-**이 응답은 ${subject} 과목에 대해서만 작성합니다.**
+**핵심 원칙: 교사가 작성한 내용만 다시 표현**
+
+당신의 역할:
+- 교사가 기록한 관찰 내용을 학부모가 이해하기 쉽게 정리
+- 명확성과 어조 개선
+
+절대 하지 말 것:
+- 교사가 기록하지 않은 내용 추측/창작
+- "심화", "확장", "고난도", "다음 단계로" 등 진도 추측
+- "체계적인 접근", "맞춤형 커리큘럼" 같은 교육 전략 창작
+
+**정보 출처 (이 필드들만 사용):**
+- [상세 관찰 기록] = learning_issues_note
+- [다음 수업 방향] = next_lesson_goal  
+- [숙제 관찰] = homework_check_note
+- [테스트] = test_result_text
+
+${!hasTeacherNotes ? `**[주의] 이 과목에 상세 교사 기록이 부족합니다.**
+3번째 단락은 반드시: "이번 주에는 기본 학습 점검 위주로 수업이 진행되었습니다."로 작성하세요.
+` : ''}
 
 ${allowedTerms ? `**사용 가능한 용어**: ${allowedTerms}` : ''}
 ${disallowedTermsDesc ? `**절대 사용 금지 용어 (다른 과목 용어)**: ${disallowedTermsDesc}` : ''}
 
-[필수 준수]
-- ${subject} 과목의 학습 내용만 언급
-- 다른 과목(${subject === '수학' ? '영어, 국어, 과학' : subject === '영어' ? '수학, 국어, 과학' : '수학, 영어'})의 용어 혼용 금지
-- 글머리 기호(·, -, •) 사용 금지
-- 추상적 평가("전반적으로 안정", "잘 따라옴") 금지
+[어조 가이드]
+- "이번 수업에서는 ~을 중심으로 진행했습니다."
+- "수업 중에는 ~한 반응을 보였습니다."
+- "선생님은 ~한 방식으로 다시 지도했습니다."
 
-=== ${subject} 수업 데이터 ===
+=== ${subject} 수업 데이터 (교사 기록) ===
 
 [${subject}] 수업 ${subjectLessons.length}회
 `;
@@ -1145,14 +1202,15 @@ ${disallowedTermsDesc ? `**절대 사용 금지 용어 (다른 과목 용어)**:
 {
   "subject": "${subject}",
   "paragraphs": [
-    "1단락: 학습 맥락 (이번 주 학습 내용과 교육과정 위치, 평가 없이 사실만)",
-    "2단락: 관찰된 행동 (수업 중 학생의 구체적 반응과 행동)",
-    "3단락: 교사 해석 및 방향 (행동의 원인 해석과 다음 주 지도 방향)"
+    "1단락: 이번 수업에서 무엇을 했는지 (교사 기록 기반 사실만)",
+    "2단락: 학생이 어떤 반응을 보였는지 (관찰 사실)",
+    "3단락: 교사가 기록한 다음 방향 또는 '기본 학습 점검 위주로 수업 진행'"
   ],
-  "testsSummary": "테스트 결과 해석 문장 (선택)",
-  "homeworkSummary": "숙제 패턴 설명 (선택)",
-  "attendanceImpact": "출결 영향 설명 (선택)"
+  "testsSummary": "테스트 결과 (기록된 경우만)",
+  "homeworkSummary": "숙제 상태 (기록된 경우만)"
 }
+
+**금지 용어:** 심화, 확장, 고난도, 다음 단계로, 체계적인 접근, 맞춤형 커리큘럼
 
 반드시 유효한 JSON만 출력하세요. ${subject} 과목 용어만 사용하세요.`;
 
@@ -1187,13 +1245,22 @@ async function generateSingleSubjectReport(
     previousLessons
   );
 
+  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Updated system prompt
   const systemPrompt = `당신은 학원 담당 선생님입니다. ${subject} 과목 학습 리포트를 JSON 형식으로 작성합니다.
 
-[REPORT_SUBJECT_ISOLATION_V1 규칙]
+[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 규칙]
+
+**핵심:** 교사가 기록한 내용만 다시 표현. 추측/창작 금지.
+
+- 정보 출처: learning_issues_note, next_lesson_goal, homework_check_note, test_result_text
 - ${subject} 과목 전용 용어만 사용
 - 다른 과목 용어 혼용 절대 금지
 - 글머리 기호(·, -, •) 사용 금지
 - 추상적 평가 금지
+
+**절대 금지 용어:** 심화, 확장, 고난도, 다음 단계로, 체계적인 접근, 맞춤형 커리큘럼
+
+**교사 기록 부족 시 3단락:** "이번 주에는 기본 학습 점검 위주로 수업이 진행되었습니다."
 
 반드시 유효한 JSON만 출력하세요.`;
 
@@ -1380,13 +1447,31 @@ async function generateOpeningClosingNotes(
   const subjects = Object.keys(subjectData);
   const totalLessons = Object.values(subjectData).reduce((sum, d) => sum + d.lessons.length, 0);
   
+  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Collect teacher-written next_lesson_goals
+  const teacherGoals: string[] = [];
+  for (const data of Object.values(subjectData)) {
+    for (const lesson of data.lessons) {
+      if (lesson.next_lesson_goal && lesson.next_lesson_goal.trim().length > 5) {
+        teacherGoals.push(lesson.next_lesson_goal.trim());
+      }
+    }
+  }
+  
+  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Updated system prompt
   const systemPrompt = `당신은 학원 담당 선생님입니다. 주간 리포트의 도입부와 마무리를 JSON 형식으로 작성합니다.
 
-[규칙]
-- 도입부: 학생의 이번 주 전반적 학습 태도/자세를 구체적으로 묘사
-- 마무리: 다음 주 구체적 학습 방향 안내
-- 금지: "전반적으로", "안정적", "지속 점검하겠습니다", "계속 지켜보겠습니다"
-- 글머리 기호 사용 금지
+[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 규칙]
+
+**핵심:** 교사가 기록한 내용만 다시 표현. 추측/창작 금지.
+
+- 도입부: 학생의 수업 참여 모습 (관찰 기반)
+- 마무리: 교사가 기록한 next_lesson_goal 내용 요약 (없으면 일반 문구)
+
+**금지:** 
+- "전반적으로", "안정적"
+- "지속 점검하겠습니다", "계속 지켜보겠습니다"
+- "심화", "확장", "다음 단계로" 등 진도 추측
+- 글머리 기호
 
 반드시 유효한 JSON만 출력하세요.`;
 
@@ -1394,10 +1479,11 @@ async function generateOpeningClosingNotes(
 기간: ${weekStart} ~ ${weekEnd}
 과목: ${subjects.join(', ')}
 총 수업: ${totalLessons}회
+${teacherGoals.length > 0 ? `\n[교사가 기록한 다음 수업 방향]:\n${teacherGoals.slice(0, 3).map(g => `- ${g}`).join('\n')}` : '\n[교사가 기록한 다음 수업 방향]: 없음'}
 
 {
-  "openingNote": "학생의 이번 주 학습 태도 구체적 묘사 (전반적으로/안정적 금지)",
-  "closingNote": "다음 주 구체적 학습 방향 (지속 점검하겠습니다 금지)"
+  "openingNote": "학생의 수업 참여 모습 (전반적으로/안정적 금지)",
+  "closingNote": "${teacherGoals.length > 0 ? '교사가 기록한 다음 방향 요약' : '다음 주도 학습을 이어가겠습니다'}"
 }
 
 JSON만 출력하세요.`;
