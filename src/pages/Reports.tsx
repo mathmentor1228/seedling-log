@@ -72,6 +72,8 @@ interface WeeklyReport {
   principal_comment?: string | null;
   principal_comment_enabled?: boolean | null;
   report_quality_tag?: 'GREEN' | 'YELLOW' | 'RED' | null;
+  // REPORT-ERROR-DETAIL-V1: Include debug_info for error visibility
+  debug_info?: string | null;
 }
 
 type QualityFilter = 'all' | 'sendable' | 'RED';
@@ -202,12 +204,41 @@ export default function Reports() {
 
       if (error) throw error;
 
-      toast({
-        title: scope === 'selected' ? '선택 학생 생성 완료' : '전체 생성 완료',
-        description: scope === 'selected' 
-          ? `선택 학생 ${count}명 생성 완료 (direct_save)`
-          : `전체 학생 ${count}명 생성 완료 (direct_save)`,
-      });
+      // REPORT-ERROR-DETAIL-V1: Show detailed error info
+      const successCount = data?.successCount ?? count;
+      const errorCount = data?.errorCount ?? 0;
+      const errorDetails = data?.errorDetails ?? [];
+      
+      if (errorCount > 0) {
+        // Build error summary for toast
+        const errorSummary = errorDetails.slice(0, 3).map((e: any) => 
+          `${e.student_name}: [${e.error_stage}] ${e.error_message.slice(0, 50)}${e.error_message.length > 50 ? '...' : ''}`
+        ).join('\n');
+        
+        console.error('[REPORT_GEN_ERROR_DETAILS]', errorDetails);
+        
+        toast({
+          title: `생성 완료 (${successCount}건 성공, ${errorCount}건 실패)`,
+          description: (
+            <div className="text-sm">
+              <p className="font-medium text-destructive mb-1">실패 상세:</p>
+              <pre className="text-xs whitespace-pre-wrap bg-destructive/10 p-2 rounded max-h-40 overflow-y-auto">
+                {errorSummary}
+                {errorDetails.length > 3 ? `\n...외 ${errorDetails.length - 3}건` : ''}
+              </pre>
+            </div>
+          ),
+          variant: 'destructive',
+          duration: 10000,
+        });
+      } else {
+        toast({
+          title: scope === 'selected' ? '선택 학생 생성 완료' : '전체 생성 완료',
+          description: scope === 'selected' 
+            ? `선택 학생 ${successCount}명 생성 완료 (direct_save)`
+            : `전체 학생 ${successCount}명 생성 완료 (direct_save)`,
+        });
+      }
 
       // Refresh reports list
       await fetchReports();
@@ -988,6 +1019,19 @@ export default function Reports() {
               학생/학부모에게 전송될 메시지를 확인하세요.
             </DialogDescription>
           </DialogHeader>
+          
+          {/* REPORT-ERROR-DETAIL-V1: Show debug_info for RED reports with errors */}
+          {previewReport?.report_quality_tag === 'RED' && previewReport?.debug_info && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 mb-2">
+              <div className="flex items-center gap-2 text-destructive font-medium text-sm mb-1">
+                <AlertTriangle className="h-4 w-4" />
+                오류 상세 정보
+              </div>
+              <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground overflow-x-auto">
+                {previewReport.debug_info}
+              </pre>
+            </div>
+          )}
           
           <Tabs value={previewTab} onValueChange={(v) => setPreviewTab(v as 'student' | 'parent')}>
             <TabsList className="grid w-full grid-cols-2">

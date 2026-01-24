@@ -7,6 +7,7 @@ const corsHeaders = {
 
 // v2.4-sendable-lock: Final narrative enforcement with quality tagging
 // REPORT-ENGINE-DEBUG-V2
+// REPORT-ERROR-DETAIL-V1: Enhanced error tracking with stage, code, and debug info
 const SCHEDULE_CONFIG = {
   schedule_text: 'Sat 22:00 KST',
   cron_utc: '0 13 * * 6',
@@ -16,6 +17,18 @@ const TEMPLATE_VERSION = 'v2.4-sendable-lock';
 
 // v2.4: hard marker so we can verify the narrative saver is the one writing the row
 const NARRATIVE_RENDER_PREFIX = '[NARRATIVE_RENDER_ACTIVE v2.4]';
+
+// REPORT-ERROR-DETAIL-V1: Error detail structure
+interface ErrorDetail {
+  student_id: string;
+  student_name: string;
+  error_stage: 'fetch_records' | 'build_prompt' | 'llm_call' | 'validate' | 'save_report' | 'unknown';
+  error_message: string;
+  error_code?: string;
+  fetched_lesson_records_count: number;
+  submitted_count: number;
+  draft_count: number;
+}
 
 // v2.4 FINAL SAVE VALIDATOR - stricter forbidden patterns
 const FORBIDDEN_PATTERNS_V24 = {
@@ -219,13 +232,21 @@ Deno.serve(async (req) => {
       let successCount = 0;
       let errorCount = 0;
       const errors: string[] = [];
+      const errorDetails: ErrorDetail[] = [];
 
       for (const student of studentsToGenerate) {
+        // REPORT-ERROR-DETAIL-V1: Track state for error reporting
+        let currentStage: ErrorDetail['error_stage'] = 'unknown';
+        let debugTotal = 0;
+        let debugSubmitted = 0;
+        let debugDraft = 0;
         try {
           console.log(`[generate-weekly-reports] REPORT_GEN_DEBUG_V2.4: Generating for ${student.name} (${student.id})`);
+          currentStage = 'fetch_records';
 
           // Invoke AI report generator
           const invokeAiReport = async (strictNarrative: boolean) => {
+            currentStage = 'llm_call';
             return await supabase.functions.invoke('generate-ai-report', {
               body: {
                 student_id: student.id,
@@ -263,6 +284,7 @@ Deno.serve(async (req) => {
             }
 
             // v2.4 FINAL SAVE VALIDATOR
+            currentStage = 'validate';
             const validation = validateFinalSaveText(cleanedParent);
             
             if (!validation.pass) {
@@ -300,16 +322,21 @@ Deno.serve(async (req) => {
 
           // Get lesson count and subjects with debug info
           // First get ALL lessons for debug
-          const { data: allLessonsDebug } = await supabase
+          currentStage = 'fetch_records';
+          const { data: allLessonsDebug, error: fetchError } = await supabase
             .from('lesson_records')
             .select('id, subject, submitted, submitted_at')
             .eq('student_id', student.id)
             .gte('lesson_date', weekStart)
             .lte('lesson_date', weekEnd);
 
-          const debugTotal = allLessonsDebug?.length || 0;
-          const debugSubmitted = allLessonsDebug?.filter(l => l.submitted === true)?.length || 0;
-          const debugDraft = allLessonsDebug?.filter(l => l.submitted === false || l.submitted === null)?.length || 0;
+          if (fetchError) {
+            throw new Error(`FETCH_ERROR: ${fetchError.message}`);
+          }
+
+          debugTotal = allLessonsDebug?.length || 0;
+          debugSubmitted = allLessonsDebug?.filter(l => l.submitted === true)?.length || 0;
+          debugDraft = allLessonsDebug?.filter(l => l.submitted === false || l.submitted === null)?.length || 0;
           const debugSubjects: Record<string, number> = {};
           allLessonsDebug?.forEach(l => {
             debugSubjects[l.subject] = (debugSubjects[l.subject] || 0) + 1;
@@ -381,6 +408,7 @@ Deno.serve(async (req) => {
           const debugInfoStr = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} mode=direct_save validator=${validatorStatus} retries=${Math.max(0, aiAttempts - 1)} tag=${qualityTag} violations=${validatorViolations.join(';') || 'none'} | ${dataDebugStr}`;
 
           // Upsert with quality tag
+          currentStage = 'save_report';
           const { error: upsertError } = await supabase
             .from('weekly_reports')
             .upsert(
@@ -407,8 +435,19 @@ Deno.serve(async (req) => {
 
           if (upsertError) {
             console.error(`[generate-weekly-reports] Upsert error for ${student.name}:`, upsertError);
+            const detail: ErrorDetail = {
+              student_id: student.id,
+              student_name: student.name,
+              error_stage: 'save_report',
+              error_message: upsertError.message,
+              error_code: upsertError.code || undefined,
+              fetched_lesson_records_count: debugTotal,
+              submitted_count: debugSubmitted,
+              draft_count: debugDraft,
+            };
+            errorDetails.push(detail);
+            errors.push(`${student.name}: ERROR_DETAIL: stage=save_report code=${upsertError.code || 'N/A'} msg=${upsertError.message} fetched=${debugTotal}`);
             errorCount++;
-            errors.push(`${student.name}: ${upsertError.message}`);
             continue;
           }
 
@@ -417,19 +456,64 @@ Deno.serve(async (req) => {
           
         } catch (e: unknown) {
           const errMsg = e instanceof Error ? e.message : 'Unknown error';
+          const errCode = (e as any)?.code || 'N/A';
           console.error(`[generate-weekly-reports] Error processing ${student.name}:`, errMsg);
+          
+          // REPORT-ERROR-DETAIL-V1: Capture full error detail
+          const detail: ErrorDetail = {
+            student_id: student.id,
+            student_name: student.name,
+            error_stage: currentStage,
+            error_message: errMsg,
+            error_code: errCode !== 'N/A' ? errCode : undefined,
+            fetched_lesson_records_count: debugTotal,
+            submitted_count: debugSubmitted,
+            draft_count: debugDraft,
+          };
+          errorDetails.push(detail);
+          errors.push(`${student.name}: ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal}`);
+          console.error(`[ERROR_DETAIL] ${student.name}: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`);
+          
+          // Also store error in weekly_reports.debug_info for visibility in UI
+          try {
+            const errorDebugStr = `[REPORT_GEN_DEBUG_V2.4] ERROR_DETAIL: stage=${currentStage} code=${errCode} msg=${errMsg} fetched=${debugTotal} submitted=${debugSubmitted} draft=${debugDraft}`;
+            await supabase
+              .from('weekly_reports')
+              .upsert(
+                {
+                  student_id: student.id,
+                  week_start: weekStart,
+                  week_end: weekEnd,
+                  total_lessons: 0,
+                  risk_level: 'high',
+                  summary: 'error',
+                  parent_message: null,
+                  student_message: null,
+                  generated_at: new Date().toISOString(),
+                  debug_info: errorDebugStr,
+                  report_quality_tag: 'RED',
+                },
+                { onConflict: 'student_id,week_start,week_end' }
+              );
+          } catch (saveErr) {
+            console.error(`[generate-weekly-reports] Failed to save error debug_info for ${student.name}`, saveErr);
+          }
+          
           errorCount++;
-          errors.push(`${student.name}: ${errMsg}`);
         }
       }
 
-      // Log job result
+      // Log job result with error details
+      const errorDetailsSummary = errorDetails.length > 0
+        ? ' | ERRORS: ' + errorDetails.map(e => `${e.student_name}[${e.error_stage}:${e.error_code || 'N/A'}]`).join(', ')
+        : '';
+      
       await supabase.from('weekly_jobs_log').insert({
         job_name: 'generate_weekly_reports',
         week_start: weekStart,
         week_end: weekEnd,
         status: errorCount === 0 ? 'completed' : 'partial',
-        message: `Direct save v2.4: ${successCount} success, ${errorCount} errors`,
+        message: `Direct save v2.4: ${successCount} success, ${errorCount} errors${errorDetailsSummary}`,
         scheduler_source: schedulerSource,
         schedule_text: SCHEDULE_CONFIG.schedule_text,
       });
@@ -448,6 +532,8 @@ Deno.serve(async (req) => {
           successCount,
           errorCount,
           errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
+          // REPORT-ERROR-DETAIL-V1: Full error details in response
+          errorDetails: errorDetails.length > 0 ? errorDetails : undefined,
           _debug: {
             source: 'edge_function_direct_save_v2.4',
             scope,
@@ -456,6 +542,7 @@ Deno.serve(async (req) => {
             time: nowKST,
             handler: 'generate-weekly-reports/index.ts',
             mode: 'direct_save_sendable_lock',
+            marker: 'REPORT-ERROR-DETAIL-V1',
           },
         }),
         {
