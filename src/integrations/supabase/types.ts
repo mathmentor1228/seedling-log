@@ -624,6 +624,7 @@ export type Database = {
           submitted_at: string | null
           teacher_id: string
           test_assistant: string | null
+          test_content: string | null
           test_date: string | null
           test_name: string | null
           test_notes: string | null
@@ -665,6 +666,7 @@ export type Database = {
           submitted_at?: string | null
           teacher_id: string
           test_assistant?: string | null
+          test_content?: string | null
           test_date?: string | null
           test_name?: string | null
           test_notes?: string | null
@@ -706,6 +708,7 @@ export type Database = {
           submitted_at?: string | null
           teacher_id?: string
           test_assistant?: string | null
+          test_content?: string | null
           test_date?: string | null
           test_name?: string | null
           test_notes?: string | null

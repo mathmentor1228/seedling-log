@@ -19,6 +19,7 @@ import AssistantPage from "./pages/AssistantPage";
 import StatsPage from "./pages/StatsPage";
 import AdminBriefingPage from "./pages/AdminBriefingPage";
 import AdminReportPage from "./pages/AdminReportPage";
+import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,7 +47,7 @@ const App = () => (
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/admin/briefing" element={<AdminBriefingPage />} />
             <Route path="/admin/report" element={<AdminReportPage />} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="/admin/daily" element={<AdminDailyOpsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

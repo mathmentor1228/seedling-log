@@ -79,8 +79,9 @@ for (let hour = 16; hour <= 21; hour++) {
 interface TestRow {
   id: string;
   subject: string;
-  testTitle: string;
-  testResultText: string;
+  testContent: string; // TEST-CONTENT-REQUIRED-V1: What was tested (required)
+  testTitle: string; // Fallback for display compatibility
+  testResultText: string; // Score/result
   testTime: string;
   testAssistant: string;
   englishPassFail: 'pass' | 'fail' | '';
@@ -112,7 +113,8 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
     {
       id: generateRowId(),
       subject: '',
-      testTitle: '',
+      testContent: '', // TEST-CONTENT-REQUIRED-V1: required field
+      testTitle: '', // kept for backward compatibility
       testResultText: '',
       testTime: '16:00',
       testAssistant: '',
@@ -202,6 +204,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
       {
         id: generateRowId(),
         subject: '',
+        testContent: '', // TEST-CONTENT-REQUIRED-V1
         testTitle: '',
         testResultText: '',
         testTime: '16:00',
@@ -218,6 +221,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
       {
         id: generateRowId(),
         subject: '',
+        testContent: '', // TEST-CONTENT-REQUIRED-V1
         testTitle: '',
         testResultText: '',
         testTime: '16:00',
@@ -262,19 +266,20 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
       return;
     }
 
+    // TEST-CONTENT-REQUIRED-V1: Validate required fields
     for (const row of validRows) {
-      if (!row.testTitle.trim()) {
+      if (!row.testContent.trim()) {
         toast({
-          title: '테스트제목 누락',
-          description: `${row.subject} 과목의 테스트제목을 입력해주세요.`,
+          title: '테스트내용 누락',
+          description: `테스트내용(무엇을 봤는지)을 입력해주세요. (${row.subject})`,
           variant: 'destructive',
         });
         return;
       }
       if (!row.testResultText.trim()) {
         toast({
-          title: '테스트내용 누락',
-          description: `${row.subject} 과목의 테스트내용을 입력해주세요.`,
+          title: '테스트결과 누락',
+          description: `${row.subject} 과목의 테스트결과를 입력해주세요.`,
           variant: 'destructive',
         });
         return;
@@ -324,10 +329,12 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
 
           if (existingRecordId) {
             // Update existing lesson record's test fields
+            // TEST-CONTENT-REQUIRED-V1: Save test_content as primary field
             const { error } = await supabase
               .from('lesson_records')
               .update({
-                test_title: row.testTitle.trim(),
+                test_content: row.testContent.trim(), // Primary content field
+                test_title: row.testContent.trim(), // Backward compatibility
                 test_name: '재시험/테스트',
                 test_result_text: row.testResultText.trim(),
                 test_result:
@@ -345,6 +352,7 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
             if (error) throw error;
           } else {
             // Create new lesson_record tagged as 테스트방문
+            // TEST-CONTENT-REQUIRED-V1: Save test_content as primary field
             const { error } = await supabase.from('lesson_records').insert({
               student_id: selectedStudentId,
               subject: row.subject as SubjectType,
@@ -355,7 +363,8 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
               homework_status: 'none',
               lesson_range: '테스트만',
               understanding_score: 0,
-              test_title: row.testTitle.trim(),
+              test_content: row.testContent.trim(), // Primary content field
+              test_title: row.testContent.trim(), // Backward compatibility
               test_name: '재시험/테스트',
               test_result_text: row.testResultText.trim(),
               test_result:
@@ -567,21 +576,21 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
                   </Select>
                 </div>
 
-                {/* TEST-TITLE-FIELD-V1 */}
+                {/* TEST-CONTENT-REQUIRED-V1: Required test content field */}
                 <div className="space-y-1">
-                  <Label className="text-xs">테스트제목 <span className="text-red-500">*</span></Label>
+                  <Label className="text-xs">테스트내용 (무엇을 봤는지) <span className="text-destructive">*</span></Label>
                   <Input
-                    placeholder="예: 중2 1단원 단원평가 / 영어 단어 재시험"
-                    value={row.testTitle}
-                    onChange={e => updateTestRow(row.id, 'testTitle', e.target.value)}
+                    placeholder="예: 중2 1단원 단원평가 / 영어 단어 30개 재시험"
+                    value={row.testContent}
+                    onChange={e => updateTestRow(row.id, 'testContent', e.target.value)}
                   />
                 </div>
 
-                {/* Test Result Text */}
+                {/* Test Result Text - Score/Result */}
                 <div className="space-y-1">
-                  <Label className="text-xs">테스트내용 <span className="text-red-500">*</span></Label>
+                  <Label className="text-xs">결과/점수 <span className="text-destructive">*</span></Label>
                   <Input
-                    placeholder="예: 18/25, 단어 30개 중 27개, 85점 등"
+                    placeholder="예: 18/25, 단어 27/30, 85점 등"
                     value={row.testResultText}
                     onChange={e => updateTestRow(row.id, 'testResultText', e.target.value)}
                   />
