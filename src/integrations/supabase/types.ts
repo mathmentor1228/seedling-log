@@ -1443,6 +1443,20 @@ export type Database = {
         | {
             Args: {
               _lesson_id: string
+              _test_assistant?: string
+              _test_content?: string
+              _test_date?: string
+              _test_name?: string
+              _test_notes?: string
+              _test_result?: string
+              _test_result_text?: string
+              _test_time?: string
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              _lesson_id: string
               _test_date?: string
               _test_name?: string
               _test_notes?: string
