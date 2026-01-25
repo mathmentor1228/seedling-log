@@ -183,6 +183,16 @@ export default function AdminStatsSection() {
     }
   }
 
+  // FIX-KPI-NULL-SAFETY-V1: Default values for null-safe rendering
+  const defaultLessonStats = { total: 0, submitted: 0, draft: 0, submission_rate: 0 };
+  const defaultHomeworkStats = { completed: 0, partial: 0, not_done: 0, none_assigned: 0, total: 0, pending_verification: 0 };
+  const defaultAttendanceStats = { '지각': 0, '조퇴': 0, '인정결석': 0, '무단결석': 0, '보충불가': 0, total: 0 };
+  
+  const lessonStats = kpis?.lesson_stats ?? defaultLessonStats;
+  const homeworkStats = kpis?.homework_stats ?? defaultHomeworkStats;
+  const attendanceStats = kpis?.attendance_stats ?? defaultAttendanceStats;
+  const testStats = kpis?.test_stats ?? [];
+
   if (loading && !kpis) {
     return (
       <Card className="animate-slide-up">
@@ -298,23 +308,23 @@ export default function AdminStatsSection() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">수업일지 제출률</p>
-                      <p className={`text-2xl font-bold ${getSubmissionRateColor(kpis.lesson_stats.submission_rate)}`}>
-                        {kpis.lesson_stats.submission_rate}%
+                      <p className={`text-2xl font-bold ${getSubmissionRateColor(lessonStats.submission_rate)}`}>
+                        {lessonStats.submission_rate}%
                       </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center text-xs">
                     <div className="p-2 bg-muted/50 rounded">
                       <p className="text-muted-foreground">전체</p>
-                      <p className="font-semibold">{kpis.lesson_stats.total}</p>
+                      <p className="font-semibold">{lessonStats.total}</p>
                     </div>
                     <div className="p-2 bg-green-500/10 rounded">
                       <p className="text-green-600">제출</p>
-                      <p className="font-semibold text-green-600">{kpis.lesson_stats.submitted}</p>
+                      <p className="font-semibold text-green-600">{lessonStats.submitted}</p>
                     </div>
                     <div className="p-2 bg-amber-500/10 rounded">
                       <p className="text-amber-600">임시저장</p>
-                      <p className="font-semibold text-amber-600">{kpis.lesson_stats.draft}</p>
+                      <p className="font-semibold text-amber-600">{lessonStats.draft}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -329,25 +339,25 @@ export default function AdminStatsSection() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">숙제 현황</p>
-                      <p className="text-2xl font-bold">{kpis.homework_stats.total}건</p>
+                      <p className="text-2xl font-bold">{homeworkStats.total}건</p>
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <Badge className={getHomeworkStatusColor('completed')}>완료</Badge>
-                      <span className="font-medium">{kpis.homework_stats.completed}</span>
+                      <span className="font-medium">{homeworkStats.completed}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <Badge className={getHomeworkStatusColor('partial')}>일부완료</Badge>
-                      <span className="font-medium">{kpis.homework_stats.partial}</span>
+                      <span className="font-medium">{homeworkStats.partial}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <Badge className={getHomeworkStatusColor('not_done')}>미이행</Badge>
-                      <span className="font-medium">{kpis.homework_stats.not_done}</span>
+                      <span className="font-medium">{homeworkStats.not_done}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <Badge className={getHomeworkStatusColor('')}>없음</Badge>
-                      <span className="font-medium">{kpis.homework_stats.none_assigned}</span>
+                      <span className="font-medium">{homeworkStats.none_assigned}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -362,29 +372,29 @@ export default function AdminStatsSection() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">출결 예외</p>
-                      <p className="text-2xl font-bold text-red-600">{kpis.attendance_stats.total}건</p>
+                      <p className="text-2xl font-bold text-red-600">{attendanceStats.total}건</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-xs">
                     <div className="flex justify-between p-1.5 bg-muted/50 rounded">
                       <span>지각</span>
-                      <span className="font-medium">{kpis.attendance_stats.지각}</span>
+                      <span className="font-medium">{attendanceStats.지각}</span>
                     </div>
                     <div className="flex justify-between p-1.5 bg-muted/50 rounded">
                       <span>조퇴</span>
-                      <span className="font-medium">{kpis.attendance_stats.조퇴}</span>
+                      <span className="font-medium">{attendanceStats.조퇴}</span>
                     </div>
                     <div className="flex justify-between p-1.5 bg-muted/50 rounded">
                       <span>인정결석</span>
-                      <span className="font-medium">{kpis.attendance_stats.인정결석}</span>
+                      <span className="font-medium">{attendanceStats.인정결석}</span>
                     </div>
                     <div className="flex justify-between p-1.5 bg-muted/50 rounded">
                       <span>무단결석</span>
-                      <span className="font-medium">{kpis.attendance_stats.무단결석}</span>
+                      <span className="font-medium">{attendanceStats.무단결석}</span>
                     </div>
                     <div className="flex justify-between p-1.5 bg-muted/50 rounded col-span-2">
                       <span>보충불가</span>
-                      <span className="font-medium">{kpis.attendance_stats.보충불가}</span>
+                      <span className="font-medium">{attendanceStats.보충불가}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -400,13 +410,13 @@ export default function AdminStatsSection() {
                     <div>
                       <p className="text-sm text-muted-foreground">테스트 현황</p>
                       <p className="text-2xl font-bold text-purple-600">
-                        {(kpis.test_stats || []).reduce((sum, t) => sum + t.test_count, 0)}건
+                        {testStats.reduce((sum, t) => sum + t.test_count, 0)}건
                       </p>
                     </div>
                   </div>
-                  {(kpis.test_stats || []).length > 0 ? (
+                  {testStats.length > 0 ? (
                     <div className="space-y-1.5">
-                      {kpis.test_stats.map((ts) => (
+                      {testStats.map((ts) => (
                         <div key={ts.subject} className="flex items-center justify-between text-xs">
                           <span className="font-medium">{ts.subject}</span>
                           <div className="flex items-center gap-2">
@@ -431,7 +441,7 @@ export default function AdminStatsSection() {
             {/* Tables Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Top Exception Students */}
-              {kpis.top_exception_students.length > 0 && (
+              {(kpis?.top_exception_students ?? []).length > 0 && (
                 <Card className="bg-background">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
@@ -448,7 +458,7 @@ export default function AdminStatsSection() {
                         </tr>
                       </thead>
                       <tbody>
-                        {kpis.top_exception_students.map((student, idx) => (
+                        {(kpis?.top_exception_students ?? []).map((student, idx) => (
                           <tr key={student.student_id} className="border-b last:border-0">
                             <td className="py-2">
                               <span className="text-muted-foreground mr-2">{idx + 1}.</span>
@@ -468,7 +478,7 @@ export default function AdminStatsSection() {
               )}
 
               {/* Teacher Breakdown */}
-              {kpis.teacher_breakdown.length > 0 && (
+              {(kpis?.teacher_breakdown ?? []).length > 0 && (
                 <Card className="bg-background">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
@@ -486,7 +496,7 @@ export default function AdminStatsSection() {
                         </tr>
                       </thead>
                       <tbody>
-                        {kpis.teacher_breakdown.map((teacher) => (
+                        {(kpis?.teacher_breakdown ?? []).map((teacher) => (
                           <tr key={teacher.teacher_id} className="border-b last:border-0">
                             <td className="py-2 font-medium">{teacher.teacher_name}</td>
                             <td className="py-2 text-right text-muted-foreground">{teacher.total_lessons}</td>
