@@ -322,8 +322,10 @@ export function LessonRecordForm({
   const [newHomeworkContent, setNewHomeworkContent] = useState('');
 
   // Test fields state
+  // WRITE-PERSIST-FIX-V1: Added test_content as required field
   const [testFormData, setTestFormData] = useState({
     test_name: '',
+    test_content: '', // WRITE-PERSIST-FIX-V1: Primary field for test scope/description
     test_result_text: '',
     test_result: 'none' as 'pass' | 'fail' | 'none',
     test_notes: '',
@@ -572,8 +574,10 @@ export function LessonRecordForm({
           setEnglishPrefillDebugRecordId(record.id);
           setIsNewRecordMode(false); // This is an existing record
           setIsNewDraft(false);
+          // WRITE-PERSIST-FIX-V1: Load test_content from DB
           setTestFormData({
             test_name: record.test_name || '',
+            test_content: (record as any).test_content || '', // WRITE-PERSIST-FIX-V1
             test_result_text: record.test_result_text || '',
             test_result: (record.test_result as 'pass' | 'fail' | 'none') || 'none',
             test_notes: record.test_notes || '',
@@ -853,10 +857,12 @@ export function LessonRecordForm({
       ...curriculumFields,
     };
 
+    // WRITE-PERSIST-FIX-V1: Include test_content in payload
     if (includeTestFields) {
       return {
         ...basePayload,
         test_name: testFormData.test_name || null,
+        test_content: testFormData.test_content || null, // WRITE-PERSIST-FIX-V1
         test_result_text: testFormData.test_result_text || null,
         test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
         test_notes: testFormData.test_notes || null,
