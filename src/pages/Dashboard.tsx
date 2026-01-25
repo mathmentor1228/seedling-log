@@ -133,8 +133,9 @@ interface TodaySlotStudent {
   homeworkCheckNote?: string | null;
   homeworkCheckLessonId?: string | null;
   prevNextLessonGoal?: string | null;
-  // DASH-ROW-TEST-SNIPPET-V1: Today's test data for inline display
+  // TEST-CONTENT-DISPLAY-V2: Today's test data for inline display (content-first)
   todayTestData?: {
+    test_content: string | null;
     test_title: string | null;
     test_result_text: string | null;
     english_pass_fail: string | null;
@@ -1110,9 +1111,10 @@ export default function Dashboard() {
         lessonRecordId: string | null;
         homeworkCheckNote: string | null;
         homeworkCheckLessonId: string | null;
-        // DASH-ROW-TEST-SNIPPET-V1
+        // TEST-CONTENT-DISPLAY-V2
         subject?: string;
         todayTestData?: {
+          test_content: string | null;
           test_title: string | null;
           test_result_text: string | null;
           english_pass_fail: string | null;
@@ -1150,10 +1152,10 @@ export default function Dashboard() {
         const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
         const classIdsForRecords = [...new Set(allStudentClassPairs.map(p => p.classId))];
         
-        // TEACHER-HW-ALERT-V2 + DASH-ROW-TEST-SNIPPET-V1: Include homework_check_note and test fields in query
+        // TEST-CONTENT-DISPLAY-V2: Include test_content as primary field
         const { data: todayRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, subject, lesson_types, attendance_status, homework_check_note, test_title, test_result_text, english_pass_fail')
+          .select('id, student_id, class_id, subject, lesson_types, attendance_status, homework_check_note, test_content, test_title, test_result_text, english_pass_fail')
           .eq('lesson_date', today)
           .in('student_id', studentIds)
           .in('class_id', classIdsForRecords);
@@ -1162,17 +1164,18 @@ export default function Dashboard() {
           todayRecords.forEach((lr: any) => {
             const key = `${lr.student_id}:${lr.class_id}`;
             const isHyugang = lr.lesson_types && lr.lesson_types.includes('휴강');
-            // DASH-ROW-TEST-SNIPPET-V1: Check for test data
-            const hasTestData = (lr.test_title && lr.test_title.trim() !== '') || (lr.test_result_text && lr.test_result_text.trim() !== '');
+            // TEST-CONTENT-DISPLAY-V2: Check for test data (content-first)
+            const hasTestData = (lr.test_content && lr.test_content.trim() !== '') || (lr.test_title && lr.test_title.trim() !== '') || (lr.test_result_text && lr.test_result_text.trim() !== '');
             lessonRecordMap[key] = {
               hyugangRecordId: isHyugang ? lr.id : null,
               attendanceStatus: lr.attendance_status || ['정상등원'],
               lessonRecordId: lr.id,
               homeworkCheckNote: lr.homework_check_note || null,
               homeworkCheckLessonId: lr.homework_check_note ? lr.id : null,
-              // DASH-ROW-TEST-SNIPPET-V1
+              // TEST-CONTENT-DISPLAY-V2
               subject: lr.subject,
               todayTestData: hasTestData ? {
+                test_content: lr.test_content || null,
                 test_title: lr.test_title || null,
                 test_result_text: lr.test_result_text || null,
                 english_pass_fail: lr.english_pass_fail || null,
@@ -1968,11 +1971,12 @@ export default function Dashboard() {
                                         </>
                                       )}
                                       
-                                      {/* DASH-LATEST-TEST-CONTENT-FIRST-V1: Show today's test snippet inline (only if content exists) */}
-                                      {!student.hyugangRecordId && student.todayTestData && student.todayTestData.test_title && (() => {
+                                      {/* TEST-CONTENT-DISPLAY-V2: Show today's test snippet inline (content-first) */}
+                                      {!student.hyugangRecordId && student.todayTestData && (student.todayTestData.test_content || student.todayTestData.test_title) && (() => {
                                         const testObj = {
                                           subject: slot.subject as '수학' | '과학' | '영어' | '국어',
                                           lesson_date: getTodayKST(),
+                                          test_content: student.todayTestData.test_content,
                                           test_title: student.todayTestData.test_title,
                                           test_result_text: student.todayTestData.test_result_text,
                                           english_pass_fail: student.todayTestData.english_pass_fail,

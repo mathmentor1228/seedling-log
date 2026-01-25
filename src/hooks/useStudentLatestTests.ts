@@ -1,5 +1,5 @@
-// DASH-LATEST-TEST-CONTENT-FIRST-V1: Hook for fetching latest test per subject for a student
-// Priority: test_title (content) is primary, test_result_text is secondary
+// TEST-CONTENT-DISPLAY-V2: Hook for fetching latest test per subject for a student
+// Priority: test_content is primary, test_title is fallback, test_result_text is secondary
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -9,8 +9,9 @@ type SubjectType = '수학' | '과학' | '영어' | '국어';
 export interface LatestTest {
   subject: SubjectType;
   lesson_date: string;
-  test_title: string | null;  // This is the test CONTENT (what was tested) - PRIMARY
-  test_result_text: string | null;  // This is the test RESULT - SECONDARY
+  test_content: string | null;  // Primary field for test scope/description
+  test_title: string | null;    // Fallback if test_content is empty
+  test_result_text: string | null;  // This is the test RESULT
   english_pass_fail: string | null;
 }
 
@@ -21,13 +22,20 @@ interface StudentLatestTests {
   error: string | null;
 }
 
-// DASH-LATEST-TEST-CONTENT-FIRST-V1: Helper to format compact test snippet for roster row
-// Priority: test_title (content) first, then result
+// TEST-CONTENT-DISPLAY-V2: Helper to get display content (content-first)
+export function getTestDisplayContent(test: LatestTest): string {
+  if (test.test_content?.trim()) return test.test_content.trim();
+  if (test.test_title?.trim()) return test.test_title.trim();
+  return '';
+}
+
+// TEST-CONTENT-DISPLAY-V2: Helper to format compact test snippet for roster row
+// Priority: test_content first, then test_title, then result
 export function formatTestSnippet(test: LatestTest, maxLength: number = 35): string {
-  const contentPart = test.test_title || '';
+  const contentPart = getTestDisplayContent(test);
   const resultPart = test.test_result_text || '';
   
-  // If no content (test_title), don't show test section
+  // If no content (test_content or test_title), don't show test section
   if (!contentPart) {
     return '';
   }
@@ -65,7 +73,7 @@ export function formatTestSnippet(test: LatestTest, maxLength: number = 35): str
 
 // Helper to get full tooltip text (untruncated)
 export function formatTestTooltip(test: LatestTest): string {
-  const contentPart = test.test_title || '';
+  const contentPart = getTestDisplayContent(test);
   const resultPart = test.test_result_text || '';
   
   if (!contentPart) return '';
@@ -104,24 +112,27 @@ export function useStudentLatestTests() {
     const tests: LatestTest[] = [];
 
     for (const subject of subjects) {
-      // DASH-LATEST-TEST-CONTENT-FIRST-V1: Only fetch records with test_title (content)
-      // test_title is the primary field - if empty, don't show test section
+      // TEST-CONTENT-DISPLAY-V2: Fetch records with either test_content or test_title
       const { data, error } = await supabase
         .from('lesson_records')
-        .select('lesson_date, test_title, test_result_text, english_pass_fail, subject')
+        .select('lesson_date, test_content, test_title, test_result_text, english_pass_fail, subject')
         .eq('student_id', studentId)
         .eq('subject', subject)
-        .neq('test_title', '')
-        .not('test_title', 'is', null)
+        .or('test_content.neq.,test_title.neq.')
         .order('lesson_date', { ascending: false })
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (!error && data && data.test_title) {
+      const testContent = data?.test_content?.trim() || '';
+      const testTitle = data?.test_title?.trim() || '';
+      
+      // Only add if we have some content
+      if (!error && data && (testContent || testTitle)) {
         tests.push({
           subject,
           lesson_date: data.lesson_date,
+          test_content: data.test_content,
           test_title: data.test_title,
           test_result_text: data.test_result_text,
           english_pass_fail: data.english_pass_fail,
@@ -202,11 +213,11 @@ export function useStudentLatestTests() {
   };
 }
 
-// DASH-LATEST-TEST-CONTENT-FIRST-V1: Helper to format expanded test display line
-// Format: [MM/dd] 내용: {test_title} 결과: {test_result_text}
+// TEST-CONTENT-DISPLAY-V2: Helper to format expanded test display line
+// Format: [MM/dd] 내용: {test_content or test_title} 결과: {test_result_text}
 export function formatTestLine(test: LatestTest): string {
   const datePart = format(new Date(test.lesson_date), 'MM/dd');
-  const contentPart = test.test_title || '';
+  const contentPart = getTestDisplayContent(test);
   const resultPart = test.test_result_text || '';
   
   // If no content, return empty (shouldn't happen with new query filter)
@@ -229,7 +240,7 @@ export function formatTestLine(test: LatestTest): string {
   return line;
 }
 
-// DASH-LATEST-TEST-CONTENT-FIRST-V1: Structured format for expanded view
+// TEST-CONTENT-DISPLAY-V2: Structured format for expanded view
 export interface FormattedTestDetails {
   date: string;
   content: string;
@@ -238,11 +249,12 @@ export interface FormattedTestDetails {
 }
 
 export function getTestDetails(test: LatestTest): FormattedTestDetails | null {
-  if (!test.test_title) return null;
+  const content = getTestDisplayContent(test);
+  if (!content) return null;
   
   return {
     date: format(new Date(test.lesson_date), 'MM/dd'),
-    content: test.test_title,
+    content,
     result: test.test_result_text || null,
     passFail: test.subject === '영어' && test.english_pass_fail 
       ? (test.english_pass_fail === 'pass' ? '통과' : test.english_pass_fail === 'fail' ? '불통과' : null)

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar } from 'lucide-react';
@@ -29,12 +38,16 @@ import StudentCsvImport from '@/components/StudentCsvImport';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { normalizePhone } from '@/lib/phoneUtils';
 
+// STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1
 interface Student {
   id: string;
   name: string;
   email: string | null;
   phone: string | null;
   grade: string | null;
+  school_level: string | null;
+  grade_year: number | null;
+  enrollment_status: string;
   notes: string | null;
   school: string | null;
   parent_phone: string | null;
@@ -51,11 +64,17 @@ export default function Students() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
+  // STUDENT-ENROLLMENT-STATUS-V1: Filter toggle for non-active students
+  const [includeInactive, setIncludeInactive] = useState(false);
+  // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     grade: '',
+    school_level: '',
+    grade_year: '',
+    enrollment_status: '재원',
     notes: '',
     school: '',
     parent_phone: '',
@@ -65,14 +84,21 @@ export default function Students() {
 
   useEffect(() => {
     fetchStudents();
-  }, []);
+  }, [includeInactive]);
 
   async function fetchStudents() {
     try {
-      const { data, error } = await supabase
+      // STUDENT-ENROLLMENT-STATUS-V1: Filter by enrollment_status
+      let query = supabase
         .from('students')
         .select('*')
         .order('name');
+      
+      if (!includeInactive) {
+        query = query.eq('enrollment_status', '재원');
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setStudents(data || []);
@@ -149,11 +175,15 @@ export default function Students() {
         }
       }
 
+      // STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1: Include new fields
       const payload: any = {
         name: formData.name.trim(),
         email: formData.email.trim() || null,
         phone: formData.phone.trim() || null,
         grade: formData.grade.trim() || null,
+        school_level: formData.school_level || null,
+        grade_year: formData.grade_year ? parseInt(formData.grade_year) : null,
+        enrollment_status: formData.enrollment_status || '재원',
         notes: formData.notes.trim() || null,
         school: formData.school.trim() || null,
         parent_phone: normalizedParentPhone || null,
@@ -213,6 +243,9 @@ export default function Students() {
       email: '',
       phone: '',
       grade: '',
+      school_level: '',
+      grade_year: '',
+      enrollment_status: '재원',
       notes: '',
       school: '',
       parent_phone: '',
@@ -227,6 +260,9 @@ export default function Students() {
       email: student.email || '',
       phone: student.phone || '',
       grade: student.grade || '',
+      school_level: student.school_level || '',
+      grade_year: student.grade_year?.toString() || '',
+      enrollment_status: student.enrollment_status || '재원',
       notes: student.notes || '',
       school: student.school || '',
       parent_phone: student.parent_phone || '',
@@ -327,13 +363,74 @@ export default function Students() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="grade">Grade/Level</Label>
+                    <Label htmlFor="grade">Grade/Level (기존)</Label>
                     <Input
                       id="grade"
                       value={formData.grade}
                       onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
                       placeholder="e.g., 고2"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="school_level">학교급 *</Label>
+                    <Select
+                      value={formData.school_level}
+                      onValueChange={(value) => setFormData({ ...formData, school_level: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="초">초등</SelectItem>
+                        <SelectItem value="중">중등</SelectItem>
+                        <SelectItem value="고">고등</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="grade_year">학년 *</Label>
+                    <Select
+                      value={formData.grade_year}
+                      onValueChange={(value) => setFormData({ ...formData, grade_year: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {formData.school_level === '초' ? (
+                          <>
+                            <SelectItem value="1">1학년</SelectItem>
+                            <SelectItem value="2">2학년</SelectItem>
+                            <SelectItem value="3">3학년</SelectItem>
+                            <SelectItem value="4">4학년</SelectItem>
+                            <SelectItem value="5">5학년</SelectItem>
+                            <SelectItem value="6">6학년</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="1">1학년</SelectItem>
+                            <SelectItem value="2">2학년</SelectItem>
+                            <SelectItem value="3">3학년</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="enrollment_status">재원상태 *</Label>
+                    <Select
+                      value={formData.enrollment_status}
+                      onValueChange={(value) => setFormData({ ...formData, enrollment_status: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="재원">재원</SelectItem>
+                        <SelectItem value="휴원">휴원</SelectItem>
+                        <SelectItem value="퇴원">퇴원</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="school">School</Label>
@@ -413,14 +510,27 @@ export default function Students() {
 
       <Card>
         <CardHeader className="pb-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search students..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search students..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            {/* STUDENT-ENROLLMENT-STATUS-V1: Include inactive toggle */}
+            <div className="flex items-center gap-2">
+              <Switch
+                id="include-inactive"
+                checked={includeInactive}
+                onCheckedChange={setIncludeInactive}
+              />
+              <Label htmlFor="include-inactive" className="text-sm">
+                휴원/퇴원 포함
+              </Label>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

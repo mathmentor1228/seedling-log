@@ -826,14 +826,17 @@ export type Database = {
         Row: {
           created_at: string
           email: string | null
+          enrollment_status: string
           followup_2w_done_subjects: string[]
           grade: string | null
+          grade_year: number | null
           id: string
           name: string
           notes: string | null
           parent_phone: string | null
           phone: string | null
           school: string | null
+          school_level: string | null
           status: string | null
           student_code: string | null
           student_phone: string | null
@@ -842,14 +845,17 @@ export type Database = {
         Insert: {
           created_at?: string
           email?: string | null
+          enrollment_status?: string
           followup_2w_done_subjects?: string[]
           grade?: string | null
+          grade_year?: number | null
           id?: string
           name: string
           notes?: string | null
           parent_phone?: string | null
           phone?: string | null
           school?: string | null
+          school_level?: string | null
           status?: string | null
           student_code?: string | null
           student_phone?: string | null
@@ -858,14 +864,17 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string | null
+          enrollment_status?: string
           followup_2w_done_subjects?: string[]
           grade?: string | null
+          grade_year?: number | null
           id?: string
           name?: string
           notes?: string | null
           parent_phone?: string | null
           phone?: string | null
           school?: string | null
+          school_level?: string | null
           status?: string | null
           student_code?: string | null
           student_phone?: string | null
