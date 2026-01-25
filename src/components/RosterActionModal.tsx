@@ -134,8 +134,10 @@ export function RosterActionModal({
   // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records
   const [homeworkCheckNote, setHomeworkCheckNote] = useState('');
   const [newHomeworkContent, setNewHomeworkContent] = useState('');
+  // WRITE-PERSIST-FIX-V1: Added test_content as required field
   const [testFormData, setTestFormData] = useState({
     test_name: '',
+    test_content: '', // WRITE-PERSIST-FIX-V1: Primary field for test scope/description
     test_result_text: '',
     test_result: 'none' as 'pass' | 'fail' | 'none',
     test_notes: '',
@@ -163,8 +165,10 @@ export function RosterActionModal({
       setHomeworkCheckNotes('');
       setHomeworkCheckNote(''); // ASSISTANT-HW-NO-CARRYOVER-V1: Reset assistant note
       setNewHomeworkContent('');
+      // WRITE-PERSIST-FIX-V1: Reset test_content
       setTestFormData({
         test_name: '',
+        test_content: '', // WRITE-PERSIST-FIX-V1
         test_result_text: '',
         test_result: 'none',
         test_notes: '',
@@ -253,9 +257,10 @@ export function RosterActionModal({
           // ASSISTANT-HW-NO-CARRYOVER-V1: Load homework_check_note for CURRENT record only (lesson-scoped)
           // This is intentionally loaded from the current record, not carried over from previous lessons
           setHomeworkCheckNote(record.homework_check_note || '');
-          // Pre-fill test fields
+          // Pre-fill test fields - WRITE-PERSIST-FIX-V1: Include test_content
           setTestFormData({
             test_name: record.test_name || '',
+            test_content: (record as any).test_content || '', // WRITE-PERSIST-FIX-V1
             test_result_text: record.test_result_text || '',
             test_result: (record.test_result as 'pass' | 'fail' | 'none') || 'none',
             test_notes: record.test_notes || '',
@@ -430,13 +435,27 @@ export function RosterActionModal({
         }
       }
       
+      // WRITE-PERSIST-FIX-V1: Refetch to verify and update UI from DB
+      const { data: savedRecord } = await supabase
+        .from('lesson_records')
+        .select('homework_status, homework_check_note')
+        .eq('id', lessonRecord!.id)
+        .single();
+      
+      // WRITE-PERSIST-FIX-V1: Debug log for admin
+      console.log('[HW_WRITE_DEBUG] After save from DB:', {
+        recordId: lessonRecord!.id,
+        sent: homeworkStatusToSave,
+        saved: savedRecord?.homework_status,
+      });
+      
       // HOMEWORK-STATUS-PERSIST-V1: Show saved status in toast
       const statusLabel = {
         'completed': '완료',
         'partial': '일부완료',
         'not_done': '미이행',
         'none_assigned': '없음',
-      }[homeworkStatusToSave] || homeworkStatusToSave;
+      }[savedRecord?.homework_status || homeworkStatusToSave] || (savedRecord?.homework_status || homeworkStatusToSave);
       
       toast({
         title: '확인 완료',
@@ -458,15 +477,37 @@ export function RosterActionModal({
     }
   }
 
-  // Save test fields
+  // Save test fields - WRITE-PERSIST-FIX-V1: Include test_content and add debug
   async function handleSaveTestFields() {
     if (!lessonRecord?.id || !user || !context) return;
     
+    // WRITE-PERSIST-FIX-V1 / TEST-CONTENT-REQUIRED-V1: Validate test_content when saving test results
+    if (testFormData.test_result_text.trim() && !testFormData.test_content.trim()) {
+      toast({
+        title: '입력 필요',
+        description: '테스트내용(무엇을 봤는지)을 입력해주세요.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     setIsSavingTest(true);
     try {
+      // WRITE-PERSIST-FIX-V1: Debug log before save
+      console.log('[TEST_WRITE_DEBUG] Saving test fields:', {
+        recordId: lessonRecord.id,
+        sent: {
+          test_content: testFormData.test_content || null,
+          test_name: testFormData.test_name || null,
+          test_result_text: testFormData.test_result_text || null,
+        },
+      });
+
+      // WRITE-PERSIST-FIX-V1: Include test_content in RPC call
       const { error } = await supabase.rpc('update_lesson_test_fields', {
         _lesson_id: lessonRecord.id,
         _test_name: testFormData.test_name || null,
+        _test_content: testFormData.test_content || null, // WRITE-PERSIST-FIX-V1
         _test_result_text: testFormData.test_result_text || null,
         _test_result: context.subject === '영어' ? testFormData.test_result : 'none',
         _test_notes: testFormData.test_notes || null,
@@ -477,9 +518,22 @@ export function RosterActionModal({
       
       if (error) throw error;
       
+      // WRITE-PERSIST-FIX-V1: Refetch to verify and update UI from DB
+      const { data: savedRecord } = await supabase
+        .from('lesson_records')
+        .select('test_content, test_name, test_result_text')
+        .eq('id', lessonRecord.id)
+        .single();
+      
+      // WRITE-PERSIST-FIX-V1: Debug log after save
+      console.log('[TEST_WRITE_DEBUG] After save from DB:', {
+        recordId: lessonRecord.id,
+        saved: savedRecord,
+      });
+      
       toast({
         title: '저장 완료',
-        description: '테스트 결과가 저장되었습니다',
+        description: `테스트내용=${savedRecord?.test_content || '-'}`,
       });
       
       await fetchData();
@@ -619,13 +673,14 @@ export function RosterActionModal({
           </div>
         </div>
 
-        {/* Visible marker for debugging */}
+        {/* Visible marker for debugging - WRITE-PERSIST-FIX-V1 */}
         <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
           TEST_SCREEN_MARKER_V3
-          {/* HOMEWORK-STATUS-PERSIST-V1: Admin debug for homework_status */}
+          {/* WRITE-PERSIST-FIX-V1: Admin debug for homework_status and test_content */}
           {isAdmin && lessonRecord && (
             <span className="ml-2 font-mono">
-              | HW_SAVE_DEBUG: recordId={lessonRecord.id?.slice(0, 8)} current_status={lessonRecord.homework_status || 'null'}
+              | HW_DEBUG: id={lessonRecord.id?.slice(0, 8)} hw_status={lessonRecord.homework_status || 'null'}
+              | TEST_DEBUG: content={(lessonRecord as any).test_content?.slice(0, 15) || 'null'}
             </span>
           )}
         </div>
@@ -764,9 +819,22 @@ export function RosterActionModal({
                     </p>
                   ) : (
                     <>
+                      {/* WRITE-PERSIST-FIX-V1: test_content is the primary field */}
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-1">
+                          테스트 내용 <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          value={testFormData.test_content}
+                          onChange={(e) => setTestFormData(prev => ({ ...prev, test_content: e.target.value }))}
+                          placeholder="무엇을 봤는지 입력 (필수)"
+                          className={!testFormData.test_content.trim() && testFormData.test_result_text ? 'border-destructive' : ''}
+                        />
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>테스트명</Label>
+                          <Label>테스트명 (선택)</Label>
                           <Input
                             value={testFormData.test_name}
                             onChange={(e) => setTestFormData(prev => ({ ...prev, test_name: e.target.value }))}
