@@ -30,14 +30,15 @@ import type { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 
 // ADMIN_REPORT_TOOL_V1
 
+// FIX-KPI-NULL-SAFETY-V1: Interface matches RPC return structure
 interface KpiData {
-  lessons: {
+  lesson_stats: {
     total: number;
     submitted: number;
     draft: number;
     submission_rate: number;
   };
-  homework: {
+  homework_stats: {
     completed: number;
     partial: number;
     not_done: number;
@@ -45,7 +46,7 @@ interface KpiData {
     total: number;
     pending_verification: number;
   };
-  attendance: {
+  attendance_stats: {
     지각: number;
     조퇴: number;
     인정결석: number;
@@ -53,7 +54,7 @@ interface KpiData {
     보충불가: number;
     total: number;
   };
-  tests: Array<{
+  test_stats: Array<{
     subject: string;
     test_count: number;
     pass_count: number;
@@ -75,6 +76,11 @@ interface KpiData {
     tests_count: number;
   }>;
 }
+
+// FIX-KPI-NULL-SAFETY-V1: Default values for null-safe rendering
+const defaultLessonStats = { total: 0, submitted: 0, draft: 0, submission_rate: 0 };
+const defaultHomeworkStats = { completed: 0, partial: 0, not_done: 0, none_assigned: 0, total: 0, pending_verification: 0 };
+const defaultAttendanceStats = { '지각': 0, '조퇴': 0, '인정결석': 0, '무단결석': 0, '보충불가': 0, total: 0 };
 
 interface LessonRecord {
   id: string;
@@ -285,7 +291,12 @@ export function AdminReport() {
     return reasons;
   }
 
-  const totalTests = kpiData?.tests?.reduce((sum, t) => sum + t.test_count, 0) || 0;
+  // FIX-KPI-NULL-SAFETY-V1: Use correct property names and null-safe access
+  const lessonStats = kpiData?.lesson_stats ?? defaultLessonStats;
+  const homeworkStats = kpiData?.homework_stats ?? defaultHomeworkStats;
+  const attendanceStats = kpiData?.attendance_stats ?? defaultAttendanceStats;
+  const testStats = kpiData?.test_stats ?? [];
+  const totalTests = testStats.reduce((sum, t) => sum + t.test_count, 0);
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -356,6 +367,7 @@ export function AdminReport() {
         </div>
       ) : kpiData && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* FIX-KPI-NULL-SAFETY-V1: Use extracted null-safe variables */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground flex items-center gap-1">
@@ -364,9 +376,9 @@ export function AdminReport() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{kpiData.lessons.total}</div>
+              <div className="text-2xl font-bold">{lessonStats.total}</div>
               <div className="text-xs text-muted-foreground">
-                제출 {kpiData.lessons.submitted} / 미제출 {kpiData.lessons.draft}
+                제출 {lessonStats.submitted} / 미제출 {lessonStats.draft}
               </div>
             </CardContent>
           </Card>
@@ -379,7 +391,7 @@ export function AdminReport() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{kpiData.lessons.submission_rate}%</div>
+              <div className="text-2xl font-bold">{lessonStats.submission_rate}%</div>
             </CardContent>
           </Card>
 
@@ -393,7 +405,7 @@ export function AdminReport() {
             <CardContent>
               <div className="text-2xl font-bold">{totalTests}</div>
               <div className="text-xs text-muted-foreground">
-                {kpiData.tests.map(t => `${t.subject}: ${t.test_count}`).join(', ')}
+                {testStats.map(t => `${t.subject}: ${t.test_count}`).join(', ') || '-'}
               </div>
             </CardContent>
           </Card>
@@ -407,10 +419,10 @@ export function AdminReport() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-destructive">
-                {kpiData.homework.not_done + kpiData.homework.partial}
+                {homeworkStats.not_done + homeworkStats.partial}
               </div>
               <div className="text-xs text-muted-foreground">
-                미이행 {kpiData.homework.not_done} / 일부 {kpiData.homework.partial}
+                미이행 {homeworkStats.not_done} / 일부 {homeworkStats.partial}
               </div>
             </CardContent>
           </Card>
@@ -423,9 +435,9 @@ export function AdminReport() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-destructive">{kpiData.attendance.total}</div>
+              <div className="text-2xl font-bold text-destructive">{attendanceStats.total}</div>
               <div className="text-xs text-muted-foreground">
-                지각 {kpiData.attendance.지각} / 결석 {kpiData.attendance.인정결석 + kpiData.attendance.무단결석}
+                지각 {attendanceStats.지각} / 결석 {attendanceStats.인정결석 + attendanceStats.무단결석}
               </div>
             </CardContent>
           </Card>
@@ -438,7 +450,7 @@ export function AdminReport() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{kpiData.homework.pending_verification}</div>
+              <div className="text-2xl font-bold">{homeworkStats.pending_verification}</div>
             </CardContent>
           </Card>
         </div>
