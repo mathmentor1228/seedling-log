@@ -18,7 +18,8 @@ import {
   UserCheck,
   BarChart3,
   FileBarChart2,
-  FileText
+  FileText,
+  CalendarDays
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
   { label: '리포트 발송', href: '/reports/send', icon: <Send className="w-4 h-4" />, adminOnly: true },
   { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
+  { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
   { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
   { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },
   { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, adminOnly: true },
