@@ -17,6 +17,7 @@ import TimetablePage from "./pages/TimetablePage";
 import AssistantRequestsPage from "./pages/AssistantRequestsPage";
 import AssistantPage from "./pages/AssistantPage";
 import StatsPage from "./pages/StatsPage";
+import AdminBriefingPage from "./pages/AdminBriefingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/assistant-requests" element={<AssistantRequestsPage />} />
             <Route path="/assistant" element={<AssistantPage />} />
             <Route path="/stats" element={<StatsPage />} />
+            <Route path="/admin/briefing" element={<AdminBriefingPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

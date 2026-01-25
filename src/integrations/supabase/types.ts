@@ -375,6 +375,36 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_briefings: {
+        Row: {
+          briefing_date: string
+          created_at: string
+          generated_at: string
+          generated_by: string | null
+          highlights: Json
+          id: string
+          totals: Json
+        }
+        Insert: {
+          briefing_date: string
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          highlights?: Json
+          id?: string
+          totals?: Json
+        }
+        Update: {
+          briefing_date?: string
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          highlights?: Json
+          id?: string
+          totals?: Json
+        }
+        Relationships: []
+      }
       event_attachments: {
         Row: {
           created_at: string
@@ -1165,6 +1195,48 @@ export type Database = {
           status?: string
           week_end?: string | null
           week_start?: string | null
+        }
+        Relationships: []
+      }
+      weekly_principal_reports: {
+        Row: {
+          attention_students: Json
+          created_at: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          recurring_issues: Json
+          summary_text: string | null
+          teacher_breakdown: Json
+          totals: Json
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          attention_students?: Json
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          recurring_issues?: Json
+          summary_text?: string | null
+          teacher_breakdown?: Json
+          totals?: Json
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          attention_students?: Json
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          recurring_issues?: Json
+          summary_text?: string | null
+          teacher_breakdown?: Json
+          totals?: Json
+          week_end?: string
+          week_start?: string
         }
         Relationships: []
       }
