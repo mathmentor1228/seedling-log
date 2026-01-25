@@ -5,12 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// v2.6-teacher-grounded: Teacher-grounded narrative with source validation
+// v2.7-student-voice: Student report with teacher-voice tone
 // REPORT-ENGINE-DEBUG-V1
 // REPORT_SUBJECT_ISOLATION_V1: Per-subject generation with terminology validation
 // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: AI must ONLY rephrase teacher-written content
-const TEMPLATE_VERSION = 'v2.6-teacher-grounded';
-const FORMATTER_NAME = 'renderReportFromJson-v2.6';
+// STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Natural, observation-first, non-formulaic student reports
+const TEMPLATE_VERSION = 'v2.7-student-voice';
+const FORMATTER_NAME = 'renderReportFromJson-v2.7';
 
 // Forbidden patterns for FINAL text validation (runs before save)
 const FORBIDDEN_PATTERNS = {
@@ -26,6 +27,18 @@ const FORBIDDEN_PATTERNS = {
   // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Detect speculative/invented content
   speculativeProgression: /(심화\s*(학습|과정|단계)|확장\s*(학습|활동)|고난도\s*(문제|과정)|다음\s*단계로\s*넘어|상위\s*개념으로)/gi,
   inventedPedagogy: /(학습\s*전략을\s*세워|체계적인\s*접근을\s*통해|단계별\s*학습\s*계획|맞춤형\s*커리큘럼)/gi,
+};
+
+// STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Forbidden patterns for student messages
+const STUDENT_FORBIDDEN_PATTERNS = {
+  // Generic praise phrases
+  genericPraise: /(인상적이었어요?|인상적이야|잘했어요?|잘했어|화이팅|열심히\s*했어요?|열심히\s*했어|수고했어요?|수고했어|대단해요?|대단해|멋져요?|멋져|최고야|최고예요|훌륭해요?|훌륭해)/gi,
+  // Mission-poster language
+  missionPoster: /(해보자[!]?|하면\s*좋아요?|도전해봅시다|도전해보자|파이팅|힘내자|노력하자|달려보자)/gi,
+  // Motivational speech patterns
+  motivationalSpeech: /(할\s*수\s*있어|믿어요?|믿어|응원할게|응원해|자신감\s*갖고|기대할게|기대해)/gi,
+  // Evaluation report tone
+  evaluationTone: /(향상되었|발전했|성장했|진보했|좋아졌|나아졌)/gi,
 };
 
 // REPORT_SUBJECT_ISOLATION_V1: Subject-specific vocabulary constraints
@@ -176,22 +189,48 @@ const RETRY_SYSTEM_PROMPT = `당신은 학원 담당 선생님입니다.
 
 반드시 유효한 JSON만 출력하세요.`;
 
-const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니다. 학생에게 보내는 짧은 주간 메시지를 작성합니다.
+// STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Teacher-voice prompt for student messages
+const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니다. 학생에게 직접 말하듯 짧은 주간 메시지를 작성합니다.
 
-[v2.2 규칙]
-1. 이번 주 수업에서 학생이 한 구체적 행동 1가지만 언급
-2. 다음 주 명확한 미션 1가지 제시
-3. 금지: "잘했어", "열심히 했어", "수고했어" 같은 일반 칭찬
-4. 금지: 점수나 이해도 숫자 기반 칭찬
-5. 글머리 기호(·, -, •) 사용 금지
+[STUDENT_REPORT_TONE_V2_TEACHER_VOICE 핵심 규칙]
+
+**A) 절대 금지 - 일반 칭찬 & 포스터 언어**
+절대 사용 금지:
+- "인상적이었어", "잘했어", "화이팅", "열심히 했어", "수고했어"
+- "~해보자", "~하면 좋아요", "~도전해봅시다"
+- "할 수 있어", "응원할게", "기대할게"
+- "향상되었어", "발전했어", "성장했어"
+
+**B) 관찰 중심 구조 (과목별 2-4문장)**
+- 문장 1: 수업에서 교사가 실제로 본 구체적 행동
+- 문장 2: 학생이 어떻게 반응했는지 (태도, 어려움, 시도)
+- 문장 3 (선택): 다음 시간에 다시 볼 내용 - 차분하게
+
+**C) 교사 목소리 - 차분하고 담백하게**
+- 동기부여 연설 ❌
+- 평가 보고서 ❌
+- 친근하지만 가볍지 않게
+
+권장 표현:
+- "이번 수업에서는 ~하는 모습이 보였어."
+- "~할 때 잠시 멈칫했지만 다시 시도했어."
+- "이 부분은 다음 시간에 다시 같이 볼 거야."
+- "아직 익숙하지 않은 단계야."
+- "조금 더 시간이 필요한 부분이야."
+
+**D) 정직함 > 격려**
+학생이 어려워한 부분은 솔직하게:
+- "아직 익숙하지 않은 단계야."
+- "조금 더 시간이 필요한 부분이야."
+단, 어조는 차분하고 존중하는 톤 유지.
 
 [형식]
-- 2-3문장
-- 이모지 1-2개만
-- 친근하지만 가볍지 않은 톤
+- 과목별 2-4문장
+- 이모지 1개만 (끝에)
+- 글머리 기호(·, -, •) 사용 금지
 
-예시:
-"이번 주 분수 통분할 때 공배수 찾는 속도가 확실히 빨라졌어. 다음 주는 분수 나눗셈에서 '뒤집어 곱하기' 원리 확실히 이해하고 오자! 💪"
+[예시]
+"이번 수업에서 분수 통분할 때 공배수 찾는 부분에서 잠시 멈칫하는 모습이 보였어. 두세 번 다시 시도하면서 감을 잡아가더라. 다음 시간에 분수 나눗셈에서 '뒤집어 곱하기' 원리 다시 같이 볼 거야. 📝"
 
 반드시 한국어로 작성하세요.`;
 
@@ -339,6 +378,58 @@ function validateFinalReportText(content: string): ValidationResult {
   FORBIDDEN_PATTERNS.inventedPedagogy.lastIndex = 0;
   if (FORBIDDEN_PATTERNS.inventedPedagogy.test(content)) {
     violations.push('INVENTED_PEDAGOGY_DETECTED');
+  }
+
+  return {
+    isValid: violations.length === 0,
+    violations,
+  };
+}
+
+// STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Validate student message content
+function validateStudentMessage(content: string): ValidationResult {
+  const violations: string[] = [];
+
+  // Reset regex lastIndex
+  Object.values(STUDENT_FORBIDDEN_PATTERNS).forEach(pattern => {
+    if (pattern instanceof RegExp) {
+      pattern.lastIndex = 0;
+    }
+  });
+
+  // Check for generic praise
+  STUDENT_FORBIDDEN_PATTERNS.genericPraise.lastIndex = 0;
+  if (STUDENT_FORBIDDEN_PATTERNS.genericPraise.test(content)) {
+    violations.push('GENERIC_PRAISE_DETECTED');
+  }
+
+  // Check for mission-poster language
+  STUDENT_FORBIDDEN_PATTERNS.missionPoster.lastIndex = 0;
+  if (STUDENT_FORBIDDEN_PATTERNS.missionPoster.test(content)) {
+    violations.push('MISSION_POSTER_LANGUAGE_DETECTED');
+  }
+
+  // Check for motivational speech patterns
+  STUDENT_FORBIDDEN_PATTERNS.motivationalSpeech.lastIndex = 0;
+  if (STUDENT_FORBIDDEN_PATTERNS.motivationalSpeech.test(content)) {
+    violations.push('MOTIVATIONAL_SPEECH_DETECTED');
+  }
+
+  // Check for evaluation report tone
+  STUDENT_FORBIDDEN_PATTERNS.evaluationTone.lastIndex = 0;
+  if (STUDENT_FORBIDDEN_PATTERNS.evaluationTone.test(content)) {
+    violations.push('EVALUATION_TONE_DETECTED');
+  }
+
+  // Also check basic forbidden patterns (bullets, etc.)
+  FORBIDDEN_PATTERNS.bulletPoints.lastIndex = 0;
+  if (FORBIDDEN_PATTERNS.bulletPoints.test(content)) {
+    violations.push('BULLET_POINTS_DETECTED');
+  }
+
+  FORBIDDEN_PATTERNS.newlineBullets.lastIndex = 0;
+  if (FORBIDDEN_PATTERNS.newlineBullets.test(content)) {
+    violations.push('NEWLINE_BULLETS_DETECTED');
   }
 
   return {
@@ -1544,6 +1635,7 @@ JSON만 출력하세요.`;
   }
 }
 
+// STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Student message generation with validation and retry
 async function generateStudentMessage(
   apiKey: string,
   systemPrompt: string,
@@ -1552,62 +1644,113 @@ async function generateStudentMessage(
   weekEnd: string,
   subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
 ): Promise<string> {
-  const studentUserPrompt = `학생 이름: ${studentName}
+  const maxRetries = 2;
+  let attempts = 0;
+  let lastContent = '';
+  let lastViolations: string[] = [];
+
+  // Build detailed observation data from teacher notes
+  const observationData = Object.entries(subjectData).map(([subject, data]) => {
+    const recentLesson = data.lessons[data.lessons.length - 1];
+    const note = recentLesson?.learning_issues_note || '';
+    const goal = recentLesson?.next_lesson_goal || '';
+    const hwNote = recentLesson?.homework_check_note || '';
+    return `[${subject}] 수업 ${data.lessons.length}회
+  관찰 기록: ${note || '(없음)'}
+  다음 수업 방향: ${goal || '(없음)'}
+  숙제 관찰: ${hwNote || '(없음)'}`;
+  }).join('\n');
+
+  while (attempts < maxRetries) {
+    attempts++;
+    const isRetry = attempts > 1;
+
+    const studentUserPrompt = `학생 이름: ${studentName}
 기간: ${weekStart} ~ ${weekEnd}
 
-[중요] 글머리 기호(·, -, •) 사용 금지. 일반 칭찬("잘했어", "수고했어") 금지.
+[STUDENT_REPORT_TONE_V2_TEACHER_VOICE 규칙]
+${isRetry ? `\n⚠️ 재생성 요청: 이전 메시지에서 다음 위반 감지됨: ${lastViolations.join(', ')}\n` : ''}
+**절대 금지:**
+- 일반 칭찬: "인상적이었어", "잘했어", "화이팅", "열심히 했어", "수고했어"
+- 포스터 언어: "~해보자", "~하면 좋아요", "~도전해봅시다"
+- 동기부여 연설: "할 수 있어", "응원할게", "기대할게"
+- 평가 어조: "향상되었어", "발전했어", "성장했어"
 
-이번 주 수업 내용:
-${Object.entries(subjectData).map(([subject, data]) => {
-  const goals = data.lessons.filter(l => l.next_lesson_goal).map(l => l.next_lesson_goal).slice(-1);
-  const notes = data.lessons.filter(l => l.learning_issues_note).map(l => l.learning_issues_note).slice(-1);
-  return `${subject}: ${data.lessons.length}회 수업${goals.length > 0 ? `, 다음 목표: ${goals[0]}` : ''}${notes.length > 0 ? `, 관찰: ${notes[0]?.slice(0, 50)}` : ''}`;
-}).join('\n')}
+**필수 구조 (과목별 2-4문장):**
+1. 수업에서 교사가 본 구체적 행동
+2. 학생의 반응 (태도, 어려움, 시도)
+3. (선택) 다음 시간에 볼 내용
 
-위 내용을 바탕으로 학생에게 보내는 짧은 격려 메시지를 작성하세요.
-구체적인 행동 1가지 언급 + 다음 주 미션 1가지 제시.`;
+**권장 표현:**
+- "이번 수업에서는 ~하는 모습이 보였어."
+- "~할 때 잠시 멈칫했지만 다시 시도했어."
+- "이 부분은 다음 시간에 다시 같이 볼 거야."
+- "아직 익숙하지 않은 단계야."
 
-  try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: studentUserPrompt },
-        ],
-      }),
-    });
+이번 주 관찰 데이터:
+${observationData}
 
-    if (!response.ok) {
-      console.error('[generate-ai-report] Student message AI error:', response.status);
+위 관찰 기록을 바탕으로 교사가 학생에게 직접 말하듯 차분하게 작성하세요.`;
+
+    try {
+      console.log(`[generate-ai-report] Student message attempt ${attempts}/${maxRetries}${isRetry ? ` (violations: ${lastViolations.join(',')})` : ''}`);
+
+      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: studentUserPrompt },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('[generate-ai-report] Student message AI error:', response.status);
+        return generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData);
+      }
+
+      const result = await response.json();
+      lastContent = result.choices?.[0]?.message?.content || '';
+
+      // Validate student message with new patterns
+      const validation = validateStudentMessage(lastContent);
+      
+      if (validation.isValid) {
+        console.log(`[generate-ai-report] Student message valid on attempt ${attempts}`);
+        const startDate = new Date(weekStart);
+        const endDate = new Date(weekEnd);
+        const header = `[더멘토] 이번 주 체크 (${startDate.getMonth() + 1}/${startDate.getDate()}~${endDate.getMonth() + 1}/${endDate.getDate()})`;
+        return header + '\n\n' + lastContent;
+      }
+
+      console.warn(`[generate-ai-report] Student message validation failed (attempt ${attempts}):`, validation.violations);
+      lastViolations = validation.violations;
+      
+      // If this was the last attempt, use the content anyway but log warning
+      if (attempts >= maxRetries) {
+        console.warn('[generate-ai-report] Using student message despite violations after max retries');
+        const startDate = new Date(weekStart);
+        const endDate = new Date(weekEnd);
+        const header = `[더멘토] 이번 주 체크 (${startDate.getMonth() + 1}/${startDate.getDate()}~${endDate.getMonth() + 1}/${endDate.getDate()})`;
+        return header + '\n\n' + lastContent;
+      }
+    } catch (error) {
+      console.error('[generate-ai-report] Student message error:', error);
       return generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData);
     }
-
-    const result = await response.json();
-    const content = result.choices?.[0]?.message?.content || '';
-    
-    // Validate student message too
-    const validation = validateFinalReportText(content);
-    if (!validation.isValid) {
-      console.warn('[generate-ai-report] Student message validation failed:', validation.violations);
-    }
-    
-    const startDate = new Date(weekStart);
-    const endDate = new Date(weekEnd);
-    const header = `[더멘토] 이번 주 체크 (${startDate.getMonth() + 1}/${startDate.getDate()}~${endDate.getMonth() + 1}/${endDate.getDate()})`;
-    
-    return header + '\n\n' + content;
-  } catch (error) {
-    console.error('[generate-ai-report] Student message error:', error);
-    return generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData);
   }
+
+  // Fallback if loop exits without returning
+  return generateFallbackStudentMessage(studentName, weekStart, weekEnd, subjectData);
 }
 
+// STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Fallback message with teacher-voice tone
 function generateFallbackStudentMessage(
   studentName: string,
   weekStart: string,
@@ -1618,19 +1761,28 @@ function generateFallbackStudentMessage(
   const endDate = new Date(weekEnd);
   const header = `[더멘토] 이번 주 체크 (${startDate.getMonth() + 1}/${startDate.getDate()}~${endDate.getMonth() + 1}/${endDate.getDate()})`;
   
-  // Find a concrete next goal from lessons
-  let nextGoal = '';
+  // Find observation and next goal from lessons
+  let observation = '';
+  let nextFocus = '';
+  
   for (const [subject, data] of Object.entries(subjectData)) {
-    const goal = data.lessons.find(l => l.next_lesson_goal)?.next_lesson_goal;
-    if (goal) {
-      nextGoal = `다음 주 ${subject} 미션: ${goal}`;
-      break;
+    const recentLesson = data.lessons[data.lessons.length - 1];
+    if (recentLesson?.learning_issues_note && !observation) {
+      observation = `이번 ${subject} 수업에서 ${recentLesson.learning_issues_note.slice(0, 40)}하는 모습이 보였어.`;
     }
+    if (recentLesson?.next_lesson_goal && !nextFocus) {
+      nextFocus = `다음 시간에는 ${recentLesson.next_lesson_goal} 부분 다시 같이 볼 거야.`;
+    }
+    if (observation && nextFocus) break;
   }
   
-  if (!nextGoal) {
-    nextGoal = '다음 주도 꾸준히 진행하자!';
+  // Default fallback with teacher-voice tone
+  if (!observation) {
+    observation = '이번 주 수업 내용을 정리해봤어.';
+  }
+  if (!nextFocus) {
+    nextFocus = '다음 시간에 이어서 같이 볼 거야.';
   }
   
-  return `${header}\n\n${studentName} 학생, ${nextGoal} 💪`;
+  return `${header}\n\n${observation} ${nextFocus} 📝`;
 }
