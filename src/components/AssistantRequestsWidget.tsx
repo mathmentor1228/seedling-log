@@ -8,6 +8,8 @@
 // ASSISTANT-REQUEST-DEDUP-CONSTRAINT-V4
 // TEACHER-REQUEST-DETAILS-ATTACH-V1
 // COMMENT-MODAL-V1
+// REQUEST-MODAL-V1
+// REQUEST-REPLIES-V1
 import { useState, useEffect, Component, ReactNode, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
@@ -23,7 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2, X, Copy, Check, MessageSquare } from 'lucide-react';
+import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2, X, Copy, Check, MessageSquare, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { getDueBadgeInfo, cn } from '@/lib/utils';
@@ -97,6 +99,16 @@ interface AssistantTask {
   related_teacher_profile?: { full_name: string; email: string } | null;
 }
 
+// REQUEST-REPLIES-V1: Reply interface
+interface TaskReply {
+  id: string;
+  task_id: string;
+  author_id: string | null;
+  author_name: string | null;
+  body: string;
+  created_at: string;
+}
+
 interface Teacher {
   id: string;
   full_name: string;
@@ -130,11 +142,17 @@ function AssistantRequestsWidgetInner() {
   // Expanded notes state (for teachers only)
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
-  // COMMENT-MODAL-V1: Modal state for viewing full request details
+  // REQUEST-MODAL-V1: Modal state for viewing full request details
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<AssistantTask | null>(null);
   const [copied, setCopied] = useState(false);
   const clickedRowRef = useRef<HTMLDivElement | null>(null);
+  
+  // REQUEST-REPLIES-V1: Replies state
+  const [replies, setReplies] = useState<TaskReply[]>([]);
+  const [repliesLoading, setRepliesLoading] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replySubmitting, setReplySubmitting] = useState(false);
 
   // Attachment handling (for teachers only)
   const {
@@ -432,15 +450,39 @@ function AssistantRequestsWidgetInner() {
     return isTeacher(role) && task.created_by === user?.id && (task.status === 'todo' || task.status === 'doing');
   };
 
-  // COMMENT-MODAL-V1: Open detail modal and track clicked row for focus restoration
+  // REQUEST-REPLIES-V1: Fetch replies for a task
+  const fetchReplies = async (taskId: string) => {
+    setRepliesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('task_replies')
+        .select('*')
+        .eq('task_id', taskId)
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      setReplies(data || []);
+    } catch (err) {
+      console.error('Error fetching replies:', err);
+      setReplies([]);
+    } finally {
+      setRepliesLoading(false);
+    }
+  };
+
+  // REQUEST-MODAL-V1: Open detail modal and track clicked row for focus restoration
   const handleRowClick = (task: AssistantTask, rowElement: HTMLDivElement | null) => {
     clickedRowRef.current = rowElement;
     setSelectedTask(task);
     setCopied(false);
+    setReplyText('');
+    setReplies([]);
     setDetailModalOpen(true);
+    // Fetch replies when modal opens
+    fetchReplies(task.id);
   };
 
-  // COMMENT-MODAL-V1: Copy full notes text to clipboard
+  // REQUEST-MODAL-V1: Copy full notes text to clipboard
   const handleCopyNotes = async () => {
     if (!selectedTask?.notes) return;
     try {
@@ -453,9 +495,51 @@ function AssistantRequestsWidgetInner() {
     }
   };
 
-  // COMMENT-MODAL-V1: Handle modal close with focus restoration
+  // REQUEST-REPLIES-V1: Submit a reply
+  const handleSubmitReply = async () => {
+    if (!selectedTask || !replyText.trim() || !user) return;
+    
+    setReplySubmitting(true);
+    try {
+      // Get current user's profile for author_name snapshot
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      const { error } = await supabase
+        .from('task_replies')
+        .insert({
+          task_id: selectedTask.id,
+          author_id: user.id,
+          author_name: profileData?.full_name || user.email || '알 수 없음',
+          body: replyText.trim()
+        });
+      
+      if (error) throw error;
+      
+      toast({ title: '답글이 등록되었습니다.' });
+      setReplyText('');
+      // Refetch replies
+      fetchReplies(selectedTask.id);
+    } catch (err: any) {
+      console.error('Error submitting reply:', err);
+      toast({ 
+        title: '답글 등록 실패', 
+        description: err?.message || '다시 시도해주세요.',
+        variant: 'destructive' 
+      });
+    } finally {
+      setReplySubmitting(false);
+    }
+  };
+
+  // REQUEST-MODAL-V1: Handle modal close with focus restoration
   const handleModalClose = () => {
     setDetailModalOpen(false);
+    setReplies([]);
+    setReplyText('');
     // Restore focus to clicked row after modal closes
     setTimeout(() => {
       clickedRowRef.current?.focus();
@@ -757,14 +841,14 @@ function AssistantRequestsWidgetInner() {
           )}
         </div>
 
-        {/* COMMENT-MODAL-V1: Detail modal for viewing full request content */}
+        {/* REQUEST-MODAL-V1: Detail modal for viewing full request content with replies */}
         <Dialog open={detailModalOpen} onOpenChange={(open) => {
           if (!open) handleModalClose();
         }}>
-          <DialogContent className="max-w-lg max-h-[90vh]">
-            {/* COMMENT-MODAL-V1 marker */}
+          <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+            {/* REQUEST-MODAL-V1 marker */}
             <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-              COMMENT-MODAL-V1
+              REQUEST-MODAL-V1
             </div>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 pr-8">
@@ -777,7 +861,7 @@ function AssistantRequestsWidgetInner() {
             </DialogHeader>
             
             {selectedTask && (
-              <ScrollArea className="max-h-[60vh]">
+              <ScrollArea className="flex-1 max-h-[60vh]">
                 <div className="space-y-4 pr-4">
                   {/* Status badges row */}
                   <div className="flex items-center gap-2 flex-wrap">
@@ -839,7 +923,7 @@ function AssistantRequestsWidgetInner() {
                         </Button>
                       )}
                     </div>
-                    <div className="p-3 border rounded-lg bg-background min-h-[100px]">
+                    <div className="p-3 border rounded-lg bg-background min-h-[80px]">
                       {selectedTask.notes ? (
                         <p className="text-sm whitespace-pre-wrap break-words">{selectedTask.notes}</p>
                       ) : (
@@ -848,14 +932,62 @@ function AssistantRequestsWidgetInner() {
                     </div>
                   </div>
                   
-                  {/* TODO: Reply/thread feature placeholder */}
-                  {/* Uncomment when reply feature is implemented:
-                  <div className="space-y-2 pt-2 border-t">
-                    <Label className="text-muted-foreground">답글 작성</Label>
-                    <Textarea placeholder="답글을 입력하세요..." className="min-h-[80px]" />
-                    <Button size="sm">답글 등록</Button>
+                  {/* REQUEST-REPLIES-V1: Replies section */}
+                  <div className="space-y-3 pt-2 border-t">
+                    <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
+                      REQUEST-REPLIES-V1
+                    </div>
+                    <Label className="text-muted-foreground flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4" />
+                      답글 ({replies.length})
+                    </Label>
+                    
+                    {/* Replies list */}
+                    {repliesLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : replies.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic py-2">아직 답글이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                        {replies.map((reply) => (
+                          <div key={reply.id} className="p-2 border rounded-lg bg-secondary/30">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                              <span className="font-medium text-foreground">{reply.author_name || '알 수 없음'}</span>
+                              <span>{format(new Date(reply.created_at), 'MM/dd HH:mm')}</span>
+                            </div>
+                            <p className="text-sm whitespace-pre-wrap break-words">{reply.body}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Reply input */}
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder="답글을 입력하세요..."
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        className="min-h-[60px] text-sm"
+                        disabled={replySubmitting}
+                      />
+                      <div className="flex justify-end">
+                        <Button 
+                          size="sm" 
+                          onClick={handleSubmitReply}
+                          disabled={!replyText.trim() || replySubmitting}
+                        >
+                          {replySubmitting ? (
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4 mr-1" />
+                          )}
+                          답글 등록
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  */}
                 </div>
               </ScrollArea>
             )}
