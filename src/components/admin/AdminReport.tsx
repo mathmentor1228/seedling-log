@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LessonModal } from '@/components/lessons/LessonModal';
+import { OpsChangelogSection } from './OpsChangelogSection';
 import { 
   CalendarIcon, 
   ChevronLeft, 
@@ -23,7 +24,8 @@ import {
   FileText,
   ClipboardCheck,
   Users,
-  BookOpen
+  BookOpen,
+  History
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LessonFormContext } from '@/components/lessons/LessonRecordForm';
@@ -471,6 +473,10 @@ export function AdminReport() {
             <Users className="h-4 w-4" />
             교사별 현황
           </TabsTrigger>
+          <TabsTrigger value="changelog" className="gap-1">
+            <History className="h-4 w-4" />
+            운영 변경 이력
+          </TabsTrigger>
         </TabsList>
 
         {/* Test Summary Table */}
@@ -718,6 +724,11 @@ export function AdminReport() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Ops Changelog Tab - OPS_CHANGELOG_V1 */}
+        <TabsContent value="changelog">
+          <OpsChangelogSection />
         </TabsContent>
       </Tabs>
 

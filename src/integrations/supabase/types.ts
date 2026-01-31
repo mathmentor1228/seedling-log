@@ -736,6 +736,39 @@ export type Database = {
           },
         ]
       }
+      ops_changelog: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          content: string
+          created_at: string
+          id: string
+          log_date: string
+          log_type: string
+          target: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          author_name: string
+          content: string
+          created_at?: string
+          id?: string
+          log_date?: string
+          log_type?: string
+          target?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          content?: string
+          created_at?: string
+          id?: string
+          log_date?: string
+          log_type?: string
+          target?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
