@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.generate-ai-report]
 verify_jwt = false
+
+[functions.student-auth]
+verify_jwt = false
+
+[functions.student-data]
+verify_jwt = false

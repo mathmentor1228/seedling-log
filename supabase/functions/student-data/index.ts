@@ -1,0 +1,356 @@
+// STUDENT-APP-V1: Secure data fetching for student app (bypasses RLS via service role)
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { action, student_id, student_token, ...params } = await req.json();
+
+    // Validate required fields
+    if (!action || !student_id || !student_token) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Missing environment variables');
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    // Validate student session
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('student_accounts')
+      .select('student_id')
+      .eq('student_id', student_id)
+      .single();
+
+    if (sessionError || !sessionData) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid session' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let result: any = null;
+
+    switch (action) {
+      case 'dashboard': {
+        // Fetch student points
+        const { data: studentData } = await supabase
+          .from('students')
+          .select('total_points')
+          .eq('id', student_id)
+          .single();
+
+        // Fetch pending homework (last 14 days, unchecked)
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        
+        const { data: homeworkData } = await supabase
+          .from('homework_assignments')
+          .select('id, content, subject, assigned_date, check_status')
+          .eq('student_id', student_id)
+          .gte('assigned_date', twoWeeksAgo.toISOString().split('T')[0])
+          .eq('check_status', 'unchecked')
+          .order('assigned_date', { ascending: false })
+          .limit(5);
+
+        // Fetch upcoming classes
+        const { data: classData } = await supabase
+          .from('class_students')
+          .select(`
+            class_id,
+            classes!inner (
+              name,
+              subject,
+              class_schedules!inner (
+                day_of_week,
+                start_time,
+                end_time,
+                is_active
+              )
+            )
+          `)
+          .eq('student_id', student_id);
+
+        const today = new Date();
+        const dow = today.getDay();
+        const upcomingClasses: any[] = [];
+        
+        if (classData) {
+          for (const cs of classData) {
+            const classInfo = cs.classes as any;
+            if (classInfo?.class_schedules) {
+              for (const schedule of classInfo.class_schedules) {
+                if (schedule.is_active) {
+                  upcomingClasses.push({
+                    class_name: classInfo.name,
+                    subject: classInfo.subject,
+                    day_of_week: schedule.day_of_week,
+                    start_time: schedule.start_time,
+                    end_time: schedule.end_time,
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        // Sort by day of week relative to today
+        upcomingClasses.sort((a, b) => {
+          const aDays = (a.day_of_week - dow + 7) % 7;
+          const bDays = (b.day_of_week - dow + 7) % 7;
+          return aDays - bDays;
+        });
+
+        result = {
+          total_points: studentData?.total_points || 0,
+          pending_homework: homeworkData || [],
+          upcoming_classes: upcomingClasses.slice(0, 3),
+        };
+        break;
+      }
+
+      case 'homework_list': {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const { data, error } = await supabase
+          .from('homework_assignments')
+          .select('id, content, subject, assigned_date, check_status, result, notes')
+          .eq('student_id', student_id)
+          .gte('assigned_date', thirtyDaysAgo.toISOString().split('T')[0])
+          .order('assigned_date', { ascending: false });
+
+        if (error) throw error;
+        result = { homework: data || [] };
+        break;
+      }
+
+      case 'homework_submission': {
+        const { homework_id } = params;
+        if (!homework_id) {
+          return new Response(
+            JSON.stringify({ error: 'Missing homework_id' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data } = await supabase
+          .from('homework_submissions')
+          .select('*')
+          .eq('homework_id', homework_id)
+          .eq('student_id', student_id)
+          .order('submitted_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        result = { submission: data };
+        break;
+      }
+
+      case 'submit_homework': {
+        const { homework_id, image_url, submission_text } = params;
+        if (!homework_id) {
+          return new Response(
+            JSON.stringify({ error: 'Missing homework_id' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error } = await supabase
+          .from('homework_assignments')
+          .update({
+            submission_image_url: image_url || null,
+            submission_text: submission_text || null,
+            submitted_at: new Date().toISOString(),
+          })
+          .eq('id', homework_id)
+          .eq('student_id', student_id);
+
+        if (error) throw error;
+        result = { success: true };
+        break;
+      }
+
+      case 'points_history': {
+        // Fetch current total points
+        const { data: studentData } = await supabase
+          .from('students')
+          .select('total_points')
+          .eq('id', student_id)
+          .single();
+
+        // Fetch point history
+        const { data: historyData } = await supabase
+          .from('student_point_history')
+          .select('id, points, reason, created_at')
+          .eq('student_id', student_id)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        result = {
+          total_points: studentData?.total_points || 0,
+          history: historyData || [],
+        };
+        break;
+      }
+
+      case 'schedule': {
+        const { data, error } = await supabase
+          .from('class_students')
+          .select(`
+            class_id,
+            classes!inner (
+              name,
+              subject,
+              teacher_id,
+              class_schedules!inner (
+                day_of_week,
+                start_time,
+                end_time,
+                is_active
+              )
+            )
+          `)
+          .eq('student_id', student_id);
+
+        if (error) throw error;
+
+        // Fetch teacher names
+        const teacherIds = [...new Set(
+          (data || [])
+            .map((cs: any) => cs.classes?.teacher_id)
+            .filter(Boolean)
+        )];
+
+        let teacherMap: Record<string, string> = {};
+        if (teacherIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', teacherIds);
+
+          teacherMap = (profiles || []).reduce((acc: any, p: any) => {
+            acc[p.id] = p.full_name;
+            return acc;
+          }, {});
+        }
+
+        // Process schedule data
+        const scheduleItems: any[] = [];
+        for (const cs of data || []) {
+          const classInfo = cs.classes as any;
+          if (classInfo?.class_schedules) {
+            for (const sched of classInfo.class_schedules) {
+              if (sched.is_active) {
+                scheduleItems.push({
+                  class_name: classInfo.name,
+                  subject: classInfo.subject,
+                  teacher_name: classInfo.teacher_id ? teacherMap[classInfo.teacher_id] || null : null,
+                  day_of_week: sched.day_of_week,
+                  start_time: sched.start_time,
+                  end_time: sched.end_time,
+                });
+              }
+            }
+          }
+        }
+
+        // Sort by day of week, then by start time
+        scheduleItems.sort((a, b) => {
+          if (a.day_of_week !== b.day_of_week) {
+            return a.day_of_week - b.day_of_week;
+          }
+          return a.start_time.localeCompare(b.start_time);
+        });
+
+        result = { schedule: scheduleItems };
+        break;
+      }
+
+      case 'feedback': {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const { data, error } = await supabase
+          .from('lesson_records')
+          .select('id, lesson_date, subject, lesson_range, understanding_score, next_lesson_goal, notes, learning_issues, teacher_id')
+          .eq('student_id', student_id)
+          .eq('submitted', true)
+          .gte('lesson_date', thirtyDaysAgo.toISOString().split('T')[0])
+          .order('lesson_date', { ascending: false })
+          .limit(30);
+
+        if (error) throw error;
+
+        // Fetch teacher names
+        const teacherIds = [...new Set((data || []).map((d: any) => d.teacher_id).filter(Boolean))];
+        let teacherMap: Record<string, string> = {};
+
+        if (teacherIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', teacherIds);
+
+          teacherMap = (profiles || []).reduce((acc: any, p: any) => {
+            acc[p.id] = p.full_name;
+            return acc;
+          }, {});
+        }
+
+        const feedbackData = (data || []).map((d: any) => ({
+          id: d.id,
+          lesson_date: d.lesson_date,
+          subject: d.subject,
+          lesson_range: d.lesson_range,
+          understanding_score: d.understanding_score,
+          next_lesson_goal: d.next_lesson_goal,
+          notes: d.notes,
+          learning_issues: d.learning_issues,
+          teacher_name: d.teacher_id ? teacherMap[d.teacher_id] || null : null,
+        }));
+
+        result = { feedback: feedbackData };
+        break;
+      }
+
+      default:
+        return new Response(
+          JSON.stringify({ error: 'Unknown action' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+
+    return new Response(
+      JSON.stringify(result),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('student-data error:', error);
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
