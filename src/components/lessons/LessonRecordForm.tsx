@@ -16,7 +16,13 @@ import {
 } from '@/components/ui/select';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2, Camera, Star, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import { MathCurriculumTag } from './MathCurriculumTag';
@@ -59,6 +65,27 @@ interface HomeworkAssignment {
   checked_at: string | null;
   notes: string | null;
   checker_name?: string;
+}
+
+// TEACHER-HW-SUBMISSION-VIEW-V1: Interface for student submission data
+interface HomeworkSubmission {
+  id: string;
+  homework_id: string;
+  student_id: string;
+  image_url: string | null;
+  submission_note: string | null;
+  submitted_at: string;
+  status: 'pending' | 'reviewed' | 'approved' | 'needs_revision';
+  feedback: string | null;
+  points_awarded: number | null;
+}
+
+// TEACHER-HW-SUBMISSION-VIEW-V1: Interface for point history
+interface PointHistoryEntry {
+  id: string;
+  points: number;
+  reason: string;
+  created_at: string;
 }
 
 interface LessonRecord {
@@ -320,6 +347,11 @@ export function LessonRecordForm({
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
   const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
   const [newHomeworkContent, setNewHomeworkContent] = useState('');
+  
+  // TEACHER-HW-SUBMISSION-VIEW-V1: Student submission and point history states
+  const [studentSubmission, setStudentSubmission] = useState<HomeworkSubmission | null>(null);
+  const [pointHistory, setPointHistory] = useState<PointHistoryEntry[]>([]);
+  const [showSubmissionImageModal, setShowSubmissionImageModal] = useState(false);
 
   // Test fields state
   // WRITE-PERSIST-FIX-V1: Added test_content as required field
@@ -769,8 +801,40 @@ export function LessonRecordForm({
             setHomeworkCheckResult(homeworkData.result || '');
             setHomeworkCheckNotes(homeworkData.notes || '');
           }
+          
+          // TEACHER-HW-SUBMISSION-VIEW-V1: Fetch student submission for this homework
+          const { data: submissionData } = await supabase
+            .from('homework_submissions')
+            .select('*')
+            .eq('homework_id', homeworkData.id)
+            .eq('student_id', studentId)
+            .order('submitted_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (submissionData) {
+            setStudentSubmission(submissionData as HomeworkSubmission);
+          } else {
+            setStudentSubmission(null);
+          }
+          
+          // TEACHER-HW-SUBMISSION-VIEW-V1: Fetch point history for this homework
+          const { data: pointData } = await supabase
+            .from('student_point_history')
+            .select('id, points, reason, created_at')
+            .eq('student_id', studentId)
+            .eq('related_homework_id', homeworkData.id)
+            .order('created_at', { ascending: false });
+          
+          if (pointData && pointData.length > 0) {
+            setPointHistory(pointData as PointHistoryEntry[]);
+          } else {
+            setPointHistory([]);
+          }
         } else {
           setPreviousLessonHomework(null);
+          setStudentSubmission(null);
+          setPointHistory([]);
         }
       } else {
         setPreviousLesson(null);
@@ -1250,13 +1314,81 @@ export function LessonRecordForm({
               </div>
 
               {previousLessonHomework && (
-                <div className="p-3 bg-background rounded-lg border space-y-2">
+                <div className="p-3 bg-background rounded-lg border space-y-3">
                   {/* PREV_HW_LINK_V1 debug marker */}
                   <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
                     PREV_HW_LINK_V1: subject={formData.subject} found={prevHwDebugInfo.found ? 1 : 0}
                   </span>
                   <Label className="text-sm font-medium">지난숙제(자동)</Label>
                   <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
+
+                  {/* TEACHER-HW-SUBMISSION-VIEW-V1: Student submission display */}
+                  {studentSubmission && (
+                    <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Camera className="w-4 h-4 text-primary" />
+                          <span className="text-sm font-medium text-primary">📷 인증 완료</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({format(new Date(studentSubmission.submitted_at), 'MM/dd HH:mm')})
+                          </span>
+                        </div>
+                        {studentSubmission.image_url && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowSubmissionImageModal(true)}
+                            className="text-xs gap-1"
+                          >
+                            <Camera className="w-3 h-3" />
+                            사진 보기
+                          </Button>
+                        )}
+                      </div>
+                      {studentSubmission.submission_note && (
+                        <div className="text-sm text-muted-foreground bg-secondary/30 p-2 rounded">
+                          <span className="font-medium text-xs">학생 메모: </span>
+                          {studentSubmission.submission_note}
+                        </div>
+                      )}
+                      {studentSubmission.image_url && (
+                        <div 
+                          className="cursor-pointer rounded overflow-hidden border w-24 h-24"
+                          onClick={() => setShowSubmissionImageModal(true)}
+                        >
+                          <img 
+                            src={studentSubmission.image_url} 
+                            alt="숙제 인증" 
+                            className="w-full h-full object-cover hover:opacity-80 transition-opacity"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TEACHER-HW-SUBMISSION-VIEW-V1: Point history display */}
+                  {pointHistory.length > 0 && (
+                    <div className="p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-1">
+                      <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                        <Star className="w-4 h-4" />
+                        포인트 지급 내역
+                      </div>
+                      {pointHistory.map((entry) => (
+                        <div key={entry.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{entry.reason}</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              +{entry.points}점
+                            </Badge>
+                            <span className="text-[10px]">
+                              {format(new Date(entry.created_at), 'MM/dd')}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {previousLessonHomework.check_status === 'checked' ? (
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
@@ -1306,6 +1438,39 @@ export function LessonRecordForm({
                   )}
                 </div>
               )}
+
+              {/* TEACHER-HW-SUBMISSION-VIEW-V1: Image modal */}
+              <Dialog open={showSubmissionImageModal} onOpenChange={setShowSubmissionImageModal}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Camera className="w-5 h-5" />
+                      학생 숙제 인증 사진
+                    </DialogTitle>
+                  </DialogHeader>
+                  {studentSubmission?.image_url && (
+                    <div className="space-y-4">
+                      <img 
+                        src={studentSubmission.image_url} 
+                        alt="숙제 인증" 
+                        className="w-full rounded-lg"
+                      />
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <p>
+                          <span className="font-medium">제출 시간:</span>{' '}
+                          {format(new Date(studentSubmission.submitted_at), 'yyyy-MM-dd HH:mm')}
+                        </p>
+                        {studentSubmission.submission_note && (
+                          <p>
+                            <span className="font-medium">학생 메모:</span>{' '}
+                            {studentSubmission.submission_note}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
             </div>
           ) : (
             <div className="text-sm text-muted-foreground">이전 수업 기록 없음</div>
