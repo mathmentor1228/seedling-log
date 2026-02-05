@@ -21,6 +21,14 @@ import AdminBriefingPage from "./pages/AdminBriefingPage";
 import AdminReportPage from "./pages/AdminReportPage";
 import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
 import NotFound from "./pages/NotFound";
+ import { StudentAuthProvider } from "@/lib/studentAuth";
+ import StudentLogin from "./pages/student/StudentLogin";
+ import StudentDashboard from "./pages/student/StudentDashboard";
+ import StudentHomework from "./pages/student/StudentHomework";
+ import StudentPoints from "./pages/student/StudentPoints";
+ import StudentSchedule from "./pages/student/StudentSchedule";
+ import StudentFeedback from "./pages/student/StudentFeedback";
+ import { StudentLayout } from "@/components/student/StudentLayout";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +42,45 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+             
+             {/* Student App Routes */}
+             <Route path="/student/login" element={
+               <StudentAuthProvider>
+                 <StudentLogin />
+               </StudentAuthProvider>
+             } />
+             <Route path="/student" element={
+               <StudentAuthProvider>
+                 <StudentLayout><StudentDashboard /></StudentLayout>
+               </StudentAuthProvider>
+             } />
+             <Route path="/student/homework" element={
+               <StudentAuthProvider>
+                 <StudentLayout><StudentHomework /></StudentLayout>
+               </StudentAuthProvider>
+             } />
+             <Route path="/student/homework/:homeworkId" element={
+               <StudentAuthProvider>
+                 <StudentLayout><StudentHomework /></StudentLayout>
+               </StudentAuthProvider>
+             } />
+             <Route path="/student/points" element={
+               <StudentAuthProvider>
+                 <StudentLayout><StudentPoints /></StudentLayout>
+               </StudentAuthProvider>
+             } />
+             <Route path="/student/schedule" element={
+               <StudentAuthProvider>
+                 <StudentLayout><StudentSchedule /></StudentLayout>
+               </StudentAuthProvider>
+             } />
+             <Route path="/student/feedback" element={
+               <StudentAuthProvider>
+                 <StudentLayout><StudentFeedback /></StudentLayout>
+               </StudentAuthProvider>
+             } />
+             
+             {/* Admin App Routes */}
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/students" element={<StudentsPage />} />
             <Route path="/classes" element={<ClassesPage />} />

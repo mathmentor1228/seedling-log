@@ -536,9 +536,13 @@ export type Database = {
           id: string
           lesson_record_id: string | null
           notes: string | null
+          points_earned: number | null
           result: string | null
           student_id: string
           subject: Database["public"]["Enums"]["subject_type"]
+          submission_image_url: string | null
+          submission_text: string | null
+          submitted_at: string | null
         }
         Insert: {
           assigned_date?: string
@@ -550,9 +554,13 @@ export type Database = {
           id?: string
           lesson_record_id?: string | null
           notes?: string | null
+          points_earned?: number | null
           result?: string | null
           student_id: string
           subject: Database["public"]["Enums"]["subject_type"]
+          submission_image_url?: string | null
+          submission_text?: string | null
+          submitted_at?: string | null
         }
         Update: {
           assigned_date?: string
@@ -564,9 +572,13 @@ export type Database = {
           id?: string
           lesson_record_id?: string | null
           notes?: string | null
+          points_earned?: number | null
           result?: string | null
           student_id?: string
           subject?: Database["public"]["Enums"]["subject_type"]
+          submission_image_url?: string | null
+          submission_text?: string | null
+          submitted_at?: string | null
         }
         Relationships: [
           {
@@ -585,6 +597,66 @@ export type Database = {
           },
           {
             foreignKeyName: "homework_assignments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      homework_submissions: {
+        Row: {
+          created_at: string
+          feedback: string | null
+          homework_id: string
+          id: string
+          image_url: string | null
+          points_awarded: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          student_id: string
+          submission_note: string | null
+          submitted_at: string
+        }
+        Insert: {
+          created_at?: string
+          feedback?: string | null
+          homework_id: string
+          id?: string
+          image_url?: string | null
+          points_awarded?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          student_id: string
+          submission_note?: string | null
+          submitted_at?: string
+        }
+        Update: {
+          created_at?: string
+          feedback?: string | null
+          homework_id?: string
+          id?: string
+          image_url?: string | null
+          points_awarded?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          student_id?: string
+          submission_note?: string | null
+          submitted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "homework_submissions_homework_id_fkey"
+            columns: ["homework_id"]
+            isOneToOne: false
+            referencedRelation: "homework_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "homework_submissions_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
@@ -823,6 +895,96 @@ export type Database = {
         }
         Relationships: []
       }
+      student_accounts: {
+        Row: {
+          created_at: string
+          id: string
+          last_login_at: string | null
+          pin_hash: string
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_login_at?: string | null
+          pin_hash: string
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_login_at?: string | null
+          pin_hash?: string
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_accounts_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: true
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_point_history: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          points: number
+          reason: string
+          related_homework_id: string | null
+          related_submission_id: string | null
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          points: number
+          reason: string
+          related_homework_id?: string | null
+          related_submission_id?: string | null
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          points?: number
+          reason?: string
+          related_homework_id?: string | null
+          related_submission_id?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_point_history_related_homework_id_fkey"
+            columns: ["related_homework_id"]
+            isOneToOne: false
+            referencedRelation: "homework_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_point_history_related_submission_id_fkey"
+            columns: ["related_submission_id"]
+            isOneToOne: false
+            referencedRelation: "homework_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_point_history_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_subject_teachers: {
         Row: {
           created_at: string
@@ -873,6 +1035,7 @@ export type Database = {
           status: string | null
           student_code: string | null
           student_phone: string | null
+          total_points: number | null
           updated_at: string
         }
         Insert: {
@@ -892,6 +1055,7 @@ export type Database = {
           status?: string | null
           student_code?: string | null
           student_phone?: string | null
+          total_points?: number | null
           updated_at?: string
         }
         Update: {
@@ -911,6 +1075,7 @@ export type Database = {
           status?: string | null
           student_code?: string | null
           student_phone?: string | null
+          total_points?: number | null
           updated_at?: string
         }
         Relationships: []
