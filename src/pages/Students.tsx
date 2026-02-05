@@ -30,15 +30,16 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key } from 'lucide-react';
 import { format } from 'date-fns';
 import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentCsvImport from '@/components/StudentCsvImport';
+import StudentPinManager from '@/components/StudentPinManager';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { normalizePhone } from '@/lib/phoneUtils';
 
-// STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1
+// STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1, STUDENT-PIN-MANAGER-V1
 interface Student {
   id: string;
   name: string;
@@ -52,6 +53,7 @@ interface Student {
   school: string | null;
   parent_phone: string | null;
   student_phone: string | null;
+  student_code: string | null;
   created_at: string;
 }
 
@@ -546,6 +548,7 @@ export default function Students() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>학생코드</TableHead>
                     <TableHead>Grade</TableHead>
                     <TableHead>School</TableHead>
                     <TableHead>Phone</TableHead>
@@ -561,6 +564,15 @@ export default function Students() {
                       onClick={() => setDetailStudent(student)}
                     >
                       <TableCell className="font-medium">{student.name}</TableCell>
+                      <TableCell>
+                        {student.student_code ? (
+                          <code className="bg-muted px-2 py-0.5 rounded text-xs font-mono">
+                            {student.student_code}
+                          </code>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>{student.grade || '-'}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {student.school || '-'}
@@ -633,16 +645,22 @@ export default function Students() {
           
           {detailStudent && (
             <Tabs defaultValue="info" className="mt-4">
-              <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-4' : 'grid-cols-2'}`}>
                 <TabsTrigger value="info">기본정보</TabsTrigger>
                 {(isAdmin(role) || isTeacher(role)) && (
                   <TabsTrigger value="slots">
                     <Calendar className="w-4 h-4 mr-2" />
-                    수업 슬롯 배정
+                    수업 슬롯
                   </TabsTrigger>
                 )}
                 {isAdmin(role) && (
                   <TabsTrigger value="subject-teachers">과목별 담당</TabsTrigger>
+                )}
+                {isAdmin(role) && (
+                  <TabsTrigger value="pin-manager">
+                    <Key className="w-4 h-4 mr-2" />
+                    앱 계정
+                  </TabsTrigger>
                 )}
               </TabsList>
               
@@ -699,6 +717,15 @@ export default function Students() {
                   <StudentSubjectTeacherMapping
                     studentId={detailStudent.id}
                     studentName={detailStudent.name}
+                  />
+                </TabsContent>
+              )}
+              {isAdmin(role) && (
+                <TabsContent value="pin-manager" className="mt-4">
+                  <StudentPinManager
+                    studentId={detailStudent.id}
+                    studentName={detailStudent.name}
+                    studentCode={detailStudent.student_code}
                   />
                 </TabsContent>
               )}
