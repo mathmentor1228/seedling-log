@@ -36,7 +36,9 @@ import {
   User,
   BookOpen,
   ExternalLink,
-  AlertTriangle
+  AlertTriangle,
+  Camera,
+  X
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
@@ -73,6 +75,23 @@ interface HomeworkAssignment {
   result: 'completed' | 'partial' | 'not_done' | 'unable_to_verify' | null;
   notes: string | null;
   checker_name?: string;
+  // STUDENT-SUBMISSION-V1: Fields for student submission
+  submission_image_url?: string | null;
+  submission_text?: string | null;
+  submitted_at?: string | null;
+}
+
+// STUDENT-SUBMISSION-V1: Interface for homework_submissions table data
+interface HomeworkSubmission {
+  id: string;
+  homework_id: string;
+  student_id: string;
+  image_url: string | null;
+  submission_note: string | null;
+  submitted_at: string;
+  status: 'pending' | 'reviewed' | 'approved' | 'needs_revision';
+  feedback: string | null;
+  points_awarded: number | null;
 }
 
 interface LessonRecord {
@@ -127,6 +146,9 @@ export function RosterActionModal({
   const [loadError, setLoadError] = useState<string | null>(null); // Error state for resilient UI
   const [lessonRecord, setLessonRecord] = useState<LessonRecord | null>(null);
   const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
+  // STUDENT-SUBMISSION-V1: Student submission data from homework_submissions table
+  const [studentSubmission, setStudentSubmission] = useState<HomeworkSubmission | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
   
   // Form states
   const [homeworkCheckResult, setHomeworkCheckResult] = useState('');
@@ -160,6 +182,8 @@ export function RosterActionModal({
       // ASSISTANT-HW-NO-CARRYOVER-V1: Explicitly reset homework_check_note to prevent carryover
       setLessonRecord(null);
       setPreviousHomework(null);
+      setStudentSubmission(null); // STUDENT-SUBMISSION-V1: Reset submission
+      setShowImageModal(false); // STUDENT-SUBMISSION-V1: Reset modal
       setLoadError(null);
       setHomeworkCheckResult('');
       setHomeworkCheckNotes('');
@@ -319,7 +343,29 @@ export function RosterActionModal({
         setPreviousHomework({
           ...prevHw,
           checker_name: checkerName,
+          // STUDENT-SUBMISSION-V1: Include inline submission fields from homework_assignments
+          submission_image_url: prevHw.submission_image_url,
+          submission_text: prevHw.submission_text,
+          submitted_at: prevHw.submitted_at,
         } as HomeworkAssignment);
+        
+        // STUDENT-SUBMISSION-V1: Also fetch from homework_submissions table
+        const { data: submission, error: subError } = await supabase
+          .from('homework_submissions')
+          .select('*')
+          .eq('homework_id', prevHw.id)
+          .eq('student_id', context.student_id)
+          .order('submitted_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (subError) {
+          console.error('[fetchData] homework_submissions SELECT failed:', subError.code, subError.message);
+        }
+        
+        if (submission) {
+          setStudentSubmission(submission as HomeworkSubmission);
+        }
         
         // Pre-fill check fields
         if (prevHw.check_status === 'checked') {
@@ -721,9 +767,38 @@ export function RosterActionModal({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="p-3 bg-secondary/50 rounded-lg text-sm">
-                      {previousHomework.content}
+                    {/* STUDENT-SUBMISSION-V1: Show homework content with submission indicator */}
+                    <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
+                      <div className="flex-1">{previousHomework.content}</div>
+                      {/* Show camera icon if student submitted image */}
+                      {(studentSubmission?.image_url || previousHomework.submission_image_url) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowImageModal(true)}
+                          className="flex-shrink-0 relative group cursor-pointer"
+                          title="학생 제출 사진 보기"
+                        >
+                          <div className="w-16 h-16 rounded-lg border-2 border-primary/30 overflow-hidden bg-muted hover:border-primary transition-colors">
+                            <img 
+                              src={studentSubmission?.image_url || previousHomework.submission_image_url || ''} 
+                              alt="제출 이미지" 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center">
+                            <Camera className="w-3 h-3" />
+                          </div>
+                        </button>
+                      )}
                     </div>
+                    
+                    {/* STUDENT-SUBMISSION-V1: Show submission note if exists */}
+                    {(studentSubmission?.submission_note || previousHomework.submission_text) && (
+                      <div className="p-2 bg-primary/5 rounded-lg text-sm border border-primary/20">
+                        <p className="text-xs text-muted-foreground mb-1">📝 학생 메모:</p>
+                        <p>{studentSubmission?.submission_note || previousHomework.submission_text}</p>
+                      </div>
+                    )}
                     
                     {previousHomework.check_status === 'checked' ? (
                       <div className="text-sm text-muted-foreground">
@@ -990,6 +1065,42 @@ export function RosterActionModal({
           </Button>
         </div>
       </DialogContent>
+      
+      {/* STUDENT-SUBMISSION-V1: Image Preview Modal */}
+      <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] p-2">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 z-10 bg-background/80 hover:bg-background"
+              onClick={() => setShowImageModal(false)}
+            >
+              <X className="w-5 h-5" />
+            </Button>
+            <img 
+              src={studentSubmission?.image_url || previousHomework?.submission_image_url || ''} 
+              alt="학생 제출 이미지" 
+              className="w-full max-h-[80vh] object-contain rounded-lg"
+            />
+            {/* Show submission details */}
+            {(studentSubmission || previousHomework?.submitted_at) && (
+              <div className="absolute bottom-0 left-0 right-0 bg-background/90 p-3 rounded-b-lg">
+                <p className="text-sm font-medium">
+                  📷 제출 시간: {studentSubmission?.submitted_at || previousHomework?.submitted_at 
+                    ? format(new Date(studentSubmission?.submitted_at || previousHomework?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
+                    : '-'}
+                </p>
+                {(studentSubmission?.submission_note || previousHomework?.submission_text) && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    📝 메모: {studentSubmission?.submission_note || previousHomework?.submission_text}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
