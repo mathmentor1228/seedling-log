@@ -397,13 +397,31 @@ export function RosterActionModal({
   };
 
   // TEACHER-HW-ALERT-V2 + HOMEWORK-STATUS-PERSIST-V1: Save homework check including homework_status to lesson_records
+  // POINT-AWARD-V1: Award points when homework is marked as completed
   async function handleSaveHomeworkCheck() {
-    if (!previousHomework || !homeworkCheckResult || !user) return;
+    if (!previousHomework || !homeworkCheckResult || !user || !context) return;
     
     setIsSavingHomework(true);
     try {
       // HOMEWORK-STATUS-PERSIST-V1: Calculate the homework_status to persist
       const homeworkStatusToSave = mapHomeworkResultToStatus(homeworkCheckResult);
+      
+      // POINT-AWARD-V1: Check if points were already awarded for this homework
+      let pointsAlreadyAwarded = false;
+      if (homeworkCheckResult === 'completed') {
+        const { data: existingPoints, error: pointsCheckError } = await supabase
+          .from('student_point_history')
+          .select('id')
+          .eq('student_id', context.student_id)
+          .eq('related_homework_id', previousHomework.id)
+          .maybeSingle();
+        
+        if (pointsCheckError) {
+          console.error('[POINT-AWARD-V1] Error checking existing points:', pointsCheckError);
+        }
+        
+        pointsAlreadyAwarded = !!existingPoints;
+      }
       
       // Use RPC for assistants
       if (isAssistant) {
@@ -481,6 +499,48 @@ export function RosterActionModal({
         }
       }
       
+      // POINT-AWARD-V1: Award points if homework is completed and not already awarded
+      let pointsAwarded = false;
+      if (homeworkCheckResult === 'completed' && !pointsAlreadyAwarded) {
+        // Insert point history record
+        const { error: pointHistoryError } = await supabase
+          .from('student_point_history')
+          .insert({
+            student_id: context.student_id,
+            points: 10,
+            reason: '숙제 완료 보상',
+            related_homework_id: previousHomework.id,
+            created_by: user.id,
+          });
+        
+        if (pointHistoryError) {
+          console.error('[POINT-AWARD-V1] Error inserting point history:', pointHistoryError);
+        } else {
+          // Update student's total_points using direct update
+          const { data: student } = await supabase
+            .from('students')
+            .select('total_points')
+            .eq('id', context.student_id)
+            .single();
+          
+          const { error: updatePointsError } = await supabase
+            .from('students')
+            .update({ total_points: (student?.total_points || 0) + 10 })
+            .eq('id', context.student_id);
+          
+          if (updatePointsError) {
+            console.error('[POINT-AWARD-V1] Error updating student points:', updatePointsError);
+          } else {
+            pointsAwarded = true;
+            console.log('[POINT-AWARD-V1] Points awarded successfully:', {
+              studentId: context.student_id,
+              homeworkId: previousHomework.id,
+              points: 10,
+            });
+          }
+        }
+      }
+      
       // WRITE-PERSIST-FIX-V1: Refetch to verify and update UI from DB
       const { data: savedRecord } = await supabase
         .from('lesson_records')
@@ -503,10 +563,23 @@ export function RosterActionModal({
         'none_assigned': '없음',
       }[savedRecord?.homework_status || homeworkStatusToSave] || (savedRecord?.homework_status || homeworkStatusToSave);
       
-      toast({
-        title: '확인 완료',
-        description: `숙제상태 저장됨: ${statusLabel}`,
-      });
+      // POINT-AWARD-V1: Include point award message in toast
+      if (pointsAwarded) {
+        toast({
+          title: '확인 완료',
+          description: `숙제상태 저장됨: ${statusLabel} / 포인트가 지급되었습니다 (+10점)`,
+        });
+      } else if (homeworkCheckResult === 'completed' && pointsAlreadyAwarded) {
+        toast({
+          title: '확인 완료',
+          description: `숙제상태 저장됨: ${statusLabel} (포인트 이미 지급됨)`,
+        });
+      } else {
+        toast({
+          title: '확인 완료',
+          description: `숙제상태 저장됨: ${statusLabel}`,
+        });
+      }
       
       // Refresh data from DB (single source of truth)
       await fetchData();
