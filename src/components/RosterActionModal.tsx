@@ -763,6 +763,7 @@ export function RosterActionModal({
   const dateFormatted = format(new Date(context.date), 'M월 d일 (EEE)', { locale: ko });
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -860,6 +861,9 @@ export function RosterActionModal({
                               src={firstUrl} 
                               alt="제출 이미지" 
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
                             />
                           </div>
                           {imageUrls.length > 1 && (
@@ -1149,51 +1153,82 @@ export function RosterActionModal({
         </div>
       </DialogContent>
       
-      {/* STUDENT-SUBMISSION-V1: Image Preview Modal - supports multiple comma-separated URLs */}
-      <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
-        <DialogContent className="max-w-3xl max-h-[90vh] p-4">
-          <DialogHeader>
-            <DialogTitle className="text-base">📷 학생 제출 사진</DialogTitle>
-          </DialogHeader>
-          {(() => {
-            const rawUrl = studentSubmission?.image_url || previousHomework?.submission_image_url || '';
-            const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
-            return (
-              <div className="space-y-3">
-                {imageUrls.length <= 3 ? (
-                  <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto">
-                    {imageUrls.map((url, idx) => (
-                      <img key={idx} src={url} alt={`제출 이미지 ${idx + 1}`} className="w-full max-h-[50vh] object-contain rounded-lg border" />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto">
-                    {imageUrls.map((url, idx) => (
-                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all">
-                        <img src={url} alt={`제출 이미지 ${idx + 1}`} className="w-full h-full object-cover" />
-                      </a>
-                    ))}
-                  </div>
-                )}
-                {(studentSubmission || previousHomework?.submitted_at) && (
-                  <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
-                    <p className="font-medium">
-                      📷 제출 시간: {studentSubmission?.submitted_at || previousHomework?.submitted_at 
-                        ? format(new Date(studentSubmission?.submitted_at || previousHomework?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
-                        : '-'}
-                    </p>
-                    {(studentSubmission?.submission_note || previousHomework?.submission_text) && (
-                      <p className="text-muted-foreground">
-                        📝 메모: {studentSubmission?.submission_note || previousHomework?.submission_text}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
     </Dialog>
+
+    {/* STUDENT-SUBMISSION-V1: Image Preview Modal - rendered OUTSIDE the main dialog to avoid nested dialog issues */}
+    <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
+      <DialogContent className="max-w-3xl max-h-[90vh] p-4">
+        <DialogHeader>
+          <DialogTitle className="text-base">📷 학생 제출 사진</DialogTitle>
+        </DialogHeader>
+        {(() => {
+          const rawUrl = studentSubmission?.image_url || previousHomework?.submission_image_url || '';
+          const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
+          return (
+            <div className="space-y-3">
+              {imageUrls.length === 0 && (
+                <p className="text-muted-foreground text-sm text-center py-4">이미지를 불러올 수 없습니다.</p>
+              )}
+              {imageUrls.length <= 3 ? (
+                <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto">
+                  {imageUrls.map((url, idx) => (
+                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+                      <img 
+                        src={url} 
+                        alt={`제출 이미지 ${idx + 1}`} 
+                        className="w-full max-h-[50vh] object-contain rounded-lg border"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const fallback = document.createElement('div');
+                          fallback.className = 'w-full h-32 flex items-center justify-center bg-muted rounded-lg border text-sm text-muted-foreground';
+                          fallback.textContent = '이미지 로드 실패';
+                          target.parentElement?.appendChild(fallback);
+                        }}
+                      />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto">
+                  {imageUrls.map((url, idx) => (
+                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all">
+                      <img 
+                        src={url} 
+                        alt={`제출 이미지 ${idx + 1}`} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const fallback = document.createElement('div');
+                          fallback.className = 'w-full h-full flex items-center justify-center bg-muted text-sm text-muted-foreground';
+                          fallback.textContent = '로드 실패';
+                          target.parentElement?.appendChild(fallback);
+                        }}
+                      />
+                    </a>
+                  ))}
+                </div>
+              )}
+              {(studentSubmission || previousHomework?.submitted_at) && (
+                <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
+                  <p className="font-medium">
+                    📷 제출 시간: {studentSubmission?.submitted_at || previousHomework?.submitted_at 
+                      ? format(new Date(studentSubmission?.submitted_at || previousHomework?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
+                      : '-'}
+                  </p>
+                  {(studentSubmission?.submission_note || previousHomework?.submission_text) && (
+                    <p className="text-muted-foreground">
+                      📝 메모: {studentSubmission?.submission_note || previousHomework?.submission_text}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
