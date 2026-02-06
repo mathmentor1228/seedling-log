@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import { 
   CalendarIcon, 
@@ -464,6 +465,7 @@ export function AdminDailyOps() {
             ) : commentRecords.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">코멘트가 없습니다.</p>
             ) : (
+              <TooltipProvider delayDuration={200}>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -490,8 +492,22 @@ export function AdminDailyOps() {
                           </Badge>
                         ))}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-muted-foreground">
-                        {getCommentPreview(record)}
+                      <TableCell className="max-w-[200px]">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="truncate text-muted-foreground cursor-default">
+                              {getCommentPreview(record)}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm z-[100]">
+                            {record.homework_check_note && record.homework_check_note.trim() && (
+                              <div><strong>조교:</strong> {record.homework_check_note}</div>
+                            )}
+                            {record.learning_issues_note && record.learning_issues_note.trim() && (
+                              <div><strong>교사:</strong> {record.learning_issues_note}</div>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
                         <Button variant="ghost" size="sm" onClick={() => openViewModal(record)}>
@@ -502,6 +518,7 @@ export function AdminDailyOps() {
                   ))}
                 </TableBody>
               </Table>
+              </TooltipProvider>
             )}
           </CardContent>
         </Card>
@@ -576,6 +593,7 @@ export function AdminDailyOps() {
             ) : testRecords.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">테스트 기록이 없습니다.</p>
             ) : (
+              <TooltipProvider delayDuration={200}>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -596,8 +614,20 @@ export function AdminDailyOps() {
                       <TableCell className="font-medium">{record.student_name}</TableCell>
                       <TableCell>{record.subject}</TableCell>
                       <TableCell>{record.teacher_name}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {getTestDisplayContent(record) || <span className="text-muted-foreground italic">-</span>}
+                      <TableCell className="max-w-[200px]">
+                        {getTestDisplayContent(record) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="truncate cursor-default">{getTestDisplayContent(record)}</div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm z-[100]">
+                              <div><strong>내용:</strong> {getTestDisplayContent(record)}</div>
+                              {record.test_result_text && <div><strong>결과:</strong> {record.test_result_text}</div>}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-muted-foreground italic">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {record.test_result_text}
@@ -621,6 +651,7 @@ export function AdminDailyOps() {
                   ))}
                 </TableBody>
               </Table>
+              </TooltipProvider>
             )}
           </CardContent>
         </Card>

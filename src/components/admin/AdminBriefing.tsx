@@ -916,14 +916,13 @@ export function AdminBriefing() {
                               const result = record.test_result_text;
                               if (!content && !result) return <span className="text-muted-foreground">-</span>;
                               const full = [content, result].filter(Boolean).join(' — ');
+                              const display = full.length > 30 ? full.slice(0, 30) + '…' : full;
                               return (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <span className="text-blue-600 truncate block cursor-default">
-                                      {full.length > 30 ? full.slice(0, 30) + '…' : full}
-                                    </span>
+                                    <div className="text-blue-600 truncate cursor-default">{display}</div>
                                   </TooltipTrigger>
-                                  <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm">
+                                  <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm z-[100]">
                                     {content && <div><strong>내용:</strong> {content}</div>}
                                     {result && <div><strong>결과:</strong> {result}</div>}
                                   </TooltipContent>
@@ -932,32 +931,37 @@ export function AdminBriefing() {
                             })()}
                           </TableCell>
                           <TableCell>
-                            <div className="flex gap-1">
-                              {record.homework_check_note && (
+                            <div className="flex gap-1 flex-wrap">
+                              {record.homework_check_note && record.homework_check_note.trim() && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200 cursor-default">
-                                      조교코멘트
-                                    </Badge>
+                                    <div className="cursor-default">
+                                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                        조교코멘트
+                                      </Badge>
+                                    </div>
                                   </TooltipTrigger>
-                                  <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm">
+                                  <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm z-[100]">
                                     {record.homework_check_note}
                                   </TooltipContent>
                                 </Tooltip>
                               )}
-                              {record.learning_issues_note && (
+                              {record.learning_issues_note && record.learning_issues_note.trim() && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 cursor-default">
-                                      교사관찰
-                                    </Badge>
+                                    <div className="cursor-default">
+                                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                        교사관찰
+                                      </Badge>
+                                    </div>
                                   </TooltipTrigger>
-                                  <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm">
+                                  <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm z-[100]">
                                     {record.learning_issues_note}
                                   </TooltipContent>
                                 </Tooltip>
                               )}
-                              {!record.homework_check_note && !record.learning_issues_note && (
+                              {(!record.homework_check_note || !record.homework_check_note.trim()) && 
+                               (!record.learning_issues_note || !record.learning_issues_note.trim()) && (
                                 <span className="text-muted-foreground text-xs">-</span>
                               )}
                             </div>
