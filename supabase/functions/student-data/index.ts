@@ -176,6 +176,34 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Fetch old submission to delete previous storage files on re-submission
+        const { data: oldHw } = await supabase
+          .from('homework_assignments')
+          .select('submission_image_url')
+          .eq('id', homework_id)
+          .eq('student_id', student_id)
+          .single();
+
+        if (oldHw?.submission_image_url) {
+          const oldUrls = oldHw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
+          const pathsToDelete: string[] = [];
+          for (const url of oldUrls) {
+            // Extract storage path from public URL: .../object/public/homework-submissions/PATH
+            const match = url.match(/\/object\/public\/homework-submissions\/(.+)$/);
+            if (match) {
+              pathsToDelete.push(match[1]);
+            }
+          }
+          if (pathsToDelete.length > 0) {
+            const { error: delErr } = await supabase.storage
+              .from('homework-submissions')
+              .remove(pathsToDelete);
+            if (delErr) {
+              console.warn('Failed to delete old submission files:', delErr.message);
+            }
+          }
+        }
+
         const { error } = await supabase
           .from('homework_assignments')
           .update({
