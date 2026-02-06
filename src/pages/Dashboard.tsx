@@ -376,7 +376,8 @@ export default function Dashboard() {
 
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null }>>({});
+  // NEXT-HW-BADGE-V1: Include hasNextHomework
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
@@ -786,10 +787,24 @@ export default function Dashboard() {
           .in('student_id', studentIds)
           .in('class_id', classIds);
         
-        const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null }> = {};
+        const recordIds = (lessonRecords || []).map((lr: any) => lr.id).filter(Boolean);
+        
+        // NEXT-HW-BADGE-V1: Fetch homework_assignments for today's lesson records
+        let hwAssignmentSet = new Set<string>();
+        if (recordIds.length > 0) {
+          const { data: hwAssignments } = await supabase
+            .from('homework_assignments')
+            .select('lesson_record_id')
+            .in('lesson_record_id', recordIds)
+            .not('content', 'eq', '');
+          
+          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
+        }
+        
+        const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean }> = {};
         (lessonRecords || []).forEach((lr: any) => {
           const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
-          statusMap[key] = { submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null };
+          statusMap[key] = { submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null, hasNextHomework: hwAssignmentSet.has(lr.id) };
         });
         
         setLessonStatusMap(statusMap);
@@ -1581,7 +1596,8 @@ export default function Dashboard() {
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">시간/클래스</th>
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">과목</th>
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">수업일지</th>
-                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">숙제</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">숙제확인</th>
+                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">다음숙제</th>
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">작업</th>
                             </tr>
                           </thead>
@@ -1625,6 +1641,15 @@ export default function Dashboard() {
                                   </td>
                                   <td className="py-2 px-2">{lessonBadge}</td>
                                   <td className="py-2 px-2">{homeworkBadge}</td>
+                                  <td className="py-2 px-2">
+                                    {lessonStatus?.hasNextHomework ? (
+                                      <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">배정됨</Badge>
+                                    ) : lessonStatus?.recordId ? (
+                                      <Badge variant="outline" className="text-muted-foreground text-xs">미배정</Badge>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">-</span>
+                                    )}
+                                  </td>
                                   <td className="py-2 px-2">
                                     <div className="flex items-center gap-1">
                                       <Button
