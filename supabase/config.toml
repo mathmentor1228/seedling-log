@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.public-report]
 verify_jwt = false
+
+[functions.parent-portal]
+verify_jwt = false

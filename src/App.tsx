@@ -22,6 +22,7 @@ import AdminReportPage from "./pages/AdminReportPage";
 import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
 import NotFound from "./pages/NotFound";
 import PublicReport from "./pages/PublicReport";
+import ParentPortal from "./pages/ParentPortal";
 import { StudentAuthProvider } from "@/lib/studentAuth";
 import StudentLogin from "./pages/student/StudentLogin";
 import StudentDashboard from "./pages/student/StudentDashboard";
@@ -42,6 +43,7 @@ const App = () => (
         <Routes>
           {/* Public route - NO AuthProvider, accessible without login */}
           <Route path="/report/view" element={<PublicReport />} />
+          <Route path="/parent" element={<ParentPortal />} />
 
           {/* All authenticated routes */}
           <Route path="/*" element={
