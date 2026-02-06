@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.student-data]
 verify_jwt = false
+
+[functions.public-report]
+verify_jwt = false

@@ -21,6 +21,7 @@ import AdminBriefingPage from "./pages/AdminBriefingPage";
 import AdminReportPage from "./pages/AdminReportPage";
 import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
 import NotFound from "./pages/NotFound";
+import PublicReport from "./pages/PublicReport";
  import { StudentAuthProvider } from "@/lib/studentAuth";
  import StudentLogin from "./pages/student/StudentLogin";
  import StudentDashboard from "./pages/student/StudentDashboard";
@@ -42,6 +43,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/report/view" element={<PublicReport />} />
              
              {/* Student App Routes */}
              <Route path="/student/login" element={
