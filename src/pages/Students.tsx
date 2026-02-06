@@ -324,7 +324,8 @@ export default function Students() {
       if (!res.ok || result.error) {
         throw new Error(result.error || '링크 생성 실패');
       }
-      const parentUrl = `${window.location.origin}/parent?token=${result.token}`;
+      const publishedOrigin = 'https://seedling-log.lovable.app';
+      const parentUrl = `${publishedOrigin}/parent?token=${result.token}`;
       await navigator.clipboard.writeText(parentUrl);
       toast({ title: '학부모 링크 복사됨', description: '카카오톡에 붙여넣기하세요!' });
     } catch (err: any) {
