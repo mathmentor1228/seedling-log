@@ -22,11 +22,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2, Camera, Star, X } from 'lucide-react';
+import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2, Camera, Star, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import { MathCurriculumTag } from './MathCurriculumTag';
 import { EnglishCurriculumTag } from './EnglishCurriculumTag';
+import SubmissionImageCarousel from './SubmissionImageCarousel';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -65,6 +66,9 @@ interface HomeworkAssignment {
   checked_at: string | null;
   notes: string | null;
   checker_name?: string;
+  submission_image_url?: string | null;
+  submission_text?: string | null;
+  submitted_at?: string | null;
 }
 
 // TEACHER-HW-SUBMISSION-VIEW-V1: Interface for student submission data
@@ -1322,50 +1326,81 @@ export function LessonRecordForm({
                   <Label className="text-sm font-medium">지난숙제(자동)</Label>
                   <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
 
-                  {/* TEACHER-HW-SUBMISSION-VIEW-V1: Student submission display */}
-                  {studentSubmission && (
-                    <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Camera className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium text-primary">📷 인증 완료</span>
-                          <span className="text-xs text-muted-foreground">
-                            ({format(new Date(studentSubmission.submitted_at), 'MM/dd HH:mm')})
-                          </span>
+                  {/* TEACHER-HW-SUBMISSION-VIEW-V2: Student submission display (supports multi-image from homework_assignments) */}
+                  {(() => {
+                    // Get images from homework_assignments.submission_image_url (comma-separated)
+                    const hwImages = previousLessonHomework.submission_image_url
+                      ? previousLessonHomework.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
+                      : [];
+                    // Also check homework_submissions table
+                    const submissionImages = studentSubmission?.image_url
+                      ? studentSubmission.image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
+                      : [];
+                    // Use whichever has more images (prefer direct assignment data)
+                    const allImages = hwImages.length > 0 ? hwImages : submissionImages;
+                    const submittedAt = previousLessonHomework.submitted_at || studentSubmission?.submitted_at;
+                    const submissionNote = previousLessonHomework.submission_text || studentSubmission?.submission_note;
+                    const hasSubmission = allImages.length > 0 || submissionNote;
+
+                    if (!hasSubmission) return null;
+
+                    return (
+                      <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Camera className="w-4 h-4 text-primary" />
+                            <span className="text-sm font-medium text-primary">📷 인증 완료</span>
+                            {submittedAt && (
+                              <span className="text-xs text-muted-foreground">
+                                ({format(new Date(submittedAt), 'MM/dd HH:mm')})
+                              </span>
+                            )}
+                          </div>
+                          {allImages.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowSubmissionImageModal(true)}
+                              className="text-xs gap-1"
+                            >
+                              <Camera className="w-3 h-3" />
+                              사진 보기 ({allImages.length}장)
+                            </Button>
+                          )}
                         </div>
-                        {studentSubmission.image_url && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowSubmissionImageModal(true)}
-                            className="text-xs gap-1"
-                          >
-                            <Camera className="w-3 h-3" />
-                            사진 보기
-                          </Button>
+                        {submissionNote && (
+                          <div className="text-sm text-muted-foreground bg-secondary/30 p-2 rounded">
+                            <span className="font-medium text-xs">학생 메모: </span>
+                            {submissionNote}
+                          </div>
+                        )}
+                        {allImages.length > 0 && (
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {allImages.slice(0, 4).map((url: string, idx: number) => (
+                              <div
+                                key={idx}
+                                className="relative cursor-pointer rounded overflow-hidden border w-20 h-20 flex-shrink-0"
+                                onClick={() => setShowSubmissionImageModal(true)}
+                              >
+                                <img 
+                                  src={url} 
+                                  alt={`숙제 인증 ${idx + 1}`} 
+                                  className="w-full h-full object-cover hover:opacity-80 transition-opacity"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                                {idx === 3 && allImages.length > 4 && (
+                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-sm font-bold">
+                                    +{allImages.length - 4}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-                      {studentSubmission.submission_note && (
-                        <div className="text-sm text-muted-foreground bg-secondary/30 p-2 rounded">
-                          <span className="font-medium text-xs">학생 메모: </span>
-                          {studentSubmission.submission_note}
-                        </div>
-                      )}
-                      {studentSubmission.image_url && (
-                        <div 
-                          className="cursor-pointer rounded overflow-hidden border w-24 h-24"
-                          onClick={() => setShowSubmissionImageModal(true)}
-                        >
-                          <img 
-                            src={studentSubmission.image_url} 
-                            alt="숙제 인증" 
-                            className="w-full h-full object-cover hover:opacity-80 transition-opacity"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* TEACHER-HW-SUBMISSION-VIEW-V1: Point history display */}
                   {pointHistory.length > 0 && (
@@ -1439,7 +1474,7 @@ export function LessonRecordForm({
                 </div>
               )}
 
-              {/* TEACHER-HW-SUBMISSION-VIEW-V1: Image modal */}
+              {/* TEACHER-HW-SUBMISSION-VIEW-V2: Multi-image carousel modal */}
               <Dialog open={showSubmissionImageModal} onOpenChange={setShowSubmissionImageModal}>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
@@ -1448,27 +1483,21 @@ export function LessonRecordForm({
                       학생 숙제 인증 사진
                     </DialogTitle>
                   </DialogHeader>
-                  {studentSubmission?.image_url && (
-                    <div className="space-y-4">
-                      <img 
-                        src={studentSubmission.image_url} 
-                        alt="숙제 인증" 
-                        className="w-full rounded-lg"
-                      />
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <p>
-                          <span className="font-medium">제출 시간:</span>{' '}
-                          {format(new Date(studentSubmission.submitted_at), 'yyyy-MM-dd HH:mm')}
-                        </p>
-                        {studentSubmission.submission_note && (
-                          <p>
-                            <span className="font-medium">학생 메모:</span>{' '}
-                            {studentSubmission.submission_note}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  {(() => {
+                    const hwImages = previousLessonHomework?.submission_image_url
+                      ? previousLessonHomework.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
+                      : [];
+                    const subImages = studentSubmission?.image_url
+                      ? studentSubmission.image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
+                      : [];
+                    const images = hwImages.length > 0 ? hwImages : subImages;
+                    const submittedAt = previousLessonHomework?.submitted_at || studentSubmission?.submitted_at;
+                    const note = previousLessonHomework?.submission_text || studentSubmission?.submission_note;
+
+                    if (images.length === 0) return null;
+
+                    return <SubmissionImageCarousel images={images} submittedAt={submittedAt} note={note} />;
+                  })()}
                 </DialogContent>
               </Dialog>
             </div>
