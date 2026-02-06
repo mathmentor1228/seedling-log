@@ -135,7 +135,7 @@ export default function ParentPortal() {
 function SummaryCards({ lessons, homework }: { lessons: LessonRecord[]; homework: Homework[] }) {
   const totalLessons = lessons.length;
   const checkedHw = homework.filter(h => h.check_status === 'checked');
-  const goodHw = checkedHw.filter(h => h.result === 'good' || h.result === 'excellent');
+  const goodHw = checkedHw.filter(h => h.result === 'completed' || h.result === 'good' || h.result === 'excellent');
   const hwRate = checkedHw.length > 0 ? Math.round((goodHw.length / checkedHw.length) * 100) : null;
   const scoredLessons = lessons.filter(l => l.understanding_score != null);
   const avgScore = scoredLessons.length > 0
@@ -477,12 +477,14 @@ function UnderstandingDots({ score }: { score: number }) {
 
 function HwStatus({ status, result }: { status: string; result: string | null }) {
   if (status === 'checked') {
-    if (result === 'good' || result === 'excellent')
+    if (result === 'completed' || result === 'good' || result === 'excellent')
       return <StatusPill icon={<CheckCircle2 className="w-3.5 h-3.5" />} label="완료" color="text-emerald-600 bg-emerald-50" />;
-    if (result === 'incomplete' || result === 'poor')
+    if (result === 'partial' || result === 'incomplete' || result === 'poor')
       return <StatusPill icon={<AlertTriangle className="w-3.5 h-3.5" />} label="미흡" color="text-amber-600 bg-amber-50" />;
     if (result === 'not_done')
       return <StatusPill icon={<XCircle className="w-3.5 h-3.5" />} label="미완료" color="text-red-600 bg-red-50" />;
+    if (result === 'unable_to_verify')
+      return <StatusPill icon={<Clock className="w-3.5 h-3.5" />} label="확인불가" color="text-gray-500 bg-gray-50" />;
     return <StatusPill icon={<CheckCircle2 className="w-3.5 h-3.5" />} label="확인" color="text-emerald-600 bg-emerald-50" />;
   }
   return <StatusPill icon={<Clock className="w-3.5 h-3.5" />} label="대기" color="text-gray-400 bg-gray-50" />;
