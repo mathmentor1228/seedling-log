@@ -100,6 +100,16 @@ Deno.serve(async (req) => {
       .order("assigned_date", { ascending: false })
       .limit(30);
 
+    // Fetch recent lessons (last 14 days)
+    const { data: lessons } = await supabase
+      .from("lesson_records")
+      .select("id, lesson_date, subject, lesson_range, course, understanding_score")
+      .eq("student_id", studentId)
+      .eq("submitted", true)
+      .gte("lesson_date", hwDateStr)
+      .order("lesson_date", { ascending: false })
+      .limit(30);
+
     // Fetch recent test results (last 14 days, from lesson_records)
     const { data: lessonTests } = await supabase
       .from("lesson_records")
@@ -165,6 +175,14 @@ Deno.serve(async (req) => {
           grade: student.grade,
         },
         homework: homework || [],
+        lessons: (lessons || []).map((l: any) => ({
+          id: l.id,
+          date: l.lesson_date,
+          subject: l.subject,
+          range: l.lesson_range,
+          course: l.course,
+          understanding_score: l.understanding_score,
+        })),
         tests: tests || [],
         reports: reports || [],
       }),

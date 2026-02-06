@@ -35,6 +35,15 @@ interface TestRecord {
   source: string;
 }
 
+interface LessonRecord {
+  id: string;
+  date: string;
+  subject: string;
+  range: string;
+  course: string | null;
+  understanding_score: number | null;
+}
+
 interface WeeklyReport {
   id: string;
   week_start: string;
@@ -50,6 +59,7 @@ interface WeeklyReport {
 interface PortalData {
   student: StudentInfo;
   homework: Homework[];
+  lessons: LessonRecord[];
   tests: TestRecord[];
   reports: WeeklyReport[];
 }
@@ -114,7 +124,7 @@ export default function ParentPortal() {
     );
   }
 
-  const { student, homework, tests, reports } = data;
+  const { student, homework, lessons, tests, reports } = data;
   const studentLabel = `${student.name}${student.school_level && student.grade_year ? ` (${student.school_level}${student.grade_year})` : ''}`;
 
   return (
@@ -133,11 +143,16 @@ export default function ParentPortal() {
 
       <main className="max-w-lg mx-auto p-4">
         <Tabs defaultValue="homework" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsList className="grid w-full grid-cols-4 mb-4">
+            <TabsTrigger value="lessons" className="text-xs">📖 수업</TabsTrigger>
             <TabsTrigger value="homework" className="text-xs">📝 숙제</TabsTrigger>
             <TabsTrigger value="tests" className="text-xs">📊 테스트</TabsTrigger>
-            <TabsTrigger value="reports" className="text-xs">📋 주간리포트</TabsTrigger>
+            <TabsTrigger value="reports" className="text-xs">📋 리포트</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="lessons" className="space-y-3">
+            <LessonsSection lessons={lessons} />
+          </TabsContent>
 
           <TabsContent value="homework" className="space-y-3">
             <HomeworkSection homework={homework} />
@@ -157,6 +172,38 @@ export default function ParentPortal() {
         </p>
       </main>
     </div>
+  );
+}
+
+function LessonsSection({ lessons }: { lessons: LessonRecord[] }) {
+  if (lessons.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-gray-400 text-sm">
+          최근 2주간 수업 기록이 없습니다.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      {lessons.map((l) => (
+        <Card key={l.id}>
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge variant="outline" className="text-[10px]">{l.subject}</Badge>
+              <span className="text-[10px] text-gray-400">{l.date}</span>
+              {l.understanding_score != null && (
+                <span className="text-[10px] text-blue-600 ml-auto">이해도 {l.understanding_score}/5</span>
+              )}
+            </div>
+            <p className="text-sm font-medium">{l.range}</p>
+            {l.course && <p className="text-xs text-gray-500 mt-0.5">{l.course}</p>}
+          </CardContent>
+        </Card>
+      ))}
+    </>
   );
 }
 
