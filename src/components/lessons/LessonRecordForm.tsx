@@ -598,17 +598,36 @@ export function LessonRecordForm({
             // KOREAN-CATEGORY-V1: Load Korean curriculum categories
             korean_categories: (record as any).korean_categories || [],
           });
-          // PREFILL-FIX-V5: Existing record - mark source and prevent prefill
-          setTagSource('existing_record');
-          setEnglishTagSource('existing_record');
+          // PREFILL-FIX-V6: For existing records with EMPTY curriculum tags, allow prefill from student's last record
+          const hasMathTags = !!(record as any).curriculum_version || !!(record as any).course || !!(record as any).curriculum_unit_key;
+          const hasEnglishTags = !!(record as any).english_grammar_unit || ((record as any).english_reading_units && (record as any).english_reading_units.length > 0);
+          
+          if (!hasMathTags && record.subject === '수학') {
+            // Allow math prefill to run for this existing record
+            setTagSource('empty');
+            setIsNewRecordMode(true); // Trick prefill trigger to run
+            console.log('[PREFILL-FIX-V6] Existing math record has no curriculum tags, allowing prefill');
+          } else {
+            setTagSource('existing_record');
+            lastMathPrefillKeyRef.current = `${record.student_id}|수학`;
+          }
+          
+          if (!hasEnglishTags && record.subject === '영어') {
+            setEnglishTagSource('empty');
+            setIsNewRecordMode(true);
+            console.log('[PREFILL-FIX-V6] Existing English record has no curriculum tags, allowing prefill');
+          } else {
+            setEnglishTagSource('existing_record');
+            lastEnglishPrefillKeyRef.current = `${record.student_id}|영어`;
+          }
+          
           setTagPrefillOccurred(false);
           setEnglishTagPrefillOccurred(false);
-          // Mark prefill keys as if applied to prevent prefill
-          lastMathPrefillKeyRef.current = `${record.student_id}|수학`;
-          lastEnglishPrefillKeyRef.current = `${record.student_id}|영어`;
           setPrefillDebugRecordId(record.id);
           setEnglishPrefillDebugRecordId(record.id);
-          setIsNewRecordMode(false); // This is an existing record
+          if (hasMathTags && hasEnglishTags) {
+            setIsNewRecordMode(false);
+          }
           setIsNewDraft(false);
           // WRITE-PERSIST-FIX-V1: Load test_content from DB
           setTestFormData({
