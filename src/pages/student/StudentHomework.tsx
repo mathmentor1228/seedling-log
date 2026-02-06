@@ -36,6 +36,7 @@ interface HomeworkItem {
   notes: string | null;
   submitted_at: string | null;
   submission_image_url: string | null;
+  is_expired?: boolean;
 }
 
 export default function StudentHomework() {
@@ -285,7 +286,7 @@ export default function StudentHomework() {
               </div>
             )}
 
-            {selectedHomework.check_status === 'unchecked' && (
+            {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && (
               <div className="space-y-3">
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <p className="text-xs text-amber-700 font-medium">
@@ -300,6 +301,12 @@ export default function StudentHomework() {
                   <Upload className="w-5 h-5 mr-2" />
                   {selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
                 </Button>
+              </div>
+            )}
+
+            {selectedHomework.check_status === 'unchecked' && selectedHomework.is_expired && (
+              <div className="p-3 bg-muted rounded-lg text-center">
+                <p className="text-sm text-muted-foreground">⏰ 제출 기한이 지났습니다.</p>
               </div>
             )}
           </CardContent>
