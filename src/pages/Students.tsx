@@ -66,8 +66,10 @@ export default function Students() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
-  // STUDENT-ENROLLMENT-STATUS-V1: Filter toggle for non-active students
-  const [includeInactive, setIncludeInactive] = useState(false);
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<string>('재원');
+  const [schoolLevelFilter, setSchoolLevelFilter] = useState<string>('all');
+  const [gradeYearFilter, setGradeYearFilter] = useState<string>('all');
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
     name: '',
@@ -86,18 +88,17 @@ export default function Students() {
 
   useEffect(() => {
     fetchStudents();
-  }, [includeInactive]);
+  }, [statusFilter]);
 
   async function fetchStudents() {
     try {
-      // STUDENT-ENROLLMENT-STATUS-V1: Filter by enrollment_status
       let query = supabase
         .from('students')
         .select('*')
         .order('name');
       
-      if (!includeInactive) {
-        query = query.eq('enrollment_status', '재원');
+      if (statusFilter !== 'all') {
+        query = query.eq('enrollment_status', statusFilter);
       }
 
       const { data, error } = await query;
@@ -306,13 +307,24 @@ export default function Students() {
     }
   };
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.grade?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.school?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredStudents = students.filter((student) => {
+    // Text search
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = !q || 
+      student.name.toLowerCase().includes(q) ||
+      student.email?.toLowerCase().includes(q) ||
+      student.grade?.toLowerCase().includes(q) ||
+      student.school?.toLowerCase().includes(q);
+    if (!matchesSearch) return false;
+
+    // School level filter
+    if (schoolLevelFilter !== 'all' && student.school_level !== schoolLevelFilter) return false;
+
+    // Grade year filter
+    if (gradeYearFilter !== 'all' && student.grade_year?.toString() !== gradeYearFilter) return false;
+
+    return true;
+  });
 
   if (loading) {
     return (
@@ -522,16 +534,48 @@ export default function Students() {
                 className="pl-10"
               />
             </div>
-            {/* STUDENT-ENROLLMENT-STATUS-V1: Include inactive toggle */}
-            <div className="flex items-center gap-2">
-              <Switch
-                id="include-inactive"
-                checked={includeInactive}
-                onCheckedChange={setIncludeInactive}
-              />
-              <Label htmlFor="include-inactive" className="text-sm">
-                휴원/퇴원 포함
-              </Label>
+            {/* Filters row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Status filter chips */}
+              {['재원', '휴원', '퇴원', 'all'].map((s) => (
+                <Button
+                  key={s}
+                  variant={statusFilter === s ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setStatusFilter(s)}
+                >
+                  {s === 'all' ? '전체' : s}
+                </Button>
+              ))}
+              <span className="w-px h-5 bg-border mx-1" />
+              {/* School level filter */}
+              <Select value={schoolLevelFilter} onValueChange={setSchoolLevelFilter}>
+                <SelectTrigger className="h-7 w-[90px] text-xs">
+                  <SelectValue placeholder="학교급" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="초">초등</SelectItem>
+                  <SelectItem value="중">중등</SelectItem>
+                  <SelectItem value="고">고등</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Grade year filter */}
+              <Select value={gradeYearFilter} onValueChange={setGradeYearFilter}>
+                <SelectTrigger className="h-7 w-[90px] text-xs">
+                  <SelectValue placeholder="학년" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {(schoolLevelFilter === '초' ? [1,2,3,4,5,6] : [1,2,3]).map((y) => (
+                    <SelectItem key={y} value={y.toString()}>{y}학년</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {filteredStudents.length}명
+              </span>
             </div>
           </div>
         </CardHeader>
