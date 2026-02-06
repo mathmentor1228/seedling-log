@@ -1,5 +1,5 @@
 // STUDENT-APP-V1: Secure data fetching for student app (bypasses RLS via service role)
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -192,14 +192,12 @@ Deno.serve(async (req) => {
       }
 
       case 'points_history': {
-        // Fetch current total points
         const { data: studentData } = await supabase
           .from('students')
           .select('total_points')
           .eq('id', student_id)
           .single();
 
-        // Fetch point history
         const { data: historyData } = await supabase
           .from('student_point_history')
           .select('id, points, reason, created_at')
@@ -235,7 +233,6 @@ Deno.serve(async (req) => {
 
         if (error) throw error;
 
-        // Fetch teacher names
         const teacherIds = [...new Set(
           (data || [])
             .map((cs: any) => cs.classes?.teacher_id)
@@ -255,7 +252,6 @@ Deno.serve(async (req) => {
           }, {});
         }
 
-        // Process schedule data
         const scheduleItems: any[] = [];
         for (const cs of data || []) {
           const classInfo = cs.classes as any;
@@ -275,7 +271,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Sort by day of week, then by start time
         scheduleItems.sort((a, b) => {
           if (a.day_of_week !== b.day_of_week) {
             return a.day_of_week - b.day_of_week;
@@ -302,7 +297,6 @@ Deno.serve(async (req) => {
 
         if (error) throw error;
 
-        // Fetch teacher names
         const teacherIds = [...new Set((data || []).map((d: any) => d.teacher_id).filter(Boolean))];
         let teacherMap: Record<string, string> = {};
 
