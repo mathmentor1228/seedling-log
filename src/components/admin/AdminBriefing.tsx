@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -918,14 +919,32 @@ export function AdminBriefing() {
                           <TableCell>
                             <div className="flex gap-1">
                               {record.homework_check_note && (
-                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-                                  조교코멘트
-                                </Badge>
+                                <TooltipProvider delayDuration={200}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200 cursor-default">
+                                        조교코멘트
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm">
+                                      {record.homework_check_note}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               )}
                               {record.learning_issues_note && (
-                                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                  교사관찰
-                                </Badge>
+                                <TooltipProvider delayDuration={200}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 cursor-default">
+                                        교사관찰
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm">
+                                      {record.learning_issues_note}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               )}
                               {!record.homework_check_note && !record.learning_issues_note && (
                                 <span className="text-muted-foreground text-xs">-</span>
