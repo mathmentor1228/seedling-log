@@ -549,6 +549,7 @@ export default function Students() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>학생코드</TableHead>
+                    <TableHead>상태</TableHead>
                     <TableHead>Grade</TableHead>
                     <TableHead>School</TableHead>
                     <TableHead>Phone</TableHead>
@@ -572,6 +573,23 @@ export default function Students() {
                         ) : (
                           <span className="text-muted-foreground text-xs">-</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            student.enrollment_status === '재원' ? 'default' :
+                            student.enrollment_status === '휴원' ? 'secondary' : 'outline'
+                          }
+                          className={
+                            student.enrollment_status === '퇴원'
+                              ? 'text-muted-foreground border-muted-foreground/30'
+                              : student.enrollment_status === '휴원'
+                              ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                              : ''
+                          }
+                        >
+                          {student.enrollment_status || '재원'}
+                        </Badge>
                       </TableCell>
                       <TableCell>{student.grade || '-'}</TableCell>
                       <TableCell className="text-muted-foreground">
