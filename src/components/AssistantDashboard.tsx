@@ -71,6 +71,8 @@ interface RosterStudent {
   // HW-ISSUE-BADGE-TODAY-V1: Track if homework_check_note exists for today
   hasHomeworkIssue: boolean;
   homeworkCheckNote: string | null;
+  // NEXT-HW-BADGE-V1: Track if next homework has been assigned
+  hasNextHomework: boolean;
   // TEST-CONTENT-DISPLAY-V2: Today's test data for inline display (content-first)
   todayTestData: {
     test_content: string | null;
@@ -326,6 +328,8 @@ export default function AssistantDashboard() {
       let homeworkIssueMap: Record<string, string | null> = {};
       // TEST-CONTENT-DISPLAY-V2: Track today's test data for inline display (content-first)
       let todayTestDataMap: Record<string, { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null> = {};
+      // NEXT-HW-BADGE-V1: Track next homework assignment
+      let nextHomeworkMap: Record<string, boolean> = {};
 
       if (studentIds.length > 0 && classIds.length > 0) {
         const { data: dateRecords } = await supabase
@@ -335,9 +339,11 @@ export default function AssistantDashboard() {
           .in('student_id', studentIds)
           .in('class_id', classIds);
 
+        const recordIds: string[] = [];
         (dateRecords || []).forEach((lr: any) => {
           const key = `${lr.student_id}:${lr.class_id}`;
           existingRecordMap[key] = lr.id;
+          recordIds.push(lr.id);
           if (lr.lesson_types && lr.lesson_types.includes('휴강')) {
             hyugangMap[key] = lr.id;
           }
@@ -359,6 +365,25 @@ export default function AssistantDashboard() {
             };
           }
         });
+
+        // NEXT-HW-BADGE-V1: Fetch homework assignments for today's records
+        if (recordIds.length > 0) {
+          const { data: hwAssignments } = await supabase
+            .from('homework_assignments')
+            .select('lesson_record_id')
+            .in('lesson_record_id', recordIds)
+            .not('content', 'eq', '');
+          
+          (hwAssignments || []).forEach((ha: any) => {
+            // Find the student key for this record
+            for (const [k, v] of Object.entries(existingRecordMap)) {
+              if (v === ha.lesson_record_id) {
+                nextHomeworkMap[k] = true;
+                break;
+              }
+            }
+          });
+        }
       }
 
       // Build final roster
@@ -387,6 +412,8 @@ export default function AssistantDashboard() {
           homeworkCheckNote: homeworkIssueMap[key] || null,
           // DASH-ROW-TEST-SNIPPET-V1
           todayTestData: todayTestDataMap[key] || null,
+          // NEXT-HW-BADGE-V1
+          hasNextHomework: !!nextHomeworkMap[key],
         };
       });
 
@@ -883,6 +910,14 @@ export default function AssistantDashboard() {
                                       >
                                         이슈
                                       </Badge>
+                                    )}
+                                    {/* NEXT-HW-BADGE-V1: Show next homework assignment status */}
+                                    {!student.hyugangRecordId && student.existingRecordId && (
+                                      student.hasNextHomework ? (
+                                        <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">다음숙제 ✓</Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-muted-foreground border-muted text-xs">숙제미배정</Badge>
+                                      )
                                     )}
                                   </>
                                 )}
