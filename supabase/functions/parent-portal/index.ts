@@ -87,83 +87,59 @@ Deno.serve(async (req) => {
 
     const studentId = student.id;
 
-    // Fetch recent homework (last 14 days)
+    // Date range: last 14 days
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-    const hwDateStr = fourteenDaysAgo.toISOString().split("T")[0];
+    const dateStr = fourteenDaysAgo.toISOString().split("T")[0];
 
-    const { data: homework } = await supabase
-      .from("homework_assignments")
-      .select("id, content, subject, assigned_date, check_status, result, notes")
-      .eq("student_id", studentId)
-      .gte("assigned_date", hwDateStr)
-      .order("assigned_date", { ascending: false })
-      .limit(30);
+    // Fetch all data in parallel
+    const [hwRes, lessonRes, attendanceRes, reportRes] = await Promise.all([
+      supabase
+        .from("homework_assignments")
+        .select("id, content, subject, assigned_date, check_status, result, notes")
+        .eq("student_id", studentId)
+        .gte("assigned_date", dateStr)
+        .order("assigned_date", { ascending: false })
+        .limit(50),
+      supabase
+        .from("lesson_records")
+        .select("id, lesson_date, subject, lesson_range, course, understanding_score, attendance_status")
+        .eq("student_id", studentId)
+        .eq("submitted", true)
+        .gte("lesson_date", dateStr)
+        .order("lesson_date", { ascending: false })
+        .limit(50),
+      supabase
+        .from("attendance")
+        .select("id, att_date, status, note")
+        .eq("student_id", studentId)
+        .gte("att_date", dateStr)
+        .order("att_date", { ascending: false })
+        .limit(50),
+      supabase
+        .from("weekly_reports")
+        .select("id, week_start, week_end, total_lessons, avg_understanding, homework_completion_rate, risk_level, parent_message, generated_at")
+        .eq("student_id", studentId)
+        .eq("parent_visible", true)
+        .order("week_start", { ascending: false })
+        .limit(8),
+    ]);
 
-    // Fetch recent lessons (last 14 days)
-    const { data: lessons } = await supabase
-      .from("lesson_records")
-      .select("id, lesson_date, subject, lesson_range, course, understanding_score")
-      .eq("student_id", studentId)
-      .eq("submitted", true)
-      .gte("lesson_date", hwDateStr)
-      .order("lesson_date", { ascending: false })
-      .limit(30);
+    const homework = hwRes.data || [];
+    const rawLessons = lessonRes.data || [];
+    const attendance = attendanceRes.data || [];
+    const reports = reportRes.data || [];
 
-    // Fetch recent test results (last 14 days, from lesson_records)
-    const { data: lessonTests } = await supabase
-      .from("lesson_records")
-      .select("id, lesson_date, subject, test_name, test_result, test_result_text, test_date, test_content, understanding_score")
-      .eq("student_id", studentId)
-      .eq("submitted", true)
-      .gte("lesson_date", hwDateStr)
-      .not("test_result", "eq", "none")
-      .order("lesson_date", { ascending: false })
-      .limit(30);
-
-    // Fetch recent test visits (last 14 days)
-    const { data: testVisits } = await supabase
-      .from("test_visits")
-      .select("id, visit_date, subject, test_result_text, english_pass_fail, notes")
-      .eq("student_id", studentId)
-      .gte("visit_date", hwDateStr)
-      .order("visit_date", { ascending: false })
-      .limit(30);
-
-    // Merge both test sources
-    const tests = [
-      ...(lessonTests || []).map((t: any) => ({
-        id: t.id,
-        date: t.test_date || t.lesson_date,
-        subject: t.subject,
-        name: t.test_name || '',
-        content: t.test_content || '',
-        result: t.test_result,
-        result_text: t.test_result_text,
-        understanding_score: t.understanding_score,
-        source: 'lesson',
-      })),
-      ...(testVisits || []).map((t: any) => ({
-        id: t.id,
-        date: t.visit_date,
-        subject: t.subject,
-        name: '',
-        content: t.notes || '',
-        result: t.english_pass_fail || '',
-        result_text: t.test_result_text,
-        understanding_score: null,
-        source: 'visit',
-      })),
-    ].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-
-    // Fetch weekly reports (only parent_visible = true)
-    const { data: reports } = await supabase
-      .from("weekly_reports")
-      .select("id, week_start, week_end, total_lessons, avg_understanding, homework_completion_rate, risk_level, parent_message, generated_at")
-      .eq("student_id", studentId)
-      .eq("parent_visible", true)
-      .order("week_start", { ascending: false })
-      .limit(8);
+    // Map lessons
+    const lessons = rawLessons.map((l: any) => ({
+      id: l.id,
+      date: l.lesson_date,
+      subject: l.subject,
+      range: l.lesson_range,
+      course: l.course,
+      understanding_score: l.understanding_score,
+      attendance_status: l.attendance_status,
+    }));
 
     return new Response(
       JSON.stringify({
@@ -174,17 +150,14 @@ Deno.serve(async (req) => {
           grade_year: student.grade_year,
           grade: student.grade,
         },
-        homework: homework || [],
-        lessons: (lessons || []).map((l: any) => ({
-          id: l.id,
-          date: l.lesson_date,
-          subject: l.subject,
-          range: l.lesson_range,
-          course: l.course,
-          understanding_score: l.understanding_score,
+        homework,
+        lessons,
+        attendance: (attendance || []).map((a: any) => ({
+          date: a.att_date,
+          status: a.status,
+          note: a.note,
         })),
-        tests: tests || [],
-        reports: reports || [],
+        reports,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
