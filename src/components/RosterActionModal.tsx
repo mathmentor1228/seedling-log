@@ -844,7 +844,11 @@ export function RosterActionModal({
                     <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
                       <div className="flex-1">{previousHomework.content}</div>
                       {/* Show camera icon if student submitted image */}
-                      {(studentSubmission?.image_url || previousHomework.submission_image_url) && (
+                      {(studentSubmission?.image_url || previousHomework.submission_image_url) && (() => {
+                        const rawUrl = studentSubmission?.image_url || previousHomework.submission_image_url || '';
+                        const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
+                        const firstUrl = imageUrls[0] || '';
+                        return (
                         <button
                           type="button"
                           onClick={() => setShowImageModal(true)}
@@ -853,16 +857,22 @@ export function RosterActionModal({
                         >
                           <div className="w-16 h-16 rounded-lg border-2 border-primary/30 overflow-hidden bg-muted hover:border-primary transition-colors">
                             <img 
-                              src={studentSubmission?.image_url || previousHomework.submission_image_url || ''} 
+                              src={firstUrl} 
                               alt="제출 이미지" 
                               className="w-full h-full object-cover"
                             />
                           </div>
+                          {imageUrls.length > 1 && (
+                            <div className="absolute -bottom-1 -left-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold">
+                              {imageUrls.length}
+                            </div>
+                          )}
                           <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center">
                             <Camera className="w-3 h-3" />
                           </div>
                         </button>
-                      )}
+                        );
+                      })()}
                     </div>
                     
                     {/* STUDENT-SUBMISSION-V1: Show submission note if exists */}
@@ -1139,39 +1149,49 @@ export function RosterActionModal({
         </div>
       </DialogContent>
       
-      {/* STUDENT-SUBMISSION-V1: Image Preview Modal */}
+      {/* STUDENT-SUBMISSION-V1: Image Preview Modal - supports multiple comma-separated URLs */}
       <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
-        <DialogContent className="max-w-3xl max-h-[90vh] p-2">
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-2 right-2 z-10 bg-background/80 hover:bg-background"
-              onClick={() => setShowImageModal(false)}
-            >
-              <X className="w-5 h-5" />
-            </Button>
-            <img 
-              src={studentSubmission?.image_url || previousHomework?.submission_image_url || ''} 
-              alt="학생 제출 이미지" 
-              className="w-full max-h-[80vh] object-contain rounded-lg"
-            />
-            {/* Show submission details */}
-            {(studentSubmission || previousHomework?.submitted_at) && (
-              <div className="absolute bottom-0 left-0 right-0 bg-background/90 p-3 rounded-b-lg">
-                <p className="text-sm font-medium">
-                  📷 제출 시간: {studentSubmission?.submitted_at || previousHomework?.submitted_at 
-                    ? format(new Date(studentSubmission?.submitted_at || previousHomework?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
-                    : '-'}
-                </p>
-                {(studentSubmission?.submission_note || previousHomework?.submission_text) && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    📝 메모: {studentSubmission?.submission_note || previousHomework?.submission_text}
-                  </p>
+        <DialogContent className="max-w-3xl max-h-[90vh] p-4">
+          <DialogHeader>
+            <DialogTitle className="text-base">📷 학생 제출 사진</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const rawUrl = studentSubmission?.image_url || previousHomework?.submission_image_url || '';
+            const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
+            return (
+              <div className="space-y-3">
+                {imageUrls.length <= 3 ? (
+                  <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto">
+                    {imageUrls.map((url, idx) => (
+                      <img key={idx} src={url} alt={`제출 이미지 ${idx + 1}`} className="w-full max-h-[50vh] object-contain rounded-lg border" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto">
+                    {imageUrls.map((url, idx) => (
+                      <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all">
+                        <img src={url} alt={`제출 이미지 ${idx + 1}`} className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {(studentSubmission || previousHomework?.submitted_at) && (
+                  <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
+                    <p className="font-medium">
+                      📷 제출 시간: {studentSubmission?.submitted_at || previousHomework?.submitted_at 
+                        ? format(new Date(studentSubmission?.submitted_at || previousHomework?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
+                        : '-'}
+                    </p>
+                    {(studentSubmission?.submission_note || previousHomework?.submission_text) && (
+                      <p className="text-muted-foreground">
+                        📝 메모: {studentSubmission?.submission_note || previousHomework?.submission_text}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </Dialog>
