@@ -30,7 +30,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Check if token already exists
       const { data: existing } = await supabase
         .from("students")
         .select("parent_token")
@@ -44,7 +43,6 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Generate new token
       const { data: tokenData } = await supabase.rpc("generate_parent_token");
       const newToken = tokenData as string;
 
@@ -74,7 +72,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find student by parent_token
     const { data: student, error: studentError } = await supabase
       .from("students")
       .select("id, name, school, school_level, grade_year, grade")
@@ -90,10 +87,10 @@ Deno.serve(async (req) => {
 
     const studentId = student.id;
 
-    // Fetch recent homework (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const hwDateStr = thirtyDaysAgo.toISOString().split("T")[0];
+    // Fetch recent homework (last 14 days)
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const hwDateStr = fourteenDaysAgo.toISOString().split("T")[0];
 
     const { data: homework } = await supabase
       .from("homework_assignments")
@@ -103,26 +100,23 @@ Deno.serve(async (req) => {
       .order("assigned_date", { ascending: false })
       .limit(30);
 
-    // Fetch recent test results from lesson_records (last 60 days, only submitted with test data)
-    const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-    const testDateStr = sixtyDaysAgo.toISOString().split("T")[0];
-
+    // Fetch recent test results (last 14 days, only submitted with test data)
     const { data: tests } = await supabase
       .from("lesson_records")
       .select("id, lesson_date, subject, test_name, test_result, test_result_text, test_date, understanding_score")
       .eq("student_id", studentId)
       .eq("submitted", true)
-      .gte("lesson_date", testDateStr)
+      .gte("lesson_date", hwDateStr)
       .not("test_result", "eq", "none")
       .order("lesson_date", { ascending: false })
       .limit(20);
 
-    // Fetch weekly reports (last 8 weeks)
+    // Fetch weekly reports (only parent_visible = true)
     const { data: reports } = await supabase
       .from("weekly_reports")
       .select("id, week_start, week_end, total_lessons, avg_understanding, homework_completion_rate, risk_level, parent_message, generated_at")
       .eq("student_id", studentId)
+      .eq("parent_visible", true)
       .order("week_start", { ascending: false })
       .limit(8);
 
