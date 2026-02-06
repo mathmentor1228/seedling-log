@@ -968,9 +968,12 @@ export function LessonRecordForm({
       let finalDraftId = draftId;
 
       if (draftId) {
+        // HOMEWORK-STATUS-PROTECT-V1: On update, preserve DB homework_status to prevent overwriting
+        // homework check results that were set by handleSaveHomeworkCheck
+        const { homework_status: _hwIgnored, ...updatePayload } = payload;
         const { error } = await supabase
           .from('lesson_records')
-          .update({ ...payload, submitted: false })
+          .update({ ...updatePayload, submitted: false })
           .eq('id', draftId);
         if (error) throw error;
       } else {
@@ -1042,7 +1045,9 @@ export function LessonRecordForm({
       let finalRecordId = recordId;
 
       if (recordId) {
-        const { error } = await supabase.from('lesson_records').update(payload).eq('id', recordId);
+        // HOMEWORK-STATUS-PROTECT-V1: On update, preserve DB homework_status
+        const { homework_status: _hwIgnored, ...updatePayload } = payload;
+        const { error } = await supabase.from('lesson_records').update(updatePayload).eq('id', recordId);
         if (error) throw error;
       } else {
         const { data, error } = await supabase.from('lesson_records').insert(payload).select().single();
