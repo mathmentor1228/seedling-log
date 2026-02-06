@@ -898,6 +898,7 @@ export function AdminBriefing() {
                         <TableHead>선생님</TableHead>
                         <TableHead className="w-[70px]">상태</TableHead>
                         <TableHead className="w-[80px]">숙제</TableHead>
+                        <TableHead className="max-w-[160px]">수업내용</TableHead>
                         <TableHead>테스트</TableHead>
                         <TableHead>코멘트</TableHead>
                         <TableHead className="w-[60px]">보기</TableHead>
@@ -917,30 +918,39 @@ export function AdminBriefing() {
                           <TableCell>{getStatusBadge(record.submitted)}</TableCell>
                           <TableCell>
                             {(() => {
-                              const hwLabel = record.homework_status;
                               const hasNote = record.homework_check_note?.trim();
-                              const hasLessonInfo = record.lesson_range?.trim() || record.notes?.trim() || record.next_lesson_goal?.trim();
-                              const showTooltip = hasNote || hasLessonInfo;
-                              const badge = getHomeworkBadge(hwLabel);
-                              if (!showTooltip) return badge;
+                              const badge = getHomeworkBadge(record.homework_status);
+                              if (!hasNote) return badge;
                               return (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <div className="cursor-default">{badge}</div>
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm z-[100]">
-                                    {record.lesson_range?.trim() && (
-                                      <div><strong>수업내용:</strong> {record.lesson_range}</div>
-                                    )}
-                                    {record.notes?.trim() && (
-                                      <div><strong>메모:</strong> {record.notes}</div>
-                                    )}
-                                    {record.next_lesson_goal?.trim() && (
-                                      <div><strong>다음목표:</strong> {record.next_lesson_goal}</div>
-                                    )}
-                                    {hasNote && (
-                                      <div className="mt-1 pt-1 border-t"><strong>숙제확인:</strong> {record.homework_check_note}</div>
-                                    )}
+                                    <strong>숙제확인:</strong> {record.homework_check_note}
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[160px]">
+                            {(() => {
+                              const range = record.lesson_range?.trim();
+                              const goal = record.next_lesson_goal?.trim();
+                              const memo = record.notes?.trim();
+                              if (!range && !goal && !memo) return <span className="text-muted-foreground">-</span>;
+                              const display = range || '—';
+                              const hasExtra = goal || memo || (range && range.length > 20);
+                              if (!hasExtra) return <span>{display}</span>;
+                              return (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="truncate cursor-default">{display}</div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm z-[100]">
+                                    {range && <div><strong>수업내용:</strong> {range}</div>}
+                                    {memo && <div><strong>메모:</strong> {memo}</div>}
+                                    {goal && <div><strong>다음목표:</strong> {goal}</div>}
                                   </TooltipContent>
                                 </Tooltip>
                               );
