@@ -82,6 +82,7 @@ interface WeeklyReport {
   report_quality_tag?: 'GREEN' | 'YELLOW' | 'RED' | null;
   // REPORT-ERROR-DETAIL-V1: Include debug_info for error visibility
   debug_info?: string | null;
+  parent_visible?: boolean;
 }
 
 type QualityFilter = 'all' | 'sendable' | 'RED';
@@ -1029,6 +1030,7 @@ export default function Reports() {
                     <TableHead>학부모 상태</TableHead>
                      <TableHead>미리보기</TableHead>
                      <TableHead>공유 링크</TableHead>
+                     <TableHead>학부모 공개</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1178,6 +1180,19 @@ export default function Reports() {
                               <Link2 className="h-4 w-4" />
                             )}
                           </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={report.parent_visible ?? false}
+                            onCheckedChange={async (checked) => {
+                              await supabase
+                                .from('weekly_reports')
+                                .update({ parent_visible: checked } as any)
+                                .eq('id', report.id);
+                              setReports(prev => prev.map(r => r.id === report.id ? { ...r, parent_visible: checked } : r));
+                              toast({ title: checked ? '학부모 공개됨' : '학부모 비공개됨' });
+                            }}
+                          />
                         </TableCell>
                       </TableRow>
                     );
