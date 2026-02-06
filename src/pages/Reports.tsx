@@ -443,7 +443,8 @@ export default function Reports() {
       const result = await res.json();
       if (!res.ok || result.error) throw new Error(result.error);
 
-      const publicUrl = `${window.location.origin}/report/view?token=${result.token}`;
+      const publishedOrigin = 'https://seedling-log.lovable.app';
+      const publicUrl = `${publishedOrigin}/report/view?token=${result.token}`;
       await navigator.clipboard.writeText(publicUrl);
       toast({ title: '공유 링크가 복사되었습니다!', description: '카톡에 붙여넣기 하세요.' });
     } catch (err: any) {
