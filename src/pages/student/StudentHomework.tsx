@@ -264,7 +264,9 @@ export default function StudentHomework() {
                 onClick={() => setShowSubmitDialog(true)}
               >
                 <Upload className="w-5 h-5 mr-2" />
-                숙제 제출하기
+                {selectedHomework.result === null && (selectedHomework as any).submitted_at
+                  ? '다시 제출하기'
+                  : '숙제 제출하기'}
               </Button>
             )}
           </CardContent>
