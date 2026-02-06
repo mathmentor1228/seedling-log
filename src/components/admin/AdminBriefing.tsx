@@ -51,6 +51,7 @@ interface LessonRecord {
   submitted: boolean;
   homework_status: string;
   test_title: string | null;
+  test_content: string | null;
   test_result_text: string | null;
   homework_check_note: string | null;
   learning_issues_note: string | null;
@@ -214,6 +215,7 @@ export function AdminBriefing() {
           submitted,
           homework_status,
           test_title,
+          test_content,
           test_result_text,
           homework_check_note,
           learning_issues_note,
@@ -306,7 +308,7 @@ export function AdminBriefing() {
 
       // Tests only
       if (filters.testsOnly) {
-        const hasTest = record.test_title || record.test_result_text;
+        const hasTest = record.test_content || record.test_title || record.test_result_text;
         if (!hasTest) return false;
       }
 
@@ -907,14 +909,28 @@ export function AdminBriefing() {
                           <TableCell className="text-sm">{record.teacher_name}</TableCell>
                           <TableCell>{getStatusBadge(record.submitted)}</TableCell>
                           <TableCell>{getHomeworkBadge(record.homework_status)}</TableCell>
-                          <TableCell className="text-xs max-w-[150px] truncate">
-                            {record.test_title || record.test_result_text ? (
-                              <span className="text-blue-600">
-                                {record.test_title || ''}{record.test_title && record.test_result_text ? ' - ' : ''}{record.test_result_text || ''}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
+                          <TableCell className="text-xs max-w-[200px]">
+                            {(() => {
+                              const content = record.test_content || record.test_title;
+                              const result = record.test_result_text;
+                              if (!content && !result) return <span className="text-muted-foreground">-</span>;
+                              const full = [content, result].filter(Boolean).join(' — ');
+                              return (
+                                <TooltipProvider delayDuration={200}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="text-blue-600 truncate block cursor-default">
+                                        {full.length > 30 ? full.slice(0, 30) + '…' : full}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm">
+                                      {content && <div><strong>내용:</strong> {content}</div>}
+                                      {result && <div><strong>결과:</strong> {result}</div>}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
