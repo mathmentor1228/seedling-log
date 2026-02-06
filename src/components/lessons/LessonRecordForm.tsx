@@ -1081,6 +1081,17 @@ export function LessonRecordForm({
     }
   };
 
+  // HOMEWORK-STATUS-PERSIST-V2: Map homework check result to lesson_records.homework_status
+  const mapHomeworkResultToStatus = (result: string): string => {
+    switch (result) {
+      case 'completed': return 'completed';
+      case 'partial': return 'partial';
+      case 'not_done': return 'not_done';
+      case 'unable_to_verify': return 'none_assigned';
+      default: return 'none_assigned';
+    }
+  };
+
   const handleSaveHomeworkCheck = async () => {
     // VIEW_MODE_WRITE_GUARD: Block all writes in view mode
     if (isViewMode) {
@@ -1104,7 +1115,31 @@ export function LessonRecordForm({
         .eq('id', previousHomework.id);
 
       if (error) throw error;
-      toast({ title: '숙제 확인 완료' });
+
+      // HOMEWORK-STATUS-PERSIST-V2: Also update lesson_records.homework_status so dashboard/lessons reflect correctly
+      const homeworkStatusToSave = mapHomeworkResultToStatus(homeworkCheckResult);
+      
+      // Update formData so the form payload includes the correct status on submit
+      setFormData(prev => ({ ...prev, homework_status: homeworkStatusToSave }));
+
+      // If we have an existing record, persist to DB immediately
+      if (editingLesson?.id || existingRecordId) {
+        const recordId = editingLesson?.id || existingRecordId;
+        const { error: statusError } = await supabase
+          .from('lesson_records')
+          .update({ homework_status: homeworkStatusToSave })
+          .eq('id', recordId);
+        
+        if (statusError) {
+          console.error('[HOMEWORK-STATUS-PERSIST-V2] Error updating lesson_records:', statusError);
+        } else {
+          console.log('[HOMEWORK-STATUS-PERSIST-V2] lesson_records.homework_status updated:', homeworkStatusToSave);
+        }
+      }
+
+      const statusLabel = { completed: '완료', partial: '일부완료', not_done: '미이행', none_assigned: '없음' }[homeworkStatusToSave] || homeworkStatusToSave;
+      toast({ title: '숙제 확인 완료', description: `숙제상태: ${statusLabel}` });
+      
       if (formData.student_id && formData.class_id) {
         await fetchPreviousLesson(formData.student_id, formData.class_id, formData.lesson_date);
       }
