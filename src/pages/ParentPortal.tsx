@@ -131,33 +131,91 @@ export default function ParentPortal() {
   );
 }
 
-/* ═══════ Summary Cards ═══════ */
+/* ═══════ Status Banner + Summary ═══════ */
 function SummaryCards({ lessons, homework }: { lessons: LessonRecord[]; homework: Homework[] }) {
   const totalLessons = lessons.length;
-  const subjects = [...new Set(lessons.map(l => l.subject))];
   const checkedHw = homework.filter(h => h.check_status === 'checked');
   const goodHw = checkedHw.filter(h => h.result === 'good' || h.result === 'excellent');
   const hwRate = checkedHw.length > 0 ? Math.round((goodHw.length / checkedHw.length) * 100) : null;
-  const avgScore = lessons.filter(l => l.understanding_score != null).length > 0
-    ? (lessons.reduce((s, l) => s + (l.understanding_score || 0), 0) / lessons.filter(l => l.understanding_score != null).length).toFixed(1)
+  const scoredLessons = lessons.filter(l => l.understanding_score != null);
+  const avgScore = scoredLessons.length > 0
+    ? scoredLessons.reduce((s, l) => s + (l.understanding_score || 0), 0) / scoredLessons.length
     : null;
+  const notDone = checkedHw.filter(h => h.result === 'not_done').length;
+  const incomplete = checkedHw.filter(h => h.result === 'incomplete' || h.result === 'poor').length;
+
+  // Determine overall status
+  const status = getOverallStatus(avgScore, hwRate, notDone, incomplete, totalLessons);
 
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <div className="bg-white rounded-xl border border-gray-100 p-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-        <p className="text-lg font-bold text-blue-600">{totalLessons}</p>
-        <p className="text-[10px] text-gray-500">수업 (2주)</p>
+    <div className="space-y-2">
+      {/* Emoji Status Banner */}
+      <div className={`rounded-2xl px-5 py-4 flex items-center gap-4 border shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${status.bgClass}`}>
+        <span className="text-4xl">{status.emoji}</span>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold ${status.titleColor}`}>{status.title}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{status.desc}</p>
+        </div>
       </div>
-      <div className="bg-white rounded-xl border border-gray-100 p-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-        <p className="text-lg font-bold text-emerald-600">{hwRate != null ? `${hwRate}%` : '-'}</p>
-        <p className="text-[10px] text-gray-500">숙제 완료</p>
-      </div>
-      <div className="bg-white rounded-xl border border-gray-100 p-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-        <p className="text-lg font-bold text-violet-600">{avgScore ?? '-'}</p>
-        <p className="text-[10px] text-gray-500">평균 이해도</p>
+
+      {/* Compact Stats */}
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat value={totalLessons} label="수업" unit="회" color="text-blue-600" />
+        <MiniStat value={avgScore != null ? avgScore.toFixed(1) : '-'} label="이해도" unit="/5" color="text-violet-600" />
+        <MiniStat value={hwRate != null ? `${hwRate}` : '-'} label="숙제완료" unit="%" color="text-emerald-600" />
       </div>
     </div>
   );
+}
+
+function MiniStat({ value, label, unit, color }: { value: string | number; label: string; unit: string; color: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 py-2.5 px-2 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <p className={`text-base font-bold ${color}`}>
+        {value}<span className="text-[10px] font-normal text-gray-400">{unit}</span>
+      </p>
+      <p className="text-[10px] text-gray-400">{label}</p>
+    </div>
+  );
+}
+
+function getOverallStatus(avgScore: number | null, hwRate: number | null, notDone: number, incomplete: number, totalLessons: number) {
+  // No data
+  if (totalLessons === 0) return {
+    emoji: '📭', title: '아직 수업 기록이 없어요',
+    desc: '최근 2주간 수업이 없습니다.',
+    bgClass: 'bg-gray-50 border-gray-100', titleColor: 'text-gray-600',
+  };
+
+  // Bad: low understanding or many not_done
+  if ((avgScore != null && avgScore < 2.5) || notDone >= 3) return {
+    emoji: '😟', title: '학습에 주의가 필요해요',
+    desc: avgScore != null && avgScore < 2.5
+      ? '이해도가 낮은 수업이 많습니다. 복습이 필요합니다.'
+      : '미완료 숙제가 많습니다. 숙제 관리에 신경 써주세요.',
+    bgClass: 'bg-red-50 border-red-100', titleColor: 'text-red-700',
+  };
+
+  // Warning: mediocre
+  if ((avgScore != null && avgScore < 3.5) || (hwRate != null && hwRate < 60) || incomplete >= 2) return {
+    emoji: '🤔', title: '조금 더 신경 쓰면 좋겠어요',
+    desc: '전반적으로 무난하지만, 일부 부족한 부분이 있습니다.',
+    bgClass: 'bg-amber-50 border-amber-100', titleColor: 'text-amber-700',
+  };
+
+  // Good
+  if ((avgScore != null && avgScore >= 4.0) && (hwRate == null || hwRate >= 80)) return {
+    emoji: '😊', title: '학습 흐름이 아주 좋아요!',
+    desc: '이해도가 높고 숙제도 잘 해오고 있습니다.',
+    bgClass: 'bg-emerald-50 border-emerald-100', titleColor: 'text-emerald-700',
+  };
+
+  // Normal/default
+  return {
+    emoji: '🙂', title: '꾸준히 잘 하고 있어요',
+    desc: '학습이 안정적으로 진행되고 있습니다.',
+    bgClass: 'bg-blue-50 border-blue-100', titleColor: 'text-blue-700',
+  };
 }
 
 /* ═══════ Mini Calendar ═══════ */
