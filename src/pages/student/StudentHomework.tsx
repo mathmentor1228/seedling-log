@@ -1,5 +1,5 @@
 // STUDENT-APP-V1: Student homework list and submission page
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
 import { studentApi } from '@/lib/studentApi';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,11 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  Camera, 
   Upload, 
   CheckCircle, 
   Clock,
-  X,
   Loader2,
   ChevronLeft
 } from 'lucide-react';
@@ -26,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
 
 interface HomeworkItem {
   id: string;
@@ -50,11 +49,8 @@ export default function StudentHomework() {
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   
   // Submission form state
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadImages, setUploadImages] = useState<ImageItem[]>([]);
   const [submissionNote, setSubmissionNote] = useState('');
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (student?.id) {
@@ -103,52 +99,15 @@ export default function StudentHomework() {
     }
   }
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast({
-          title: '오류',
-          description: '이미지 파일만 업로드할 수 있습니다.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        toast({
-          title: '오류',
-          description: '파일 크기는 10MB 이하여야 합니다.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      
-      setImageFile(file);
-      
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const clearImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const clearImages = () => {
+    uploadImages.forEach((img) => URL.revokeObjectURL(img.preview));
+    setUploadImages([]);
   };
 
   const handleSubmit = async () => {
     if (!selectedHomework || !student?.id) return;
     
-    if (!imageFile && !submissionNote.trim()) {
+    if (uploadImages.length === 0 && !submissionNote.trim()) {
       toast({
         title: '입력 필요',
         description: '사진 또는 메모를 입력해주세요.',
@@ -160,34 +119,42 @@ export default function StudentHomework() {
     setIsSubmitting(true);
     
     try {
-      let imageUrl: string | null = null;
+      const imageUrls: string[] = [];
       
-      // Upload image if provided (storage is separate from RLS)
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${student.id}/${selectedHomework.id}/${Date.now()}.${fileExt}`;
+      // Upload each image
+      for (const img of uploadImages) {
+        const fileExt = img.file.name.split('.').pop() || 'jpg';
+        const fileName = `${student.id}/${selectedHomework.id}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${fileExt}`;
         
         const { error: uploadError } = await supabase.storage
           .from('homework-submissions')
-          .upload(fileName, imageFile);
+          .upload(fileName, img.file, { contentType: img.file.type });
         
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          // Determine error type
+          const msg = uploadError.message?.toLowerCase() || '';
+          if (msg.includes('payload too large') || msg.includes('size')) {
+            throw new Error('FILE_TOO_LARGE');
+          }
+          throw new Error('NETWORK_ERROR');
+        }
         
         const { data: urlData } = supabase.storage
           .from('homework-submissions')
           .getPublicUrl(fileName);
         
-        imageUrl = urlData.publicUrl;
+        imageUrls.push(urlData.publicUrl);
       }
       
-      // Submit via edge function to bypass RLS
+      // Submit via edge function
+      const imageUrl = imageUrls.length > 0 ? imageUrls.join(',') : null;
       const { error } = await studentApi.submitHomework(
         selectedHomework.id,
         imageUrl,
         submissionNote.trim() || null
       );
       
-      if (error) throw new Error(error);
+      if (error) throw new Error('SUBMIT_ERROR');
       
       toast({
         title: '제출 완료',
@@ -195,17 +162,31 @@ export default function StudentHomework() {
       });
       
       setShowSubmitDialog(false);
-      clearImage();
+      clearImages();
       setSubmissionNote('');
       fetchHomework();
       
-    } catch (error) {
-      console.error('Submit error:', error);
-      toast({
-        title: '제출 실패',
-        description: '숙제 제출에 실패했습니다. 다시 시도해주세요.',
-        variant: 'destructive',
-      });
+    } catch (error: any) {
+      const code = error?.message || '';
+      if (code === 'FILE_TOO_LARGE') {
+        toast({
+          title: '용량 초과',
+          description: '이미지 파일 크기가 너무 큽니다. 더 작은 사진을 사용해주세요.',
+          variant: 'destructive',
+        });
+      } else if (code === 'NETWORK_ERROR') {
+        toast({
+          title: '네트워크 오류',
+          description: '인터넷 연결을 확인하고 다시 시도해주세요.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: '제출 실패',
+          description: '숙제 제출에 실패했습니다. 다시 시도해주세요.',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -297,44 +278,12 @@ export default function StudentHomework() {
             </DialogHeader>
             
             <div className="space-y-4">
-              {/* Image upload */}
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                
-                {imagePreview ? (
-                  <div className="relative">
-                    <img 
-                      src={imagePreview} 
-                      alt="Preview" 
-                      className="w-full h-48 object-cover rounded-lg"
-                    />
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="absolute top-2 right-2 h-8 w-8"
-                      onClick={clearImage}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    className="w-full h-32 flex flex-col gap-2"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Camera className="w-8 h-8" />
-                    <span>사진 촬영 / 선택</span>
-                  </Button>
-                )}
-              </div>
+              {/* Multi-image upload */}
+              <HomeworkImageUploader
+                images={uploadImages}
+                onImagesChange={setUploadImages}
+                disabled={isSubmitting}
+              />
 
               {/* Note input */}
               <div>
@@ -350,7 +299,7 @@ export default function StudentHomework() {
                 className="w-full" 
                 size="lg"
                 onClick={handleSubmit}
-                disabled={isSubmitting || (!imageFile && !submissionNote.trim())}
+                disabled={isSubmitting || (uploadImages.length === 0 && !submissionNote.trim())}
               >
                 {isSubmitting ? (
                   <>
