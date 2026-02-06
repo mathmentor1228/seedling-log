@@ -34,6 +34,8 @@ interface HomeworkItem {
   check_status: string;
   result: string | null;
   notes: string | null;
+  submitted_at: string | null;
+  submission_image_url: string | null;
 }
 
 export default function StudentHomework() {
@@ -257,6 +259,32 @@ export default function StudentHomework() {
               </div>
             )}
 
+            {/* Show submitted images */}
+            {selectedHomework.submission_image_url && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">📷 제출한 사진</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {selectedHomework.submission_image_url.split(',').map((url, idx) => (
+                    <a key={idx} href={url.trim()} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-lg overflow-hidden border">
+                      <img
+                        src={url.trim()}
+                        alt={`제출 사진 ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </a>
+                  ))}
+                </div>
+                {selectedHomework.submitted_at && (
+                  <p className="text-xs text-muted-foreground">
+                    제출: {format(new Date(selectedHomework.submitted_at), 'M월 d일 HH:mm', { locale: ko })}
+                  </p>
+                )}
+              </div>
+            )}
+
             {selectedHomework.check_status === 'unchecked' && (
               <Button 
                 className="w-full" 
@@ -264,9 +292,7 @@ export default function StudentHomework() {
                 onClick={() => setShowSubmitDialog(true)}
               >
                 <Upload className="w-5 h-5 mr-2" />
-                {selectedHomework.result === null && (selectedHomework as any).submitted_at
-                  ? '다시 제출하기'
-                  : '숙제 제출하기'}
+                {selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
               </Button>
             )}
           </CardContent>
