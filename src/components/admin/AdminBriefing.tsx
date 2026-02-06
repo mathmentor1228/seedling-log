@@ -881,6 +881,7 @@ export function AdminBriefing() {
                   조건에 맞는 수업 기록이 없습니다.
                 </div>
               ) : (
+                <TooltipProvider delayDuration={200}>
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -916,51 +917,45 @@ export function AdminBriefing() {
                               if (!content && !result) return <span className="text-muted-foreground">-</span>;
                               const full = [content, result].filter(Boolean).join(' — ');
                               return (
-                                <TooltipProvider delayDuration={200}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="text-blue-600 truncate block cursor-default">
-                                        {full.length > 30 ? full.slice(0, 30) + '…' : full}
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm">
-                                      {content && <div><strong>내용:</strong> {content}</div>}
-                                      {result && <div><strong>결과:</strong> {result}</div>}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-blue-600 truncate block cursor-default">
+                                      {full.length > 30 ? full.slice(0, 30) + '…' : full}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm">
+                                    {content && <div><strong>내용:</strong> {content}</div>}
+                                    {result && <div><strong>결과:</strong> {result}</div>}
+                                  </TooltipContent>
+                                </Tooltip>
                               );
                             })()}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
                               {record.homework_check_note && (
-                                <TooltipProvider delayDuration={200}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200 cursor-default">
-                                        조교코멘트
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm">
-                                      {record.homework_check_note}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200 cursor-default">
+                                      조교코멘트
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm">
+                                    {record.homework_check_note}
+                                  </TooltipContent>
+                                </Tooltip>
                               )}
                               {record.learning_issues_note && (
-                                <TooltipProvider delayDuration={200}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 cursor-default">
-                                        교사관찰
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm">
-                                      {record.learning_issues_note}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 cursor-default">
+                                      교사관찰
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-xs whitespace-pre-wrap text-sm">
+                                    {record.learning_issues_note}
+                                  </TooltipContent>
+                                </Tooltip>
                               )}
                               {!record.homework_check_note && !record.learning_issues_note && (
                                 <span className="text-muted-foreground text-xs">-</span>
@@ -982,6 +977,7 @@ export function AdminBriefing() {
                     </TableBody>
                   </Table>
                 </div>
+                </TooltipProvider>
               )}
             </CardContent>
           </Card>
