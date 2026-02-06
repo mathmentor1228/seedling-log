@@ -1029,6 +1029,7 @@ export type Database = {
           name: string
           notes: string | null
           parent_phone: string | null
+          parent_token: string | null
           phone: string | null
           school: string | null
           school_level: string | null
@@ -1049,6 +1050,7 @@ export type Database = {
           name: string
           notes?: string | null
           parent_phone?: string | null
+          parent_token?: string | null
           phone?: string | null
           school?: string | null
           school_level?: string | null
@@ -1069,6 +1071,7 @@ export type Database = {
           name?: string
           notes?: string | null
           parent_phone?: string | null
+          parent_token?: string | null
           phone?: string | null
           school?: string | null
           school_level?: string | null
@@ -1616,6 +1619,7 @@ export type Database = {
         }
         Returns: Json
       }
+      generate_parent_token: { Args: never; Returns: string }
       generate_share_token: { Args: never; Returns: string }
       generate_weekly_reports: {
         Args: {

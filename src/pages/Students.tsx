@@ -30,7 +30,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
 import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
@@ -304,6 +304,31 @@ export default function Students() {
         description: error.message || 'Failed to delete student',
         variant: 'destructive',
       });
+    }
+  };
+
+  const generateParentLink = async (studentId: string) => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parent-portal?action=generate`,
+        {
+          method: 'POST',
+          headers: {
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ student_id: studentId }),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok || result.error) {
+        throw new Error(result.error || '링크 생성 실패');
+      }
+      const parentUrl = `${window.location.origin}/parent?token=${result.token}`;
+      await navigator.clipboard.writeText(parentUrl);
+      toast({ title: '학부모 링크 복사됨', description: '카카오톡에 붙여넣기하세요!' });
+    } catch (err: any) {
+      toast({ title: '오류', description: err.message, variant: 'destructive' });
     }
   };
 
@@ -763,6 +788,23 @@ export default function Students() {
                     </p>
                   </div>
                 </div>
+                {/* Parent portal link button */}
+                {isAdmin(role) && (
+                  <div className="pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => generateParentLink(detailStudent.id)}
+                    >
+                      <Link2 className="w-4 h-4 mr-2" />
+                      학부모 포털 링크 복사
+                    </Button>
+                    <p className="text-[10px] text-muted-foreground mt-1 text-center">
+                      로그인 없이 숙제·테스트·리포트를 볼 수 있는 링크입니다
+                    </p>
+                  </div>
+                )}
               </TabsContent>
               
               {(isAdmin(role) || isTeacher(role)) && (
