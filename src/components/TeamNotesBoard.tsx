@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
+// TEAM-NOTES-DETAIL-MODAL-V1
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth, isAdmin as checkIsAdmin } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -20,6 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogClose,
 } from '@/components/ui/dialog';
 import {
   Collapsible,
@@ -41,7 +45,9 @@ import {
   X,
   Loader2,
   Filter,
-  AlertTriangle
+  AlertTriangle,
+  Copy,
+  Send
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -78,6 +84,15 @@ interface UserOption {
   id: string;
   name: string;
   role: string;
+}
+
+interface TeamNoteReply {
+  id: string;
+  note_id: string;
+  created_by: string;
+  body: string;
+  created_at: string;
+  author_name?: string;
 }
 
 const PRIORITY_OPTIONS = [
@@ -122,6 +137,17 @@ export function TeamNotesBoard() {
   const [uploadingFiles, setUploadingFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Detail modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<TeamNote | null>(null);
+  const [copied, setCopied] = useState(false);
+  const clickedRowRef = useRef<HTMLDivElement | null>(null);
+
+  // Replies state
+  const [replies, setReplies] = useState<TeamNoteReply[]>([]);
+  const [repliesLoading, setRepliesLoading] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replySubmitting, setReplySubmitting] = useState(false);
   useEffect(() => {
     if (user) {
       fetchNotes();
@@ -391,6 +417,94 @@ export function TeamNotesBoard() {
         variant: 'destructive',
       });
     }
+  }
+
+  // Detail modal functions
+  async function fetchReplies(noteId: string) {
+    setRepliesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('team_note_replies')
+        .select('*')
+        .eq('note_id', noteId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      
+      // Fetch author names
+      const replyData = data || [];
+      const authorIds = [...new Set(replyData.map(r => r.created_by))];
+      let profileMap: Record<string, string> = {};
+      if (authorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', authorIds);
+        (profiles || []).forEach((p: any) => {
+          profileMap[p.id] = p.full_name || p.email || '알 수 없음';
+        });
+      }
+      
+      setReplies(replyData.map(r => ({
+        ...r,
+        author_name: profileMap[r.created_by] || '알 수 없음',
+      })));
+    } catch (err) {
+      console.error('Error fetching replies:', err);
+      setReplies([]);
+    } finally {
+      setRepliesLoading(false);
+    }
+  }
+
+  function handleNoteClick(note: TeamNote, rowElement: HTMLDivElement | null) {
+    clickedRowRef.current = rowElement;
+    setSelectedNote(note);
+    setCopied(false);
+    setReplyText('');
+    setReplies([]);
+    setDetailModalOpen(true);
+    fetchReplies(note.id);
+  }
+
+  async function handleCopyBody() {
+    if (!selectedNote?.body) return;
+    try {
+      await navigator.clipboard.writeText(selectedNote.body);
+      setCopied(true);
+      toast({ title: '복사되었습니다' });
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast({ title: '복사 실패', variant: 'destructive' });
+    }
+  }
+
+  async function handleSubmitReply() {
+    if (!selectedNote || !replyText.trim() || !user) return;
+    setReplySubmitting(true);
+    try {
+      const { error } = await supabase.from('team_note_replies').insert({
+        note_id: selectedNote.id,
+        created_by: user.id,
+        body: replyText.trim(),
+      });
+      if (error) throw error;
+      toast({ title: '답글이 등록되었습니다' });
+      setReplyText('');
+      fetchReplies(selectedNote.id);
+    } catch (err) {
+      console.error('Error submitting reply:', err);
+      toast({ title: '답글 등록 실패', variant: 'destructive' });
+    } finally {
+      setReplySubmitting(false);
+    }
+  }
+
+  function handleDetailModalClose() {
+    setDetailModalOpen(false);
+    setSelectedNote(null);
+    setReplies([]);
+    setReplyText('');
+    setTimeout(() => clickedRowRef.current?.focus(), 50);
   }
 
   function getPriorityBadge(priority: string) {
@@ -664,13 +778,29 @@ export function TeamNotesBoard() {
                 {notes.map((note) => (
                   <div 
                     key={note.id}
-                    className={`p-3 rounded-lg border ${
+                    ref={(el) => {
+                      if (selectedNote?.id === note.id) clickedRowRef.current = el;
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`메모 상세보기: ${note.title}`}
+                    className={`p-3 rounded-lg border cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                       note.status === 'done' 
-                        ? 'bg-muted/30 border-muted' 
+                        ? 'bg-muted/30 border-muted hover:bg-muted/50' 
                         : note.priority === 'high' 
-                          ? 'bg-red-500/5 border-red-500/20' 
-                          : 'bg-secondary/50 border-border'
+                          ? 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10' 
+                          : 'bg-secondary/50 border-border hover:bg-secondary/70'
                     }`}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('button')) return;
+                      handleNoteClick(note, e.currentTarget);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleNoteClick(note, e.currentTarget);
+                      }
+                    }}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -685,7 +815,7 @@ export function TeamNotesBoard() {
                         </div>
                         
                         {note.body && (
-                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2 whitespace-pre-wrap">
                             {note.body}
                           </p>
                         )}
@@ -713,7 +843,7 @@ export function TeamNotesBoard() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 text-xs"
-                                onClick={() => handleDownloadAttachment(att.storage_path, att.original_name)}
+                                onClick={(e) => { e.stopPropagation(); handleDownloadAttachment(att.storage_path, att.original_name); }}
                               >
                                 <Download className="w-3 h-3 mr-1" />
                                 {att.original_name}
@@ -727,7 +857,19 @@ export function TeamNotesBoard() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleToggleStatus(note.id, note.status)}
+                          className="text-xs text-muted-foreground hover:text-foreground h-7 px-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNoteClick(note, e.currentTarget.closest('[role="button"]') as HTMLDivElement);
+                          }}
+                        >
+                          자세히
+                          <ChevronRight className="w-3 h-3 ml-0.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); handleToggleStatus(note.id, note.status); }}
                         >
                           <Check className={`w-4 h-4 ${note.status === 'done' ? 'text-green-600' : ''}`} />
                         </Button>
@@ -735,7 +877,7 @@ export function TeamNotesBoard() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteNote(note.id)}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteNote(note.id); }}
                           >
                             <Trash2 className="w-4 h-4 text-destructive" />
                           </Button>
@@ -746,6 +888,176 @@ export function TeamNotesBoard() {
                 ))}
               </div>
             )}
+
+            {/* Detail modal for viewing full note content with replies */}
+            <Dialog open={detailModalOpen} onOpenChange={(open) => {
+              if (!open) handleDetailModalClose();
+            }}>
+              <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 pr-8">
+                    <MessageSquare className="w-5 h-5 text-primary" />
+                    <span className="truncate">{selectedNote?.title}</span>
+                  </DialogTitle>
+                  <DialogDescription className="sr-only">
+                    메모 상세 내용
+                  </DialogDescription>
+                </DialogHeader>
+                
+                {selectedNote && (
+                  <ScrollArea className="flex-1 max-h-[60vh]">
+                    <div className="space-y-4 pr-4">
+                      {/* Status badges row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {getPriorityBadge(selectedNote.priority)}
+                        <Badge variant={selectedNote.status === 'done' ? 'secondary' : 'outline'}>
+                          {selectedNote.status === 'done' ? '완료' : '미완료'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {getTargetLabel(selectedNote)}
+                        </span>
+                      </div>
+                      
+                      {/* Metadata */}
+                      <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg p-3 bg-muted/30">
+                        <div>
+                          <span className="text-muted-foreground">작성자:</span>
+                          <span className="ml-1 font-medium">{selectedNote.creator_name || '알 수 없음'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">작성일시:</span>
+                          <span className="ml-1 font-medium">
+                            {format(new Date(selectedNote.created_at), 'yyyy년 M월 d일 HH:mm', { locale: ko })}
+                          </span>
+                        </div>
+                        {selectedNote.due_date && (
+                          <div>
+                            <span className="text-muted-foreground">기한:</span>
+                            <span className="ml-1 font-medium">{selectedNote.due_date}</span>
+                          </div>
+                        )}
+                        {selectedNote.status === 'done' && selectedNote.done_by_name && (
+                          <div>
+                            <span className="text-muted-foreground">완료:</span>
+                            <span className="ml-1 font-medium text-green-600">{selectedNote.done_by_name}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Full content */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-muted-foreground">내용</Label>
+                          {selectedNote.body && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={handleCopyBody}
+                            >
+                              {copied ? (
+                                <><Check className="w-3 h-3 mr-1" />복사됨</>
+                              ) : (
+                                <><Copy className="w-3 h-3 mr-1" />복사</>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        <div className="p-3 border rounded-lg bg-background min-h-[80px]">
+                          {selectedNote.body ? (
+                            <p className="text-sm whitespace-pre-wrap break-words">{selectedNote.body}</p>
+                          ) : (
+                            <p className="text-sm text-muted-foreground italic">내용 없음</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Attachments in modal */}
+                      {selectedNote.attachments && selectedNote.attachments.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-muted-foreground">첨부파일</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedNote.attachments.map((att) => (
+                              <Button
+                                key={att.id}
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => handleDownloadAttachment(att.storage_path, att.original_name)}
+                              >
+                                <Download className="w-3 h-3 mr-1" />
+                                {att.original_name}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Replies section */}
+                      <div className="space-y-3 pt-2 border-t">
+                        <Label className="text-muted-foreground flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4" />
+                          답글 ({replies.length})
+                        </Label>
+                        
+                        {repliesLoading ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : replies.length === 0 ? (
+                          <p className="text-sm text-muted-foreground italic py-2">아직 답글이 없습니다.</p>
+                        ) : (
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                            {replies.map((reply) => (
+                              <div key={reply.id} className="p-2 border rounded-lg bg-secondary/30">
+                                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                                  <span className="font-medium text-foreground">{reply.author_name || '알 수 없음'}</span>
+                                  <span>{format(new Date(reply.created_at), 'MM/dd HH:mm')}</span>
+                                </div>
+                                <p className="text-sm whitespace-pre-wrap break-words">{reply.body}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {/* Reply input */}
+                        <div className="space-y-2">
+                          <Textarea
+                            placeholder="답글을 입력하세요..."
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            className="min-h-[60px] text-sm"
+                            disabled={replySubmitting}
+                          />
+                          <div className="flex justify-end">
+                            <Button 
+                              size="sm" 
+                              onClick={handleSubmitReply}
+                              disabled={!replyText.trim() || replySubmitting}
+                            >
+                              {replySubmitting ? (
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              ) : (
+                                <Send className="w-4 h-4 mr-1" />
+                              )}
+                              답글 등록
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </ScrollArea>
+                )}
+                
+                <div className="flex justify-end pt-2 border-t">
+                  <DialogClose asChild>
+                    <Button variant="outline" size="sm">
+                      닫기
+                    </Button>
+                  </DialogClose>
+                </div>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </CollapsibleContent>
       </Card>
