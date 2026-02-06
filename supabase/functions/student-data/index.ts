@@ -141,7 +141,30 @@ Deno.serve(async (req) => {
           .order('assigned_date', { ascending: false });
 
         if (error) throw error;
-        result = { homework: data || [] };
+
+        // Mark expired homework: assigned > 7 days ago AND newer homework exists for same subject
+        const now = new Date();
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(now.getDate() - 7);
+
+        const homeworkItems = (data || []).map((hw: any) => {
+          const assignedDate = new Date(hw.assigned_date);
+          const isOlderThan7Days = assignedDate < sevenDaysAgo;
+
+          // Check if there's a newer homework for the same subject
+          const hasNewerHomework = (data || []).some((other: any) =>
+            other.id !== hw.id &&
+            other.subject === hw.subject &&
+            new Date(other.assigned_date) > assignedDate
+          );
+
+          return {
+            ...hw,
+            is_expired: isOlderThan7Days && hasNewerHomework,
+          };
+        });
+
+        result = { homework: homeworkItems };
         break;
       }
 
