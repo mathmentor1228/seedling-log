@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RiskBadge } from '@/components/ui/risk-badge';
@@ -45,7 +46,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { format, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
+import { format, startOfWeek, endOfWeek, subWeeks, addWeeks } from 'date-fns';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface WeeklyReport {
@@ -135,6 +137,19 @@ export default function Reports() {
   // Quality tag filter state - default to sendable (GREEN + YELLOW)
   const [qualityFilter, setQualityFilter] = useState<QualityFilter>('sendable');
 
+  // Batch generation progress
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
+
+  // Custom week range state
+  const [weekStart, setWeekStart] = useState<string>(() => {
+    const lastWeek = subWeeks(new Date(), 1);
+    return format(startOfWeek(lastWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  });
+  const [weekEnd, setWeekEnd] = useState<string>(() => {
+    const lastWeek = subWeeks(new Date(), 1);
+    return format(endOfWeek(lastWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  });
+
   useEffect(() => {
     fetchReports();
     fetchAllStudents();
@@ -154,17 +169,20 @@ export default function Reports() {
     }
   }
 
-  // Compute week range (last week by default)
-  const weekRange = useMemo(() => {
-    const now = new Date();
-    const lastWeek = subWeeks(now, 1);
-    const weekStart = startOfWeek(lastWeek, { weekStartsOn: 1 }); // Monday
-    const weekEnd = endOfWeek(lastWeek, { weekStartsOn: 1 }); // Sunday
-    return {
-      start: format(weekStart, 'yyyy-MM-dd'),
-      end: format(weekEnd, 'yyyy-MM-dd'),
-    };
-  }, []);
+  // Week range as object for compatibility
+  const weekRange = useMemo(() => ({
+    start: weekStart,
+    end: weekEnd,
+  }), [weekStart, weekEnd]);
+
+  // Navigate weeks
+  function shiftWeek(direction: -1 | 1) {
+    const fn = direction === -1 ? subWeeks : addWeeks;
+    const baseDate = new Date(weekStart);
+    const newBase = fn(baseDate, 1);
+    setWeekStart(format(startOfWeek(newBase, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+    setWeekEnd(format(endOfWeek(newBase, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+  }
 
   // Filter students by search
   const filteredStudents = useMemo(() => {
@@ -197,61 +215,81 @@ export default function Reports() {
     setSelectedStudentIds(new Set());
   }
 
+  const BATCH_SIZE = 10; // Max students per edge function call
+
   async function handleGenerateReports(scope: 'all' | 'selected') {
     setGenerating(true);
-    setLastGenerationErrors([]); // Clear previous errors
+    setLastGenerationErrors([]);
+    setBatchProgress(null);
     
     try {
-      const studentIds = scope === 'selected' ? Array.from(selectedStudentIds) : null;
-      const count = scope === 'selected' ? selectedStudentIds.size : allStudents.length;
-      
-      console.log(`[REPORT_GEN_DEBUG_V2.1] scope=${scope} count=${count} templateVersion=v2.1-narrative-render mode=direct_save`);
-      
-      // BYPASS LEGACY DB RPC: Call edge function with direct_save=true
-      const { data, error } = await supabase.functions.invoke('generate-weekly-reports', {
-        body: {
-          manual: true,
-          direct_save: true, // KEY: bypasses legacy DB RPC formatter
-          week_start: weekRange.start,
-          week_end: weekRange.end,
-          student_ids: studentIds,
-        },
-      });
+      const allTargetIds = scope === 'selected' ? Array.from(selectedStudentIds) : allStudents.map(s => s.id);
+      const totalCount = allTargetIds.length;
 
-      if (error) throw error;
+      if (totalCount === 0) {
+        toast({ title: '생성할 학생이 없습니다.', variant: 'destructive' });
+        setGenerating(false);
+        return;
+      }
 
-      // REPORT-ERROR-PANEL-V1: Use new structured errors array
-      const successCount = data?.successCount ?? count;
-      const errorCount = data?.errorCount ?? 0;
-      const errors: GenerationError[] = data?.errors ?? [];
-      
-      // Store errors for visible panel
-      setLastGenerationErrors(errors);
-      
-      if (errorCount > 0) {
-        console.error('[REPORT_GEN_ERROR_PANEL_V1]', errors);
-        
+      // Split into batches
+      const batches: string[][] = [];
+      for (let i = 0; i < allTargetIds.length; i += BATCH_SIZE) {
+        batches.push(allTargetIds.slice(i, i + BATCH_SIZE));
+      }
+
+      console.log(`[REPORT_GEN_BATCH] total=${totalCount} batches=${batches.length} batchSize=${BATCH_SIZE}`);
+
+      let totalSuccess = 0;
+      let totalErrors = 0;
+      const allErrors: GenerationError[] = [];
+
+      for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+        const batch = batches[batchIdx];
+        setBatchProgress({ current: batchIdx * BATCH_SIZE + batch.length, total: totalCount, errors: totalErrors });
+
+        const { data, error } = await supabase.functions.invoke('generate-weekly-reports', {
+          body: {
+            manual: true,
+            direct_save: true,
+            week_start: weekRange.start,
+            week_end: weekRange.end,
+            student_ids: batch,
+          },
+        });
+
+        if (error) {
+          console.error(`[REPORT_GEN_BATCH] Batch ${batchIdx + 1} failed:`, error);
+          totalErrors += batch.length;
+          continue;
+        }
+
+        totalSuccess += data?.successCount ?? 0;
+        totalErrors += data?.errorCount ?? 0;
+        if (data?.errors) {
+          allErrors.push(...data.errors);
+        }
+      }
+
+      setBatchProgress(null);
+      setLastGenerationErrors(allErrors);
+
+      if (totalErrors > 0) {
         toast({
-          title: `생성 완료 (${successCount}건 성공, ${errorCount}건 실패)`,
-          description: '하단 오류 패널에서 상세 정보를 확인하세요.',
+          title: `생성 완료 (${totalSuccess}건 성공, ${totalErrors}건 실패)`,
+          description: `총 ${totalCount}명 중 ${totalSuccess}명 완료. 하단 오류 패널 확인.`,
           variant: 'destructive',
           duration: 8000,
         });
       } else {
         toast({
-          title: scope === 'selected' ? '선택 학생 생성 완료' : '전체 생성 완료',
-          description: scope === 'selected' 
-            ? `선택 학생 ${successCount}명 생성 완료 (direct_save)`
-            : `전체 학생 ${successCount}명 생성 완료 (direct_save)`,
+          title: `전체 ${totalSuccess}명 생성 완료`,
+          description: `${batches.length > 1 ? `${batches.length}개 배치로 나눠 처리` : '1회 처리'} 완료`,
         });
       }
 
-      // Refresh reports list
       await fetchReports();
-      
-      if (scope === 'selected') {
-        clearSelectedStudents();
-      }
+      if (scope === 'selected') clearSelectedStudents();
     } catch (error: any) {
       console.error('Error generating reports:', error);
       toast({
@@ -261,6 +299,7 @@ export default function Reports() {
       });
     } finally {
       setGenerating(false);
+      setBatchProgress(null);
     }
   }
   async function fetchReports() {
@@ -591,16 +630,33 @@ export default function Reports() {
       {/* Per-Student Report Generation Section - REPORT-PER-STUDENT-V1 */}
       <Card className="border-primary/30">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
               <CardTitle className="text-lg">학생별 생성</CardTitle>
-              <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
-                REPORT-PER-STUDENT-V1
-              </span>
             </div>
-            <div className="text-sm text-muted-foreground">
-              기간: {weekRange.start} ~ {weekRange.end}
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftWeek(-1)}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="date"
+                  value={weekStart}
+                  onChange={(e) => setWeekStart(e.target.value)}
+                  className="h-8 w-[130px] text-xs"
+                />
+                <span className="text-muted-foreground text-sm">~</span>
+                <Input
+                  type="date"
+                  value={weekEnd}
+                  onChange={(e) => setWeekEnd(e.target.value)}
+                  className="h-8 w-[130px] text-xs"
+                />
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftWeek(1)}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -662,9 +718,26 @@ export default function Reports() {
             </div>
           </ScrollArea>
 
+          {/* Batch progress indicator */}
+          {batchProgress && (
+            <div className="space-y-1.5 pt-2 border-t">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  배치 처리 중... ({batchProgress.current}/{batchProgress.total}명)
+                </span>
+                {batchProgress.errors > 0 && (
+                  <span className="text-destructive">{batchProgress.errors}건 오류</span>
+                )}
+              </div>
+              <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-2 border-t">
-            <div className="text-sm text-muted-foreground">
-              선택된 학생: <span className="font-medium text-foreground">{selectedStudentIds.size}명</span>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <span>선택: <span className="font-medium text-foreground">{selectedStudentIds.size}명</span></span>
+              <span className="text-xs">1회 최대 {BATCH_SIZE}명씩 배치 처리</span>
             </div>
             <div className="flex items-center gap-2">
               <Button
