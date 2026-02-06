@@ -57,6 +57,9 @@ interface LessonRecord {
   learning_issues_note: string | null;
   attendance_status: string[] | null;
   understanding_score: number | null;
+  lesson_range: string | null;
+  notes: string | null;
+  next_lesson_goal: string | null;
   student_name?: string;
   teacher_name?: string;
 }
@@ -220,7 +223,10 @@ export function AdminBriefing() {
           homework_check_note,
           learning_issues_note,
           attendance_status,
-          understanding_score
+          understanding_score,
+          lesson_range,
+          notes,
+          next_lesson_goal
         `)
         .gte('lesson_date', dateFilter.start)
         .lte('lesson_date', dateFilter.end)
@@ -909,7 +915,37 @@ export function AdminBriefing() {
                           </TableCell>
                           <TableCell className="text-sm">{record.teacher_name}</TableCell>
                           <TableCell>{getStatusBadge(record.submitted)}</TableCell>
-                          <TableCell>{getHomeworkBadge(record.homework_status)}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              const hwLabel = record.homework_status;
+                              const hasNote = record.homework_check_note?.trim();
+                              const hasLessonInfo = record.lesson_range?.trim() || record.notes?.trim() || record.next_lesson_goal?.trim();
+                              const showTooltip = hasNote || hasLessonInfo;
+                              const badge = getHomeworkBadge(hwLabel);
+                              if (!showTooltip) return badge;
+                              return (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="cursor-default">{badge}</div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm z-[100]">
+                                    {record.lesson_range?.trim() && (
+                                      <div><strong>수업내용:</strong> {record.lesson_range}</div>
+                                    )}
+                                    {record.notes?.trim() && (
+                                      <div><strong>메모:</strong> {record.notes}</div>
+                                    )}
+                                    {record.next_lesson_goal?.trim() && (
+                                      <div><strong>다음목표:</strong> {record.next_lesson_goal}</div>
+                                    )}
+                                    {hasNote && (
+                                      <div className="mt-1 pt-1 border-t"><strong>숙제확인:</strong> {record.homework_check_note}</div>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell className="text-xs max-w-[200px]">
                             {(() => {
                               const content = record.test_content || record.test_title;
