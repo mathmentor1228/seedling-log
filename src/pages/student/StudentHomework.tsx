@@ -286,14 +286,21 @@ export default function StudentHomework() {
             )}
 
             {selectedHomework.check_status === 'unchecked' && (
-              <Button 
-                className="w-full" 
-                size="lg"
-                onClick={() => setShowSubmitDialog(true)}
-              >
-                <Upload className="w-5 h-5 mr-2" />
-                {selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
-              </Button>
+              <div className="space-y-3">
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <p className="text-xs text-amber-700 font-medium">
+                    ⚠️ 반드시 전체 페이지가 잘 나오게 올려주세요. 페이지가 보이지 않거나 흔들려 제대로 안보이는 경우 숙제는 미제출로 기록됩니다.
+                  </p>
+                </div>
+                <Button 
+                  className="w-full" 
+                  size="lg"
+                  onClick={() => setShowSubmitDialog(true)}
+                >
+                  <Upload className="w-5 h-5 mr-2" />
+                  {selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
