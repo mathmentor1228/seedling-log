@@ -529,6 +529,7 @@ export function TeamNotesBoard() {
   const doneNotes = notes.filter(n => n.status === 'done');
 
   return (
+    <>
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
       <Card>
         <CollapsibleTrigger asChild>
@@ -888,179 +889,180 @@ export function TeamNotesBoard() {
                 ))}
               </div>
             )}
-
-            {/* Detail modal for viewing full note content with replies */}
-            <Dialog open={detailModalOpen} onOpenChange={(open) => {
-              if (!open) handleDetailModalClose();
-            }}>
-              <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 pr-8">
-                    <MessageSquare className="w-5 h-5 text-primary" />
-                    <span className="truncate">{selectedNote?.title}</span>
-                  </DialogTitle>
-                  <DialogDescription className="sr-only">
-                    메모 상세 내용
-                  </DialogDescription>
-                </DialogHeader>
-                
-                {selectedNote && (
-                  <ScrollArea className="flex-1 max-h-[60vh]">
-                    <div className="space-y-4 pr-4">
-                      {/* Status badges row */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {getPriorityBadge(selectedNote.priority)}
-                        <Badge variant={selectedNote.status === 'done' ? 'secondary' : 'outline'}>
-                          {selectedNote.status === 'done' ? '완료' : '미완료'}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {getTargetLabel(selectedNote)}
-                        </span>
-                      </div>
-                      
-                      {/* Metadata */}
-                      <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg p-3 bg-muted/30">
-                        <div>
-                          <span className="text-muted-foreground">작성자:</span>
-                          <span className="ml-1 font-medium">{selectedNote.creator_name || '알 수 없음'}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">작성일시:</span>
-                          <span className="ml-1 font-medium">
-                            {format(new Date(selectedNote.created_at), 'yyyy년 M월 d일 HH:mm', { locale: ko })}
-                          </span>
-                        </div>
-                        {selectedNote.due_date && (
-                          <div>
-                            <span className="text-muted-foreground">기한:</span>
-                            <span className="ml-1 font-medium">{selectedNote.due_date}</span>
-                          </div>
-                        )}
-                        {selectedNote.status === 'done' && selectedNote.done_by_name && (
-                          <div>
-                            <span className="text-muted-foreground">완료:</span>
-                            <span className="ml-1 font-medium text-green-600">{selectedNote.done_by_name}</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Full content */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-muted-foreground">내용</Label>
-                          {selectedNote.body && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={handleCopyBody}
-                            >
-                              {copied ? (
-                                <><Check className="w-3 h-3 mr-1" />복사됨</>
-                              ) : (
-                                <><Copy className="w-3 h-3 mr-1" />복사</>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                        <div className="p-3 border rounded-lg bg-background min-h-[80px]">
-                          {selectedNote.body ? (
-                            <p className="text-sm whitespace-pre-wrap break-words">{selectedNote.body}</p>
-                          ) : (
-                            <p className="text-sm text-muted-foreground italic">내용 없음</p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Attachments in modal */}
-                      {selectedNote.attachments && selectedNote.attachments.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-muted-foreground">첨부파일</Label>
-                          <div className="flex flex-wrap gap-2">
-                            {selectedNote.attachments.map((att) => (
-                              <Button
-                                key={att.id}
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => handleDownloadAttachment(att.storage_path, att.original_name)}
-                              >
-                                <Download className="w-3 h-3 mr-1" />
-                                {att.original_name}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Replies section */}
-                      <div className="space-y-3 pt-2 border-t">
-                        <Label className="text-muted-foreground flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4" />
-                          답글 ({replies.length})
-                        </Label>
-                        
-                        {repliesLoading ? (
-                          <div className="flex items-center justify-center py-4">
-                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                          </div>
-                        ) : replies.length === 0 ? (
-                          <p className="text-sm text-muted-foreground italic py-2">아직 답글이 없습니다.</p>
-                        ) : (
-                          <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                            {replies.map((reply) => (
-                              <div key={reply.id} className="p-2 border rounded-lg bg-secondary/30">
-                                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                                  <span className="font-medium text-foreground">{reply.author_name || '알 수 없음'}</span>
-                                  <span>{format(new Date(reply.created_at), 'MM/dd HH:mm')}</span>
-                                </div>
-                                <p className="text-sm whitespace-pre-wrap break-words">{reply.body}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {/* Reply input */}
-                        <div className="space-y-2">
-                          <Textarea
-                            placeholder="답글을 입력하세요..."
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                            className="min-h-[60px] text-sm"
-                            disabled={replySubmitting}
-                          />
-                          <div className="flex justify-end">
-                            <Button 
-                              size="sm" 
-                              onClick={handleSubmitReply}
-                              disabled={!replyText.trim() || replySubmitting}
-                            >
-                              {replySubmitting ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <Send className="w-4 h-4 mr-1" />
-                              )}
-                              답글 등록
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </ScrollArea>
-                )}
-                
-                <div className="flex justify-end pt-2 border-t">
-                  <DialogClose asChild>
-                    <Button variant="outline" size="sm">
-                      닫기
-                    </Button>
-                  </DialogClose>
-                </div>
-              </DialogContent>
-            </Dialog>
           </CardContent>
         </CollapsibleContent>
       </Card>
     </Collapsible>
+
+    {/* Detail modal for viewing full note content with replies - rendered outside Collapsible */}
+    <Dialog open={detailModalOpen} onOpenChange={(open) => {
+      if (!open) handleDetailModalClose();
+    }}>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 pr-8">
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <span className="truncate">{selectedNote?.title}</span>
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            메모 상세 내용
+          </DialogDescription>
+        </DialogHeader>
+        
+        {selectedNote && (
+          <ScrollArea className="flex-1 max-h-[60vh]">
+            <div className="space-y-4 pr-4">
+              {/* Status badges row */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {getPriorityBadge(selectedNote.priority)}
+                <Badge variant={selectedNote.status === 'done' ? 'secondary' : 'outline'}>
+                  {selectedNote.status === 'done' ? '완료' : '미완료'}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {getTargetLabel(selectedNote)}
+                </span>
+              </div>
+              
+              {/* Metadata */}
+              <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg p-3 bg-muted/30">
+                <div>
+                  <span className="text-muted-foreground">작성자:</span>
+                  <span className="ml-1 font-medium">{selectedNote.creator_name || '알 수 없음'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">작성일시:</span>
+                  <span className="ml-1 font-medium">
+                    {format(new Date(selectedNote.created_at), 'yyyy년 M월 d일 HH:mm', { locale: ko })}
+                  </span>
+                </div>
+                {selectedNote.due_date && (
+                  <div>
+                    <span className="text-muted-foreground">기한:</span>
+                    <span className="ml-1 font-medium">{selectedNote.due_date}</span>
+                  </div>
+                )}
+                {selectedNote.status === 'done' && selectedNote.done_by_name && (
+                  <div>
+                    <span className="text-muted-foreground">완료:</span>
+                    <span className="ml-1 font-medium text-green-600">{selectedNote.done_by_name}</span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Full content */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-muted-foreground">내용</Label>
+                  {selectedNote.body && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={handleCopyBody}
+                    >
+                      {copied ? (
+                        <><Check className="w-3 h-3 mr-1" />복사됨</>
+                      ) : (
+                        <><Copy className="w-3 h-3 mr-1" />복사</>
+                      )}
+                    </Button>
+                  )}
+                </div>
+                <div className="p-3 border rounded-lg bg-background min-h-[80px]">
+                  {selectedNote.body ? (
+                    <p className="text-sm whitespace-pre-wrap break-words">{selectedNote.body}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">내용 없음</p>
+                  )}
+                </div>
+              </div>
+              
+              {/* Attachments in modal */}
+              {selectedNote.attachments && selectedNote.attachments.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">첨부파일</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedNote.attachments.map((att) => (
+                      <Button
+                        key={att.id}
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => handleDownloadAttachment(att.storage_path, att.original_name)}
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        {att.original_name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Replies section */}
+              <div className="space-y-3 pt-2 border-t">
+                <Label className="text-muted-foreground flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  답글 ({replies.length})
+                </Label>
+                
+                {repliesLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : replies.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic py-2">아직 답글이 없습니다.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                    {replies.map((reply) => (
+                      <div key={reply.id} className="p-2 border rounded-lg bg-secondary/30">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                          <span className="font-medium text-foreground">{reply.author_name || '알 수 없음'}</span>
+                          <span>{format(new Date(reply.created_at), 'MM/dd HH:mm')}</span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap break-words">{reply.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Reply input */}
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="답글을 입력하세요..."
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    className="min-h-[60px] text-sm"
+                    disabled={replySubmitting}
+                  />
+                  <div className="flex justify-end">
+                    <Button 
+                      size="sm" 
+                      onClick={handleSubmitReply}
+                      disabled={!replyText.trim() || replySubmitting}
+                    >
+                      {replySubmitting ? (
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4 mr-1" />
+                      )}
+                      답글 등록
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+        )}
+        
+        <div className="flex justify-end pt-2 border-t">
+          <DialogClose asChild>
+            <Button variant="outline" size="sm">
+              닫기
+            </Button>
+          </DialogClose>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
