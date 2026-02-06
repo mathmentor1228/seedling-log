@@ -25,13 +25,14 @@ interface Homework {
 
 interface TestRecord {
   id: string;
-  lesson_date: string;
+  date: string;
   subject: string;
-  test_name: string | null;
-  test_result: string;
-  test_result_text: string | null;
-  test_date: string | null;
+  name: string;
+  content: string;
+  result: string;
+  result_text: string | null;
   understanding_score: number | null;
+  source: string;
 }
 
 interface WeeklyReport {
@@ -252,13 +253,13 @@ function TestsSection({ tests }: { tests: TestRecord[] }) {
           <CardContent className="py-3 px-4">
             <div className="flex items-center gap-2 mb-1">
               <Badge variant="outline" className="text-[10px]">{test.subject}</Badge>
-              <span className="text-[10px] text-gray-400">{test.test_date || test.lesson_date}</span>
+              <span className="text-[10px] text-gray-400">{test.date}</span>
             </div>
-            <p className="text-sm font-medium">{test.test_name || '테스트'}</p>
+            <p className="text-sm font-medium">{test.content || test.name || '테스트'}</p>
             <div className="flex items-center gap-3 mt-2">
-              <TestResultBadge result={test.test_result} />
-              {test.test_result_text && (
-                <span className="text-xs text-gray-600">{test.test_result_text}</span>
+              <TestResultBadge result={test.result} />
+              {test.result_text && (
+                <span className="text-xs text-gray-600">{test.result_text}</span>
               )}
               {test.understanding_score != null && (
                 <span className="text-xs text-blue-600">이해도 {test.understanding_score}/5</span>

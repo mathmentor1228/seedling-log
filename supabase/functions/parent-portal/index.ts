@@ -100,16 +100,51 @@ Deno.serve(async (req) => {
       .order("assigned_date", { ascending: false })
       .limit(30);
 
-    // Fetch recent test results (last 14 days, only submitted with test data)
-    const { data: tests } = await supabase
+    // Fetch recent test results (last 14 days, from lesson_records)
+    const { data: lessonTests } = await supabase
       .from("lesson_records")
-      .select("id, lesson_date, subject, test_name, test_result, test_result_text, test_date, understanding_score")
+      .select("id, lesson_date, subject, test_name, test_result, test_result_text, test_date, test_content, understanding_score")
       .eq("student_id", studentId)
       .eq("submitted", true)
       .gte("lesson_date", hwDateStr)
       .not("test_result", "eq", "none")
       .order("lesson_date", { ascending: false })
-      .limit(20);
+      .limit(30);
+
+    // Fetch recent test visits (last 14 days)
+    const { data: testVisits } = await supabase
+      .from("test_visits")
+      .select("id, visit_date, subject, test_result_text, english_pass_fail, notes")
+      .eq("student_id", studentId)
+      .gte("visit_date", hwDateStr)
+      .order("visit_date", { ascending: false })
+      .limit(30);
+
+    // Merge both test sources
+    const tests = [
+      ...(lessonTests || []).map((t: any) => ({
+        id: t.id,
+        date: t.test_date || t.lesson_date,
+        subject: t.subject,
+        name: t.test_name || '',
+        content: t.test_content || '',
+        result: t.test_result,
+        result_text: t.test_result_text,
+        understanding_score: t.understanding_score,
+        source: 'lesson',
+      })),
+      ...(testVisits || []).map((t: any) => ({
+        id: t.id,
+        date: t.visit_date,
+        subject: t.subject,
+        name: '',
+        content: t.notes || '',
+        result: t.english_pass_fail || '',
+        result_text: t.test_result_text,
+        understanding_score: null,
+        source: 'visit',
+      })),
+    ].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
     // Fetch weekly reports (only parent_visible = true)
     const { data: reports } = await supabase
