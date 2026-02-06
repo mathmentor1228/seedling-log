@@ -47,8 +47,14 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Share link generation state
+interface ShareLinkState {
+  loading: boolean;
+  reportId: string | null;
+}
 
 interface WeeklyReport {
   id: string;
@@ -139,6 +145,9 @@ export default function Reports() {
 
   // Batch generation progress
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; errors: number } | null>(null);
+
+  // Share link state
+  const [shareLinkState, setShareLinkState] = useState<ShareLinkState>({ loading: false, reportId: null });
 
   // Custom week range state
   const [weekStart, setWeekStart] = useState<string>(() => {
@@ -414,6 +423,33 @@ export default function Reports() {
       toast({ title: '클립보드에 복사되었습니다.' });
     } catch (err) {
       toast({ title: '복사 실패', variant: 'destructive' });
+    }
+  }
+
+  async function generateShareLink(reportId: string) {
+    setShareLinkState({ loading: true, reportId });
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-report?action=generate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ report_id: reportId }),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok || result.error) throw new Error(result.error);
+
+      const publicUrl = `${window.location.origin}/report/view?token=${result.token}`;
+      await navigator.clipboard.writeText(publicUrl);
+      toast({ title: '공유 링크가 복사되었습니다!', description: '카톡에 붙여넣기 하세요.' });
+    } catch (err: any) {
+      toast({ title: '링크 생성 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setShareLinkState({ loading: false, reportId: null });
     }
   }
 
@@ -990,7 +1026,8 @@ export default function Reports() {
                     <TableHead>위험도</TableHead>
                     <TableHead>학생 상태</TableHead>
                     <TableHead>학부모 상태</TableHead>
-                    <TableHead>미리보기</TableHead>
+                     <TableHead>미리보기</TableHead>
+                     <TableHead>공유 링크</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1125,6 +1162,20 @@ export default function Reports() {
                             disabled={hasNoLessons}
                           >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => generateShareLink(report.id)}
+                            disabled={hasNoLessons || (shareLinkState.loading && shareLinkState.reportId === report.id)}
+                          >
+                            {shareLinkState.loading && shareLinkState.reportId === report.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Link2 className="h-4 w-4" />
+                            )}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -1397,7 +1448,21 @@ export default function Reports() {
             </TabsContent>
           </Tabs>
           
-          <DialogFooter>
+          <DialogFooter className="flex-row gap-2">
+            {previewReport && (
+              <Button
+                variant="secondary"
+                onClick={() => generateShareLink(previewReport.id)}
+                disabled={shareLinkState.loading && shareLinkState.reportId === previewReport.id}
+              >
+                {shareLinkState.loading && shareLinkState.reportId === previewReport.id ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Link2 className="h-4 w-4 mr-2" />
+                )}
+                공유 링크 복사
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setShowPreview(false)}>
               닫기
             </Button>

@@ -1503,6 +1503,7 @@ export type Database = {
           sent_at: string | null
           sent_by: string | null
           sent_status: string | null
+          share_token: string | null
           student_id: string
           student_message: string | null
           student_sent_at: string | null
@@ -1530,6 +1531,7 @@ export type Database = {
           sent_at?: string | null
           sent_by?: string | null
           sent_status?: string | null
+          share_token?: string | null
           student_id: string
           student_message?: string | null
           student_sent_at?: string | null
@@ -1557,6 +1559,7 @@ export type Database = {
           sent_at?: string | null
           sent_by?: string | null
           sent_status?: string | null
+          share_token?: string | null
           student_id?: string
           student_message?: string | null
           student_sent_at?: string | null
@@ -1613,6 +1616,7 @@ export type Database = {
         }
         Returns: Json
       }
+      generate_share_token: { Args: never; Returns: string }
       generate_weekly_reports: {
         Args: {
           _student_ids?: string[]
