@@ -7,6 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
 import { RiskBadge } from '@/components/ui/risk-badge';
 import { ScoreBadge } from '@/components/ui/score-badge';
+import { AttentionSummaryBar, type AttentionItem } from '@/components/dashboard/AttentionSummaryBar';
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -1384,24 +1386,58 @@ export default function Dashboard() {
 
   const totalOverdueDrafts = (overdueDrafts || []).reduce((sum, g) => sum + (g?.count || 0), 0);
 
+  // Build attention items for summary bar
+  const attentionItems: AttentionItem[] = [];
+  
+  if (isTeacher(role) && teacherOverdueLessons.length > 0) {
+    attentionItems.push({
+      icon: <AlertTriangle className="w-4 h-4" />,
+      label: '미제출 수업일지',
+      count: teacherOverdueLessons.length,
+      color: 'bg-destructive/10 border-destructive/20 text-destructive',
+    });
+  }
+  
+  if (isAdmin(role) && totalOverdueDrafts > 0) {
+    attentionItems.push({
+      icon: <Clock className="w-4 h-4" />,
+      label: '미제출 수업기록',
+      count: totalOverdueDrafts,
+      color: 'bg-warning/10 border-warning/20 text-warning',
+    });
+  }
+  
+  if (pendingHomework.length > 0 && !isTeacher(role)) {
+    attentionItems.push({
+      icon: <CheckSquare className="w-4 h-4" />,
+      label: '숙제 확인 대기',
+      count: pendingHomework.length,
+      color: 'bg-primary/10 border-primary/20 text-primary',
+    });
+  }
+  
+  if (isAdmin(role) && todayAttendance.filter(r => {
+    const s = r.attendance_status ?? [];
+    return s.includes('무단결석') || s.includes('인정결석') || s.includes('보충불가') || s.includes('지각');
+  }).length > 0) {
+    const issueCount = todayAttendance.filter(r => {
+      const s = r.attendance_status ?? [];
+      return s.includes('무단결석') || s.includes('인정결석') || s.includes('보충불가') || s.includes('지각');
+    }).length;
+    attentionItems.push({
+      icon: <UserCheck className="w-4 h-4" />,
+      label: '출결 이슈',
+      count: issueCount,
+      color: 'bg-destructive/10 border-destructive/20 text-destructive',
+    });
+  }
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">대시보드</h1>
-        <p className="text-muted-foreground mt-1">
-          {isAdmin(role) 
-            ? '학원 전체 현황을 한눈에 확인하세요' 
-            : isAssistant(role)
-            ? '숙제 확인 현황'
-            : '나의 수업 현황'}
-        </p>
-        {/* Debug info for teacher */}
-        {isTeacher(role) && (
-          <div className="mt-2 text-xs text-muted-foreground space-y-0.5">
-            <p>role: {role}, uid: {user?.id}</p>
-          </div>
-        )}
-      </div>
+    <div className="space-y-6">
+      <DashboardHeader role={role || ''} />
+      
+      {/* Attention Summary Bar */}
+      <AttentionSummaryBar items={attentionItems} />
 
       {/* Stats Grid - Visible for admin and teacher */}
       {!isAssistant(role) && (
@@ -1444,12 +1480,9 @@ export default function Dashboard() {
 
       {/* TEACHER-OVERDUE-WARN-V1: Teacher's own overdue lessons warning */}
       {isTeacher(role) && teacherOverdueLessons.length > 0 && (
-        <Card className="border-red-500/50 bg-red-500/5 animate-slide-up">
+         <Card className="border-destructive/30 bg-destructive/5 animate-slide-up">
           <CardHeader className="pb-3">
-            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-              TEACHER-OVERDUE-WARN-V1
-            </div>
-            <CardTitle className="flex items-center gap-2 text-red-600">
+            <CardTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="w-5 h-5" />
               미제출 수업일지 {teacherOverdueLessons.length}건 (수업일이 지났습니다)
             </CardTitle>
@@ -1554,11 +1587,8 @@ export default function Dashboard() {
 
       {/* ADMIN-LESSON-MODAL-V1 + ADMIN-ROSTER-DEBUG-V1 - Admin Roster Section Grouped by Teacher */}
       {isAdmin(role) && adminRosterData && (
-        <Card className="border-primary/30 bg-primary/5 animate-slide-up">
+        <Card className="border-primary/20 animate-slide-up">
           <CardHeader>
-            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-              ADMIN-LESSON-MODAL-V1 | ADMIN-ROSTER-DEBUG-V1
-            </div>
             <CardTitle className="flex items-center gap-2">
               <PenLine className="w-5 h-5 text-primary" />
               오늘 수업(원장) - 선생님별 ({adminRosterData.roster_rows?.length ?? 0}명)
@@ -1569,12 +1599,6 @@ export default function Dashboard() {
               <div className="text-center py-8">
                 <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
-                {/* ADMIN-ROSTER-DEBUG-V1: Show debug counts when roster is empty */}
-                {(adminRosterData as any)._debug && (
-                  <div className="mt-4 p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground font-mono">
-                    <p>ROSTER_DEBUG: scheduledSlots={(adminRosterData as any)._debug.scheduledSlots}, rosterStudents={(adminRosterData as any)._debug.rosterStudents}, todayLessonRecords={(adminRosterData as any)._debug.todayLessonRecords}, dayOfWeek={(adminRosterData as any)._debug.dayOfWeek}</p>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="space-y-6">
@@ -1714,14 +1738,11 @@ export default function Dashboard() {
 
       {/* ADMIN-ROSTER-DEBUG-V1: Fallback - Today's Lesson Records when roster is empty */}
       {isAdmin(role) && (adminRosterData?.teachers?.length ?? 0) === 0 && todayLessonRecordsFallback.length > 0 && (
-        <Card className="border-amber-500/30 bg-amber-500/5 animate-slide-up">
+        <Card className="border-warning/30 bg-warning/5 animate-slide-up">
           <CardHeader>
-            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-              ADMIN-ROSTER-DEBUG-V1 | FALLBACK
-            </div>
-            <CardTitle className="flex items-center gap-2 text-amber-700">
+            <CardTitle className="flex items-center gap-2 text-warning">
               <FileEdit className="w-5 h-5" />
-              오늘 작성된 수업일지 (Fallback)
+              오늘 작성된 수업일지
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1912,12 +1933,8 @@ export default function Dashboard() {
             if (hideRoster) return null;
             
             return (
-              <Card className="border-primary/30 bg-primary/5 animate-slide-up">
+              <Card className="border-primary/20 animate-slide-up">
                 <CardHeader>
-                  {/* TEACHER-HW-ALERT-V2 + FORM-WORKFLOW-REFINE-V2 markers */}
-                  <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-                    TEACHER-HW-ALERT-V2 | FORM-WORKFLOW-REFINE-V2
-                  </div>
                   <CardTitle className="flex items-center gap-2">
                     <GraduationCap className="w-5 h-5 text-primary" />
                     오늘 수업 ({todaySlots.length}개)
@@ -2085,12 +2102,6 @@ export default function Dashboard() {
                                           ))}
                                         </div>
                                       )}
-                                      {/* DASH-LATEST-TEST-TOGGLE-V1 admin debug */}
-                                      {isAdmin(role) && (
-                                        <div className="text-[10px] text-muted-foreground font-mono mt-1">
-                                          DASH-LATEST-TEST-TOGGLE-V1: count={testState.tests.length}
-                                        </div>
-                                      )}
                                     </div>
                                   )}
                                   
@@ -2135,13 +2146,10 @@ export default function Dashboard() {
 
       {/* TEACHER-HIDE-HW-PENDING-V1: Pending Homework Section - Hidden for teachers */}
       {pendingHomework.length > 0 && !isTeacher(role) && (
-        <Card className="border-blue-500/50 bg-blue-500/5 animate-slide-up">
+        <Card className="border-primary/20 animate-slide-up">
           <CardHeader>
-            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-              TEACHER-HIDE-HW-PENDING-V1
-            </div>
-            <CardTitle className="flex items-center gap-2 text-blue-600">
-              <CheckSquare className="w-5 h-5" />
+            <CardTitle className="flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-primary" />
               숙제 확인 대기 ({pendingHomework.length}건)
             </CardTitle>
           </CardHeader>
