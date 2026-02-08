@@ -88,6 +88,8 @@ const CATEGORY_OPTIONS = [
   { value: 'meeting', label: '회의', variant: 'outline' as const },
   { value: 'holiday', label: '휴강', variant: 'warning' as const },
   { value: 'event', label: '행사', variant: 'success' as const },
+  { value: 'makeup', label: '보강', variant: 'outline' as const },
+  { value: 'attendance_issue', label: '출결이슈', variant: 'destructive' as const },
 ];
 
 const VISIBILITY_OPTIONS = [
