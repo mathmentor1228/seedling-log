@@ -126,6 +126,12 @@ const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부�
 - 진도/심화/확장 등 학습 방향을 임의로 언급
 - 교사가 기록한 next_lesson_goal 외의 다음 단계를 창작
 
+**아이 이름 호칭 규칙:**
+- 학부모 메시지에서 아이 이름을 다정하게 불러주세요.
+- 한국어 호칭: 이름 뒤에 "이" (받침 있을 때) 또는 그대로 (받침 없을 때) 사용
+- 예: "세인이는", "민준이는", "도연이는", "세윤이는"
+- openingNote에서 반드시 아이 이름으로 시작하세요. 예: "세인이는 이번 주 수업에서..."
+
 **정보 출처 (Source of Truth):**
 반드시 아래 필드에서 직접 확인된 내용만 서술:
 - learning_issues_note (교사의 상세 관찰 기록)
@@ -147,7 +153,7 @@ const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부�
       "homeworkSummary": "숙제 상태 (기록된 경우만)"
     }
   ],
-  "openingNote": "학생의 수업 참여 모습 (관찰 기반)",
+  "openingNote": "아이 이름으로 시작하는 수업 참여 모습 (관찰 기반)",
   "closingNote": "교사가 기록한 다음 수업 방향 요약",
   "adminTag": "GREEN|YELLOW|RED"
 }
@@ -159,11 +165,11 @@ const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부�
 - "체계적인 접근", "맞춤형 커리큘럼" 같은 창작된 교육 전략 금지
 
 **교사 기록이 부족한 경우:**
-- 해당 과목에 대해: "이번 주에는 기본 학습 점검 위주로 수업이 진행되었습니다."
+- 해당 과목에 대해: "이번 주에는 해당 과목에서 기본 학습 점검 위주로 수업이 진행되었습니다."
 - adminTag를 YELLOW로 설정
 
 **어조 가이드:**
-- "이번 수업에서는 ~을 중심으로 진행했습니다."
+- "세인이는 이번 수업에서 ~을 중심으로 학습했습니다."
 - "수업 중에는 ~한 반응을 보였습니다."
 - "선생님은 ~한 방식으로 다시 지도했습니다."
 
@@ -194,31 +200,38 @@ const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니�
 
 [STUDENT_REPORT_TONE_V2_TEACHER_VOICE 핵심 규칙]
 
-**A) 절대 금지 - 일반 칭찬 & 포스터 언어**
+**A) 학생 이름 호칭**
+- 메시지 첫 문장에서 학생 이름을 다정하게 불러주세요.
+- 한국어 호칭 규칙: 이름 끝이 받침으로 끝나면 "~아", 받침 없이 끝나면 "~야"
+- 예: "세인아", "민준아", "도연아", "나현아", "세윤아"
+- 예: "라현아" (ㄴ 받침 → 아)
+- 메시지 중간이나 끝에서도 자연스럽게 이름을 한 번 더 불러도 좋습니다.
+
+**B) 절대 금지 - 일반 칭찬 & 포스터 언어**
 절대 사용 금지:
 - "인상적이었어", "잘했어", "화이팅", "열심히 했어", "수고했어"
 - "~해보자", "~하면 좋아요", "~도전해봅시다"
 - "할 수 있어", "응원할게", "기대할게"
 - "향상되었어", "발전했어", "성장했어"
 
-**B) 관찰 중심 구조 (과목별 2-4문장)**
+**C) 관찰 중심 구조 (과목별 2-4문장)**
 - 문장 1: 수업에서 교사가 실제로 본 구체적 행동
 - 문장 2: 학생이 어떻게 반응했는지 (태도, 어려움, 시도)
 - 문장 3 (선택): 다음 시간에 다시 볼 내용 - 차분하게
 
-**C) 교사 목소리 - 차분하고 담백하게**
+**D) 교사 목소리 - 차분하고 담백하게**
 - 동기부여 연설 ❌
 - 평가 보고서 ❌
 - 친근하지만 가볍지 않게
 
 권장 표현:
-- "이번 수업에서는 ~하는 모습이 보였어."
+- "세인아, 이번 수업에서는 ~하는 모습이 보였어."
 - "~할 때 잠시 멈칫했지만 다시 시도했어."
 - "이 부분은 다음 시간에 다시 같이 볼 거야."
 - "아직 익숙하지 않은 단계야."
 - "조금 더 시간이 필요한 부분이야."
 
-**D) 정직함 > 격려**
+**E) 정직함 > 격려**
 학생이 어려워한 부분은 솔직하게:
 - "아직 익숙하지 않은 단계야."
 - "조금 더 시간이 필요한 부분이야."
@@ -230,7 +243,7 @@ const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니�
 - 글머리 기호(·, -, •) 사용 금지
 
 [예시]
-"이번 수업에서 분수 통분할 때 공배수 찾는 부분에서 잠시 멈칫하는 모습이 보였어. 두세 번 다시 시도하면서 감을 잡아가더라. 다음 시간에 분수 나눗셈에서 '뒤집어 곱하기' 원리 다시 같이 볼 거야. 📝"
+"민준아, 이번 수업에서 분수 통분할 때 공배수 찾는 부분에서 잠시 멈칫하는 모습이 보였어. 두세 번 다시 시도하면서 감을 잡아가더라. 다음 시간에 분수 나눗셈에서 '뒤집어 곱하기' 원리 다시 같이 볼 거야. 📝"
 
 반드시 한국어로 작성하세요.`;
 
@@ -1555,7 +1568,12 @@ async function generateOpeningClosingNotes(
 
 **핵심:** 교사가 기록한 내용만 다시 표현. 추측/창작 금지.
 
-- 도입부: 학생의 수업 참여 모습 (관찰 기반)
+**아이 이름 호칭:**
+- 도입부(openingNote)에서 반드시 아이 이름을 다정하게 불러주세요.
+- 한국어 호칭: 이름 뒤에 "이" 사용 (예: "세인이는", "민준이는", "도연이는")
+- 예: "세인이는 이번 주에도 꾸준히 수업에 참여했습니다."
+
+- 도입부: 아이 이름으로 시작하는 수업 참여 모습 (관찰 기반)
 - 마무리: 교사가 기록한 next_lesson_goal 내용 요약 (없으면 일반 문구)
 
 **금지:** 
@@ -1599,7 +1617,7 @@ JSON만 출력하세요.`;
     if (!response.ok) {
       console.error('[generate-ai-report] Opening/closing notes AI error:', response.status);
       return {
-        openingNote: `${studentName} 학생의 이번 주 학습 내용을 정리했습니다.`,
+        openingNote: `${studentName}이는 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
         closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
       };
     }
@@ -1616,20 +1634,20 @@ JSON만 출력하세요.`;
     try {
       const parsed = JSON.parse(content);
       return {
-        openingNote: parsed.openingNote || `${studentName} 학생의 이번 주 학습 내용을 정리했습니다.`,
+        openingNote: parsed.openingNote || `${studentName}이는 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
         closingNote: parsed.closingNote || '다음 주도 꾸준히 학습을 이어가겠습니다.',
       };
     } catch {
       console.error('[generate-ai-report] Opening/closing notes JSON parse error');
       return {
-        openingNote: `${studentName} 학생의 이번 주 학습 내용을 정리했습니다.`,
+        openingNote: `${studentName}이는 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
         closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
       };
     }
   } catch (error) {
     console.error('[generate-ai-report] Opening/closing notes error:', error);
     return {
-      openingNote: `${studentName} 학생의 이번 주 학습 내용을 정리했습니다.`,
+      openingNote: `${studentName}이는 이번 주 수업에 참여하며 학습을 이어갔습니다.`,
       closingNote: '다음 주도 꾸준히 학습을 이어가겠습니다.',
     };
   }
@@ -1670,6 +1688,10 @@ async function generateStudentMessage(
 
 [STUDENT_REPORT_TONE_V2_TEACHER_VOICE 규칙]
 ${isRetry ? `\n⚠️ 재생성 요청: 이전 메시지에서 다음 위반 감지됨: ${lastViolations.join(', ')}\n` : ''}
+**학생 이름 호칭 (필수):**
+- 첫 문장에서 "${studentName}아" 또는 "${studentName}야"로 다정하게 불러주세요.
+- 이름 끝이 받침이면 "아", 받침 없으면 "야"
+
 **절대 금지:**
 - 일반 칭찬: "인상적이었어", "잘했어", "화이팅", "열심히 했어", "수고했어"
 - 포스터 언어: "~해보자", "~하면 좋아요", "~도전해봅시다"
@@ -1682,7 +1704,7 @@ ${isRetry ? `\n⚠️ 재생성 요청: 이전 메시지에서 다음 위반 감
 3. (선택) 다음 시간에 볼 내용
 
 **권장 표현:**
-- "이번 수업에서는 ~하는 모습이 보였어."
+- "${studentName}아, 이번 수업에서는 ~하는 모습이 보였어."
 - "~할 때 잠시 멈칫했지만 다시 시도했어."
 - "이 부분은 다음 시간에 다시 같이 볼 거야."
 - "아직 익숙하지 않은 단계야."
@@ -1768,7 +1790,7 @@ function generateFallbackStudentMessage(
   for (const [subject, data] of Object.entries(subjectData)) {
     const recentLesson = data.lessons[data.lessons.length - 1];
     if (recentLesson?.learning_issues_note && !observation) {
-      observation = `이번 ${subject} 수업에서 ${recentLesson.learning_issues_note.slice(0, 40)}하는 모습이 보였어.`;
+      observation = `${studentName}아, 이번 ${subject} 수업에서 ${recentLesson.learning_issues_note.slice(0, 40)}하는 모습이 보였어.`;
     }
     if (recentLesson?.next_lesson_goal && !nextFocus) {
       nextFocus = `다음 시간에는 ${recentLesson.next_lesson_goal} 부분 다시 같이 볼 거야.`;
@@ -1778,7 +1800,7 @@ function generateFallbackStudentMessage(
   
   // Default fallback with teacher-voice tone
   if (!observation) {
-    observation = '이번 주 수업 내용을 정리해봤어.';
+    observation = `${studentName}아, 이번 주 수업 내용을 정리해봤어.`;
   }
   if (!nextFocus) {
     nextFocus = '다음 시간에 이어서 같이 볼 거야.';
