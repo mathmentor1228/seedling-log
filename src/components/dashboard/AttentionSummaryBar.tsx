@@ -1,5 +1,5 @@
-import { AlertTriangle, Clock, CheckSquare, FileEdit, UserCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { CheckCircle2 } from 'lucide-react';
 
 interface AttentionItem {
   icon: React.ReactNode;
@@ -18,9 +18,9 @@ export function AttentionSummaryBar({ items }: AttentionSummaryBarProps) {
   
   if (activeItems.length === 0) {
     return (
-      <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+      <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-success/8 border border-success/20">
+        <CheckCircle2 className="w-5 h-5 text-success" />
+        <span className="text-sm font-medium text-success">
           모든 항목이 정상입니다
         </span>
       </div>
@@ -33,11 +33,11 @@ export function AttentionSummaryBar({ items }: AttentionSummaryBarProps) {
         <button
           key={idx}
           onClick={item.onClick}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all hover:scale-[1.02] active:scale-[0.98] ${item.color}`}
+          className={`group flex items-center gap-2 px-3.5 py-2.5 rounded-xl border transition-all duration-200 hover:scale-[1.02] hover:shadow-sm active:scale-[0.98] ${item.color}`}
         >
-          {item.icon}
+          <span className="opacity-80 group-hover:opacity-100 transition-opacity">{item.icon}</span>
           <span className="text-sm font-medium">{item.label}</span>
-          <Badge variant="secondary" className="ml-0.5 h-5 min-w-[20px] flex items-center justify-center text-xs font-bold">
+          <Badge variant="secondary" className="ml-0.5 h-5 min-w-[22px] flex items-center justify-center text-xs font-bold rounded-full">
             {item.count}
           </Badge>
         </button>
