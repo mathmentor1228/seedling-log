@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import HolidayManagement from '@/components/HolidayManagement';
 import { AssistantRequestsWidget } from '@/components/AssistantRequestsWidget';
@@ -38,7 +39,8 @@ import {
   UserCheck,
   PenLine,
   TestTube2,
-  Loader2
+  Loader2,
+  ChevronDown
 } from 'lucide-react';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
@@ -393,6 +395,12 @@ export default function Dashboard() {
   
   // TEACHER-HW-ALERT-V2: Map for acknowledged alerts to hide badges
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<Set<string>>(new Set());
+  
+  // Collapsible section states
+  const [overdueOpen, setOverdueOpen] = useState(true);
+  const [homeworkOpen, setHomeworkOpen] = useState(true);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [adminOverdueOpen, setAdminOverdueOpen] = useState(true);
   
   // ADMIN-ROSTER-DEBUG-V1: Fallback today's lesson records (grouped by teacher)
   const [todayLessonRecordsFallback, setTodayLessonRecordsFallback] = useState<{
@@ -1395,6 +1403,7 @@ export default function Dashboard() {
       label: '미제출 수업일지',
       count: teacherOverdueLessons.length,
       color: 'bg-destructive/10 border-destructive/20 text-destructive',
+      onClick: () => setOverdueOpen(prev => !prev),
     });
   }
   
@@ -1404,6 +1413,7 @@ export default function Dashboard() {
       label: '미제출 수업기록',
       count: totalOverdueDrafts,
       color: 'bg-warning/10 border-warning/20 text-warning',
+      onClick: () => setAdminOverdueOpen(prev => !prev),
     });
   }
   
@@ -1413,6 +1423,7 @@ export default function Dashboard() {
       label: '숙제 확인 대기',
       count: pendingHomework.length,
       color: 'bg-primary/10 border-primary/20 text-primary',
+      onClick: () => setHomeworkOpen(prev => !prev),
     });
   }
   
@@ -1429,6 +1440,7 @@ export default function Dashboard() {
       label: '출결 이슈',
       count: issueCount,
       color: 'bg-destructive/10 border-destructive/20 text-destructive',
+      onClick: () => setAttendanceOpen(prev => !prev),
     });
   }
 
@@ -1441,38 +1453,38 @@ export default function Dashboard() {
 
       {/* Stats Grid - Visible for admin and teacher */}
       {!isAssistant(role) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {isAdmin(role) && (
             <>
               <StatCard
                 title="전체 학생"
                 value={stats.totalStudents}
-                icon={<Users className="w-6 h-6" />}
+                icon={<Users className="w-5 h-5" />}
               />
               <StatCard
                 title="활성 클래스"
                 value={stats.totalClasses}
-                icon={<BookOpen className="w-6 h-6" />}
+                icon={<BookOpen className="w-5 h-5" />}
               />
             </>
           )}
           <StatCard
             title="이번 주 수업"
             value={stats.lessonsThisWeek}
-            icon={<ClipboardList className="w-6 h-6" />}
+            icon={<ClipboardList className="w-5 h-5" />}
           />
           <StatCard
             title="평균 이해도"
             value={stats.avgUnderstanding || '-'}
             subtitle="5점 만점"
-            icon={<TrendingUp className="w-6 h-6" />}
+            icon={<TrendingUp className="w-5 h-5" />}
           />
           {isAdmin(role) && (
             <StatCard
               title="고위험 학생"
               value={stats.highRiskStudents}
-              icon={<AlertTriangle className="w-6 h-6" />}
-              className={stats.highRiskStudents > 0 ? 'border-destructive/30' : ''}
+              icon={<AlertTriangle className="w-5 h-5" />}
+              className={stats.highRiskStudents > 0 ? 'border-destructive/30 bg-destructive/5' : ''}
             />
           )}
         </div>
@@ -1480,109 +1492,127 @@ export default function Dashboard() {
 
       {/* TEACHER-OVERDUE-WARN-V1: Teacher's own overdue lessons warning */}
       {isTeacher(role) && teacherOverdueLessons.length > 0 && (
-         <Card className="border-destructive/30 bg-destructive/5 animate-slide-up">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="w-5 h-5" />
-              미제출 수업일지 {teacherOverdueLessons.length}건 (수업일이 지났습니다)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">날짜</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">학생</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">과목</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">클래스(시간)</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">상태</th>
-                    <th className="text-left py-2 px-2 font-medium text-muted-foreground">작업</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teacherOverdueLessons.map((lesson) => (
-                    <tr key={lesson.id} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="py-2 px-2 text-muted-foreground">
-                        {format(new Date(lesson.lesson_date), 'MM/dd')}
-                      </td>
-                      <td className="py-2 px-2 font-medium">{lesson.student_name}</td>
-                      <td className="py-2 px-2">
-                        <Badge variant="outline">{lesson.subject}</Badge>
-                      </td>
-                      <td className="py-2 px-2 text-muted-foreground">
-                        {lesson.class_name}
-                        {lesson.start_time && <span className="ml-1">({lesson.start_time})</span>}
-                      </td>
-                      <td className="py-2 px-2">
-                        <Badge variant="outline" className="border-amber-500/50 text-amber-600 text-xs">
-                          <FileEdit className="w-3 h-3 mr-1" />
-                          임시저장
-                        </Badge>
-                      </td>
-                      <td className="py-2 px-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => navigate(`/lessons?student_id=${lesson.student_id}&class_id=${lesson.class_id || ''}&subject=${encodeURIComponent(lesson.subject)}&lesson_date=${lesson.lesson_date}`)}
-                        >
-                          <FileEdit className="w-3 h-3 mr-1" />
-                          지금 작성
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <Collapsible open={overdueOpen} onOpenChange={setOverdueOpen}>
+          <Card className="border-destructive/30 bg-destructive/5 animate-slide-up">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="pb-3 cursor-pointer hover:bg-destructive/5 transition-colors rounded-t-lg">
+                <CardTitle className="flex items-center justify-between text-destructive">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    미제출 수업일지 {teacherOverdueLessons.length}건
+                  </div>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${overdueOpen ? 'rotate-180' : ''}`} />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="space-y-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">날짜</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">학생</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">과목</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">클래스(시간)</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">상태</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">작업</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teacherOverdueLessons.map((lesson) => (
+                        <tr key={lesson.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="py-2 px-2 text-muted-foreground">
+                            {format(new Date(lesson.lesson_date), 'MM/dd')}
+                          </td>
+                          <td className="py-2 px-2 font-medium">{lesson.student_name}</td>
+                          <td className="py-2 px-2">
+                            <Badge variant="outline">{lesson.subject}</Badge>
+                          </td>
+                          <td className="py-2 px-2 text-muted-foreground">
+                            {lesson.class_name}
+                            {lesson.start_time && <span className="ml-1">({lesson.start_time})</span>}
+                          </td>
+                          <td className="py-2 px-2">
+                            <Badge variant="outline" className="border-amber-500/50 text-amber-600 text-xs">
+                              <FileEdit className="w-3 h-3 mr-1" />
+                              임시저장
+                            </Badge>
+                          </td>
+                          <td className="py-2 px-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => navigate(`/lessons?student_id=${lesson.student_id}&class_id=${lesson.class_id || ''}&subject=${encodeURIComponent(lesson.subject)}&lesson_date=${lesson.lesson_date}`)}
+                            >
+                              <FileEdit className="w-3 h-3 mr-1" />
+                              지금 작성
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
 
       {isAdmin(role) && totalOverdueDrafts > 0 && (
-        <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-600">
-              <Clock className="w-5 h-5" />
-              24시간 이상 미제출 수업기록 ({totalOverdueDrafts}건)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {(overdueDrafts || []).map((group) => (
-                <div key={group?.teacher_id || 'unknown'} className="border rounded-lg p-4 bg-background">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-foreground">{group?.teacher_name || '알 수 없음'}</h4>
-                    <span className="text-sm bg-amber-500/10 text-amber-600 px-2 py-1 rounded-full">
-                      {group?.count || 0}건 미제출
-                    </span>
+        <Collapsible open={adminOverdueOpen} onOpenChange={setAdminOverdueOpen}>
+          <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-amber-500/5 transition-colors rounded-t-lg">
+                <CardTitle className="flex items-center justify-between text-amber-600">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5" />
+                    24시간 이상 미제출 수업기록 ({totalOverdueDrafts}건)
                   </div>
-                  <div className="space-y-2">
-                    {(group?.drafts || []).map((draft) => (
-                      <div
-                        key={draft?.id || Math.random()}
-                        className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileEdit className="w-4 h-4 text-amber-500" />
-                          <span className="font-medium">{draft?.student_name || '알 수 없음'}</span>
-                          <span className="text-muted-foreground">{draft?.subject || '-'}</span>
-                          <span className="text-muted-foreground">
-                            {draft?.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
-                          </span>
-                        </div>
-                        <span className="text-amber-600 font-medium">
-                          {draft?.overdue_hours || 0}시간 경과
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${adminOverdueOpen ? 'rotate-180' : ''}`} />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="space-y-4">
+                  {(overdueDrafts || []).map((group) => (
+                    <div key={group?.teacher_id || 'unknown'} className="border rounded-lg p-4 bg-background">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-foreground">{group?.teacher_name || '알 수 없음'}</h4>
+                        <span className="text-sm bg-amber-500/10 text-amber-600 px-2 py-1 rounded-full">
+                          {group?.count || 0}건 미제출
                         </span>
                       </div>
-                    ))}
-                  </div>
+                      <div className="space-y-2">
+                        {(group?.drafts || []).map((draft) => (
+                          <div
+                            key={draft?.id || Math.random()}
+                            className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"
+                          >
+                            <div className="flex items-center gap-3">
+                              <FileEdit className="w-4 h-4 text-amber-500" />
+                              <span className="font-medium">{draft?.student_name || '알 수 없음'}</span>
+                              <span className="text-muted-foreground">{draft?.subject || '-'}</span>
+                              <span className="text-muted-foreground">
+                                {draft?.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
+                              </span>
+                            </div>
+                            <span className="text-amber-600 font-medium">
+                              {draft?.overdue_hours || 0}시간 경과
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
 
       {/* ADMIN-LESSON-MODAL-V1 + ADMIN-ROSTER-DEBUG-V1 - Admin Roster Section Grouped by Teacher */}
@@ -1799,68 +1829,87 @@ export default function Dashboard() {
 
       {/* Today's Attendance Overview - Admin Only */}
       {isAdmin(role) && todayAttendance.length > 0 && (
-        <Card className="animate-slide-up">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2">
-              <UserCheck className="w-5 h-5 text-primary" />
-              오늘 출결 현황 ({todayAttendance.length}건)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">학생명</th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">담당 선생님</th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">수업 시간</th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">출결 상태</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {todayAttendance.map((record) => {
-                    // Determine badge color based on attendance status
-                    const getAttendanceBadge = (status: string[] | null | undefined) => {
-                      const safeStatus = status ?? [];
-                      const hasAbsent = safeStatus.includes('무단결석') || safeStatus.includes('인정결석');
-                      const hasLateOrEarly = safeStatus.includes('지각') || safeStatus.includes('조퇴');
-                      const hasNoShow = safeStatus.includes('보충불가');
-                      
-                      if (hasAbsent || hasNoShow) {
-                        return (
-                          <Badge className="bg-red-500/15 text-red-600 border-red-500/30">
-                            {safeStatus.filter(s => s !== '정상등원').join(', ') || '정상등원'}
-                          </Badge>
-                        );
-                      } else if (hasLateOrEarly) {
-                        return (
-                          <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30">
-                            {safeStatus.filter(s => s !== '정상등원').join(', ') || '정상등원'}
-                          </Badge>
-                        );
-                      } else {
-                        return (
-                          <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                            정상등원
-                          </Badge>
-                        );
-                      }
-                    };
-                    
-                    return (
-                      <tr key={record.id} className="border-b last:border-0 hover:bg-muted/30">
-                        <td className="py-2 px-3 font-medium">{record.student_name}</td>
-                        <td className="py-2 px-3 text-muted-foreground">{record.teacher_name}</td>
-                        <td className="py-2 px-3 text-muted-foreground">{record.start_time}</td>
-                        <td className="py-2 px-3">{getAttendanceBadge(record.attendance_status)}</td>
+        <Collapsible open={attendanceOpen} onOpenChange={setAttendanceOpen}>
+          <Card className="animate-slide-up">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="pb-3 cursor-pointer hover:bg-accent/30 transition-colors rounded-t-lg">
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-5 h-5 text-primary" />
+                    오늘 출결 현황 ({todayAttendance.length}건)
+                    {todayAttendance.filter(r => {
+                      const s = r.attendance_status ?? [];
+                      return s.includes('무단결석') || s.includes('인정결석') || s.includes('보충불가') || s.includes('지각');
+                    }).length > 0 && (
+                      <Badge variant="destructive" className="text-xs">
+                        이슈 {todayAttendance.filter(r => {
+                          const s = r.attendance_status ?? [];
+                          return s.includes('무단결석') || s.includes('인정결석') || s.includes('보충불가') || s.includes('지각');
+                        }).length}건
+                      </Badge>
+                    )}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${attendanceOpen ? 'rotate-180' : ''}`} />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">학생명</th>
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">담당 선생님</th>
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">수업 시간</th>
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">출결 상태</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                    </thead>
+                    <tbody>
+                      {todayAttendance.map((record) => {
+                        const getAttendanceBadge = (status: string[] | null | undefined) => {
+                          const safeStatus = status ?? [];
+                          const hasAbsent = safeStatus.includes('무단결석') || safeStatus.includes('인정결석');
+                          const hasLateOrEarly = safeStatus.includes('지각') || safeStatus.includes('조퇴');
+                          const hasNoShow = safeStatus.includes('보충불가');
+                          
+                          if (hasAbsent || hasNoShow) {
+                            return (
+                              <Badge className="bg-red-500/15 text-red-600 border-red-500/30">
+                                {safeStatus.filter(s => s !== '정상등원').join(', ') || '정상등원'}
+                              </Badge>
+                            );
+                          } else if (hasLateOrEarly) {
+                            return (
+                              <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30">
+                                {safeStatus.filter(s => s !== '정상등원').join(', ') || '정상등원'}
+                              </Badge>
+                            );
+                          } else {
+                            return (
+                              <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                                정상등원
+                              </Badge>
+                            );
+                          }
+                        };
+                        
+                        return (
+                          <tr key={record.id} className="border-b last:border-0 hover:bg-muted/30">
+                            <td className="py-2 px-3 font-medium">{record.student_name}</td>
+                            <td className="py-2 px-3 text-muted-foreground">{record.teacher_name}</td>
+                            <td className="py-2 px-3 text-muted-foreground">{record.start_time}</td>
+                            <td className="py-2 px-3">{getAttendanceBadge(record.attendance_status)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
 
       {(isTeacher(role) || isAdmin(role) || isAssistant(role)) && (
@@ -2146,43 +2195,52 @@ export default function Dashboard() {
 
       {/* TEACHER-HIDE-HW-PENDING-V1: Pending Homework Section - Hidden for teachers */}
       {pendingHomework.length > 0 && !isTeacher(role) && (
-        <Card className="border-primary/20 animate-slide-up">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckSquare className="w-5 h-5 text-primary" />
-              숙제 확인 대기 ({pendingHomework.length}건)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {(pendingHomework || []).map((hw) => (
-                <div
-                  key={hw.id}
-                  className="flex items-center justify-between p-3 bg-background rounded-lg border"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-foreground">{hw.student_name}</span>
-                      <Badge variant="outline" className="text-xs">{hw.subject}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(hw.assigned_date), 'MM/dd')}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground truncate">{hw.content}</p>
+        <Collapsible open={homeworkOpen} onOpenChange={setHomeworkOpen}>
+          <Card className="border-primary/20 animate-slide-up">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-accent/30 transition-colors rounded-t-lg">
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5 text-primary" />
+                    숙제 확인 대기 ({pendingHomework.length}건)
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-3 shrink-0"
-                    onClick={() => navigate(`/lessons?student_id=${hw.student_id}&subject=${encodeURIComponent(hw.subject)}`)}
-                  >
-                    확인하기
-                  </Button>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${homeworkOpen ? 'rotate-180' : ''}`} />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <div className="space-y-2">
+                  {(pendingHomework || []).map((hw) => (
+                    <div
+                      key={hw.id}
+                      className="flex items-center justify-between p-3 bg-background rounded-lg border"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-foreground">{hw.student_name}</span>
+                          <Badge variant="outline" className="text-xs">{hw.subject}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(hw.assigned_date), 'MM/dd')}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground truncate">{hw.content}</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-3 shrink-0"
+                        onClick={() => navigate(`/lessons?student_id=${hw.student_id}&subject=${encodeURIComponent(hw.subject)}`)}
+                      >
+                        확인하기
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
 
       {/* Content Grid - Admin only (TEACHER-RECENT-LESSONS-REMOVED-V1: removed 최근수업 for teachers) */}
