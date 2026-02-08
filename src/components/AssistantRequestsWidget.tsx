@@ -574,10 +574,6 @@ function AssistantRequestsWidgetInner() {
   return (
     <Card className="animate-slide-up">
       <CardHeader className="pb-3">
-        {/* Marker for deployment confirmation */}
-        <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-          TEACHER-REQUEST-DETAILS-ATTACH-V1
-        </div>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <ClipboardCheck className="w-5 h-5 text-primary" />
@@ -887,11 +883,7 @@ function AssistantRequestsWidgetInner() {
         <Dialog open={detailModalOpen} onOpenChange={(open) => {
           if (!open) handleModalClose();
         }}>
-          <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
-            {/* REQUEST-MODAL-V1 marker */}
-            <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded mb-2">
-              REQUEST-MODAL-V1
-            </div>
+           <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 pr-8">
                 <MessageSquare className="w-5 h-5 text-primary" />
@@ -976,9 +968,6 @@ function AssistantRequestsWidgetInner() {
                   
                   {/* REQUEST-REPLIES-V1: Replies section */}
                   <div className="space-y-3 pt-2 border-t">
-                    <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-                      REQUEST-REPLIES-V1
-                    </div>
                     <Label className="text-muted-foreground flex items-center gap-2">
                       <MessageSquare className="w-4 h-4" />
                       답글 ({replies.length})
