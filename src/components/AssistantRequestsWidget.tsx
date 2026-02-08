@@ -25,7 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2, X, Copy, Check, MessageSquare, Send } from 'lucide-react';
+import { CalendarIcon, ClipboardCheck, Plus, ChevronRight, Loader2, X, Copy, Check, MessageSquare, Send, ShieldCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { getDueBadgeInfo, cn } from '@/lib/utils';
@@ -122,6 +122,7 @@ function AssistantRequestsWidgetInner() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   
   // Form state
@@ -407,6 +408,30 @@ function AssistantRequestsWidgetInner() {
       });
     } finally {
       setCancellingId(null);
+    }
+    };
+
+  // ADMIN-CONFIRM-DONE: Mark task as done via admin confirmation
+  const handleAdminConfirm = async (taskId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setConfirmingId(taskId);
+    try {
+      const { error } = await supabase
+        .from('assistant_tasks')
+        .update({ status: 'done' })
+        .eq('id', taskId);
+      if (error) throw error;
+      toast({ title: '원장확인 완료', description: '요청이 자동 완료 처리되었습니다.' });
+      fetchTasks();
+      // Close modal if open
+      if (selectedTask?.id === taskId) {
+        handleModalClose();
+      }
+    } catch (error: any) {
+      console.error('Error confirming task:', error);
+      toast({ title: '확인 실패', variant: 'destructive' });
+    } finally {
+      setConfirmingId(null);
     }
   };
 
@@ -778,6 +803,23 @@ function AssistantRequestsWidgetInner() {
                             )}
                           </Button>
                         )}
+                        {/* Admin: 원장확인 → auto-complete */}
+                        {isAdmin(role) && (task.status === 'todo' || task.status === 'doing') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 h-7 px-2"
+                            onClick={(e) => handleAdminConfirm(task.id, e)}
+                            disabled={confirmingId === task.id}
+                          >
+                            {confirmingId === task.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                            ) : (
+                              <ShieldCheck className="w-3 h-3 mr-1" />
+                            )}
+                            원장확인
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -992,7 +1034,24 @@ function AssistantRequestsWidgetInner() {
               </ScrollArea>
             )}
             
-            <div className="flex justify-end pt-2 border-t">
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              {/* Admin: 원장확인 in modal */}
+              {isAdmin(role) && selectedTask && (selectedTask.status === 'todo' || selectedTask.status === 'doing') && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => handleAdminConfirm(selectedTask.id)}
+                  disabled={confirmingId === selectedTask.id}
+                >
+                  {confirmingId === selectedTask.id ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4 mr-1" />
+                  )}
+                  원장확인 (완료처리)
+                </Button>
+              )}
               <DialogClose asChild>
                 <Button variant="outline" size="sm">
                   닫기
