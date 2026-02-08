@@ -356,10 +356,6 @@ export function TeacherAssistantRequestsView() {
 
   return (
     <div className="space-y-6">
-      {/* Marker for deployment confirmation */}
-      <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        TEACHER-REQUEST-DETAILS-ATTACH-V1
-      </div>
 
       <div className="flex items-center gap-3">
         <ClipboardCheck className="w-8 h-8 text-primary" />

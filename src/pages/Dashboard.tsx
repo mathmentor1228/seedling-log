@@ -5,8 +5,6 @@ import AssistantDashboard from '@/components/AssistantDashboard';
 import AdminStatsSection from '@/components/AdminStatsSection';
 import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
-import { RiskBadge } from '@/components/ui/risk-badge';
-import { ScoreBadge } from '@/components/ui/score-badge';
 import { AttentionSummaryBar, type AttentionItem } from '@/components/dashboard/AttentionSummaryBar';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -74,20 +72,7 @@ interface DashboardStats {
   highRiskStudents: number;
 }
 
-interface RecentLesson {
-  id: string;
-  student_name: string;
-  subject: string;
-  understanding_score: number;
-  lesson_date: string;
-}
-
-interface AtRiskStudent {
-  id: string;
-  name: string;
-  risk_level: 'low' | 'medium' | 'high';
-  avg_score: number;
-}
+// (Removed RecentLesson and AtRiskStudent - no longer displayed on admin dashboard)
 
 interface OverdueDraft {
   id: string;
@@ -336,8 +321,7 @@ export default function Dashboard() {
     avgUnderstanding: 0,
     highRiskStudents: 0,
   });
-  const [recentLessons, setRecentLessons] = useState<RecentLesson[]>([]);
-  const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
+  // (Removed recentLessons and atRiskStudents state - no longer displayed)
   const [todaySlots, setTodaySlots] = useState<TodaySlot[]>([]);
   const [overdueDrafts, setOverdueDrafts] = useState<GroupedOverdueDrafts[]>([]);
   const [pendingHomework, setPendingHomework] = useState<PendingHomework[]>([]);
@@ -456,37 +440,14 @@ export default function Dashboard() {
             ? lessonsData.reduce((sum, l) => sum + l.understanding_score, 0) / lessonsData.length
             : 0;
 
-          // TEACHER-RECENT-LESSONS-REMOVED-V1: Fetch recent lessons only for admin (removed for teacher)
-          let recentData: any[] = [];
-          if (isAdmin(role)) {
-            const { data } = await supabase
-              .from('lesson_records')
-              .select(`
-                id,
-                subject,
-                understanding_score,
-                lesson_date,
-                students:student_id (name)
-              `)
-              .order('lesson_date', { ascending: false })
-              .limit(5);
-            recentData = data || [];
-          }
-
-          // Fetch weekly reports for at-risk students
+          // Fetch weekly reports for high-risk student count only
           const { data: reportsData } = await supabase
             .from('weekly_reports')
-            .select(`
-              id,
-              risk_level,
-              avg_understanding,
-              students:student_id (id, name)
-            `)
-            .in('risk_level', ['medium', 'high'])
-            .order('generated_at', { ascending: false })
-            .limit(5);
+            .select('risk_level')
+            .in('risk_level', ['high'])
+            .limit(20);
 
-          const highRisk = reportsData?.filter(r => r.risk_level === 'high').length || 0;
+          const highRisk = reportsData?.length || 0;
 
           setStats({
             totalStudents: studentsCount || 0,
@@ -495,25 +456,6 @@ export default function Dashboard() {
             avgUnderstanding: Math.round(avgScore * 10) / 10,
             highRiskStudents: highRisk,
           });
-
-          setRecentLessons(
-            (recentData || []).map((l: any) => ({
-              id: l.id,
-              student_name: l.students?.name || 'Unknown',
-              subject: l.subject,
-              understanding_score: l.understanding_score,
-              lesson_date: l.lesson_date,
-            }))
-          );
-
-          setAtRiskStudents(
-            (reportsData || []).map((r: any) => ({
-              id: r.students?.id || r.id,
-              name: r.students?.name || 'Unknown',
-              risk_level: r.risk_level as 'low' | 'medium' | 'high',
-              avg_score: Number(r.avg_understanding) || 0,
-            }))
-          );
 
           // Fetch overdue drafts for admin only
           if (isAdmin(role)) {
@@ -2178,22 +2120,12 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* Admin Statistics Section - Admin Only */}
-      {isAdmin(role) && (
-        <AdminStatsSection />
-      )}
-
-      {/* Holiday Management Section - Admin Only */}
-      {isAdmin(role) && (
-        <HolidayManagement />
-      )}
-
-      {/* DASHBOARD-ASSISTANT-REQUESTS-WIDGET-V2: Assistant Requests Widget - Teacher & Admin */}
+      {/* Assistant Requests Widget - Teacher & Admin */}
       {(isAdmin(role) || isTeacher(role)) && (
         <AssistantRequestsWidget />
       )}
 
-      {/* TEACHER-HIDE-HW-PENDING-V1: Pending Homework Section - Hidden for teachers */}
+      {/* Pending Homework Section - Hidden for teachers */}
       {pendingHomework.length > 0 && !isTeacher(role) && (
         <Collapsible open={homeworkOpen} onOpenChange={setHomeworkOpen}>
           <Card className="border-primary/20 animate-slide-up">
@@ -2243,80 +2175,17 @@ export default function Dashboard() {
         </Collapsible>
       )}
 
-      {/* Content Grid - Admin only (TEACHER-RECENT-LESSONS-REMOVED-V1: removed 최근수업 for teachers) */}
+      {/* Admin Management Section */}
       {isAdmin(role) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Lessons - Admin Only */}
-          <Card className="animate-slide-up">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-primary" />
-                최근 수업
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentLessons.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">최근 수업이 없습니다</p>
-              ) : (
-                <div className="space-y-3">
-                  {(recentLessons || []).map((lesson) => (
-                    <div
-                      key={lesson.id}
-                      className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium text-foreground">{lesson.student_name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {lesson.subject} • {format(new Date(lesson.lesson_date), 'MM/dd')}
-                        </p>
-                      </div>
-                      <ScoreBadge score={lesson.understanding_score} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* At Risk Students - Admin Only */}
-          <Card className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-500" />
-                주의가 필요한 학생
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {atRiskStudents.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  위험 학생이 없습니다
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {(atRiskStudents || []).map((student) => (
-                    <div
-                      key={student.id}
-                      className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium text-foreground">{student.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          평균 점수: {student.avg_score.toFixed(1)}
-                        </p>
-                      </div>
-                      <RiskBadge level={student.risk_level} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <div className="space-y-4 pt-2">
+          <h2 className="text-lg font-semibold text-muted-foreground flex items-center gap-2">
+            <GraduationCap className="w-5 h-5" />
+            학원 관리
+          </h2>
+          <AdminStatsSection />
+          <HolidayManagement />
+          <WeeklyScheduleVerification />
         </div>
-      )}
-
-      {/* WEEKLY-SCHED-VERIFY-V1: Weekly Schedule Verification Panel - Admin Only */}
-      {isAdmin(role) && (
-        <WeeklyScheduleVerification />
       )}
 
       {/* LESSON-SHARED-FORM-V3: Unified Lesson Modal (Dashboard + Lessons use same form) */}
