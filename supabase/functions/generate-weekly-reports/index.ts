@@ -375,10 +375,10 @@ Deno.serve(async (req) => {
             const aiAdminTag = aiReportData?._debug?.admin_tag || aiReportData?.admin_tag;
             qualityTag = determineQualityTag(true, subjectCount, lessonCount, aiAdminTag);
 
-            const header = formatParentHeader(student.name, weekStart, weekEnd);
             const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=${qualityTag} validator=pass retries=${aiAttempts - 1}`;
             
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${header}\n\n${debugLine}\n\n${aiReportData.parent_message}`;
+            // parent_message from generate-ai-report already includes the header, so don't add it again
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${aiReportData.parent_message}`;
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 
