@@ -150,19 +150,24 @@ export function AcademyCalendar() {
     try {
       setLoading(true);
       
+      const today = getTodayKST();
+      const futureDate = format(addDays(getKSTDateObject(), 30), 'yyyy-MM-dd');
+      // Use KST offset (+09:00) to ensure correct timezone comparison
+      const todayStart = today + 'T00:00:00+09:00';
+      const futureEnd = futureDate + 'T23:59:59+09:00';
+      
+      // Fetch events where:
+      // 1. start_at is within range, OR
+      // 2. end_at is in the future (multi-day events that started earlier)
       let query = supabase
         .from('academy_events')
         .select('*')
+        .or(`and(start_at.gte.${todayStart},start_at.lte.${futureEnd}),and(end_at.gte.${todayStart},start_at.lte.${futureEnd})`)
         .order('start_at', { ascending: true });
       
       if (filterCategory !== 'all') {
         query = query.eq('category', filterCategory);
       }
-      
-      const today = getTodayKST();
-      const futureDate = format(addDays(getKSTDateObject(), 30), 'yyyy-MM-dd');
-      query = query.gte('start_at', today + 'T00:00:00');
-      query = query.lte('start_at', futureDate + 'T23:59:59');
       
       const { data, error } = await query;
       
@@ -420,8 +425,12 @@ export function AcademyCalendar() {
   const eventDates = events.map(e => new Date(e.start_at));
   
   // Group events by date for better readability
+  // Multi-day events appear under their start date
+  const today = getTodayKST();
   const groupedEvents = events.reduce<Record<string, AcademyEvent[]>>((acc, event) => {
-    const dateKey = format(new Date(event.start_at), 'yyyy-MM-dd');
+    const startDate = format(new Date(event.start_at), 'yyyy-MM-dd');
+    // For multi-day events that started before today, also show under today
+    const dateKey = startDate < today && event.end_at ? today : startDate;
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(event);
     return acc;
