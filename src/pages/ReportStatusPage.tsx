@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -161,7 +160,6 @@ export default function ReportStatusPage() {
 
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher']}>
-      <AppLayout>
         <div className="space-y-4">
           {/* Header */}
           <div>
@@ -255,10 +253,9 @@ export default function ReportStatusPage() {
                   </Card>
                 );
               })}
-            </div>
+        </div>
           )}
         </div>
-      </AppLayout>
     </ProtectedRoute>
   );
 }
