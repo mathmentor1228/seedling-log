@@ -14,7 +14,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2 } from 'lucide-react';
 
 interface Schedule {
   id: string;
@@ -79,6 +80,10 @@ export function VocabTestResultsPanel() {
   const [retestResult, setRetestResult] = useState<TestResult | null>(null);
   const [retestDate, setRetestDate] = useState<Date | undefined>();
   const [retestTime, setRetestTime] = useState('');
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
 
   useEffect(() => {
     fetchSchedulesAndResults();
@@ -227,7 +232,46 @@ export function VocabTestResultsPanel() {
     setRetestResult(result);
     setRetestDate(undefined);
     setRetestTime('');
+    setConflictWarning(null);
     setRetestDialogOpen(true);
+  };
+
+  // Check for schedule conflicts when retest date changes
+  const checkRetestConflict = async (date: Date) => {
+    setRetestDate(date);
+    setConflictWarning(null);
+    if (!retestResult) return;
+
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const { data: existing } = await supabase
+      .from('vocab_schedules')
+      .select('*, students(name)')
+      .eq('student_id', retestResult.student_id)
+      .eq('test_date', dateStr);
+
+    if (existing && existing.length > 0) {
+      const types = existing.map((e: any) => e.schedule_type === 'retest' ? '재시험' : '정규시험').join(', ');
+      setConflictWarning(`이 날짜에 이미 ${existing.length}건의 시험(${types})이 있습니다. 그래도 등록하시겠습니까?`);
+    }
+  };
+
+  // Delete a schedule
+  const handleDeleteSchedule = async () => {
+    if (!deleteTarget) return;
+    setSaving(true);
+
+    // Also delete any results linked to this schedule
+    await supabase.from('vocab_test_results').delete().eq('schedule_id', deleteTarget.id);
+    const { error } = await supabase.from('vocab_schedules').delete().eq('id', deleteTarget.id);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('스케줄이 삭제되었습니다');
+      fetchSchedulesAndResults();
+    }
+    setDeleteTarget(null);
+    setSaving(false);
   };
 
   const handleScheduleRetest = async () => {
@@ -397,6 +441,9 @@ export function VocabTestResultsPanel() {
                                 재시험
                               </Button>
                             )}
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(sched)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -518,7 +565,7 @@ export function VocabTestResultsPanel() {
                     <Calendar
                       mode="single"
                       selected={retestDate}
-                      onSelect={setRetestDate}
+                      onSelect={(d) => d && checkRetestConflict(d)}
                       locale={ko}
                       disabled={(d) => d < new Date()}
                     />
@@ -540,14 +587,46 @@ export function VocabTestResultsPanel() {
                 </div>
               </div>
 
+              {conflictWarning && (
+                <div className="bg-warning/10 border border-warning/30 rounded-md p-3 text-xs text-warning-foreground">
+                  ⚠️ {conflictWarning}
+                </div>
+              )}
+
               <Button onClick={handleScheduleRetest} disabled={saving || !retestDate || !retestTime} className="w-full">
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-                재시험 등록
+                {conflictWarning ? '그래도 등록' : '재시험 등록'}
               </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>스케줄 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget && (
+                <>
+                  <strong>{(deleteTarget as any).students?.name}</strong>의{' '}
+                  {deleteTarget.book_name} Day {deleteTarget.day_number} ({deleteTarget.test_date}) 시험 일정을 삭제하시겠습니까?
+                  {getResult(deleteTarget.id) && (
+                    <span className="block mt-1 text-destructive">⚠️ 입력된 시험 결과도 함께 삭제됩니다.</span>
+                  )}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteSchedule} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
