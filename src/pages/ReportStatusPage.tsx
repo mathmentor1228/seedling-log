@@ -22,6 +22,7 @@ interface ReportRow {
   student_message: string | null;
   parent_message: string | null;
   generated_at: string;
+  risk_level: string | null;
 }
 
 function stripDebugMarkers(text: string): string {
@@ -35,6 +36,28 @@ function stripDebugMarkers(text: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+const GUIDANCE_KEYWORDS = [
+  '지도 방향', '지도방향', '다음 수업', '앞으로', '계획', '목표',
+  '중점적으로', '보완', '강화', '집중', '유도', '이끌어',
+  '방향으로', '진행할', '예정', '필요합니다', '살펴볼',
+];
+
+function highlightGuidance(text: string): React.ReactNode[] {
+  if (!text) return [];
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
+    const isGuidance = GUIDANCE_KEYWORDS.some(kw => line.includes(kw));
+    return (
+      <span key={i}>
+        {isGuidance ? (
+          <span className="bg-primary/8 border-l-2 border-primary/40 pl-2 -ml-2 inline-block w-full">{line}</span>
+        ) : line}
+        {i < lines.length - 1 && '\n'}
+      </span>
+    );
+  });
 }
 
 export default function ReportStatusPage() {
@@ -68,7 +91,7 @@ export default function ReportStatusPage() {
         .from('weekly_reports')
         .select(`
           id, student_id, week_start, week_end, total_lessons,
-          student_message, parent_message, generated_at,
+          student_message, parent_message, generated_at, risk_level,
           students:student_id (name)
         `)
         .gte('week_start', weekStart)
@@ -169,36 +192,49 @@ export default function ReportStatusPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {filtered.map(r => (
-                <Card key={r.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold text-foreground">{r.student_name}</h3>
-                      <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
-                    </div>
-                    <Tabs defaultValue="parent" className="w-full">
-                      <TabsList className="grid w-full grid-cols-2 h-8">
-                        <TabsTrigger value="parent" className="text-xs">학부모용</TabsTrigger>
-                        <TabsTrigger value="student" className="text-xs">학생용</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="parent" className="mt-2">
-                        <div className="bg-muted/50 rounded-md p-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground max-h-60 overflow-y-auto">
-                          {r.parent_message
-                            ? stripDebugMarkers(r.parent_message)
-                            : <span className="text-muted-foreground">학부모 메시지가 없습니다.</span>}
+              {filtered.map(r => {
+                const isHigh = r.risk_level === 'high' || r.risk_level === 'RED';
+                const isMedium = r.risk_level === 'medium' || r.risk_level === 'YELLOW';
+                const cardBorder = isHigh
+                  ? 'border-destructive/40 bg-destructive/5'
+                  : isMedium
+                  ? 'border-warning/40 bg-warning/5'
+                  : '';
+                return (
+                  <Card key={r.id} className={cardBorder}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-foreground">{r.student_name}</h3>
+                          {isHigh && <span className="text-2xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">주의</span>}
+                          {isMedium && <span className="text-2xs px-1.5 py-0.5 rounded bg-warning/10 text-warning font-medium">관찰</span>}
                         </div>
-                      </TabsContent>
-                      <TabsContent value="student" className="mt-2">
-                        <div className="bg-muted/50 rounded-md p-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground max-h-60 overflow-y-auto">
-                          {r.student_message
-                            ? stripDebugMarkers(r.student_message)
-                            : <span className="text-muted-foreground">학생 메시지가 없습니다.</span>}
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </CardContent>
-                </Card>
-              ))}
+                        <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
+                      </div>
+                      <Tabs defaultValue="parent" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2 h-8">
+                          <TabsTrigger value="parent" className="text-xs">학부모용</TabsTrigger>
+                          <TabsTrigger value="student" className="text-xs">학생용</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="parent" className="mt-2">
+                          <div className="bg-muted/50 rounded-md p-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground max-h-60 overflow-y-auto">
+                            {r.parent_message
+                              ? highlightGuidance(stripDebugMarkers(r.parent_message))
+                              : <span className="text-muted-foreground">학부모 메시지가 없습니다.</span>}
+                          </div>
+                        </TabsContent>
+                        <TabsContent value="student" className="mt-2">
+                          <div className="bg-muted/50 rounded-md p-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground max-h-60 overflow-y-auto">
+                            {r.student_message
+                              ? highlightGuidance(stripDebugMarkers(r.student_message))
+                              : <span className="text-muted-foreground">학생 메시지가 없습니다.</span>}
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
