@@ -1,0 +1,286 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/lib/auth';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { toast } from 'sonner';
+import { Plus, Edit2, Loader2, BookOpen } from 'lucide-react';
+
+interface VocabSetting {
+  id: string;
+  student_id: string;
+  teacher_id: string;
+  book_name: string;
+  days_per_test: number;
+  cutline_percent: number;
+  test_days: string[];
+  current_day_number: number;
+  is_active: boolean;
+  notes: string | null;
+  students?: { name: string; grade: string | null; school: string | null };
+}
+
+interface Student {
+  id: string;
+  name: string;
+  grade: string | null;
+  school: string | null;
+}
+
+const TEST_DAY_OPTIONS = [
+  { value: 'mon_wed', label: '월/수' },
+  { value: 'tue_thu', label: '화/목' },
+];
+
+export function VocabSettingsPanel() {
+  const { user } = useAuth();
+  const [settings, setSettings] = useState<VocabSetting[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Form state
+  const [formStudentId, setFormStudentId] = useState('');
+  const [formBookName, setFormBookName] = useState('');
+  const [formDaysPerTest, setFormDaysPerTest] = useState(1);
+  const [formCutline, setFormCutline] = useState(80);
+  const [formTestDays, setFormTestDays] = useState('mon_wed');
+  const [formCurrentDay, setFormCurrentDay] = useState(1);
+  const [formNotes, setFormNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    const [settingsRes, studentsRes] = await Promise.all([
+      supabase
+        .from('vocab_settings')
+        .select('*, students(name, grade, school)')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('students')
+        .select('id, name, grade, school')
+        .eq('enrollment_status', '재원')
+        .order('name'),
+    ]);
+
+    if (settingsRes.data) setSettings(settingsRes.data as any);
+    if (studentsRes.data) setStudents(studentsRes.data);
+    setLoading(false);
+  };
+
+  const resetForm = () => {
+    setFormStudentId('');
+    setFormBookName('');
+    setFormDaysPerTest(1);
+    setFormCutline(80);
+    setFormTestDays('mon_wed');
+    setFormCurrentDay(1);
+    setFormNotes('');
+    setEditingId(null);
+  };
+
+  const openEdit = (s: VocabSetting) => {
+    setEditingId(s.id);
+    setFormStudentId(s.student_id);
+    setFormBookName(s.book_name);
+    setFormDaysPerTest(s.days_per_test);
+    setFormCutline(s.cutline_percent);
+    setFormTestDays(s.test_days[0] || 'mon_wed');
+    setFormCurrentDay(s.current_day_number);
+    setFormNotes(s.notes || '');
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!formStudentId || !formBookName) {
+      toast.error('학생과 교재명을 입력해주세요');
+      return;
+    }
+    setSaving(true);
+
+    const payload = {
+      student_id: formStudentId,
+      teacher_id: user?.id || '',
+      book_name: formBookName,
+      days_per_test: formDaysPerTest,
+      cutline_percent: formCutline,
+      test_days: [formTestDays],
+      current_day_number: formCurrentDay,
+      notes: formNotes || null,
+      is_active: true,
+    };
+
+    let error;
+    if (editingId) {
+      ({ error } = await supabase.from('vocab_settings').update(payload).eq('id', editingId));
+    } else {
+      ({ error } = await supabase.from('vocab_settings').insert(payload));
+    }
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(editingId ? '수정 완료' : '등록 완료');
+      setDialogOpen(false);
+      resetForm();
+      fetchData();
+    }
+    setSaving(false);
+  };
+
+  // Filter students who don't have settings yet (for new entries)
+  const availableStudents = editingId
+    ? students
+    : students.filter(s => !settings.some(st => st.student_id === s.id));
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold">학생별 단어 설정</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">교재, DAY 수, 커트라인을 학생별로 관리합니다</p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" />
+              학생 추가
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{editingId ? '설정 수정' : '단어 설정 추가'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">학생</Label>
+                <Select value={formStudentId} onValueChange={setFormStudentId} disabled={!!editingId}>
+                  <SelectTrigger><SelectValue placeholder="학생 선택" /></SelectTrigger>
+                  <SelectContent>
+                    {availableStudents.map(s => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} {s.grade ? `(${s.grade})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">교재명</Label>
+                <Input value={formBookName} onChange={e => setFormBookName(e.target.value)} placeholder="예: 워드마스터 중등" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">회당 DAY 수</Label>
+                  <Input type="number" min={1} value={formDaysPerTest} onChange={e => setFormDaysPerTest(Number(e.target.value))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">커트라인 (%)</Label>
+                  <Input type="number" min={0} max={100} value={formCutline} onChange={e => setFormCutline(Number(e.target.value))} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">시험 요일</Label>
+                  <Select value={formTestDays} onValueChange={setFormTestDays}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TEST_DAY_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">현재 DAY 번호</Label>
+                  <Input type="number" min={1} value={formCurrentDay} onChange={e => setFormCurrentDay(Number(e.target.value))} />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">메모</Label>
+                <Input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="선택 사항" />
+              </div>
+
+              <Button onClick={handleSave} disabled={saving} className="w-full">
+                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                {editingId ? '수정' : '등록'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {settings.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground text-sm">
+            <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            등록된 학생이 없습니다. 학생을 추가해주세요.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[120px]">학생</TableHead>
+                <TableHead>교재</TableHead>
+                <TableHead className="text-center w-[60px]">DAY</TableHead>
+                <TableHead className="text-center w-[70px]">커트라인</TableHead>
+                <TableHead className="text-center w-[60px]">요일</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {settings.map(s => (
+                <TableRow key={s.id}>
+                  <TableCell className="font-medium text-sm">
+                    {(s as any).students?.name || '—'}
+                    {(s as any).students?.grade && (
+                      <span className="text-xs text-muted-foreground ml-1">({(s as any).students.grade})</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm">{s.book_name}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="secondary" className="text-xs font-mono">Day {s.current_day_number}</Badge>
+                  </TableCell>
+                  <TableCell className="text-center text-sm">{s.cutline_percent}%</TableCell>
+                  <TableCell className="text-center text-xs">
+                    {s.test_days.map(d => TEST_DAY_OPTIONS.find(o => o.value === d)?.label || d).join(', ')}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+    </div>
+  );
+}
