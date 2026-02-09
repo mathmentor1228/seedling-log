@@ -1460,6 +1460,7 @@ export type Database = {
       }
       vocab_settings: {
         Row: {
+          assigned_teacher: string | null
           book_name: string
           bundle_days: boolean
           created_at: string
@@ -1476,6 +1477,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_teacher?: string | null
           book_name: string
           bundle_days?: boolean
           created_at?: string
@@ -1492,6 +1494,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_teacher?: string | null
           book_name?: string
           bundle_days?: boolean
           created_at?: string
