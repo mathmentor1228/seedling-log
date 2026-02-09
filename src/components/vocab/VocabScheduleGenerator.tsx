@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { Loader2, Wand2, Trash2 } from 'lucide-react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Loader2, Wand2, Trash2, RefreshCw } from 'lucide-react';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i),
@@ -15,96 +18,165 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => ({
 }));
 
 const DAY_MAP: Record<string, number[]> = {
-  mon_wed: [1, 3], // Monday, Wednesday
-  tue_thu: [2, 4], // Tuesday, Thursday
+  mon_wed: [1, 3],
+  tue_thu: [2, 4],
 };
+
+const TEST_DAY_LABELS: Record<string, string> = {
+  mon_wed: '월/수',
+  tue_thu: '화/목',
+};
+
+interface StudentScheduleInfo {
+  settingId: string;
+  studentId: string;
+  studentName: string;
+  grade: string | null;
+  bookName: string;
+  testDays: string;
+  currentDay: number;
+  daysPerTest: number;
+  bundleDays: boolean;
+  scheduleCount: number; // existing schedules this month
+}
 
 export function VocabScheduleGenerator() {
   const now = new Date();
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth()));
+  const [studentInfos, setStudentInfos] = useState<StudentScheduleInfo[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  // Delete confirmation
+  const [deleteMode, setDeleteMode] = useState<'selected' | 'all' | null>(null);
   const [deleteCount, setDeleteCount] = useState(0);
+  const [deleting, setDeleting] = useState(false);
 
-  const handleGenerate = async () => {
-    setGenerating(true);
+  useEffect(() => {
+    fetchStudentScheduleInfo();
+  }, [year, month]);
 
-    // Fetch all active settings
-    const { data: settings, error: settErr } = await supabase
-      .from('vocab_settings')
-      .select('*')
-      .eq('is_active', true);
+  const getMonthRange = () => {
+    const target = new Date(Number(year), Number(month), 1);
+    return {
+      start: format(startOfMonth(target), 'yyyy-MM-dd'),
+      end: format(endOfMonth(target), 'yyyy-MM-dd'),
+    };
+  };
 
-    if (settErr || !settings?.length) {
-      toast.error(settings?.length === 0 ? '활성화된 학생 설정이 없습니다' : settErr?.message || '오류');
-      setGenerating(false);
-      return;
-    }
+  const fetchStudentScheduleInfo = async () => {
+    setLoading(true);
+    const { start, end } = getMonthRange();
 
-    const targetMonth = new Date(Number(year), Number(month), 1);
-    const monthStart = startOfMonth(targetMonth);
-    const monthEnd = endOfMonth(targetMonth);
-    const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-    // Check for existing schedules in this month
-    const { data: existing } = await supabase
-      .from('vocab_schedules')
-      .select('id')
-      .gte('test_date', format(monthStart, 'yyyy-MM-dd'))
-      .lte('test_date', format(monthEnd, 'yyyy-MM-dd'));
-
-    if (existing && existing.length > 0) {
-      const confirm = window.confirm(
-        `${Number(month) + 1}월에 이미 ${existing.length}건의 스케줄이 있습니다. 기존 스케줄을 삭제하고 새로 생성할까요?`
-      );
-      if (!confirm) {
-        setGenerating(false);
-        return;
-      }
-      await supabase
+    const [settingsRes, schedulesRes] = await Promise.all([
+      supabase
+        .from('vocab_settings')
+        .select('*, students(name, grade)')
+        .eq('is_active', true)
+        .order('created_at'),
+      supabase
         .from('vocab_schedules')
-        .delete()
-        .gte('test_date', format(monthStart, 'yyyy-MM-dd'))
-        .lte('test_date', format(monthEnd, 'yyyy-MM-dd'))
-        .eq('schedule_type', 'regular');
+        .select('id, student_id')
+        .gte('test_date', start)
+        .lte('test_date', end),
+    ]);
+
+    const settings = settingsRes.data || [];
+    const schedules = schedulesRes.data || [];
+
+    // Count schedules per student
+    const countMap: Record<string, number> = {};
+    for (const s of schedules) {
+      countMap[s.student_id] = (countMap[s.student_id] || 0) + 1;
     }
 
-    // Generate schedules for each student
+    const infos: StudentScheduleInfo[] = settings.map((s: any) => ({
+      settingId: s.id,
+      studentId: s.student_id,
+      studentName: s.students?.name || '—',
+      grade: s.students?.grade || null,
+      bookName: s.book_name,
+      testDays: s.test_days?.[0] || 'mon_wed',
+      currentDay: s.current_day_number,
+      daysPerTest: s.days_per_test,
+      bundleDays: s.bundle_days || false,
+      scheduleCount: countMap[s.student_id] || 0,
+    }));
+
+    setStudentInfos(infos);
+    setSelectedIds(new Set());
+    setLoading(false);
+  };
+
+  const toggleSelect = (studentId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === studentInfos.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(studentInfos.map(s => s.studentId)));
+    }
+  };
+
+  const generateForStudents = async (targetStudentIds: string[]) => {
+    setGenerating(true);
+    const { start, end } = getMonthRange();
+    const target = new Date(Number(year), Number(month), 1);
+    const allDays = eachDayOfInterval({ start: startOfMonth(target), end: endOfMonth(target) });
+
+    const targetSettings = studentInfos.filter(s => targetStudentIds.includes(s.studentId));
+
+    // Delete existing regular schedules for these students in this month
+    for (const info of targetSettings) {
+      const { data: existingIds } = await supabase
+        .from('vocab_schedules')
+        .select('id')
+        .eq('student_id', info.studentId)
+        .eq('schedule_type', 'regular')
+        .gte('test_date', start)
+        .lte('test_date', end);
+
+      if (existingIds && existingIds.length > 0) {
+        await supabase.from('vocab_test_results').delete().in('schedule_id', existingIds.map(s => s.id));
+        await supabase.from('vocab_schedules').delete().in('id', existingIds.map(s => s.id));
+      }
+    }
+
+    // Generate new schedules
     const inserts: any[] = [];
-
-    for (const setting of settings) {
-      const testDayKey = setting.test_days[0] || 'mon_wed';
-      const allowedDays = DAY_MAP[testDayKey] || [1, 3];
+    for (const info of targetSettings) {
+      const allowedDays = DAY_MAP[info.testDays] || [1, 3];
       const testDates = allDays.filter(d => allowedDays.includes(getDay(d)));
-
-      let dayNumber = setting.current_day_number;
-      const bundleDays = (setting as any).bundle_days || false;
+      let dayNumber = info.currentDay;
 
       for (const testDate of testDates) {
-        if (bundleDays) {
-          // Bundle: one schedule entry covering multiple days
-          const startDay = dayNumber;
-          const endDay = dayNumber + setting.days_per_test - 1;
+        if (info.bundleDays) {
           inserts.push({
-            student_id: setting.student_id,
-            setting_id: setting.id,
+            student_id: info.studentId,
+            setting_id: info.settingId,
             test_date: format(testDate, 'yyyy-MM-dd'),
-            day_number: startDay,
-            book_name: setting.book_name,
+            day_number: dayNumber,
+            book_name: info.bookName,
             schedule_type: 'regular',
           });
-          dayNumber += setting.days_per_test;
+          dayNumber += info.daysPerTest;
         } else {
-          // Individual: separate schedule entry per day
-          for (let i = 0; i < setting.days_per_test; i++) {
+          for (let i = 0; i < info.daysPerTest; i++) {
             inserts.push({
-              student_id: setting.student_id,
-              setting_id: setting.id,
+              student_id: info.studentId,
+              setting_id: info.settingId,
               test_date: format(testDate, 'yyyy-MM-dd'),
               day_number: dayNumber,
-              book_name: setting.book_name,
+              book_name: info.bookName,
               schedule_type: 'regular',
             });
             dayNumber++;
@@ -120,132 +192,228 @@ export function VocabScheduleGenerator() {
     }
 
     const { error } = await supabase.from('vocab_schedules').insert(inserts);
-
     if (error) {
       toast.error(error.message);
     } else {
       toast.success(`${inserts.length}건의 스케줄이 생성되었습니다`);
     }
+    await fetchStudentScheduleInfo();
     setGenerating(false);
   };
 
-  const handleDeleteMonth = async () => {
-    const targetMonth = new Date(Number(year), Number(month), 1);
-    const monthStart = startOfMonth(targetMonth);
-    const monthEnd = endOfMonth(targetMonth);
+  const openDeleteConfirm = async (mode: 'selected' | 'all') => {
+    const { start, end } = getMonthRange();
+    const targetIds = mode === 'all'
+      ? studentInfos.map(s => s.studentId)
+      : Array.from(selectedIds);
 
-    // Count first
-    const { data: existing } = await supabase
-      .from('vocab_schedules')
-      .select('id')
-      .gte('test_date', format(monthStart, 'yyyy-MM-dd'))
-      .lte('test_date', format(monthEnd, 'yyyy-MM-dd'));
-
-    if (!existing || existing.length === 0) {
-      toast.info('해당 월에 삭제할 스케줄이 없습니다');
+    if (targetIds.length === 0) {
+      toast.info('학생을 선택해주세요');
       return;
     }
-    setDeleteCount(existing.length);
-    setDeleteConfirmOpen(true);
+
+    const { data } = await supabase
+      .from('vocab_schedules')
+      .select('id')
+      .in('student_id', targetIds)
+      .gte('test_date', start)
+      .lte('test_date', end);
+
+    if (!data || data.length === 0) {
+      toast.info('삭제할 스케줄이 없습니다');
+      return;
+    }
+
+    setDeleteCount(data.length);
+    setDeleteMode(mode);
   };
 
-  const confirmDeleteMonth = async () => {
+  const confirmDelete = async () => {
     setDeleting(true);
-    const targetMonth = new Date(Number(year), Number(month), 1);
-    const monthStart = startOfMonth(targetMonth);
-    const monthEnd = endOfMonth(targetMonth);
-    const startStr = format(monthStart, 'yyyy-MM-dd');
-    const endStr = format(monthEnd, 'yyyy-MM-dd');
+    const { start, end } = getMonthRange();
+    const targetIds = deleteMode === 'all'
+      ? studentInfos.map(s => s.studentId)
+      : Array.from(selectedIds);
 
-    // Delete results linked to these schedules first
     const { data: schedIds } = await supabase
       .from('vocab_schedules')
       .select('id')
-      .gte('test_date', startStr)
-      .lte('test_date', endStr);
+      .in('student_id', targetIds)
+      .gte('test_date', start)
+      .lte('test_date', end);
 
     if (schedIds && schedIds.length > 0) {
       await supabase.from('vocab_test_results').delete().in('schedule_id', schedIds.map(s => s.id));
+      await supabase.from('vocab_schedules').delete().in('id', schedIds.map(s => s.id));
     }
 
-    const { error } = await supabase
-      .from('vocab_schedules')
-      .delete()
-      .gte('test_date', startStr)
-      .lte('test_date', endStr);
-
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`${deleteCount}건의 스케줄이 삭제되었습니다`);
-    }
-    setDeleteConfirmOpen(false);
+    toast.success(`${deleteCount}건의 스케줄이 삭제되었습니다`);
+    setDeleteMode(null);
     setDeleting(false);
+    await fetchStudentScheduleInfo();
   };
 
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-          <Wand2 className="w-4 h-4" />
-          월별 스케줄 자동 생성
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-end gap-3 flex-wrap">
-          <div className="space-y-1.5">
-            <Label className="text-xs">년도</Label>
-            <Select value={year} onValueChange={setYear}>
-              <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={String(now.getFullYear())}>{now.getFullYear()}</SelectItem>
-                <SelectItem value={String(now.getFullYear() + 1)}>{now.getFullYear() + 1}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">월</Label>
-            <Select value={month} onValueChange={setMonth}>
-              <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MONTHS.map(m => (
-                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={handleGenerate} disabled={generating} size="sm">
-            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Wand2 className="w-3.5 h-3.5 mr-1.5" />}
-            생성
-          </Button>
-          <Button onClick={handleDeleteMonth} disabled={deleting} variant="outline" size="sm" className="text-destructive hover:text-destructive">
-            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
-            월 스케줄 삭제
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          활성 학생의 시험 요일에 맞춰 해당 월 전체 스케줄을 자동 생성합니다
-        </p>
+  const allSelected = studentInfos.length > 0 && selectedIds.size === studentInfos.length;
+  const someSelected = selectedIds.size > 0;
 
-        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>월 스케줄 전체 삭제</AlertDialogTitle>
-              <AlertDialogDescription>
-                {Number(month) + 1}월의 <strong>{deleteCount}건</strong>의 스케줄을 모두 삭제하시겠습니까?
-                <span className="block mt-1 text-destructive">⚠️ 연결된 시험 결과도 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</span>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>취소</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDeleteMonth} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-                삭제
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </CardContent>
-    </Card>
+  return (
+    <div className="space-y-4">
+      {/* Controls */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+            <Wand2 className="w-4 h-4" />
+            스케줄 생성 / 삭제
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="space-y-1.5">
+              <Label className="text-xs">년도</Label>
+              <Select value={year} onValueChange={setYear}>
+                <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={String(now.getFullYear())}>{now.getFullYear()}</SelectItem>
+                  <SelectItem value={String(now.getFullYear() + 1)}>{now.getFullYear() + 1}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">월</Label>
+              <Select value={month} onValueChange={setMonth}>
+                <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={fetchStudentScheduleInfo} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              disabled={generating || !someSelected}
+              onClick={() => generateForStudents(Array.from(selectedIds))}
+            >
+              {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Wand2 className="w-3.5 h-3.5 mr-1.5" />}
+              선택 학생 생성
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={generating}
+              onClick={() => generateForStudents(studentInfos.map(s => s.studentId))}
+            >
+              {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Wand2 className="w-3.5 h-3.5 mr-1.5" />}
+              전체 생성
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              disabled={deleting || !someSelected}
+              onClick={() => openDeleteConfirm('selected')}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              선택 삭제
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              disabled={deleting}
+              onClick={() => openDeleteConfirm('all')}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              전체 삭제
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Student list */}
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : studentInfos.length === 0 ? (
+        <Card>
+          <CardContent className="py-6 text-center text-muted-foreground text-sm">
+            활성화된 학생 설정이 없습니다. '학생 설정' 탭에서 먼저 추가해주세요.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[40px]">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
+                </TableHead>
+                <TableHead>학생</TableHead>
+                <TableHead>교재</TableHead>
+                <TableHead className="text-center">요일</TableHead>
+                <TableHead className="text-center">시작 DAY</TableHead>
+                <TableHead className="text-center">{Number(month) + 1}월 스케줄</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {studentInfos.map(info => (
+                <TableRow key={info.studentId}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedIds.has(info.studentId)}
+                      onCheckedChange={() => toggleSelect(info.studentId)}
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium text-sm">
+                    {info.studentName}
+                    {info.grade && <span className="text-xs text-muted-foreground ml-1">({info.grade})</span>}
+                  </TableCell>
+                  <TableCell className="text-sm">{info.bookName}</TableCell>
+                  <TableCell className="text-center text-xs">{TEST_DAY_LABELS[info.testDays] || info.testDays}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="secondary" className="text-xs font-mono">Day {info.currentDay}</Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {info.scheduleCount > 0 ? (
+                      <Badge variant="outline" className="text-xs">{info.scheduleCount}건</Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">없음</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteMode} onOpenChange={(open) => !open && setDeleteMode(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>스케줄 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteMode === 'all' ? '전체' : `선택된 ${selectedIds.size}명`} 학생의 {Number(month) + 1}월 스케줄 <strong>{deleteCount}건</strong>을 삭제하시겠습니까?
+              <span className="block mt-1 text-destructive">⚠️ 연결된 시험 결과도 함께 삭제됩니다.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
