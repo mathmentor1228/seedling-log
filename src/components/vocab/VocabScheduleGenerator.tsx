@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { Loader2, Wand2, Trash2, RefreshCw } from 'lucide-react';
+import { Loader2, Wand2, Trash2, RefreshCw, Plus } from 'lucide-react';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i),
@@ -39,6 +41,7 @@ interface StudentScheduleInfo {
   bundleDays: boolean;
   totalDays: number | null;
   teacherId: string;
+  assignedTeacher: string | null;
   scheduleCount: number;
 }
 
@@ -50,8 +53,14 @@ export function VocabScheduleGenerator() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [teacherMap, setTeacherMap] = useState<Record<string, string>>({});
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
+
+  // Guerrilla test dialog
+  const [guerrillaOpen, setGuerrillaOpen] = useState(false);
+  const [guerrillaStudentId, setGuerrillaStudentId] = useState('');
+  const [guerrillaDate, setGuerrillaDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [guerrillaDayNumber, setGuerrillaDayNumber] = useState(1);
+  const [guerrillaSaving, setGuerrillaSaving] = useState(false);
 
   // Hardcoded teacher categories
   const TEACHER_CATEGORIES = [
@@ -114,20 +123,9 @@ export function VocabScheduleGenerator() {
       bundleDays: s.bundle_days || false,
       totalDays: s.total_days || null,
       teacherId: s.teacher_id,
+      assignedTeacher: s.assigned_teacher || null,
       scheduleCount: countMap[s.student_id] || 0,
     }));
-
-    // Build teacher name map for display
-    const teacherIds = new Set(infos.map(i => i.teacherId));
-    if (teacherIds.size > 0) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', Array.from(teacherIds));
-      const map: Record<string, string> = {};
-      (profiles || []).forEach(p => { map[p.id] = p.full_name; });
-      setTeacherMap(map);
-    }
 
     setStudentInfos(infos);
     setSelectedIds(new Set());
@@ -298,15 +296,10 @@ export function VocabScheduleGenerator() {
     await fetchStudentScheduleInfo();
   };
 
-  // Filter by teacher category
+  // Filter by teacher category using assigned_teacher field
   const displayInfos = selectedTeacher === 'all'
     ? studentInfos
-    : studentInfos.filter(s => {
-        const tName = teacherMap[s.teacherId] || '';
-        if (selectedTeacher === 'seo') return tName.includes('서미정');
-        if (selectedTeacher === 'kim') return tName.includes('김민희');
-        return false;
-      });
+    : studentInfos.filter(s => s.assignedTeacher === selectedTeacher);
 
   const allSelected = displayInfos.length > 0 && displayInfos.every(s => selectedIds.has(s.studentId));
   const someSelected = selectedIds.size > 0;
@@ -400,6 +393,14 @@ export function VocabScheduleGenerator() {
               <Trash2 className="w-3.5 h-3.5 mr-1.5" />
               전체 삭제
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setGuerrillaOpen(true)}
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              게릴라 시험 추가
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -423,6 +424,7 @@ export function VocabScheduleGenerator() {
                 <TableHead className="w-[40px]">
                   <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
                 </TableHead>
+                <TableHead>선생님</TableHead>
                 <TableHead>학생</TableHead>
                 <TableHead>교재</TableHead>
                 <TableHead className="text-center">요일</TableHead>
@@ -439,6 +441,9 @@ export function VocabScheduleGenerator() {
                       checked={selectedIds.has(info.studentId)}
                       onCheckedChange={() => toggleSelect(info.studentId)}
                     />
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {info.assignedTeacher === 'seo' ? '서미정' : info.assignedTeacher === 'kim' ? '김민희' : '—'}
                   </TableCell>
                   <TableCell className="font-medium text-sm">
                     {info.studentName}
@@ -485,6 +490,77 @@ export function VocabScheduleGenerator() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Guerrilla test dialog */}
+      <Dialog open={guerrillaOpen} onOpenChange={(o) => { setGuerrillaOpen(o); if (!o) { setGuerrillaStudentId(''); setGuerrillaDayNumber(1); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>게릴라 시험 추가</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">학생</Label>
+              <Select value={guerrillaStudentId} onValueChange={(v) => {
+                setGuerrillaStudentId(v);
+                const info = studentInfos.find(s => s.studentId === v);
+                if (info) setGuerrillaDayNumber(info.currentDay);
+              }}>
+                <SelectTrigger><SelectValue placeholder="학생 선택" /></SelectTrigger>
+                <SelectContent>
+                  {studentInfos.map(s => (
+                    <SelectItem key={s.studentId} value={s.studentId}>
+                      {s.studentName} {s.grade ? `(${s.grade})` : ''} — {s.bookName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">시험 날짜</Label>
+                <Input type="date" value={guerrillaDate} onChange={e => setGuerrillaDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">DAY 번호</Label>
+                <Input type="number" min={1} value={guerrillaDayNumber} onChange={e => setGuerrillaDayNumber(Number(e.target.value))} />
+              </div>
+            </div>
+            <Button
+              className="w-full"
+              disabled={guerrillaSaving || !guerrillaStudentId || !guerrillaDate}
+              onClick={async () => {
+                setGuerrillaSaving(true);
+                const info = studentInfos.find(s => s.studentId === guerrillaStudentId);
+                if (!info) { toast.error('학생 정보를 찾을 수 없습니다'); setGuerrillaSaving(false); return; }
+                if (info.totalDays && guerrillaDayNumber > info.totalDays) {
+                  toast.error(`총 일차(${info.totalDays})를 초과할 수 없습니다`);
+                  setGuerrillaSaving(false);
+                  return;
+                }
+                const { error } = await supabase.from('vocab_schedules').insert({
+                  student_id: info.studentId,
+                  setting_id: info.settingId,
+                  test_date: guerrillaDate,
+                  day_number: guerrillaDayNumber,
+                  book_name: info.bookName,
+                  schedule_type: 'guerrilla',
+                });
+                if (error) { toast.error(error.message); }
+                else {
+                  toast.success(`게릴라 시험 추가 완료 (Day ${guerrillaDayNumber})`);
+                  setGuerrillaOpen(false);
+                  setGuerrillaStudentId('');
+                  fetchStudentScheduleInfo();
+                }
+                setGuerrillaSaving(false);
+              }}
+            >
+              {guerrillaSaving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              추가
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

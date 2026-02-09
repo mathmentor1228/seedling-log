@@ -13,6 +13,11 @@ import { toast } from 'sonner';
 import { Plus, Edit2, Loader2, BookOpen } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
+const TEACHER_OPTIONS = [
+  { value: 'seo', label: '서미정' },
+  { value: 'kim', label: '김민희' },
+];
+
 interface VocabSetting {
   id: string;
   student_id: string;
@@ -26,6 +31,7 @@ interface VocabSetting {
   bundle_days: boolean;
   total_days: number | null;
   notes: string | null;
+  assigned_teacher: string | null;
   students?: { name: string; grade: string | null; school: string | null };
 }
 
@@ -59,6 +65,7 @@ export function VocabSettingsPanel() {
   const [formBundleDays, setFormBundleDays] = useState(false);
   const [formTotalDays, setFormTotalDays] = useState<number | ''>('');
   const [formNotes, setFormNotes] = useState('');
+  const [formAssignedTeacher, setFormAssignedTeacher] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -94,6 +101,7 @@ export function VocabSettingsPanel() {
     setFormBundleDays(false);
     setFormTotalDays('');
     setFormNotes('');
+    setFormAssignedTeacher('');
     setEditingId(null);
   };
 
@@ -108,12 +116,13 @@ export function VocabSettingsPanel() {
     setFormBundleDays(s.bundle_days);
     setFormTotalDays(s.total_days || '');
     setFormNotes(s.notes || '');
+    setFormAssignedTeacher(s.assigned_teacher || '');
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!formStudentId || !formBookName) {
-      toast.error('학생과 교재명을 입력해주세요');
+    if (!formStudentId || !formBookName || !formAssignedTeacher) {
+      toast.error('학생, 교재명, 담당 선생님을 입력해주세요');
       return;
     }
     setSaving(true);
@@ -130,6 +139,7 @@ export function VocabSettingsPanel() {
       total_days: formTotalDays ? Number(formTotalDays) : null,
       notes: formNotes || null,
       is_active: true,
+      assigned_teacher: formAssignedTeacher,
     };
 
     let error;
@@ -196,9 +206,22 @@ export function VocabSettingsPanel() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">교재명</Label>
-                <Input value={formBookName} onChange={e => setFormBookName(e.target.value)} placeholder="예: 워드마스터 중등" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">담당 선생님</Label>
+                  <Select value={formAssignedTeacher} onValueChange={setFormAssignedTeacher}>
+                    <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {TEACHER_OPTIONS.map(t => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">교재명</Label>
+                  <Input value={formBookName} onChange={e => setFormBookName(e.target.value)} placeholder="예: 워드마스터 중등" />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -280,6 +303,7 @@ export function VocabSettingsPanel() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[80px]">선생님</TableHead>
                 <TableHead className="w-[120px]">학생</TableHead>
                 <TableHead>교재</TableHead>
                 <TableHead className="text-center w-[60px]">DAY</TableHead>
@@ -293,6 +317,9 @@ export function VocabSettingsPanel() {
             <TableBody>
               {settings.map(s => (
                 <TableRow key={s.id}>
+                  <TableCell className="text-xs">
+                    {TEACHER_OPTIONS.find(t => t.value === s.assigned_teacher)?.label || '—'}
+                  </TableCell>
                   <TableCell className="font-medium text-sm">
                     {(s as any).students?.name || '—'}
                     {(s as any).students?.grade && (
