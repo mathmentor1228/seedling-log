@@ -47,6 +47,7 @@ const navItems: NavItem[] = [
   { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
   { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
   { label: '리포트 발송', href: '/reports/send', icon: <Send className="w-4 h-4" />, adminOnly: true },
+  { label: '발송 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
   { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
   { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
   { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
