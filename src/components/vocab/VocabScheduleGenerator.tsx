@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { Loader2, Wand2 } from 'lucide-react';
+import { Loader2, Wand2, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i),
@@ -23,6 +24,9 @@ export function VocabScheduleGenerator() {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth()));
   const [generating, setGenerating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteCount, setDeleteCount] = useState(0);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -125,6 +129,60 @@ export function VocabScheduleGenerator() {
     setGenerating(false);
   };
 
+  const handleDeleteMonth = async () => {
+    const targetMonth = new Date(Number(year), Number(month), 1);
+    const monthStart = startOfMonth(targetMonth);
+    const monthEnd = endOfMonth(targetMonth);
+
+    // Count first
+    const { data: existing } = await supabase
+      .from('vocab_schedules')
+      .select('id')
+      .gte('test_date', format(monthStart, 'yyyy-MM-dd'))
+      .lte('test_date', format(monthEnd, 'yyyy-MM-dd'));
+
+    if (!existing || existing.length === 0) {
+      toast.info('해당 월에 삭제할 스케줄이 없습니다');
+      return;
+    }
+    setDeleteCount(existing.length);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteMonth = async () => {
+    setDeleting(true);
+    const targetMonth = new Date(Number(year), Number(month), 1);
+    const monthStart = startOfMonth(targetMonth);
+    const monthEnd = endOfMonth(targetMonth);
+    const startStr = format(monthStart, 'yyyy-MM-dd');
+    const endStr = format(monthEnd, 'yyyy-MM-dd');
+
+    // Delete results linked to these schedules first
+    const { data: schedIds } = await supabase
+      .from('vocab_schedules')
+      .select('id')
+      .gte('test_date', startStr)
+      .lte('test_date', endStr);
+
+    if (schedIds && schedIds.length > 0) {
+      await supabase.from('vocab_test_results').delete().in('schedule_id', schedIds.map(s => s.id));
+    }
+
+    const { error } = await supabase
+      .from('vocab_schedules')
+      .delete()
+      .gte('test_date', startStr)
+      .lte('test_date', endStr);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`${deleteCount}건의 스케줄이 삭제되었습니다`);
+    }
+    setDeleteConfirmOpen(false);
+    setDeleting(false);
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -134,7 +192,7 @@ export function VocabScheduleGenerator() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-3 flex-wrap">
           <div className="space-y-1.5">
             <Label className="text-xs">년도</Label>
             <Select value={year} onValueChange={setYear}>
@@ -160,10 +218,33 @@ export function VocabScheduleGenerator() {
             {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Wand2 className="w-3.5 h-3.5 mr-1.5" />}
             생성
           </Button>
+          <Button onClick={handleDeleteMonth} disabled={deleting} variant="outline" size="sm" className="text-destructive hover:text-destructive">
+            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+            월 스케줄 삭제
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
           활성 학생의 시험 요일에 맞춰 해당 월 전체 스케줄을 자동 생성합니다
         </p>
+
+        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>월 스케줄 전체 삭제</AlertDialogTitle>
+              <AlertDialogDescription>
+                {Number(month) + 1}월의 <strong>{deleteCount}건</strong>의 스케줄을 모두 삭제하시겠습니까?
+                <span className="block mt-1 text-destructive">⚠️ 연결된 시험 결과도 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>취소</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDeleteMonth} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                삭제
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
