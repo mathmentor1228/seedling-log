@@ -82,14 +82,14 @@ interface AcademyEvent {
 }
 
 const CATEGORY_OPTIONS = [
-  { value: 'general', label: '일반', variant: 'secondary' as const },
-  { value: 'notice', label: '공지', variant: 'default' as const },
-  { value: 'exam', label: '시험', variant: 'destructive' as const },
-  { value: 'meeting', label: '회의', variant: 'outline' as const },
-  { value: 'holiday', label: '휴강', variant: 'warning' as const },
-  { value: 'event', label: '행사', variant: 'success' as const },
-  { value: 'makeup', label: '보강', variant: 'outline' as const },
-  { value: 'attendance_issue', label: '출결이슈', variant: 'destructive' as const },
+  { value: 'general', label: '일반', variant: 'secondary' as const, color: 'bg-slate-400' },
+  { value: 'notice', label: '공지', variant: 'default' as const, color: 'bg-blue-500' },
+  { value: 'exam', label: '시험', variant: 'destructive' as const, color: 'bg-red-500' },
+  { value: 'meeting', label: '회의', variant: 'outline' as const, color: 'bg-purple-500' },
+  { value: 'holiday', label: '휴강', variant: 'warning' as const, color: 'bg-amber-500' },
+  { value: 'event', label: '행사', variant: 'success' as const, color: 'bg-emerald-500' },
+  { value: 'makeup', label: '보강', variant: 'outline' as const, color: 'bg-cyan-500' },
+  { value: 'attendance_issue', label: '출결이슈', variant: 'destructive' as const, color: 'bg-orange-500' },
 ];
 
 const VISIBILITY_OPTIONS = [
@@ -402,10 +402,14 @@ export function AcademyCalendar() {
     const option = CATEGORY_OPTIONS.find(o => o.value === category);
     if (!option) return null;
     return (
-      <Badge variant={option.variant}>
+      <Badge variant={option.variant} className="text-[10px] px-1.5 py-0 leading-4">
         {option.label}
       </Badge>
     );
+  }
+
+  function getCategoryColor(category: string) {
+    return CATEGORY_OPTIONS.find(o => o.value === category)?.color || 'bg-slate-400';
   }
 
   function isImageType(mimeType: string | null): boolean {
@@ -415,90 +419,94 @@ export function AcademyCalendar() {
   // Get dates with events for calendar dots
   const eventDates = events.map(e => new Date(e.start_at));
   
-  // Filter events for list view
-  const announcements = events.filter(e => e.is_announcement || e.category === 'notice');
-  const upcomingEvents = events.filter(e => !e.is_announcement && e.category !== 'notice');
-  
-  // Sort: pinned first, then by date
-  const sortedAnnouncements = [...announcements].sort((a, b) => {
-    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
-  });
+  // Group events by date for better readability
+  const groupedEvents = events.reduce<Record<string, AcademyEvent[]>>((acc, event) => {
+    const dateKey = format(new Date(event.start_at), 'yyyy-MM-dd');
+    if (!acc[dateKey]) acc[dateKey] = [];
+    acc[dateKey].push(event);
+    return acc;
+  }, {});
 
-  function renderEventCard(event: AcademyEvent, isAnnouncement: boolean = false) {
+  // Sort dates
+  const sortedDateKeys = Object.keys(groupedEvents).sort();
+
+  // Pinned announcements (shown at top)
+  const pinnedAnnouncements = events.filter(e => e.pinned || (e.is_announcement && e.category === 'notice'));
+  const regularDateKeys = sortedDateKeys; // all dates shown in groups
+
+  function renderEventRow(event: AcademyEvent, showDate: boolean = false) {
     const hasPosters = (event.attachments || []).length > 0;
+    const eventDate = new Date(event.start_at);
+    const isToday = format(eventDate, 'yyyy-MM-dd') === getTodayKST();
     
     return (
       <div 
         key={event.id}
-        className={`p-3 rounded-lg border ${isAnnouncement ? 'bg-blue-500/5 border-blue-500/20' : 'bg-secondary/50'}`}
+        className={`flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors hover:bg-accent/50 ${
+          event.pinned ? 'bg-blue-500/5' : ''
+        }`}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              {event.pinned && <Pin className="w-4 h-4 text-blue-500" />}
-              <span className="font-medium">{event.title}</span>
-              {getCategoryBadge(event.category)}
-              {hasPosters && (
-                <Badge variant="outline" className="text-xs gap-1">
-                  <Image className="w-3 h-3" />
-                  {event.attachments?.length}
-                </Badge>
-              )}
-            </div>
-            {event.description && (
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                {event.description}
-              </p>
-            )}
-            
-            {/* Poster thumbnails */}
+        {/* Color bar */}
+        <div className={`w-1 self-stretch rounded-full shrink-0 mt-0.5 ${getCategoryColor(event.category)}`} />
+        
+        {/* Time column */}
+        <div className="w-14 shrink-0 text-center pt-0.5">
+          {event.all_day ? (
+            <span className="text-[11px] font-medium text-muted-foreground">종일</span>
+          ) : (
+            <span className="text-sm font-mono font-medium tabular-nums">
+              {format(eventDate, 'HH:mm')}
+            </span>
+          )}
+        </div>
+        
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {event.pinned && <Pin className="w-3 h-3 text-blue-500 shrink-0" />}
+            <span className="font-medium text-sm leading-tight">{event.title}</span>
+            {getCategoryBadge(event.category)}
             {hasPosters && (
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {event.attachments?.filter(a => isImageType(a.mime_type)).slice(0, 3).map(att => (
-                  <PosterThumbnail key={att.id} attachment={att} onClick={() => handleDownloadPoster(att)} />
-                ))}
-                {(event.attachments?.filter(a => isImageType(a.mime_type)).length || 0) > 3 && (
-                  <span className="text-xs text-muted-foreground self-end">
-                    +{(event.attachments?.filter(a => isImageType(a.mime_type)).length || 0) - 3}
-                  </span>
-                )}
-              </div>
-            )}
-            
-            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-              <span>
-                {format(new Date(event.start_at), event.all_day ? 'M/d (EEE)' : 'M/d (EEE) HH:mm', { locale: ko })}
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                <Image className="w-3 h-3" />
+                {event.attachments?.length}
               </span>
-              {event.location && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {event.location}
-                </span>
-              )}
+            )}
+          </div>
+          {event.description && (
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+              {event.description}
+            </p>
+          )}
+          {event.location && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
+              <MapPin className="w-3 h-3" />
+              {event.location}
+            </span>
+          )}
+          
+          {/* Poster thumbnails */}
+          {hasPosters && (
+            <div className="flex gap-1.5 mt-1.5">
+              {event.attachments?.filter(a => isImageType(a.mime_type)).slice(0, 3).map(att => (
+                <PosterThumbnail key={att.id} attachment={att} onClick={() => handleDownloadPoster(att)} />
+              ))}
             </div>
-          </div>
-          <div className="flex gap-1">
-            {/* Edit posters button (admin/assistant only) */}
-            {canUploadPosters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { setEditEvent(event); setEditDialogOpen(true); }}
-              >
-                <Image className="w-4 h-4 text-muted-foreground" />
-              </Button>
-            )}
-            {(isAdmin || event.created_by === user?.id) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDeleteEvent(event.id)}
-              >
-                <Trash2 className="w-4 h-4 text-destructive" />
-              </Button>
-            )}
-          </div>
+          )}
+        </div>
+        
+        {/* Actions */}
+        <div className="flex gap-0.5 shrink-0">
+          {canUploadPosters && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditEvent(event); setEditDialogOpen(true); }}>
+              <Image className="w-3.5 h-3.5 text-muted-foreground" />
+            </Button>
+          )}
+          {(isAdmin || event.created_by === user?.id) && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteEvent(event.id)}>
+              <Trash2 className="w-3.5 h-3.5 text-destructive" />
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -514,8 +522,8 @@ export function AcademyCalendar() {
                 {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
                 <CalendarDays className="w-4 h-4 text-muted-foreground" />
                 <span>원내 일정</span>
-                {upcomingEvents.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">{upcomingEvents.length}</Badge>
+                {events.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{events.length}</Badge>
                 )}
               </div>
               <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -671,9 +679,6 @@ export function AcademyCalendar() {
                           <Image className="w-4 h-4" />
                           포스터 이미지 업로드 (선택)
                         </Label>
-                        <div className="bg-muted/30 text-muted-foreground text-xs text-center py-1 rounded mb-2">
-                          CALENDAR-POSTER-UPLOAD-V1
-                        </div>
                         <div className="border rounded-md p-3 space-y-2">
                           <input
                             type="file"
@@ -771,30 +776,54 @@ export function AcademyCalendar() {
                 />
               </div>
             ) : (
-              <div className="space-y-4 max-h-[400px] overflow-y-auto">
-                {/* Announcements */}
-                {sortedAnnouncements.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium flex items-center gap-2">
-                      <Bell className="w-4 h-4" />
-                      공지사항
-                    </h4>
-                    {sortedAnnouncements.map((event) => renderEventCard(event, true))}
+              <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                {/* Pinned announcements at top */}
+                {pinnedAnnouncements.length > 0 && (
+                  <div className="mb-3">
+                    <div className="flex items-center gap-1.5 mb-1.5 px-1">
+                      <Bell className="w-3.5 h-3.5 text-blue-500" />
+                      <span className="text-xs font-semibold text-blue-500 uppercase tracking-wide">공지</span>
+                    </div>
+                    <div className="space-y-0.5 border-l-2 border-blue-500/30 ml-1">
+                      {pinnedAnnouncements.map((event) => renderEventRow(event))}
+                    </div>
                   </div>
                 )}
                 
-                {/* Upcoming Events */}
-                {upcomingEvents.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium">다가오는 일정</h4>
-                    {upcomingEvents.map((event) => renderEventCard(event, false))}
-                  </div>
-                )}
+                {/* Date-grouped events */}
+                {sortedDateKeys.map((dateKey) => {
+                  const dayEvents = groupedEvents[dateKey].filter(
+                    e => !pinnedAnnouncements.some(pa => pa.id === e.id)
+                  );
+                  if (dayEvents.length === 0) return null;
+                  
+                  const dateObj = new Date(dateKey + 'T00:00:00+09:00');
+                  const isToday = dateKey === getTodayKST();
+                  
+                  return (
+                    <div key={dateKey} className="mb-2">
+                      <div className={`sticky top-0 z-10 flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-semibold ${
+                        isToday 
+                          ? 'bg-primary/10 text-primary' 
+                          : 'bg-muted/60 text-muted-foreground'
+                      }`}>
+                        <span className="tabular-nums">{format(dateObj, 'M/d', { locale: ko })}</span>
+                        <span>{format(dateObj, 'EEEE', { locale: ko })}</span>
+                        {isToday && <Badge variant="default" className="text-[9px] px-1 py-0 leading-3">오늘</Badge>}
+                      </div>
+                      <div className="space-y-0.5 mt-0.5">
+                        {dayEvents
+                          .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
+                          .map((event) => renderEventRow(event))}
+                      </div>
+                    </div>
+                  );
+                })}
                 
                 {events.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p>일정이 없습니다</p>
+                  <div className="text-center py-10 text-muted-foreground">
+                    <CalendarDays className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">등록된 일정이 없습니다</p>
                   </div>
                 )}
               </div>
@@ -814,10 +843,6 @@ export function AcademyCalendar() {
           </DialogHeader>
           {editEvent && canUploadPosters && (
             <div className="space-y-4 pt-2">
-              <div className="bg-muted/30 text-muted-foreground text-xs text-center py-1 rounded">
-                CALENDAR-POSTER-UPLOAD-V1
-              </div>
-              
               {/* Existing posters */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
