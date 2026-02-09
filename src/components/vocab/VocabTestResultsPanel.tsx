@@ -14,7 +14,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock } from 'lucide-react';
 
 interface Schedule {
   id: string;
@@ -24,6 +24,7 @@ interface Schedule {
   book_name: string;
   schedule_type: string;
   setting_id: string;
+  test_time: string | null;
   students?: { name: string; grade: string | null };
 }
 
@@ -40,14 +41,28 @@ interface TestResult {
   passed: boolean;
   retest_scheduled: boolean;
   retest_date: string | null;
+  retest_time: string | null;
   notes: string | null;
+}
+
+interface VocabSettingInfo {
+  days_per_test: number;
+  bundle_days: boolean;
+  teacher_id: string;
+}
+
+interface Teacher {
+  id: string;
+  full_name: string;
 }
 
 export function VocabTestResultsPanel() {
   const { user } = useAuth();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
-  const [settings, setSettings] = useState<Record<string, { days_per_test: number; bundle_days: boolean }>>({});
+  const [settingsMap, setSettingsMap] = useState<Record<string, VocabSettingInfo>>({});
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
@@ -63,6 +78,7 @@ export function VocabTestResultsPanel() {
   const [retestDialogOpen, setRetestDialogOpen] = useState(false);
   const [retestResult, setRetestResult] = useState<TestResult | null>(null);
   const [retestDate, setRetestDate] = useState<Date | undefined>();
+  const [retestTime, setRetestTime] = useState('');
 
   useEffect(() => {
     fetchSchedulesAndResults();
@@ -70,7 +86,6 @@ export function VocabTestResultsPanel() {
 
   const fetchSchedulesAndResults = async () => {
     setLoading(true);
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const startOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1), 'yyyy-MM-dd');
     const endOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0), 'yyyy-MM-dd');
 
@@ -89,26 +104,60 @@ export function VocabTestResultsPanel() {
         .order('test_date'),
       supabase
         .from('vocab_settings')
-        .select('id, days_per_test, bundle_days'),
+        .select('id, days_per_test, bundle_days, teacher_id'),
     ]);
 
     if (schedRes.data) setSchedules(schedRes.data as any);
     if (resRes.data) setResults(resRes.data as any);
+
     if (settingsRes.data) {
-      const map: Record<string, { days_per_test: number; bundle_days: boolean }> = {};
+      const map: Record<string, VocabSettingInfo> = {};
+      const teacherIds = new Set<string>();
       for (const s of settingsRes.data) {
-        map[s.id] = { days_per_test: s.days_per_test, bundle_days: (s as any).bundle_days || false };
+        map[s.id] = {
+          days_per_test: s.days_per_test,
+          bundle_days: (s as any).bundle_days || false,
+          teacher_id: s.teacher_id,
+        };
+        teacherIds.add(s.teacher_id);
       }
-      setSettings(map);
+      setSettingsMap(map);
+
+      // Fetch teacher names
+      if (teacherIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', Array.from(teacherIds));
+        if (profiles) setTeachers(profiles);
+      }
     }
+
     setLoading(false);
   };
 
-  const todaySchedules = schedules.filter(s => s.test_date === format(selectedDate, 'yyyy-MM-dd'));
+  // Filter schedules by teacher
+  const filteredSchedules = selectedTeacher === 'all'
+    ? schedules
+    : schedules.filter(s => {
+        const setting = settingsMap[s.setting_id];
+        return setting?.teacher_id === selectedTeacher;
+      });
+
+  const todaySchedules = filteredSchedules.filter(s => s.test_date === format(selectedDate, 'yyyy-MM-dd'));
+  const filteredResults = selectedTeacher === 'all'
+    ? results
+    : results.filter(r => {
+        const sched = schedules.find(s => s.id === r.schedule_id);
+        if (!sched) return false;
+        const setting = settingsMap[sched.setting_id];
+        return setting?.teacher_id === selectedTeacher;
+      });
+
   const getResult = (scheduleId: string) => results.find(r => r.schedule_id === scheduleId);
 
   const formatDayLabel = (sched: Schedule) => {
-    const setting = settings[sched.setting_id];
+    const setting = settingsMap[sched.setting_id];
     if (setting?.bundle_days && setting.days_per_test > 1) {
       const endDay = sched.day_number + setting.days_per_test - 1;
       return `Day ${sched.day_number}~${endDay}`;
@@ -129,7 +178,6 @@ export function VocabTestResultsPanel() {
     if (!activeSchedule || !user) return;
     setSaving(true);
 
-    // Fetch cutline for this student
     const { data: setting } = await supabase
       .from('vocab_settings')
       .select('cutline_percent')
@@ -178,19 +226,20 @@ export function VocabTestResultsPanel() {
   const openRetestDialog = (result: TestResult) => {
     setRetestResult(result);
     setRetestDate(undefined);
+    setRetestTime('');
     setRetestDialogOpen(true);
   };
 
   const handleScheduleRetest = async () => {
-    if (!retestResult || !retestDate) return;
+    if (!retestResult || !retestDate || !retestTime) return;
     setSaving(true);
 
-    // Update result with retest info
     const { error: updateErr } = await supabase
       .from('vocab_test_results')
       .update({
         retest_scheduled: true,
         retest_date: format(retestDate, 'yyyy-MM-dd'),
+        retest_time: retestTime,
         retest_requested_at: new Date().toISOString(),
       })
       .eq('id', retestResult.id);
@@ -201,11 +250,11 @@ export function VocabTestResultsPanel() {
       return;
     }
 
-    // Create retest schedule entry
     const { error: insertErr } = await supabase.from('vocab_schedules').insert({
       student_id: retestResult.student_id,
       setting_id: (await supabase.from('vocab_settings').select('id').eq('student_id', retestResult.student_id).single()).data?.id || '',
       test_date: format(retestDate, 'yyyy-MM-dd'),
+      test_time: retestTime,
       day_number: retestResult.day_number,
       book_name: retestResult.book_name,
       schedule_type: 'retest',
@@ -222,7 +271,7 @@ export function VocabTestResultsPanel() {
   };
 
   // Dates with schedules (for calendar highlighting)
-  const scheduleDates = [...new Set(schedules.map(s => s.test_date))];
+  const scheduleDates = [...new Set(filteredSchedules.map(s => s.test_date))];
 
   if (loading) {
     return (
@@ -234,9 +283,24 @@ export function VocabTestResultsPanel() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold">시험 일정 & 결과</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">날짜를 선택하면 해당일 시험 목록이 표시됩니다</p>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-base font-semibold">시험 일정 & 결과</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">날짜를 선택하면 해당일 시험 목록이 표시됩니다</p>
+        </div>
+        {teachers.length > 1 && (
+          <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="담당 선생님" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              {teachers.map(t => (
+                <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4">
@@ -283,6 +347,7 @@ export function VocabTestResultsPanel() {
                     <TableHead>교재</TableHead>
                     <TableHead className="text-center">DAY</TableHead>
                     <TableHead className="text-center">유형</TableHead>
+                    <TableHead className="text-center">시간</TableHead>
                     <TableHead className="text-center">결과</TableHead>
                     <TableHead className="w-[100px]"></TableHead>
                   </TableRow>
@@ -303,6 +368,9 @@ export function VocabTestResultsPanel() {
                           <Badge variant={sched.schedule_type === 'retest' ? 'destructive' : 'outline'} className="text-xs">
                             {sched.schedule_type === 'retest' ? '재시험' : '정규'}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-center text-xs font-mono text-muted-foreground">
+                          {sched.test_time ? sched.test_time.slice(0, 5) : '—'}
                         </TableCell>
                         <TableCell className="text-center">
                           {result ? (
@@ -340,7 +408,7 @@ export function VocabTestResultsPanel() {
           )}
 
           {/* Failed tests needing retest */}
-          {results.filter(r => !r.passed && !r.retest_scheduled).length > 0 && (
+          {filteredResults.filter(r => !r.passed && !r.retest_scheduled).length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-destructive flex items-center gap-1.5">
                 <XCircle className="w-4 h-4" />
@@ -349,7 +417,7 @@ export function VocabTestResultsPanel() {
               <Card className="border-destructive/30">
                 <Table>
                   <TableBody>
-                    {results
+                    {filteredResults
                       .filter(r => !r.passed && !r.retest_scheduled)
                       .map(r => {
                         const sched = schedules.find(s => s.id === r.schedule_id);
@@ -458,7 +526,21 @@ export function VocabTestResultsPanel() {
                 </Popover>
               </div>
 
-              <Button onClick={handleScheduleRetest} disabled={saving || !retestDate} className="w-full">
+              <div className="space-y-1.5">
+                <Label className="text-xs">재시험 시간 <span className="text-destructive">*</span></Label>
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="time"
+                    value={retestTime}
+                    onChange={e => setRetestTime(e.target.value)}
+                    className="pl-9"
+                    placeholder="HH:MM"
+                  />
+                </div>
+              </div>
+
+              <Button onClick={handleScheduleRetest} disabled={saving || !retestDate || !retestTime} className="w-full">
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
                 재시험 등록
               </Button>

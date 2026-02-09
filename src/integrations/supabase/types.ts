@@ -1417,6 +1417,7 @@ export type Database = {
           setting_id: string
           student_id: string
           test_date: string
+          test_time: string | null
         }
         Insert: {
           book_name: string
@@ -1427,6 +1428,7 @@ export type Database = {
           setting_id: string
           student_id: string
           test_date: string
+          test_time?: string | null
         }
         Update: {
           book_name?: string
@@ -1437,6 +1439,7 @@ export type Database = {
           setting_id?: string
           student_id?: string
           test_date?: string
+          test_time?: string | null
         }
         Relationships: [
           {
@@ -1524,6 +1527,7 @@ export type Database = {
           retest_date: string | null
           retest_requested_at: string | null
           retest_scheduled: boolean
+          retest_time: string | null
           schedule_id: string
           score_percent: number | null
           student_id: string
@@ -1543,6 +1547,7 @@ export type Database = {
           retest_date?: string | null
           retest_requested_at?: string | null
           retest_scheduled?: boolean
+          retest_time?: string | null
           schedule_id: string
           score_percent?: number | null
           student_id: string
@@ -1562,6 +1567,7 @@ export type Database = {
           retest_date?: string | null
           retest_requested_at?: string | null
           retest_scheduled?: boolean
+          retest_time?: string | null
           schedule_id?: string
           score_percent?: number | null
           student_id?: string
