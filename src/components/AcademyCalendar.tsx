@@ -244,14 +244,14 @@ export function AcademyCalendar() {
     setIsSubmitting(true);
     try {
       const startAt = formData.all_day 
-        ? `${formData.start_date}T00:00:00`
-        : `${formData.start_date}T${formData.start_time}:00`;
+        ? `${formData.start_date}T00:00:00+09:00`
+        : `${formData.start_date}T${formData.start_time}:00+09:00`;
       
       let endAt = null;
       if (formData.end_date) {
         endAt = formData.all_day 
-          ? `${formData.end_date}T23:59:59`
-          : `${formData.end_date}T${formData.end_time || formData.start_time}:00`;
+          ? `${formData.end_date}T23:59:59+09:00`
+          : `${formData.end_date}T${formData.end_time || formData.start_time}:00+09:00`;
       }
       
       const { data, error } = await supabase
