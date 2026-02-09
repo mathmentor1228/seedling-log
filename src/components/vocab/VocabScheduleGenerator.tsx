@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { Loader2, Wand2, Trash2, RefreshCw, Plus } from 'lucide-react';
+import { Loader2, Wand2, Trash2, RefreshCw, Plus, Users } from 'lucide-react';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i),
@@ -56,13 +56,21 @@ export function VocabScheduleGenerator() {
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
 
-  // Guerrilla test dialog
+  // Individual guerrilla test dialog
   const [guerrillaOpen, setGuerrillaOpen] = useState(false);
   const [guerrillaStudentId, setGuerrillaStudentId] = useState('');
   const [guerrillaDate, setGuerrillaDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [guerrillaDayStart, setGuerrillaDayStart] = useState(1);
   const [guerrillaDayEnd, setGuerrillaDayEnd] = useState(1);
   const [guerrillaSaving, setGuerrillaSaving] = useState(false);
+
+  // Bulk guerrilla test dialog
+  const [bulkGuerrillaOpen, setBulkGuerrillaOpen] = useState(false);
+  const [bulkDate, setBulkDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [bulkTeacher, setBulkTeacher] = useState<string>('');
+  const [bulkSelectedStudents, setBulkSelectedStudents] = useState<Set<string>>(new Set());
+  const [bulkDayRanges, setBulkDayRanges] = useState<Record<string, { start: number; end: number }>>({}); 
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   // Hardcoded teacher categories
   const TEACHER_CATEGORIES = [
@@ -417,6 +425,19 @@ export function VocabScheduleGenerator() {
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               게릴라 시험 추가
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setBulkGuerrillaOpen(true);
+                setBulkSelectedStudents(new Set());
+                setBulkDayRanges({});
+                setBulkTeacher('');
+              }}
+            >
+              <Users className="w-3.5 h-3.5 mr-1.5" />
+              일괄 게릴라 추가
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -591,6 +612,172 @@ export function VocabScheduleGenerator() {
             >
               {guerrillaSaving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
               추가
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Guerrilla Dialog */}
+      <Dialog open={bulkGuerrillaOpen} onOpenChange={(o) => { setBulkGuerrillaOpen(o); if (!o) { setBulkSelectedStudents(new Set()); setBulkDayRanges({}); } }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>일괄 게릴라 시험 추가</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">시험 날짜</Label>
+                <Input type="date" value={bulkDate} onChange={e => setBulkDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">선생님</Label>
+                <Select value={bulkTeacher} onValueChange={(v) => {
+                  setBulkTeacher(v);
+                  setBulkSelectedStudents(new Set());
+                  setBulkDayRanges({});
+                }}>
+                  <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                  <SelectContent>
+                    {TEACHER_CATEGORIES.map(t => (
+                      <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {bulkTeacher && (() => {
+              const teacherStudents = studentInfos.filter(s => s.assignedTeacher === bulkTeacher);
+              if (teacherStudents.length === 0) return (
+                <p className="text-sm text-muted-foreground text-center py-4">해당 선생님에 배정된 학생이 없습니다</p>
+              );
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-medium">학생 선택</Label>
+                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => {
+                      const allIds = new Set(teacherStudents.map(s => s.studentId));
+                      const allChecked = teacherStudents.every(s => bulkSelectedStudents.has(s.studentId));
+                      if (allChecked) {
+                        setBulkSelectedStudents(new Set());
+                      } else {
+                        setBulkSelectedStudents(allIds);
+                        // Init day ranges
+                        const ranges: Record<string, { start: number; end: number }> = {};
+                        teacherStudents.forEach(s => { ranges[s.studentId] = { start: s.currentDay, end: s.currentDay }; });
+                        setBulkDayRanges(prev => ({ ...prev, ...ranges }));
+                      }
+                    }}>
+                      전체 선택/해제
+                    </Button>
+                  </div>
+                  <div className="border rounded-md divide-y max-h-[300px] overflow-y-auto">
+                    {teacherStudents.map(info => {
+                      const checked = bulkSelectedStudents.has(info.studentId);
+                      const range = bulkDayRanges[info.studentId] || { start: info.currentDay, end: info.currentDay };
+                      return (
+                        <div key={info.studentId} className="p-2 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                const next = new Set(bulkSelectedStudents);
+                                if (v) {
+                                  next.add(info.studentId);
+                                  setBulkDayRanges(prev => ({ ...prev, [info.studentId]: { start: info.currentDay, end: info.currentDay } }));
+                                } else {
+                                  next.delete(info.studentId);
+                                }
+                                setBulkSelectedStudents(next);
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium">{info.studentName}</span>
+                              {info.grade && <span className="text-xs text-muted-foreground ml-1">({info.grade})</span>}
+                              <span className="text-xs text-muted-foreground ml-2">{info.bookName}</span>
+                            </div>
+                          </div>
+                          {checked && (
+                            <div className="flex items-center gap-2 pl-6">
+                              <Label className="text-[10px] text-muted-foreground whitespace-nowrap">DAY</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                className="h-7 w-16 text-xs"
+                                value={range.start}
+                                onChange={e => {
+                                  const v = Number(e.target.value);
+                                  setBulkDayRanges(prev => ({
+                                    ...prev,
+                                    [info.studentId]: { start: v, end: Math.max(v, prev[info.studentId]?.end || v) },
+                                  }));
+                                }}
+                              />
+                              <span className="text-xs text-muted-foreground">~</span>
+                              <Input
+                                type="number"
+                                min={range.start}
+                                className="h-7 w-16 text-xs"
+                                value={range.end}
+                                onChange={e => setBulkDayRanges(prev => ({
+                                  ...prev,
+                                  [info.studentId]: { ...prev[info.studentId], end: Number(e.target.value) },
+                                }))}
+                              />
+                              {range.start !== range.end && (
+                                <span className="text-[10px] text-muted-foreground">({range.end - range.start + 1}개)</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <Button
+              className="w-full"
+              disabled={bulkSaving || bulkSelectedStudents.size === 0 || !bulkDate}
+              onClick={async () => {
+                setBulkSaving(true);
+                const inserts: any[] = [];
+                for (const studentId of bulkSelectedStudents) {
+                  const info = studentInfos.find(s => s.studentId === studentId);
+                  if (!info) continue;
+                  const range = bulkDayRanges[studentId];
+                  if (!range) continue;
+                  for (let d = range.start; d <= range.end; d++) {
+                    inserts.push({
+                      student_id: info.studentId,
+                      setting_id: info.settingId,
+                      test_date: bulkDate,
+                      day_number: d,
+                      book_name: info.bookName,
+                      schedule_type: 'guerrilla',
+                    });
+                  }
+                }
+                if (inserts.length === 0) {
+                  toast.info('추가할 시험이 없습니다');
+                  setBulkSaving(false);
+                  return;
+                }
+                const { error } = await supabase.from('vocab_schedules').insert(inserts);
+                if (error) { toast.error(error.message); }
+                else {
+                  toast.success(`${bulkSelectedStudents.size}명, ${inserts.length}건 게릴라 시험 추가 완료`);
+                  setBulkGuerrillaOpen(false);
+                  setBulkSelectedStudents(new Set());
+                  setBulkDayRanges({});
+                  fetchStudentScheduleInfo();
+                }
+                setBulkSaving(false);
+              }}
+            >
+              {bulkSaving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              {bulkSelectedStudents.size}명 일괄 추가
             </Button>
           </div>
         </DialogContent>

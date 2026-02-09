@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Edit2, Loader2, BookOpen } from 'lucide-react';
+import { Plus, Edit2, Loader2, BookOpen, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 const TEACHER_OPTIONS = [
@@ -67,6 +68,8 @@ export function VocabSettingsPanel() {
   const [formNotes, setFormNotes] = useState('');
   const [formAssignedTeacher, setFormAssignedTeacher] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<VocabSetting | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -341,9 +344,14 @@ export function VocabSettingsPanel() {
                     {s.days_per_test > 1 ? (s.bundle_days ? '묶음' : '개별') : '—'}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(s)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -351,6 +359,54 @@ export function VocabSettingsPanel() {
           </Table>
         </Card>
       )}
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>학생 설정 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget && (
+                <>
+                  <strong>{(deleteTarget as any).students?.name}</strong>의 단어 설정({deleteTarget.book_name})을 삭제하시겠습니까?
+                  <span className="block mt-1 text-destructive">⚠️ 연결된 스케줄과 시험 결과도 함께 삭제됩니다.</span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!deleteTarget) return;
+                setDeleteLoading(true);
+                // Delete results linked to schedules of this setting
+                const { data: schedIds } = await supabase
+                  .from('vocab_schedules')
+                  .select('id')
+                  .eq('setting_id', deleteTarget.id);
+                if (schedIds && schedIds.length > 0) {
+                  await supabase.from('vocab_test_results').delete().in('schedule_id', schedIds.map(s => s.id));
+                  await supabase.from('vocab_schedules').delete().in('id', schedIds.map(s => s.id));
+                }
+                const { error } = await supabase.from('vocab_settings').delete().eq('id', deleteTarget.id);
+                if (error) {
+                  toast.error(error.message);
+                } else {
+                  toast.success('설정이 삭제되었습니다');
+                  fetchData();
+                }
+                setDeleteTarget(null);
+                setDeleteLoading(false);
+              }}
+            >
+              {deleteLoading && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
