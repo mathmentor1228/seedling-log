@@ -1472,6 +1472,7 @@ export type Database = {
           student_id: string
           teacher_id: string
           test_days: string[]
+          total_days: number | null
           updated_at: string
         }
         Insert: {
@@ -1487,6 +1488,7 @@ export type Database = {
           student_id: string
           teacher_id: string
           test_days?: string[]
+          total_days?: number | null
           updated_at?: string
         }
         Update: {
@@ -1502,6 +1504,7 @@ export type Database = {
           student_id?: string
           teacher_id?: string
           test_days?: string[]
+          total_days?: number | null
           updated_at?: string
         }
         Relationships: [

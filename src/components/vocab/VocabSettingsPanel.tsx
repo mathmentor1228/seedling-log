@@ -24,6 +24,7 @@ interface VocabSetting {
   current_day_number: number;
   is_active: boolean;
   bundle_days: boolean;
+  total_days: number | null;
   notes: string | null;
   students?: { name: string; grade: string | null; school: string | null };
 }
@@ -56,6 +57,7 @@ export function VocabSettingsPanel() {
   const [formTestDays, setFormTestDays] = useState('mon_wed');
   const [formCurrentDay, setFormCurrentDay] = useState(1);
   const [formBundleDays, setFormBundleDays] = useState(false);
+  const [formTotalDays, setFormTotalDays] = useState<number | ''>('');
   const [formNotes, setFormNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -90,6 +92,7 @@ export function VocabSettingsPanel() {
     setFormTestDays('mon_wed');
     setFormCurrentDay(1);
     setFormBundleDays(false);
+    setFormTotalDays('');
     setFormNotes('');
     setEditingId(null);
   };
@@ -103,6 +106,7 @@ export function VocabSettingsPanel() {
     setFormTestDays(s.test_days[0] || 'mon_wed');
     setFormCurrentDay(s.current_day_number);
     setFormBundleDays(s.bundle_days);
+    setFormTotalDays(s.total_days || '');
     setFormNotes(s.notes || '');
     setDialogOpen(true);
   };
@@ -123,6 +127,7 @@ export function VocabSettingsPanel() {
       test_days: [formTestDays],
       current_day_number: formCurrentDay,
       bundle_days: formBundleDays,
+      total_days: formTotalDays ? Number(formTotalDays) : null,
       notes: formNotes || null,
       is_active: true,
     };
@@ -226,6 +231,18 @@ export function VocabSettingsPanel() {
               </div>
 
               <div className="space-y-1.5">
+                <Label className="text-xs">총 일차 수 (교재 전체 DAY)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={formTotalDays}
+                  onChange={e => setFormTotalDays(e.target.value ? Number(e.target.value) : '')}
+                  placeholder="미입력 시 제한 없음"
+                />
+                <p className="text-xs text-muted-foreground">스케줄 생성 시 이 DAY를 초과하면 자동으로 중단됩니다</p>
+              </div>
+
+              <div className="space-y-1.5">
                 <Label className="text-xs">메모</Label>
                 <Input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="선택 사항" />
               </div>
@@ -266,6 +283,7 @@ export function VocabSettingsPanel() {
                 <TableHead className="w-[120px]">학생</TableHead>
                 <TableHead>교재</TableHead>
                 <TableHead className="text-center w-[60px]">DAY</TableHead>
+                <TableHead className="text-center w-[60px]">총 일차</TableHead>
                 <TableHead className="text-center w-[70px]">커트라인</TableHead>
                 <TableHead className="text-center w-[60px]">요일</TableHead>
                 <TableHead className="text-center w-[50px]">묶음</TableHead>
@@ -284,6 +302,9 @@ export function VocabSettingsPanel() {
                   <TableCell className="text-sm">{s.book_name}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className="text-xs font-mono">Day {s.current_day_number}</Badge>
+                  </TableCell>
+                  <TableCell className="text-center text-xs font-mono">
+                    {s.total_days ? `${s.total_days}일` : '—'}
                   </TableCell>
                   <TableCell className="text-center text-sm">{s.cutline_percent}%</TableCell>
                   <TableCell className="text-center text-xs">
