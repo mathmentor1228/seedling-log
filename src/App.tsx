@@ -20,6 +20,7 @@ import StatsPage from "./pages/StatsPage";
 import AdminBriefingPage from "./pages/AdminBriefingPage";
 import AdminReportPage from "./pages/AdminReportPage";
 import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
+import ReportStatusPage from "./pages/ReportStatusPage";
 import NotFound from "./pages/NotFound";
 import PublicReport from "./pages/PublicReport";
 import ParentPortal from "./pages/ParentPortal";
@@ -90,6 +91,7 @@ const App = () => (
                 <Route path="/admin/briefing" element={<AdminBriefingPage />} />
                 <Route path="/admin/report" element={<AdminReportPage />} />
                 <Route path="/admin/daily" element={<AdminDailyOpsPage />} />
+                <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
