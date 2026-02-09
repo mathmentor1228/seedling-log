@@ -1407,6 +1407,182 @@ export type Database = {
         }
         Relationships: []
       }
+      vocab_schedules: {
+        Row: {
+          book_name: string
+          created_at: string
+          day_number: number
+          id: string
+          schedule_type: string
+          setting_id: string
+          student_id: string
+          test_date: string
+        }
+        Insert: {
+          book_name: string
+          created_at?: string
+          day_number: number
+          id?: string
+          schedule_type?: string
+          setting_id: string
+          student_id: string
+          test_date: string
+        }
+        Update: {
+          book_name?: string
+          created_at?: string
+          day_number?: number
+          id?: string
+          schedule_type?: string
+          setting_id?: string
+          student_id?: string
+          test_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_schedules_setting_id_fkey"
+            columns: ["setting_id"]
+            isOneToOne: false
+            referencedRelation: "vocab_settings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vocab_schedules_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vocab_settings: {
+        Row: {
+          book_name: string
+          created_at: string
+          current_day_number: number
+          cutline_percent: number
+          days_per_test: number
+          id: string
+          is_active: boolean
+          notes: string | null
+          student_id: string
+          teacher_id: string
+          test_days: string[]
+          updated_at: string
+        }
+        Insert: {
+          book_name: string
+          created_at?: string
+          current_day_number?: number
+          cutline_percent?: number
+          days_per_test?: number
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          student_id: string
+          teacher_id: string
+          test_days?: string[]
+          updated_at?: string
+        }
+        Update: {
+          book_name?: string
+          created_at?: string
+          current_day_number?: number
+          cutline_percent?: number
+          days_per_test?: number
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          student_id?: string
+          teacher_id?: string
+          test_days?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_settings_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: true
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vocab_test_results: {
+        Row: {
+          book_name: string
+          correct_words: number | null
+          created_at: string
+          day_number: number
+          id: string
+          notes: string | null
+          passed: boolean
+          recorded_by: string | null
+          retest_date: string | null
+          retest_requested_at: string | null
+          retest_scheduled: boolean
+          schedule_id: string
+          score_percent: number | null
+          student_id: string
+          test_date: string
+          total_words: number | null
+          updated_at: string
+        }
+        Insert: {
+          book_name: string
+          correct_words?: number | null
+          created_at?: string
+          day_number: number
+          id?: string
+          notes?: string | null
+          passed?: boolean
+          recorded_by?: string | null
+          retest_date?: string | null
+          retest_requested_at?: string | null
+          retest_scheduled?: boolean
+          schedule_id: string
+          score_percent?: number | null
+          student_id: string
+          test_date: string
+          total_words?: number | null
+          updated_at?: string
+        }
+        Update: {
+          book_name?: string
+          correct_words?: number | null
+          created_at?: string
+          day_number?: number
+          id?: string
+          notes?: string | null
+          passed?: boolean
+          recorded_by?: string | null
+          retest_date?: string | null
+          retest_requested_at?: string | null
+          retest_scheduled?: boolean
+          schedule_id?: string
+          score_percent?: number | null
+          student_id?: string
+          test_date?: string
+          total_words?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_test_results_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "vocab_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vocab_test_results_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weekly_jobs_log: {
         Row: {
           created_at: string

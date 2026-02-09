@@ -19,7 +19,8 @@ import {
   BarChart3,
   FileBarChart2,
   FileText,
-  CalendarDays
+  CalendarDays,
+  BookOpenCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
   { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
   { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
   { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
+  { label: '단어 테스트', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
   { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
   { label: '리포트 발송', href: '/reports/send', icon: <Send className="w-4 h-4" />, adminOnly: true },
   { label: '리포트 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
