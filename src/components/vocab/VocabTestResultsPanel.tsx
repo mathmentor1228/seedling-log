@@ -76,6 +76,8 @@ export function VocabTestResultsPanel() {
   const [resultNotes, setResultNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [syncToLesson, setSyncToLesson] = useState(false);
+  const [isOralTest, setIsOralTest] = useState(false);
+  const [oralPassed, setOralPassed] = useState(true);
 
   // Retest dialog
   const [retestDialogOpen, setRetestDialogOpen] = useState(false);
@@ -175,9 +177,13 @@ export function VocabTestResultsPanel() {
   const openResultInput = (sched: Schedule) => {
     const existing = getResult(sched.id);
     setActiveSchedule(sched);
+    const existingNotes = existing?.notes || '';
+    const wasOral = existingNotes.startsWith('[구두테스트]');
+    setIsOralTest(wasOral);
+    setOralPassed(existing ? existing.passed : true);
     setTotalWords(existing?.total_words || 0);
     setCorrectWords(existing?.correct_words || 0);
-    setResultNotes(existing?.notes || '');
+    setResultNotes(wasOral ? existingNotes.replace('[구두테스트] ', '') : existingNotes);
     setSyncToLesson(false);
     setDialogOpen(true);
   };
@@ -186,15 +192,32 @@ export function VocabTestResultsPanel() {
     if (!activeSchedule || !user) return;
     setSaving(true);
 
-    const { data: setting } = await supabase
-      .from('vocab_settings')
-      .select('cutline_percent')
-      .eq('student_id', activeSchedule.student_id)
-      .single();
+    let scorePercent: number;
+    let passed: boolean;
+    let finalTotalWords: number | null;
+    let finalCorrectWords: number | null;
+    let finalNotes: string | null;
 
-    const cutline = setting?.cutline_percent || 80;
-    const scorePercent = totalWords > 0 ? Math.round((correctWords / totalWords) * 100) : 0;
-    const passed = scorePercent >= cutline;
+    if (isOralTest) {
+      passed = oralPassed;
+      scorePercent = oralPassed ? 100 : 0;
+      finalTotalWords = null;
+      finalCorrectWords = null;
+      finalNotes = `[구두테스트] ${resultNotes}`.trim();
+    } else {
+      const { data: setting } = await supabase
+        .from('vocab_settings')
+        .select('cutline_percent')
+        .eq('student_id', activeSchedule.student_id)
+        .single();
+
+      const cutline = setting?.cutline_percent || 80;
+      scorePercent = totalWords > 0 ? Math.round((correctWords / totalWords) * 100) : 0;
+      passed = scorePercent >= cutline;
+      finalTotalWords = totalWords;
+      finalCorrectWords = correctWords;
+      finalNotes = resultNotes || null;
+    }
 
     const existing = getResult(activeSchedule.id);
     const payload = {
@@ -203,12 +226,12 @@ export function VocabTestResultsPanel() {
       test_date: activeSchedule.test_date,
       day_number: activeSchedule.day_number,
       book_name: activeSchedule.book_name,
-      total_words: totalWords,
-      correct_words: correctWords,
+      total_words: finalTotalWords,
+      correct_words: finalCorrectWords,
       score_percent: scorePercent,
       passed,
       recorded_by: user.id,
-      notes: resultNotes || null,
+      notes: finalNotes,
     };
 
     let error;
@@ -481,14 +504,25 @@ export function VocabTestResultsPanel() {
                         </TableCell>
                         <TableCell className="text-center">
                           {result ? (
-                            <div className="flex items-center justify-center gap-1">
-                              {result.passed ? (
-                                <CheckCircle2 className="w-4 h-4 text-success" />
-                              ) : (
-                                <XCircle className="w-4 h-4 text-destructive" />
-                              )}
-                              <span className="text-xs font-mono">{result.score_percent}%</span>
-                            </div>
+                            result.notes?.startsWith('[구두테스트]') ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <span className="text-xs">🗣️</span>
+                                {result.passed ? (
+                                  <Badge variant="outline" className="text-xs text-success border-success/30">Pass</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs text-destructive border-destructive/30">Non-Pass</Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1">
+                                {result.passed ? (
+                                  <CheckCircle2 className="w-4 h-4 text-success" />
+                                ) : (
+                                  <XCircle className="w-4 h-4 text-destructive" />
+                                )}
+                                <span className="text-xs font-mono">{result.score_percent}%</span>
+                              </div>
+                            )
                           ) : (
                             <span className="text-xs text-muted-foreground">미입력</span>
                           )}
@@ -592,31 +626,67 @@ export function VocabTestResultsPanel() {
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {activeSchedule.book_name} · {formatDayLabel(activeSchedule)}
                 </p>
+               </div>
+
+              <div className="flex items-center gap-2 rounded-md border p-3">
+                <Checkbox id="oral-test" checked={isOralTest} onCheckedChange={(v) => setIsOralTest(!!v)} />
+                <label htmlFor="oral-test" className="text-xs cursor-pointer font-medium">🗣️ 구두테스트로 대체</label>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">전체 단어 수</Label>
-                  <Input type="number" min={0} value={totalWords} onChange={e => setTotalWords(Number(e.target.value))} />
+              {isOralTest ? (
+                <div className="space-y-3">
+                  <div className="flex gap-2 justify-center">
+                    <Button
+                      variant={oralPassed ? 'default' : 'outline'}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setOralPassed(true)}
+                    >
+                      <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                      Pass
+                    </Button>
+                    <Button
+                      variant={!oralPassed ? 'destructive' : 'outline'}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setOralPassed(false)}
+                    >
+                      <XCircle className="w-4 h-4 mr-1.5" />
+                      Non-Pass
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">메모</Label>
+                    <Input value={resultNotes} onChange={e => setResultNotes(e.target.value)} placeholder="구두테스트 관련 메모" />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">맞은 단어 수</Label>
-                  <Input type="number" min={0} max={totalWords} value={correctWords} onChange={e => setCorrectWords(Number(e.target.value))} />
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">전체 단어 수</Label>
+                      <Input type="number" min={0} value={totalWords} onChange={e => setTotalWords(Number(e.target.value))} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">맞은 단어 수</Label>
+                      <Input type="number" min={0} max={totalWords} value={correctWords} onChange={e => setCorrectWords(Number(e.target.value))} />
+                    </div>
+                  </div>
 
-              {totalWords > 0 && (
-                <div className="text-center py-2">
-                  <span className="text-2xl font-bold font-mono">
-                    {Math.round((correctWords / totalWords) * 100)}%
-                  </span>
-                </div>
+                  {totalWords > 0 && (
+                    <div className="text-center py-2">
+                      <span className="text-2xl font-bold font-mono">
+                        {Math.round((correctWords / totalWords) * 100)}%
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">메모</Label>
+                    <Input value={resultNotes} onChange={e => setResultNotes(e.target.value)} placeholder="선택 사항" />
+                  </div>
+                </>
               )}
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">메모</Label>
-                <Input value={resultNotes} onChange={e => setResultNotes(e.target.value)} placeholder="선택 사항" />
-              </div>
 
               <div className="flex items-center gap-2 rounded-md border p-3">
                 <Checkbox id="sync-lesson" checked={syncToLesson} onCheckedChange={(v) => setSyncToLesson(!!v)} />
