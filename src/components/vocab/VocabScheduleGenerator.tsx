@@ -50,8 +50,14 @@ export function VocabScheduleGenerator() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
+  const [teacherMap, setTeacherMap] = useState<Record<string, string>>({});
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
+
+  // Hardcoded teacher categories
+  const TEACHER_CATEGORIES = [
+    { label: '서미정', key: 'seo' },
+    { label: '김민희', key: 'kim' },
+  ];
 
   // Delete confirmation
   const [deleteMode, setDeleteMode] = useState<'selected' | 'all' | null>(null);
@@ -111,14 +117,16 @@ export function VocabScheduleGenerator() {
       scheduleCount: countMap[s.student_id] || 0,
     }));
 
-    // Fetch teacher names
+    // Build teacher name map for display
     const teacherIds = new Set(infos.map(i => i.teacherId));
     if (teacherIds.size > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, full_name')
         .in('id', Array.from(teacherIds));
-      if (profiles) setTeachers(profiles);
+      const map: Record<string, string> = {};
+      (profiles || []).forEach(p => { map[p.id] = p.full_name; });
+      setTeacherMap(map);
     }
 
     setStudentInfos(infos);
@@ -290,10 +298,15 @@ export function VocabScheduleGenerator() {
     await fetchStudentScheduleInfo();
   };
 
-  // Filter by teacher
+  // Filter by teacher category
   const displayInfos = selectedTeacher === 'all'
     ? studentInfos
-    : studentInfos.filter(s => s.teacherId === selectedTeacher);
+    : studentInfos.filter(s => {
+        const tName = teacherMap[s.teacherId] || '';
+        if (selectedTeacher === 'seo') return tName.includes('서미정');
+        if (selectedTeacher === 'kim') return tName.includes('김민희');
+        return false;
+      });
 
   const allSelected = displayInfos.length > 0 && displayInfos.every(s => selectedIds.has(s.studentId));
   const someSelected = selectedIds.size > 0;
@@ -334,20 +347,18 @@ export function VocabScheduleGenerator() {
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={fetchStudentScheduleInfo} disabled={loading}>
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-            {teachers.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">선생님</Label>
-                <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
-                  <SelectTrigger className="w-[120px]"><SelectValue placeholder="선생님" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">전체</SelectItem>
-                    {teachers.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">선생님</Label>
+              <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+                <SelectTrigger className="w-[120px]"><SelectValue placeholder="선생님" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {TEACHER_CATEGORIES.map(t => (
+                    <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Action buttons */}

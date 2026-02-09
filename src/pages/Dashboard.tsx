@@ -50,6 +50,7 @@ interface PendingHomework {
   subject: string;
   content: string;
   assigned_date: string;
+  has_photo_submission: boolean;
 }
 
 interface TodayAttendanceRecord {
@@ -365,7 +366,7 @@ export default function Dashboard() {
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
   // NEXT-HW-BADGE-V1: Include hasNextHomework
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean }>>({});
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
@@ -486,6 +487,8 @@ export default function Dashboard() {
             subject,
             content,
             assigned_date,
+            submitted_at,
+            submission_image_url,
             students:student_id (name)
           `)
           .eq('check_status', 'unchecked')
@@ -502,6 +505,7 @@ export default function Dashboard() {
             subject: h.subject,
             content: h.content,
             assigned_date: h.assigned_date,
+            has_photo_submission: !!(h.submitted_at && h.submission_image_url),
           }))
         );
       } catch (error) {
@@ -743,20 +747,39 @@ export default function Dashboard() {
         
         // NEXT-HW-BADGE-V1: Fetch homework_assignments for today's lesson records
         let hwAssignmentSet = new Set<string>();
+        // PHOTO-SUBMISSION-BADGE-V1: Track which students have photo submissions for pending homework
+        let photoSubmissionSet = new Set<string>();
         if (recordIds.length > 0) {
           const { data: hwAssignments } = await supabase
             .from('homework_assignments')
-            .select('lesson_record_id')
+            .select('lesson_record_id, student_id, submitted_at, submission_image_url')
             .in('lesson_record_id', recordIds)
             .not('content', 'eq', '');
           
           hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
         }
+
+        // Also check unchecked homework for photo submissions (for all roster students)
+        if (studentIds.length > 0) {
+          const { data: pendingHw } = await supabase
+            .from('homework_assignments')
+            .select('student_id, submitted_at, submission_image_url')
+            .in('student_id', studentIds)
+            .eq('check_status', 'unchecked')
+            .not('submitted_at', 'is', null)
+            .not('submission_image_url', 'is', null);
+          
+          (pendingHw || []).forEach((hw: any) => {
+            if (hw.submitted_at && hw.submission_image_url) {
+              photoSubmissionSet.add(hw.student_id);
+            }
+          });
+        }
         
-        const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean }> = {};
+        const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean }> = {};
         (lessonRecords || []).forEach((lr: any) => {
           const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
-          statusMap[key] = { submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null, hasNextHomework: hwAssignmentSet.has(lr.id) };
+          statusMap[key] = { submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null, hasNextHomework: hwAssignmentSet.has(lr.id), hasPhotoSubmission: photoSubmissionSet.has(lr.student_id) };
         });
         
         setLessonStatusMap(statusMap);
@@ -1619,9 +1642,16 @@ export default function Dashboard() {
                               const hwLabel = getHomeworkStatusLabel(rawHwStatus);
                               const hwBadgeClass = getHomeworkStatusBadgeClass(rawHwStatus);
                               const homeworkBadge = (
-                                <Badge className={`${hwBadgeClass} text-xs`} title={isAdmin ? `HW_STATUS_DEBUG: raw=${rawHwStatus} rendered=${hwLabel} recordId=${lessonStatus?.recordId || 'none'}` : undefined}>
-                                  {hwLabel}
-                                </Badge>
+                                <div className="flex items-center gap-1">
+                                  <Badge className={`${hwBadgeClass} text-xs`} title={isAdmin(role) ? `HW_STATUS_DEBUG: raw=${rawHwStatus} rendered=${hwLabel} recordId=${lessonStatus?.recordId || 'none'}` : undefined}>
+                                    {hwLabel}
+                                  </Badge>
+                                  {lessonStatus?.hasPhotoSubmission && (
+                                    <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
+                                      📷
+                                    </Badge>
+                                  )}
+                                </div>
                               );
                               
                               return (
@@ -2148,10 +2178,15 @@ export default function Dashboard() {
                       key={hw.id}
                       className="flex items-center justify-between p-3 bg-background rounded-lg border"
                     >
-                      <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-foreground">{hw.student_name}</span>
                           <Badge variant="outline" className="text-xs">{hw.subject}</Badge>
+                          {hw.has_photo_submission && (
+                            <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
+                              📷 사진제출완료
+                            </Badge>
+                          )}
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(hw.assigned_date), 'MM/dd')}
                           </span>
