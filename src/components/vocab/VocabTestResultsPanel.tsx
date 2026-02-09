@@ -15,7 +15,8 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2 } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2, FileText } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface Schedule {
   id: string;
@@ -74,6 +75,7 @@ export function VocabTestResultsPanel() {
   const [correctWords, setCorrectWords] = useState<number>(0);
   const [resultNotes, setResultNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [syncToLesson, setSyncToLesson] = useState(false);
 
   // Retest dialog
   const [retestDialogOpen, setRetestDialogOpen] = useState(false);
@@ -176,6 +178,7 @@ export function VocabTestResultsPanel() {
     setTotalWords(existing?.total_words || 0);
     setCorrectWords(existing?.correct_words || 0);
     setResultNotes(existing?.notes || '');
+    setSyncToLesson(false);
     setDialogOpen(true);
   };
 
@@ -222,6 +225,65 @@ export function VocabTestResultsPanel() {
       if (!passed) {
         toast.info('불통과 — 재시험 일정을 잡아주세요');
       }
+
+      // Sync to lesson_records if requested
+      if (syncToLesson && activeSchedule) {
+        const dayLabel = formatDayLabel(activeSchedule);
+        const testContent = `${activeSchedule.book_name} ${dayLabel}`;
+        const testResultText = `${correctWords}/${totalWords} (${scorePercent}%)`;
+
+        // Check if there's already a lesson record for this student on this date
+        const { data: existingLesson } = await supabase
+          .from('lesson_records')
+          .select('id')
+          .eq('student_id', activeSchedule.student_id)
+          .eq('lesson_date', activeSchedule.test_date)
+          .eq('subject', '영어')
+          .limit(1)
+          .maybeSingle();
+
+        if (existingLesson) {
+          // Update existing lesson record's test fields
+          await supabase
+            .from('lesson_records')
+            .update({
+              test_title: '단어시험',
+              test_content: testContent,
+              test_result: passed ? 'pass' : 'fail',
+              test_result_text: testResultText,
+              english_pass_fail: passed ? 'pass' : 'fail',
+            })
+            .eq('id', existingLesson.id);
+          toast.success('기존 수업일지에 테스트 결과 연동 완료');
+        } else {
+          // Create new lesson record as '테스트방문' type
+          const { error: lessonErr } = await supabase
+            .from('lesson_records')
+            .insert({
+              student_id: activeSchedule.student_id,
+              teacher_id: user!.id,
+              subject: '영어' as any,
+              lesson_date: activeSchedule.test_date,
+              lesson_range: testContent,
+              homework_status: '해당없음',
+              test_title: '단어시험',
+              test_content: testContent,
+              test_result: passed ? 'pass' : 'fail',
+              test_result_text: testResultText,
+              english_pass_fail: passed ? 'pass' : 'fail',
+              lesson_types: ['테스트방문'],
+              submitted: true,
+              submitted_at: new Date().toISOString(),
+              notes: resultNotes || null,
+            });
+          if (lessonErr) {
+            toast.error(`수업일지 생성 실패: ${lessonErr.message}`);
+          } else {
+            toast.success('새 수업일지(테스트방문) 생성 완료');
+          }
+        }
+      }
+
       setDialogOpen(false);
       fetchSchedulesAndResults();
     }
@@ -526,6 +588,14 @@ export function VocabTestResultsPanel() {
               <div className="space-y-1.5">
                 <Label className="text-xs">메모</Label>
                 <Input value={resultNotes} onChange={e => setResultNotes(e.target.value)} placeholder="선택 사항" />
+              </div>
+
+              <div className="flex items-center gap-2 rounded-md border p-3">
+                <Checkbox id="sync-lesson" checked={syncToLesson} onCheckedChange={(v) => setSyncToLesson(!!v)} />
+                <label htmlFor="sync-lesson" className="text-xs cursor-pointer flex-1">
+                  <span className="font-medium flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> 수업일지 연동</span>
+                  <span className="text-muted-foreground block mt-0.5">기존 수업이 있으면 테스트칸 업데이트, 없으면 테스트방문으로 새로 생성</span>
+                </label>
               </div>
 
               <Button onClick={handleSaveResult} disabled={saving} className="w-full">

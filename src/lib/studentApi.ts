@@ -72,6 +72,9 @@ export const studentApi = {
     total_points: number;
     pending_homework: any[];
     upcoming_classes: any[];
+    vocab_schedules?: any[];
+    vocab_results?: any[];
+    vocab_setting?: any;
   }>('dashboard'),
 
   getHomeworkList: () => studentApiCall<{ homework: any[] }>('homework_list'),

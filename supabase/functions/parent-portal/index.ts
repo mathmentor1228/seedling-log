@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     const dateStr = fourteenDaysAgo.toISOString().split("T")[0];
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes")
@@ -123,6 +123,20 @@ Deno.serve(async (req) => {
         .eq("parent_visible", true)
         .order("week_start", { ascending: false })
         .limit(8),
+      supabase
+        .from("vocab_schedules")
+        .select("id, test_date, day_number, book_name, schedule_type")
+        .eq("student_id", studentId)
+        .gte("test_date", dateStr)
+        .order("test_date")
+        .limit(30),
+      supabase
+        .from("vocab_test_results")
+        .select("id, test_date, day_number, book_name, score_percent, passed, total_words, correct_words")
+        .eq("student_id", studentId)
+        .gte("test_date", dateStr)
+        .order("test_date", { ascending: false })
+        .limit(30),
     ]);
 
     const homework = hwRes.data || [];
@@ -158,6 +172,8 @@ Deno.serve(async (req) => {
           note: a.note,
         })),
         reports,
+        vocab_schedules: vocabSchedRes.data || [],
+        vocab_results: vocabResultRes.data || [],
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

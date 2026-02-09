@@ -59,7 +59,8 @@ export function VocabScheduleGenerator() {
   const [guerrillaOpen, setGuerrillaOpen] = useState(false);
   const [guerrillaStudentId, setGuerrillaStudentId] = useState('');
   const [guerrillaDate, setGuerrillaDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [guerrillaDayNumber, setGuerrillaDayNumber] = useState(1);
+  const [guerrillaDayStart, setGuerrillaDayStart] = useState(1);
+  const [guerrillaDayEnd, setGuerrillaDayEnd] = useState(1);
   const [guerrillaSaving, setGuerrillaSaving] = useState(false);
 
   // Hardcoded teacher categories
@@ -492,7 +493,7 @@ export function VocabScheduleGenerator() {
       </AlertDialog>
 
       {/* Guerrilla test dialog */}
-      <Dialog open={guerrillaOpen} onOpenChange={(o) => { setGuerrillaOpen(o); if (!o) { setGuerrillaStudentId(''); setGuerrillaDayNumber(1); } }}>
+      <Dialog open={guerrillaOpen} onOpenChange={(o) => { setGuerrillaOpen(o); if (!o) { setGuerrillaStudentId(''); setGuerrillaDayStart(1); setGuerrillaDayEnd(1); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>게릴라 시험 추가</DialogTitle>
@@ -503,7 +504,7 @@ export function VocabScheduleGenerator() {
               <Select value={guerrillaStudentId} onValueChange={(v) => {
                 setGuerrillaStudentId(v);
                 const info = studentInfos.find(s => s.studentId === v);
-                if (info) setGuerrillaDayNumber(info.currentDay);
+                if (info) { setGuerrillaDayStart(info.currentDay); setGuerrillaDayEnd(info.currentDay); }
               }}>
                 <SelectTrigger><SelectValue placeholder="학생 선택" /></SelectTrigger>
                 <SelectContent>
@@ -515,16 +516,27 @@ export function VocabScheduleGenerator() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">시험 날짜</Label>
+              <Input type="date" value={guerrillaDate} onChange={e => setGuerrillaDate(e.target.value)} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">시험 날짜</Label>
-                <Input type="date" value={guerrillaDate} onChange={e => setGuerrillaDate(e.target.value)} />
+                <Label className="text-xs">시작 DAY</Label>
+                <Input type="number" min={1} value={guerrillaDayStart} onChange={e => {
+                  const v = Number(e.target.value);
+                  setGuerrillaDayStart(v);
+                  if (v > guerrillaDayEnd) setGuerrillaDayEnd(v);
+                }} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">DAY 번호</Label>
-                <Input type="number" min={1} value={guerrillaDayNumber} onChange={e => setGuerrillaDayNumber(Number(e.target.value))} />
+                <Label className="text-xs">끝 DAY</Label>
+                <Input type="number" min={guerrillaDayStart} value={guerrillaDayEnd} onChange={e => setGuerrillaDayEnd(Number(e.target.value))} />
               </div>
             </div>
+            {guerrillaDayStart !== guerrillaDayEnd && (
+              <p className="text-xs text-muted-foreground">Day {guerrillaDayStart}~{guerrillaDayEnd} ({guerrillaDayEnd - guerrillaDayStart + 1}개 DAY) 시험이 등록됩니다</p>
+            )}
             <Button
               className="w-full"
               disabled={guerrillaSaving || !guerrillaStudentId || !guerrillaDate}
@@ -532,22 +544,29 @@ export function VocabScheduleGenerator() {
                 setGuerrillaSaving(true);
                 const info = studentInfos.find(s => s.studentId === guerrillaStudentId);
                 if (!info) { toast.error('학생 정보를 찾을 수 없습니다'); setGuerrillaSaving(false); return; }
-                if (info.totalDays && guerrillaDayNumber > info.totalDays) {
+                if (info.totalDays && guerrillaDayEnd > info.totalDays) {
                   toast.error(`총 일차(${info.totalDays})를 초과할 수 없습니다`);
                   setGuerrillaSaving(false);
                   return;
                 }
-                const { error } = await supabase.from('vocab_schedules').insert({
-                  student_id: info.studentId,
-                  setting_id: info.settingId,
-                  test_date: guerrillaDate,
-                  day_number: guerrillaDayNumber,
-                  book_name: info.bookName,
-                  schedule_type: 'guerrilla',
-                });
+                const inserts = [];
+                for (let d = guerrillaDayStart; d <= guerrillaDayEnd; d++) {
+                  inserts.push({
+                    student_id: info.studentId,
+                    setting_id: info.settingId,
+                    test_date: guerrillaDate,
+                    day_number: d,
+                    book_name: info.bookName,
+                    schedule_type: 'guerrilla',
+                  });
+                }
+                const { error } = await supabase.from('vocab_schedules').insert(inserts);
                 if (error) { toast.error(error.message); }
                 else {
-                  toast.success(`게릴라 시험 추가 완료 (Day ${guerrillaDayNumber})`);
+                  const label = guerrillaDayStart === guerrillaDayEnd
+                    ? `Day ${guerrillaDayStart}`
+                    : `Day ${guerrillaDayStart}~${guerrillaDayEnd}`;
+                  toast.success(`게릴라 시험 추가 완료 (${label})`);
                   setGuerrillaOpen(false);
                   setGuerrillaStudentId('');
                   fetchStudentScheduleInfo();
