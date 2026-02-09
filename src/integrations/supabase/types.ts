@@ -1458,6 +1458,7 @@ export type Database = {
       vocab_settings: {
         Row: {
           book_name: string
+          bundle_days: boolean
           created_at: string
           current_day_number: number
           cutline_percent: number
@@ -1472,6 +1473,7 @@ export type Database = {
         }
         Insert: {
           book_name: string
+          bundle_days?: boolean
           created_at?: string
           current_day_number?: number
           cutline_percent?: number
@@ -1486,6 +1488,7 @@ export type Database = {
         }
         Update: {
           book_name?: string
+          bundle_days?: boolean
           created_at?: string
           current_day_number?: number
           cutline_percent?: number

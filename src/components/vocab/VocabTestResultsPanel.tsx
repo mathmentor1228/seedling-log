@@ -23,6 +23,7 @@ interface Schedule {
   day_number: number;
   book_name: string;
   schedule_type: string;
+  setting_id: string;
   students?: { name: string; grade: string | null };
 }
 
@@ -46,6 +47,7 @@ export function VocabTestResultsPanel() {
   const { user } = useAuth();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
+  const [settings, setSettings] = useState<Record<string, { days_per_test: number; bundle_days: boolean }>>({});
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
@@ -72,7 +74,7 @@ export function VocabTestResultsPanel() {
     const startOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1), 'yyyy-MM-dd');
     const endOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0), 'yyyy-MM-dd');
 
-    const [schedRes, resRes] = await Promise.all([
+    const [schedRes, resRes, settingsRes] = await Promise.all([
       supabase
         .from('vocab_schedules')
         .select('*, students(name, grade)')
@@ -85,15 +87,34 @@ export function VocabTestResultsPanel() {
         .gte('test_date', startOfMonth)
         .lte('test_date', endOfMonth)
         .order('test_date'),
+      supabase
+        .from('vocab_settings')
+        .select('id, days_per_test, bundle_days'),
     ]);
 
     if (schedRes.data) setSchedules(schedRes.data as any);
     if (resRes.data) setResults(resRes.data as any);
+    if (settingsRes.data) {
+      const map: Record<string, { days_per_test: number; bundle_days: boolean }> = {};
+      for (const s of settingsRes.data) {
+        map[s.id] = { days_per_test: s.days_per_test, bundle_days: (s as any).bundle_days || false };
+      }
+      setSettings(map);
+    }
     setLoading(false);
   };
 
   const todaySchedules = schedules.filter(s => s.test_date === format(selectedDate, 'yyyy-MM-dd'));
   const getResult = (scheduleId: string) => results.find(r => r.schedule_id === scheduleId);
+
+  const formatDayLabel = (sched: Schedule) => {
+    const setting = settings[sched.setting_id];
+    if (setting?.bundle_days && setting.days_per_test > 1) {
+      const endDay = sched.day_number + setting.days_per_test - 1;
+      return `Day ${sched.day_number}~${endDay}`;
+    }
+    return `Day ${sched.day_number}`;
+  };
 
   const openResultInput = (sched: Schedule) => {
     const existing = getResult(sched.id);
@@ -276,7 +297,7 @@ export function VocabTestResultsPanel() {
                         </TableCell>
                         <TableCell className="text-sm">{sched.book_name}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="secondary" className="font-mono text-xs">Day {sched.day_number}</Badge>
+                          <Badge variant="secondary" className="font-mono text-xs">{formatDayLabel(sched)}</Badge>
                         </TableCell>
                         <TableCell className="text-center">
                           <Badge variant={sched.schedule_type === 'retest' ? 'destructive' : 'outline'} className="text-xs">
@@ -364,7 +385,7 @@ export function VocabTestResultsPanel() {
               <div className="bg-muted rounded-md p-3 text-sm">
                 <p className="font-medium">{(activeSchedule as any).students?.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {activeSchedule.book_name} · Day {activeSchedule.day_number}
+                  {activeSchedule.book_name} · {formatDayLabel(activeSchedule)}
                 </p>
               </div>
 

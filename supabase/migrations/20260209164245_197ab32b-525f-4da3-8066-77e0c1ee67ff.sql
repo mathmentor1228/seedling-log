@@ -1,0 +1,1 @@
+ALTER TABLE public.vocab_settings ADD COLUMN bundle_days boolean NOT NULL DEFAULT false;
