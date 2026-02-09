@@ -37,7 +37,9 @@ interface StudentScheduleInfo {
   currentDay: number;
   daysPerTest: number;
   bundleDays: boolean;
-  scheduleCount: number; // existing schedules this month
+  totalDays: number | null;
+  teacherId: string;
+  scheduleCount: number;
 }
 
 export function VocabScheduleGenerator() {
@@ -48,6 +50,8 @@ export function VocabScheduleGenerator() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
+  const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
 
   // Delete confirmation
   const [deleteMode, setDeleteMode] = useState<'selected' | 'all' | null>(null);
@@ -102,8 +106,20 @@ export function VocabScheduleGenerator() {
       currentDay: s.current_day_number,
       daysPerTest: s.days_per_test,
       bundleDays: s.bundle_days || false,
+      totalDays: s.total_days || null,
+      teacherId: s.teacher_id,
       scheduleCount: countMap[s.student_id] || 0,
     }));
+
+    // Fetch teacher names
+    const teacherIds = new Set(infos.map(i => i.teacherId));
+    if (teacherIds.size > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', Array.from(teacherIds));
+      if (profiles) setTeachers(profiles);
+    }
 
     setStudentInfos(infos);
     setSelectedIds(new Set());
@@ -120,10 +136,20 @@ export function VocabScheduleGenerator() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === studentInfos.length) {
-      setSelectedIds(new Set());
+    const displayIds = displayInfos.map(s => s.studentId);
+    const allChecked = displayIds.every(id => selectedIds.has(id));
+    if (allChecked) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        displayIds.forEach(id => next.delete(id));
+        return next;
+      });
     } else {
-      setSelectedIds(new Set(studentInfos.map(s => s.studentId)));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        displayIds.forEach(id => next.add(id));
+        return next;
+      });
     }
   };
 
@@ -153,12 +179,19 @@ export function VocabScheduleGenerator() {
 
     // Generate new schedules
     const inserts: any[] = [];
+    const skippedStudents: string[] = [];
     for (const info of targetSettings) {
       const allowedDays = DAY_MAP[info.testDays] || [1, 3];
       const testDates = allDays.filter(d => allowedDays.includes(getDay(d)));
       let dayNumber = info.currentDay;
 
       for (const testDate of testDates) {
+        // Check total_days cap
+        if (info.totalDays && dayNumber > info.totalDays) {
+          if (!skippedStudents.includes(info.studentName)) skippedStudents.push(info.studentName);
+          break;
+        }
+
         if (info.bundleDays) {
           inserts.push({
             student_id: info.studentId,
@@ -171,6 +204,7 @@ export function VocabScheduleGenerator() {
           dayNumber += info.daysPerTest;
         } else {
           for (let i = 0; i < info.daysPerTest; i++) {
+            if (info.totalDays && dayNumber > info.totalDays) break;
             inserts.push({
               student_id: info.studentId,
               setting_id: info.settingId,
@@ -196,6 +230,9 @@ export function VocabScheduleGenerator() {
       toast.error(error.message);
     } else {
       toast.success(`${inserts.length}건의 스케줄이 생성되었습니다`);
+      if (skippedStudents.length > 0) {
+        toast.info(`${skippedStudents.join(', ')} — 총 일차 초과로 일부 스케줄 제외`);
+      }
     }
     await fetchStudentScheduleInfo();
     setGenerating(false);
@@ -253,7 +290,12 @@ export function VocabScheduleGenerator() {
     await fetchStudentScheduleInfo();
   };
 
-  const allSelected = studentInfos.length > 0 && selectedIds.size === studentInfos.length;
+  // Filter by teacher
+  const displayInfos = selectedTeacher === 'all'
+    ? studentInfos
+    : studentInfos.filter(s => s.teacherId === selectedTeacher);
+
+  const allSelected = displayInfos.length > 0 && displayInfos.every(s => selectedIds.has(s.studentId));
   const someSelected = selectedIds.size > 0;
 
   return (
@@ -292,6 +334,20 @@ export function VocabScheduleGenerator() {
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={fetchStudentScheduleInfo} disabled={loading}>
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
+            {teachers.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">선생님</Label>
+                <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+                  <SelectTrigger className="w-[120px]"><SelectValue placeholder="선생님" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    {teachers.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {/* Action buttons */}
@@ -360,11 +416,12 @@ export function VocabScheduleGenerator() {
                 <TableHead>교재</TableHead>
                 <TableHead className="text-center">요일</TableHead>
                 <TableHead className="text-center">시작 DAY</TableHead>
+                <TableHead className="text-center">총 일차</TableHead>
                 <TableHead className="text-center">{Number(month) + 1}월 스케줄</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {studentInfos.map(info => (
+              {displayInfos.map(info => (
                 <TableRow key={info.studentId}>
                   <TableCell>
                     <Checkbox
@@ -380,6 +437,9 @@ export function VocabScheduleGenerator() {
                   <TableCell className="text-center text-xs">{TEST_DAY_LABELS[info.testDays] || info.testDays}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className="text-xs font-mono">Day {info.currentDay}</Badge>
+                  </TableCell>
+                  <TableCell className="text-center text-xs font-mono">
+                    {info.totalDays ? `${info.totalDays}일` : '—'}
                   </TableCell>
                   <TableCell className="text-center">
                     {info.scheduleCount > 0 ? (
