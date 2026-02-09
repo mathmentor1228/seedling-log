@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { Plus, Edit2, Loader2, BookOpen } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 
 interface VocabSetting {
   id: string;
@@ -22,6 +23,7 @@ interface VocabSetting {
   test_days: string[];
   current_day_number: number;
   is_active: boolean;
+  bundle_days: boolean;
   notes: string | null;
   students?: { name: string; grade: string | null; school: string | null };
 }
@@ -53,6 +55,7 @@ export function VocabSettingsPanel() {
   const [formCutline, setFormCutline] = useState(80);
   const [formTestDays, setFormTestDays] = useState('mon_wed');
   const [formCurrentDay, setFormCurrentDay] = useState(1);
+  const [formBundleDays, setFormBundleDays] = useState(false);
   const [formNotes, setFormNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -86,6 +89,7 @@ export function VocabSettingsPanel() {
     setFormCutline(80);
     setFormTestDays('mon_wed');
     setFormCurrentDay(1);
+    setFormBundleDays(false);
     setFormNotes('');
     setEditingId(null);
   };
@@ -98,6 +102,7 @@ export function VocabSettingsPanel() {
     setFormCutline(s.cutline_percent);
     setFormTestDays(s.test_days[0] || 'mon_wed');
     setFormCurrentDay(s.current_day_number);
+    setFormBundleDays(s.bundle_days);
     setFormNotes(s.notes || '');
     setDialogOpen(true);
   };
@@ -117,6 +122,7 @@ export function VocabSettingsPanel() {
       cutline_percent: formCutline,
       test_days: [formTestDays],
       current_day_number: formCurrentDay,
+      bundle_days: formBundleDays,
       notes: formNotes || null,
       is_active: true,
     };
@@ -224,6 +230,18 @@ export function VocabSettingsPanel() {
                 <Input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="선택 사항" />
               </div>
 
+              {formDaysPerTest > 1 && (
+                <div className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <Label className="text-xs font-medium">DAY 묶음 시험</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formDaysPerTest}개 DAY를 하나의 시험으로 묶어서 봅니다
+                    </p>
+                  </div>
+                  <Switch checked={formBundleDays} onCheckedChange={setFormBundleDays} />
+                </div>
+              )}
+
               <Button onClick={handleSave} disabled={saving} className="w-full">
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
                 {editingId ? '수정' : '등록'}
@@ -250,6 +268,7 @@ export function VocabSettingsPanel() {
                 <TableHead className="text-center w-[60px]">DAY</TableHead>
                 <TableHead className="text-center w-[70px]">커트라인</TableHead>
                 <TableHead className="text-center w-[60px]">요일</TableHead>
+                <TableHead className="text-center w-[50px]">묶음</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -269,6 +288,9 @@ export function VocabSettingsPanel() {
                   <TableCell className="text-center text-sm">{s.cutline_percent}%</TableCell>
                   <TableCell className="text-center text-xs">
                     {s.test_days.map(d => TEST_DAY_OPTIONS.find(o => o.value === d)?.label || d).join(', ')}
+                  </TableCell>
+                  <TableCell className="text-center text-xs">
+                    {s.days_per_test > 1 ? (s.bundle_days ? '묶음' : '개별') : '—'}
                   </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>

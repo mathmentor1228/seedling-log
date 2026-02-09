@@ -76,18 +76,35 @@ export function VocabScheduleGenerator() {
       const testDates = allDays.filter(d => allowedDays.includes(getDay(d)));
 
       let dayNumber = setting.current_day_number;
+      const bundleDays = (setting as any).bundle_days || false;
 
       for (const testDate of testDates) {
-        for (let i = 0; i < setting.days_per_test; i++) {
+        if (bundleDays) {
+          // Bundle: one schedule entry covering multiple days
+          const startDay = dayNumber;
+          const endDay = dayNumber + setting.days_per_test - 1;
           inserts.push({
             student_id: setting.student_id,
             setting_id: setting.id,
             test_date: format(testDate, 'yyyy-MM-dd'),
-            day_number: dayNumber,
+            day_number: startDay,
             book_name: setting.book_name,
             schedule_type: 'regular',
           });
-          dayNumber++;
+          dayNumber += setting.days_per_test;
+        } else {
+          // Individual: separate schedule entry per day
+          for (let i = 0; i < setting.days_per_test; i++) {
+            inserts.push({
+              student_id: setting.student_id,
+              setting_id: setting.id,
+              test_date: format(testDate, 'yyyy-MM-dd'),
+              day_number: dayNumber,
+              book_name: setting.book_name,
+              schedule_type: 'regular',
+            });
+            dayNumber++;
+          }
         }
       }
     }
