@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2, FileText } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2, FileText, ArrowRight } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface Schedule {
@@ -88,6 +88,11 @@ export function VocabTestResultsPanel() {
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
+
+  // Postpone dialog
+  const [postponeTarget, setPostponeTarget] = useState<Schedule | null>(null);
+  const [postponeDate, setPostponeDate] = useState<Date | undefined>();
+  const [postponeSaving, setPostponeSaving] = useState(false);
 
   useEffect(() => {
     fetchSchedulesAndResults();
@@ -359,6 +364,33 @@ export function VocabTestResultsPanel() {
     setSaving(false);
   };
 
+  const handlePostpone = async () => {
+    if (!postponeTarget || !postponeDate) return;
+    setPostponeSaving(true);
+    const newDate = format(postponeDate, 'yyyy-MM-dd');
+    const { error } = await supabase
+      .from('vocab_schedules')
+      .update({ test_date: newDate })
+      .eq('id', postponeTarget.id);
+
+    const existingResult = getResult(postponeTarget.id);
+    if (!error && existingResult) {
+      await supabase
+        .from('vocab_test_results')
+        .update({ test_date: newDate })
+        .eq('id', existingResult.id);
+    }
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`시험이 ${newDate}로 변경되었습니다`);
+      setPostponeTarget(null);
+      fetchSchedulesAndResults();
+    }
+    setPostponeSaving(false);
+  };
+
   const handleScheduleRetest = async () => {
     if (!retestResult || !retestDate || !retestTime) return;
     setSaving(true);
@@ -565,6 +597,9 @@ export function VocabTestResultsPanel() {
                                 재시험
                               </Button>
                             )}
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-warning" onClick={() => { setPostponeTarget(sched); setPostponeDate(undefined); }} title="날짜 미루기">
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </Button>
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(sched)}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
@@ -795,6 +830,51 @@ export function VocabTestResultsPanel() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Postpone dialog */}
+      <Dialog open={!!postponeTarget} onOpenChange={(open) => !open && setPostponeTarget(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>시험 날짜 변경</DialogTitle>
+          </DialogHeader>
+          {postponeTarget && (
+            <div className="space-y-4 pt-2">
+              <div className="bg-muted rounded-md p-3 text-sm">
+                <p className="font-medium">{(postponeTarget as any).students?.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {postponeTarget.book_name} · Day {postponeTarget.day_number}
+                </p>
+                <p className="text-xs text-muted-foreground">현재: {postponeTarget.test_date}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">변경할 날짜</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-sm font-normal">
+                      <CalendarDays className="w-4 h-4 mr-2" />
+                      {postponeDate ? format(postponeDate, 'yyyy-MM-dd') : '날짜 선택'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={postponeDate}
+                      onSelect={(d) => d && setPostponeDate(d)}
+                      locale={ko}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <Button onClick={handlePostpone} disabled={postponeSaving || !postponeDate} className="w-full">
+                {postponeSaving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                날짜 변경
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
