@@ -23,6 +23,7 @@ interface ReportRow {
   parent_message: string | null;
   generated_at: string;
   risk_level: string | null;
+  teacher_subjects?: string[]; // subjects this teacher teaches for this student
 }
 
 function stripDebugMarkers(text: string): string {
@@ -105,27 +106,43 @@ export default function ReportStatusPage() {
         student_name: r.students?.name || '알 수 없음',
       }));
 
-      // Teachers: filter to own students
+      // Teachers: filter to own students and attach subject info
       if (role === 'teacher' && user) {
         const [linksRes, classesRes, sstRes] = await Promise.all([
           supabase.from('teacher_student_links').select('student_id').eq('teacher_id', user.id),
-          supabase.from('classes').select('id').eq('teacher_id', user.id),
-          supabase.from('student_subject_teachers').select('student_id').eq('teacher_id', user.id),
+          supabase.from('classes').select('id, subject').eq('teacher_id', user.id),
+          supabase.from('student_subject_teachers').select('student_id, subject').eq('teacher_id', user.id),
         ]);
 
-        const myStudentIds = new Set<string>();
-        (linksRes.data || []).forEach((l: any) => myStudentIds.add(l.student_id));
-        (sstRes.data || []).forEach((s: any) => myStudentIds.add(s.student_id));
+        // Build student → subjects map
+        const studentSubjects = new Map<string, Set<string>>();
+        const addStudentSubject = (sid: string, subj?: string) => {
+          if (!studentSubjects.has(sid)) studentSubjects.set(sid, new Set());
+          if (subj) studentSubjects.get(sid)!.add(subj);
+        };
+
+        (linksRes.data || []).forEach((l: any) => addStudentSubject(l.student_id));
+        (sstRes.data || []).forEach((s: any) => addStudentSubject(s.student_id, s.subject));
 
         if (classesRes.data && classesRes.data.length > 0) {
+          const classSubjectMap = new Map<string, string>();
+          classesRes.data.forEach((c: any) => classSubjectMap.set(c.id, c.subject));
+
           const { data: csData } = await supabase
             .from('class_students')
-            .select('student_id')
+            .select('student_id, class_id')
             .in('class_id', classesRes.data.map((c: any) => c.id));
-          (csData || []).forEach((cs: any) => myStudentIds.add(cs.student_id));
+          (csData || []).forEach((cs: any) => {
+            addStudentSubject(cs.student_id, classSubjectMap.get(cs.class_id));
+          });
         }
 
-        rows = rows.filter(r => myStudentIds.has(r.student_id));
+        rows = rows
+          .filter(r => studentSubjects.has(r.student_id))
+          .map(r => ({
+            ...r,
+            teacher_subjects: Array.from(studentSubjects.get(r.student_id) || []),
+          }));
       }
 
       setReports(rows);
@@ -204,10 +221,13 @@ export default function ReportStatusPage() {
                   <Card key={r.id} className={cardBorder}>
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold text-foreground">{r.student_name}</h3>
                           {isHigh && <span className="text-2xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">주의</span>}
                           {isMedium && <span className="text-2xs px-1.5 py-0.5 rounded bg-warning/10 text-warning font-medium">관찰</span>}
+                          {r.teacher_subjects && r.teacher_subjects.length > 0 && r.teacher_subjects.map(subj => (
+                            <span key={subj} className="text-2xs px-1.5 py-0.5 rounded bg-accent text-accent-foreground font-medium">{subj}</span>
+                          ))}
                         </div>
                         <span className="text-xs text-muted-foreground">수업 {r.total_lessons}회</span>
                       </div>
