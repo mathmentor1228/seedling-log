@@ -121,10 +121,43 @@ Deno.serve(async (req) => {
           return aDays - bDays;
         });
 
+        // Fetch upcoming vocab tests (next 14 days)
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + 14);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const futureStr = futureDate.toISOString().split('T')[0];
+
+        const [vocabScheduleRes, vocabResultsRes, vocabSettingsRes] = await Promise.all([
+          supabase
+            .from('vocab_schedules')
+            .select('id, test_date, day_number, book_name, schedule_type')
+            .eq('student_id', student_id)
+            .gte('test_date', todayStr)
+            .lte('test_date', futureStr)
+            .order('test_date'),
+          supabase
+            .from('vocab_test_results')
+            .select('id, test_date, day_number, book_name, score_percent, passed, total_words, correct_words')
+            .eq('student_id', student_id)
+            .gte('test_date', twoWeeksAgo.toISOString().split('T')[0])
+            .order('test_date', { ascending: false })
+            .limit(20),
+          supabase
+            .from('vocab_settings')
+            .select('book_name, current_day_number, cutline_percent, total_days')
+            .eq('student_id', student_id)
+            .eq('is_active', true)
+            .limit(1)
+            .maybeSingle(),
+        ]);
+
         result = {
           total_points: studentData?.total_points || 0,
           pending_homework: homeworkData || [],
           upcoming_classes: upcomingClasses.slice(0, 3),
+          vocab_schedules: vocabScheduleRes.data || [],
+          vocab_results: vocabResultsRes.data || [],
+          vocab_setting: vocabSettingsRes.data || null,
         };
         break;
       }

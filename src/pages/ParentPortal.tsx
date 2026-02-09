@@ -10,7 +10,9 @@ interface Homework { id: string; content: string; subject: string; assigned_date
 interface LessonRecord { id: string; date: string; subject: string; range: string; course: string | null; understanding_score: number | null; attendance_status: string[] | null; }
 interface Attendance { date: string; status: string; note: string | null; }
 interface WeeklyReport { id: string; week_start: string; week_end: string; total_lessons: number; avg_understanding: number | null; homework_completion_rate: number | null; risk_level: string | null; parent_message: string | null; generated_at: string; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; }
+interface VocabScheduleItem { id: string; test_date: string; day_number: number; book_name: string; schedule_type: string; }
+interface VocabResultItem { id: string; test_date: string; day_number: number; book_name: string; score_percent: number | null; passed: boolean; total_words: number | null; correct_words: number | null; }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -75,6 +77,8 @@ export default function ParentPortal() {
   );
 
   const { student, homework, lessons, attendance, reports } = data;
+  const vocabSchedules = data.vocab_schedules || [];
+  const vocabResults = data.vocab_results || [];
   const label = `${student.name}${student.school_level && student.grade_year ? ` (${student.school_level}${student.grade_year})` : ''}`;
 
   return (
@@ -115,6 +119,11 @@ export default function ParentPortal() {
           />
         ) : (
           <Timeline lessons={lessons} homework={homework} />
+        )}
+
+        {/* Vocab Test Section */}
+        {(vocabSchedules.length > 0 || vocabResults.length > 0) && (
+          <VocabSection schedules={vocabSchedules} results={vocabResults} />
         )}
 
         {/* Reports */}
@@ -495,6 +504,71 @@ function StatusPill({ icon, label, color }: { icon: React.ReactNode; label: stri
     <span className={`shrink-0 flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full ${color}`}>
       {icon} {label}
     </span>
+  );
+}
+
+/* ═══════ Vocab Section ═══════ */
+function VocabSection({ schedules, results }: { schedules: VocabScheduleItem[]; results: VocabResultItem[] }) {
+  return (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold text-gray-500 px-1">📖 영어 단어 시험</h3>
+
+      {schedules.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardContent className="p-3 space-y-1.5">
+            <p className="text-[11px] font-medium text-gray-500">다가오는 시험</p>
+            {schedules.slice(0, 5).map(vs => {
+              const d = new Date(vs.test_date + 'T00:00:00');
+              return (
+                <div key={vs.id} className="flex items-center justify-between py-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                      {d.getMonth() + 1}/{d.getDate()}
+                    </span>
+                    <span className="text-[13px] text-gray-700">{vs.book_name}</span>
+                  </div>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                    vs.schedule_type === 'retest' ? 'bg-red-50 text-red-600' :
+                    vs.schedule_type === 'guerrilla' ? 'bg-amber-50 text-amber-600' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    Day {vs.day_number} {vs.schedule_type === 'retest' ? '재시험' : vs.schedule_type === 'guerrilla' ? '게릴라' : ''}
+                  </span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {results.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardContent className="p-3 space-y-1.5">
+            <p className="text-[11px] font-medium text-gray-500">최근 결과</p>
+            {results.slice(0, 5).map(vr => (
+              <div key={vr.id} className="flex items-center justify-between py-1.5">
+                <div className="flex items-center gap-2">
+                  {vr.passed ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5 text-red-500" />
+                  )}
+                  <span className="text-[13px] text-gray-700">{vr.book_name} Day {vr.day_number}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {vr.total_words != null && vr.correct_words != null && (
+                    <span className="text-[10px] text-gray-400">{vr.correct_words}/{vr.total_words}</span>
+                  )}
+                  <span className={`text-[11px] font-bold font-mono ${vr.passed ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {vr.score_percent}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 

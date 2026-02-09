@@ -12,7 +12,9 @@ import {
   ClipboardCheck,
   ChevronRight,
   Upload,
-  Clock
+  Clock,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -34,11 +36,40 @@ interface UpcomingClass {
   end_time: string;
 }
 
+interface VocabSchedule {
+  id: string;
+  test_date: string;
+  day_number: number;
+  book_name: string;
+  schedule_type: string;
+}
+
+interface VocabResult {
+  id: string;
+  test_date: string;
+  day_number: number;
+  book_name: string;
+  score_percent: number | null;
+  passed: boolean;
+  total_words: number | null;
+  correct_words: number | null;
+}
+
+interface VocabSetting {
+  book_name: string;
+  current_day_number: number;
+  cutline_percent: number;
+  total_days: number | null;
+}
+
 export default function StudentDashboard() {
   const { student } = useStudentAuth();
   const [totalPoints, setTotalPoints] = useState(0);
   const [pendingHomework, setPendingHomework] = useState<HomeworkItem[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
+  const [vocabSchedules, setVocabSchedules] = useState<VocabSchedule[]>([]);
+  const [vocabResults, setVocabResults] = useState<VocabResult[]>([]);
+  const [vocabSetting, setVocabSetting] = useState<VocabSetting | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -63,6 +94,9 @@ export default function StudentDashboard() {
         setTotalPoints(data.total_points);
         setPendingHomework(data.pending_homework);
         setUpcomingClasses(data.upcoming_classes);
+        setVocabSchedules(data.vocab_schedules || []);
+        setVocabResults(data.vocab_results || []);
+        setVocabSetting(data.vocab_setting || null);
       }
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
@@ -158,6 +192,75 @@ export default function StudentDashboard() {
           </Card>
         </Link>
       </div>
+
+      {/* Vocab Test Section */}
+      {(vocabSchedules.length > 0 || vocabResults.length > 0) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BookOpen className="w-5 h-5" />
+              영어 단어 시험
+              {vocabSetting && (
+                <Badge variant="secondary" className="text-[10px] ml-auto font-normal">
+                  {vocabSetting.book_name} · 커트라인 {vocabSetting.cutline_percent}%
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {vocabSchedules.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">📅 다가오는 시험</p>
+                <div className="space-y-1.5">
+                  {vocabSchedules.slice(0, 5).map(vs => {
+                    const d = new Date(vs.test_date + 'T00:00:00');
+                    const dayLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+                    return (
+                      <div key={vs.id} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">{dayLabel}</span>
+                          <span className="text-sm">{vs.book_name}</span>
+                        </div>
+                        <Badge variant={vs.schedule_type === 'retest' ? 'destructive' : vs.schedule_type === 'guerrilla' ? 'outline' : 'secondary'} className="text-[10px]">
+                          Day {vs.day_number} {vs.schedule_type === 'retest' ? '재시험' : vs.schedule_type === 'guerrilla' ? '게릴라' : ''}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {vocabResults.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">📊 최근 결과</p>
+                <div className="space-y-1.5">
+                  {vocabResults.slice(0, 5).map(vr => (
+                    <div key={vr.id} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        {vr.passed ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-destructive" />
+                        )}
+                        <span className="text-sm">{vr.book_name} Day {vr.day_number}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {vr.total_words != null && vr.correct_words != null && (
+                          <span className="text-xs text-muted-foreground">{vr.correct_words}/{vr.total_words}</span>
+                        )}
+                        <Badge variant={vr.passed ? 'secondary' : 'destructive'} className="text-[10px] font-mono">
+                          {vr.score_percent}%
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pending Homework */}
       {pendingHomework.length > 0 && (
