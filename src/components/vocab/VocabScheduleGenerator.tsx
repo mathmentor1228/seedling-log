@@ -54,6 +54,7 @@ export function VocabScheduleGenerator() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
 
   // Guerrilla test dialog
   const [guerrillaOpen, setGuerrillaOpen] = useState(false);
@@ -164,7 +165,8 @@ export function VocabScheduleGenerator() {
     setGenerating(true);
     const { start, end } = getMonthRange();
     const target = new Date(Number(year), Number(month), 1);
-    const allDays = eachDayOfInterval({ start: startOfMonth(target), end: endOfMonth(target) });
+    const rangeStart = startDate ? new Date(startDate) : startOfMonth(target);
+    const allDays = eachDayOfInterval({ start: rangeStart > startOfMonth(target) ? rangeStart : startOfMonth(target), end: endOfMonth(target) });
 
     const targetSettings = studentInfos.filter(s => targetStudentIds.includes(s.studentId));
 
@@ -352,6 +354,19 @@ export function VocabScheduleGenerator() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">시작일</Label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-[150px]"
+                placeholder="미입력 시 월초"
+              />
+              {startDate && (
+                <p className="text-[10px] text-muted-foreground">{startDate}부터 생성</p>
+              )}
             </div>
           </div>
 

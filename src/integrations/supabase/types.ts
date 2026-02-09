@@ -1409,6 +1409,7 @@ export type Database = {
       }
       vocab_schedules: {
         Row: {
+          absence_reason: string | null
           book_name: string
           created_at: string
           day_number: number
@@ -1420,6 +1421,7 @@ export type Database = {
           test_time: string | null
         }
         Insert: {
+          absence_reason?: string | null
           book_name: string
           created_at?: string
           day_number: number
@@ -1431,6 +1433,7 @@ export type Database = {
           test_time?: string | null
         }
         Update: {
+          absence_reason?: string | null
           book_name?: string
           created_at?: string
           day_number?: number

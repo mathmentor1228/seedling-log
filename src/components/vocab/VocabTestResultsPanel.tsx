@@ -452,10 +452,11 @@ export function VocabTestResultsPanel() {
                     <TableHead>학생</TableHead>
                     <TableHead>교재</TableHead>
                     <TableHead className="text-center">DAY</TableHead>
-                    <TableHead className="text-center">유형</TableHead>
-                    <TableHead className="text-center">시간</TableHead>
-                    <TableHead className="text-center">결과</TableHead>
-                    <TableHead className="w-[100px]"></TableHead>
+                     <TableHead className="text-center">유형</TableHead>
+                     <TableHead className="text-center">시간</TableHead>
+                     <TableHead className="text-center">결과</TableHead>
+                     <TableHead className="text-center">결석</TableHead>
+                     <TableHead className="w-[100px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -490,6 +491,33 @@ export function VocabTestResultsPanel() {
                             </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">미입력</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {(sched as any).absence_reason ? (
+                            <Badge variant="outline" className="text-xs text-destructive border-destructive/30">
+                              {(sched as any).absence_reason}
+                            </Badge>
+                          ) : !result ? (
+                            <Select
+                              value=""
+                              onValueChange={async (val) => {
+                                await supabase.from('vocab_schedules').update({ absence_reason: val }).eq('id', sched.id);
+                                toast.success('결석 사유가 등록되었습니다');
+                                fetchSchedulesAndResults();
+                              }}
+                            >
+                              <SelectTrigger className="h-7 w-[90px] text-xs">
+                                <SelectValue placeholder="—" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="인정결석">인정결석</SelectItem>
+                                <SelectItem value="무단결석">무단결석</SelectItem>
+                                <SelectItem value="기타결석">기타결석</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
                         <TableCell>
