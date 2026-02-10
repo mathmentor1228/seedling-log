@@ -1382,7 +1382,7 @@ export default function Dashboard() {
     });
   }
   
-  if (pendingHomework.length > 0 && !isTeacher(role)) {
+  if (pendingHomework.length > 0) {
     attentionItems.push({
       icon: <CheckSquare className="w-4 h-4" />,
       label: '숙제 확인 대기',
@@ -2156,7 +2156,7 @@ export default function Dashboard() {
       )}
 
       {/* Pending Homework Section - Hidden for teachers */}
-      {pendingHomework.length > 0 && !isTeacher(role) && (
+      {pendingHomework.length > 0 && (
         <Collapsible open={homeworkOpen} onOpenChange={setHomeworkOpen}>
           <Card className="border-primary/20 animate-slide-up">
             <CollapsibleTrigger asChild>
