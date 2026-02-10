@@ -372,7 +372,7 @@ export default function Dashboard() {
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
   // NEXT-HW-BADGE-V1: Include hasNextHomework
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean }>>({});
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { url: string; text: string | null; at: string | null; studentName: string } }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
@@ -773,10 +773,11 @@ export default function Dashboard() {
         }
 
         // Also check unchecked homework for photo submissions (for all roster students)
+        let photoDataMap: Record<string, { url: string; text: string | null; at: string | null }> = {};
         if (studentIds.length > 0) {
           const { data: pendingHw } = await supabase
             .from('homework_assignments')
-            .select('student_id, submitted_at, submission_image_url')
+            .select('student_id, submitted_at, submission_image_url, submission_text')
             .in('student_id', studentIds)
             .eq('check_status', 'unchecked')
             .not('submitted_at', 'is', null)
@@ -785,14 +786,23 @@ export default function Dashboard() {
           (pendingHw || []).forEach((hw: any) => {
             if (hw.submitted_at && hw.submission_image_url) {
               photoSubmissionSet.add(hw.student_id);
+              photoDataMap[hw.student_id] = { url: hw.submission_image_url, text: hw.submission_text, at: hw.submitted_at };
             }
           });
         }
         
-        const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean }> = {};
+        // Build a student name lookup from roster rows
+        const studentNameLookup: Record<string, string> = {};
+        (adminRosterData?.roster_rows || []).forEach((r: any) => { studentNameLookup[r.student_id] = r.student_name; });
+
+        const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { url: string; text: string | null; at: string | null; studentName: string } }> = {};
         (lessonRecords || []).forEach((lr: any) => {
           const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
-          statusMap[key] = { submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null, hasNextHomework: hwAssignmentSet.has(lr.id), hasPhotoSubmission: photoSubmissionSet.has(lr.student_id) };
+          const pd = photoDataMap[lr.student_id];
+          statusMap[key] = { 
+            submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null, hasNextHomework: hwAssignmentSet.has(lr.id), hasPhotoSubmission: photoSubmissionSet.has(lr.student_id),
+            ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[lr.student_id] || '학생' } } : {})
+          };
         });
         
         setLessonStatusMap(statusMap);
@@ -1659,9 +1669,22 @@ export default function Dashboard() {
                                   <Badge className={`${hwBadgeClass} text-xs`} title={isAdmin(role) ? `HW_STATUS_DEBUG: raw=${rawHwStatus} rendered=${hwLabel} recordId=${lessonStatus?.recordId || 'none'}` : undefined}>
                                     {hwLabel}
                                   </Badge>
-                                  {lessonStatus?.hasPhotoSubmission && (
-                                    <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
-                                      📷
+                                  {lessonStatus?.hasPhotoSubmission && lessonStatus.photoData && (
+                                    <Badge 
+                                      className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs cursor-pointer hover:bg-blue-500/25"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPhotoViewHw({
+                                          id: '', student_id: row.student_id, student_name: row.student_name,
+                                          subject: row.subject, content: '', assigned_date: '',
+                                          has_photo_submission: true,
+                                          submission_image_url: lessonStatus.photoData!.url,
+                                          submission_text: lessonStatus.photoData!.text,
+                                          submitted_at: lessonStatus.photoData!.at,
+                                        });
+                                      }}
+                                    >
+                                      📷 사진보기
                                     </Badge>
                                   )}
                                 </div>
