@@ -6,6 +6,50 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// DEADLINE-V1: Calculate the next class datetime for a given subject and student's schedule
+// Returns the next occurrence of the class (KST), or null if no schedule found
+function getNextClassDatetimeKST(
+  schedules: Array<{ day_of_week: number; start_time: string; subject: string }>,
+  subject: string,
+  nowKST: Date
+): Date | null {
+  const subjectSchedules = schedules.filter(s => s.subject === subject);
+  if (subjectSchedules.length === 0) return null;
+
+  const currentDow = nowKST.getDay(); // 0=Sun
+  let closest: Date | null = null;
+
+  for (const sched of subjectSchedules) {
+    // Check next 7 days to find the closest upcoming class
+    for (let offset = 0; offset <= 7; offset++) {
+      const targetDow = (currentDow + offset) % 7;
+      if (targetDow !== sched.day_of_week) continue;
+
+      const classDate = new Date(nowKST);
+      classDate.setDate(classDate.getDate() + offset);
+      const [h, m] = sched.start_time.split(':').map(Number);
+      classDate.setHours(h, m, 0, 0);
+
+      // Skip if this class time is already past
+      if (classDate <= nowKST) continue;
+
+      if (!closest || classDate < closest) {
+        closest = classDate;
+      }
+      break; // Found the nearest occurrence for this schedule
+    }
+  }
+
+  return closest;
+}
+
+// DEADLINE-V1: Get submission deadline = next class start - 5 hours
+function getDeadlineFromClassTime(nextClassKST: Date): Date {
+  const deadline = new Date(nextClassKST);
+  deadline.setHours(deadline.getHours() - 5);
+  return deadline;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -47,6 +91,52 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: 'Invalid session' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // DEADLINE-V1: Helper to get student's class schedules with subjects
+    async function getStudentClassSchedules() {
+      const { data } = await supabase
+        .from('class_students')
+        .select(`
+          class_id,
+          classes!inner (
+            subject,
+            class_schedules!inner (
+              day_of_week,
+              start_time,
+              is_active
+            )
+          )
+        `)
+        .eq('student_id', student_id);
+
+      const schedules: Array<{ day_of_week: number; start_time: string; subject: string }> = [];
+      if (data) {
+        for (const cs of data) {
+          const classInfo = cs.classes as any;
+          if (classInfo?.class_schedules) {
+            for (const sched of classInfo.class_schedules) {
+              if (sched.is_active) {
+                schedules.push({
+                  day_of_week: sched.day_of_week,
+                  start_time: sched.start_time,
+                  subject: classInfo.subject,
+                });
+              }
+            }
+          }
+        }
+      }
+      return schedules;
+    }
+
+    // Get current time in KST
+    function getNowKST(): Date {
+      const now = new Date();
+      // Convert to KST by adding offset
+      const kstOffset = 9 * 60; // KST is UTC+9
+      const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+      return new Date(utcMs + kstOffset * 60000);
     }
 
     let result: any = null;
@@ -180,6 +270,10 @@ Deno.serve(async (req) => {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(now.getDate() - 7);
 
+        // DEADLINE-V1: Fetch class schedules for deadline calculation
+        const classSchedules = await getStudentClassSchedules();
+        const nowKST = getNowKST();
+
         const homeworkItems = (data || []).map((hw: any) => {
           const assignedDate = new Date(hw.assigned_date);
           const isOlderThan7Days = assignedDate < sevenDaysAgo;
@@ -191,9 +285,24 @@ Deno.serve(async (req) => {
             new Date(other.assigned_date) > assignedDate
           );
 
+          // DEADLINE-V1: Calculate deadline for unchecked homework
+          let deadline_at: string | null = null;
+          let is_deadline_passed = false;
+
+          if (hw.check_status === 'unchecked') {
+            const nextClass = getNextClassDatetimeKST(classSchedules, hw.subject, nowKST);
+            if (nextClass) {
+              const deadline = getDeadlineFromClassTime(nextClass);
+              deadline_at = deadline.toISOString();
+              is_deadline_passed = nowKST >= deadline;
+            }
+          }
+
           return {
             ...hw,
             is_expired: isOlderThan7Days && hasNewerHomework,
+            deadline_at,
+            is_deadline_passed,
           };
         });
 
@@ -232,6 +341,37 @@ Deno.serve(async (req) => {
           );
         }
 
+        // DEADLINE-V1: Server-side deadline validation
+        const { data: hwData } = await supabase
+          .from('homework_assignments')
+          .select('subject, check_status')
+          .eq('id', homework_id)
+          .eq('student_id', student_id)
+          .single();
+
+        if (!hwData) {
+          return new Response(
+            JSON.stringify({ error: 'Homework not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (hwData.check_status === 'unchecked') {
+          const classSchedules = await getStudentClassSchedules();
+          const nowKST = getNowKST();
+          const nextClass = getNextClassDatetimeKST(classSchedules, hwData.subject, nowKST);
+
+          if (nextClass) {
+            const deadline = getDeadlineFromClassTime(nextClass);
+            if (nowKST >= deadline) {
+              return new Response(
+                JSON.stringify({ error: 'DEADLINE_PASSED', message: '제출 마감 시간이 지났습니다.' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+          }
+        }
+
         // Fetch old submission to delete previous storage files on re-submission
         const { data: oldHw } = await supabase
           .from('homework_assignments')
@@ -244,7 +384,6 @@ Deno.serve(async (req) => {
           const oldUrls = oldHw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
           const pathsToDelete: string[] = [];
           for (const url of oldUrls) {
-            // Extract storage path from public URL: .../object/public/homework-submissions/PATH
             const match = url.match(/\/object\/public\/homework-submissions\/(.+)$/);
             if (match) {
               pathsToDelete.push(match[1]);
