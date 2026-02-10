@@ -799,25 +799,26 @@ export default function Dashboard() {
             }
           });
 
-          // Fallback: homework_assignments.submission_image_url for students not found above
-          // PHOTO-MATCH-V2: Order by assigned_date DESC so the LATEST homework's photo wins per student+subject
-          const { data: hwWithPhotos } = await supabase
+          // Fallback: homework_assignments.submission_image_url
+          // PHOTO-MATCH-V3: Only show photo from the LATEST homework per student+subject.
+          // If the latest homework has no photo, do NOT fall back to older homework photos.
+          const { data: hwAll } = await supabase
             .from('homework_assignments')
             .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text')
             .in('student_id', studentIds)
-            .not('submitted_at', 'is', null)
-            .not('submission_image_url', 'is', null)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
           
-          (hwWithPhotos || []).forEach((hw: any) => {
-            if (hw.submitted_at && hw.submission_image_url) {
-              const photoKey = `${hw.student_id}:${hw.subject}`;
-              // Only use the first (newest by assigned_date) match per student+subject
-              if (!photoDataMap[photoKey]) {
-                const imgUrls = hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
-                photoDataMap[photoKey] = { urls: imgUrls, text: hw.submission_text || null, at: hw.submitted_at };
-              }
+          // Track which student+subject we've already seen (latest first)
+          const seenLatest = new Set<string>();
+          (hwAll || []).forEach((hw: any) => {
+            const photoKey = `${hw.student_id}:${hw.subject}`;
+            if (seenLatest.has(photoKey)) return; // skip older assignments
+            seenLatest.add(photoKey);
+            // Only populate photo if THIS (latest) assignment has a submission
+            if (hw.submitted_at && hw.submission_image_url && !photoDataMap[photoKey]) {
+              const imgUrls = hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
+              photoDataMap[photoKey] = { urls: imgUrls, text: hw.submission_text || null, at: hw.submitted_at };
             }
           });
         }
