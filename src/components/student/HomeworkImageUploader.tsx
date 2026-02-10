@@ -80,9 +80,11 @@ export default function HomeworkImageUploader({
     if (!validFiles.length) return;
 
     setIsCompressing(true);
-    try {
-      const newItems: ImageItem[] = [];
-      for (const file of validFiles) {
+    const newItems: ImageItem[] = [];
+    let failCount = 0;
+    
+    for (const file of validFiles) {
+      try {
         const compressed = await compressImage(file);
         const preview = URL.createObjectURL(compressed);
         newItems.push({
@@ -90,17 +92,25 @@ export default function HomeworkImageUploader({
           file: compressed,
           preview,
         });
+      } catch {
+        failCount++;
+        console.warn('[HomeworkImageUploader] Failed to process:', file.name);
       }
+    }
+    
+    if (newItems.length > 0) {
       onImagesChange([...images, ...newItems]);
-    } catch {
+    }
+    
+    if (failCount > 0) {
       toast({
-        title: '압축 실패',
-        description: '이미지 압축 중 오류가 발생했습니다.',
+        title: '일부 사진 처리 실패',
+        description: `${failCount}장의 사진을 처리할 수 없었습니다. 다른 형식으로 다시 시도해주세요.`,
         variant: 'destructive',
       });
-    } finally {
-      setIsCompressing(false);
     }
+    
+    setIsCompressing(false);
   };
 
   const removeImage = (id: string) => {
