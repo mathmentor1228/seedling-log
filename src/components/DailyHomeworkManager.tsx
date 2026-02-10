@@ -1,11 +1,10 @@
-// DAILY-HOMEWORK-V1: Bulk daily homework assignment (Mon-Fri weekly)
-import { useEffect, useState, useCallback } from 'react';
+// DAILY-HOMEWORK-V2: Per-student daily homework assignment grouped by teacher & grade
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth, isAdmin as checkIsAdmin } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,20 +21,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CalendarPlus, Loader2, Users, BookOpen } from 'lucide-react';
+import { CalendarPlus, Loader2, Users, BookOpen, ChevronDown } from 'lucide-react';
 import { format, startOfWeek, addDays } from 'date-fns';
-import { ko } from 'date-fns/locale';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'] as const;
 const DAY_LABELS = ['월', '화', '수', '목', '금'];
 
-interface StudentItem {
+interface StudentWithMeta {
   id: string;
   name: string;
+  grade: string | null;
+  school: string | null;
 }
 
-interface DailyContent {
-  [day: number]: string; // 0=Mon, 1=Tue, ..., 4=Fri
+interface TeacherGroup {
+  teacher_id: string;
+  teacher_name: string;
+  students: StudentWithMeta[];
 }
 
 export default function DailyHomeworkManager() {
@@ -49,56 +52,157 @@ export default function DailyHomeworkManager() {
     return format(mon, 'yyyy-MM-dd');
   });
   const [subject, setSubject] = useState<string>('수학');
-  const [classId, setClassId] = useState<string>('');
-  const [classes, setClasses] = useState<{ id: string; name: string; subject: string }[]>([]);
-  const [students, setStudents] = useState<StudentItem[]>([]);
+  const [teacherGroups, setTeacherGroups] = useState<TeacherGroup[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
-  const [dailyContent, setDailyContent] = useState<DailyContent>({
-    0: '', 1: '', 2: '', 3: '', 4: '',
-  });
+  const [homeworkContent, setHomeworkContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [expandedTeachers, setExpandedTeachers] = useState<Set<string>>(new Set());
 
-  // Fetch classes on open
+  // Fetch students grouped by teacher when dialog opens or subject changes
   useEffect(() => {
     if (open) {
-      fetchClasses();
+      fetchStudentsBySubject(subject);
     }
-  }, [open]);
+  }, [open, subject]);
 
-  // Fetch students when class changes
-  useEffect(() => {
-    if (classId) {
-      fetchStudentsByClass(classId);
-    } else {
-      setStudents([]);
-      setSelectedStudents(new Set());
+  async function fetchStudentsBySubject(subj: string) {
+    setLoading(true);
+    try {
+      // Get students mapped to teachers for this subject via student_subject_teachers
+      const { data: mappings } = await supabase
+        .from('student_subject_teachers')
+        .select('student_id, teacher_id, subject')
+        .eq('subject', subj);
+
+      if (!mappings || mappings.length === 0) {
+        // Fallback: try class-based grouping
+        const { data: classData } = await supabase
+          .from('classes')
+        .select('id, teacher_id, name')
+        .eq('subject', subj as any);
+        if (!classData || classData.length === 0) {
+          setTeacherGroups([]);
+          setLoading(false);
+          return;
+        }
+
+        const classIds = classData.map(c => c.id);
+        const teacherIds = [...new Set(classData.map(c => c.teacher_id).filter(Boolean))] as string[];
+
+        const [studentsRes, profilesRes] = await Promise.all([
+          supabase
+            .from('class_students')
+            .select('class_id, students:student_id (id, name, grade, school, enrollment_status)')
+            .in('class_id', classIds),
+          teacherIds.length > 0
+            ? supabase.from('profiles').select('id, full_name').in('id', teacherIds)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+        const teacherNameMap: Record<string, string> = {};
+        (profilesRes.data || []).forEach((p: any) => {
+          teacherNameMap[p.id] = p.full_name;
+        });
+
+        const groups: Record<string, TeacherGroup> = {};
+        const classTeacherMap: Record<string, string> = {};
+        classData.forEach(c => {
+          if (c.teacher_id) classTeacherMap[c.id] = c.teacher_id;
+        });
+
+        (studentsRes.data || []).forEach((cs: any) => {
+          const student = cs.students;
+          if (!student || student.enrollment_status !== '재원') return;
+          const teacherId = classTeacherMap[cs.class_id] || 'unknown';
+          if (!groups[teacherId]) {
+            groups[teacherId] = {
+              teacher_id: teacherId,
+              teacher_name: teacherNameMap[teacherId] || '미배정',
+              students: [],
+            };
+          }
+          if (!groups[teacherId].students.find(s => s.id === student.id)) {
+            groups[teacherId].students.push({
+              id: student.id,
+              name: student.name,
+              grade: student.grade,
+              school: student.school,
+            });
+          }
+        });
+
+        const result = Object.values(groups).map(g => ({
+          ...g,
+          students: g.students.sort((a, b) => {
+            const gradeA = a.grade || '';
+            const gradeB = b.grade || '';
+            if (gradeA !== gradeB) return gradeA.localeCompare(gradeB);
+            return a.name.localeCompare(b.name);
+          }),
+        }));
+
+        setTeacherGroups(result);
+        setExpandedTeachers(new Set(result.map(g => g.teacher_id)));
+        setLoading(false);
+        return;
+      }
+
+      // Use student_subject_teachers mappings
+      const studentIds = [...new Set(mappings.map(m => m.student_id))];
+      const teacherIds = [...new Set(mappings.map(m => m.teacher_id))];
+
+      const [studentsRes, profilesRes] = await Promise.all([
+        supabase
+          .from('students')
+          .select('id, name, grade, school, enrollment_status')
+          .in('id', studentIds)
+          .eq('enrollment_status', '재원'),
+        supabase.from('profiles').select('id, full_name').in('id', teacherIds),
+      ]);
+
+      const studentMap: Record<string, StudentWithMeta> = {};
+      (studentsRes.data || []).forEach((s: any) => {
+        studentMap[s.id] = { id: s.id, name: s.name, grade: s.grade, school: s.school };
+      });
+
+      const teacherNameMap: Record<string, string> = {};
+      (profilesRes.data || []).forEach((p: any) => {
+        teacherNameMap[p.id] = p.full_name;
+      });
+
+      const groups: Record<string, TeacherGroup> = {};
+      mappings.forEach(m => {
+        if (!studentMap[m.student_id]) return;
+        if (!groups[m.teacher_id]) {
+          groups[m.teacher_id] = {
+            teacher_id: m.teacher_id,
+            teacher_name: teacherNameMap[m.teacher_id] || '미배정',
+            students: [],
+          };
+        }
+        if (!groups[m.teacher_id].students.find(s => s.id === m.student_id)) {
+          groups[m.teacher_id].students.push(studentMap[m.student_id]);
+        }
+      });
+
+      const result = Object.values(groups).map(g => ({
+        ...g,
+        students: g.students.sort((a, b) => {
+          const gradeA = a.grade || '';
+          const gradeB = b.grade || '';
+          if (gradeA !== gradeB) return gradeA.localeCompare(gradeB);
+          return a.name.localeCompare(b.name);
+        }),
+      }));
+
+      setTeacherGroups(result);
+      setExpandedTeachers(new Set(result.map(g => g.teacher_id)));
+    } catch (error) {
+      console.error('Error fetching students:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [classId]);
-
-  async function fetchClasses() {
-    const { data } = await supabase
-      .from('classes')
-      .select('id, name, subject')
-      .order('name');
-    setClasses(data || []);
-  }
-
-  async function fetchStudentsByClass(cId: string) {
-    setLoadingStudents(true);
-    const { data } = await supabase
-      .from('class_students')
-      .select('students:student_id (id, name)')
-      .eq('class_id', cId);
-
-    const list = (data || [])
-      .map((d: any) => d.students)
-      .filter(Boolean)
-      .sort((a: StudentItem, b: StudentItem) => a.name.localeCompare(b.name));
-    
-    setStudents(list);
-    setSelectedStudents(new Set(list.map((s: StudentItem) => s.id)));
-    setLoadingStudents(false);
   }
 
   function toggleStudent(id: string) {
@@ -110,26 +214,35 @@ export default function DailyHomeworkManager() {
     });
   }
 
-  function toggleAll() {
-    if (selectedStudents.size === students.length) {
-      setSelectedStudents(new Set());
-    } else {
-      setSelectedStudents(new Set(students.map(s => s.id)));
-    }
+  function toggleTeacherGroup(teacherId: string) {
+    const group = teacherGroups.find(g => g.teacher_id === teacherId);
+    if (!group) return;
+    const allSelected = group.students.every(s => selectedStudents.has(s.id));
+    setSelectedStudents(prev => {
+      const next = new Set(prev);
+      group.students.forEach(s => {
+        if (allSelected) next.delete(s.id);
+        else next.add(s.id);
+      });
+      return next;
+    });
   }
 
-  // Get the selected class's subject
-  useEffect(() => {
-    if (classId) {
-      const cls = classes.find(c => c.id === classId);
-      if (cls) setSubject(cls.subject);
-    }
-  }, [classId, classes]);
+  function toggleExpandTeacher(teacherId: string) {
+    setExpandedTeachers(prev => {
+      const next = new Set(prev);
+      if (next.has(teacherId)) next.delete(teacherId);
+      else next.add(teacherId);
+      return next;
+    });
+  }
 
   const weekDates = Array.from({ length: 5 }, (_, i) => {
     const mon = new Date(weekStartDate + 'T00:00:00');
     return addDays(mon, i);
   });
+
+  const totalStudents = teacherGroups.reduce((sum, g) => sum + g.students.length, 0);
 
   async function handleSubmit() {
     if (selectedStudents.size === 0) {
@@ -137,10 +250,8 @@ export default function DailyHomeworkManager() {
       return;
     }
 
-    // Check at least one day has content
-    const hasContent = Object.values(dailyContent).some(c => c.trim());
-    if (!hasContent) {
-      toast({ title: '최소 1일 이상 숙제 내용을 입력해주세요', variant: 'destructive' });
+    if (!homeworkContent.trim()) {
+      toast({ title: '숙제 내용을 입력해주세요', variant: 'destructive' });
       return;
     }
 
@@ -150,23 +261,15 @@ export default function DailyHomeworkManager() {
 
       for (const studentId of selectedStudents) {
         for (let day = 0; day < 5; day++) {
-          const content = dailyContent[day]?.trim();
-          if (!content) continue;
-
           inserts.push({
             student_id: studentId,
             subject: subject,
-            content: content,
+            content: homeworkContent.trim(),
             assigned_date: format(weekDates[day], 'yyyy-MM-dd'),
             homework_type: 'daily',
             check_status: 'unchecked',
           });
         }
-      }
-
-      if (inserts.length === 0) {
-        toast({ title: '생성할 숙제가 없습니다', variant: 'destructive' });
-        return;
       }
 
       const { error } = await supabase
@@ -177,11 +280,11 @@ export default function DailyHomeworkManager() {
 
       toast({
         title: '데일리숙제 등록 완료',
-        description: `${selectedStudents.size}명 × ${inserts.length / selectedStudents.size}일 = ${inserts.length}건 생성`,
+        description: `${selectedStudents.size}명 × 5일 = ${inserts.length}건 생성`,
       });
 
-      // Reset
-      setDailyContent({ 0: '', 1: '', 2: '', 3: '', 4: '' });
+      setHomeworkContent('');
+      setSelectedStudents(new Set());
       setOpen(false);
     } catch (error: any) {
       console.error('Daily homework error:', error);
@@ -207,12 +310,12 @@ export default function DailyHomeworkManager() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <BookOpen className="w-5 h-5" />
-              데일리숙제 주간 일괄 등록
+              데일리숙제 등록
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-5">
-            {/* Week & Class Selection */}
+            {/* Week & Subject Selection */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium mb-1 block">주간 시작 (월요일)</label>
@@ -223,99 +326,136 @@ export default function DailyHomeworkManager() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">반 선택</label>
-                <Select value={classId} onValueChange={setClassId}>
+                <label className="text-sm font-medium mb-1 block">과목</label>
+                <Select value={subject} onValueChange={(v) => { setSubject(v); setSelectedStudents(new Set()); }}>
                   <SelectTrigger>
-                    <SelectValue placeholder="반 선택" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {classes.map(c => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} ({c.subject})
-                      </SelectItem>
+                    {SUBJECTS.map(s => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* Subject display */}
-            {classId && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">과목:</span>
-                <Badge variant="outline">{subject}</Badge>
-              </div>
-            )}
+            {/* Week display */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-muted-foreground">배정 기간:</span>
+              {weekDates.map((date, i) => (
+                <Badge key={i} variant="outline" className="text-xs">
+                  {DAY_LABELS[i]} {format(date, 'M/d')}
+                </Badge>
+              ))}
+            </div>
 
-            {/* Student Selection */}
-            {classId && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium flex items-center gap-1">
-                    <Users className="w-4 h-4" />
-                    학생 선택 ({selectedStudents.size}/{students.length})
-                  </label>
-                  <Button variant="ghost" size="sm" onClick={toggleAll}>
-                    {selectedStudents.size === students.length ? '전체 해제' : '전체 선택'}
-                  </Button>
+            {/* Homework Content */}
+            <div>
+              <label className="text-sm font-medium mb-1 block">숙제 내용 (전체 주간 동일 적용)</label>
+              <Textarea
+                placeholder="예: 교재 p.30~35 풀기"
+                value={homeworkContent}
+                onChange={(e) => setHomeworkContent(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            {/* Student Selection by Teacher & Grade */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium flex items-center gap-1">
+                  <Users className="w-4 h-4" />
+                  학생 선택 ({selectedStudents.size}/{totalStudents})
+                </label>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
+              ) : teacherGroups.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  해당 과목에 배정된 학생이 없습니다.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-[40vh] overflow-y-auto border rounded-lg p-2">
+                  {teacherGroups.map(group => {
+                    const allSelected = group.students.every(s => selectedStudents.has(s.id));
+                    const someSelected = group.students.some(s => selectedStudents.has(s.id));
+                    const isExpanded = expandedTeachers.has(group.teacher_id);
 
-                {loadingStudents ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  </div>
-                ) : students.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-2">이 반에 배정된 학생이 없습니다.</p>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
-                    {students.map(s => (
-                      <label
-                        key={s.id}
-                        className="flex items-center gap-2 p-1.5 rounded hover:bg-accent cursor-pointer text-sm"
-                      >
-                        <Checkbox
-                          checked={selectedStudents.has(s.id)}
-                          onCheckedChange={() => toggleStudent(s.id)}
-                        />
-                        {s.name}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                    // Group students by grade
+                    const byGrade: Record<string, StudentWithMeta[]> = {};
+                    group.students.forEach(s => {
+                      const grade = s.grade || '학년 미지정';
+                      if (!byGrade[grade]) byGrade[grade] = [];
+                      byGrade[grade].push(s);
+                    });
 
-            {/* Daily Content Input */}
-            {classId && (
-              <div className="space-y-3">
-                <label className="text-sm font-medium">요일별 숙제 내용</label>
-                {weekDates.map((date, dayIdx) => (
-                  <div key={dayIdx} className="flex items-start gap-2">
-                    <Badge
-                      variant="outline"
-                      className="mt-2 min-w-[60px] justify-center"
-                    >
-                      {DAY_LABELS[dayIdx]} {format(date, 'M/d')}
-                    </Badge>
-                    <Textarea
-                      placeholder={`${DAY_LABELS[dayIdx]}요일 숙제 내용 (비우면 건너뜀)`}
-                      value={dailyContent[dayIdx] || ''}
-                      onChange={(e) =>
-                        setDailyContent(prev => ({ ...prev, [dayIdx]: e.target.value }))
-                      }
-                      rows={2}
-                      className="flex-1"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+                    return (
+                      <div key={group.teacher_id} className="border rounded-lg overflow-hidden">
+                        {/* Teacher header */}
+                        <div
+                          className="flex items-center justify-between p-2 bg-muted/50 cursor-pointer hover:bg-muted/80"
+                          onClick={() => toggleExpandTeacher(group.teacher_id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                            <span className="font-medium text-sm">{group.teacher_name}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {group.students.filter(s => selectedStudents.has(s.id)).length}/{group.students.length}명
+                            </Badge>
+                          </div>
+                          <Checkbox
+                            checked={allSelected}
+                            // @ts-ignore
+                            indeterminate={someSelected && !allSelected}
+                            onCheckedChange={() => toggleTeacherGroup(group.teacher_id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+
+                        {/* Students by grade */}
+                        {isExpanded && (
+                          <div className="p-2 space-y-2">
+                            {Object.entries(byGrade).sort(([a], [b]) => a.localeCompare(b)).map(([grade, students]) => (
+                              <div key={grade}>
+                                <div className="text-xs text-muted-foreground font-medium mb-1 pl-1">
+                                  {grade}
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                                  {students.map(s => (
+                                    <label
+                                      key={s.id}
+                                      className={`flex items-center gap-2 p-1.5 rounded text-sm cursor-pointer transition-colors ${
+                                        selectedStudents.has(s.id) ? 'bg-primary/10' : 'hover:bg-accent'
+                                      }`}
+                                    >
+                                      <Checkbox
+                                        checked={selectedStudents.has(s.id)}
+                                        onCheckedChange={() => toggleStudent(s.id)}
+                                      />
+                                      <span>{s.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* Submit */}
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={isSubmitting || selectedStudents.size === 0}
+              disabled={isSubmitting || selectedStudents.size === 0 || !homeworkContent.trim()}
             >
               {isSubmitting ? (
                 <>
@@ -325,7 +465,7 @@ export default function DailyHomeworkManager() {
               ) : (
                 <>
                   <CalendarPlus className="w-4 h-4 mr-2" />
-                  데일리숙제 일괄 등록
+                  {selectedStudents.size}명에게 데일리숙제 등록 (월~금)
                 </>
               )}
             </Button>
