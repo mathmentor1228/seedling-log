@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     const dateStr = fourteenDaysAgo.toISOString().split("T")[0];
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes")
@@ -137,7 +137,32 @@ Deno.serve(async (req) => {
         .gte("test_date", dateStr)
         .order("test_date", { ascending: false })
         .limit(30),
+      supabase
+        .from("class_students")
+        .select("class_id")
+        .eq("student_id", studentId),
     ]);
+
+    // Fetch class schedules for the student's classes
+    const classIds = (classStudentsRes.data || []).map((cs: any) => cs.class_id);
+    let scheduleItems: any[] = [];
+    if (classIds.length > 0) {
+      const { data: schedData } = await supabase
+        .from("class_schedules")
+        .select("day_of_week, start_time, end_time, class_id, is_active, classes(name, subject)")
+        .in("class_id", classIds)
+        .eq("is_active", true)
+        .order("day_of_week")
+        .order("start_time");
+
+      scheduleItems = (schedData || []).map((s: any) => ({
+        class_name: s.classes?.name || '',
+        subject: s.classes?.subject || '',
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        end_time: s.end_time,
+      }));
+    }
 
     const homework = hwRes.data || [];
     const rawLessons = lessonRes.data || [];
@@ -174,6 +199,7 @@ Deno.serve(async (req) => {
         reports,
         vocab_schedules: vocabSchedRes.data || [],
         vocab_results: vocabResultRes.data || [],
+        class_schedule: scheduleItems,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 
 /* ═══════ Types ═══════ */
 interface StudentInfo { name: string; school: string | null; school_level: string | null; grade_year: number | null; grade: string | null; }
@@ -12,7 +12,8 @@ interface Attendance { date: string; status: string; note: string | null; }
 interface WeeklyReport { id: string; week_start: string; week_end: string; total_lessons: number; avg_understanding: number | null; homework_completion_rate: number | null; risk_level: string | null; parent_message: string | null; generated_at: string; }
 interface VocabScheduleItem { id: string; test_date: string; day_number: number; book_name: string; schedule_type: string; }
 interface VocabResultItem { id: string; test_date: string; day_number: number; book_name: string; score_percent: number | null; passed: boolean; total_words: number | null; correct_words: number | null; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; }
+interface ClassScheduleItem { class_name: string; subject: string; day_of_week: number; start_time: string; end_time: string; }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -79,6 +80,7 @@ export default function ParentPortal() {
   const { student, homework, lessons, attendance, reports } = data;
   const vocabSchedules = data.vocab_schedules || [];
   const vocabResults = data.vocab_results || [];
+  const classSchedule = data.class_schedule || [];
   const label = `${student.name}${student.school_level && student.grade_year ? ` (${student.school_level}${student.grade_year})` : ''}`;
 
   return (
@@ -124,6 +126,11 @@ export default function ParentPortal() {
         {/* Vocab Test Section */}
         {(vocabSchedules.length > 0 || vocabResults.length > 0) && (
           <VocabSection schedules={vocabSchedules} results={vocabResults} />
+        )}
+
+        {/* Class Schedule */}
+        {classSchedule.length > 0 && (
+          <ClassScheduleSection schedule={classSchedule} />
         )}
 
         {/* Reports */}
@@ -504,6 +511,62 @@ function StatusPill({ icon, label, color }: { icon: React.ReactNode; label: stri
     <span className={`shrink-0 flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full ${color}`}>
       {icon} {label}
     </span>
+  );
+}
+
+/* ═══════ Class Schedule Section ═══════ */
+const SCHED_DAY_NAMES = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+const SCHED_DAY_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
+
+function ClassScheduleSection({ schedule }: { schedule: ClassScheduleItem[] }) {
+  const today = new Date().getDay();
+
+  const byDay: Record<number, ClassScheduleItem[]> = {};
+  for (const item of schedule) {
+    (byDay[item.day_of_week] ||= []).push(item);
+  }
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold text-gray-500 px-1 flex items-center gap-1.5">
+        <Calendar className="w-3.5 h-3.5" /> 수업 시간표
+      </h3>
+      <Card className="overflow-hidden">
+        <CardContent className="p-3 space-y-2">
+          {[1, 2, 3, 4, 5, 6, 0].map(dow => {
+            const items = byDay[dow];
+            if (!items?.length) return null;
+            const isToday = dow === today;
+            return (
+              <div key={dow} className={`rounded-lg p-2.5 ${isToday ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                    isToday ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}>{SCHED_DAY_SHORT[dow]}</span>
+                  <span className="text-[12px] font-medium text-gray-600">{SCHED_DAY_NAMES[dow]}</span>
+                  {isToday && <span className="text-[9px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full ml-auto">오늘</span>}
+                </div>
+                {items.map((item, idx) => {
+                  const c = SUBJECT_COLORS[item.subject] || DEFAULT_COLOR;
+                  return (
+                    <div key={idx} className="flex items-center justify-between py-1 pl-8">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                        <span className="text-[12px] text-gray-700">{item.class_name}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>{item.subject}</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-gray-500">
+                        {item.start_time?.slice(0, 5)} - {item.end_time?.slice(0, 5)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
