@@ -7,13 +7,14 @@ import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, Bo
 /* ═══════ Types ═══════ */
 interface StudentInfo { name: string; school: string | null; school_level: string | null; grade_year: number | null; grade: string | null; }
 interface Homework { id: string; content: string; subject: string; assigned_date: string; check_status: string; result: string | null; notes: string | null; }
-interface LessonRecord { id: string; date: string; subject: string; range: string; course: string | null; understanding_score: number | null; attendance_status: string[] | null; }
+interface LessonRecord { id: string; date: string; subject: string; range: string; course: string | null; understanding_score: number | null; attendance_status: string[] | null; lesson_types: string[]; }
 interface Attendance { date: string; status: string; note: string | null; }
 interface WeeklyReport { id: string; week_start: string; week_end: string; total_lessons: number; avg_understanding: number | null; homework_completion_rate: number | null; risk_level: string | null; parent_message: string | null; generated_at: string; }
 interface VocabScheduleItem { id: string; test_date: string; day_number: number; book_name: string; schedule_type: string; }
 interface VocabResultItem { id: string; test_date: string; day_number: number; book_name: string; score_percent: number | null; passed: boolean; total_words: number | null; correct_words: number | null; }
 interface ClassScheduleItem { class_name: string; subject: string; day_of_week: number; start_time: string; end_time: string; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; }
+interface UpcomingSupplement { id: string; date: string; subject: string; range: string; course: string | null; }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -81,6 +82,7 @@ export default function ParentPortal() {
   const vocabSchedules = data.vocab_schedules || [];
   const vocabResults = data.vocab_results || [];
   const classSchedule = data.class_schedule || [];
+  const upcomingSupplements = data.upcoming_supplements || [];
   const label = `${student.name}${student.school_level && student.grade_year ? ` (${student.school_level}${student.grade_year})` : ''}`;
 
   return (
@@ -100,6 +102,16 @@ export default function ParentPortal() {
       <main className="max-w-lg mx-auto p-4 space-y-4">
         {/* Summary Stats */}
         <SummaryCards lessons={lessons} homework={homework} />
+
+        {/* Class Schedule - at top for quick reference */}
+        {classSchedule.length > 0 && (
+          <ClassScheduleSection schedule={classSchedule} />
+        )}
+
+        {/* Upcoming 보충 Lessons */}
+        {upcomingSupplements.length > 0 && (
+          <SupplementSection supplements={upcomingSupplements} />
+        )}
 
         {/* Calendar */}
         <MiniCalendar
@@ -126,11 +138,6 @@ export default function ParentPortal() {
         {/* Vocab Test Section */}
         {(vocabSchedules.length > 0 || vocabResults.length > 0) && (
           <VocabSection schedules={vocabSchedules} results={vocabResults} />
-        )}
-
-        {/* Class Schedule */}
-        {classSchedule.length > 0 && (
-          <ClassScheduleSection schedule={classSchedule} />
         )}
 
         {/* Reports */}
@@ -444,12 +451,14 @@ function Timeline({ lessons, homework }: { lessons: LessonRecord[]; homework: Ho
 /* ═══════ Lesson Card ═══════ */
 function LessonCard({ lesson: l }: { lesson: LessonRecord }) {
   const c = SUBJECT_COLORS[l.subject] || DEFAULT_COLOR;
+  const isSupplement = l.lesson_types?.includes('보충수업');
   return (
     <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-start gap-3">
-      <div className={`w-1 self-stretch rounded-full ${c.dot} shrink-0`} />
+      <div className={`w-1 self-stretch rounded-full ${isSupplement ? 'bg-orange-400' : c.dot} shrink-0`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${c.bg} ${c.text} ${c.border}`}>{l.subject}</span>
+          {isSupplement && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200">보충</span>}
           {l.course && <span className="text-[10px] text-gray-400 truncate">{l.course}</span>}
         </div>
         <p className="text-[13px] text-gray-800 leading-snug">{l.range}</p>
@@ -514,8 +523,7 @@ function StatusPill({ icon, label, color }: { icon: React.ReactNode; label: stri
   );
 }
 
-/* ═══════ Class Schedule Section ═══════ */
-const SCHED_DAY_NAMES = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+/* ═══════ Class Schedule Section (Redesigned) ═══════ */
 const SCHED_DAY_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
 
 function ClassScheduleSection({ schedule }: { schedule: ClassScheduleItem[] }) {
@@ -526,46 +534,96 @@ function ClassScheduleSection({ schedule }: { schedule: ClassScheduleItem[] }) {
     (byDay[item.day_of_week] ||= []).push(item);
   }
 
+  // Compact horizontal week view
+  const activeDays = [1, 2, 3, 4, 5, 6, 0].filter(d => byDay[d]?.length);
+
   return (
-    <div className="space-y-3">
-      <h3 className="text-xs font-semibold text-gray-500 px-1 flex items-center gap-1.5">
-        <Calendar className="w-3.5 h-3.5" /> 수업 시간표
-      </h3>
-      <Card className="overflow-hidden">
-        <CardContent className="p-3 space-y-2">
-          {[1, 2, 3, 4, 5, 6, 0].map(dow => {
-            const items = byDay[dow];
-            if (!items?.length) return null;
-            const isToday = dow === today;
-            return (
-              <div key={dow} className={`rounded-lg p-2.5 ${isToday ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                    isToday ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
-                  }`}>{SCHED_DAY_SHORT[dow]}</span>
-                  <span className="text-[12px] font-medium text-gray-600">{SCHED_DAY_NAMES[dow]}</span>
-                  {isToday && <span className="text-[9px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full ml-auto">오늘</span>}
-                </div>
-                {items.map((item, idx) => {
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50 bg-gradient-to-r from-blue-50/60 to-violet-50/40">
+        <Calendar className="w-4 h-4 text-blue-500" />
+        <span className="text-xs font-bold text-gray-700">수업 시간표</span>
+      </div>
+
+      {/* Week strip - horizontal scrollable day pills */}
+      <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto">
+        {[1, 2, 3, 4, 5, 6, 0].map(dow => {
+          const items = byDay[dow];
+          const hasClass = items && items.length > 0;
+          const isToday = dow === today;
+          return (
+            <div key={dow} className={`flex-shrink-0 w-9 flex flex-col items-center gap-0.5 py-1 rounded-lg transition-colors
+              ${isToday ? 'bg-blue-600' : hasClass ? 'bg-gray-100' : ''}`}>
+              <span className={`text-[10px] font-bold ${isToday ? 'text-blue-100' : hasClass ? 'text-gray-600' : 'text-gray-300'}`}>
+                {SCHED_DAY_SHORT[dow]}
+              </span>
+              <div className="flex gap-0.5">
+                {hasClass ? items!.map((item, i) => {
                   const c = SUBJECT_COLORS[item.subject] || DEFAULT_COLOR;
-                  return (
-                    <div key={idx} className="flex items-center justify-between py-1 pl-8">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-                        <span className="text-[12px] text-gray-700">{item.class_name}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>{item.subject}</span>
-                      </div>
-                      <span className="text-[11px] font-mono text-gray-500">
-                        {item.start_time?.slice(0, 5)} - {item.end_time?.slice(0, 5)}
-                      </span>
-                    </div>
-                  );
-                })}
+                  return <div key={i} className={`w-1.5 h-1.5 rounded-full ${isToday ? 'bg-white' : c.dot}`} />;
+                }) : <div className="w-1.5 h-1.5" />}
               </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Detail rows for active days */}
+      <div className="px-3 pb-3 space-y-1">
+        {activeDays.map(dow => {
+          const items = byDay[dow]!;
+          const isToday = dow === today;
+          return (
+            <div key={dow} className={`rounded-xl px-3 py-2 ${isToday ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50/70'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`text-[11px] font-bold ${isToday ? 'text-blue-700' : 'text-gray-500'}`}>
+                  {SCHED_DAY_SHORT[dow]}
+                </span>
+                {isToday && <span className="text-[8px] font-bold text-white bg-blue-500 px-1.5 py-0.5 rounded-full leading-none">TODAY</span>}
+              </div>
+              {items.map((item, idx) => {
+                const c = SUBJECT_COLORS[item.subject] || DEFAULT_COLOR;
+                return (
+                  <div key={idx} className="flex items-center gap-2 py-0.5">
+                    <div className={`w-2 h-2 rounded-sm ${c.dot}`} />
+                    <span className={`text-[11px] font-medium ${c.text}`}>{item.subject}</span>
+                    <span className="text-[10px] text-gray-400 truncate flex-1">{item.class_name}</span>
+                    <span className={`text-[10px] font-mono tabular-nums ${isToday ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>
+                      {item.start_time?.slice(0, 5)}–{item.end_time?.slice(0, 5)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════ Supplement (보충) Section ═══════ */
+function SupplementSection({ supplements }: { supplements: UpcomingSupplement[] }) {
+  return (
+    <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-200 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-base">📌</span>
+        <span className="text-xs font-bold text-orange-800">예정된 보충 수업</span>
+      </div>
+      <div className="space-y-1.5">
+        {supplements.map(s => {
+          const c = SUBJECT_COLORS[s.subject] || DEFAULT_COLOR;
+          return (
+            <div key={s.id} className="flex items-center gap-2 bg-white/60 rounded-lg px-3 py-2">
+              <span className="text-[11px] font-mono font-semibold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">
+                {fmt(s.date)}
+              </span>
+              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>{s.subject}</span>
+              <span className="text-[12px] text-gray-700 truncate flex-1">{s.range}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
