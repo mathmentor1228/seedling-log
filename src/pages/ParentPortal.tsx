@@ -2,12 +2,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar, Camera, MessageSquare, TrendingUp } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 /* ═══════ Types ═══════ */
 interface StudentInfo { name: string; school: string | null; school_level: string | null; grade_year: number | null; grade: string | null; }
-interface Homework { id: string; content: string; subject: string; assigned_date: string; check_status: string; result: string | null; notes: string | null; }
-interface LessonRecord { id: string; date: string; subject: string; range: string; course: string | null; understanding_score: number | null; attendance_status: string[] | null; lesson_types: string[]; }
+interface Homework { id: string; content: string; subject: string; assigned_date: string; check_status: string; result: string | null; notes: string | null; submitted_at: string | null; submission_image_url: string | null; }
+interface LessonRecord { id: string; date: string; subject: string; range: string; course: string | null; understanding_score: number | null; attendance_status: string[] | null; lesson_types: string[]; notes: string | null; learning_issues: string[]; next_lesson_goal: string | null; }
 interface Attendance { date: string; status: string; note: string | null; }
 interface WeeklyReport { id: string; week_start: string; week_end: string; total_lessons: number; avg_understanding: number | null; homework_completion_rate: number | null; risk_level: string | null; parent_message: string | null; generated_at: string; }
 interface VocabScheduleItem { id: string; test_date: string; day_number: number; book_name: string; schedule_type: string; }
@@ -103,7 +104,10 @@ export default function ParentPortal() {
         {/* Summary Stats */}
         <SummaryCards lessons={lessons} homework={homework} />
 
-        {/* Class Schedule - at top for quick reference */}
+        {/* Learning Trend Chart */}
+        {lessons.length >= 2 && (
+          <LearningTrendChart lessons={lessons} />
+        )}
         {classSchedule.length > 0 && (
           <ClassScheduleSection schedule={classSchedule} />
         )}
@@ -448,40 +452,136 @@ function Timeline({ lessons, homework }: { lessons: LessonRecord[]; homework: Ho
   );
 }
 
+/* ═══════ Learning Trend Chart ═══════ */
+function LearningTrendChart({ lessons }: { lessons: LessonRecord[] }) {
+  const chartData = useMemo(() => {
+    // Group by date, average understanding score per date
+    const byDate: Record<string, { scores: number[]; date: string }> = {};
+    [...lessons].reverse().forEach(l => {
+      if (l.understanding_score != null) {
+        if (!byDate[l.date]) byDate[l.date] = { scores: [], date: l.date };
+        byDate[l.date].scores.push(l.understanding_score);
+      }
+    });
+    return Object.values(byDate).map(d => ({
+      date: `${new Date(d.date + 'T00:00:00').getMonth() + 1}/${new Date(d.date + 'T00:00:00').getDate()}`,
+      이해도: Math.round(d.scores.reduce((a, b) => a + b, 0) / d.scores.length * 10) / 10,
+    }));
+  }, [lessons]);
+
+  if (chartData.length < 2) return null;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50">
+        <TrendingUp className="w-4 h-4 text-blue-500" />
+        <span className="text-xs font-bold text-gray-700">학습 추이</span>
+      </div>
+      <div className="px-2 py-3" style={{ height: 160 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#ccc" />
+            <YAxis domain={[0, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 10 }} stroke="#ccc" width={25} />
+            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #eee' }} />
+            <Line type="monotone" dataKey="이해도" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3, fill: '#3b82f6' }} activeDot={{ r: 5 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════ Lesson Card ═══════ */
 function LessonCard({ lesson: l }: { lesson: LessonRecord }) {
   const c = SUBJECT_COLORS[l.subject] || DEFAULT_COLOR;
   const isSupplement = l.lesson_types?.includes('보충수업');
+  const hasTeacherComment = !!(l.notes || (l.learning_issues && l.learning_issues.length > 0) || l.next_lesson_goal);
+  
   return (
-    <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-start gap-3">
-      <div className={`w-1 self-stretch rounded-full ${isSupplement ? 'bg-orange-400' : c.dot} shrink-0`} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${c.bg} ${c.text} ${c.border}`}>{l.subject}</span>
-          {isSupplement && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200">보충</span>}
-          {l.course && <span className="text-[10px] text-gray-400 truncate">{l.course}</span>}
+    <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2">
+      <div className="flex items-start gap-3">
+        <div className={`w-1 self-stretch rounded-full ${isSupplement ? 'bg-orange-400' : c.dot} shrink-0`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${c.bg} ${c.text} ${c.border}`}>{l.subject}</span>
+            {isSupplement && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200">보충</span>}
+            {l.course && <span className="text-[10px] text-gray-400 truncate">{l.course}</span>}
+          </div>
+          <p className="text-[13px] text-gray-800 leading-snug">{l.range}</p>
         </div>
-        <p className="text-[13px] text-gray-800 leading-snug">{l.range}</p>
+        {l.understanding_score != null && <UnderstandingDots score={l.understanding_score} />}
       </div>
-      {l.understanding_score != null && <UnderstandingDots score={l.understanding_score} />}
+
+      {/* Teacher comments section */}
+      {hasTeacherComment && (
+        <div className="ml-4 space-y-1.5">
+          {l.notes && (
+            <div className="flex items-start gap-1.5 bg-blue-50/70 rounded-lg px-3 py-2 border border-blue-100">
+              <MessageSquare className="w-3 h-3 text-blue-500 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-blue-800 leading-snug">{l.notes}</p>
+            </div>
+          )}
+          {l.learning_issues && l.learning_issues.length > 0 && (
+            <div className="flex items-start gap-1.5 bg-amber-50/70 rounded-lg px-3 py-2 border border-amber-100">
+              <AlertTriangle className="w-3 h-3 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-amber-800 leading-snug">{l.learning_issues.join(', ')}</p>
+            </div>
+          )}
+          {l.next_lesson_goal && (
+            <div className="flex items-start gap-1.5 bg-emerald-50/70 rounded-lg px-3 py-2 border border-emerald-100">
+              <BookOpen className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-emerald-800 leading-snug">다음 목표: {l.next_lesson_goal}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ═══════ Homework Card ═══════ */
 function HomeworkCard({ hw }: { hw: Homework }) {
+  const hasSubmission = !!hw.submitted_at;
+  const hasPhoto = !!hw.submission_image_url;
+  const photoCount = hasPhoto ? hw.submission_image_url!.split(',').filter(Boolean).length : 0;
+
   return (
-    <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center gap-3">
-      <div className="w-1 self-stretch rounded-full bg-orange-300 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-[11px] font-medium px-2 py-0.5 rounded-md border bg-orange-50 text-orange-700 border-orange-200">숙제</span>
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${SUBJECT_COLORS[hw.subject]?.bg || 'bg-gray-50'} ${SUBJECT_COLORS[hw.subject]?.text || 'text-gray-500'}`}>{hw.subject}</span>
+    <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2">
+      <div className="flex items-center gap-3">
+        <div className="w-1 self-stretch rounded-full bg-orange-300 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded-md border bg-orange-50 text-orange-700 border-orange-200">숙제</span>
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${SUBJECT_COLORS[hw.subject]?.bg || 'bg-gray-50'} ${SUBJECT_COLORS[hw.subject]?.text || 'text-gray-500'}`}>{hw.subject}</span>
+          </div>
+          <p className="text-[13px] text-gray-800 leading-snug">{hw.content}</p>
+          {hw.notes && <p className="text-[10px] text-gray-400 mt-0.5">{hw.notes}</p>}
         </div>
-        <p className="text-[13px] text-gray-800 leading-snug">{hw.content}</p>
-        {hw.notes && <p className="text-[10px] text-gray-400 mt-0.5">{hw.notes}</p>}
+        <HwStatus status={hw.check_status} result={hw.result} />
       </div>
-      <HwStatus status={hw.check_status} result={hw.result} />
+
+      {/* Submission details */}
+      {hasSubmission && (
+        <div className="ml-4 flex items-center gap-2 text-[10px]">
+          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+          <span className="text-gray-500">
+            제출됨 · {new Date(hw.submitted_at!).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </span>
+          {hasPhoto && (
+            <span className="flex items-center gap-0.5 text-blue-500">
+              <Camera className="w-3 h-3" />
+              사진 {photoCount}장
+            </span>
+          )}
+        </div>
+      )}
+      {!hasSubmission && hw.check_status === 'unchecked' && (
+        <div className="ml-4 flex items-center gap-1.5 text-[10px] text-gray-400">
+          <Clock className="w-3 h-3" />
+          <span>아직 제출하지 않음</span>
+        </div>
+      )}
     </div>
   );
 }

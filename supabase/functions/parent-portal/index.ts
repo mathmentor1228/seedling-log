@@ -99,14 +99,14 @@ Deno.serve(async (req) => {
     const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes] = await Promise.all([
       supabase
         .from("homework_assignments")
-        .select("id, content, subject, assigned_date, check_status, result, notes")
+        .select("id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url")
         .eq("student_id", studentId)
         .gte("assigned_date", dateStr)
         .order("assigned_date", { ascending: false })
         .limit(50),
       supabase
         .from("lesson_records")
-        .select("id, lesson_date, subject, lesson_range, course, understanding_score, attendance_status, lesson_types")
+        .select("id, lesson_date, subject, lesson_range, course, understanding_score, attendance_status, lesson_types, notes, learning_issues, next_lesson_goal")
         .eq("student_id", studentId)
         .eq("submitted", true)
         .gte("lesson_date", dateStr)
@@ -192,6 +192,9 @@ Deno.serve(async (req) => {
       understanding_score: l.understanding_score,
       attendance_status: l.attendance_status,
       lesson_types: l.lesson_types || [],
+      notes: l.notes || null,
+      learning_issues: l.learning_issues || [],
+      next_lesson_goal: l.next_lesson_goal || null,
     }));
 
     return new Response(
