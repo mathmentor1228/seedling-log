@@ -800,17 +800,20 @@ export default function Dashboard() {
           });
 
           // Fallback: homework_assignments.submission_image_url for students not found above
+          // PHOTO-MATCH-V2: Order by assigned_date DESC so the LATEST homework's photo wins per student+subject
           const { data: hwWithPhotos } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, submitted_at, submission_image_url, submission_text')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text')
             .in('student_id', studentIds)
             .not('submitted_at', 'is', null)
             .not('submission_image_url', 'is', null)
-            .gte('assigned_date', sevenDaysAgo);
+            .gte('assigned_date', sevenDaysAgo)
+            .order('assigned_date', { ascending: false });
           
           (hwWithPhotos || []).forEach((hw: any) => {
             if (hw.submitted_at && hw.submission_image_url) {
               const photoKey = `${hw.student_id}:${hw.subject}`;
+              // Only use the first (newest by assigned_date) match per student+subject
               if (!photoDataMap[photoKey]) {
                 const imgUrls = hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
                 photoDataMap[photoKey] = { urls: imgUrls, text: hw.submission_text || null, at: hw.submitted_at };
