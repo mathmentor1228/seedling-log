@@ -1,5 +1,5 @@
 // STUDENT-APP-V1: Student homework list and submission page
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
 import { studentApi } from '@/lib/studentApi';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Upload, 
@@ -15,7 +16,10 @@ import {
   Loader2,
   ChevronLeft,
   AlertTriangle,
-  Mic
+  Mic,
+  WifiOff,
+  RefreshCw,
+  PartyPopper
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -88,13 +92,22 @@ export default function StudentHomework() {
   const [homework, setHomework] = useState<HomeworkItem[]>([]);
   const [selectedHomework, setSelectedHomework] = useState<HomeworkItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   
   // Submission form state
   const [uploadImages, setUploadImages] = useState<ImageItem[]>([]);
   const [submissionNote, setSubmissionNote] = useState('');
   const [recordedAudio, setRecordedAudio] = useState<RecordedAudio | null>(null);
+  
+  // COUNTDOWN-V1: Live countdown ticker
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 60000); // tick every minute
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (student?.id) {
@@ -115,16 +128,13 @@ export default function StudentHomework() {
     if (!student?.id) return;
     
     setIsLoading(true);
+    setFetchError(false);
     try {
       const { data, error } = await studentApi.getHomeworkList();
       
       if (error) {
         console.error('Homework fetch error:', error);
-        toast({
-          title: '오류',
-          description: '숙제 목록을 불러오는데 실패했습니다.',
-          variant: 'destructive',
-        });
+        setFetchError(true);
         return;
       }
 
@@ -133,11 +143,7 @@ export default function StudentHomework() {
       }
     } catch (error) {
       console.error('Fetch homework error:', error);
-      toast({
-        title: '오류',
-        description: '숙제 목록을 불러오는데 실패했습니다.',
-        variant: 'destructive',
-      });
+      setFetchError(true);
     } finally {
       setIsLoading(false);
     }
@@ -271,12 +277,13 @@ export default function StudentHomework() {
         throw new Error('SUBMIT_ERROR');
       }
       
-      toast({
-        title: '제출 완료',
-        description: '숙제가 제출되었습니다!',
-      });
-      
+      // Show success animation
       setShowSubmitDialog(false);
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+      }, 2500);
+      
       clearImages();
       setSubmissionNote('');
       setRecordedAudio(null);
@@ -356,6 +363,23 @@ export default function StudentHomework() {
       </span>
     );
   };
+
+  // Success overlay
+  if (showSuccess) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
+        <div className="text-center space-y-4 animate-scale-in">
+          <div className="w-20 h-20 rounded-full bg-green-500/15 flex items-center justify-center mx-auto">
+            <PartyPopper className="w-10 h-10 text-green-500" />
+          </div>
+          <div>
+            <p className="text-xl font-bold">제출 완료! 🎉</p>
+            <p className="text-sm text-muted-foreground mt-1">잘했어요! 선생님이 확인할 거예요</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Detail view for a specific homework
   if (selectedHomework) {
@@ -566,8 +590,41 @@ export default function StudentHomework() {
   // Homework list view
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="space-y-6 pb-20 animate-fade-in">
+        <Skeleton className="h-7 w-20" />
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  // Network error state
+  if (fetchError) {
+    return (
+      <div className="space-y-6 pb-20 animate-fade-in">
+        <h1 className="text-xl font-bold">숙제</h1>
+        <Card className="border-destructive/30">
+          <CardContent className="p-8 text-center space-y-4">
+            <WifiOff className="w-12 h-12 mx-auto text-muted-foreground" />
+            <div>
+              <p className="font-medium">숙제를 불러올 수 없습니다</p>
+              <p className="text-sm text-muted-foreground mt-1">인터넷 연결을 확인하고 다시 시도해주세요</p>
+            </div>
+            <Button onClick={fetchHomework} variant="outline" className="gap-2">
+              <RefreshCw className="w-4 h-4" />
+              다시 시도
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
