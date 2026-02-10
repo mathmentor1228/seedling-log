@@ -37,6 +37,7 @@ interface HomeworkItem {
   submitted_at: string | null;
   submission_image_url: string | null;
   is_expired?: boolean;
+  homework_type?: string;
 }
 
 export default function StudentHomework() {
@@ -409,6 +410,11 @@ export default function StudentHomework() {
                       <Badge className={getSubjectColor(hw.subject)}>
                         {hw.subject}
                       </Badge>
+                      {hw.homework_type === 'daily' && (
+                        <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                          데일리
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(hw.assigned_date), 'M/d')}
                       </span>
@@ -449,6 +455,11 @@ export default function StudentHomework() {
                       <Badge className={getSubjectColor(hw.subject)}>
                         {hw.subject}
                       </Badge>
+                      {hw.homework_type === 'daily' && (
+                        <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                          데일리
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(hw.assigned_date), 'M/d')}
                       </span>
