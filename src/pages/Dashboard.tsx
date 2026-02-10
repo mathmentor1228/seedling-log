@@ -16,8 +16,11 @@ import { useToast } from '@/hooks/use-toast';
 import HolidayManagement from '@/components/HolidayManagement';
 import { AssistantRequestsWidget } from '@/components/AssistantRequestsWidget';
 import { LessonModal } from '@/components/lessons/LessonModal';
+import DailyHomeworkManager from '@/components/DailyHomeworkManager';
 import { RosterActionModal } from '@/components/RosterActionModal';
 import { HomeworkAlertModal } from '@/components/HomeworkAlertModal';
+import SubmissionImageCarousel from '@/components/lessons/SubmissionImageCarousel';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
@@ -51,6 +54,9 @@ interface PendingHomework {
   content: string;
   assigned_date: string;
   has_photo_submission: boolean;
+  submission_image_url: string | null;
+  submission_text: string | null;
+  submitted_at: string | null;
 }
 
 interface TodayAttendanceRecord {
@@ -387,6 +393,9 @@ export default function Dashboard() {
   const [attendanceOpen, setAttendanceOpen] = useState(false);
   const [adminOverdueOpen, setAdminOverdueOpen] = useState(true);
   
+  // PHOTO-VIEW-V1: Photo viewer state for pending homework
+  const [photoViewHw, setPhotoViewHw] = useState<PendingHomework | null>(null);
+  
   // ADMIN-ROSTER-DEBUG-V1: Fallback today's lesson records (grouped by teacher)
   const [todayLessonRecordsFallback, setTodayLessonRecordsFallback] = useState<{
     teacher_id: string;
@@ -489,6 +498,7 @@ export default function Dashboard() {
             assigned_date,
             submitted_at,
             submission_image_url,
+            submission_text,
             students:student_id (name)
           `)
           .eq('check_status', 'unchecked')
@@ -506,6 +516,9 @@ export default function Dashboard() {
             content: h.content,
             assigned_date: h.assigned_date,
             has_photo_submission: !!(h.submitted_at && h.submission_image_url),
+            submission_image_url: h.submission_image_url || null,
+            submission_text: h.submission_text || null,
+            submitted_at: h.submitted_at || null,
           }))
         );
       } catch (error) {
@@ -2155,7 +2168,14 @@ export default function Dashboard() {
         <AssistantRequestsWidget />
       )}
 
-      {/* Pending Homework Section - Hidden for teachers */}
+      {/* DAILY-HOMEWORK-V1: Quick access to daily homework manager */}
+      {(isAdmin(role) || isTeacher(role)) && (
+        <div className="flex justify-end">
+          <DailyHomeworkManager />
+        </div>
+      )}
+
+      {/* Pending Homework Section */}
       {pendingHomework.length > 0 && (
         <Collapsible open={homeworkOpen} onOpenChange={setHomeworkOpen}>
           <Card className="border-primary/20 animate-slide-up">
@@ -2183,8 +2203,11 @@ export default function Dashboard() {
                           <span className="font-medium text-foreground">{hw.student_name}</span>
                           <Badge variant="outline" className="text-xs">{hw.subject}</Badge>
                           {hw.has_photo_submission && (
-                            <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
-                              📷 사진제출완료
+                            <Badge 
+                              className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs cursor-pointer hover:bg-blue-500/25"
+                              onClick={() => setPhotoViewHw(hw)}
+                            >
+                              📷 사진보기
                             </Badge>
                           )}
                           <span className="text-xs text-muted-foreground">
@@ -2193,14 +2216,24 @@ export default function Dashboard() {
                         </div>
                         <p className="text-sm text-muted-foreground truncate">{hw.content}</p>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="ml-3 shrink-0"
-                        onClick={() => navigate(`/lessons?student_id=${hw.student_id}&subject=${encodeURIComponent(hw.subject)}`)}
-                      >
-                        확인하기
-                      </Button>
+                      <div className="flex items-center gap-2 ml-3 shrink-0">
+                        {hw.has_photo_submission && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPhotoViewHw(hw)}
+                          >
+                            📷
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate(`/lessons?student_id=${hw.student_id}&subject=${encodeURIComponent(hw.subject)}`)}
+                        >
+                          확인하기
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2209,6 +2242,24 @@ export default function Dashboard() {
           </Card>
         </Collapsible>
       )}
+
+      {/* PHOTO-VIEW-V1: Photo viewer dialog for pending homework */}
+      <Dialog open={!!photoViewHw} onOpenChange={(open) => !open && setPhotoViewHw(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              📷 {photoViewHw?.student_name} - 숙제 제출 사진
+            </DialogTitle>
+          </DialogHeader>
+          {photoViewHw?.submission_image_url && (
+            <SubmissionImageCarousel
+              images={photoViewHw.submission_image_url.split(',').map(u => u.trim()).filter(Boolean)}
+              submittedAt={photoViewHw.submitted_at}
+              note={photoViewHw.submission_text}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Admin Management Section */}
       {isAdmin(role) && (
