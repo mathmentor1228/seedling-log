@@ -5,6 +5,7 @@ import { studentApi } from '@/lib/studentApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   BookOpen, 
   Star, 
@@ -14,7 +15,9 @@ import {
   Upload,
   Clock,
   CheckCircle2,
-  XCircle
+  XCircle,
+  WifiOff,
+  RefreshCw
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -71,6 +74,7 @@ export default function StudentDashboard() {
   const [vocabResults, setVocabResults] = useState<VocabResult[]>([]);
   const [vocabSetting, setVocabSetting] = useState<VocabSetting | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     if (student?.id) {
@@ -82,11 +86,13 @@ export default function StudentDashboard() {
     if (!student?.id) return;
     
     setIsLoading(true);
+    setFetchError(false);
     try {
       const { data, error } = await studentApi.getDashboard();
       
       if (error) {
         console.error('Dashboard fetch error:', error);
+        setFetchError(true);
         return;
       }
 
@@ -100,6 +106,7 @@ export default function StudentDashboard() {
       }
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
+      setFetchError(true);
     } finally {
       setIsLoading(false);
     }
@@ -122,8 +129,50 @@ export default function StudentDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="space-y-6 pb-20 animate-fade-in">
+        {/* Header skeleton */}
+        <div className="text-center pt-2 space-y-2">
+          <Skeleton className="h-7 w-48 mx-auto" />
+          <Skeleton className="h-4 w-32 mx-auto" />
+        </div>
+        {/* Points card skeleton */}
+        <Skeleton className="h-32 w-full rounded-xl" />
+        {/* Quick actions skeleton */}
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+        </div>
+        {/* Content skeleton */}
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+          <Skeleton className="h-16 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  // Network error state
+  if (fetchError && !isLoading) {
+    return (
+      <div className="space-y-6 pb-20 animate-fade-in">
+        <div className="text-center pt-2">
+          <h1 className="text-xl font-bold">안녕하세요, {student?.name}님! 👋</h1>
+        </div>
+        <Card className="border-destructive/30">
+          <CardContent className="p-8 text-center space-y-4">
+            <WifiOff className="w-12 h-12 mx-auto text-muted-foreground" />
+            <div>
+              <p className="font-medium">데이터를 불러올 수 없습니다</p>
+              <p className="text-sm text-muted-foreground mt-1">인터넷 연결을 확인해주세요</p>
+            </div>
+            <Button onClick={fetchDashboardData} variant="outline" className="gap-2">
+              <RefreshCw className="w-4 h-4" />
+              다시 시도
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
