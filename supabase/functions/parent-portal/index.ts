@@ -92,8 +92,11 @@ Deno.serve(async (req) => {
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     const dateStr = fourteenDaysAgo.toISOString().split("T")[0];
 
+    const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    const todayStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth()+1).padStart(2,'0')}-${String(nowKST.getDate()).padStart(2,'0')}`;
+
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes")
@@ -103,7 +106,7 @@ Deno.serve(async (req) => {
         .limit(50),
       supabase
         .from("lesson_records")
-        .select("id, lesson_date, subject, lesson_range, course, understanding_score, attendance_status")
+        .select("id, lesson_date, subject, lesson_range, course, understanding_score, attendance_status, lesson_types")
         .eq("student_id", studentId)
         .eq("submitted", true)
         .gte("lesson_date", dateStr)
@@ -141,6 +144,16 @@ Deno.serve(async (req) => {
         .from("class_students")
         .select("class_id")
         .eq("student_id", studentId),
+      // Upcoming 보충수업 (draft lesson records with future dates)
+      supabase
+        .from("lesson_records")
+        .select("id, lesson_date, subject, lesson_range, course, lesson_types")
+        .eq("student_id", studentId)
+        .eq("submitted", false)
+        .gte("lesson_date", todayStr)
+        .contains("lesson_types", ["보충수업"])
+        .order("lesson_date")
+        .limit(10),
     ]);
 
     // Fetch class schedules for the student's classes
@@ -178,6 +191,7 @@ Deno.serve(async (req) => {
       course: l.course,
       understanding_score: l.understanding_score,
       attendance_status: l.attendance_status,
+      lesson_types: l.lesson_types || [],
     }));
 
     return new Response(
@@ -200,6 +214,13 @@ Deno.serve(async (req) => {
         vocab_schedules: vocabSchedRes.data || [],
         vocab_results: vocabResultRes.data || [],
         class_schedule: scheduleItems,
+        upcoming_supplements: (supplRes.data || []).map((s: any) => ({
+          id: s.id,
+          date: s.lesson_date,
+          subject: s.subject,
+          range: s.lesson_range,
+          course: s.course,
+        })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
