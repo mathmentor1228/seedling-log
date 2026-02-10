@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Camera, X, Loader2 } from 'lucide-react';
 import { compressImage } from '@/lib/imageCompression';
 
-const MAX_FILES = 10;
+const MAX_FILES = 30;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB before compression
 
 interface ImageItem {
