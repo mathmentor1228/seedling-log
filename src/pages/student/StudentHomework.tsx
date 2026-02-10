@@ -575,6 +575,95 @@ export default function StudentHomework() {
   const pendingHomework = homework.filter(hw => hw.check_status === 'unchecked');
   const completedHomework = homework.filter(hw => hw.check_status === 'checked');
 
+  // Group homework by date, then sort subjects within each date
+  const SUBJECT_ORDER = ['수학', '영어', '국어', '과학'];
+  const groupByDate = (items: HomeworkItem[]) => {
+    const groups: Record<string, HomeworkItem[]> = {};
+    items.forEach(hw => {
+      const dateKey = hw.assigned_date;
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(hw);
+    });
+    // Sort each group by subject order
+    Object.values(groups).forEach(group => {
+      group.sort((a, b) => {
+        const ai = SUBJECT_ORDER.indexOf(a.subject);
+        const bi = SUBJECT_ORDER.indexOf(b.subject);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
+    });
+    // Return sorted by date descending
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+  };
+
+  const pendingByDate = groupByDate(pendingHomework);
+  const completedByDate = groupByDate(completedHomework);
+
+  const renderHomeworkCard = (hw: HomeworkItem, isPending: boolean) => (
+    <Card 
+      key={hw.id}
+      className={`hover:bg-accent transition-colors cursor-pointer ${!isPending ? 'opacity-70 hover:opacity-100' : ''}`}
+      onClick={() => {
+        setSelectedHomework(hw);
+        navigate(`/student/homework/${hw.id}`);
+      }}
+    >
+      <CardContent className="p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <Badge className={getSubjectColor(hw.subject)}>
+                {hw.subject}
+              </Badge>
+              {hw.homework_type === 'daily' && (
+                <Badge variant="outline" className="text-xs border-primary/40 text-primary">
+                  데일리
+                </Badge>
+              )}
+              {isPending && showVoiceRecorder(hw.subject) && (
+                <Mic className="w-3 h-3 text-muted-foreground" />
+              )}
+            </div>
+            <p className="text-sm line-clamp-2">{hw.content}</p>
+            {isPending && hw.deadline_at && (
+              <div className="mt-1.5">
+                <DeadlineBadge hw={hw} />
+              </div>
+            )}
+          </div>
+          {isPending ? (
+            hw.is_deadline_passed ? (
+              <Badge variant="outline" className="text-xs border-red-500/40 text-red-500 flex-shrink-0">
+                마감됨
+              </Badge>
+            ) : (
+              <Button variant="outline" size="sm" className="flex-shrink-0">
+                <Upload className="w-4 h-4" />
+              </Button>
+            )
+          ) : (
+            getStatusBadge(hw)
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderDateGroup = (dateGroups: [string, HomeworkItem[]][], isPending: boolean) => (
+    dateGroups.map(([dateKey, items]) => (
+      <div key={dateKey} className="space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-medium text-muted-foreground px-2">
+            {format(new Date(dateKey + 'T00:00:00'), 'M월 d일 (EEE)', { locale: ko })}
+          </span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+        {items.map(hw => renderHomeworkCard(hw, isPending))}
+      </div>
+    ))
+  );
+
   return (
     <div className="space-y-6 pb-20">
       <h1 className="text-xl font-bold">숙제</h1>
@@ -586,7 +675,7 @@ export default function StudentHomework() {
           제출 대기 ({pendingHomework.length})
         </h2>
         
-        {pendingHomework.length === 0 ? (
+        {pendingByDate.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center text-muted-foreground">
               <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
@@ -594,98 +683,18 @@ export default function StudentHomework() {
             </CardContent>
           </Card>
         ) : (
-          pendingHomework.map((hw) => (
-            <Card 
-              key={hw.id}
-              className="hover:bg-accent transition-colors cursor-pointer"
-              onClick={() => {
-                setSelectedHomework(hw);
-                navigate(`/student/homework/${hw.id}`);
-              }}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <Badge className={getSubjectColor(hw.subject)}>
-                        {hw.subject}
-                      </Badge>
-                      {hw.homework_type === 'daily' && (
-                        <Badge variant="outline" className="text-xs border-primary/40 text-primary">
-                          데일리
-                        </Badge>
-                      )}
-                      {showVoiceRecorder(hw.subject) && (
-                        <Mic className="w-3 h-3 text-muted-foreground" />
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(hw.assigned_date), 'M/d')}
-                      </span>
-                    </div>
-                    <p className="text-sm line-clamp-2">{hw.content}</p>
-                    {/* DEADLINE-V1: Show deadline on list card */}
-                    {hw.deadline_at && (
-                      <div className="mt-1.5">
-                        <DeadlineBadge hw={hw} />
-                      </div>
-                    )}
-                  </div>
-                  {hw.is_deadline_passed ? (
-                    <Badge variant="outline" className="text-xs border-red-500/40 text-red-500 flex-shrink-0">
-                      마감됨
-                    </Badge>
-                  ) : (
-                    <Button variant="outline" size="sm" className="flex-shrink-0">
-                      <Upload className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+          renderDateGroup(pendingByDate, true)
         )}
       </div>
 
       {/* Completed Section */}
-      {completedHomework.length > 0 && (
+      {completedByDate.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
             완료됨 ({completedHomework.length})
           </h2>
-          
-          {completedHomework.map((hw) => (
-            <Card 
-              key={hw.id}
-              className="opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
-              onClick={() => {
-                setSelectedHomework(hw);
-                navigate(`/student/homework/${hw.id}`);
-              }}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge className={getSubjectColor(hw.subject)}>
-                        {hw.subject}
-                      </Badge>
-                      {hw.homework_type === 'daily' && (
-                        <Badge variant="outline" className="text-xs border-primary/40 text-primary">
-                          데일리
-                        </Badge>
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(hw.assigned_date), 'M/d')}
-                      </span>
-                    </div>
-                    <p className="text-sm line-clamp-1">{hw.content}</p>
-                  </div>
-                  {getStatusBadge(hw)}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {renderDateGroup(completedByDate, false)}
         </div>
       )}
     </div>
