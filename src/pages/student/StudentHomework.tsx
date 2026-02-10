@@ -13,7 +13,8 @@ import {
   CheckCircle, 
   Clock,
   Loader2,
-  ChevronLeft
+  ChevronLeft,
+  AlertTriangle
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -38,6 +39,36 @@ interface HomeworkItem {
   submission_image_url: string | null;
   is_expired?: boolean;
   homework_type?: string;
+  deadline_at?: string | null;
+  is_deadline_passed?: boolean;
+}
+
+// DEADLINE-V1: Format deadline for display
+function formatDeadline(deadlineAt: string): string {
+  const d = new Date(deadlineAt);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  const timeStr = format(d, 'M월 d일 (EEE) a h:mm', { locale: ko });
+
+  if (diffMs <= 0) return `마감됨`;
+  if (diffHours < 1) return `${diffMinutes}분 후 마감`;
+  if (diffHours < 24) return `${diffHours}시간 ${diffMinutes > 0 ? diffMinutes + '분' : ''} 후 마감`;
+  return `${timeStr}까지`;
+}
+
+function getDeadlineUrgency(deadlineAt: string): 'expired' | 'urgent' | 'warning' | 'normal' {
+  const d = new Date(deadlineAt);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffMs <= 0) return 'expired';
+  if (diffHours <= 2) return 'urgent';
+  if (diffHours <= 6) return 'warning';
+  return 'normal';
 }
 
 export default function StudentHomework() {
@@ -108,8 +139,26 @@ export default function StudentHomework() {
     setUploadImages([]);
   };
 
+  // DEADLINE-V1: Check if submission is allowed
+  const isSubmissionBlocked = (hw: HomeworkItem): boolean => {
+    if (hw.check_status !== 'unchecked') return true;
+    if (hw.is_expired) return true;
+    if (hw.is_deadline_passed) return true;
+    return false;
+  };
+
   const handleSubmit = async () => {
     if (!selectedHomework || !student?.id) return;
+    
+    // DEADLINE-V1: Client-side deadline check
+    if (selectedHomework.is_deadline_passed) {
+      toast({
+        title: '마감 시간 초과',
+        description: '숙제 제출 마감 시간이 지났습니다.',
+        variant: 'destructive',
+      });
+      return;
+    }
     
     if (uploadImages.length === 0 && !submissionNote.trim()) {
       toast({
@@ -135,7 +184,6 @@ export default function StudentHomework() {
           .upload(fileName, img.file, { contentType: img.file.type });
         
         if (uploadError) {
-          // Determine error type
           const msg = uploadError.message?.toLowerCase() || '';
           if (msg.includes('payload too large') || msg.includes('size')) {
             throw new Error('FILE_TOO_LARGE');
@@ -152,13 +200,26 @@ export default function StudentHomework() {
       
       // Submit via edge function
       const imageUrl = imageUrls.length > 0 ? imageUrls.join(',') : null;
-      const { error } = await studentApi.submitHomework(
+      const { error, data: submitData } = await studentApi.submitHomework(
         selectedHomework.id,
         imageUrl,
         submissionNote.trim() || null
       );
       
-      if (error) throw new Error('SUBMIT_ERROR');
+      // DEADLINE-V1: Handle server-side deadline rejection
+      if (error) {
+        if (error.includes('DEADLINE_PASSED') || error.includes('마감')) {
+          toast({
+            title: '마감 시간 초과',
+            description: '숙제 제출 마감 시간이 지났습니다. 다음 수업 전까지 제출해주세요.',
+            variant: 'destructive',
+          });
+          setShowSubmitDialog(false);
+          fetchHomework(); // Refresh to update deadline status
+          return;
+        }
+        throw new Error('SUBMIT_ERROR');
+      }
       
       toast({
         title: '제출 완료',
@@ -219,8 +280,37 @@ export default function StudentHomework() {
     }
   };
 
+  // DEADLINE-V1: Deadline badge component
+  const DeadlineBadge = ({ hw }: { hw: HomeworkItem }) => {
+    if (hw.check_status !== 'unchecked' || !hw.deadline_at) return null;
+
+    const urgency = getDeadlineUrgency(hw.deadline_at);
+    const label = formatDeadline(hw.deadline_at);
+
+    const colorMap = {
+      expired: 'bg-red-500/10 text-red-600 border-red-500/30',
+      urgent: 'bg-red-500/10 text-red-600 border-red-500/30',
+      warning: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
+      normal: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
+    };
+
+    return (
+      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${colorMap[urgency]}`}>
+        {urgency === 'expired' ? (
+          <AlertTriangle className="w-3 h-3" />
+        ) : (
+          <Clock className="w-3 h-3" />
+        )}
+        {label}
+      </span>
+    );
+  };
+
   // Detail view for a specific homework
   if (selectedHomework) {
+    const blocked = isSubmissionBlocked(selectedHomework);
+    const deadlinePassed = selectedHomework.is_deadline_passed;
+
     return (
       <div className="space-y-4 pb-20">
         <div className="flex items-center gap-2">
@@ -249,6 +339,29 @@ export default function StudentHomework() {
             <p className="text-sm text-muted-foreground">
               {format(new Date(selectedHomework.assigned_date), 'M월 d일 (EEEE)', { locale: ko })}
             </p>
+
+            {/* DEADLINE-V1: Show deadline info */}
+            {selectedHomework.check_status === 'unchecked' && selectedHomework.deadline_at && (
+              <div className={`p-3 rounded-lg border flex items-center gap-2 ${
+                deadlinePassed
+                  ? 'bg-red-500/10 border-red-500/30'
+                  : getDeadlineUrgency(selectedHomework.deadline_at) === 'urgent'
+                    ? 'bg-red-500/10 border-red-500/30'
+                    : getDeadlineUrgency(selectedHomework.deadline_at) === 'warning'
+                      ? 'bg-amber-500/10 border-amber-500/30'
+                      : 'bg-blue-500/10 border-blue-500/30'
+              }`}>
+                <Clock className="w-4 h-4 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">
+                    {deadlinePassed ? '⏰ 제출 마감됨' : `⏰ 마감: ${formatDeadline(selectedHomework.deadline_at)}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    수업 시작 5시간 전에 제출이 마감됩니다
+                  </p>
+                </div>
+              </div>
+            )}
             
             <div className="p-3 bg-muted rounded-lg">
               <p className="text-sm whitespace-pre-wrap">{selectedHomework.content}</p>
@@ -287,7 +400,8 @@ export default function StudentHomework() {
               </div>
             )}
 
-            {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && (
+            {/* DEADLINE-V1: Show submit button or deadline-passed message */}
+            {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && !deadlinePassed && (
               <div className="space-y-3">
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <p className="text-xs text-amber-700 font-medium">
@@ -302,6 +416,14 @@ export default function StudentHomework() {
                   <Upload className="w-5 h-5 mr-2" />
                   {selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
                 </Button>
+              </div>
+            )}
+
+            {selectedHomework.check_status === 'unchecked' && deadlinePassed && !selectedHomework.is_expired && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-center">
+                <AlertTriangle className="w-6 h-6 mx-auto mb-1 text-red-500" />
+                <p className="text-sm font-medium text-red-600">제출 마감 시간이 지났습니다</p>
+                <p className="text-xs text-muted-foreground mt-1">수업 시작 5시간 전까지 제출해야 합니다</p>
               </div>
             )}
 
@@ -406,7 +528,7 @@ export default function StudentHomework() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge className={getSubjectColor(hw.subject)}>
                         {hw.subject}
                       </Badge>
@@ -420,10 +542,22 @@ export default function StudentHomework() {
                       </span>
                     </div>
                     <p className="text-sm line-clamp-2">{hw.content}</p>
+                    {/* DEADLINE-V1: Show deadline on list card */}
+                    {hw.deadline_at && (
+                      <div className="mt-1.5">
+                        <DeadlineBadge hw={hw} />
+                      </div>
+                    )}
                   </div>
-                  <Button variant="outline" size="sm">
-                    <Upload className="w-4 h-4" />
-                  </Button>
+                  {hw.is_deadline_passed ? (
+                    <Badge variant="outline" className="text-xs border-red-500/40 text-red-500 flex-shrink-0">
+                      마감됨
+                    </Badge>
+                  ) : (
+                    <Button variant="outline" size="sm" className="flex-shrink-0">
+                      <Upload className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
