@@ -1161,8 +1161,77 @@ export function LessonRecordForm({
         }
       }
 
+      // POINT-AWARD-V3: Award/deduct points (same logic as RosterActionModal)
+      let pointsAwarded = false;
+      let awardedPoints = 0;
+      
+      // Check if points were already awarded for this homework
+      let pointsAlreadyAwarded = false;
+      if (homeworkCheckResult === 'completed' || homeworkCheckResult === 'not_done') {
+        const { data: existingPoints } = await supabase
+          .from('student_point_history')
+          .select('id')
+          .eq('related_homework_id', previousHomework.id)
+          .limit(1);
+        pointsAlreadyAwarded = (existingPoints?.length || 0) > 0;
+      }
+
+      if (!pointsAlreadyAwarded) {
+        if (homeworkCheckResult === 'completed') {
+          const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
+          awardedPoints = hasPhotoSubmission ? 10 : 5;
+        } else if (homeworkCheckResult === 'not_done') {
+          awardedPoints = -5;
+        }
+      }
+
+      if (awardedPoints !== 0 && !pointsAlreadyAwarded) {
+        let reason = '';
+        if (awardedPoints === 10) reason = '숙제 완료 보상 (사진 인증)';
+        else if (awardedPoints === 5) reason = '숙제 완료 보상 (현장 확인)';
+        else if (awardedPoints === -5) reason = '숙제 미이행 감점';
+
+        const { error: pointHistoryError } = await supabase
+          .from('student_point_history')
+          .insert({
+            student_id: previousHomework.student_id,
+            points: awardedPoints,
+            reason,
+            related_homework_id: previousHomework.id,
+            created_by: user.id,
+          });
+
+        if (pointHistoryError) {
+          console.error('[POINT-AWARD-V3] Error inserting point history:', pointHistoryError);
+        } else {
+          const { data: student } = await supabase
+            .from('students')
+            .select('total_points')
+            .eq('id', previousHomework.student_id)
+            .single();
+
+          const { error: updatePointsError } = await supabase
+            .from('students')
+            .update({ total_points: (student?.total_points || 0) + awardedPoints })
+            .eq('id', previousHomework.student_id);
+
+          if (updatePointsError) {
+            console.error('[POINT-AWARD-V3] Error updating student points:', updatePointsError);
+          } else {
+            pointsAwarded = true;
+          }
+        }
+      }
+
       const statusLabel = { completed: '완료', partial: '일부완료', not_done: '미이행', none_assigned: '없음' }[homeworkStatusToSave] || homeworkStatusToSave;
-      toast({ title: '숙제 확인 완료', description: `숙제상태: ${statusLabel}` });
+      
+      // POINT-AWARD-V3: Include point message in toast
+      if (pointsAwarded) {
+        const pointLabel = awardedPoints > 0 ? `+${awardedPoints}점 지급` : `${awardedPoints}점 감점`;
+        toast({ title: '숙제 확인 완료', description: `숙제상태: ${statusLabel} | ${pointLabel}` });
+      } else {
+        toast({ title: '숙제 확인 완료', description: `숙제상태: ${statusLabel}` });
+      }
       
       if (formData.student_id && formData.class_id) {
         await fetchPreviousLesson(formData.student_id, formData.class_id, formData.lesson_date);
