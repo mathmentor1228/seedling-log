@@ -151,14 +151,15 @@ Deno.serve(async (req) => {
           .single();
 
         // Fetch pending homework (last 14 days, unchecked)
-        const twoWeeksAgo = new Date();
-        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-        
+        const nowKST = getNowKST();
+        const twoWeeksAgoKST = new Date(nowKST);
+        twoWeeksAgoKST.setDate(twoWeeksAgoKST.getDate() - 14);
+        const twoWeeksAgoStr = `${twoWeeksAgoKST.getFullYear()}-${String(twoWeeksAgoKST.getMonth() + 1).padStart(2, '0')}-${String(twoWeeksAgoKST.getDate()).padStart(2, '0')}`;
         const { data: homeworkData } = await supabase
           .from('homework_assignments')
           .select('id, content, subject, assigned_date, check_status')
           .eq('student_id', student_id)
-          .gte('assigned_date', twoWeeksAgo.toISOString().split('T')[0])
+          .gte('assigned_date', twoWeeksAgoStr)
           .eq('check_status', 'unchecked')
           .order('assigned_date', { ascending: false })
           .limit(5);
@@ -181,8 +182,8 @@ Deno.serve(async (req) => {
           `)
           .eq('student_id', student_id);
 
-        const today = new Date();
-        const dow = today.getDay();
+        const todayKST = getNowKST();
+        const dow = todayKST.getDay();
         const upcomingClasses: any[] = [];
         
         if (classData) {
@@ -204,18 +205,18 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Sort by day of week relative to today
+        // Sort by day of week relative to today (KST), exclude past days
         upcomingClasses.sort((a, b) => {
-          const aDays = (a.day_of_week - dow + 7) % 7;
-          const bDays = (b.day_of_week - dow + 7) % 7;
+          const aDays = (a.day_of_week - dow + 7) % 7 || 7;
+          const bDays = (b.day_of_week - dow + 7) % 7 || 7;
           return aDays - bDays;
         });
 
-        // Fetch upcoming vocab tests (next 14 days)
-        const futureDate = new Date();
-        futureDate.setDate(futureDate.getDate() + 14);
-        const todayStr = new Date().toISOString().split('T')[0];
-        const futureStr = futureDate.toISOString().split('T')[0];
+        // Fetch upcoming vocab tests (next 14 days) — use KST dates
+        const todayStr = `${todayKST.getFullYear()}-${String(todayKST.getMonth() + 1).padStart(2, '0')}-${String(todayKST.getDate()).padStart(2, '0')}`;
+        const futureKST = new Date(todayKST);
+        futureKST.setDate(futureKST.getDate() + 14);
+        const futureStr = `${futureKST.getFullYear()}-${String(futureKST.getMonth() + 1).padStart(2, '0')}-${String(futureKST.getDate()).padStart(2, '0')}`;
 
         const [vocabScheduleRes, vocabResultsRes, vocabSettingsRes] = await Promise.all([
           supabase
@@ -229,7 +230,7 @@ Deno.serve(async (req) => {
             .from('vocab_test_results')
             .select('id, test_date, day_number, book_name, score_percent, passed, total_words, correct_words')
             .eq('student_id', student_id)
-            .gte('test_date', twoWeeksAgo.toISOString().split('T')[0])
+            .gte('test_date', twoWeeksAgoStr)
             .order('test_date', { ascending: false })
             .limit(20),
           supabase
