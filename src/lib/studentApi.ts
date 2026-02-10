@@ -82,11 +82,12 @@ export const studentApi = {
   getHomeworkSubmission: (homeworkId: string) =>
     studentApiCall<{ submission: any | null }>('homework_submission', { homework_id: homeworkId }),
 
-  submitHomework: (homeworkId: string, imageUrl: string | null, submissionText: string | null) =>
+  submitHomework: (homeworkId: string, imageUrl: string | null, submissionText: string | null, audioUrl: string | null = null) =>
     studentApiCall<{ success: boolean }>('submit_homework', {
       homework_id: homeworkId,
       image_url: imageUrl,
       submission_text: submissionText,
+      audio_url: audioUrl,
     }),
 
   getPointsHistory: () => studentApiCall<{
