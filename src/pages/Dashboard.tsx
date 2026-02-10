@@ -20,6 +20,7 @@ import DailyHomeworkManager from '@/components/DailyHomeworkManager';
 import { RosterActionModal } from '@/components/RosterActionModal';
 import { HomeworkAlertModal } from '@/components/HomeworkAlertModal';
 import SubmissionImageCarousel from '@/components/lessons/SubmissionImageCarousel';
+import StudentProgressWidget from '@/components/StudentProgressWidget';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
@@ -2316,6 +2317,11 @@ export default function Dashboard() {
             </CollapsibleContent>
           </Card>
         </Collapsible>
+      )}
+
+      {/* LEARNING-ANALYSIS-V1: Student progress analysis widget */}
+      {(isTeacher(role) || isAdmin(role)) && (
+        <StudentProgressWidget />
       )}
 
       {/* PHOTO-VIEW-V1: Photo viewer dialog for pending homework */}
