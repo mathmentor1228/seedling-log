@@ -791,9 +791,9 @@ export default function Dashboard() {
           });
         }
         
-        // Build a student name lookup from roster rows
+        // Build a student name lookup from roster rows (use current rosterRows, not stale state)
         const studentNameLookup: Record<string, string> = {};
-        (adminRosterData?.roster_rows || []).forEach((r: any) => { studentNameLookup[r.student_id] = r.student_name; });
+        rosterRows.forEach((r: any) => { studentNameLookup[r.student_id] = r.student_name; });
 
         const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { url: string; text: string | null; at: string | null; studentName: string } }> = {};
         (lessonRecords || []).forEach((lr: any) => {
@@ -803,6 +803,19 @@ export default function Dashboard() {
             submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null, hasNextHomework: hwAssignmentSet.has(lr.id), hasPhotoSubmission: photoSubmissionSet.has(lr.student_id),
             ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[lr.student_id] || '학생' } } : {})
           };
+        });
+        
+        // PHOTO-BADGE-FIX-V1: Also populate statusMap for students with photo submissions but no lesson record
+        rosterRows.forEach((row: any) => {
+          const key = `${row.student_id}:${row.class_id}:${row.subject}`;
+          if (!statusMap[key] && photoSubmissionSet.has(row.student_id)) {
+            const pd = photoDataMap[row.student_id];
+            statusMap[key] = {
+              submitted: false, recordId: null, homeworkStatus: null, hasNextHomework: false,
+              hasPhotoSubmission: true,
+              ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[row.student_id] || '학생' } } : {})
+            };
+          }
         });
         
         setLessonStatusMap(statusMap);
