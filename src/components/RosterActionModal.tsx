@@ -499,26 +499,37 @@ export function RosterActionModal({
         }
       }
       
-      // POINT-AWARD-V2: Award points based on photo submission status
-      // Photo submitted: 10pts, In-person check only: 5pts
+      // POINT-AWARD-V3: Award/deduct points based on homework result
+      // Photo submitted + check: +10pts, Submit-only or check-only: +5pts, Not done: -5pts
       let pointsAwarded = false;
       let awardedPoints = 0;
-      if (homeworkCheckResult === 'completed' && !pointsAlreadyAwarded) {
-        const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
-        awardedPoints = hasPhotoSubmission ? 10 : 5;
+      if (!pointsAlreadyAwarded) {
+        if (homeworkCheckResult === 'completed') {
+          const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
+          awardedPoints = hasPhotoSubmission ? 10 : 5;
+        } else if (homeworkCheckResult === 'not_done') {
+          awardedPoints = -5;
+        }
+      }
+      
+      if (awardedPoints !== 0 && !pointsAlreadyAwarded) {
+        let reason = '';
+        if (awardedPoints === 10) reason = '숙제 완료 보상 (사진 인증)';
+        else if (awardedPoints === 5) reason = '숙제 완료 보상 (현장 확인)';
+        else if (awardedPoints === -5) reason = '숙제 미이행 감점';
         
         const { error: pointHistoryError } = await supabase
           .from('student_point_history')
           .insert({
             student_id: context.student_id,
             points: awardedPoints,
-            reason: hasPhotoSubmission ? '숙제 완료 보상 (사진 인증)' : '숙제 완료 보상 (현장 확인)',
+            reason,
             related_homework_id: previousHomework.id,
             created_by: user.id,
           });
         
         if (pointHistoryError) {
-          console.error('[POINT-AWARD-V2] Error inserting point history:', pointHistoryError);
+          console.error('[POINT-AWARD-V3] Error inserting point history:', pointHistoryError);
         } else {
           const { data: student } = await supabase
             .from('students')
@@ -532,7 +543,7 @@ export function RosterActionModal({
             .eq('id', context.student_id);
           
           if (updatePointsError) {
-            console.error('[POINT-AWARD-V2] Error updating student points:', updatePointsError);
+            console.error('[POINT-AWARD-V3] Error updating student points:', updatePointsError);
           } else {
             pointsAwarded = true;
           }
@@ -561,16 +572,17 @@ export function RosterActionModal({
         'none_assigned': '없음',
       }[savedRecord?.homework_status || homeworkStatusToSave] || (savedRecord?.homework_status || homeworkStatusToSave);
       
-      // POINT-AWARD-V1: Include point award message in toast
+      // POINT-AWARD-V3: Include point award/deduction message in toast
       if (pointsAwarded) {
+        const pointLabel = awardedPoints > 0 ? `+${awardedPoints}점 지급` : `${awardedPoints}점 감점`;
         toast({
           title: '확인 완료',
-          description: `숙제상태 저장됨: ${statusLabel} / 포인트 +${awardedPoints}점 지급`,
+          description: `숙제상태 저장됨: ${statusLabel} / 포인트 ${pointLabel}`,
         });
-      } else if (homeworkCheckResult === 'completed' && pointsAlreadyAwarded) {
+      } else if (pointsAlreadyAwarded) {
         toast({
           title: '확인 완료',
-          description: `숙제상태 저장됨: ${statusLabel} (포인트 이미 지급됨)`,
+          description: `숙제상태 저장됨: ${statusLabel} (포인트 이미 처리됨)`,
         });
       } else {
         toast({
