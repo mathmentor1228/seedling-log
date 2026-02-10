@@ -30,6 +30,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
+import DailyHomeworkManager from '@/components/DailyHomeworkManager';
 
 interface Teacher {
   id: string;
@@ -805,14 +806,17 @@ export default function Lessons() {
             {role === 'admin' ? '전체 수업 기록' : '수업 내용을 기록하고 관리하세요'}
           </p>
         </div>
-        {canManage && (
-          <Button 
-            onClick={handleOpenNewForm}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            + 수업기록 생성
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <Button 
+              onClick={handleOpenNewForm}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              + 수업기록 생성
+            </Button>
+          )}
+          {(isAdmin || isTeacher) && <DailyHomeworkManager />}
+        </div>
       </div>
 
       {/* LessonModal - only render when open to prevent backdrop blocking clicks */}

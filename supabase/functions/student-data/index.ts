@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
 
         const { data, error } = await supabase
           .from('homework_assignments')
-          .select('id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url')
+          .select('id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url, homework_type')
           .eq('student_id', student_id)
           .gte('assigned_date', thirtyDaysAgo.toISOString().split('T')[0])
           .order('assigned_date', { ascending: false });
