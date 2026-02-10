@@ -43,6 +43,9 @@ import { RosterActionModal } from '@/components/RosterActionModal';
 import AssistantChecklist from '@/components/AssistantChecklist';
 import { TestVisitModal } from '@/components/TestVisitModal';
 import { TestVisitsList } from '@/components/TestVisitsList';
+import SubmissionImageCarousel from '@/components/lessons/SubmissionImageCarousel';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Camera } from 'lucide-react';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
 
 interface Teacher {
@@ -80,6 +83,11 @@ interface RosterStudent {
     test_result_text: string | null;
     english_pass_fail: string | null;
   } | null;
+  // PHOTO-SUBMISSION-ROSTER-V1
+  hasPhotoSubmission: boolean;
+  submissionImageUrl: string | null;
+  submissionText: string | null;
+  submittedAt: string | null;
 }
 
 interface Holiday {
@@ -204,6 +212,9 @@ export default function AssistantDashboard() {
 
   // Test visit modal state
   const [testVisitModalOpen, setTestVisitModalOpen] = useState(false);
+
+  // PHOTO-SUBMISSION-ROSTER-V1: Photo viewer state
+  const [photoViewStudent, setPhotoViewStudent] = useState<RosterStudent | null>(null);
 
   // DASH-LATEST-TEST-TOGGLE-V1: Latest test toggle hook
   const latestTests = useStudentLatestTests();
@@ -330,6 +341,8 @@ export default function AssistantDashboard() {
       let todayTestDataMap: Record<string, { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null> = {};
       // NEXT-HW-BADGE-V1: Track next homework assignment
       let nextHomeworkMap: Record<string, boolean> = {};
+      // PHOTO-SUBMISSION-ROSTER-V1: Track photo submissions
+      let photoSubmissionMap: Record<string, { url: string; text: string | null; at: string | null }> = {};
 
       if (studentIds.length > 0 && classIds.length > 0) {
         const { data: dateRecords } = await supabase
@@ -384,12 +397,34 @@ export default function AssistantDashboard() {
             }
           });
         }
+
+        // PHOTO-SUBMISSION-ROSTER-V1: Fetch unchecked homework with photo submissions
+        if (studentIds.length > 0) {
+          const { data: pendingHw } = await supabase
+            .from('homework_assignments')
+            .select('student_id, submitted_at, submission_image_url, submission_text')
+            .in('student_id', studentIds)
+            .eq('check_status', 'unchecked')
+            .not('submitted_at', 'is', null)
+            .not('submission_image_url', 'is', null);
+          
+          (pendingHw || []).forEach((hw: any) => {
+            if (hw.submitted_at && hw.submission_image_url) {
+              photoSubmissionMap[hw.student_id] = {
+                url: hw.submission_image_url,
+                text: hw.submission_text || null,
+                at: hw.submitted_at,
+              };
+            }
+          });
+        }
       }
 
       // Build final roster
       const rosterData: RosterStudent[] = rosterRowsRaw.map(r => {
         const key = `${r.student_id}:${r.class_id}`;
         const mapped = previousHomeworkMap[key];
+        const photo = photoSubmissionMap[r.student_id];
         return {
           student_id: r.student_id,
           student_name: r.student_name,
@@ -414,6 +449,11 @@ export default function AssistantDashboard() {
           todayTestData: todayTestDataMap[key] || null,
           // NEXT-HW-BADGE-V1
           hasNextHomework: !!nextHomeworkMap[key],
+          // PHOTO-SUBMISSION-ROSTER-V1
+          hasPhotoSubmission: !!photo,
+          submissionImageUrl: photo?.url || null,
+          submissionText: photo?.text || null,
+          submittedAt: photo?.at || null,
         };
       });
 
@@ -919,6 +959,15 @@ export default function AssistantDashboard() {
                                         <Badge variant="outline" className="text-muted-foreground border-muted text-xs">숙제미배정</Badge>
                                       )
                                     )}
+                                    {/* PHOTO-SUBMISSION-ROSTER-V1: Show photo badge */}
+                                    {student.hasPhotoSubmission && (
+                                      <Badge 
+                                        className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs cursor-pointer hover:bg-blue-500/25"
+                                        onClick={() => setPhotoViewStudent(student)}
+                                      >
+                                        📷 사진보기
+                                      </Badge>
+                                    )}
                                   </>
                                 )}
                                 
@@ -1049,6 +1098,24 @@ export default function AssistantDashboard() {
           fetchAllData();
         }}
       />
+
+      {/* PHOTO-SUBMISSION-ROSTER-V1: Photo viewer dialog */}
+      <Dialog open={!!photoViewStudent} onOpenChange={(open) => !open && setPhotoViewStudent(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              📷 {photoViewStudent?.student_name} - 숙제 제출 사진
+            </DialogTitle>
+          </DialogHeader>
+          {photoViewStudent?.submissionImageUrl && (
+            <SubmissionImageCarousel
+              images={photoViewStudent.submissionImageUrl.split(',').map(u => u.trim()).filter(Boolean)}
+              submittedAt={photoViewStudent.submittedAt}
+              note={photoViewStudent.submissionText}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
