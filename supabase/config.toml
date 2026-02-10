@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.parent-portal]
 verify_jwt = false
+
+[functions.student-progress-analysis]
+verify_jwt = false
