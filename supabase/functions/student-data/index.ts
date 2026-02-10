@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
       }
 
       case 'submit_homework': {
-        const { homework_id, image_url, submission_text } = params;
+        const { homework_id, image_url, submission_text, audio_url } = params;
         if (!homework_id) {
           return new Response(
             JSON.stringify({ error: 'Missing homework_id' }),
@@ -404,6 +404,7 @@ Deno.serve(async (req) => {
           .update({
             submission_image_url: image_url || null,
             submission_text: submission_text || null,
+            submission_audio_url: audio_url || null,
             submitted_at: new Date().toISOString(),
           })
           .eq('id', homework_id)

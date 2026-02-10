@@ -14,7 +14,8 @@ import {
   Clock,
   Loader2,
   ChevronLeft,
-  AlertTriangle
+  AlertTriangle,
+  Mic
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -26,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
+import VoiceRecorder, { type RecordedAudio } from '@/components/student/VoiceRecorder';
 
 interface HomeworkItem {
   id: string;
@@ -41,7 +43,13 @@ interface HomeworkItem {
   homework_type?: string;
   deadline_at?: string | null;
   is_deadline_passed?: boolean;
+  submission_audio_url?: string | null;
 }
+
+// VOICE-RECORD-V1: Subjects that require/allow voice recording
+const VOICE_SUBJECTS = ['영어'];
+// Subjects where voice is optional (shown but not required)
+const VOICE_OPTIONAL_SUBJECTS = ['국어'];
 
 // DEADLINE-V1: Format deadline for display
 function formatDeadline(deadlineAt: string): string {
@@ -86,6 +94,7 @@ export default function StudentHomework() {
   // Submission form state
   const [uploadImages, setUploadImages] = useState<ImageItem[]>([]);
   const [submissionNote, setSubmissionNote] = useState('');
+  const [recordedAudio, setRecordedAudio] = useState<RecordedAudio | null>(null);
 
   useEffect(() => {
     if (student?.id) {
@@ -139,6 +148,15 @@ export default function StudentHomework() {
     setUploadImages([]);
   };
 
+  // VOICE-RECORD-V1: Check if subject supports voice recording
+  const showVoiceRecorder = (subject: string): boolean => {
+    return VOICE_SUBJECTS.includes(subject) || VOICE_OPTIONAL_SUBJECTS.includes(subject);
+  };
+
+  const isVoiceRequired = (subject: string): boolean => {
+    return VOICE_SUBJECTS.includes(subject);
+  };
+
   // DEADLINE-V1: Check if submission is allowed
   const isSubmissionBlocked = (hw: HomeworkItem): boolean => {
     if (hw.check_status !== 'unchecked') return true;
@@ -160,10 +178,20 @@ export default function StudentHomework() {
       return;
     }
     
-    if (uploadImages.length === 0 && !submissionNote.trim()) {
+    // VOICE-RECORD-V1: Check voice requirement
+    if (isVoiceRequired(selectedHomework.subject) && !recordedAudio && uploadImages.length === 0 && !submissionNote.trim()) {
+      toast({
+        title: '음성 녹음 필요',
+        description: `${selectedHomework.subject} 과목은 음성 녹음을 포함해야 합니다.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (uploadImages.length === 0 && !submissionNote.trim() && !recordedAudio) {
       toast({
         title: '입력 필요',
-        description: '사진 또는 메모를 입력해주세요.',
+        description: '사진, 음성 녹음 또는 메모를 입력해주세요.',
         variant: 'destructive',
       });
       return;
@@ -198,12 +226,34 @@ export default function StudentHomework() {
         imageUrls.push(urlData.publicUrl);
       }
       
+      // VOICE-RECORD-V1: Upload audio if present
+      let audioUrl: string | null = null;
+      if (recordedAudio) {
+        const audioExt = recordedAudio.blob.type.includes('mp4') ? 'mp4' : 'webm';
+        const audioFileName = `${student.id}/${selectedHomework.id}/${Date.now()}-voice.${audioExt}`;
+        
+        const { error: audioUploadError } = await supabase.storage
+          .from('homework-submissions')
+          .upload(audioFileName, recordedAudio.blob, { contentType: recordedAudio.blob.type });
+        
+        if (audioUploadError) {
+          throw new Error('NETWORK_ERROR');
+        }
+        
+        const { data: audioUrlData } = supabase.storage
+          .from('homework-submissions')
+          .getPublicUrl(audioFileName);
+        
+        audioUrl = audioUrlData.publicUrl;
+      }
+
       // Submit via edge function
       const imageUrl = imageUrls.length > 0 ? imageUrls.join(',') : null;
       const { error, data: submitData } = await studentApi.submitHomework(
         selectedHomework.id,
         imageUrl,
-        submissionNote.trim() || null
+        submissionNote.trim() || null,
+        audioUrl
       );
       
       // DEADLINE-V1: Handle server-side deadline rejection
@@ -229,6 +279,7 @@ export default function StudentHomework() {
       setShowSubmitDialog(false);
       clearImages();
       setSubmissionNote('');
+      setRecordedAudio(null);
       fetchHomework();
       
     } catch (error: any) {
@@ -400,6 +451,16 @@ export default function StudentHomework() {
               </div>
             )}
 
+            {/* VOICE-RECORD-V1: Show submitted audio */}
+            {selectedHomework.submission_audio_url && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">🎙️ 제출한 음성</p>
+                <audio controls className="w-full" src={selectedHomework.submission_audio_url}>
+                  브라우저가 오디오 재생을 지원하지 않습니다.
+                </audio>
+              </div>
+            )}
+
             {/* DEADLINE-V1: Show submit button or deadline-passed message */}
             {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && !deadlinePassed && (
               <div className="space-y-3">
@@ -450,6 +511,23 @@ export default function StudentHomework() {
                 disabled={isSubmitting}
               />
 
+              {/* VOICE-RECORD-V1: Voice recorder (subject-based) */}
+              {selectedHomework && showVoiceRecorder(selectedHomework.subject) && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Mic className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">
+                      음성 녹음 {isVoiceRequired(selectedHomework.subject) ? '(필수)' : '(선택)'}
+                    </span>
+                  </div>
+                  <VoiceRecorder
+                    audio={recordedAudio}
+                    onAudioChange={setRecordedAudio}
+                    disabled={isSubmitting}
+                  />
+                </div>
+              )}
+
               {/* Note input */}
               <div>
                 <Textarea
@@ -464,7 +542,7 @@ export default function StudentHomework() {
                 className="w-full" 
                 size="lg"
                 onClick={handleSubmit}
-                disabled={isSubmitting || (uploadImages.length === 0 && !submissionNote.trim())}
+                disabled={isSubmitting || (uploadImages.length === 0 && !submissionNote.trim() && !recordedAudio)}
               >
                 {isSubmitting ? (
                   <>
@@ -536,6 +614,9 @@ export default function StudentHomework() {
                         <Badge variant="outline" className="text-xs border-primary/40 text-primary">
                           데일리
                         </Badge>
+                      )}
+                      {showVoiceRecorder(hw.subject) && (
+                        <Mic className="w-3 h-3 text-muted-foreground" />
                       )}
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(hw.assigned_date), 'M/d')}

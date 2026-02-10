@@ -541,6 +541,7 @@ export type Database = {
           result: string | null
           student_id: string
           subject: Database["public"]["Enums"]["subject_type"]
+          submission_audio_url: string | null
           submission_image_url: string | null
           submission_text: string | null
           submitted_at: string | null
@@ -560,6 +561,7 @@ export type Database = {
           result?: string | null
           student_id: string
           subject: Database["public"]["Enums"]["subject_type"]
+          submission_audio_url?: string | null
           submission_image_url?: string | null
           submission_text?: string | null
           submitted_at?: string | null
@@ -579,6 +581,7 @@ export type Database = {
           result?: string | null
           student_id?: string
           subject?: Database["public"]["Enums"]["subject_type"]
+          submission_audio_url?: string | null
           submission_image_url?: string | null
           submission_text?: string | null
           submitted_at?: string | null
