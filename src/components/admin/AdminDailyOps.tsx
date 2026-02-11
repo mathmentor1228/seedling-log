@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { LessonModal } from '@/components/lessons/LessonModal';
 import { 
   CalendarIcon, 
+  CalendarDays,
   ChevronLeft, 
   ChevronRight, 
   Eye,
@@ -274,15 +275,16 @@ export function AdminDailyOps() {
   const dateStr = format(selectedDate, 'yyyy년 M월 d일 (EEE)', { locale: ko });
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      {/* ADMIN-DAILY-OPS-V1 marker */}
-      <div className="text-xs text-center py-1 rounded bg-primary/20 text-primary">
-        ADMIN-DAILY-OPS-V1 | TEST-CONTENT-REQUIRED-V1
-      </div>
-
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">일일 운영 현황</h1>
+        <div>
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            <CalendarDays className="w-5 h-5" />
+            일일 운영 현황
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">{dateStr}</p>
+        </div>
         
         {/* Date Navigation */}
         <div className="flex items-center gap-2">
@@ -322,131 +324,107 @@ export function AdminDailyOps() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground">선생님:</Label>
-          <Select value={teacherFilter} onValueChange={setTeacherFilter}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              {teachers.map(t => (
-                <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Select value={teacherFilter} onValueChange={setTeacherFilter}>
+          <SelectTrigger className="w-[130px] h-8 text-xs">
+            <SelectValue placeholder="선생님" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 선생님</SelectItem>
+            {teachers.map(t => (
+              <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground">과목:</Label>
-          <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-            <SelectTrigger className="w-[100px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              {SUBJECTS.map(s => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Toggle filters */}
-        <div className="flex flex-wrap items-center gap-4 ml-auto">
-          <div className="flex items-center gap-2">
-            <Switch checked={showCommentsOnly} onCheckedChange={setShowCommentsOnly} id="comments" />
-            <Label htmlFor="comments" className="text-xs">코멘트만</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch checked={showAttendanceOnly} onCheckedChange={setShowAttendanceOnly} id="attendance" />
-            <Label htmlFor="attendance" className="text-xs">출결만</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch checked={showTestsOnly} onCheckedChange={setShowTestsOnly} id="tests" />
-            <Label htmlFor="tests" className="text-xs">테스트만</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch checked={showHomeworkIssuesOnly} onCheckedChange={setShowHomeworkIssuesOnly} id="homework" />
-            <Label htmlFor="homework" className="text-xs">숙제이슈만</Label>
-          </div>
-        </div>
+        <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+          <SelectTrigger className="w-[100px] h-8 text-xs">
+            <SelectValue placeholder="과목" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 과목</SelectItem>
+            {SUBJECTS.map(s => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Summary Bar */}
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-24" />
+            <Skeleton key={i} className="h-20 rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card className={cn(showCommentsOnly && "ring-2 ring-primary")}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <MessageSquare className="w-4 h-4" />
-                코멘트 건수
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{kpis.comments}</p>
-              <p className="text-xs text-muted-foreground">조교/교사 관찰</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <button
+            onClick={() => { setShowCommentsOnly(!showCommentsOnly); setShowAttendanceOnly(false); setShowTestsOnly(false); setShowHomeworkIssuesOnly(false); }}
+            className={cn(
+              "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
+              showCommentsOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
+            )}
+          >
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">코멘트</span>
+            </div>
+            <p className="text-xl font-bold">{kpis.comments}</p>
+          </button>
 
-          <Card className={cn(showAttendanceOnly && "ring-2 ring-primary")}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                출결 이슈
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{kpis.attendance}</p>
-              <p className="text-xs text-muted-foreground">지각/결석/조퇴 등</p>
-            </CardContent>
-          </Card>
+          <button
+            onClick={() => { setShowAttendanceOnly(!showAttendanceOnly); setShowCommentsOnly(false); setShowTestsOnly(false); setShowHomeworkIssuesOnly(false); }}
+            className={cn(
+              "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
+              showAttendanceOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
+            )}
+          >
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">출결 이슈</span>
+            </div>
+            <p className="text-xl font-bold">{kpis.attendance}</p>
+          </button>
 
-          <Card className={cn(showHomeworkIssuesOnly && "ring-2 ring-primary")}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <FileWarning className="w-4 h-4" />
-                숙제 이슈
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{kpis.homework}</p>
-              <p className="text-xs text-muted-foreground">미이행/일부완료</p>
-            </CardContent>
-          </Card>
+          <button
+            onClick={() => { setShowHomeworkIssuesOnly(!showHomeworkIssuesOnly); setShowCommentsOnly(false); setShowAttendanceOnly(false); setShowTestsOnly(false); }}
+            className={cn(
+              "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
+              showHomeworkIssuesOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
+            )}
+          >
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <FileWarning className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">숙제 이슈</span>
+            </div>
+            <p className="text-xl font-bold">{kpis.homework}</p>
+          </button>
 
-          <Card className={cn(showTestsOnly && "ring-2 ring-primary")}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <ClipboardCheck className="w-4 h-4" />
-                테스트 건수
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{kpis.tests}</p>
-              <p className="text-xs text-muted-foreground">당일 테스트</p>
-            </CardContent>
-          </Card>
+          <button
+            onClick={() => { setShowTestsOnly(!showTestsOnly); setShowCommentsOnly(false); setShowAttendanceOnly(false); setShowHomeworkIssuesOnly(false); }}
+            className={cn(
+              "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
+              showTestsOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
+            )}
+          >
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <ClipboardCheck className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">테스트</span>
+            </div>
+            <p className="text-xl font-bold">{kpis.tests}</p>
+          </button>
 
-          <Card className={cn(kpis.testsMissingContent > 0 && "border-destructive")}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-destructive">
-                <FileWarning className="w-4 h-4" />
-                내용 누락
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-destructive">{kpis.testsMissingContent}</p>
-              <p className="text-xs text-muted-foreground">테스트 내용 없음</p>
-            </CardContent>
-          </Card>
+          <div className={cn(
+            "rounded-xl border p-3 text-left",
+            kpis.testsMissingContent > 0 ? "border-destructive/40 bg-destructive/5" : "bg-card border-border"
+          )}>
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <FileWarning className="w-3.5 h-3.5 text-destructive" />
+              <span className="text-[11px] font-medium text-destructive">내용 누락</span>
+            </div>
+            <p className={cn("text-xl font-bold", kpis.testsMissingContent > 0 && "text-destructive")}>{kpis.testsMissingContent}</p>
+          </div>
         </div>
       )}
 
