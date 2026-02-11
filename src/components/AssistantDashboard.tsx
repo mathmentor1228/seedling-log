@@ -398,13 +398,16 @@ export default function AssistantDashboard() {
           });
         }
 
-        // PHOTO-SUBMISSION-ROSTER-V2: Fetch unchecked homework with photo submissions (keyed by student_id:subject)
+        // PHOTO-SUBMISSION-ROSTER-V3: Fetch unchecked homework with photo submissions
+        // Only show badge for homework assigned BEFORE today (i.e., previous class homework)
+        // This matches RosterActionModal logic: .lt('assigned_date', context.date)
         if (studentIds.length > 0) {
           const { data: pendingHw } = await supabase
             .from('homework_assignments')
             .select('student_id, subject, submitted_at, submission_image_url, submission_text')
             .in('student_id', studentIds)
             .eq('check_status', 'unchecked')
+            .lt('assigned_date', dateStr)
             .not('submitted_at', 'is', null)
             .not('submission_image_url', 'is', null);
           
