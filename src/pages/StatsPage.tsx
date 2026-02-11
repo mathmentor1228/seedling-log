@@ -168,15 +168,15 @@ function StatsContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BarChart3 className="w-6 h-6" />
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" />
             통계
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <p className="text-xs text-muted-foreground mt-0.5">
             수강 현황 및 등록 통계
           </p>
         </div>
@@ -186,64 +186,46 @@ function StatsContent() {
           onClick={handleRefresh}
           disabled={refreshing}
         >
-          <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
           새로고침
         </Button>
       </div>
 
       {/* Summary Cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                총 원생 수
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totals.total_students}명</div>
-              <p className="text-xs text-muted-foreground">
-                수업 배정: {stats.totals.students_with_classes}명
-              </p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-border bg-card p-3">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <Users className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">총 원생 수</span>
+            </div>
+            <p className="text-xl font-bold">{stats.totals.total_students}명</p>
+            <p className="text-[11px] text-muted-foreground">수업 배정: {stats.totals.students_with_classes}명</p>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <BookOpen className="w-4 h-4" />
-                총 반 수
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totals.total_classes}개</div>
-            </CardContent>
-          </Card>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <BookOpen className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">총 반 수</span>
+            </div>
+            <p className="text-xl font-bold">{stats.totals.total_classes}개</p>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <UserCheck className="w-4 h-4" />
-                담당 선생님
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totals.total_teachers}명</div>
-            </CardContent>
-          </Card>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">담당 선생님</span>
+            </div>
+            <p className="text-xl font-bold">{stats.totals.total_teachers}명</p>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <GraduationCap className="w-4 h-4" />
-                과목 수
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.by_subject.length}개</div>
-            </CardContent>
-          </Card>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">과목 수</span>
+            </div>
+            <p className="text-xl font-bold">{stats.by_subject.length}개</p>
+          </div>
         </div>
       )}
 
