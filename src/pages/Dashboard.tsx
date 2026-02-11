@@ -174,13 +174,13 @@ function normalizeHomeworkStatus(status: string | null | undefined): TodaySlotSt
 
 // HOMEWORK-STATUS-DISPLAY-FIX-V1: Helper to get display label for homework status
 function getHomeworkStatusLabel(status: string | null | undefined): string {
-  if (!status) return '확인대기';
+  if (!status) return '확인요망';
   const normalized = status.toLowerCase().trim();
   if (['not_done', '미이행', '미완료'].includes(normalized)) return '미이행';
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return '일부완료';
   if (['completed', '완료'].includes(normalized)) return '완료';
-  if (['none_assigned', '없음'].includes(normalized)) return '없음';
-  return '확인대기';
+  if (['none_assigned', '없음'].includes(normalized)) return '미배정';
+  return '확인요망';
 }
 
 // HOMEWORK-STATUS-DISPLAY-FIX-V1: Get badge variant based on status
@@ -1997,7 +1997,7 @@ export default function Dashboard() {
                                                 ) : (
                                                   <>
                                                     <TestTube2 className="w-3.5 h-3.5" />
-                                                    <span className="ml-1">{isTestExpanded ? '접기' : '테스트'}</span>
+                                                    <span className="ml-1">{isTestExpanded ? '접기' : '최근테스트'}</span>
                                                   </>
                                                 )}
                                               </Button>
@@ -2292,7 +2292,7 @@ export default function Dashboard() {
                                             ) : (
                                               <>
                                                 <TestTube2 className="w-3.5 h-3.5 mr-1" />
-                                                {isTestExpanded ? '접기' : '테스트'}
+                                                {isTestExpanded ? '접기' : '최근테스트'}
                                               </>
                                             )}
                                           </Button>
