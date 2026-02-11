@@ -168,7 +168,7 @@
   }
 
   .stat-card {
-    @apply bg-card rounded-lg border border-border p-5 shadow-sm transition-colors hover:bg-accent/30;
+    @apply bg-card rounded-xl border border-border p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/20;
   }
 
   .data-table {
