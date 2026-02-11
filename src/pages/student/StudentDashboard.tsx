@@ -129,10 +129,18 @@ export default function StudentDashboard() {
         setVocabSetting(data.vocab_setting || null);
       }
 
-      // Fetch weekly reports separately
+      // Fetch weekly reports separately — deduplicate by week_start (keep latest generated_at)
       const { data: reportsData } = await studentApi.getWeeklyReports();
       if (reportsData) {
-        setWeeklyReports(reportsData.reports || []);
+        const raw = reportsData.reports || [];
+        const weekMap = new Map<string, WeeklyReport>();
+        for (const r of raw) {
+          const existing = weekMap.get(r.week_start);
+          if (!existing || new Date(r.generated_at) > new Date(existing.generated_at)) {
+            weekMap.set(r.week_start, r);
+          }
+        }
+        setWeeklyReports(Array.from(weekMap.values()).sort((a, b) => b.week_start.localeCompare(a.week_start)));
       }
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
