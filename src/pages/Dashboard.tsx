@@ -126,6 +126,10 @@ interface TodaySlotStudent {
   hyugangRecordId?: string | null;
   attendanceStatus?: string[];
   lessonRecordId?: string | null;
+  lessonSubmitted?: boolean;
+  hasNextHomework?: boolean;
+  hasPhotoSubmission?: boolean;
+  photoData?: { urls: string[]; text: string | null; at: string | null } | null;
   // TEACHER-HW-ALERT-V2: Homework check note and previous goal
   homeworkCheckNote?: string | null;
   homeworkCheckLessonId?: string | null;
@@ -1170,13 +1174,17 @@ export default function Dashboard() {
         followup2wDue: boolean;
       }> = {};
       
-      // key: `${studentId}:${classId}` -> { hyugangRecordId, attendanceStatus, lessonRecordId, homeworkCheckNote, homeworkCheckLessonId, todayTestData }
+      // key: `${studentId}:${classId}` -> { hyugangRecordId, attendanceStatus, lessonRecordId, submitted, homeworkCheckNote, homeworkCheckLessonId, todayTestData }
       let lessonRecordMap: Record<string, { 
         hyugangRecordId: string | null; 
         attendanceStatus: string[]; 
         lessonRecordId: string | null;
+        submitted: boolean;
         homeworkCheckNote: string | null;
         homeworkCheckLessonId: string | null;
+        hasNextHomework: boolean;
+        hasPhotoSubmission: boolean;
+        photoData?: { urls: string[]; text: string | null; at: string | null } | null;
         // TEST-CONTENT-DISPLAY-V2
         subject?: string;
         todayTestData?: {
@@ -1218,26 +1226,89 @@ export default function Dashboard() {
         const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
         const classIdsForRecords = [...new Set(allStudentClassPairs.map(p => p.classId))];
         
-        // TEST-CONTENT-DISPLAY-V2: Include test_content as primary field
+        // TEST-CONTENT-DISPLAY-V2: Include test_content and submitted as primary fields
         const { data: todayRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, subject, lesson_types, attendance_status, homework_check_note, test_content, test_title, test_result_text, english_pass_fail')
+          .select('id, student_id, class_id, subject, submitted, lesson_types, attendance_status, homework_check_note, test_content, test_title, test_result_text, english_pass_fail')
           .eq('lesson_date', today)
           .in('student_id', studentIds)
           .in('class_id', classIdsForRecords);
         
+        // Fetch homework assignments for today's records (for hasNextHomework)
+        const recordIds = (todayRecords || []).map((lr: any) => lr.id).filter(Boolean);
+        let hwAssignmentSet = new Set<string>();
+        if (recordIds.length > 0) {
+          const { data: hwAssignments } = await supabase
+            .from('homework_assignments')
+            .select('lesson_record_id')
+            .in('lesson_record_id', recordIds)
+            .not('content', 'eq', '');
+          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
+        }
+
+        // Fetch photo submissions for teacher's students
+        let teacherPhotoDataMap: Record<string, { urls: string[]; text: string | null; at: string | null }> = {};
+        if (studentIds.length > 0) {
+          const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+          const { data: submissions } = await supabase
+            .from('homework_submissions')
+            .select('student_id, image_url, submission_note, submitted_at, homework_id, homework_assignments!inner(subject, student_id)')
+            .in('student_id', studentIds)
+            .not('image_url', 'is', null)
+            .gte('submitted_at', sevenDaysAgo)
+            .order('submitted_at', { ascending: false });
+          
+          (submissions || []).forEach((sub: any) => {
+            if (sub.image_url) {
+              const subject = (sub.homework_assignments as any)?.subject;
+              if (!subject) return;
+              const photoKey = `${sub.student_id}:${subject}`;
+              if (!teacherPhotoDataMap[photoKey]) {
+                teacherPhotoDataMap[photoKey] = { urls: [], text: sub.submission_note || null, at: sub.submitted_at };
+              }
+              const imgUrls = sub.image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
+              teacherPhotoDataMap[photoKey].urls.push(...imgUrls);
+            }
+          });
+
+          // Fallback: homework_assignments.submission_image_url
+          const { data: hwAll } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text')
+            .in('student_id', studentIds)
+            .gte('assigned_date', sevenDaysAgo)
+            .order('assigned_date', { ascending: false });
+          
+          const seenLatest = new Set<string>();
+          (hwAll || []).forEach((hw: any) => {
+            const photoKey = `${hw.student_id}:${hw.subject}`;
+            if (seenLatest.has(photoKey)) return;
+            seenLatest.add(photoKey);
+            if (hw.submitted_at && hw.submission_image_url && !teacherPhotoDataMap[photoKey]) {
+              const imgUrls = hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
+              teacherPhotoDataMap[photoKey] = { urls: imgUrls, text: hw.submission_text || null, at: hw.submitted_at };
+            }
+          });
+        }
+
         if (todayRecords) {
           todayRecords.forEach((lr: any) => {
             const key = `${lr.student_id}:${lr.class_id}`;
             const isHyugang = lr.lesson_types && lr.lesson_types.includes('휴강');
             // TEST-CONTENT-DISPLAY-V2: Check for test data (content-first)
             const hasTestData = (lr.test_content && lr.test_content.trim() !== '') || (lr.test_title && lr.test_title.trim() !== '') || (lr.test_result_text && lr.test_result_text.trim() !== '');
+            const photoKey = `${lr.student_id}:${lr.subject}`;
+            const pd = teacherPhotoDataMap[photoKey];
             lessonRecordMap[key] = {
               hyugangRecordId: isHyugang ? lr.id : null,
               attendanceStatus: lr.attendance_status || ['정상등원'],
               lessonRecordId: lr.id,
+              submitted: lr.submitted || false,
               homeworkCheckNote: lr.homework_check_note || null,
               homeworkCheckLessonId: lr.homework_check_note ? lr.id : null,
+              hasNextHomework: hwAssignmentSet.has(lr.id),
+              hasPhotoSubmission: !!pd,
+              photoData: pd || null,
               // TEST-CONTENT-DISPLAY-V2
               subject: lr.subject,
               todayTestData: hasTestData ? {
@@ -1308,6 +1379,10 @@ export default function Dashboard() {
             hyugangRecordId: recordInfo?.hyugangRecordId || null,
             attendanceStatus: recordInfo?.attendanceStatus || ['정상등원'],
             lessonRecordId: recordInfo?.lessonRecordId || null,
+            lessonSubmitted: recordInfo?.submitted || false,
+            hasNextHomework: recordInfo?.hasNextHomework || false,
+            hasPhotoSubmission: recordInfo?.hasPhotoSubmission || false,
+            photoData: recordInfo?.photoData || null,
             // TEACHER-HW-ALERT-V2: Add homework check note and previous goal
             homeworkCheckNote: recordInfo?.homeworkCheckNote || null,
             homeworkCheckLessonId: recordInfo?.homeworkCheckLessonId || null,
@@ -2073,14 +2148,14 @@ export default function Dashboard() {
                                   key={student.id} 
                                   className={`rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
                                 >
-                                  <div className="flex items-center justify-between p-2">
-                                    <div className="flex items-center gap-2 flex-wrap">
+                                  <div className="flex items-center justify-between p-2 gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
                                       <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
                                       {student.hyugangRecordId ? (
                                         <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
                                       ) : (
                                         <>
-                                          {/* Attendance badge - show first for visibility */}
+                                          {/* Attendance badge */}
                                           {getAttendanceStatusBadge(student.attendanceStatus)}
                                           {getRosterBadges(
                                             student.previousHomeworkStatus,
@@ -2115,28 +2190,49 @@ export default function Dashboard() {
                                           )}
                                         </>
                                       )}
-                                      
-                                      {/* TEST-CONTENT-DISPLAY-V2: Show today's test snippet inline (content-first) */}
-                                      {!student.hyugangRecordId && student.todayTestData && (student.todayTestData.test_content || student.todayTestData.test_title) && (() => {
-                                        const testObj = {
-                                          subject: slot.subject as '수학' | '과학' | '영어' | '국어',
-                                          lesson_date: getTodayKST(),
-                                          test_content: student.todayTestData.test_content,
-                                          test_title: student.todayTestData.test_title,
-                                          test_result_text: student.todayTestData.test_result_text,
-                                          english_pass_fail: student.todayTestData.english_pass_fail,
-                                        };
-                                        const snippet = formatTestSnippet(testObj);
-                                        const tooltip = formatTestTooltip(testObj);
-                                        return snippet ? (
-                                          <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={tooltip}>
-                                            {snippet}
-                                          </span>
-                                        ) : null;
-                                      })()}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      {/* DASH-LATEST-TEST-TOGGLE-V1: Latest test toggle button */}
+                                    {/* Status indicators: 수업일지, 다음숙제, 사진보기 */}
+                                    {!student.hyugangRecordId && (
+                                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                                        {/* 수업일지 작성여부 */}
+                                        {student.lessonRecordId ? (
+                                          student.lessonSubmitted ? (
+                                            <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">일지✓</Badge>
+                                          ) : (
+                                            <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-[11px] px-1.5">임시저장</Badge>
+                                          )
+                                        ) : (
+                                          <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">일지✗</Badge>
+                                        )}
+                                        {/* 다음숙제 배정여부 */}
+                                        {student.hasNextHomework ? (
+                                          <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">숙제✓</Badge>
+                                        ) : student.lessonRecordId ? (
+                                          <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">숙제✗</Badge>
+                                        ) : null}
+                                        {/* 사진 보기 */}
+                                        {student.hasPhotoSubmission && student.photoData && (
+                                          <Badge 
+                                            className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-[11px] px-1.5 cursor-pointer hover:bg-blue-500/25"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setPhotoViewHw({
+                                                id: '', student_id: student.id, student_name: student.name,
+                                                subject: slot.subject, content: '', assigned_date: '',
+                                                has_photo_submission: true,
+                                                submission_image_url: student.photoData!.urls.join(','),
+                                                submission_text: student.photoData!.text,
+                                                submitted_at: student.photoData!.at,
+                                              });
+                                            }}
+                                          >
+                                            📷 {student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {/* Latest test toggle */}
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -2148,7 +2244,7 @@ export default function Dashboard() {
                                         ) : (
                                           <>
                                             <TestTube2 className="w-3.5 h-3.5 mr-1" />
-                                            {isTestExpanded ? '접기' : '최근 테스트'}
+                                            {isTestExpanded ? '접기' : '테스트'}
                                           </>
                                         )}
                                       </Button>
@@ -2162,24 +2258,14 @@ export default function Dashboard() {
                                           휴강 기록 보기
                                         </Button>
                                       ) : (
-                                        <>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
-                                          >
-                                            <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                            수업기록
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}&focus=test`)}
-                                          >
-                                            <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                                            숙제/테스트
-                                          </Button>
-                                        </>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                        >
+                                          <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                          수업기록
+                                        </Button>
                                       )}
                                     </div>
                                   </div>
@@ -2309,6 +2395,24 @@ export default function Dashboard() {
             setHwAlertContext(null);
           }}
         />
+      )}
+
+      {/* Photo Viewer Dialog */}
+      {photoViewHw && (
+        <Dialog open={!!photoViewHw} onOpenChange={(open) => { if (!open) setPhotoViewHw(null); }}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {photoViewHw.student_name} - {photoViewHw.subject} 숙제 사진
+              </DialogTitle>
+            </DialogHeader>
+            <SubmissionImageCarousel
+              images={photoViewHw.submission_image_url?.split(',').map(u => u.trim()).filter(Boolean) || []}
+              submittedAt={photoViewHw.submitted_at}
+              note={photoViewHw.submission_text}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
