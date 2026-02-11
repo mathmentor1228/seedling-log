@@ -98,4 +98,6 @@ export const studentApi = {
   getSchedule: () => studentApiCall<{ schedule: any[] }>('schedule'),
 
   getFeedback: () => studentApiCall<{ feedback: any[] }>('feedback'),
+
+  getWeeklyReports: () => studentApiCall<{ reports: any[] }>('weekly_reports'),
 };

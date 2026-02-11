@@ -553,6 +553,21 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'weekly_reports': {
+        // Fetch recent weekly reports for this student (last 8 weeks)
+        const { data, error } = await supabase
+          .from('weekly_reports')
+          .select('id, week_start, week_end, total_lessons, avg_understanding, homework_completion_rate, risk_level, student_message, summary, subject_breakdown, generated_at')
+          .eq('student_id', student_id)
+          .order('week_start', { ascending: false })
+          .limit(8);
+
+        if (error) throw error;
+
+        result = { reports: data || [] };
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),
