@@ -275,20 +275,14 @@ Deno.serve(async (req) => {
         const classSchedules = await getStudentClassSchedules();
         const nowKST = getNowKST();
 
-        // Hide unchecked homework older than 2 weeks from student view
+        // 2-week threshold: show as "미제출" with no submission prompt
         const twoWeeksAgo = new Date(now);
         twoWeeksAgo.setDate(now.getDate() - 14);
 
-        const homeworkItems = (data || [])
-          .filter((hw: any) => {
-            if (hw.check_status === 'unchecked' && new Date(hw.assigned_date) < twoWeeksAgo) {
-              return false;
-            }
-            return true;
-          })
-          .map((hw: any) => {
+        const homeworkItems = (data || []).map((hw: any) => {
           const assignedDate = new Date(hw.assigned_date);
           const isOlderThan7Days = assignedDate < sevenDaysAgo;
+          const isSubmissionClosed = hw.check_status === 'unchecked' && assignedDate < twoWeeksAgo;
 
           // Check if there's a newer homework for the same subject
           const hasNewerHomework = (data || []).some((other: any) =>
@@ -297,11 +291,11 @@ Deno.serve(async (req) => {
             new Date(other.assigned_date) > assignedDate
           );
 
-          // DEADLINE-V1: Calculate deadline for unchecked homework
+          // DEADLINE-V1: Calculate deadline for unchecked homework (skip if submission closed)
           let deadline_at: string | null = null;
           let is_deadline_passed = false;
 
-          if (hw.check_status === 'unchecked') {
+          if (hw.check_status === 'unchecked' && !isSubmissionClosed) {
             const nextClass = getNextClassDatetimeKST(classSchedules, hw.subject, nowKST);
             if (nextClass) {
               const deadline = getDeadlineFromClassTime(nextClass);
@@ -313,6 +307,7 @@ Deno.serve(async (req) => {
           return {
             ...hw,
             is_expired: isOlderThan7Days && hasNewerHomework,
+            is_submission_closed: isSubmissionClosed,
             deadline_at,
             is_deadline_passed,
           };

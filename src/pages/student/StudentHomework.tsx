@@ -44,6 +44,7 @@ interface HomeworkItem {
   submitted_at: string | null;
   submission_image_url: string | null;
   is_expired?: boolean;
+  is_submission_closed?: boolean;
   homework_type?: string;
   deadline_at?: string | null;
   is_deadline_passed?: boolean;
@@ -167,6 +168,7 @@ export default function StudentHomework() {
   const isSubmissionBlocked = (hw: HomeworkItem): boolean => {
     if (hw.check_status !== 'unchecked') return true;
     if (hw.is_expired) return true;
+    if (hw.is_submission_closed) return true;
     if (hw.is_deadline_passed) return true;
     return false;
   };
@@ -415,8 +417,8 @@ export default function StudentHomework() {
               {format(new Date(selectedHomework.assigned_date), 'M월 d일 (EEEE)', { locale: ko })}
             </p>
 
-            {/* DEADLINE-V1: Show deadline info */}
-            {selectedHomework.check_status === 'unchecked' && selectedHomework.deadline_at && (
+            {/* DEADLINE-V1: Show deadline info (hide for submission-closed items) */}
+            {selectedHomework.check_status === 'unchecked' && selectedHomework.deadline_at && !selectedHomework.is_submission_closed && (
               <div className={`p-3 rounded-lg border flex items-center gap-2 ${
                 deadlinePassed
                   ? 'bg-red-500/10 border-red-500/30'
@@ -486,7 +488,7 @@ export default function StudentHomework() {
             )}
 
             {/* DEADLINE-V1: Show submit button or deadline-passed message */}
-            {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && !deadlinePassed && (
+            {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && !selectedHomework.is_submission_closed && !deadlinePassed && (
               <div className="space-y-3">
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <p className="text-xs text-amber-700 font-medium">
@@ -504,7 +506,7 @@ export default function StudentHomework() {
               </div>
             )}
 
-            {selectedHomework.check_status === 'unchecked' && deadlinePassed && !selectedHomework.is_expired && (
+            {selectedHomework.check_status === 'unchecked' && deadlinePassed && !selectedHomework.is_expired && !selectedHomework.is_submission_closed && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-center">
                 <AlertTriangle className="w-6 h-6 mx-auto mb-1 text-red-500" />
                 <p className="text-sm font-medium text-red-600">제출 마감 시간이 지났습니다</p>
@@ -515,6 +517,12 @@ export default function StudentHomework() {
             {selectedHomework.check_status === 'unchecked' && selectedHomework.is_expired && (
               <div className="p-3 bg-muted rounded-lg text-center">
                 <p className="text-sm text-muted-foreground">⏰ 제출 기한이 지났습니다.</p>
+              </div>
+            )}
+
+            {selectedHomework.check_status === 'unchecked' && selectedHomework.is_submission_closed && (
+              <div className="p-3 bg-muted rounded-lg text-center">
+                <p className="text-sm text-muted-foreground">미제출</p>
               </div>
             )}
           </CardContent>
@@ -682,14 +690,18 @@ export default function StudentHomework() {
               )}
             </div>
             <p className="text-sm line-clamp-2">{hw.content}</p>
-            {isPending && hw.deadline_at && (
+            {isPending && hw.deadline_at && !hw.is_submission_closed && (
               <div className="mt-1.5">
                 <DeadlineBadge hw={hw} />
               </div>
             )}
           </div>
           {isPending ? (
-            hw.is_deadline_passed ? (
+            hw.is_submission_closed ? (
+              <Badge variant="outline" className="text-xs border-muted text-muted-foreground flex-shrink-0">
+                미제출
+              </Badge>
+            ) : hw.is_deadline_passed ? (
               <Badge variant="outline" className="text-xs border-red-500/40 text-red-500 flex-shrink-0">
                 마감됨
               </Badge>
