@@ -1458,15 +1458,6 @@ export default function Dashboard() {
     });
   }
   
-  if (pendingHomework.length > 0) {
-    attentionItems.push({
-      icon: <CheckSquare className="w-4 h-4" />,
-      label: '숙제 확인 대기',
-      count: pendingHomework.length,
-      color: 'bg-primary/10 border-primary/20 text-primary',
-      onClick: () => setHomeworkOpen(prev => !prev),
-    });
-  }
   
   if (isAdmin(role) && todayAttendance.filter(r => {
     const s = r.attendance_status ?? [];
@@ -2251,96 +2242,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Pending Homework Section */}
-      {pendingHomework.length > 0 && (
-        <Collapsible open={homeworkOpen} onOpenChange={setHomeworkOpen}>
-          <Card className="border-primary/20 animate-slide-up">
-            <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-accent/30 transition-colors rounded-t-lg">
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckSquare className="w-5 h-5 text-primary" />
-                    숙제 확인 대기 ({pendingHomework.length}건)
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${homeworkOpen ? 'rotate-180' : ''}`} />
-                </CardTitle>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent>
-                <div className="space-y-2">
-                  {(pendingHomework || []).map((hw) => (
-                    <div
-                      key={hw.id}
-                      className="flex items-center justify-between p-3 bg-background rounded-lg border"
-                    >
-                        <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-foreground">{hw.student_name}</span>
-                          <Badge variant="outline" className="text-xs">{hw.subject}</Badge>
-                          {hw.has_photo_submission && (
-                            <Badge 
-                              className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs cursor-pointer hover:bg-blue-500/25"
-                              onClick={() => setPhotoViewHw(hw)}
-                            >
-                              📷 사진보기
-                            </Badge>
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(hw.assigned_date), 'MM/dd')}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground truncate">{hw.content}</p>
-                      </div>
-                      <div className="flex items-center gap-2 ml-3 shrink-0">
-                        {hw.has_photo_submission && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setPhotoViewHw(hw)}
-                          >
-                            📷
-                          </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigate(`/lessons?student_id=${hw.student_id}&subject=${encodeURIComponent(hw.subject)}`)}
-                        >
-                          확인하기
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-      )}
-
-      {/* LEARNING-ANALYSIS-V1: Student progress analysis widget */}
-      {(isTeacher(role) || isAdmin(role)) && (
-        <StudentProgressWidget />
-      )}
-
-      {/* PHOTO-VIEW-V1: Photo viewer dialog for pending homework */}
-      <Dialog open={!!photoViewHw} onOpenChange={(open) => !open && setPhotoViewHw(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              📷 {photoViewHw?.student_name} - 숙제 제출 사진
-            </DialogTitle>
-          </DialogHeader>
-          {photoViewHw?.submission_image_url && (
-            <SubmissionImageCarousel
-              images={photoViewHw.submission_image_url.split(',').map(u => u.trim()).filter(Boolean)}
-              submittedAt={photoViewHw.submitted_at}
-              note={photoViewHw.submission_text}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* Admin Management Section */}
       {isAdmin(role) && (
