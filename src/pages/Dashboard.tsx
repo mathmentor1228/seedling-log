@@ -2243,6 +2243,11 @@ export default function Dashboard() {
       )}
 
 
+      {/* LEARNING-ANALYSIS-V1: Student progress analysis widget */}
+      {(isTeacher(role) || isAdmin(role)) && (
+        <StudentProgressWidget />
+      )}
+
       {/* Admin Management Section */}
       {isAdmin(role) && (
         <div className="space-y-4 pt-2">
