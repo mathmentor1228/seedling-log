@@ -1722,237 +1722,9 @@ export default function Dashboard() {
         </Collapsible>
       )}
 
-      {/* ADMIN-LESSON-MODAL-V1 + ADMIN-ROSTER-DEBUG-V1 - Admin Roster Section Grouped by Teacher */}
-      {isAdmin(role) && adminRosterData && (
-        <Card className="border-primary/20 shadow-sm animate-slide-up">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <PenLine className="w-4.5 h-4.5 text-primary" />
-              </div>
-              오늘 수업(원장) - 선생님별 ({adminRosterData.roster_rows?.length ?? 0}명)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {(adminRosterData.teachers?.length ?? 0) === 0 ? (
-              <div className="text-center py-8">
-                <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {(adminRosterData.teachers ?? []).map((teacher) => {
-                  const teacherRows = (adminRosterData.roster_rows ?? []).filter(r => r.teacher_id === teacher.teacher_id);
-                  if (teacherRows.length === 0) return null;
-                  
-                  return (
-                    <div key={teacher.teacher_id} className="border rounded-lg p-4 bg-background">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold text-foreground">{teacher.teacher_name}</h4>
-                        <Badge variant="secondary">{teacherRows.length}명</Badge>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b">
-                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">학생</th>
-                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">시간/클래스</th>
-                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">과목</th>
-                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">수업일지</th>
-                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">다음숙제</th>
-                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">작업</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {teacherRows.map((row: any) => {
-                              const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
-                              const lessonStatus = lessonStatusMap[statusKey];
-                              
-                              // Lesson badge logic
-                              let lessonBadge;
-                              if (lessonStatus?.recordId) {
-                                if (lessonStatus.submitted) {
-                                  lessonBadge = <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">제출</Badge>;
-                                } else {
-                                  lessonBadge = <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">임시저장</Badge>;
-                                }
-                              } else {
-                                lessonBadge = <Badge variant="outline" className="text-muted-foreground text-xs">미작성</Badge>;
-                              }
-                              
-                              // HOMEWORK-STATUS-DISPLAY-FIX-V1: Use actual homework_status from lesson record
-                              const rawHwStatus = lessonStatus?.homeworkStatus || null;
-                              const hwLabel = getHomeworkStatusLabel(rawHwStatus);
-                              const hwBadgeClass = getHomeworkStatusBadgeClass(rawHwStatus);
-                              const homeworkBadge = (
-                                <div className="flex items-center gap-1">
-                                  <Badge className={`${hwBadgeClass} text-xs`} title={isAdmin(role) ? `HW_STATUS_DEBUG: raw=${rawHwStatus} rendered=${hwLabel} recordId=${lessonStatus?.recordId || 'none'}` : undefined}>
-                                    {hwLabel}
-                                  </Badge>
-                                  {lessonStatus?.hasPhotoSubmission && lessonStatus.photoData && (
-                                    <Badge 
-                                      className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs cursor-pointer hover:bg-blue-500/25"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setPhotoViewHw({
-                                          id: '', student_id: row.student_id, student_name: row.student_name,
-                                          subject: row.subject, content: '', assigned_date: '',
-                                          has_photo_submission: true,
-                                          submission_image_url: lessonStatus.photoData!.urls.join(','),
-                                          submission_text: lessonStatus.photoData!.text,
-                                          submitted_at: lessonStatus.photoData!.at,
-                                        });
-                                      }}
-                                    >
-                                      📷 사진보기
-                                    </Badge>
-                                  )}
-                                </div>
-                              );
-                              
-                              return (
-                                <tr key={`${row.student_id}-${row.class_id}`} className="border-b last:border-0 hover:bg-muted/30">
-                                  <td className="py-2 px-2 font-medium">{row.student_name}</td>
-                                  <td className="py-2 px-2 text-muted-foreground">
-                                    <span className="font-medium">{row.start_time?.slice(0, 5)}</span>
-                                    <span className="mx-1">/</span>
-                                    <span>{row.class_name}</span>
-                                  </td>
-                                  <td className="py-2 px-2">
-                                    <Badge variant="outline">{row.subject}</Badge>
-                                  </td>
-                                  <td className="py-2 px-2">{lessonBadge}</td>
-                                  <td className="py-2 px-2">
-                                    {lessonStatus?.hasNextHomework ? (
-                                      <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">배정됨</Badge>
-                                    ) : lessonStatus?.recordId ? (
-                                      <Badge variant="outline" className="text-muted-foreground text-xs">미배정</Badge>
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground">-</span>
-                                    )}
-                                  </td>
-                                  <td className="py-2 px-2">
-                                    <div className="flex items-center gap-1">
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={() => {
-                                          setAdminLessonModalContext({
-                                            student_id: row.student_id,
-                                            class_id: row.class_id,
-                                            subject: row.subject,
-                                            lesson_date: getTodayKST(),
-                                          });
-                                          setAdminLessonModalRecordId(lessonStatus?.recordId || null);
-                                          // PREFILL-FIX-V5: Force new record mode if no existing record
-                                          setAdminLessonModalForceNew(!lessonStatus?.recordId);
-                                          setAdminLessonModalOpen(true);
-                                        }}
-                                      >
-                                        <FileEdit className="w-3 h-3 mr-1" />
-                                        수업일지 작성
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 text-xs"
-                                        onClick={() => {
-                                          setRosterActionContext({
-                                            date: getTodayKST(),
-                                            student_id: row.student_id,
-                                            student_name: row.student_name,
-                                            class_id: row.class_id,
-                                            class_name: row.class_name,
-                                            subject: row.subject,
-                                            teacher_id: row.teacher_id,
-                                            teacher_name: row.teacher_name,
-                                            start_time: row.start_time,
-                                            existingRecordId: lessonStatus?.recordId || null,
-                                          });
-                                          setRosterActionModalOpen(true);
-                                        }}
-                                      >
-                                        <CheckSquare className="w-3 h-3 mr-1" />
-                                        숙제/테스트
-                                      </Button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Admin-only roster removed - consolidated into shared "오늘 수업" below */}
 
-      {/* ADMIN-ROSTER-DEBUG-V1: Fallback - Today's Lesson Records when roster is empty */}
-      {isAdmin(role) && (adminRosterData?.teachers?.length ?? 0) === 0 && todayLessonRecordsFallback.length > 0 && (
-        <Card className="border-warning/30 bg-warning/5 animate-slide-up">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-warning">
-              <FileEdit className="w-5 h-5" />
-              오늘 작성된 수업일지
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              정규 로스터가 비어 있어 오늘 날짜로 작성된 수업일지를 표시합니다.
-            </p>
-            <div className="space-y-4">
-              {todayLessonRecordsFallback.map((group) => (
-                <div key={group.teacher_id} className="border rounded-lg p-4 bg-background">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-foreground">{group.teacher_name}</h4>
-                    <Badge variant="secondary">{group.records.length}건</Badge>
-                  </div>
-                  <div className="space-y-2">
-                    {group.records.map((record) => (
-                      <div 
-                        key={record.id}
-                        className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm cursor-pointer hover:bg-secondary/70"
-                        onClick={() => {
-                          setAdminLessonModalContext({
-                            student_id: record.student_id,
-                            class_id: record.class_id,
-                            subject: record.subject,
-                            lesson_date: getTodayKST(),
-                          });
-                          setAdminLessonModalRecordId(record.id);
-                          // PREFILL-FIX-V5: This is opening an existing record, not forcing new
-                          setAdminLessonModalForceNew(false);
-                          setAdminLessonModalOpen(true);
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-medium">{record.student_name}</span>
-                          <Badge variant="outline">{record.subject}</Badge>
-                          <span className="text-muted-foreground text-xs">{record.class_name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {record.submitted ? (
-                            <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">제출</Badge>
-                          ) : (
-                            <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">임시저장</Badge>
-                          )}
-                          <FileEdit className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Fallback section removed - consolidated into shared "오늘 수업" */}
 
       {/* Today's Attendance Overview - Admin Only */}
       {isAdmin(role) && todayAttendance.length > 0 && (
@@ -2115,88 +1887,50 @@ export default function Dashboard() {
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                       <GraduationCap className="w-4.5 h-4.5 text-primary" />
                     </div>
-                    오늘 수업 ({todaySlots.length}개)
+                    {isAdmin(role) 
+                      ? `오늘 수업 - 선생님별 (${adminRosterData?.roster_rows?.length ?? 0}명)`
+                      : `오늘 수업 (${todaySlots.length}개)`
+                    }
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {todaySlots.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                      <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {(todaySlots || []).map((slot) => (
-                        <div key={slot.id} className="border rounded-lg p-4 bg-background">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-foreground">{slot.class_name}</span>
-                              <Badge variant="outline">{slot.subject}</Badge>
-                            </div>
-                            <span className="text-sm text-muted-foreground font-medium">
-                              {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
-                            </span>
-                          </div>
-{(slot?.students || []).length > 0 ? (
-                            <div className="space-y-2">
-                              {(slot?.students || []).map((student) => {
-                                const testState = latestTests.getStudentState(student.id);
-                                const isTestExpanded = latestTests.isExpanded(student.id);
-                                
-                                return (
-                                <div 
-                                  key={student.id} 
-                                  className={`rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
-                                >
-                                  <div className="flex items-center justify-between p-2 gap-2">
-                                    <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
-                                      <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
-                                      {student.hyugangRecordId ? (
-                                        <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
-                                      ) : (
-                                        <>
-                                          {/* Attendance badge */}
-                                          {getAttendanceStatusBadge(student.attendanceStatus)}
-                                          {getRosterBadges(
-                                            student.previousHomeworkStatus,
-                                            student.debugReason,
-                                            student.firstSubject,
-                                            student.followup2wDue,
-                                            slot.subject,
-                                            isAdmin(role),
-                                            () => markFollowupDone(student.id, slot.subject)
-                                          )}
-                                          {/* TEACHER-HW-ALERT-V2: 별도 확인 badge */}
-                                          {student.homeworkCheckNote && 
-                                           student.homeworkCheckLessonId && 
-                                           !acknowledgedAlerts.has(student.homeworkCheckLessonId) && (
-                                            <Badge 
-                                              className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-xs cursor-pointer hover:bg-amber-500/25"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setHwAlertContext({
-                                                  studentName: student.name,
-                                                  subject: slot.subject,
-                                                  lessonId: student.homeworkCheckLessonId!,
-                                                  noteText: student.homeworkCheckNote!,
-                                                  studentId: student.id,
-                                                });
-                                                setHwAlertModalOpen(true);
-                                              }}
-                                            >
-                                              <AlertTriangle className="w-3 h-3 mr-1" />
-                                              별도 확인
-                                            </Badge>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                    {/* Status indicators: 수업일지, 다음숙제, 사진보기 */}
-                                    {!student.hyugangRecordId && (
+                  {/* ===== ADMIN VIEW: grouped by teacher ===== */}
+                  {isAdmin(role) ? (
+                    (adminRosterData?.teachers?.length ?? 0) === 0 ? (
+                      <div className="text-center py-8">
+                        <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                        <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-5">
+                        {(adminRosterData?.teachers ?? []).map((teacher) => {
+                          const teacherRows = (adminRosterData?.roster_rows ?? []).filter(r => r.teacher_id === teacher.teacher_id);
+                          if (teacherRows.length === 0) return null;
+
+                          return (
+                            <div key={teacher.teacher_id} className="border rounded-lg p-4 bg-background">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="font-semibold text-foreground">{teacher.teacher_name}</h4>
+                                <Badge variant="secondary">{teacherRows.length}명</Badge>
+                              </div>
+                              <div className="space-y-1.5">
+                                {teacherRows.map((row: any) => {
+                                  const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
+                                  const ls = lessonStatusMap[statusKey];
+
+                                  return (
+                                    <div key={`${row.student_id}-${row.class_id}`} className="flex items-center justify-between p-2.5 bg-secondary/40 rounded-md gap-2 hover:bg-secondary/60 transition-colors">
+                                      {/* Left: student info */}
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <span className="font-medium text-sm whitespace-nowrap">{row.student_name}</span>
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">{row.start_time?.slice(0, 5)} / {row.class_name}</span>
+                                        <Badge variant="outline" className="text-[11px] px-1.5">{row.subject}</Badge>
+                                      </div>
+                                      {/* Center: status badges */}
                                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        {/* 수업일지 작성여부 */}
-                                        {student.lessonRecordId ? (
-                                          student.lessonSubmitted ? (
+                                        {/* 수업일지 */}
+                                        {ls?.recordId ? (
+                                          ls.submitted ? (
                                             <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">일지✓</Badge>
                                           ) : (
                                             <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-[11px] px-1.5">임시저장</Badge>
@@ -2204,112 +1938,273 @@ export default function Dashboard() {
                                         ) : (
                                           <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">일지✗</Badge>
                                         )}
-                                        {/* 다음숙제 배정여부 */}
-                                        {student.hasNextHomework ? (
+                                        {/* 다음숙제 */}
+                                        {ls?.hasNextHomework ? (
                                           <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">숙제✓</Badge>
-                                        ) : student.lessonRecordId ? (
+                                        ) : ls?.recordId ? (
                                           <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">숙제✗</Badge>
-                                        ) : null}
-                                        {/* 사진 보기 */}
-                                        {student.hasPhotoSubmission && student.photoData && (
-                                          <Badge 
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">-</span>
+                                        )}
+                                        {/* 사진보기 */}
+                                        {ls?.hasPhotoSubmission && ls.photoData && (
+                                          <Badge
                                             className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-[11px] px-1.5 cursor-pointer hover:bg-blue-500/25"
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               setPhotoViewHw({
-                                                id: '', student_id: student.id, student_name: student.name,
-                                                subject: slot.subject, content: '', assigned_date: '',
+                                                id: '', student_id: row.student_id, student_name: row.student_name,
+                                                subject: row.subject, content: '', assigned_date: '',
                                                 has_photo_submission: true,
-                                                submission_image_url: student.photoData!.urls.join(','),
-                                                submission_text: student.photoData!.text,
-                                                submitted_at: student.photoData!.at,
+                                                submission_image_url: ls.photoData!.urls.join(','),
+                                                submission_text: ls.photoData!.text,
+                                                submitted_at: ls.photoData!.at,
                                               });
                                             }}
                                           >
-                                            📷 {student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}
+                                            📷 {ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}
                                           </Badge>
                                         )}
                                       </div>
-                                    )}
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                      {/* Latest test toggle */}
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-xs h-7 px-2"
-                                        onClick={() => latestTests.toggleStudent(student.id)}
-                                      >
-                                        {testState?.loading ? (
-                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        ) : (
-                                          <>
-                                            <TestTube2 className="w-3.5 h-3.5 mr-1" />
-                                            {isTestExpanded ? '접기' : '테스트'}
-                                          </>
-                                        )}
-                                      </Button>
-                                      {student.hyugangRecordId ? (
+                                      {/* Right: action buttons */}
+                                      <div className="flex items-center gap-1 flex-shrink-0">
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                          className="h-7 text-xs"
+                                          onClick={() => {
+                                            setAdminLessonModalContext({
+                                              student_id: row.student_id,
+                                              class_id: row.class_id,
+                                              subject: row.subject,
+                                              lesson_date: getTodayKST(),
+                                            });
+                                            setAdminLessonModalRecordId(ls?.recordId || null);
+                                            setAdminLessonModalForceNew(!ls?.recordId);
+                                            setAdminLessonModalOpen(true);
+                                          }}
                                         >
-                                          <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                          휴강 기록 보기
+                                          <FileEdit className="w-3 h-3 mr-1" />
+                                          수업일지
                                         </Button>
-                                      ) : (
                                         <Button
-                                          variant="outline"
+                                          variant="ghost"
                                           size="sm"
-                                          onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                          className="h-7 text-xs"
+                                          onClick={() => {
+                                            setRosterActionContext({
+                                              date: getTodayKST(),
+                                              student_id: row.student_id,
+                                              student_name: row.student_name,
+                                              class_id: row.class_id,
+                                              class_name: row.class_name,
+                                              subject: row.subject,
+                                              teacher_id: row.teacher_id,
+                                              teacher_name: row.teacher_name,
+                                              start_time: row.start_time,
+                                              existingRecordId: ls?.recordId || null,
+                                            });
+                                            setRosterActionModalOpen(true);
+                                          }}
                                         >
-                                          <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                          수업기록
+                                          <CheckSquare className="w-3 h-3 mr-1" />
+                                          숙제/테스트
                                         </Button>
-                                      )}
+                                      </div>
                                     </div>
-                                  </div>
-                                  
-                                  {/* DASH-LATEST-TEST-TOGGLE-V1: Latest test expanded section */}
-                                  {isTestExpanded && testState && !testState.loading && (
-                                    <div className="px-2 pb-2">
-                                      {testState.error ? (
-                                        <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
-                                          {testState.error}
-                                        </div>
-                                      ) : testState.tests.length === 0 ? (
-                                        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                                          최근 테스트 기록이 없습니다.
-                                        </div>
-                                      ) : (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs bg-muted/30 p-2 rounded">
-                                          {testState.tests.map((test) => (
-                                            <div key={test.subject} className="flex items-center gap-2">
-                                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">{test.subject}</Badge>
-                                              <span className="text-muted-foreground truncate">{formatTestLine(test)}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  
-                                  {/* TEACHER-HW-ALERT-V2: E) 지난 목표 display */}
-                                  {!student.hyugangRecordId && student.prevNextLessonGoal && (
-                                    <div className="mt-1 mb-2 mx-2 text-xs text-muted-foreground pl-2 border-l-2 border-muted">
-                                      <span className="font-medium">지난 목표:</span> {student.prevNextLessonGoal}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )
+                  ) : (
+                    /* ===== TEACHER VIEW: slot-based ===== */
+                    todaySlots.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Calendar className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+                        <p className="text-muted-foreground">오늘 배정된 수업이 없습니다.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {(todaySlots || []).map((slot) => (
+                          <div key={slot.id} className="border rounded-lg p-4 bg-background">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-foreground">{slot.class_name}</span>
+                                <Badge variant="outline">{slot.subject}</Badge>
+                              </div>
+                              <span className="text-sm text-muted-foreground font-medium">
+                                {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
+                              </span>
+                            </div>
+                            {(slot?.students || []).length > 0 ? (
+                              <div className="space-y-2">
+                                {(slot?.students || []).map((student) => {
+                                  const testState = latestTests.getStudentState(student.id);
+                                  const isTestExpanded = latestTests.isExpanded(student.id);
+                                  
+                                  return (
+                                    <div 
+                                      key={student.id} 
+                                      className={`rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
+                                    >
+                                      <div className="flex items-center justify-between p-2 gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                                          <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
+                                          {student.hyugangRecordId ? (
+                                            <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
+                                          ) : (
+                                            <>
+                                              {getAttendanceStatusBadge(student.attendanceStatus)}
+                                              {getRosterBadges(
+                                                student.previousHomeworkStatus,
+                                                student.debugReason,
+                                                student.firstSubject,
+                                                student.followup2wDue,
+                                                slot.subject,
+                                                isAdmin(role),
+                                                () => markFollowupDone(student.id, slot.subject)
+                                              )}
+                                              {student.homeworkCheckNote && 
+                                               student.homeworkCheckLessonId && 
+                                               !acknowledgedAlerts.has(student.homeworkCheckLessonId) && (
+                                                <Badge 
+                                                  className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-xs cursor-pointer hover:bg-amber-500/25"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setHwAlertContext({
+                                                      studentName: student.name,
+                                                      subject: slot.subject,
+                                                      lessonId: student.homeworkCheckLessonId!,
+                                                      noteText: student.homeworkCheckNote!,
+                                                      studentId: student.id,
+                                                    });
+                                                    setHwAlertModalOpen(true);
+                                                  }}
+                                                >
+                                                  <AlertTriangle className="w-3 h-3 mr-1" />
+                                                  별도 확인
+                                                </Badge>
+                                              )}
+                                            </>
+                                          )}
+                                        </div>
+                                        {!student.hyugangRecordId && (
+                                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            {student.lessonRecordId ? (
+                                              student.lessonSubmitted ? (
+                                                <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">일지✓</Badge>
+                                              ) : (
+                                                <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-[11px] px-1.5">임시저장</Badge>
+                                              )
+                                            ) : (
+                                              <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">일지✗</Badge>
+                                            )}
+                                            {student.hasNextHomework ? (
+                                              <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">숙제✓</Badge>
+                                            ) : student.lessonRecordId ? (
+                                              <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">숙제✗</Badge>
+                                            ) : null}
+                                            {student.hasPhotoSubmission && student.photoData && (
+                                              <Badge 
+                                                className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-[11px] px-1.5 cursor-pointer hover:bg-blue-500/25"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setPhotoViewHw({
+                                                    id: '', student_id: student.id, student_name: student.name,
+                                                    subject: slot.subject, content: '', assigned_date: '',
+                                                    has_photo_submission: true,
+                                                    submission_image_url: student.photoData!.urls.join(','),
+                                                    submission_text: student.photoData!.text,
+                                                    submitted_at: student.photoData!.at,
+                                                  });
+                                                }}
+                                              >
+                                                📷 {student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        )}
+                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-xs h-7 px-2"
+                                            onClick={() => latestTests.toggleStudent(student.id)}
+                                          >
+                                            {testState?.loading ? (
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                              <>
+                                                <TestTube2 className="w-3.5 h-3.5 mr-1" />
+                                                {isTestExpanded ? '접기' : '테스트'}
+                                              </>
+                                            )}
+                                          </Button>
+                                          {student.hyugangRecordId ? (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                            >
+                                              <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                              휴강 기록 보기
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                            >
+                                              <FileEdit className="w-3.5 h-3.5 mr-1" />
+                                              수업기록
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      
+                                      {isTestExpanded && testState && !testState.loading && (
+                                        <div className="px-2 pb-2">
+                                          {testState.error ? (
+                                            <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                                              {testState.error}
+                                            </div>
+                                          ) : testState.tests.length === 0 ? (
+                                            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                                              최근 테스트 기록이 없습니다.
+                                            </div>
+                                          ) : (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs bg-muted/30 p-2 rounded">
+                                              {testState.tests.map((test) => (
+                                                <div key={test.subject} className="flex items-center gap-2">
+                                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">{test.subject}</Badge>
+                                                  <span className="text-muted-foreground truncate">{formatTestLine(test)}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                      
+                                      {!student.hyugangRecordId && student.prevNextLessonGoal && (
+                                        <div className="mt-1 mb-2 mx-2 text-xs text-muted-foreground pl-2 border-l-2 border-muted">
+                                          <span className="font-medium">지난 목표:</span> {student.prevNextLessonGoal}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )
                   )}
                 </CardContent>
               </Card>
