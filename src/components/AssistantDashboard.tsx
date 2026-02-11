@@ -398,11 +398,11 @@ export default function AssistantDashboard() {
           });
         }
 
-        // PHOTO-SUBMISSION-ROSTER-V1: Fetch unchecked homework with photo submissions
+        // PHOTO-SUBMISSION-ROSTER-V2: Fetch unchecked homework with photo submissions (keyed by student_id:subject)
         if (studentIds.length > 0) {
           const { data: pendingHw } = await supabase
             .from('homework_assignments')
-            .select('student_id, submitted_at, submission_image_url, submission_text')
+            .select('student_id, subject, submitted_at, submission_image_url, submission_text')
             .in('student_id', studentIds)
             .eq('check_status', 'unchecked')
             .not('submitted_at', 'is', null)
@@ -410,7 +410,8 @@ export default function AssistantDashboard() {
           
           (pendingHw || []).forEach((hw: any) => {
             if (hw.submitted_at && hw.submission_image_url) {
-              photoSubmissionMap[hw.student_id] = {
+              const photoKey = `${hw.student_id}:${hw.subject}`;
+              photoSubmissionMap[photoKey] = {
                 url: hw.submission_image_url,
                 text: hw.submission_text || null,
                 at: hw.submitted_at,
@@ -424,7 +425,7 @@ export default function AssistantDashboard() {
       const rosterData: RosterStudent[] = rosterRowsRaw.map(r => {
         const key = `${r.student_id}:${r.class_id}`;
         const mapped = previousHomeworkMap[key];
-        const photo = photoSubmissionMap[r.student_id];
+        const photo = photoSubmissionMap[`${r.student_id}:${r.subject}`];
         return {
           student_id: r.student_id,
           student_name: r.student_name,
