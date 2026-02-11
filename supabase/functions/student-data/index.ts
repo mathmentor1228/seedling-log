@@ -275,7 +275,18 @@ Deno.serve(async (req) => {
         const classSchedules = await getStudentClassSchedules();
         const nowKST = getNowKST();
 
-        const homeworkItems = (data || []).map((hw: any) => {
+        // Hide unchecked homework older than 2 weeks from student view
+        const twoWeeksAgo = new Date(now);
+        twoWeeksAgo.setDate(now.getDate() - 14);
+
+        const homeworkItems = (data || [])
+          .filter((hw: any) => {
+            if (hw.check_status === 'unchecked' && new Date(hw.assigned_date) < twoWeeksAgo) {
+              return false;
+            }
+            return true;
+          })
+          .map((hw: any) => {
           const assignedDate = new Date(hw.assigned_date);
           const isOlderThan7Days = assignedDate < sevenDaysAgo;
 
