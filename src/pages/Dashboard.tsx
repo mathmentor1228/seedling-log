@@ -377,7 +377,7 @@ export default function Dashboard() {
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
   // NEXT-HW-BADGE-V1: Include hasNextHomework
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { urls: string[]; text: string | null; at: string | null; studentName: string } }>>({});
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { urls: string[]; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
@@ -756,7 +756,7 @@ export default function Dashboard() {
         // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homework_status in select
         const { data: lessonRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, subject, submitted, homework_status')
+          .select('id, student_id, class_id, subject, submitted, homework_status, test_content, test_title, test_result_text, english_pass_fail')
           .eq('lesson_date', today)
           .in('student_id', studentIds)
           .in('class_id', classIds);
@@ -835,15 +835,44 @@ export default function Dashboard() {
         const studentNameLookup: Record<string, string> = {};
         rosterRows.forEach((r: any) => { studentNameLookup[r.student_id] = r.student_name; });
 
+        // Fetch previous lesson goals for admin view
+        let adminPrevGoalMap: Record<string, string | null> = {};
+        const subjects = [...new Set(rosterRows.map((r: any) => r.subject))].filter(Boolean);
+        if (studentIds.length > 0 && subjects.length > 0) {
+          const { data: prevLessons } = await supabase
+            .from('lesson_records')
+            .select('student_id, subject, next_lesson_goal, lesson_date')
+            .lt('lesson_date', today)
+            .eq('submitted', true)
+            .in('student_id', studentIds)
+            .in('subject', subjects as any)
+            .order('lesson_date', { ascending: false });
+          
+          if (prevLessons) {
+            const seen = new Set<string>();
+            prevLessons.forEach((pl: any) => {
+              const key = `${pl.student_id}:${pl.subject}`;
+              if (!seen.has(key) && pl.next_lesson_goal) {
+                adminPrevGoalMap[key] = pl.next_lesson_goal;
+                seen.add(key);
+              }
+            });
+          }
+        }
+
         // PHOTO-STABLE-V2: Build status map with stable photo data
-        const statusMap: Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { urls: string[]; text: string | null; at: string | null; studentName: string } }> = {};
+        const statusMap: Record<string, typeof lessonStatusMap[string]> = {};
         (lessonRecords || []).forEach((lr: any) => {
           const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
           const photoKey = `${lr.student_id}:${lr.subject}`;
+          const goalKey = `${lr.student_id}:${lr.subject}`;
           const pd = photoDataMap[photoKey];
+          const hasTestData = (lr.test_content && lr.test_content.trim() !== '') || (lr.test_title && lr.test_title.trim() !== '') || (lr.test_result_text && lr.test_result_text.trim() !== '');
           statusMap[key] = { 
             submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null, hasNextHomework: hwAssignmentSet.has(lr.id), 
             hasPhotoSubmission: photoSubmissionSet.has(photoKey),
+            prevNextLessonGoal: adminPrevGoalMap[goalKey] || null,
+            todayTestData: hasTestData ? { test_content: lr.test_content || null, test_title: lr.test_title || null, test_result_text: lr.test_result_text || null, english_pass_fail: lr.english_pass_fail || null } : null,
             ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[lr.student_id] || '학생' } } : {})
           };
         });
@@ -1948,102 +1977,166 @@ export default function Dashboard() {
                                       const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
                                       const ls = lessonStatusMap[statusKey];
                                       const rawHwStatus = ls?.homeworkStatus || null;
+                                      const testState = latestTests.getStudentState(row.student_id);
+                                      const isTestExpanded = latestTests.isExpanded(row.student_id);
 
                                       return (
-                                        <div key={`${row.student_id}-${row.class_id}`} className="flex items-center justify-between px-4 py-2.5 gap-2 hover:bg-muted/20 transition-colors">
-                                          {/* Student name */}
-                                          <span className="font-medium text-sm min-w-[60px]">{row.student_name}</span>
-                                          
-                                          {/* Status badges */}
-                                          <div className="flex items-center gap-1.5 flex-1 justify-center flex-wrap">
-                                            {/* 수업일지 */}
-                                            {ls?.recordId ? (
-                                              ls.submitted ? (
-                                                <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">일지✓</Badge>
+                                        <div key={`${row.student_id}-${row.class_id}`} className="px-4 py-2.5 hover:bg-muted/20 transition-colors">
+                                          <div className="flex items-center justify-between gap-2">
+                                            {/* Student name */}
+                                            <span className="font-medium text-sm min-w-[56px]">{row.student_name}</span>
+                                            
+                                            {/* Status badges - improved readability */}
+                                            <div className="flex items-center gap-1 flex-1 justify-center flex-wrap">
+                                              {/* 수업일지 상태 */}
+                                              {ls?.recordId ? (
+                                                ls.submitted ? (
+                                                  <Badge variant="success" className="text-[11px] px-1.5 py-0">일지 ✓</Badge>
+                                                ) : (
+                                                  <Badge variant="warning" className="text-[11px] px-1.5 py-0">임시저장</Badge>
+                                                )
                                               ) : (
-                                                <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-[11px] px-1.5">임시저장</Badge>
-                                              )
-                                            ) : (
-                                              <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">일지✗</Badge>
-                                            )}
-                                            {/* 숙제 상태 (homework_status from lesson record) */}
-                                            {ls?.recordId && (
-                                              <Badge className={`${getHomeworkStatusBadgeClass(rawHwStatus)} text-[11px] px-1.5`}>
-                                                {getHomeworkStatusLabel(rawHwStatus)}
-                                              </Badge>
-                                            )}
-                                            {/* 다음숙제 배정 */}
-                                            {ls?.hasNextHomework ? (
-                                              <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">다음숙제✓</Badge>
-                                            ) : ls?.recordId ? (
-                                              <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">다음숙제✗</Badge>
-                                            ) : null}
-                                            {/* 사진보기 */}
-                                            {ls?.hasPhotoSubmission && ls.photoData && (
-                                              <Badge
-                                                className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-[11px] px-1.5 cursor-pointer hover:bg-blue-500/25"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setPhotoViewHw({
-                                                    id: '', student_id: row.student_id, student_name: row.student_name,
-                                                    subject: row.subject, content: '', assigned_date: '',
-                                                    has_photo_submission: true,
-                                                    submission_image_url: ls.photoData!.urls.join(','),
-                                                    submission_text: ls.photoData!.text,
-                                                    submitted_at: ls.photoData!.at,
+                                                <Badge variant="muted" className="text-[11px] px-1.5 py-0">일지 ✗</Badge>
+                                              )}
+                                              {/* 숙제확인 상태 */}
+                                              {ls?.recordId && (
+                                                <Badge className={`${getHomeworkStatusBadgeClass(rawHwStatus)} text-[11px] px-1.5 py-0 border`}>
+                                                  숙제:{getHomeworkStatusLabel(rawHwStatus)}
+                                                </Badge>
+                                              )}
+                                              {/* 다음숙제 배정 */}
+                                              {ls?.hasNextHomework ? (
+                                                <Badge variant="success" className="text-[11px] px-1.5 py-0">다음숙제 ✓</Badge>
+                                              ) : ls?.recordId ? (
+                                                <Badge variant="muted" className="text-[11px] px-1.5 py-0">다음숙제 ✗</Badge>
+                                              ) : null}
+                                              {/* 사진보기 */}
+                                              {ls?.hasPhotoSubmission && ls.photoData && (
+                                                <Badge
+                                                  className="bg-blue-500/15 text-blue-600 border border-blue-500/30 text-[11px] px-1.5 py-0 cursor-pointer hover:bg-blue-500/25"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setPhotoViewHw({
+                                                      id: '', student_id: row.student_id, student_name: row.student_name,
+                                                      subject: row.subject, content: '', assigned_date: '',
+                                                      has_photo_submission: true,
+                                                      submission_image_url: ls.photoData!.urls.join(','),
+                                                      submission_text: ls.photoData!.text,
+                                                      submitted_at: ls.photoData!.at,
+                                                    });
+                                                  }}
+                                                >
+                                                  📷 {ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}
+                                                </Badge>
+                                              )}
+                                            </div>
+
+                                            {/* Action buttons */}
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-xs h-7 px-1.5"
+                                                onClick={() => latestTests.toggleStudent(row.student_id)}
+                                              >
+                                                {testState?.loading ? (
+                                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                ) : (
+                                                  <>
+                                                    <TestTube2 className="w-3.5 h-3.5 mr-0.5" />
+                                                    {isTestExpanded ? '접기' : '테스트'}
+                                                  </>
+                                                )}
+                                              </Button>
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-xs px-2"
+                                                onClick={() => {
+                                                  setAdminLessonModalContext({
+                                                    student_id: row.student_id,
+                                                    class_id: row.class_id,
+                                                    subject: row.subject,
+                                                    lesson_date: getTodayKST(),
                                                   });
+                                                  setAdminLessonModalRecordId(ls?.recordId || null);
+                                                  setAdminLessonModalForceNew(!ls?.recordId);
+                                                  setAdminLessonModalOpen(true);
                                                 }}
                                               >
-                                                📷 {ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}
-                                              </Badge>
-                                            )}
+                                                <FileEdit className="w-3 h-3 mr-0.5" />
+                                                일지
+                                              </Button>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 text-xs px-2"
+                                                onClick={() => {
+                                                  setRosterActionContext({
+                                                    date: getTodayKST(),
+                                                    student_id: row.student_id,
+                                                    student_name: row.student_name,
+                                                    class_id: row.class_id,
+                                                    class_name: row.class_name,
+                                                    subject: row.subject,
+                                                    teacher_id: row.teacher_id,
+                                                    teacher_name: row.teacher_name,
+                                                    start_time: row.start_time,
+                                                    existingRecordId: ls?.recordId || null,
+                                                  });
+                                                  setRosterActionModalOpen(true);
+                                                }}
+                                              >
+                                                <CheckSquare className="w-3 h-3 mr-0.5" />
+                                                숙제
+                                              </Button>
+                                            </div>
                                           </div>
 
-                                          {/* Action buttons */}
-                                          <div className="flex items-center gap-1 flex-shrink-0">
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              className="h-7 text-xs"
-                                              onClick={() => {
-                                                setAdminLessonModalContext({
-                                                  student_id: row.student_id,
-                                                  class_id: row.class_id,
-                                                  subject: row.subject,
-                                                  lesson_date: getTodayKST(),
-                                                });
-                                                setAdminLessonModalRecordId(ls?.recordId || null);
-                                                setAdminLessonModalForceNew(!ls?.recordId);
-                                                setAdminLessonModalOpen(true);
-                                              }}
-                                            >
-                                              <FileEdit className="w-3 h-3 mr-1" />
-                                              수업일지
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              className="h-7 text-xs"
-                                              onClick={() => {
-                                                setRosterActionContext({
-                                                  date: getTodayKST(),
-                                                  student_id: row.student_id,
-                                                  student_name: row.student_name,
-                                                  class_id: row.class_id,
-                                                  class_name: row.class_name,
-                                                  subject: row.subject,
-                                                  teacher_id: row.teacher_id,
-                                                  teacher_name: row.teacher_name,
-                                                  start_time: row.start_time,
-                                                  existingRecordId: ls?.recordId || null,
-                                                });
-                                                setRosterActionModalOpen(true);
-                                              }}
-                                            >
-                                              <CheckSquare className="w-3 h-3 mr-1" />
-                                              숙제/테스트
-                                            </Button>
-                                          </div>
+                                          {/* Today's test data inline */}
+                                          {ls?.todayTestData && (
+                                            <div className="mt-1 text-xs text-muted-foreground pl-2 border-l-2 border-blue-300">
+                                              <span className="font-medium text-blue-600">테스트:</span>{' '}
+                                              {ls.todayTestData.test_content || ls.todayTestData.test_title || ''}
+                                              {ls.todayTestData.test_result_text && <span> → {ls.todayTestData.test_result_text}</span>}
+                                              {ls.todayTestData.english_pass_fail && (
+                                                <Badge variant={ls.todayTestData.english_pass_fail === 'pass' ? 'success' : 'destructive'} className="ml-1 text-[10px] px-1 py-0">
+                                                  {ls.todayTestData.english_pass_fail === 'pass' ? '통과' : '불통과'}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          )}
+
+                                          {/* Previous lesson goal */}
+                                          {ls?.prevNextLessonGoal && (
+                                            <div className="mt-1 text-xs text-muted-foreground pl-2 border-l-2 border-muted">
+                                              <span className="font-medium">지난 목표:</span> {ls.prevNextLessonGoal}
+                                            </div>
+                                          )}
+
+                                          {/* Recent test toggle (expanded) */}
+                                          {isTestExpanded && testState && !testState.loading && (
+                                            <div className="mt-1.5">
+                                              {testState.error ? (
+                                                <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                                                  {testState.error}
+                                                </div>
+                                              ) : testState.tests.length === 0 ? (
+                                                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                                                  최근 테스트 기록이 없습니다.
+                                                </div>
+                                              ) : (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs bg-muted/30 p-2 rounded">
+                                                  {testState.tests.map((test) => (
+                                                    <div key={test.subject} className="flex items-center gap-2">
+                                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">{test.subject}</Badge>
+                                                      <span className="text-muted-foreground truncate">{formatTestLine(test)}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
