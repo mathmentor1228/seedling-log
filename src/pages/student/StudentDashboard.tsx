@@ -17,11 +17,19 @@ import {
   CheckCircle2,
   XCircle,
   WifiOff,
-  RefreshCw
+  RefreshCw,
+  FileText,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface HomeworkItem {
   id: string;
@@ -65,6 +73,20 @@ interface VocabSetting {
   total_days: number | null;
 }
 
+interface WeeklyReport {
+  id: string;
+  week_start: string;
+  week_end: string;
+  total_lessons: number;
+  avg_understanding: number | null;
+  homework_completion_rate: number | null;
+  risk_level: string | null;
+  student_message: string | null;
+  summary: string | null;
+  subject_breakdown: any[] | null;
+  generated_at: string;
+}
+
 export default function StudentDashboard() {
   const { student } = useStudentAuth();
   const [totalPoints, setTotalPoints] = useState(0);
@@ -73,6 +95,8 @@ export default function StudentDashboard() {
   const [vocabSchedules, setVocabSchedules] = useState<VocabSchedule[]>([]);
   const [vocabResults, setVocabResults] = useState<VocabResult[]>([]);
   const [vocabSetting, setVocabSetting] = useState<VocabSetting | null>(null);
+  const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([]);
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
 
@@ -103,6 +127,12 @@ export default function StudentDashboard() {
         setVocabSchedules(data.vocab_schedules || []);
         setVocabResults(data.vocab_results || []);
         setVocabSetting(data.vocab_setting || null);
+      }
+
+      // Fetch weekly reports separately
+      const { data: reportsData } = await studentApi.getWeeklyReports();
+      if (reportsData) {
+        setWeeklyReports(reportsData.reports || []);
       }
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
@@ -381,6 +411,64 @@ export default function StudentDashboard() {
                 </Badge>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Weekly Reports Section */}
+      {weeklyReports.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              주간 학습 코멘트
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {weeklyReports.slice(0, 4).map((report) => {
+              const weekLabel = `${format(new Date(report.week_start + 'T00:00:00'), 'M/d')}~${format(new Date(report.week_end + 'T00:00:00'), 'M/d')}`;
+              const isExpanded = expandedReportId === report.id;
+              
+              // Parse student_message: remove header line for cleaner display
+              const messageLines = (report.student_message || '').split('\n');
+              const cleanMessage = messageLines.filter(line => !line.startsWith('[더멘토]')).join('\n').trim();
+
+              return (
+                <Collapsible
+                  key={report.id}
+                  open={isExpanded}
+                  onOpenChange={() => setExpandedReportId(isExpanded ? null : report.id)}
+                >
+                  <CollapsibleTrigger className="w-full text-left">
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">
+                          {weekLabel}
+                        </span>
+                        <span className="text-sm">
+                          수업 {report.total_lessons}회
+                          {report.avg_understanding != null && (
+                            <span className="text-muted-foreground"> · 이해도 {Number(report.avg_understanding).toFixed(1)}</span>
+                          )}
+                        </span>
+                      </div>
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="p-3 mt-1 rounded-lg bg-primary/5 border border-primary/10">
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                        {cleanMessage || report.summary || '코멘트가 아직 작성되지 않았습니다.'}
+                      </p>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
           </CardContent>
         </Card>
       )}
