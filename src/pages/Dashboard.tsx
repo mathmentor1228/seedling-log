@@ -1981,77 +1981,30 @@ export default function Dashboard() {
                                       const isTestExpanded = latestTests.isExpanded(row.student_id);
 
                                       return (
-                                        <div key={`${row.student_id}-${row.class_id}`} className="px-4 py-2.5 hover:bg-muted/20 transition-colors">
-                                          <div className="flex items-center justify-between gap-2">
-                                            {/* Student name */}
-                                            <span className="font-medium text-sm min-w-[56px]">{row.student_name}</span>
-                                            
-                                            {/* Status badges - improved readability */}
-                                            <div className="flex items-center gap-1 flex-1 justify-center flex-wrap">
-                                              {/* 수업일지 상태 */}
-                                              {ls?.recordId ? (
-                                                ls.submitted ? (
-                                                  <Badge variant="success" className="text-[11px] px-1.5 py-0">일지 ✓</Badge>
-                                                ) : (
-                                                  <Badge variant="warning" className="text-[11px] px-1.5 py-0">임시저장</Badge>
-                                                )
-                                              ) : (
-                                                <Badge variant="muted" className="text-[11px] px-1.5 py-0">일지 ✗</Badge>
-                                              )}
-                                              {/* 숙제확인 상태 */}
-                                              {ls?.recordId && (
-                                                <Badge className={`${getHomeworkStatusBadgeClass(rawHwStatus)} text-[11px] px-1.5 py-0 border`}>
-                                                  숙제:{getHomeworkStatusLabel(rawHwStatus)}
-                                                </Badge>
-                                              )}
-                                              {/* 다음숙제 배정 */}
-                                              {ls?.hasNextHomework ? (
-                                                <Badge variant="success" className="text-[11px] px-1.5 py-0">다음숙제 ✓</Badge>
-                                              ) : ls?.recordId ? (
-                                                <Badge variant="muted" className="text-[11px] px-1.5 py-0">다음숙제 ✗</Badge>
-                                              ) : null}
-                                              {/* 사진보기 */}
-                                              {ls?.hasPhotoSubmission && ls.photoData && (
-                                                <Badge
-                                                  className="bg-blue-500/15 text-blue-600 border border-blue-500/30 text-[11px] px-1.5 py-0 cursor-pointer hover:bg-blue-500/25"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setPhotoViewHw({
-                                                      id: '', student_id: row.student_id, student_name: row.student_name,
-                                                      subject: row.subject, content: '', assigned_date: '',
-                                                      has_photo_submission: true,
-                                                      submission_image_url: ls.photoData!.urls.join(','),
-                                                      submission_text: ls.photoData!.text,
-                                                      submitted_at: ls.photoData!.at,
-                                                    });
-                                                  }}
-                                                >
-                                                  📷 {ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}
-                                                </Badge>
-                                              )}
-                                            </div>
-
-                                            {/* Action buttons */}
+                                        <div key={`${row.student_id}-${row.class_id}`} className="px-4 py-3 hover:bg-muted/30 transition-colors">
+                                          {/* Row 1: Name + Action buttons */}
+                                          <div className="flex items-center justify-between gap-3 mb-1.5">
+                                            <span className="font-semibold text-sm text-foreground">{row.student_name}</span>
                                             <div className="flex items-center gap-1 flex-shrink-0">
                                               <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="text-xs h-7 px-1.5"
+                                                className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
                                                 onClick={() => latestTests.toggleStudent(row.student_id)}
                                               >
                                                 {testState?.loading ? (
                                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                 ) : (
                                                   <>
-                                                    <TestTube2 className="w-3.5 h-3.5 mr-0.5" />
-                                                    {isTestExpanded ? '접기' : '테스트'}
+                                                    <TestTube2 className="w-3.5 h-3.5" />
+                                                    <span className="ml-1">{isTestExpanded ? '접기' : '테스트'}</span>
                                                   </>
                                                 )}
                                               </Button>
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-7 text-xs px-2"
+                                                className="h-7 text-xs px-2.5"
                                                 onClick={() => {
                                                   setAdminLessonModalContext({
                                                     student_id: row.student_id,
@@ -2064,13 +2017,13 @@ export default function Dashboard() {
                                                   setAdminLessonModalOpen(true);
                                                 }}
                                               >
-                                                <FileEdit className="w-3 h-3 mr-0.5" />
-                                                일지
+                                                <FileEdit className="w-3 h-3" />
+                                                <span className="ml-1">일지</span>
                                               </Button>
                                               <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="h-7 text-xs px-2"
+                                                className="h-7 text-xs px-2.5 text-muted-foreground hover:text-foreground"
                                                 onClick={() => {
                                                   setRosterActionContext({
                                                     date: getTodayKST(),
@@ -2087,49 +2040,120 @@ export default function Dashboard() {
                                                   setRosterActionModalOpen(true);
                                                 }}
                                               >
-                                                <CheckSquare className="w-3 h-3 mr-0.5" />
-                                                숙제
+                                                <CheckSquare className="w-3 h-3" />
+                                                <span className="ml-1">숙제</span>
                                               </Button>
                                             </div>
                                           </div>
 
-                                          {/* Today's test data inline */}
-                                          {ls?.todayTestData && (
-                                            <div className="mt-1 text-xs text-muted-foreground pl-2 border-l-2 border-blue-300">
-                                              <span className="font-medium text-blue-600">테스트:</span>{' '}
-                                              {ls.todayTestData.test_content || ls.todayTestData.test_title || ''}
-                                              {ls.todayTestData.test_result_text && <span> → {ls.todayTestData.test_result_text}</span>}
-                                              {ls.todayTestData.english_pass_fail && (
-                                                <Badge variant={ls.todayTestData.english_pass_fail === 'pass' ? 'success' : 'destructive'} className="ml-1 text-[10px] px-1 py-0">
-                                                  {ls.todayTestData.english_pass_fail === 'pass' ? '통과' : '불통과'}
-                                                </Badge>
-                                              )}
-                                            </div>
-                                          )}
+                                          {/* Row 2: Status badges - clean grid layout */}
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            {/* 수업일지 상태 */}
+                                            {ls?.recordId ? (
+                                              ls.submitted ? (
+                                                <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-success">✓ 일지완료</span>
+                                              ) : (
+                                                <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-warning">◐ 임시저장</span>
+                                              )
+                                            ) : (
+                                              <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-muted-foreground">✗ 일지미작성</span>
+                                            )}
 
-                                          {/* Previous lesson goal */}
-                                          {ls?.prevNextLessonGoal && (
-                                            <div className="mt-1 text-xs text-muted-foreground pl-2 border-l-2 border-muted">
-                                              <span className="font-medium">지난 목표:</span> {ls.prevNextLessonGoal}
+                                            <span className="text-border">│</span>
+
+                                            {/* 숙제확인 상태 */}
+                                            {ls?.recordId ? (
+                                              <span className={`inline-flex items-center text-[11px] font-medium ${
+                                                (() => {
+                                                  const label = getHomeworkStatusLabel(rawHwStatus);
+                                                  if (label === '완료') return 'text-success';
+                                                  if (label === '미이행') return 'text-destructive';
+                                                  if (label === '일부완료') return 'text-warning';
+                                                  if (label === '확인대기') return 'text-warning';
+                                                  return 'text-muted-foreground';
+                                                })()
+                                              }`}>
+                                                숙제: {getHomeworkStatusLabel(rawHwStatus)}
+                                              </span>
+                                            ) : (
+                                              <span className="text-[11px] text-muted-foreground">숙제: —</span>
+                                            )}
+
+                                            <span className="text-border">│</span>
+
+                                            {/* 다음숙제 배정 */}
+                                            {ls?.hasNextHomework ? (
+                                              <span className="inline-flex items-center text-[11px] font-medium text-success">다음숙제 ✓</span>
+                                            ) : ls?.recordId ? (
+                                              <span className="inline-flex items-center text-[11px] font-medium text-destructive">다음숙제 ✗</span>
+                                            ) : (
+                                              <span className="text-[11px] text-muted-foreground">다음숙제: —</span>
+                                            )}
+
+                                            {/* 사진보기 */}
+                                            {ls?.hasPhotoSubmission && ls.photoData && (
+                                              <>
+                                                <span className="text-border">│</span>
+                                                <button
+                                                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setPhotoViewHw({
+                                                      id: '', student_id: row.student_id, student_name: row.student_name,
+                                                      subject: row.subject, content: '', assigned_date: '',
+                                                      has_photo_submission: true,
+                                                      submission_image_url: ls.photoData!.urls.join(','),
+                                                      submission_text: ls.photoData!.text,
+                                                      submitted_at: ls.photoData!.at,
+                                                    });
+                                                  }}
+                                                >
+                                                  📷 {ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}
+                                                </button>
+                                              </>
+                                            )}
+                                          </div>
+
+                                          {/* Row 3: Contextual info (test, goal) */}
+                                          {(ls?.todayTestData || ls?.prevNextLessonGoal) && (
+                                            <div className="mt-2 space-y-1 pl-3 border-l-2 border-primary/15">
+                                              {ls?.todayTestData && (
+                                                <div className="text-xs text-muted-foreground">
+                                                  <span className="font-semibold text-primary/70">테스트</span>{' '}
+                                                  <span>{ls.todayTestData.test_content || ls.todayTestData.test_title || ''}</span>
+                                                  {ls.todayTestData.test_result_text && <span className="text-foreground font-medium"> → {ls.todayTestData.test_result_text}</span>}
+                                                  {ls.todayTestData.english_pass_fail && (
+                                                    <span className={`ml-1 font-semibold ${ls.todayTestData.english_pass_fail === 'pass' ? 'text-success' : 'text-destructive'}`}>
+                                                      {ls.todayTestData.english_pass_fail === 'pass' ? '통과' : '불통과'}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              )}
+                                              {ls?.prevNextLessonGoal && (
+                                                <div className="text-xs text-muted-foreground">
+                                                  <span className="font-semibold text-primary/70">지난목표</span>{' '}
+                                                  <span>{ls.prevNextLessonGoal}</span>
+                                                </div>
+                                              )}
                                             </div>
                                           )}
 
                                           {/* Recent test toggle (expanded) */}
                                           {isTestExpanded && testState && !testState.loading && (
-                                            <div className="mt-1.5">
+                                            <div className="mt-2">
                                               {testState.error ? (
-                                                <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                                                <div className="text-xs text-destructive bg-destructive/10 p-2 rounded-md">
                                                   {testState.error}
                                                 </div>
                                               ) : testState.tests.length === 0 ? (
-                                                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                                                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">
                                                   최근 테스트 기록이 없습니다.
                                                 </div>
                                               ) : (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs bg-muted/30 p-2 rounded">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs bg-muted/30 p-2.5 rounded-md">
                                                   {testState.tests.map((test) => (
                                                     <div key={test.subject} className="flex items-center gap-2">
-                                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">{test.subject}</Badge>
+                                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium">{test.subject}</Badge>
                                                       <span className="text-muted-foreground truncate">{formatTestLine(test)}</span>
                                                     </div>
                                                   ))}
