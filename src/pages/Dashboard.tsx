@@ -2182,157 +2182,224 @@ export default function Dashboard() {
                     ) : (
                       <div className="space-y-4">
                         {(todaySlots || []).map((slot) => (
-                          <div key={slot.id} className="border rounded-lg p-4 bg-background">
-                            <div className="flex items-center justify-between mb-3">
+                          <div key={slot.id} className="border rounded-lg bg-background overflow-hidden">
+                            {/* Slot header */}
+                            <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-foreground">{slot.class_name}</span>
-                                <Badge variant="outline">{slot.subject}</Badge>
+                                <Clock className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-semibold text-sm">{slot.class_name}</span>
+                                <Badge variant="outline" className="text-[11px]">{slot.subject}</Badge>
                               </div>
                               <span className="text-sm text-muted-foreground font-medium">
                                 {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
                               </span>
                             </div>
                             {(slot?.students || []).length > 0 ? (
-                              <div className="space-y-2">
+                              <div className="divide-y divide-border/50">
                                 {(slot?.students || []).map((student) => {
                                   const testState = latestTests.getStudentState(student.id);
                                   const isTestExpanded = latestTests.isExpanded(student.id);
+                                  const rawHwStatus = (() => {
+                                    // For teacher view, derive from previousHomeworkStatus
+                                    if (student.previousHomeworkStatus === 'completed') return '완료';
+                                    if (student.previousHomeworkStatus === 'partial') return '일부완료';
+                                    if (student.previousHomeworkStatus === 'not_done') return '미이행';
+                                    if (student.previousHomeworkStatus === 'none_assigned') return '없음';
+                                    return null;
+                                  })();
+
+                                  if (student.hyugangRecordId) {
+                                    return (
+                                      <div key={student.id} className="px-4 py-3 bg-muted/30">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium text-sm text-muted-foreground">{student.name}</span>
+                                            <Badge variant="secondary" className="text-xs">휴강</Badge>
+                                          </div>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs px-2.5"
+                                            onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                          >
+                                            <FileEdit className="w-3 h-3" />
+                                            <span className="ml-1">휴강 기록</span>
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
                                   
                                   return (
-                                    <div 
-                                      key={student.id} 
-                                      className={`rounded-md ${student.hyugangRecordId ? 'bg-muted/50' : 'bg-secondary/50'}`}
-                                    >
-                                      <div className="flex items-center justify-between p-2 gap-2">
+                                    <div key={student.id} className="px-4 py-3 hover:bg-muted/30 transition-colors">
+                                      {/* Row 1: Name + alerts + action buttons */}
+                                      <div className="flex items-center justify-between gap-3 mb-1.5">
                                         <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
-                                          <span className={`font-medium ${student.hyugangRecordId ? 'text-muted-foreground' : 'text-foreground'}`}>{student.name}</span>
-                                          {student.hyugangRecordId ? (
-                                            <Badge variant="secondary" className="bg-muted text-muted-foreground text-xs">휴강</Badge>
-                                          ) : (
-                                            <>
-                                              {getAttendanceStatusBadge(student.attendanceStatus)}
-                                              {getRosterBadges(
-                                                student.previousHomeworkStatus,
-                                                student.debugReason,
-                                                student.firstSubject,
-                                                student.followup2wDue,
-                                                slot.subject,
-                                                isAdmin(role),
-                                                () => markFollowupDone(student.id, slot.subject)
-                                              )}
-                                              {student.homeworkCheckNote && 
-                                               student.homeworkCheckLessonId && 
-                                               !acknowledgedAlerts.has(student.homeworkCheckLessonId) && (
-                                                <Badge 
-                                                  className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-xs cursor-pointer hover:bg-amber-500/25"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setHwAlertContext({
-                                                      studentName: student.name,
-                                                      subject: slot.subject,
-                                                      lessonId: student.homeworkCheckLessonId!,
-                                                      noteText: student.homeworkCheckNote!,
-                                                      studentId: student.id,
-                                                    });
-                                                    setHwAlertModalOpen(true);
-                                                  }}
-                                                >
-                                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                                  별도 확인
-                                                </Badge>
-                                              )}
-                                            </>
+                                          <span className="font-semibold text-sm text-foreground">{student.name}</span>
+                                          {getAttendanceStatusBadge(student.attendanceStatus)}
+                                          {getRosterBadges(
+                                            student.previousHomeworkStatus,
+                                            student.debugReason,
+                                            student.firstSubject,
+                                            student.followup2wDue,
+                                            slot.subject,
+                                            isAdmin(role),
+                                            () => markFollowupDone(student.id, slot.subject)
+                                          )}
+                                          {student.homeworkCheckNote && 
+                                           student.homeworkCheckLessonId && 
+                                           !acknowledgedAlerts.has(student.homeworkCheckLessonId) && (
+                                            <Badge 
+                                              className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-xs cursor-pointer hover:bg-amber-500/25"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setHwAlertContext({
+                                                  studentName: student.name,
+                                                  subject: slot.subject,
+                                                  lessonId: student.homeworkCheckLessonId!,
+                                                  noteText: student.homeworkCheckNote!,
+                                                  studentId: student.id,
+                                                });
+                                                setHwAlertModalOpen(true);
+                                              }}
+                                            >
+                                              <AlertTriangle className="w-3 h-3 mr-1" />
+                                              별도 확인
+                                            </Badge>
                                           )}
                                         </div>
-                                        {!student.hyugangRecordId && (
-                                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                                            {student.lessonRecordId ? (
-                                              student.lessonSubmitted ? (
-                                                <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">일지✓</Badge>
-                                              ) : (
-                                                <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-[11px] px-1.5">임시저장</Badge>
-                                              )
-                                            ) : (
-                                              <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">일지✗</Badge>
-                                            )}
-                                            {student.hasNextHomework ? (
-                                              <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[11px] px-1.5">숙제✓</Badge>
-                                            ) : student.lessonRecordId ? (
-                                              <Badge variant="outline" className="text-muted-foreground text-[11px] px-1.5">숙제✗</Badge>
-                                            ) : null}
-                                            {student.hasPhotoSubmission && student.photoData && (
-                                              <Badge 
-                                                className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-[11px] px-1.5 cursor-pointer hover:bg-blue-500/25"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setPhotoViewHw({
-                                                    id: '', student_id: student.id, student_name: student.name,
-                                                    subject: slot.subject, content: '', assigned_date: '',
-                                                    has_photo_submission: true,
-                                                    submission_image_url: student.photoData!.urls.join(','),
-                                                    submission_text: student.photoData!.text,
-                                                    submitted_at: student.photoData!.at,
-                                                  });
-                                                }}
-                                              >
-                                                📷 {student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                        )}
                                         <div className="flex items-center gap-1 flex-shrink-0">
                                           <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="text-xs h-7 px-2"
+                                            className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
                                             onClick={() => latestTests.toggleStudent(student.id)}
                                           >
                                             {testState?.loading ? (
                                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                             ) : (
                                               <>
-                                                <TestTube2 className="w-3.5 h-3.5 mr-1" />
-                                                {isTestExpanded ? '접기' : '최근테스트'}
+                                                <TestTube2 className="w-3.5 h-3.5" />
+                                                <span className="ml-1">{isTestExpanded ? '접기' : '최근테스트'}</span>
                                               </>
                                             )}
                                           </Button>
-                                          {student.hyugangRecordId ? (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
-                                            >
-                                              <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                              휴강 기록 보기
-                                            </Button>
-                                          ) : (
-                                            <Button
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
-                                            >
-                                              <FileEdit className="w-3.5 h-3.5 mr-1" />
-                                              수업기록
-                                            </Button>
-                                          )}
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs px-2.5"
+                                            onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                          >
+                                            <FileEdit className="w-3 h-3" />
+                                            <span className="ml-1">수업기록</span>
+                                          </Button>
                                         </div>
                                       </div>
-                                      
+
+                                      {/* Row 2: Status indicators */}
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {/* 수업일지 상태 */}
+                                        {student.lessonRecordId ? (
+                                          student.lessonSubmitted ? (
+                                            <span className="inline-flex items-center text-[11px] font-medium text-success">✓ 일지완료</span>
+                                          ) : (
+                                            <span className="inline-flex items-center text-[11px] font-medium text-warning">◐ 임시저장</span>
+                                          )
+                                        ) : (
+                                          <span className="inline-flex items-center text-[11px] font-medium text-muted-foreground">✗ 일지미작성</span>
+                                        )}
+
+                                        <span className="text-border">│</span>
+
+                                        {/* 숙제확인 상태 */}
+                                        <span className={`inline-flex items-center text-[11px] font-medium ${
+                                          (() => {
+                                            const label = getHomeworkStatusLabel(rawHwStatus);
+                                            if (label === '완료') return 'text-success';
+                                            if (label === '미이행') return 'text-destructive';
+                                            if (label === '일부완료') return 'text-warning';
+                                            if (label === '확인요망') return 'text-warning';
+                                            return 'text-muted-foreground';
+                                          })()
+                                        }`}>
+                                          숙제: {getHomeworkStatusLabel(rawHwStatus)}
+                                        </span>
+
+                                        <span className="text-border">│</span>
+
+                                        {/* 다음숙제 배정 */}
+                                        {student.hasNextHomework ? (
+                                          <span className="inline-flex items-center text-[11px] font-medium text-success">다음숙제 ✓</span>
+                                        ) : student.lessonRecordId ? (
+                                          <span className="inline-flex items-center text-[11px] font-medium text-destructive">다음숙제 ✗</span>
+                                        ) : (
+                                          <span className="text-[11px] text-muted-foreground">다음숙제: —</span>
+                                        )}
+
+                                        {/* 사진보기 */}
+                                        {student.hasPhotoSubmission && student.photoData && (
+                                          <>
+                                            <span className="text-border">│</span>
+                                            <button
+                                              className="inline-flex items-center gap-0.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setPhotoViewHw({
+                                                  id: '', student_id: student.id, student_name: student.name,
+                                                  subject: slot.subject, content: '', assigned_date: '',
+                                                  has_photo_submission: true,
+                                                  submission_image_url: student.photoData!.urls.join(','),
+                                                  submission_text: student.photoData!.text,
+                                                  submitted_at: student.photoData!.at,
+                                                });
+                                              }}
+                                            >
+                                              📷 {student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+
+                                      {/* Row 3: Contextual info */}
+                                      {(student.todayTestData || student.prevNextLessonGoal) && (
+                                        <div className="mt-2 space-y-1 pl-3 border-l-2 border-primary/15">
+                                          {student.todayTestData && (
+                                            <div className="text-xs text-muted-foreground">
+                                              <span className="font-semibold text-primary/70">테스트</span>{' '}
+                                              <span>{student.todayTestData.test_content || student.todayTestData.test_title || ''}</span>
+                                              {student.todayTestData.test_result_text && <span className="text-foreground font-medium"> → {student.todayTestData.test_result_text}</span>}
+                                              {student.todayTestData.english_pass_fail && (
+                                                <span className={`ml-1 font-semibold ${student.todayTestData.english_pass_fail === 'pass' ? 'text-success' : 'text-destructive'}`}>
+                                                  {student.todayTestData.english_pass_fail === 'pass' ? '통과' : '불통과'}
+                                                </span>
+                                              )}
+                                            </div>
+                                          )}
+                                          {student.prevNextLessonGoal && (
+                                            <div className="text-xs text-muted-foreground">
+                                              <span className="font-semibold text-primary/70">지난목표</span>{' '}
+                                              <span>{student.prevNextLessonGoal}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* Recent test toggle (expanded) */}
                                       {isTestExpanded && testState && !testState.loading && (
-                                        <div className="px-2 pb-2">
+                                        <div className="mt-2">
                                           {testState.error ? (
-                                            <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                                            <div className="text-xs text-destructive bg-destructive/10 p-2 rounded-md">
                                               {testState.error}
                                             </div>
                                           ) : testState.tests.length === 0 ? (
-                                            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                                            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">
                                               최근 테스트 기록이 없습니다.
                                             </div>
                                           ) : (
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs bg-muted/30 p-2 rounded">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs bg-muted/30 p-2.5 rounded-md">
                                               {testState.tests.map((test) => (
                                                 <div key={test.subject} className="flex items-center gap-2">
-                                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">{test.subject}</Badge>
+                                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium">{test.subject}</Badge>
                                                   <span className="text-muted-foreground truncate">{formatTestLine(test)}</span>
                                                 </div>
                                               ))}
@@ -2340,18 +2407,14 @@ export default function Dashboard() {
                                           )}
                                         </div>
                                       )}
-                                      
-                                      {!student.hyugangRecordId && student.prevNextLessonGoal && (
-                                        <div className="mt-1 mb-2 mx-2 text-xs text-muted-foreground pl-2 border-l-2 border-muted">
-                                          <span className="font-medium">지난 목표:</span> {student.prevNextLessonGoal}
-                                        </div>
-                                      )}
                                     </div>
                                   );
                                 })}
                               </div>
                             ) : (
-                              <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
+                              <div className="px-4 py-4">
+                                <p className="text-sm text-muted-foreground">배정된 학생이 없습니다</p>
+                              </div>
                             )}
                           </div>
                         ))}
