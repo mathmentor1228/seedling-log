@@ -20,7 +20,8 @@ import {
   FileBarChart2,
   FileText,
   CalendarDays,
-  BookOpenCheck
+  BookOpenCheck,
+  ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
@@ -38,22 +39,58 @@ interface NavItem {
   allowedRoles?: ('admin' | 'teacher' | 'assistant')[];
 }
 
-const navItems: NavItem[] = [
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isGroup(entry: NavEntry): entry is NavGroup {
+  return 'items' in entry;
+}
+
+const navStructure: NavEntry[] = [
   { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
   { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
-  { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-  { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-  { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
-  { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
-  { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
+  {
+    label: '수업',
+    items: [
+      { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
+    ],
+  },
   { label: '단어 테스트', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-  { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
-  { label: '리포트 발송', href: '/reports/send', icon: <Send className="w-4 h-4" />, adminOnly: true },
-  { label: '리포트 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
-  { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
-  { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
-  { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
-  { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },
+  {
+    label: '조교',
+    items: [
+      { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+      { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+    ],
+  },
+  {
+    label: '관리',
+    items: [
+      { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
+      { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
+    ],
+  },
+  {
+    label: '리포트',
+    items: [
+      { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
+      { label: '리포트 발송', href: '/reports/send', icon: <Send className="w-4 h-4" />, adminOnly: true },
+      { label: '리포트 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
+    ],
+  },
+  {
+    label: '원장',
+    items: [
+      { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
+      { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
+      { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
+      { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },
+    ],
+  },
   { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, adminOnly: true },
 ];
 
@@ -63,22 +100,66 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
   };
 
-  const filteredNavItems = navItems.filter(item => {
-    // If allowedRoles is specified, check if current role is in the list
-    if (item.allowedRoles) {
-      return role && item.allowedRoles.includes(role);
-    }
-    // Otherwise use adminOnly logic
+  const toggleGroup = (label: string) => {
+    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const canSeeItem = (item: NavItem): boolean => {
+    if (item.allowedRoles) return !!(role && item.allowedRoles.includes(role));
     return !item.adminOnly || role === 'admin';
-  });
+  };
+
+  // Auto-open groups containing the active route
+  const getFilteredEntries = () => {
+    return navStructure.map(entry => {
+      if (isGroup(entry)) {
+        const filtered = entry.items.filter(canSeeItem);
+        if (filtered.length === 0) return null;
+        return { ...entry, items: filtered };
+      }
+      return canSeeItem(entry) ? entry : null;
+    }).filter(Boolean) as NavEntry[];
+  };
+
+  const filteredEntries = getFilteredEntries();
+
+  // Check if a group contains the active route (for auto-open)
+  const groupContainsActive = (group: NavGroup) =>
+    group.items.some(item => location.pathname === item.href);
+
+  const isGroupOpen = (group: NavGroup) =>
+    openGroups[group.label] !== undefined ? openGroups[group.label] : groupContainsActive(group);
 
   // Show shared components (TeamNotesBoard, AcademyCalendar) on dashboard route only
   const isDashboard = location.pathname === '/dashboard';
+
+  const renderNavItem = (item: NavItem, indent = false) => {
+    const isActive = location.pathname === item.href;
+    return (
+      <Link
+        key={item.href}
+        to={item.href}
+        onClick={() => setSidebarOpen(false)}
+        className={cn(
+          "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
+          indent && "pl-8",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+        )}
+      >
+        {item.icon}
+        <span>{item.label}</span>
+      </Link>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -122,25 +203,28 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-3 space-y-0.5">
-            {filteredNavItems.map((item) => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
-                    isActive 
-                      ? "bg-sidebar-accent text-sidebar-foreground font-medium" 
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  )}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </Link>
-              );
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+            {filteredEntries.map((entry) => {
+              if (isGroup(entry)) {
+                const open = isGroupOpen(entry);
+                return (
+                  <div key={entry.label}>
+                    <button
+                      onClick={() => toggleGroup(entry.label)}
+                      className="flex items-center justify-between w-full px-3 py-2 rounded-md text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50 hover:text-sidebar-foreground/70 transition-colors"
+                    >
+                      <span>{entry.label}</span>
+                      <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", open && "rotate-180")} />
+                    </button>
+                    {open && (
+                      <div className="space-y-0.5 mt-0.5">
+                        {entry.items.map(item => renderNavItem(item, true))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return renderNavItem(entry as NavItem);
             })}
           </nav>
 
