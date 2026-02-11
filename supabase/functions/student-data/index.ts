@@ -46,7 +46,7 @@ function getNextClassDatetimeKST(
 // DEADLINE-V1: Get submission deadline = next class start - 5 hours
 function getDeadlineFromClassTime(nextClassKST: Date): Date {
   const deadline = new Date(nextClassKST);
-  deadline.setHours(deadline.getHours() - 5);
+  deadline.setHours(deadline.getHours() - 3);
   return deadline;
 }
 

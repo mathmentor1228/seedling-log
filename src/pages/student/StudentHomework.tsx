@@ -432,7 +432,7 @@ export default function StudentHomework() {
                     {deadlinePassed ? '⏰ 제출 마감됨' : `⏰ 마감: ${formatDeadline(selectedHomework.deadline_at)}`}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    수업 시작 5시간 전에 제출이 마감됩니다
+                    수업 시작 3시간 전에 제출이 마감됩니다
                   </p>
                 </div>
               </div>
@@ -508,7 +508,7 @@ export default function StudentHomework() {
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-center">
                 <AlertTriangle className="w-6 h-6 mx-auto mb-1 text-red-500" />
                 <p className="text-sm font-medium text-red-600">제출 마감 시간이 지났습니다</p>
-                <p className="text-xs text-muted-foreground mt-1">수업 시작 5시간 전까지 제출해야 합니다</p>
+                <p className="text-xs text-muted-foreground mt-1">수업 시작 3시간 전까지 제출해야 합니다</p>
               </div>
             )}
 
