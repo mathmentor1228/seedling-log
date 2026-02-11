@@ -1477,7 +1477,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <DashboardHeader role={role || ''} />
       
       {/* Attention Summary Bar */}
@@ -1485,7 +1485,7 @@ export default function Dashboard() {
 
       {/* Stats Grid - Visible for admin and teacher */}
       {!isAssistant(role) && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
           {isAdmin(role) && (
             <>
               <StatCard
@@ -1649,10 +1649,12 @@ export default function Dashboard() {
 
       {/* ADMIN-LESSON-MODAL-V1 + ADMIN-ROSTER-DEBUG-V1 - Admin Roster Section Grouped by Teacher */}
       {isAdmin(role) && adminRosterData && (
-        <Card className="border-primary/20 animate-slide-up">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PenLine className="w-5 h-5 text-primary" />
+        <Card className="border-primary/20 shadow-sm animate-slide-up">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <PenLine className="w-4.5 h-4.5 text-primary" />
+              </div>
               오늘 수업(원장) - 선생님별 ({adminRosterData.roster_rows?.length ?? 0}명)
             </CardTitle>
           </CardHeader>
@@ -1682,7 +1684,6 @@ export default function Dashboard() {
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">시간/클래스</th>
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">과목</th>
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">수업일지</th>
-                              <th className="text-left py-2 px-2 font-medium text-muted-foreground">숙제확인</th>
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">다음숙제</th>
                               <th className="text-left py-2 px-2 font-medium text-muted-foreground">작업</th>
                             </tr>
@@ -1746,7 +1747,6 @@ export default function Dashboard() {
                                     <Badge variant="outline">{row.subject}</Badge>
                                   </td>
                                   <td className="py-2 px-2">{lessonBadge}</td>
-                                  <td className="py-2 px-2">{homeworkBadge}</td>
                                   <td className="py-2 px-2">
                                     {lessonStatus?.hasNextHomework ? (
                                       <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">배정됨</Badge>
@@ -2034,10 +2034,12 @@ export default function Dashboard() {
             if (hideRoster) return null;
             
             return (
-              <Card className="border-primary/20 animate-slide-up">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <GraduationCap className="w-5 h-5 text-primary" />
+              <Card className="border-primary/20 shadow-sm animate-slide-up">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <GraduationCap className="w-4.5 h-4.5 text-primary" />
+                    </div>
                     오늘 수업 ({todaySlots.length}개)
                   </CardTitle>
                 </CardHeader>
