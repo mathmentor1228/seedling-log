@@ -13,43 +13,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, Check, Search, ChevronDown, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 const DAYS_OF_WEEK = [
-  { value: 0, label: '일' },
-  { value: 1, label: '월' },
-  { value: 2, label: '화' },
-  { value: 3, label: '수' },
-  { value: 4, label: '목' },
-  { value: 5, label: '금' },
-  { value: 6, label: '토' },
+  { value: 1, label: '월', full: '월요일' },
+  { value: 2, label: '화', full: '화요일' },
+  { value: 3, label: '수', full: '수요일' },
+  { value: 4, label: '목', full: '목요일' },
+  { value: 5, label: '금', full: '금요일' },
+  { value: 6, label: '토', full: '토요일' },
+  { value: 0, label: '일', full: '일요일' },
 ];
 
-// Subtle day color styles - very low saturation backgrounds
-const DAY_COLORS: Record<number, string> = {
-  0: 'bg-rose-50/50 dark:bg-rose-950/20',      // Sunday
-  1: 'bg-amber-50/50 dark:bg-amber-950/20',    // Monday
-  2: 'bg-emerald-50/50 dark:bg-emerald-950/20', // Tuesday
-  3: 'bg-sky-50/50 dark:bg-sky-950/20',        // Wednesday
-  4: 'bg-violet-50/50 dark:bg-violet-950/20',  // Thursday
-  5: 'bg-orange-50/50 dark:bg-orange-950/20',  // Friday
-  6: 'bg-slate-50/50 dark:bg-slate-950/20',    // Saturday
+const DAY_ACCENT: Record<number, string> = {
+  1: 'border-l-amber-400',
+  2: 'border-l-emerald-400',
+  3: 'border-l-sky-400',
+  4: 'border-l-violet-400',
+  5: 'border-l-orange-400',
+  6: 'border-l-slate-400',
+  0: 'border-l-rose-400',
+};
+
+const SUBJECT_COLORS: Record<string, string> = {
+  '수학': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  '영어': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  '국어': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+  '과학': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
 };
 
 const STUDENT_PAGE_SIZE = 50;
@@ -91,20 +84,14 @@ export function Timetable() {
   const isAdminUser = isAdmin(role);
   const isAssistantUser = isAssistant(role);
   const canViewAllStudents = isAdminUser || isAssistantUser;
-  
-  // DEBUG-MARKER-STUDENTS-V1
-  const [fetchError, setFetchError] = useState<{ page: string; status: number | string; message: string } | null>(null);
-  
-  // Teacher schedule states
+
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
-  const [expandedTeachers, setExpandedTeachers] = useState<Set<string>>(new Set());
-  const [copiedSlotId, setCopiedSlotId] = useState<string | null>(null);
-  const [timetableCopied, setTimetableCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Student lookup states with pagination
+  // Student lookup
   const [students, setStudents] = useState<Student[]>([]);
   const [totalStudentCount, setTotalStudentCount] = useState(0);
   const [studentPage, setStudentPage] = useState(1);
@@ -114,17 +101,13 @@ export function Timetable() {
   const [selectedStudentName, setSelectedStudentName] = useState('');
   const [studentScheduleRows, setStudentScheduleRows] = useState<StudentScheduleRow[]>([]);
   const [studentScheduleLoading, setStudentScheduleLoading] = useState(false);
-  const [studentCopied, setStudentCopied] = useState(false);
 
   useEffect(() => {
     fetchScheduleData();
   }, [user, isAdminUser]);
 
-  // Fetch students with pagination when search changes or page changes
   useEffect(() => {
-    if (canViewAllStudents) {
-      fetchStudents();
-    }
+    if (canViewAllStudents) fetchStudents();
   }, [studentPage, studentSearchQuery, canViewAllStudents]);
 
   useEffect(() => {
@@ -138,8 +121,6 @@ export function Timetable() {
   async function fetchScheduleData() {
     setLoading(true);
     try {
-      // For teachers: fetch only their schedules
-      // For admins: fetch all schedules
       let scheduleQuery = supabase
         .from('class_schedules')
         .select(`
@@ -148,31 +129,27 @@ export function Timetable() {
         `)
         .eq('is_active', true);
 
-      if (!isAdminUser && user) {
+      if (!isAdminUser && !isAssistantUser && user) {
         scheduleQuery = scheduleQuery.eq('teacher_id', user.id);
       }
 
       const { data: schedulesData, error: schedError } = await scheduleQuery;
       if (schedError) throw schedError;
 
-      // Collect all teacher IDs and class IDs
       const teacherIds = new Set<string>();
       const classIds = new Set<string>();
-
       (schedulesData || []).forEach((s: any) => {
         if (s.teacher_id) teacherIds.add(s.teacher_id);
         if (s.classes?.teacher_id) teacherIds.add(s.classes.teacher_id);
         if (s.class_id) classIds.add(s.class_id);
       });
 
-      // Fetch teacher profiles
       let teacherMap: Record<string, string> = {};
       if (teacherIds.size > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('id', Array.from(teacherIds));
-
         if (profiles) {
           teacherMap = profiles.reduce((acc: Record<string, string>, p) => {
             acc[p.id] = p.full_name;
@@ -181,7 +158,6 @@ export function Timetable() {
         }
       }
 
-      // Batch fetch students for all classes
       let studentsByClass: Record<string, { id: string; name: string }[]> = {};
       if (classIds.size > 0) {
         const { data: classStudents } = await supabase
@@ -191,35 +167,28 @@ export function Timetable() {
 
         if (classStudents && classStudents.length > 0) {
           const studentIds = [...new Set(classStudents.map((cs) => cs.student_id))];
-          
           const { data: studentsData } = await supabase
             .from('students')
             .select('id, name')
             .in('id', studentIds);
 
           const studentMap: Record<string, string> = {};
-          (studentsData || []).forEach((s) => {
-            studentMap[s.id] = s.name;
-          });
+          (studentsData || []).forEach((s) => { studentMap[s.id] = s.name; });
 
           classStudents.forEach((cs) => {
-            if (!studentsByClass[cs.class_id]) {
-              studentsByClass[cs.class_id] = [];
-            }
+            if (!studentsByClass[cs.class_id]) studentsByClass[cs.class_id] = [];
             studentsByClass[cs.class_id].push({
               id: cs.student_id,
               name: studentMap[cs.student_id] || '이름없음',
             });
           });
 
-          // Sort students by name
           Object.keys(studentsByClass).forEach((classId) => {
             studentsByClass[classId].sort((a, b) => a.name.localeCompare(b.name));
           });
         }
       }
 
-      // Build schedule rows
       const rows: ScheduleRow[] = (schedulesData || []).map((s: any) => {
         const teacherId = s.teacher_id || s.classes?.teacher_id;
         return {
@@ -235,36 +204,30 @@ export function Timetable() {
         };
       });
 
-      // Sort by day then time
       rows.sort((a, b) => {
-        if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+        const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+        const ai = dayOrder.indexOf(a.dayOfWeek);
+        const bi = dayOrder.indexOf(b.dayOfWeek);
+        if (ai !== bi) return ai - bi;
         return a.startTime.localeCompare(b.startTime);
       });
 
       setScheduleRows(rows);
 
-      // For admin: build teacher list
-      if (isAdminUser) {
+      if (isAdminUser || isAssistantUser) {
         const uniqueTeachers = new Map<string, string>();
         rows.forEach((r) => {
-          if (r.teacherId) {
-            uniqueTeachers.set(r.teacherId, r.teacherName);
-          }
+          if (r.teacherId) uniqueTeachers.set(r.teacherId, r.teacherName);
         });
         setTeachers(
-          Array.from(uniqueTeachers.entries()).map(([id, name]) => ({ id, name }))
+          Array.from(uniqueTeachers.entries())
+            .map(([id, name]) => ({ id, name }))
             .sort((a, b) => a.name.localeCompare(b.name))
         );
-        // Expand all teachers by default
-        setExpandedTeachers(new Set(uniqueTeachers.keys()));
       }
     } catch (error) {
       console.error('Error fetching schedule:', error);
-      toast({
-        title: '오류',
-        description: '시간표를 불러오지 못했습니다',
-        variant: 'destructive',
-      });
+      toast({ title: '오류', description: '시간표를 불러오지 못했습니다', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -272,40 +235,20 @@ export function Timetable() {
 
   async function fetchStudents() {
     setStudentsLoading(true);
-    setFetchError(null);
     try {
       const offset = (studentPage - 1) * STUDENT_PAGE_SIZE;
-      
-      // Build query with optional search filter
-      let query = supabase
-        .from('students')
-        .select('id, name', { count: 'exact' });
-      
-      // Apply search filter (partial match on name)
+      let query = supabase.from('students').select('id, name', { count: 'exact' });
       if (studentSearchQuery.trim()) {
         query = query.ilike('name', `%${studentSearchQuery.trim()}%`);
       }
-      
-      // Apply stable ordering and pagination
       const { data, error, count } = await query
         .order('name', { ascending: true })
-        .order('created_at', { ascending: true })
         .range(offset, offset + STUDENT_PAGE_SIZE - 1);
-
-      if (error) {
-        const errInfo = { page: 'Students', status: error.code || 'UNKNOWN', message: error.message };
-        console.error('DEBUG_FETCH_ERROR: Students', errInfo);
-        setFetchError(errInfo);
-        throw error;
-      }
-      
+      if (error) throw error;
       setStudents(data || []);
       setTotalStudentCount(count || 0);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching students:', error);
-      if (!fetchError) {
-        setFetchError({ page: 'Students', status: error?.code || 'ERR', message: error?.message || 'Unknown error' });
-      }
       setStudents([]);
       setTotalStudentCount(0);
     } finally {
@@ -320,47 +263,29 @@ export function Timetable() {
         .from('class_students')
         .select('class_id')
         .eq('student_id', studentId);
-
       if (csError) throw csError;
-
       if (!classStudents || classStudents.length === 0) {
         setStudentScheduleRows([]);
         return;
       }
 
       const classIds = classStudents.map((cs) => cs.class_id);
-
       const { data: classData, error: classError } = await supabase
         .from('classes')
-        .select(`
-          id, name, subject, teacher_id,
-          class_schedules (id, day_of_week, start_time, end_time, is_active, teacher_id)
-        `)
+        .select(`id, name, subject, teacher_id, class_schedules (id, day_of_week, start_time, end_time, is_active, teacher_id)`)
         .in('id', classIds);
-
       if (classError) throw classError;
 
       const teacherIds = new Set<string>();
       (classData || []).forEach((c: any) => {
         if (c.teacher_id) teacherIds.add(c.teacher_id);
-        (c.class_schedules || []).forEach((s: any) => {
-          if (s.teacher_id) teacherIds.add(s.teacher_id);
-        });
+        (c.class_schedules || []).forEach((s: any) => { if (s.teacher_id) teacherIds.add(s.teacher_id); });
       });
 
       let teacherMap: Record<string, string> = {};
       if (teacherIds.size > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', Array.from(teacherIds));
-
-        if (profiles) {
-          teacherMap = profiles.reduce((acc: Record<string, string>, p) => {
-            acc[p.id] = p.full_name;
-            return acc;
-          }, {});
-        }
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', Array.from(teacherIds));
+        if (profiles) teacherMap = profiles.reduce((acc: Record<string, string>, p) => { acc[p.id] = p.full_name; return acc; }, {});
       }
 
       const rows: StudentScheduleRow[] = [];
@@ -378,273 +303,137 @@ export function Timetable() {
         });
       });
 
+      const dayOrder = [1, 2, 3, 4, 5, 6, 0];
       rows.sort((a, b) => {
-        if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+        const ai = dayOrder.indexOf(a.dayOfWeek);
+        const bi = dayOrder.indexOf(b.dayOfWeek);
+        if (ai !== bi) return ai - bi;
         return a.startTime.localeCompare(b.startTime);
       });
 
       setStudentScheduleRows(rows);
     } catch (error) {
       console.error('Error fetching student schedule:', error);
-      toast({
-        title: '오류',
-        description: '학생 시간표를 불러오지 못했습니다',
-        variant: 'destructive',
-      });
+      toast({ title: '오류', description: '학생 시간표를 불러오지 못했습니다', variant: 'destructive' });
     } finally {
       setStudentScheduleLoading(false);
     }
   }
 
-  const formatTime = (time: string) => time.slice(0, 5);
+  const fmt = (time: string) => time.slice(0, 5);
 
-  const handleCopySlotStudents = async (classId: string, students: { id: string; name: string }[]) => {
-    if (students.length === 0) return;
-    const names = students.map((s) => s.name).join(', ');
+  const handleCopy = async (text: string, id: string) => {
     try {
-      await navigator.clipboard.writeText(names);
-      setCopiedSlotId(classId);
-      toast({ title: '복사됨', description: '학생 명단이 복사되었습니다' });
-      setTimeout(() => setCopiedSlotId(null), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      toast({ title: '복사됨' });
+      setTimeout(() => setCopiedId(null), 2000);
     } catch {
-      toast({
-        title: '복사 실패',
-        description: '클립보드 복사에 실패했습니다',
-        variant: 'destructive',
-      });
+      toast({ title: '복사 실패', variant: 'destructive' });
     }
   };
 
-  // Filter rows by selected teacher (admin)
-  const filteredScheduleRows = useMemo(() => {
-    if (!isAdminUser || selectedTeacherId === 'all') return scheduleRows;
+  const today = new Date().getDay();
+
+  // ── Derived data ──
+
+  const filteredRows = useMemo(() => {
+    if (selectedTeacherId === 'all') return scheduleRows;
     return scheduleRows.filter((r) => r.teacherId === selectedTeacherId);
-  }, [scheduleRows, selectedTeacherId, isAdminUser]);
+  }, [scheduleRows, selectedTeacherId]);
 
-  // Group rows by teacher for "all" view
-  const groupedByTeacher = useMemo(() => {
-    if (!isAdminUser || selectedTeacherId !== 'all') return null;
-    const grouped: Record<string, ScheduleRow[]> = {};
-    scheduleRows.forEach((row) => {
-      const key = row.teacherId || 'unassigned';
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(row);
+  const byDay = useMemo(() => {
+    const map: Record<number, ScheduleRow[]> = {};
+    filteredRows.forEach((r) => {
+      if (!map[r.dayOfWeek]) map[r.dayOfWeek] = [];
+      map[r.dayOfWeek].push(r);
     });
-    return grouped;
-  }, [scheduleRows, selectedTeacherId, isAdminUser]);
+    return map;
+  }, [filteredRows]);
 
-  // Generate copy text for whole timetable
-  const timetableCopyText = useMemo(() => {
-    const rows = filteredScheduleRows;
-    if (rows.length === 0) return '';
-    
-    const teacherName = isAdminUser && selectedTeacherId !== 'all'
-      ? teachers.find(t => t.id === selectedTeacherId)?.name || ''
-      : '';
-    
-    const lines = [
-      teacherName ? `[${teacherName} 선생님 시간표]` : '[주간 시간표]',
-      ''
-    ];
-    
-    rows.forEach((row) => {
-      const dayLabel = DAYS_OF_WEEK.find((d) => d.value === row.dayOfWeek)?.label || '';
-      const studentNames = row.students.map(s => s.name).join(', ');
-      lines.push(
-        `${dayLabel} ${formatTime(row.startTime)}-${formatTime(row.endTime)} ${row.subject} (${row.className}) - ${studentNames || '학생없음'}`
-      );
+  const byTeacher = useMemo(() => {
+    const map: Record<string, { name: string; rows: ScheduleRow[] }> = {};
+    scheduleRows.forEach((r) => {
+      const key = r.teacherId || 'unassigned';
+      if (!map[key]) map[key] = { name: r.teacherName, rows: [] };
+      map[key].rows.push(r);
     });
-    
-    return lines.join('\n');
-  }, [filteredScheduleRows, selectedTeacherId, teachers, isAdminUser]);
+    return map;
+  }, [scheduleRows]);
 
-  const handleCopyTimetable = async () => {
-    if (!timetableCopyText) return;
-    try {
-      await navigator.clipboard.writeText(timetableCopyText);
-      setTimetableCopied(true);
-      toast({ title: '복사됨', description: '시간표가 클립보드에 복사되었습니다' });
-      setTimeout(() => setTimetableCopied(false), 2000);
-    } catch {
-      toast({
-        title: '복사 실패',
-        description: '클립보드 복사에 실패했습니다',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // Student timetable copy text
-  const studentCopyText = useMemo(() => {
-    if (!selectedStudentName || studentScheduleRows.length === 0) return '';
-    const lines = [`[${selectedStudentName} 주간 시간표]`, ''];
-    studentScheduleRows.forEach((row) => {
-      const dayLabel = DAYS_OF_WEEK.find((d) => d.value === row.dayOfWeek)?.label || '';
-      lines.push(
-        `${dayLabel} ${formatTime(row.startTime)}-${formatTime(row.endTime)} ${row.subject}(${row.teacherName})`
-      );
+  const studentByDay = useMemo(() => {
+    const map: Record<number, StudentScheduleRow[]> = {};
+    studentScheduleRows.forEach((r) => {
+      if (!map[r.dayOfWeek]) map[r.dayOfWeek] = [];
+      map[r.dayOfWeek].push(r);
     });
-    return lines.join('\n');
-  }, [selectedStudentName, studentScheduleRows]);
+    return map;
+  }, [studentScheduleRows]);
 
-  const handleCopyStudentTimetable = async () => {
-    if (!studentCopyText) return;
-    try {
-      await navigator.clipboard.writeText(studentCopyText);
-      setStudentCopied(true);
-      toast({ title: '복사됨', description: '학생 시간표가 클립보드에 복사되었습니다' });
-      setTimeout(() => setStudentCopied(false), 2000);
-    } catch {
-      toast({
-        title: '복사 실패',
-        description: '클립보드 복사에 실패했습니다',
-        variant: 'destructive',
-      });
-    }
-  };
+  // ── Render helpers ──
 
-  const handleStudentSelect = (studentId: string) => {
-    setSelectedStudentId(studentId);
-    const student = students.find((s) => s.id === studentId);
-    setSelectedStudentName(student?.name || '');
-  };
-
-  const toggleTeacherExpand = (teacherId: string) => {
-    setExpandedTeachers((prev) => {
-      const next = new Set(prev);
-      if (next.has(teacherId)) {
-        next.delete(teacherId);
-      } else {
-        next.add(teacherId);
-      }
-      return next;
-    });
-  };
-
-  const renderScheduleTable = (rows: ScheduleRow[], showTeacherColumn = false) => (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm">
-          <TableRow className="text-xs">
-            <TableHead className="py-2 px-3 w-[60px]">요일</TableHead>
-            <TableHead className="py-2 px-3 w-[70px]">시간</TableHead>
-            <TableHead className="py-2 px-3 w-[60px]">과목</TableHead>
-            {showTeacherColumn && <TableHead className="py-2 px-3 w-[80px]">선생님</TableHead>}
-            <TableHead className="py-2 px-3 w-[100px]">클래스명</TableHead>
-            <TableHead className="py-2 px-3">학생명단</TableHead>
-            <TableHead className="py-2 px-3 w-[60px] text-right"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, idx) => (
-            <TableRow
-              key={`${row.classId}-${row.dayOfWeek}-${idx}`}
-              className={cn('text-sm', DAY_COLORS[row.dayOfWeek])}
-            >
-              <TableCell className="py-2 px-3">
-                <Badge variant="outline" className="text-xs font-medium">
-                  {DAYS_OF_WEEK.find((d) => d.value === row.dayOfWeek)?.label}
-                </Badge>
-              </TableCell>
-              <TableCell className="py-2 px-3 font-mono text-xs whitespace-nowrap">
-                {formatTime(row.startTime)}-{formatTime(row.endTime)}
-              </TableCell>
-              <TableCell className="py-2 px-3">
-                <Badge variant="secondary" className="text-xs">
-                  {row.subject}
-                </Badge>
-              </TableCell>
-              {showTeacherColumn && (
-                <TableCell className="py-2 px-3 text-xs">
-                  {row.teacherName}
-                </TableCell>
-              )}
-              <TableCell className="py-2 px-3 text-xs truncate max-w-[100px]">
-                {row.className}
-              </TableCell>
-              <TableCell className="py-2 px-3">
-                <div className="flex flex-wrap gap-1 items-center">
-                  {row.students.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  ) : (
-                    <>
-                      {row.students.map((student) => (
-                        <Badge
-                          key={student.id}
-                          variant="outline"
-                          className="text-xs font-normal"
-                        >
-                          {student.name}
-                        </Badge>
-                      ))}
-                      <span className="text-xs text-muted-foreground ml-1">
-                        총 {row.students.length}명
-                      </span>
-                    </>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="py-2 px-3 text-right">
-                {row.students.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs"
-                    onClick={() => handleCopySlotStudents(row.classId + '-' + idx, row.students)}
-                  >
-                    {copiedSlotId === row.classId + '-' + idx ? (
-                      <Check className="w-3 h-3" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
+  const SlotCard = ({ row, showTeacher = false }: { row: ScheduleRow; showTeacher?: boolean }) => (
+    <div className={cn(
+      'border-l-4 rounded-lg bg-card p-3 shadow-sm hover:shadow-md transition-shadow',
+      DAY_ACCENT[row.dayOfWeek]
+    )}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', SUBJECT_COLORS[row.subject] || 'bg-muted text-muted-foreground')}>
+            {row.subject}
+          </span>
+          <span className="text-sm font-medium">{row.className}</span>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono shrink-0">
+          <Clock className="w-3 h-3" />
+          {fmt(row.startTime)}–{fmt(row.endTime)}
+        </div>
+      </div>
+      {showTeacher && (
+        <div className="text-xs text-muted-foreground mb-2">
+          <User className="w-3 h-3 inline mr-1" />
+          {row.teacherName}
+        </div>
+      )}
+      {row.students.length > 0 && (
+        <div className="flex flex-wrap gap-1 items-center">
+          <Users className="w-3 h-3 text-muted-foreground shrink-0" />
+          {row.students.map((s) => (
+            <span key={s.id} className="text-xs bg-muted px-1.5 py-0.5 rounded">
+              {s.name}
+            </span>
           ))}
-        </TableBody>
-      </Table>
+          <button
+            onClick={() => handleCopy(row.students.map((s) => s.name).join(', '), row.classId + row.dayOfWeek)}
+            className="ml-1 text-muted-foreground hover:text-foreground"
+          >
+            {copiedId === row.classId + row.dayOfWeek ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          </button>
+        </div>
+      )}
     </div>
   );
 
-  const renderStudentScheduleTable = () => (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm">
-          <TableRow className="text-xs">
-            <TableHead className="py-2 px-3">요일</TableHead>
-            <TableHead className="py-2 px-3">시간</TableHead>
-            <TableHead className="py-2 px-3">과목</TableHead>
-            <TableHead className="py-2 px-3">선생님</TableHead>
-            <TableHead className="py-2 px-3">클래스명</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {studentScheduleRows.map((row, idx) => (
-            <TableRow key={idx} className={cn('text-sm', DAY_COLORS[row.dayOfWeek])}>
-              <TableCell className="py-2 px-3">
-                <Badge variant="outline" className="text-xs font-medium">
-                  {DAYS_OF_WEEK.find((d) => d.value === row.dayOfWeek)?.label}
-                </Badge>
-              </TableCell>
-              <TableCell className="py-2 px-3 font-mono text-xs whitespace-nowrap">
-                {formatTime(row.startTime)}-{formatTime(row.endTime)}
-              </TableCell>
-              <TableCell className="py-2 px-3">
-                <Badge variant="secondary" className="text-xs">
-                  {row.subject}
-                </Badge>
-              </TableCell>
-              <TableCell className="py-2 px-3 text-xs">
-                {row.teacherName}
-              </TableCell>
-              <TableCell className="py-2 px-3 text-xs truncate max-w-[120px]">
-                {row.className}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+  const StudentSlotCard = ({ row }: { row: StudentScheduleRow }) => (
+    <div className={cn(
+      'border-l-4 rounded-lg bg-card p-3 shadow-sm',
+      DAY_ACCENT[row.dayOfWeek]
+    )}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', SUBJECT_COLORS[row.subject] || 'bg-muted text-muted-foreground')}>
+            {row.subject}
+          </span>
+          <span className="text-sm font-medium">{row.className}</span>
+        </div>
+        <div className="text-xs text-muted-foreground font-mono">
+          {fmt(row.startTime)}–{fmt(row.endTime)}
+        </div>
+      </div>
+      <div className="text-xs text-muted-foreground mt-1">
+        <User className="w-3 h-3 inline mr-1" />
+        {row.teacherName}
+      </div>
     </div>
   );
 
@@ -658,66 +447,51 @@ export function Timetable() {
     );
   }
 
-  // Teacher view: simple table of their schedules
-  if (!isAdminUser) {
+  // ── Teacher-only view ──
+  if (!isAdminUser && !isAssistantUser) {
     return (
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Calendar className="w-5 h-5" />
-              내 시간표
-            </CardTitle>
-            {scheduleRows.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyTimetable}
-                className="text-xs"
-              >
-                {timetableCopied ? (
-                  <>
-                    <Check className="w-3 h-3 mr-1" />
-                    복사됨
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3 mr-1" />
-                    시간표 복사
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Calendar className="w-5 h-5" />
+            내 시간표
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {scheduleRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              등록된 시간표가 없습니다
-            </p>
+            <p className="text-sm text-muted-foreground text-center py-8">등록된 시간표가 없습니다</p>
           ) : (
-            renderScheduleTable(scheduleRows, false)
+            <div className="space-y-6">
+              {DAYS_OF_WEEK.map(({ value, full }) => {
+                const dayRows = byDay[value];
+                if (!dayRows?.length) return null;
+                const isToday = value === today;
+                return (
+                  <div key={value}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className={cn('text-sm font-semibold', isToday && 'text-primary')}>
+                        {full}
+                      </h3>
+                      {isToday && <Badge className="text-[10px] h-5">오늘</Badge>}
+                    </div>
+                    <div className="space-y-2">
+                      {dayRows.map((row, idx) => (
+                        <SlotCard key={`${row.classId}-${idx}`} row={row} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>
     );
   }
 
-  // Admin view: tabs for teacher/student timetables
+  // ── Admin / Assistant view ──
   return (
     <Card>
-      {/* DEBUG-MARKER-STUDENTS-V1 */}
-      <div className="sticky top-0 z-50 bg-yellow-400 text-yellow-900 text-xs text-center py-1 font-mono">
-        DEBUG-MARKER-STUDENTS-V1
-      </div>
-      
-      {/* Fetch error banner */}
-      {fetchError && (
-        <div className="bg-red-500 text-white text-xs py-2 px-4 font-mono">
-          DEBUG_FETCH_ERROR: {fetchError.page} status={fetchError.status} message={fetchError.message}
-        </div>
-      )}
-      
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Calendar className="w-5 h-5" />
@@ -725,98 +499,143 @@ export function Timetable() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="teacher" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="teacher">선생님 시간표</TabsTrigger>
-            <TabsTrigger value="student">학생 시간표</TabsTrigger>
+        <Tabs defaultValue="day" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="day" className="text-xs sm:text-sm">
+              <Calendar className="w-4 h-4 mr-1 hidden sm:inline" />
+              요일별
+            </TabsTrigger>
+            <TabsTrigger value="teacher" className="text-xs sm:text-sm">
+              <User className="w-4 h-4 mr-1 hidden sm:inline" />
+              선생님별
+            </TabsTrigger>
+            <TabsTrigger value="student" className="text-xs sm:text-sm">
+              <Users className="w-4 h-4 mr-1 hidden sm:inline" />
+              학생별
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="teacher" className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="선생님 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 선생님</SelectItem>
-                  {teachers.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* ── 요일별 뷰 ── */}
+          <TabsContent value="day" className="space-y-4">
+            <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="선생님 필터" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 선생님</SelectItem>
+                {teachers.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              {selectedTeacherId !== 'all' && filteredScheduleRows.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyTimetable}
-                  className="text-xs"
-                >
-                  {timetableCopied ? (
-                    <>
-                      <Check className="w-3 h-3 mr-1" />
-                      복사됨
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3 mr-1" />
-                      시간표 복사
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-
-            {selectedTeacherId === 'all' && groupedByTeacher ? (
-              <div className="space-y-3">
-                {Object.entries(groupedByTeacher).map(([teacherId, rows]) => {
-                  const teacherName = rows[0]?.teacherName || '미배정';
-                  const isExpanded = expandedTeachers.has(teacherId);
+            {filteredRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">시간표가 없습니다</p>
+            ) : (
+              <div className="space-y-6">
+                {DAYS_OF_WEEK.map(({ value, full }) => {
+                  const dayRows = byDay[value];
+                  if (!dayRows?.length) return null;
+                  const isToday = value === today;
                   return (
-                    <Collapsible key={teacherId} open={isExpanded}>
-                      <CollapsibleTrigger
-                        className="flex items-center justify-between w-full p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
-                        onClick={() => toggleTeacherExpand(teacherId)}
-                      >
-                        <span className="font-medium text-sm">{teacherName}</span>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs">
-                            {rows.length}개 수업
-                          </Badge>
-                          <ChevronDown
-                            className={cn(
-                              'w-4 h-4 transition-transform',
-                              isExpanded && 'rotate-180'
-                            )}
-                          />
+                    <div key={value}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className={cn(
+                          'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
+                          isToday ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                        )}>
+                          {DAYS_OF_WEEK.find(d => d.value === value)?.label}
                         </div>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="pt-2">
-                        {renderScheduleTable(rows, false)}
-                      </CollapsibleContent>
-                    </Collapsible>
+                        <h3 className={cn('text-sm font-semibold', isToday && 'text-primary')}>
+                          {full}
+                        </h3>
+                        {isToday && <Badge className="text-[10px] h-5">오늘</Badge>}
+                        <Badge variant="outline" className="text-[10px] ml-auto">{dayRows.length}개 수업</Badge>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {dayRows.map((row, idx) => (
+                          <SlotCard key={`${row.classId}-${idx}`} row={row} showTeacher={selectedTeacherId === 'all'} />
+                        ))}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            ) : (
-              filteredScheduleRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  시간표가 없습니다
-                </p>
-              ) : (
-                renderScheduleTable(filteredScheduleRows, false)
-              )
             )}
           </TabsContent>
 
-          <TabsContent value="student" className="space-y-4">
-            {/* Debug line */}
-            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded font-mono">
-              STUDENT_DEBUG: loaded={students.length}, total={totalStudentCount}, page={studentPage}/{Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || 1}, q='{studentSearchQuery}', role={role}
-            </div>
+          {/* ── 선생님별 뷰 ── */}
+          <TabsContent value="teacher" className="space-y-6">
+            {Object.entries(byTeacher)
+              .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+              .map(([teacherId, { name, rows }]) => {
+                // Group this teacher's rows by day
+                const teacherByDay: Record<number, ScheduleRow[]> = {};
+                rows.forEach((r) => {
+                  if (!teacherByDay[r.dayOfWeek]) teacherByDay[r.dayOfWeek] = [];
+                  teacherByDay[r.dayOfWeek].push(r);
+                });
 
+                const totalStudents = new Set(rows.flatMap(r => r.students.map(s => s.id))).size;
+
+                const copyText = rows.map(r => {
+                  const dayLabel = DAYS_OF_WEEK.find(d => d.value === r.dayOfWeek)?.label || '';
+                  return `${dayLabel} ${fmt(r.startTime)}-${fmt(r.endTime)} ${r.subject}(${r.className}) ${r.students.map(s => s.name).join(',')}`;
+                }).join('\n');
+
+                return (
+                  <div key={teacherId} className="border rounded-lg overflow-hidden">
+                    <div className="bg-muted/50 px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                          {name.charAt(0)}
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold">{name}</h3>
+                          <p className="text-xs text-muted-foreground">
+                            {rows.length}개 수업 · {totalStudents}명 학생
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => handleCopy(`[${name} 시간표]\n${copyText}`, `teacher-${teacherId}`)}
+                      >
+                        {copiedId === `teacher-${teacherId}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      </Button>
+                    </div>
+                    <div className="p-3 space-y-4">
+                      {DAYS_OF_WEEK.map(({ value, label }) => {
+                        const dayRows = teacherByDay[value];
+                        if (!dayRows?.length) return null;
+                        return (
+                          <div key={value}>
+                            <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                              <span className={cn(
+                                'inline-flex w-5 h-5 rounded items-center justify-center text-[10px] font-bold',
+                                value === today ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                              )}>
+                                {label}
+                              </span>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {dayRows.map((row, idx) => (
+                                <SlotCard key={`${row.classId}-${idx}`} row={row} />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+          </TabsContent>
+
+          {/* ── 학생별 뷰 ── */}
+          <TabsContent value="student" className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">학생 검색</Label>
               <div className="flex flex-wrap gap-2 items-center">
@@ -827,103 +646,102 @@ export function Timetable() {
                     value={studentSearchQuery}
                     onChange={(e) => {
                       setStudentSearchQuery(e.target.value);
-                      setStudentPage(1); // Reset to first page on search
+                      setStudentPage(1);
                     }}
                     className="pl-9"
                   />
                 </div>
-                <Select value={selectedStudentId} onValueChange={handleStudentSelect}>
+                <Select value={selectedStudentId} onValueChange={(id) => {
+                  setSelectedStudentId(id);
+                  setSelectedStudentName(students.find(s => s.id === id)?.name || '');
+                }}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder={studentsLoading ? '로딩중...' : '학생 선택'} />
                   </SelectTrigger>
                   <SelectContent>
                     {students.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
             </div>
 
-            {/* Pagination controls - fixed at bottom of list section */}
-            {totalStudentCount > 0 && (
-              <div className="flex items-center justify-between border-t pt-4 mt-4">
-                <span className="text-sm text-muted-foreground">
-                  페이지 {studentPage} / {Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || 1} · 총 {totalStudentCount}명
+            {totalStudentCount > STUDENT_PAGE_SIZE && (
+              <div className="flex items-center justify-between border-t pt-3">
+                <span className="text-xs text-muted-foreground">
+                  {studentPage}/{Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE)} · 총 {totalStudentCount}명
                 </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const newPage = studentPage - 1;
-                      if (newPage >= 1) {
-                        setStudentPage(newPage);
-                      }
-                    }}
-                    disabled={studentPage <= 1 || studentsLoading}
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    이전
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" onClick={() => setStudentPage(p => Math.max(1, p - 1))} disabled={studentPage <= 1}>
+                    <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const totalPages = Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE);
-                      const newPage = studentPage + 1;
-                      if (newPage <= totalPages) {
-                        setStudentPage(newPage);
-                      }
-                    }}
-                    disabled={studentPage >= Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE) || studentsLoading}
-                  >
-                    다음
-                    <ChevronRight className="w-4 h-4 ml-1" />
+                  <Button variant="outline" size="sm" onClick={() => setStudentPage(p => Math.min(Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE), p + 1))} disabled={studentPage >= Math.ceil(totalStudentCount / STUDENT_PAGE_SIZE)}>
+                    <ChevronRight className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
             )}
 
             {selectedStudentId && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium">{selectedStudentName} 시간표</h4>
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    {selectedStudentName} 시간표
+                  </h4>
                   {studentScheduleRows.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleCopyStudentTimetable}
                       className="text-xs"
+                      onClick={() => {
+                        const text = [`[${selectedStudentName} 시간표]`, ...studentScheduleRows.map(r => {
+                          const d = DAYS_OF_WEEK.find(d => d.value === r.dayOfWeek)?.label || '';
+                          return `${d} ${fmt(r.startTime)}-${fmt(r.endTime)} ${r.subject}(${r.teacherName})`;
+                        })].join('\n');
+                        handleCopy(text, 'student-copy');
+                      }}
                     >
-                      {studentCopied ? (
-                        <>
-                          <Check className="w-3 h-3 mr-1" />
-                          복사됨
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3 mr-1" />
-                          복사용 텍스트
-                        </>
-                      )}
+                      {copiedId === 'student-copy' ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
+                      복사
                     </Button>
                   )}
                 </div>
 
                 {studentScheduleLoading ? (
-                  <div className="flex items-center justify-center py-8">
+                  <div className="flex justify-center py-8">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
                   </div>
                 ) : studentScheduleRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">
-                    배정된 수업이 없습니다
-                  </p>
+                  <p className="text-sm text-muted-foreground text-center py-6">배정된 수업이 없습니다</p>
                 ) : (
-                  renderStudentScheduleTable()
+                  <div className="space-y-4">
+                    {DAYS_OF_WEEK.map(({ value, full }) => {
+                      const dayRows = studentByDay[value];
+                      if (!dayRows?.length) return null;
+                      const isToday = value === today;
+                      return (
+                        <div key={value}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={cn(
+                              'inline-flex w-6 h-6 rounded-full items-center justify-center text-xs font-bold',
+                              isToday ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                            )}>
+                              {DAYS_OF_WEEK.find(d => d.value === value)?.label}
+                            </span>
+                            <span className={cn('text-sm font-medium', isToday && 'text-primary')}>{full}</span>
+                            {isToday && <Badge className="text-[10px] h-5">오늘</Badge>}
+                          </div>
+                          <div className="space-y-2">
+                            {dayRows.map((row, idx) => (
+                              <StudentSlotCard key={idx} row={row} />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}
