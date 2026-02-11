@@ -2291,7 +2291,30 @@ export default function Dashboard() {
                                             onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
                                           >
                                             <FileEdit className="w-3 h-3" />
-                                            <span className="ml-1">수업기록</span>
+                                            <span className="ml-1">일지</span>
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-xs px-2.5 text-muted-foreground hover:text-foreground"
+                                            onClick={() => {
+                                              setRosterActionContext({
+                                                date: getTodayKST(),
+                                                student_id: student.id,
+                                                student_name: student.name,
+                                                class_id: slot.class_id,
+                                                class_name: slot.class_name,
+                                                subject: slot.subject,
+                                                teacher_id: user?.id,
+                                                teacher_name: '',
+                                                start_time: slot.start_time,
+                                                existingRecordId: student.lessonRecordId || null,
+                                              });
+                                              setRosterActionModalOpen(true);
+                                            }}
+                                          >
+                                            <CheckSquare className="w-3 h-3" />
+                                            <span className="ml-1">숙제</span>
                                           </Button>
                                         </div>
                                       </div>
@@ -2312,18 +2335,22 @@ export default function Dashboard() {
                                         <span className="text-border">│</span>
 
                                         {/* 숙제확인 상태 */}
-                                        <span className={`inline-flex items-center text-[11px] font-medium ${
-                                          (() => {
-                                            const label = getHomeworkStatusLabel(rawHwStatus);
-                                            if (label === '완료') return 'text-success';
-                                            if (label === '미이행') return 'text-destructive';
-                                            if (label === '일부완료') return 'text-warning';
-                                            if (label === '확인요망') return 'text-warning';
-                                            return 'text-muted-foreground';
-                                          })()
-                                        }`}>
-                                          숙제: {getHomeworkStatusLabel(rawHwStatus)}
-                                        </span>
+                                        {student.lessonRecordId ? (
+                                          <span className={`inline-flex items-center text-[11px] font-medium ${
+                                            (() => {
+                                              const label = getHomeworkStatusLabel(rawHwStatus);
+                                              if (label === '완료') return 'text-success';
+                                              if (label === '미이행') return 'text-destructive';
+                                              if (label === '일부완료') return 'text-warning';
+                                              if (label === '확인요망') return 'text-warning';
+                                              return 'text-muted-foreground';
+                                            })()
+                                          }`}>
+                                            숙제: {getHomeworkStatusLabel(rawHwStatus)}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[11px] text-muted-foreground">숙제: —</span>
+                                        )}
 
                                         <span className="text-border">│</span>
 
