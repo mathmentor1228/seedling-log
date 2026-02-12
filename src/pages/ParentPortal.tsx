@@ -58,6 +58,20 @@ export default function ParentPortal() {
     })();
   }, [token]);
 
+  // Deduplicate reports by week_start — keep only the latest generated_at per week
+  // Must be before any early returns to maintain hooks order
+  const reports = useMemo(() => {
+    const rawReports = data?.reports || [];
+    const weekMap = new Map<string, WeeklyReport>();
+    for (const r of rawReports) {
+      const existing = weekMap.get(r.week_start);
+      if (!existing || new Date(r.generated_at) > new Date(existing.generated_at)) {
+        weekMap.set(r.week_start, r);
+      }
+    }
+    return Array.from(weekMap.values()).sort((a, b) => b.week_start.localeCompare(a.week_start));
+  }, [data?.reports]);
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white">
       <div className="flex flex-col items-center gap-3">
@@ -79,18 +93,7 @@ export default function ParentPortal() {
     </div>
   );
 
-  const { student, homework, lessons, attendance, reports: rawReports } = data;
-  // Deduplicate reports by week_start — keep only the latest generated_at per week
-  const reports = useMemo(() => {
-    const weekMap = new Map<string, WeeklyReport>();
-    for (const r of rawReports) {
-      const existing = weekMap.get(r.week_start);
-      if (!existing || new Date(r.generated_at) > new Date(existing.generated_at)) {
-        weekMap.set(r.week_start, r);
-      }
-    }
-    return Array.from(weekMap.values()).sort((a, b) => b.week_start.localeCompare(a.week_start));
-  }, [rawReports]);
+  const { student, homework, lessons, attendance } = data;
   const vocabSchedules = data.vocab_schedules || [];
   const vocabResults = data.vocab_results || [];
   const classSchedule = data.class_schedule || [];
