@@ -1476,6 +1476,7 @@ export type Database = {
           current_day_number: number
           cutline_percent: number
           days_per_test: number
+          days_per_test_map: Json | null
           id: string
           is_active: boolean
           notes: string | null
@@ -1493,6 +1494,7 @@ export type Database = {
           current_day_number?: number
           cutline_percent?: number
           days_per_test?: number
+          days_per_test_map?: Json | null
           id?: string
           is_active?: boolean
           notes?: string | null
@@ -1510,6 +1512,7 @@ export type Database = {
           current_day_number?: number
           cutline_percent?: number
           days_per_test?: number
+          days_per_test_map?: Json | null
           id?: string
           is_active?: boolean
           notes?: string | null
