@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth, isAdmin, isAssistant } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,9 +14,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { ClassStudentManager } from '@/components/ClassStudentManager';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: '월', full: '월요일' },
@@ -90,6 +92,9 @@ export function Timetable() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<'time' | 'teacher_time'>('time');
+  const [editClassId, setEditClassId] = useState<string | null>(null);
+  const [editClassName, setEditClassName] = useState('');
 
   // Student lookup
   const [students, setStudents] = useState<Student[]>([]);
@@ -348,8 +353,18 @@ export function Timetable() {
       if (!map[r.dayOfWeek]) map[r.dayOfWeek] = [];
       map[r.dayOfWeek].push(r);
     });
+    // Sort within each day based on sortMode
+    Object.values(map).forEach(rows => {
+      rows.sort((a, b) => {
+        if (sortMode === 'teacher_time') {
+          const tc = a.teacherName.localeCompare(b.teacherName);
+          if (tc !== 0) return tc;
+        }
+        return a.startTime.localeCompare(b.startTime);
+      });
+    });
     return map;
-  }, [filteredRows]);
+  }, [filteredRows, sortMode]);
 
   const byTeacher = useMemo(() => {
     const map: Record<string, { name: string; rows: ScheduleRow[] }> = {};
@@ -372,11 +387,15 @@ export function Timetable() {
 
   // ── Render helpers ──
 
-  const SlotCard = ({ row, showTeacher = false }: { row: ScheduleRow; showTeacher?: boolean }) => (
-    <div className={cn(
-      'border-l-4 rounded-lg bg-card p-3 shadow-sm hover:shadow-md transition-shadow',
-      DAY_ACCENT[row.dayOfWeek]
-    )}>
+  const SlotCard = ({ row, showTeacher = false, editable = false }: { row: ScheduleRow; showTeacher?: boolean; editable?: boolean }) => (
+    <div
+      className={cn(
+        'border-l-4 rounded-lg bg-card p-3 shadow-sm hover:shadow-md transition-shadow',
+        DAY_ACCENT[row.dayOfWeek],
+        editable && 'cursor-pointer ring-transparent hover:ring-1 hover:ring-primary/30'
+      )}
+      onClick={editable ? () => { setEditClassId(row.classId); setEditClassName(row.className); } : undefined}
+    >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', SUBJECT_COLORS[row.subject] || 'bg-muted text-muted-foreground')}>
@@ -404,11 +423,22 @@ export function Timetable() {
             </span>
           ))}
           <button
-            onClick={() => handleCopy(row.students.map((s) => s.name).join(', '), row.classId + row.dayOfWeek)}
+            onClick={(e) => { e.stopPropagation(); handleCopy(row.students.map((s) => s.name).join(', '), row.classId + row.dayOfWeek); }}
             className="ml-1 text-muted-foreground hover:text-foreground"
           >
             {copiedId === row.classId + row.dayOfWeek ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
+          {editable && (
+            <span className="ml-auto">
+              <UserPlus className="w-3.5 h-3.5 text-muted-foreground" />
+            </span>
+          )}
+        </div>
+      )}
+      {row.students.length === 0 && editable && (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <UserPlus className="w-3.5 h-3.5" />
+          학생 배정하기
         </div>
       )}
     </div>
@@ -517,17 +547,28 @@ export function Timetable() {
 
           {/* ── 요일별 뷰 ── */}
           <TabsContent value="day" className="space-y-4">
-            <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="선생님 필터" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체 선생님</SelectItem>
-                {teachers.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="선생님 필터" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 선생님</SelectItem>
+                  {teachers.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => setSortMode(prev => prev === 'time' ? 'teacher_time' : 'time')}
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" />
+                {sortMode === 'time' ? '시간순' : '선생님→시간순'}
+              </Button>
+            </div>
 
             {filteredRows.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">시간표가 없습니다</p>
@@ -554,7 +595,7 @@ export function Timetable() {
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                         {dayRows.map((row, idx) => (
-                          <SlotCard key={`${row.classId}-${idx}`} row={row} showTeacher={selectedTeacherId === 'all'} />
+                          <SlotCard key={`${row.classId}-${idx}`} row={row} showTeacher={selectedTeacherId === 'all'} editable />
                         ))}
                       </div>
                     </div>
@@ -748,6 +789,19 @@ export function Timetable() {
           </TabsContent>
         </Tabs>
       </CardContent>
+
+      {/* Student management dialog */}
+      <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) { setEditClassId(null); fetchScheduleData(); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              {editClassName} — 학생 배정
+            </DialogTitle>
+          </DialogHeader>
+          {editClassId && <ClassStudentManager classId={editClassId} />}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
