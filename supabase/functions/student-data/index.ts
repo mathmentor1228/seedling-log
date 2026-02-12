@@ -205,10 +205,10 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Sort by day of week relative to today (KST), exclude past days
+        // Sort by day of week relative to today (KST), today's classes come first
         upcomingClasses.sort((a, b) => {
-          const aDays = (a.day_of_week - dow + 7) % 7 || 7;
-          const bDays = (b.day_of_week - dow + 7) % 7 || 7;
+          const aDays = (a.day_of_week - dow + 7) % 7;
+          const bDays = (b.day_of_week - dow + 7) % 7;
           return aDays - bDays;
         });
 
@@ -244,8 +244,8 @@ Deno.serve(async (req) => {
 
         result = {
           total_points: studentData?.total_points || 0,
-          pending_homework: homeworkData || [],
-          upcoming_classes: upcomingClasses.slice(0, 3),
+          pending_homework: (homeworkData || []).filter((hw: any) => hw.content?.trim() !== '없음'),
+          upcoming_classes: upcomingClasses,
           vocab_schedules: vocabScheduleRes.data || [],
           vocab_results: vocabResultsRes.data || [],
           vocab_setting: vocabSettingsRes.data || null,
@@ -310,6 +310,7 @@ Deno.serve(async (req) => {
             is_submission_closed: isSubmissionClosed,
             deadline_at,
             is_deadline_passed,
+            is_no_homework: hw.content?.trim() === '없음',
           };
         });
 
