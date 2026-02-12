@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth, isAssistant as checkIsAssistant, isTeacher as checkIsTeacher, isAdmin as checkIsAdmin, canManageLessons } from '@/lib/auth';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +31,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
-import DailyHomeworkManager from '@/components/DailyHomeworkManager';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 
 interface Teacher {
@@ -802,11 +802,19 @@ export default function Lessons() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">수업 기록</h1>
-          <p className="text-muted-foreground mt-1">
-            {role === 'admin' ? '전체 수업 기록' : '수업 내용을 기록하고 관리하세요'}
-          </p>
+          <h1 className="text-2xl font-bold text-foreground">수업 관리</h1>
         </div>
+      </div>
+
+      <Tabs defaultValue="lessons" className="w-full">
+        <TabsList>
+          <TabsTrigger value="lessons">수업 기록</TabsTrigger>
+          {(isAdmin || isTeacher || isAssistant) && (
+            <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="lessons" className="space-y-6 mt-4">
         <div className="flex items-center gap-2">
           {canManage && (
             <Button 
@@ -816,9 +824,7 @@ export default function Lessons() {
               + 수업기록 생성
             </Button>
           )}
-          {(isAdmin || isTeacher) && <DailyHomeworkManager />}
         </div>
-      </div>
 
       {/* LessonModal - only render when open to prevent backdrop blocking clicks */}
       {isModalOpen && (
@@ -911,8 +917,6 @@ export default function Lessons() {
         </Card>
       )}
 
-      {/* Daily Homework Checklist */}
-      {(isAdmin || isTeacher) && <DailyHomeworkChecklist />}
 
       {/* Filters */}
       <Card>
@@ -1149,6 +1153,14 @@ export default function Lessons() {
           )}
         </CardContent>
       </Card>
+      </TabsContent>
+
+      {(isAdmin || isTeacher || isAssistant) && (
+        <TabsContent value="daily-hw" className="mt-4">
+          <DailyHomeworkChecklist />
+        </TabsContent>
+      )}
+      </Tabs>
     </div>
   );
 }
