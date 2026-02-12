@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown } from 'lucide-react';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
@@ -50,6 +50,7 @@ const SUBJECT_COLORS: Record<string, string> = {
 const STUDENT_PAGE_SIZE = 50;
 
 interface ScheduleRow {
+  scheduleId: string;
   classId: string;
   className: string;
   subject: string;
@@ -96,6 +97,21 @@ export function Timetable() {
   const [editClassId, setEditClassId] = useState<string | null>(null);
   const [editClassName, setEditClassName] = useState('');
 
+  // Inline edit state
+  const [editSlot, setEditSlot] = useState<{
+    scheduleId: string;
+    classId: string;
+    className: string;
+    subject: string;
+    startTime: string;
+    endTime: string;
+    teacherId: string;
+    dayOfWeek: number;
+  } | null>(null);
+  const [editForm, setEditForm] = useState({ className: '', startTime: '', endTime: '', teacherId: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
+
   // Student lookup
   const [students, setStudents] = useState<Student[]>([]);
   const [totalStudentCount, setTotalStudentCount] = useState(0);
@@ -109,6 +125,7 @@ export function Timetable() {
 
   useEffect(() => {
     fetchScheduleData();
+    if (isAdminUser || isAssistantUser) fetchAllTeachers();
   }, [user, isAdminUser]);
 
   useEffect(() => {
@@ -197,6 +214,7 @@ export function Timetable() {
       const rows: ScheduleRow[] = (schedulesData || []).map((s: any) => {
         const teacherId = s.teacher_id || s.classes?.teacher_id;
         return {
+          scheduleId: s.id,
           classId: s.class_id,
           className: s.classes?.name || '',
           subject: s.classes?.subject || '',
@@ -236,6 +254,76 @@ export function Timetable() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function fetchAllTeachers() {
+    try {
+      const { data } = await supabase.from('profiles').select('id, full_name').order('full_name');
+      setAllTeachers((data || []).map(p => ({ id: p.id, name: p.full_name })));
+    } catch (e) {
+      console.error('Error fetching all teachers:', e);
+    }
+  }
+
+  async function handleEditSave() {
+    if (!editSlot) return;
+    setEditSaving(true);
+    try {
+      // Update class name if changed
+      if (editForm.className !== editSlot.className) {
+        const { error } = await supabase
+          .from('classes')
+          .update({ name: editForm.className })
+          .eq('id', editSlot.classId);
+        if (error) throw error;
+      }
+
+      // Update schedule time and teacher if changed
+      const updates: Record<string, any> = {};
+      if (editForm.startTime !== editSlot.startTime.slice(0, 5)) updates.start_time = editForm.startTime;
+      if (editForm.endTime !== editSlot.endTime.slice(0, 5)) updates.end_time = editForm.endTime;
+      if (editForm.teacherId !== editSlot.teacherId) {
+        updates.teacher_id = editForm.teacherId;
+        // Also update class teacher_id
+        await supabase.from('classes').update({ teacher_id: editForm.teacherId }).eq('id', editSlot.classId);
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error } = await supabase
+          .from('class_schedules')
+          .update(updates)
+          .eq('id', editSlot.scheduleId);
+        if (error) throw error;
+      }
+
+      toast({ title: '수정 완료', description: '수업 정보가 저장되었습니다' });
+      setEditSlot(null);
+      fetchScheduleData();
+    } catch (error: any) {
+      console.error('Error saving edit:', error);
+      toast({ title: '오류', description: error.message || '수정에 실패했습니다', variant: 'destructive' });
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  function openEditSlot(row: ScheduleRow) {
+    setEditSlot({
+      scheduleId: row.scheduleId,
+      classId: row.classId,
+      className: row.className,
+      subject: row.subject,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      teacherId: row.teacherId,
+      dayOfWeek: row.dayOfWeek,
+    });
+    setEditForm({
+      className: row.className,
+      startTime: row.startTime.slice(0, 5),
+      endTime: row.endTime.slice(0, 5),
+      teacherId: row.teacherId,
+    });
   }
 
   async function fetchStudents() {
@@ -403,9 +491,20 @@ export function Timetable() {
           </span>
           <span className="text-sm font-medium">{row.className}</span>
         </div>
-        <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono shrink-0">
-          <Clock className="w-3 h-3" />
-          {fmt(row.startTime)}–{fmt(row.endTime)}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+            <Clock className="w-3 h-3" />
+            {fmt(row.startTime)}–{fmt(row.endTime)}
+          </div>
+          {editable && (
+            <button
+              onClick={(e) => { e.stopPropagation(); openEditSlot(row); }}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="수업 정보 수정"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
       {showTeacher && (
@@ -800,6 +899,79 @@ export function Timetable() {
             </DialogTitle>
           </DialogHeader>
           {editClassId && <ClassStudentManager classId={editClassId} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit slot dialog */}
+      <Dialog open={!!editSlot} onOpenChange={(open) => { if (!open) setEditSlot(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5" />
+              수업 정보 수정
+            </DialogTitle>
+          </DialogHeader>
+          {editSlot && (
+            <div className="space-y-4 mt-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Badge variant="outline">
+                  {DAYS_OF_WEEK.find(d => d.value === editSlot.dayOfWeek)?.full}
+                </Badge>
+                <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', SUBJECT_COLORS[editSlot.subject] || 'bg-muted text-muted-foreground')}>
+                  {editSlot.subject}
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <Label>수업명</Label>
+                <Input
+                  value={editForm.className}
+                  onChange={(e) => setEditForm(f => ({ ...f, className: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>시작 시간</Label>
+                  <Input
+                    type="time"
+                    value={editForm.startTime}
+                    onChange={(e) => setEditForm(f => ({ ...f, startTime: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>종료 시간</Label>
+                  <Input
+                    type="time"
+                    value={editForm.endTime}
+                    onChange={(e) => setEditForm(f => ({ ...f, endTime: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>담당 선생님</Label>
+                <Select value={editForm.teacherId} onValueChange={(v) => setEditForm(f => ({ ...f, teacherId: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="선생님 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allTeachers.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setEditSlot(null)}>취소</Button>
+                <Button onClick={handleEditSave} disabled={editSaving || !editForm.className.trim()}>
+                  {editSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  저장
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Card>
