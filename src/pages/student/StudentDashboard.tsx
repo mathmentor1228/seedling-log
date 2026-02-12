@@ -123,7 +123,16 @@ export default function StudentDashboard() {
 
       if (data) {
         setTotalPoints(data.total_points);
-        setPendingHomework(data.pending_homework);
+        // Filter out expired, closed, deadline-passed, and '없음' homework
+        const filteredHomework = (data.pending_homework || []).filter((hw: any) =>
+          hw.check_status === 'unchecked' &&
+          !hw.is_expired &&
+          !hw.is_submission_closed &&
+          !hw.is_deadline_passed &&
+          !hw.is_no_homework &&
+          hw.content?.trim() !== '없음'
+        );
+        setPendingHomework(filteredHomework);
         setUpcomingClasses(data.upcoming_classes);
         setVocabSchedules(data.vocab_schedules || []);
         setVocabResults(data.vocab_results || []);
