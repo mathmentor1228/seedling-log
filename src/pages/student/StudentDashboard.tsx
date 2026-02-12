@@ -25,6 +25,7 @@ import {
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import StudentWeeklyCalendar from '@/components/student/StudentWeeklyCalendar';
 import {
   Collapsible,
   CollapsibleContent,
@@ -247,6 +248,23 @@ export default function StudentDashboard() {
               <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </Link>
+        </CardContent>
+      </Card>
+
+      {/* Weekly Calendar */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            이번 주 일정
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StudentWeeklyCalendar
+            homework={pendingHomework}
+            classes={upcomingClasses}
+            vocabSchedules={vocabSchedules}
+          />
         </CardContent>
       </Card>
 
