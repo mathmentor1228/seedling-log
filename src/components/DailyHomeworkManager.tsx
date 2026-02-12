@@ -42,7 +42,7 @@ interface TeacherGroup {
 }
 
 export default function DailyHomeworkManager() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
@@ -74,17 +74,31 @@ export default function DailyHomeworkManager() {
     setLoading(true);
     try {
       // Get students mapped to teachers for this subject via student_subject_teachers
-      const { data: mappings } = await supabase
+      let mappingsQuery = supabase
         .from('student_subject_teachers')
         .select('student_id, teacher_id, subject')
         .eq('subject', subj);
 
+      // Teachers only see their own students
+      if (role === 'teacher' && user?.id) {
+        mappingsQuery = mappingsQuery.eq('teacher_id', user.id);
+      }
+
+      const { data: mappings } = await mappingsQuery;
+
       if (!mappings || mappings.length === 0) {
         // Fallback: try class-based grouping
-        const { data: classData } = await supabase
+        let classQuery = supabase
           .from('classes')
-        .select('id, teacher_id, name')
-        .eq('subject', subj as any);
+          .select('id, teacher_id, name')
+          .eq('subject', subj as any);
+
+        // Teachers only see their own classes
+        if (role === 'teacher' && user?.id) {
+          classQuery = classQuery.eq('teacher_id', user.id);
+        }
+
+        const { data: classData } = await classQuery;
         if (!classData || classData.length === 0) {
           setTeacherGroups([]);
           setLoading(false);
