@@ -637,7 +637,7 @@ export default function StudentHomework() {
     );
   }
 
-  const pendingHomework = homework.filter(hw => hw.check_status === 'unchecked');
+  const pendingHomework = homework.filter(hw => hw.check_status === 'unchecked' && !hw.is_expired && !hw.is_submission_closed && !hw.is_deadline_passed);
   const completedHomework = homework.filter(hw => hw.check_status === 'checked');
 
   // Group homework by date, then sort subjects within each date
