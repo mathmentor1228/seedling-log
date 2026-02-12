@@ -19,12 +19,17 @@ const TEACHER_OPTIONS = [
   { value: 'kim', label: '김민희' },
 ];
 
+interface DaysPerTestMap {
+  [day: string]: number;
+}
+
 interface VocabSetting {
   id: string;
   student_id: string;
   teacher_id: string;
   book_name: string;
   days_per_test: number;
+  days_per_test_map: DaysPerTestMap | null;
   cutline_percent: number;
   test_days: string[];
   current_day_number: number;
@@ -43,19 +48,36 @@ interface Student {
   school: string | null;
 }
 
+const DAY_LABELS: Record<string, string> = {
+  mon: '월', tue: '화', wed: '수', thu: '목', fri: '금',
+};
+
 const TEST_DAY_OPTIONS = [
-  { value: 'mon_wed', label: '월/수' },
-  { value: 'tue_thu', label: '화/목' },
-  { value: 'mon_wed_fri', label: '월/수/금' },
-  { value: 'tue_thu_fri', label: '화/목/금' },
-  { value: 'mon_tue_wed_thu', label: '월/화/수/목' },
-  { value: 'mon_tue_wed_thu_fri', label: '월~금' },
-  { value: 'mon', label: '월' },
-  { value: 'tue', label: '화' },
-  { value: 'wed', label: '수' },
-  { value: 'thu', label: '목' },
-  { value: 'fri', label: '금' },
+  { value: 'mon_wed', label: '월/수', days: ['mon', 'wed'] },
+  { value: 'tue_thu', label: '화/목', days: ['tue', 'thu'] },
+  { value: 'mon_wed_fri', label: '월/수/금', days: ['mon', 'wed', 'fri'] },
+  { value: 'tue_thu_fri', label: '화/목/금', days: ['tue', 'thu', 'fri'] },
+  { value: 'mon_tue_wed_thu', label: '월/화/수/목', days: ['mon', 'tue', 'wed', 'thu'] },
+  { value: 'mon_tue_wed_thu_fri', label: '월~금', days: ['mon', 'tue', 'wed', 'thu', 'fri'] },
+  { value: 'mon', label: '월', days: ['mon'] },
+  { value: 'tue', label: '화', days: ['tue'] },
+  { value: 'wed', label: '수', days: ['wed'] },
+  { value: 'thu', label: '목', days: ['thu'] },
+  { value: 'fri', label: '금', days: ['fri'] },
 ];
+
+function getIndividualDays(testDayValue: string): string[] {
+  return TEST_DAY_OPTIONS.find(o => o.value === testDayValue)?.days || [];
+}
+
+function formatDaysPerTestMap(map: DaysPerTestMap | null, testDays: string[]): string {
+  if (!map) return '';
+  const option = TEST_DAY_OPTIONS.find(o => o.value === testDays[0]);
+  if (!option) return '';
+  return option.days
+    .map(d => `${DAY_LABELS[d]}${map[d] || 1}`)
+    .join(' / ');
+}
 
 export function VocabSettingsPanel() {
   const { user } = useAuth();
@@ -69,6 +91,8 @@ export function VocabSettingsPanel() {
   const [formStudentId, setFormStudentId] = useState('');
   const [formBookName, setFormBookName] = useState('');
   const [formDaysPerTest, setFormDaysPerTest] = useState(1);
+  const [formDaysPerTestMap, setFormDaysPerTestMap] = useState<DaysPerTestMap>({});
+  const [formUsePerDayConfig, setFormUsePerDayConfig] = useState(false);
   const [formCutline, setFormCutline] = useState(80);
   const [formTestDays, setFormTestDays] = useState('mon_wed');
   const [formCurrentDay, setFormCurrentDay] = useState(1);
@@ -107,6 +131,8 @@ export function VocabSettingsPanel() {
     setFormStudentId('');
     setFormBookName('');
     setFormDaysPerTest(1);
+    setFormDaysPerTestMap({});
+    setFormUsePerDayConfig(false);
     setFormCutline(80);
     setFormTestDays('mon_wed');
     setFormCurrentDay(1);
@@ -122,6 +148,9 @@ export function VocabSettingsPanel() {
     setFormStudentId(s.student_id);
     setFormBookName(s.book_name);
     setFormDaysPerTest(s.days_per_test);
+    const hasMap = s.days_per_test_map && Object.keys(s.days_per_test_map).length > 0;
+    setFormUsePerDayConfig(!!hasMap);
+    setFormDaysPerTestMap(hasMap ? s.days_per_test_map! : {});
     setFormCutline(s.cutline_percent);
     setFormTestDays(s.test_days[0] || 'mon_wed');
     setFormCurrentDay(s.current_day_number);
@@ -139,11 +168,18 @@ export function VocabSettingsPanel() {
     }
     setSaving(true);
 
+    const perDayMap = formUsePerDayConfig ? formDaysPerTestMap : null;
+    // Use max of per-day values as the fallback days_per_test
+    const effectiveDaysPerTest = formUsePerDayConfig
+      ? Math.max(1, ...Object.values(formDaysPerTestMap).map(Number).filter(Boolean))
+      : formDaysPerTest;
+
     const payload = {
       student_id: formStudentId,
       teacher_id: user?.id || '',
       book_name: formBookName,
-      days_per_test: formDaysPerTest,
+      days_per_test: effectiveDaysPerTest,
+      days_per_test_map: perDayMap,
       cutline_percent: formCutline,
       test_days: [formTestDays],
       current_day_number: formCurrentDay,
@@ -238,19 +274,17 @@ export function VocabSettingsPanel() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">회당 DAY 수</Label>
-                  <Input type="number" min={1} value={formDaysPerTest} onChange={e => setFormDaysPerTest(Number(e.target.value))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">커트라인 (%)</Label>
-                  <Input type="number" min={0} max={100} value={formCutline} onChange={e => setFormCutline(Number(e.target.value))} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
                   <Label className="text-xs">시험 요일</Label>
-                  <Select value={formTestDays} onValueChange={setFormTestDays}>
+                  <Select value={formTestDays} onValueChange={(v) => {
+                    setFormTestDays(v);
+                    // Reset per-day map when changing days
+                    if (formUsePerDayConfig) {
+                      const days = getIndividualDays(v);
+                      const newMap: DaysPerTestMap = {};
+                      days.forEach(d => { newMap[d] = formDaysPerTestMap[d] || 1; });
+                      setFormDaysPerTestMap(newMap);
+                    }
+                  }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TEST_DAY_OPTIONS.map(o => (
@@ -263,6 +297,56 @@ export function VocabSettingsPanel() {
                   <Label className="text-xs">현재 DAY 번호</Label>
                   <Input type="number" min={1} value={formCurrentDay} onChange={e => setFormCurrentDay(Number(e.target.value))} />
                 </div>
+              </div>
+
+              {/* DAY 수 설정: 공통 or 요일별 */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">회당 DAY 수</Label>
+                  {getIndividualDays(formTestDays).length > 1 && (
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => {
+                        const next = !formUsePerDayConfig;
+                        setFormUsePerDayConfig(next);
+                        if (next) {
+                          const days = getIndividualDays(formTestDays);
+                          const newMap: DaysPerTestMap = {};
+                          days.forEach(d => { newMap[d] = formDaysPerTest; });
+                          setFormDaysPerTestMap(newMap);
+                        }
+                      }}
+                    >
+                      {formUsePerDayConfig ? '공통으로 설정' : '요일별로 다르게'}
+                    </button>
+                  )}
+                </div>
+
+                {formUsePerDayConfig ? (
+                  <div className="grid gap-2">
+                    {getIndividualDays(formTestDays).map(day => (
+                      <div key={day} className="flex items-center gap-2">
+                        <span className="text-xs font-medium w-6 text-center">{DAY_LABELS[day]}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          className="h-8 text-sm"
+                          value={formDaysPerTestMap[day] || 1}
+                          onChange={e => setFormDaysPerTestMap(prev => ({ ...prev, [day]: Number(e.target.value) || 1 }))}
+                        />
+                        <span className="text-xs text-muted-foreground">DAY</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Input type="number" min={1} value={formDaysPerTest} onChange={e => setFormDaysPerTest(Number(e.target.value))} />
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">커트라인 (%)</Label>
+                <Input type="number" min={0} max={100} value={formCutline} onChange={e => setFormCutline(Number(e.target.value))} />
               </div>
 
               <div className="space-y-1.5">
@@ -282,7 +366,7 @@ export function VocabSettingsPanel() {
                 <Input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="선택 사항" />
               </div>
 
-              {formDaysPerTest > 1 && (
+              {!formUsePerDayConfig && formDaysPerTest > 1 && (
                 <div className="flex items-center justify-between rounded-md border p-3">
                   <div>
                     <Label className="text-xs font-medium">DAY 묶음 시험</Label>
@@ -319,10 +403,10 @@ export function VocabSettingsPanel() {
                 <TableHead className="w-[120px]">학생</TableHead>
                 <TableHead>교재</TableHead>
                 <TableHead className="text-center w-[60px]">DAY</TableHead>
+                <TableHead className="text-center w-[80px]">회당 DAY</TableHead>
                 <TableHead className="text-center w-[60px]">총 일차</TableHead>
                 <TableHead className="text-center w-[70px]">커트라인</TableHead>
                 <TableHead className="text-center w-[60px]">요일</TableHead>
-                <TableHead className="text-center w-[50px]">묶음</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -342,15 +426,17 @@ export function VocabSettingsPanel() {
                   <TableCell className="text-center">
                     <Badge variant="secondary" className="text-xs font-mono">Day {s.current_day_number}</Badge>
                   </TableCell>
+                  <TableCell className="text-center text-xs">
+                    {s.days_per_test_map
+                      ? formatDaysPerTestMap(s.days_per_test_map, s.test_days)
+                      : `${s.days_per_test}DAY`}
+                  </TableCell>
                   <TableCell className="text-center text-xs font-mono">
                     {s.total_days ? `${s.total_days}일` : '—'}
                   </TableCell>
                   <TableCell className="text-center text-sm">{s.cutline_percent}%</TableCell>
                   <TableCell className="text-center text-xs">
                     {s.test_days.map(d => TEST_DAY_OPTIONS.find(o => o.value === d)?.label || d).join(', ')}
-                  </TableCell>
-                  <TableCell className="text-center text-xs">
-                    {s.days_per_test > 1 ? (s.bundle_days ? '묶음' : '개별') : '—'}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
