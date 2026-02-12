@@ -1,4 +1,4 @@
-// DAILY-HW-CHECKLIST-V1: Per-teacher daily homework checklist with bulk delete
+// DAILY-HW-CHECKLIST-V2: Comprehensive daily homework management with views
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -25,10 +25,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Filter } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users } from 'lucide-react';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
+import DailyHomeworkManager from '@/components/DailyHomeworkManager';
+import { isAdmin as checkIsAdmin, isTeacher as checkIsTeacher } from '@/lib/auth';
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'] as const;
 
@@ -36,20 +38,26 @@ interface DailyHomeworkItem {
   id: string;
   student_id: string;
   student_name: string;
+  student_grade: string | null;
   subject: string;
   content: string;
   assigned_date: string;
+  end_date: string | null;
+  required_submissions: number;
   check_status: string;
   result: string | null;
   checked_at: string | null;
   submitted_at: string | null;
   submission_image_url: string | null;
-}
-
-interface TeacherGroup {
+  submission_count: number;
   teacher_id: string;
   teacher_name: string;
-  items: DailyHomeworkItem[];
+}
+
+interface SubmissionInfo {
+  homework_id: string;
+  submitted_at: string;
+  image_url: string | null;
 }
 
 const CHECK_STATUS_LABELS: Record<string, { label: string; className: string }> = {
@@ -58,25 +66,33 @@ const CHECK_STATUS_LABELS: Record<string, { label: string; className: string }> 
   submitted: { label: '제출됨', className: 'bg-blue-500/15 text-blue-600 border-blue-500/30' },
 };
 
+const DAY_LABELS: Record<number, string> = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
+
 export default function DailyHomeworkChecklist() {
   const { user, role } = useAuth();
   const { toast } = useToast();
 
-  const today = getTodayKST();
   const mondayOfWeek = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-  const fridayOfWeek = format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), 'yyyy-MM-dd');
+  const sundayOfWeek = format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 6), 'yyyy-MM-dd');
 
   const [startDate, setStartDate] = useState(mondayOfWeek);
-  const [endDate, setEndDate] = useState(fridayOfWeek);
+  const [endDate, setEndDate] = useState(sundayOfWeek);
   const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterTeacher, setFilterTeacher] = useState<string>('all');
+  const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<DailyHomeworkItem[]>([]);
-  const [teacherMap, setTeacherMap] = useState<Record<string, string>>({});
-  const [studentTeacherMap, setStudentTeacherMap] = useState<Record<string, string>>({});
+  const [submissionMap, setSubmissionMap] = useState<Record<string, SubmissionInfo[]>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [expandedTeachers, setExpandedTeachers] = useState<Set<string>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [viewMode, setViewMode] = useState<'teacher' | 'calendar' | 'grade'>('teacher');
+  const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
+
+  const isAdmin = checkIsAdmin(role);
+  const isTeacher = checkIsTeacher(role);
 
   useEffect(() => {
     fetchData();
@@ -90,9 +106,9 @@ export default function DailyHomeworkChecklist() {
       let query = supabase
         .from('homework_assignments')
         .select(`
-          id, student_id, subject, content, assigned_date,
+          id, student_id, subject, content, assigned_date, end_date, required_submissions,
           check_status, result, checked_at, submitted_at, submission_image_url,
-          students:student_id (name)
+          students:student_id (name, grade)
         `)
         .eq('homework_type', 'daily')
         .gte('assigned_date', startDate)
@@ -106,28 +122,39 @@ export default function DailyHomeworkChecklist() {
       const { data: hwData, error } = await query;
       if (error) throw error;
 
-      const formatted: DailyHomeworkItem[] = (hwData || []).map((h: any) => ({
-        id: h.id,
-        student_id: h.student_id,
-        student_name: h.students?.name || '알 수 없음',
-        subject: h.subject,
-        content: h.content,
-        assigned_date: h.assigned_date,
-        check_status: h.check_status,
-        result: h.result,
-        checked_at: h.checked_at,
-        submitted_at: h.submitted_at,
-        submission_image_url: h.submission_image_url,
-      }));
+      // Fetch submission counts from homework_submissions
+      const hwIds = (hwData || []).map((h: any) => h.id);
+      let submissions: SubmissionInfo[] = [];
+      if (hwIds.length > 0) {
+        // Batch fetch in chunks of 100
+        for (let i = 0; i < hwIds.length; i += 100) {
+          const batch = hwIds.slice(i, i + 100);
+          const { data: subData } = await supabase
+            .from('homework_submissions')
+            .select('homework_id, submitted_at, image_url')
+            .in('homework_id', batch)
+            .order('submitted_at', { ascending: true });
+          if (subData) submissions.push(...subData as SubmissionInfo[]);
+        }
+      }
 
-      setItems(formatted);
+      // Build submission map
+      const subMap: Record<string, SubmissionInfo[]> = {};
+      submissions.forEach(s => {
+        if (!subMap[s.homework_id]) subMap[s.homework_id] = [];
+        subMap[s.homework_id].push(s);
+      });
+      setSubmissionMap(subMap);
 
-      // Fetch student-teacher mappings for grouping
-      const studentIds = [...new Set(formatted.map(i => i.student_id))];
+      // Fetch student-teacher mappings
+      const studentIds = [...new Set((hwData || []).map((h: any) => h.student_id))];
+      const stMap: Record<string, string> = {};
+      const teacherIds = new Set<string>();
+
       if (studentIds.length > 0) {
-        const subjects = filterSubject !== 'all' 
-          ? [filterSubject] 
-          : [...new Set(formatted.map(i => i.subject))];
+        const subjects = filterSubject !== 'all'
+          ? [filterSubject]
+          : [...new Set((hwData || []).map((h: any) => h.subject))];
 
         let mappingQuery = supabase
           .from('student_subject_teachers')
@@ -135,37 +162,55 @@ export default function DailyHomeworkChecklist() {
           .in('student_id', studentIds)
           .in('subject', subjects);
 
-        if (role === 'teacher' && user?.id) {
+        if (isTeacher && user?.id) {
           mappingQuery = mappingQuery.eq('teacher_id', user.id);
         }
 
         const { data: mappings } = await mappingQuery;
-
-        // Build student -> teacher map (use first match per student)
-        const stMap: Record<string, string> = {};
-        const teacherIds = new Set<string>();
         (mappings || []).forEach((m: any) => {
-          if (!stMap[m.student_id]) {
-            stMap[m.student_id] = m.teacher_id;
-          }
+          if (!stMap[m.student_id]) stMap[m.student_id] = m.teacher_id;
           teacherIds.add(m.teacher_id);
         });
-        setStudentTeacherMap(stMap);
-
-        // Fetch teacher names
-        if (teacherIds.size > 0) {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', [...teacherIds]);
-          
-          const tMap: Record<string, string> = {};
-          (profiles || []).forEach((p: any) => {
-            tMap[p.id] = p.full_name || '알 수 없음';
-          });
-          setTeacherMap(tMap);
-        }
       }
+
+      // Fetch teacher names
+      const tMap: Record<string, string> = {};
+      if (teacherIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', [...teacherIds]);
+        (profiles || []).forEach((p: any) => {
+          tMap[p.id] = p.full_name || '알 수 없음';
+        });
+      }
+
+      setTeachers([...teacherIds].map(id => ({ id, name: tMap[id] || '알 수 없음' })).sort((a, b) => a.name.localeCompare(b.name)));
+
+      const formatted: DailyHomeworkItem[] = (hwData || []).map((h: any) => {
+        const teacherId = stMap[h.student_id] || 'unassigned';
+        return {
+          id: h.id,
+          student_id: h.student_id,
+          student_name: h.students?.name || '알 수 없음',
+          student_grade: h.students?.grade || null,
+          subject: h.subject,
+          content: h.content,
+          assigned_date: h.assigned_date,
+          end_date: h.end_date,
+          required_submissions: h.required_submissions || 1,
+          check_status: h.check_status,
+          result: h.result,
+          checked_at: h.checked_at,
+          submitted_at: h.submitted_at,
+          submission_image_url: h.submission_image_url,
+          submission_count: (subMap[h.id] || []).length + (h.submission_image_url ? 1 : 0),
+          teacher_id: teacherId,
+          teacher_name: teacherId === 'unassigned' ? '미배정' : (tMap[teacherId] || '알 수 없음'),
+        };
+      });
+
+      setItems(formatted);
     } catch (error) {
       console.error('Error fetching daily homework:', error);
       toast({ title: '데이터 로드 실패', variant: 'destructive' });
@@ -174,70 +219,68 @@ export default function DailyHomeworkChecklist() {
     }
   }
 
-  // Group items by teacher
-  const teacherGroups: TeacherGroup[] = useMemo(() => {
-    const groups: Record<string, TeacherGroup> = {};
-    
-    items.forEach(item => {
-      const teacherId = studentTeacherMap[item.student_id] || 'unassigned';
-      if (!groups[teacherId]) {
-        groups[teacherId] = {
-          teacher_id: teacherId,
-          teacher_name: teacherId === 'unassigned' ? '미배정' : (teacherMap[teacherId] || '알 수 없음'),
-          items: [],
-        };
-      }
-      groups[teacherId].items.push(item);
-    });
+  // Filtering
+  const filteredItems = useMemo(() => {
+    let result = items;
+    if (filterTeacher !== 'all') result = result.filter(i => i.teacher_id === filterTeacher);
+    if (filterGrade !== 'all') result = result.filter(i => (i.student_grade || '미지정') === filterGrade);
+    if (filterStatus === 'submitted') result = result.filter(i => i.submitted_at || i.submission_count > 0);
+    if (filterStatus === 'unchecked') result = result.filter(i => i.check_status === 'unchecked' && !i.submitted_at);
+    if (filterStatus === 'checked') result = result.filter(i => i.check_status === 'checked');
+    return result;
+  }, [items, filterTeacher, filterGrade, filterStatus]);
 
-    // Sort items within each group by date then student name
-    Object.values(groups).forEach(g => {
-      g.items.sort((a, b) => {
-        if (a.assigned_date !== b.assigned_date) return a.assigned_date.localeCompare(b.assigned_date);
-        return a.student_name.localeCompare(b.student_name);
-      });
-    });
+  // Available grades
+  const grades = useMemo(() => {
+    const gs = new Set(items.map(i => i.student_grade || '미지정'));
+    return [...gs].sort();
+  }, [items]);
 
-    return Object.values(groups).sort((a, b) => a.teacher_name.localeCompare(b.teacher_name));
-  }, [items, studentTeacherMap, teacherMap]);
+  // Stats
+  const stats = useMemo(() => {
+    const total = filteredItems.length;
+    const checked = filteredItems.filter(i => i.check_status === 'checked').length;
+    const submitted = filteredItems.filter(i => i.submitted_at || i.submission_count > 0).length;
+    const withPhotos = filteredItems.filter(i => i.submission_count > 0).length;
+    return { total, checked, submitted, withPhotos };
+  }, [filteredItems]);
 
-  // Auto-expand all teachers on load
+  // Unique dates
+  const uniqueDates = useMemo(() => [...new Set(filteredItems.map(i => i.assigned_date))].sort(), [filteredItems]);
+
+  // Auto expand
   useEffect(() => {
-    setExpandedTeachers(new Set(teacherGroups.map(g => g.teacher_id)));
-  }, [teacherGroups.length]);
+    if (viewMode === 'teacher') {
+      const tIds = new Set(filteredItems.map(i => i.teacher_id));
+      setExpandedSections(tIds);
+    } else if (viewMode === 'grade') {
+      setExpandedSections(new Set(grades));
+    } else {
+      setExpandedSections(new Set(uniqueDates));
+    }
+  }, [filteredItems.length, viewMode]);
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }
 
-  function toggleSelectGroup(teacherId: string) {
-    const group = teacherGroups.find(g => g.teacher_id === teacherId);
-    if (!group) return;
-    const allSelected = group.items.every(i => selectedIds.has(i.id));
+  function toggleSelectAll(ids: string[]) {
+    const allSelected = ids.every(id => selectedIds.has(id));
     setSelectedIds(prev => {
       const next = new Set(prev);
-      group.items.forEach(i => {
-        if (allSelected) next.delete(i.id);
-        else next.add(i.id);
-      });
+      ids.forEach(id => { if (allSelected) next.delete(id); else next.add(id); });
       return next;
     });
   }
 
-  function selectAllByDate(date: string) {
-    const dateItems = items.filter(i => i.assigned_date === date);
-    const allSelected = dateItems.every(i => selectedIds.has(i.id));
-    setSelectedIds(prev => {
+  function toggleSection(key: string) {
+    setExpandedSections(prev => {
       const next = new Set(prev);
-      dateItems.forEach(i => {
-        if (allSelected) next.delete(i.id);
-        else next.add(i.id);
-      });
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   }
@@ -247,233 +290,325 @@ export default function DailyHomeworkChecklist() {
     setIsDeleting(true);
     try {
       const ids = [...selectedIds];
-      // Delete in batches of 50
       for (let i = 0; i < ids.length; i += 50) {
         const batch = ids.slice(i, i + 50);
-        const { error } = await supabase
-          .from('homework_assignments')
-          .delete()
-          .in('id', batch);
+        const { error } = await supabase.from('homework_assignments').delete().in('id', batch);
         if (error) throw error;
       }
-
-      toast({
-        title: '삭제 완료',
-        description: `${selectedIds.size}건의 데일리숙제가 삭제되었습니다.`,
-      });
-
+      toast({ title: '삭제 완료', description: `${selectedIds.size}건 삭제됨` });
       setSelectedIds(new Set());
       setDeleteDialogOpen(false);
       fetchData();
     } catch (error: any) {
-      console.error('Error deleting homework:', error);
-      toast({
-        title: '삭제 실패',
-        description: error.message || '삭제 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
+      toast({ title: '삭제 실패', description: error.message, variant: 'destructive' });
     } finally {
       setIsDeleting(false);
     }
   }
 
-  // Unique dates in items
-  const uniqueDates = useMemo(() => {
-    return [...new Set(items.map(i => i.assigned_date))].sort();
-  }, [items]);
-
-  const DAY_LABELS: Record<number, string> = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
-
-  function getStatusBadge(status: string, submittedAt: string | null) {
-    if (submittedAt && status === 'unchecked') {
+  function getStatusBadge(item: DailyHomeworkItem) {
+    if (item.check_status === 'checked') {
+      return <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">확인완료</Badge>;
+    }
+    if (item.submitted_at || item.submission_count > 0) {
       return <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">제출됨</Badge>;
     }
-    const info = CHECK_STATUS_LABELS[status] || CHECK_STATUS_LABELS.unchecked;
-    return <Badge className={`${info.className} text-xs`}>{info.label}</Badge>;
+    return <Badge className="bg-muted text-muted-foreground text-xs">미확인</Badge>;
   }
 
-  const totalChecked = items.filter(i => i.check_status === 'checked').length;
-  const totalSubmitted = items.filter(i => i.submitted_at).length;
+  function renderSubmissionDetail(item: DailyHomeworkItem) {
+    const subs = submissionMap[item.id] || [];
+    const totalImages = subs.filter(s => s.image_url).length + (item.submission_image_url ? 1 : 0);
+    const latestSub = subs.length > 0 ? subs[subs.length - 1] : null;
+    const submittedTime = item.submitted_at || latestSub?.submitted_at;
 
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2">
-          <ClipboardCheck className="w-5 h-5 text-primary" />
-          데일리숙제 체크리스트
-        </CardTitle>
-        
-        {/* Filters */}
-        <div className="flex flex-wrap items-end gap-3 mt-3">
-          <div className="space-y-1">
-            <span className="text-xs text-muted-foreground">시작일</span>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="h-9 w-36"
-            />
-          </div>
-          <div className="space-y-1">
-            <span className="text-xs text-muted-foreground">종료일</span>
-            <Input
-              type="date"
-              value={endDate}
-              min={startDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="h-9 w-36"
-            />
-          </div>
-          <div className="space-y-1">
-            <span className="text-xs text-muted-foreground">과목</span>
-            <Select value={filterSubject} onValueChange={setFilterSubject}>
-              <SelectTrigger className="h-9 w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
-                {SUBJECTS.map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedIds.size > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setDeleteDialogOpen(true)}
-              className="ml-auto"
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              선택 삭제 ({selectedIds.size}건)
-            </Button>
-          )}
-        </div>
-
-        {/* Summary stats */}
-        {!loading && items.length > 0 && (
-          <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-            <span>총 {items.length}건</span>
-            <span>·</span>
-            <span className="text-green-600">확인완료 {totalChecked}건</span>
-            <span>·</span>
-            <span className="text-blue-600">제출 {totalSubmitted}건</span>
-            <span>·</span>
-            <span>미확인 {items.length - totalChecked}건</span>
-          </div>
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {totalImages > 0 && (
+          <span className="flex items-center gap-0.5 text-blue-600">
+            <Image className="w-3 h-3" />
+            {totalImages}장
+          </span>
         )}
-      </CardHeader>
+        {item.required_submissions > 1 && (
+          <span className={`${item.submission_count >= item.required_submissions ? 'text-green-600' : 'text-amber-600'}`}>
+            인증 {item.submission_count}/{item.required_submissions}
+          </span>
+        )}
+        {submittedTime && (
+          <span className="flex items-center gap-0.5">
+            <Clock className="w-3 h-3" />
+            {format(new Date(submittedTime), 'M/d HH:mm')}
+          </span>
+        )}
+      </div>
+    );
+  }
 
-      <CardContent>
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-            <span className="text-muted-foreground">로딩 중...</span>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">해당 기간에 데일리숙제가 없습니다.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {teacherGroups.map(group => {
-              const isExpanded = expandedTeachers.has(group.teacher_id);
-              const allSelected = group.items.every(i => selectedIds.has(i.id));
-              const someSelected = group.items.some(i => selectedIds.has(i.id));
-              const groupChecked = group.items.filter(i => i.check_status === 'checked').length;
+  function renderItemRow(item: DailyHomeworkItem, showDate = false, showTeacher = false, showGrade = false) {
+    return (
+      <div
+        key={item.id}
+        className={`flex items-center gap-2 px-3 py-2 hover:bg-accent/50 transition-colors text-sm ${
+          selectedIds.has(item.id) ? 'bg-destructive/5' : ''
+        }`}
+      >
+        <Checkbox
+          checked={selectedIds.has(item.id)}
+          onCheckedChange={() => toggleSelect(item.id)}
+        />
+        {showDate && (
+          <span className="text-xs text-muted-foreground w-14 shrink-0">
+            {format(new Date(item.assigned_date + 'T00:00:00'), 'M/d')}
+          </span>
+        )}
+        <span className="font-medium w-16 shrink-0 truncate">{item.student_name}</span>
+        {showGrade && item.student_grade && (
+          <Badge variant="outline" className="text-[10px] shrink-0">{item.student_grade}</Badge>
+        )}
+        {showTeacher && (
+          <span className="text-xs text-muted-foreground w-14 shrink-0 truncate">{item.teacher_name}</span>
+        )}
+        <Badge variant="outline" className="text-xs shrink-0">{item.subject}</Badge>
+        <span className="text-muted-foreground truncate flex-1 text-xs" title={item.content}>
+          {item.content}
+        </span>
+        {item.end_date && (
+          <span className="text-[10px] text-muted-foreground shrink-0">
+            ~{format(new Date(item.end_date + 'T00:00:00'), 'M/d')}
+          </span>
+        )}
+        <div className="shrink-0">{renderSubmissionDetail(item)}</div>
+        <div className="shrink-0">{getStatusBadge(item)}</div>
+      </div>
+    );
+  }
 
-              return (
-                <div key={group.teacher_id} className="border rounded-lg overflow-hidden">
-                  {/* Teacher Header */}
-                  <div
-                    className="flex items-center justify-between p-3 bg-muted/50 cursor-pointer hover:bg-muted/80 transition-colors"
-                    onClick={() => {
-                      setExpandedTeachers(prev => {
-                        const next = new Set(prev);
-                        if (next.has(group.teacher_id)) next.delete(group.teacher_id);
-                        else next.add(group.teacher_id);
-                        return next;
-                      });
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                      <span className="font-medium">{group.teacher_name}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {groupChecked}/{group.items.length}건 확인
-                      </Badge>
-                    </div>
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={() => toggleSelectGroup(group.teacher_id)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
+  function renderGroupedView(
+    groupKey: (item: DailyHomeworkItem) => string,
+    groupLabel: (key: string) => string,
+    sortGroups: (keys: string[]) => string[],
+    showDate: boolean,
+    showTeacher: boolean,
+    showGrade: boolean,
+  ) {
+    const groups: Record<string, DailyHomeworkItem[]> = {};
+    filteredItems.forEach(item => {
+      const key = groupKey(item);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
 
-                  {/* Items grouped by date */}
-                  {isExpanded && (
-                    <div className="divide-y">
-                      {uniqueDates
-                        .filter(date => group.items.some(i => i.assigned_date === date))
-                        .map(date => {
-                          const dateItems = group.items.filter(i => i.assigned_date === date);
-                          const d = new Date(date + 'T00:00:00');
-                          const dayLabel = DAY_LABELS[d.getDay()] || '';
+    const sortedKeys = sortGroups(Object.keys(groups));
 
-                          return (
-                            <div key={date}>
-                              {/* Date sub-header */}
-                              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/20 text-xs text-muted-foreground">
-                                <span className="font-medium">{format(d, 'M/d')} ({dayLabel})</span>
-                                <span>· {dateItems.length}명</span>
-                              </div>
-                              {/* Student rows */}
-                              {dateItems.map(item => (
-                                <div
-                                  key={item.id}
-                                  className={`flex items-center gap-3 px-3 py-2 hover:bg-accent/50 transition-colors ${
-                                    selectedIds.has(item.id) ? 'bg-destructive/5' : ''
-                                  }`}
-                                >
-                                  <Checkbox
-                                    checked={selectedIds.has(item.id)}
-                                    onCheckedChange={() => toggleSelect(item.id)}
-                                  />
-                                  <span className="text-sm font-medium w-20 shrink-0">{item.student_name}</span>
-                                  <Badge variant="outline" className="text-xs shrink-0">{item.subject}</Badge>
-                                  <span className="text-sm text-muted-foreground truncate flex-1" title={item.content}>
-                                    {item.content}
-                                  </span>
-                                  {getStatusBadge(item.check_status, item.submitted_at)}
-                                  {item.submission_image_url && (
-                                    <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-xs">📷</Badge>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
-                    </div>
+    return (
+      <div className="space-y-2">
+        {sortedKeys.map(key => {
+          const groupItems = groups[key];
+          const isExpanded = expandedSections.has(key);
+          const allSelected = groupItems.every(i => selectedIds.has(i.id));
+          const checkedCount = groupItems.filter(i => i.check_status === 'checked').length;
+          const submittedCount = groupItems.filter(i => i.submitted_at || i.submission_count > 0).length;
+
+          return (
+            <div key={key} className="border rounded-lg overflow-hidden">
+              <div
+                className="flex items-center justify-between p-2.5 bg-muted/50 cursor-pointer hover:bg-muted/80 transition-colors"
+                onClick={() => toggleSection(key)}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                  <span className="font-medium text-sm">{groupLabel(key)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {groupItems.length}건
+                  </span>
+                  {checkedCount > 0 && (
+                    <Badge className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">
+                      확인 {checkedCount}
+                    </Badge>
+                  )}
+                  {submittedCount > 0 && (
+                    <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 text-[10px]">
+                      제출 {submittedCount}
+                    </Badge>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={() => toggleSelectAll(groupItems.map(i => i.id))}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+              {isExpanded && (
+                <div className="divide-y divide-border/50">
+                  {groupItems.map(item => renderItemRow(item, showDate, showTeacher, showGrade))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
-      {/* Delete Confirmation Dialog */}
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <ClipboardCheck className="w-5 h-5 text-primary" />
+            데일리숙제 관리
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5">기간별 데일리숙제 현황 · 제출 · 인증 관리</p>
+        </div>
+        {(isAdmin || isTeacher) && <DailyHomeworkManager />}
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-4 pb-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">시작일</span>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-8 w-32 text-sm" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">종료일</span>
+              <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="h-8 w-32 text-sm" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">과목</span>
+              <Select value={filterSubject} onValueChange={setFilterSubject}>
+                <SelectTrigger className="h-8 w-24 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {(isAdmin) && teachers.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-xs text-muted-foreground">선생님</span>
+                <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+                  <SelectTrigger className="h-8 w-28 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {grades.length > 1 && (
+              <div className="space-y-1">
+                <span className="text-xs text-muted-foreground">학년</span>
+                <Select value={filterGrade} onValueChange={setFilterGrade}>
+                  <SelectTrigger className="h-8 w-24 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    {grades.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">상태</span>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-8 w-24 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="submitted">제출됨</SelectItem>
+                  <SelectItem value="unchecked">미제출</SelectItem>
+                  <SelectItem value="checked">확인완료</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedIds.size > 0 && (
+              <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)} className="ml-auto h-8">
+                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                {selectedIds.size}건 삭제
+              </Button>
+            )}
+          </div>
+
+          {/* Stats bar */}
+          {!loading && stats.total > 0 && (
+            <div className="flex gap-4 mt-3 text-xs">
+              <span className="text-muted-foreground">총 <strong>{stats.total}</strong>건</span>
+              <span className="text-green-600">확인완료 <strong>{stats.checked}</strong></span>
+              <span className="text-blue-600">제출 <strong>{stats.submitted}</strong></span>
+              <span className="text-amber-600">사진 <strong>{stats.withPhotos}</strong>건</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* View tabs + content */}
+      <Card>
+        <CardHeader className="pb-2 pt-3">
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
+            <TabsList className="grid w-full grid-cols-3 max-w-xs">
+              <TabsTrigger value="teacher" className="text-xs">선생님별</TabsTrigger>
+              <TabsTrigger value="calendar" className="text-xs">날짜별</TabsTrigger>
+              <TabsTrigger value="grade" className="text-xs">학년별</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              <span className="text-muted-foreground">로딩 중...</span>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="text-center py-12">
+              <Calendar className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground">해당 조건에 맞는 데일리숙제가 없습니다.</p>
+            </div>
+          ) : viewMode === 'teacher' ? (
+            renderGroupedView(
+              (item) => item.teacher_id,
+              (key) => {
+                const t = teachers.find(t => t.id === key);
+                return t ? t.name : (key === 'unassigned' ? '미배정' : key);
+              },
+              (keys) => keys.sort((a, b) => {
+                const nameA = teachers.find(t => t.id === a)?.name || '';
+                const nameB = teachers.find(t => t.id === b)?.name || '';
+                return nameA.localeCompare(nameB);
+              }),
+              true, false, true,
+            )
+          ) : viewMode === 'calendar' ? (
+            renderGroupedView(
+              (item) => item.assigned_date,
+              (key) => {
+                const d = new Date(key + 'T00:00:00');
+                return `${format(d, 'M/d')} (${DAY_LABELS[d.getDay()] || ''})`;
+              },
+              (keys) => keys.sort(),
+              false, true, true,
+            )
+          ) : (
+            renderGroupedView(
+              (item) => item.student_grade || '미지정',
+              (key) => key,
+              (keys) => keys.sort(),
+              true, true, false,
+            )
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Delete Confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>데일리숙제 일괄 삭제</AlertDialogTitle>
             <AlertDialogDescription>
               선택한 <strong>{selectedIds.size}건</strong>의 데일리숙제를 삭제하시겠습니까?
-              <br />
-              이 작업은 되돌릴 수 없습니다. 학생에게 이미 제출된 숙제도 함께 삭제됩니다.
+              <br />이 작업은 되돌릴 수 없습니다.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -483,21 +618,11 @@ export default function DailyHomeworkChecklist() {
               disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                  삭제 중...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  {selectedIds.size}건 삭제
-                </>
-              )}
+              {isDeleting ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />삭제 중...</> : <><Trash2 className="w-4 h-4 mr-1" />{selectedIds.size}건 삭제</>}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </div>
   );
 }
