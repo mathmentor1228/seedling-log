@@ -605,7 +605,7 @@ export function Timetable() {
                     </div>
                     <div className="space-y-2">
                       {dayRows.map((row, idx) => (
-                        <SlotCard key={`${row.classId}-${idx}`} row={row} />
+                        <SlotCard key={`${row.classId}-${idx}`} row={row} editable />
                       ))}
                     </div>
                   </div>
@@ -614,6 +614,24 @@ export function Timetable() {
             </div>
           )}
         </CardContent>
+
+        {/* Student management dialog for teachers */}
+        <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) setEditClassId(null); }}>
+          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                학생 배정 – {editClassName}
+              </DialogTitle>
+            </DialogHeader>
+            {editClassId && (
+              <ClassStudentManager
+                classId={editClassId}
+                onStudentCountChange={() => fetchScheduleData()}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </Card>
     );
   }
