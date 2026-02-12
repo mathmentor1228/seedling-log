@@ -22,11 +22,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CalendarPlus, Loader2, Users, BookOpen, ChevronDown } from 'lucide-react';
-import { format, startOfWeek, addDays, eachDayOfInterval, isWeekend, differenceInCalendarDays } from 'date-fns';
+import { format, startOfWeek, addDays, differenceInCalendarDays } from 'date-fns';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'] as const;
-const DAY_LABELS = ['월', '화', '수', '목', '금'];
+const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 
 interface StudentWithMeta {
   id: string;
@@ -62,6 +62,7 @@ export default function DailyHomeworkManager() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [expandedTeachers, setExpandedTeachers] = useState<Set<string>>(new Set());
+  const [requiredSubmissions, setRequiredSubmissions] = useState(1);
 
   // Fetch students grouped by teacher when dialog opens or subject changes
   useEffect(() => {
@@ -255,12 +256,12 @@ export default function DailyHomeworkManager() {
     });
   }
 
-  // Generate weekday dates in the selected range
-  const assignDates = (() => {
+  // Total days in the selected range (including weekends)
+  const totalDays = (() => {
     const s = new Date(startDate + 'T00:00:00');
     const e = new Date(endDate + 'T00:00:00');
-    if (s > e) return [];
-    return eachDayOfInterval({ start: s, end: e }).filter(d => !isWeekend(d));
+    if (s > e) return 0;
+    return differenceInCalendarDays(e, s) + 1;
   })();
 
   const totalStudents = teacherGroups.reduce((sum, g) => sum + g.students.length, 0);
@@ -276,21 +277,26 @@ export default function DailyHomeworkManager() {
       return;
     }
 
+    if (totalDays === 0) {
+      toast({ title: '올바른 기간을 선택해주세요', variant: 'destructive' });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const inserts: any[] = [];
 
       for (const studentId of selectedStudents) {
-        for (const date of assignDates) {
-          inserts.push({
-            student_id: studentId,
-            subject: subject,
-            content: homeworkContent.trim(),
-            assigned_date: format(date, 'yyyy-MM-dd'),
-            homework_type: 'daily',
-            check_status: 'unchecked',
-          });
-        }
+        inserts.push({
+          student_id: studentId,
+          subject: subject,
+          content: homeworkContent.trim(),
+          assigned_date: startDate,
+          end_date: endDate,
+          required_submissions: requiredSubmissions,
+          homework_type: 'daily',
+          check_status: 'unchecked',
+        });
       }
 
       const { error } = await supabase
@@ -301,7 +307,7 @@ export default function DailyHomeworkManager() {
 
       toast({
         title: '데일리숙제 등록 완료',
-        description: `${selectedStudents.size}명 × ${assignDates.length}일 = ${inserts.length}건 생성`,
+        description: `${selectedStudents.size}명 × ${totalDays}일 기간 (인증 ${requiredSubmissions}회)`,
       });
 
       setHomeworkContent('');
@@ -374,16 +380,25 @@ export default function DailyHomeworkManager() {
               </div>
             </div>
 
-            {/* Date range display */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-muted-foreground">배정일 ({assignDates.length}일):</span>
-              {assignDates.map((date, i) => (
-                <Badge key={i} variant="outline" className="text-xs">
-                  {DAY_LABELS[date.getDay() === 0 ? 6 : date.getDay() - 1]} {format(date, 'M/d')}
-                </Badge>
-              ))}
-              {assignDates.length === 0 && (
-                <span className="text-xs text-destructive">선택된 기간에 평일이 없습니다</span>
+            {/* Date range & submissions display */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <Badge variant="outline" className="text-xs">
+                {startDate} ~ {endDate} ({totalDays}일)
+              </Badge>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium whitespace-nowrap">인증 횟수</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={totalDays || 1}
+                  value={requiredSubmissions}
+                  onChange={(e) => setRequiredSubmissions(Math.max(1, Math.min(totalDays || 1, parseInt(e.target.value) || 1)))}
+                  className="w-20 h-8"
+                />
+                <span className="text-xs text-muted-foreground">회</span>
+              </div>
+              {totalDays === 0 && (
+                <span className="text-xs text-destructive">올바른 기간을 선택해주세요</span>
               )}
             </div>
 
@@ -492,7 +507,7 @@ export default function DailyHomeworkManager() {
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={isSubmitting || selectedStudents.size === 0 || !homeworkContent.trim() || assignDates.length === 0}
+              disabled={isSubmitting || selectedStudents.size === 0 || !homeworkContent.trim() || totalDays === 0}
             >
               {isSubmitting ? (
                 <>
@@ -502,7 +517,7 @@ export default function DailyHomeworkManager() {
               ) : (
                 <>
                   <CalendarPlus className="w-4 h-4 mr-2" />
-                  {selectedStudents.size}명에게 데일리숙제 등록 ({assignDates.length}일)
+                  {selectedStudents.size}명에게 데일리숙제 등록 ({totalDays}일, 인증 {requiredSubmissions}회)
                 </>
               )}
             </Button>
