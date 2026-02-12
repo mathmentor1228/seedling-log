@@ -48,6 +48,7 @@ interface HomeworkItem {
   homework_type?: string;
   deadline_at?: string | null;
   is_deadline_passed?: boolean;
+  is_no_homework?: boolean;
   submission_audio_url?: string | null;
 }
 
@@ -637,7 +638,14 @@ export default function StudentHomework() {
     );
   }
 
-  const pendingHomework = homework.filter(hw => hw.check_status === 'unchecked' && !hw.is_expired && !hw.is_submission_closed && !hw.is_deadline_passed);
+  const pendingHomework = homework.filter(hw => 
+    hw.check_status === 'unchecked' && 
+    !hw.is_expired && 
+    !hw.is_submission_closed && 
+    !hw.is_deadline_passed &&
+    !hw.is_no_homework &&
+    hw.content?.trim() !== '없음'
+  );
   const completedHomework = homework.filter(hw => hw.check_status === 'checked');
 
   // Group homework by date, then sort subjects within each date
