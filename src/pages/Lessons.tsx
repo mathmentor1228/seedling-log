@@ -31,6 +31,7 @@ import { getTodayKST } from '@/lib/utils';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
+import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 
 interface Teacher {
   id: string;
@@ -909,6 +910,9 @@ export default function Lessons() {
           </CardContent>
         </Card>
       )}
+
+      {/* Daily Homework Checklist */}
+      {(isAdmin || isTeacher) && <DailyHomeworkChecklist />}
 
       {/* Filters */}
       <Card>
