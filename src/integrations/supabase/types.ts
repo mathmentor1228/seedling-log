@@ -533,11 +533,13 @@ export type Database = {
           checked_by: string | null
           content: string
           created_at: string | null
+          end_date: string | null
           homework_type: string
           id: string
           lesson_record_id: string | null
           notes: string | null
           points_earned: number | null
+          required_submissions: number
           result: string | null
           student_id: string
           subject: Database["public"]["Enums"]["subject_type"]
@@ -553,11 +555,13 @@ export type Database = {
           checked_by?: string | null
           content: string
           created_at?: string | null
+          end_date?: string | null
           homework_type?: string
           id?: string
           lesson_record_id?: string | null
           notes?: string | null
           points_earned?: number | null
+          required_submissions?: number
           result?: string | null
           student_id: string
           subject: Database["public"]["Enums"]["subject_type"]
@@ -573,11 +577,13 @@ export type Database = {
           checked_by?: string | null
           content?: string
           created_at?: string | null
+          end_date?: string | null
           homework_type?: string
           id?: string
           lesson_record_id?: string | null
           notes?: string | null
           points_earned?: number | null
+          required_submissions?: number
           result?: string | null
           student_id?: string
           subject?: Database["public"]["Enums"]["subject_type"]
