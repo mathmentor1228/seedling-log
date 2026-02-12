@@ -46,6 +46,15 @@ interface Student {
 const TEST_DAY_OPTIONS = [
   { value: 'mon_wed', label: '월/수' },
   { value: 'tue_thu', label: '화/목' },
+  { value: 'mon_wed_fri', label: '월/수/금' },
+  { value: 'tue_thu_fri', label: '화/목/금' },
+  { value: 'mon_tue_wed_thu', label: '월/화/수/목' },
+  { value: 'mon_tue_wed_thu_fri', label: '월~금' },
+  { value: 'mon', label: '월' },
+  { value: 'tue', label: '화' },
+  { value: 'wed', label: '수' },
+  { value: 'thu', label: '목' },
+  { value: 'fri', label: '금' },
 ];
 
 export function VocabSettingsPanel() {
