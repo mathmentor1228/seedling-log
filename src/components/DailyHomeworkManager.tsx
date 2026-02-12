@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CalendarPlus, Loader2, Users, BookOpen, ChevronDown } from 'lucide-react';
-import { format, startOfWeek, addDays } from 'date-fns';
+import { format, startOfWeek, addDays, eachDayOfInterval, isWeekend, differenceInCalendarDays } from 'date-fns';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'] as const;
@@ -46,10 +46,14 @@ export default function DailyHomeworkManager() {
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
-  const [weekStartDate, setWeekStartDate] = useState(() => {
+  const [startDate, setStartDate] = useState(() => {
     const now = new Date();
-    const mon = startOfWeek(now, { weekStartsOn: 1 });
-    return format(mon, 'yyyy-MM-dd');
+    return format(now, 'yyyy-MM-dd');
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    const fri = addDays(startOfWeek(now, { weekStartsOn: 1 }), 4);
+    return format(fri, 'yyyy-MM-dd');
   });
   const [subject, setSubject] = useState<string>('수학');
   const [teacherGroups, setTeacherGroups] = useState<TeacherGroup[]>([]);
@@ -237,10 +241,13 @@ export default function DailyHomeworkManager() {
     });
   }
 
-  const weekDates = Array.from({ length: 5 }, (_, i) => {
-    const mon = new Date(weekStartDate + 'T00:00:00');
-    return addDays(mon, i);
-  });
+  // Generate weekday dates in the selected range
+  const assignDates = (() => {
+    const s = new Date(startDate + 'T00:00:00');
+    const e = new Date(endDate + 'T00:00:00');
+    if (s > e) return [];
+    return eachDayOfInterval({ start: s, end: e }).filter(d => !isWeekend(d));
+  })();
 
   const totalStudents = teacherGroups.reduce((sum, g) => sum + g.students.length, 0);
 
@@ -260,12 +267,12 @@ export default function DailyHomeworkManager() {
       const inserts: any[] = [];
 
       for (const studentId of selectedStudents) {
-        for (let day = 0; day < 5; day++) {
+        for (const date of assignDates) {
           inserts.push({
             student_id: studentId,
             subject: subject,
             content: homeworkContent.trim(),
-            assigned_date: format(weekDates[day], 'yyyy-MM-dd'),
+            assigned_date: format(date, 'yyyy-MM-dd'),
             homework_type: 'daily',
             check_status: 'unchecked',
           });
@@ -280,7 +287,7 @@ export default function DailyHomeworkManager() {
 
       toast({
         title: '데일리숙제 등록 완료',
-        description: `${selectedStudents.size}명 × 5일 = ${inserts.length}건 생성`,
+        description: `${selectedStudents.size}명 × ${assignDates.length}일 = ${inserts.length}건 생성`,
       });
 
       setHomeworkContent('');
@@ -315,14 +322,27 @@ export default function DailyHomeworkManager() {
           </DialogHeader>
 
           <div className="space-y-5">
-            {/* Week & Subject Selection */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Date Range & Subject Selection */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-sm font-medium mb-1 block">주간 시작 (월요일)</label>
+                <label className="text-sm font-medium mb-1 block">시작일</label>
                 <Input
                   type="date"
-                  value={weekStartDate}
-                  onChange={(e) => setWeekStartDate(e.target.value)}
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    // Auto-adjust end date if it's before start
+                    if (e.target.value > endDate) setEndDate(e.target.value);
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">종료일</label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  min={startDate}
+                  onChange={(e) => setEndDate(e.target.value)}
                 />
               </div>
               <div>
@@ -340,14 +360,17 @@ export default function DailyHomeworkManager() {
               </div>
             </div>
 
-            {/* Week display */}
+            {/* Date range display */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-muted-foreground">배정 기간:</span>
-              {weekDates.map((date, i) => (
+              <span className="text-sm text-muted-foreground">배정일 ({assignDates.length}일):</span>
+              {assignDates.map((date, i) => (
                 <Badge key={i} variant="outline" className="text-xs">
-                  {DAY_LABELS[i]} {format(date, 'M/d')}
+                  {DAY_LABELS[date.getDay() === 0 ? 6 : date.getDay() - 1]} {format(date, 'M/d')}
                 </Badge>
               ))}
+              {assignDates.length === 0 && (
+                <span className="text-xs text-destructive">선택된 기간에 평일이 없습니다</span>
+              )}
             </div>
 
             {/* Homework Content */}
@@ -455,7 +478,7 @@ export default function DailyHomeworkManager() {
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={isSubmitting || selectedStudents.size === 0 || !homeworkContent.trim()}
+              disabled={isSubmitting || selectedStudents.size === 0 || !homeworkContent.trim() || assignDates.length === 0}
             >
               {isSubmitting ? (
                 <>
@@ -465,7 +488,7 @@ export default function DailyHomeworkManager() {
               ) : (
                 <>
                   <CalendarPlus className="w-4 h-4 mr-2" />
-                  {selectedStudents.size}명에게 데일리숙제 등록 (월~금)
+                  {selectedStudents.size}명에게 데일리숙제 등록 ({assignDates.length}일)
                 </>
               )}
             </Button>
