@@ -8,20 +8,23 @@ const corsHeaders = {
 
 // DEADLINE-V1: Calculate the next class datetime for a given subject and student's schedule
 // Returns the next occurrence of the class (KST), or null if no schedule found
+// If skipToday is true, skip classes on the same day (used for homework assigned today)
 function getNextClassDatetimeKST(
   schedules: Array<{ day_of_week: number; start_time: string; subject: string }>,
   subject: string,
-  nowKST: Date
+  nowKST: Date,
+  skipToday = false
 ): Date | null {
   const subjectSchedules = schedules.filter(s => s.subject === subject);
   if (subjectSchedules.length === 0) return null;
 
   const currentDow = nowKST.getDay(); // 0=Sun
   let closest: Date | null = null;
+  const startOffset = skipToday ? 1 : 0;
 
   for (const sched of subjectSchedules) {
     // Check next 7 days to find the closest upcoming class
-    for (let offset = 0; offset <= 7; offset++) {
+    for (let offset = startOffset; offset <= 7; offset++) {
       const targetDow = (currentDow + offset) % 7;
       if (targetDow !== sched.day_of_week) continue;
 
@@ -296,7 +299,10 @@ Deno.serve(async (req) => {
           let is_deadline_passed = false;
 
           if (hw.check_status === 'unchecked' && !isSubmissionClosed) {
-            const nextClass = getNextClassDatetimeKST(classSchedules, hw.subject, nowKST);
+            // If homework was assigned today, skip today's classes for deadline calc
+            const todayDateStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth() + 1).padStart(2, '0')}-${String(nowKST.getDate()).padStart(2, '0')}`;
+            const assignedToday = hw.assigned_date === todayDateStr;
+            const nextClass = getNextClassDatetimeKST(classSchedules, hw.subject, nowKST, assignedToday);
             if (nextClass) {
               const deadline = getDeadlineFromClassTime(nextClass);
               deadline_at = deadline.toISOString();
@@ -352,7 +358,7 @@ Deno.serve(async (req) => {
         // DEADLINE-V1: Server-side deadline validation
         const { data: hwData } = await supabase
           .from('homework_assignments')
-          .select('subject, check_status')
+          .select('subject, check_status, assigned_date')
           .eq('id', homework_id)
           .eq('student_id', student_id)
           .single();
@@ -367,7 +373,9 @@ Deno.serve(async (req) => {
         if (hwData.check_status === 'unchecked') {
           const classSchedules = await getStudentClassSchedules();
           const nowKST = getNowKST();
-          const nextClass = getNextClassDatetimeKST(classSchedules, hwData.subject, nowKST);
+          const todayDateStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth() + 1).padStart(2, '0')}-${String(nowKST.getDate()).padStart(2, '0')}`;
+          const assignedToday = hwData.assigned_date === todayDateStr;
+          const nextClass = getNextClassDatetimeKST(classSchedules, hwData.subject, nowKST, assignedToday);
 
           if (nextClass) {
             const deadline = getDeadlineFromClassTime(nextClass);
