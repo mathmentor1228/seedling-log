@@ -546,12 +546,12 @@ export default function StudentHomework() {
 
         {/* Submission Dialog */}
         <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>숙제 제출</DialogTitle>
             </DialogHeader>
             
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 pr-1">
               {/* Multi-image upload */}
               <HomeworkImageUploader
                 images={uploadImages}
