@@ -117,11 +117,26 @@ export default function StudentHomework() {
     }
   }, [student?.id]);
 
+  // Auto-refetch when page becomes visible (e.g. teacher deleted homework while student was away)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && student?.id) {
+        fetchHomework();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [student?.id]);
+
   useEffect(() => {
     if (homeworkId && homework.length > 0) {
       const hw = homework.find(h => h.id === homeworkId);
       if (hw) {
         setSelectedHomework(hw);
+      } else {
+        // Homework was deleted — clear selection and go back to list
+        setSelectedHomework(null);
+        navigate('/student/homework', { replace: true });
       }
     }
   }, [homeworkId, homework]);
