@@ -290,12 +290,24 @@ export default function DailyHomeworkChecklist() {
     setIsDeleting(true);
     try {
       const ids = [...selectedIds];
+      let totalDeleted = 0;
       for (let i = 0; i < ids.length; i += 50) {
         const batch = ids.slice(i, i + 50);
-        const { error } = await supabase.from('homework_assignments').delete().in('id', batch);
+        const { data, error } = await supabase
+          .from('homework_assignments')
+          .delete()
+          .in('id', batch)
+          .select('id');
         if (error) throw error;
+        totalDeleted += (data?.length || 0);
       }
-      toast({ title: '삭제 완료', description: `${selectedIds.size}건 삭제됨` });
+      if (totalDeleted === 0) {
+        toast({ title: '삭제 실패', description: '권한이 없어 삭제되지 않았습니다. 관리자에게 문의하세요.', variant: 'destructive' });
+      } else if (totalDeleted < ids.length) {
+        toast({ title: '일부 삭제됨', description: `${ids.length}건 중 ${totalDeleted}건만 삭제됨 (권한 부족)`, variant: 'destructive' });
+      } else {
+        toast({ title: '삭제 완료', description: `${totalDeleted}건 삭제됨` });
+      }
       setSelectedIds(new Set());
       setDeleteDialogOpen(false);
       fetchData();
