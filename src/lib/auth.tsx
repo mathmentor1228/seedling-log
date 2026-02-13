@@ -9,6 +9,9 @@ interface AuthContextType {
   session: Session | null;
   role: AppRole | null;
   loading: boolean;
+  isTrial: boolean;
+  trialExpiresAt: string | null;
+  isTrialExpired: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -21,30 +24,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trialExpiresAt, setTrialExpiresAt] = useState<string | null>(null);
 
   const fetchUserRole = async (userId: string) => {
     const { data, error } = await supabase
       .from('user_roles')
-      .select('role')
+      .select('role, trial_expires_at')
       .eq('user_id', userId);
 
     if (error) {
       console.error('Error fetching user role:', error);
-      return null;
+      return { role: null, trialExpiresAt: null };
     }
 
     if (!data || data.length === 0) {
-      return null;
+      return { role: null, trialExpiresAt: null };
     }
 
     // If user has multiple roles, return the highest priority one
     // Priority: admin > teacher > assistant
     const roles = data.map(r => r.role as AppRole);
-    if (roles.includes('admin')) return 'admin';
-    if (roles.includes('teacher')) return 'teacher';
-    if (roles.includes('assistant')) return 'assistant';
+    let selectedRole: AppRole | null = null;
+    if (roles.includes('admin')) selectedRole = 'admin';
+    else if (roles.includes('teacher')) selectedRole = 'teacher';
+    else if (roles.includes('assistant')) selectedRole = 'assistant';
+
+    // Get trial expiry from the matching role record
+    const matchingRecord = data.find(r => r.role === selectedRole);
+    const expires = matchingRecord?.trial_expires_at || null;
     
-    return null;
+    return { role: selectedRole, trialExpiresAt: expires };
   };
 
   useEffect(() => {
@@ -55,10 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session?.user) {
           setTimeout(() => {
-            fetchUserRole(session.user.id).then(setRole);
+            fetchUserRole(session.user.id).then(result => {
+              setRole(result.role);
+              setTrialExpiresAt(result.trialExpiresAt);
+            });
           }, 0);
         } else {
           setRole(null);
+          setTrialExpiresAt(null);
         }
       }
     );
@@ -68,8 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        fetchUserRole(session.user.id).then((r) => {
-          setRole(r);
+        fetchUserRole(session.user.id).then((result) => {
+          setRole(result.role);
+          setTrialExpiresAt(result.trialExpiresAt);
           setLoading(false);
         });
       } else {
@@ -103,10 +117,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setRole(null);
+    setTrialExpiresAt(null);
   };
 
+  const isTrial = !!trialExpiresAt;
+  const isTrialExpired = isTrial && new Date(trialExpiresAt) < new Date();
+
   return (
-    <AuthContext.Provider value={{ user, session, role, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, role, loading, isTrial, trialExpiresAt, isTrialExpired, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
