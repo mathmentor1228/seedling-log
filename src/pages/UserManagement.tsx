@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, UserCog, Shield, GraduationCap, Users } from 'lucide-react';
+import { Loader2, UserCog, Shield, GraduationCap, Users, Clock, Trash2 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
@@ -31,6 +31,7 @@ interface UserWithRole {
   email: string;
   created_at: string;
   roles: AppRole[];
+  trial_expires_at?: string | null;
 }
 
 export default function UserManagement() {
@@ -54,18 +55,19 @@ export default function UserManagement() {
       // Fetch all user roles
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id, role');
+        .select('user_id, role, trial_expires_at');
 
       if (rolesError) throw rolesError;
 
       // Merge profiles with roles
       const usersWithRoles: UserWithRole[] = (profiles || []).map((profile) => {
-        const roles = (userRoles || [])
-          .filter((ur) => ur.user_id === profile.id)
-          .map((ur) => ur.role);
+        const userRoleEntries = (userRoles || []).filter((ur) => ur.user_id === profile.id);
+        const roles = userRoleEntries.map((ur) => ur.role);
+        const trialEntry = userRoleEntries.find((ur) => ur.trial_expires_at);
         return {
           ...profile,
           roles,
+          trial_expires_at: trialEntry?.trial_expires_at || null,
         };
       });
 
@@ -324,6 +326,122 @@ export default function UserManagement() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Trial Users Section */}
+      <TrialUsersCard users={users} formatDate={formatDate} onRefresh={fetchUsers} />
     </div>
+  );
+}
+
+function TrialUsersCard({ 
+  users, 
+  formatDate, 
+  onRefresh 
+}: { 
+  users: UserWithRole[]; 
+  formatDate: (d: string) => string;
+  onRefresh: () => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [deleting, setDeleting] = useState<string | null>(null);
+  
+  const trialUsers = users.filter((u) => u.trial_expires_at);
+
+  const isExpired = (expiresAt: string) => new Date(expiresAt) < new Date();
+  
+  const getDaysLeft = (expiresAt: string) => {
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  };
+
+  const handleDeleteTrialUser = async (userId: string) => {
+    if (!confirm('이 체험판 사용자의 권한을 삭제하시겠습니까?')) return;
+    setDeleting(userId);
+    try {
+      const { error } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId);
+      if (error) throw error;
+      toast({ title: '완료', description: '체험판 사용자 권한이 삭제되었습니다.' });
+      await onRefresh();
+    } catch (error) {
+      console.error('Error deleting trial user:', error);
+      toast({ title: '오류', description: '삭제에 실패했습니다.', variant: 'destructive' });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="w-5 h-5" />
+          체험판 사용자 ({trialUsers.length}명)
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {trialUsers.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">
+            체험판 사용자가 없습니다.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>이름</TableHead>
+                <TableHead>이메일</TableHead>
+                <TableHead>가입일</TableHead>
+                <TableHead>만료일</TableHead>
+                <TableHead>상태</TableHead>
+                <TableHead className="w-[80px]">관리</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {trialUsers.map((user) => {
+                const expired = isExpired(user.trial_expires_at!);
+                const daysLeft = getDaysLeft(user.trial_expires_at!);
+                return (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.full_name}</TableCell>
+                    <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(user.created_at)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(user.trial_expires_at!)}
+                    </TableCell>
+                    <TableCell>
+                      {expired ? (
+                        <Badge variant="destructive">만료됨</Badge>
+                      ) : (
+                        <Badge variant="secondary">
+                          D-{daysLeft}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteTrialUser(user.id)}
+                        disabled={deleting === user.id}
+                      >
+                        {deleting === user.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        )}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
