@@ -107,6 +107,17 @@ export default function StudentDashboard() {
     }
   }, [student?.id]);
 
+  // Auto-refetch when page becomes visible (sync deleted homework, etc.)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && student?.id) {
+        fetchDashboardData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [student?.id]);
+
   async function fetchDashboardData() {
     if (!student?.id) return;
     
