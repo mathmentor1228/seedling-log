@@ -1917,9 +1917,23 @@ export function LessonRecordForm({
 
       {/* New homework section */}
       <div className="p-4 rounded-lg border-2 border-green-500/30 bg-green-500/5 space-y-3">
-        <div className="flex items-center gap-2">
-          <Plus className="w-5 h-5 text-green-600" />
-          <Label className="text-base font-semibold text-green-700">오늘 숙제</Label>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Plus className="w-5 h-5 text-green-600" />
+            <Label className="text-base font-semibold text-green-700">오늘 숙제</Label>
+          </div>
+          {newHomeworkContent.trim() && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setNewHomeworkContent('')}
+              className="text-xs text-muted-foreground hover:text-destructive gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              숙제 취소
+            </Button>
+          )}
         </div>
         <Textarea
           placeholder="오늘 배정할 숙제 내용"
