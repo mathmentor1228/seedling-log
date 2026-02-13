@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth, isAssistant as checkIsAssistant, isTeacher as checkIsTeacher, isAdmin as checkIsAdmin } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
+import { getTodayKST } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -163,7 +164,7 @@ export function RosterActionModal({
     test_result_text: '',
     test_result: 'none' as 'pass' | 'fail' | 'none',
     test_notes: '',
-    test_date: '',
+    test_date: getTodayKST(),
     test_time: '',
     test_assistant: '',
   });
@@ -196,7 +197,7 @@ export function RosterActionModal({
         test_result_text: '',
         test_result: 'none',
         test_notes: '',
-        test_date: '',
+        test_date: getTodayKST(),
         test_time: '',
         test_assistant: '',
       });
