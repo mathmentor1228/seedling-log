@@ -96,6 +96,7 @@ export default function ReportStatusPage() {
         `)
         .gte('week_start', weekStart)
         .lte('week_end', weekEnd)
+        .eq('parent_visible', true)
         .order('generated_at', { ascending: false });
 
       if (error) throw error;
