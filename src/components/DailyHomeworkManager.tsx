@@ -296,6 +296,7 @@ export default function DailyHomeworkManager() {
           required_submissions: requiredSubmissions,
           homework_type: 'daily',
           check_status: 'unchecked',
+          created_by: user?.id || null,
         });
       }
 

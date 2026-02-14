@@ -108,6 +108,7 @@ export default function DailyHomeworkChecklist() {
         .select(`
           id, student_id, subject, content, assigned_date, end_date, required_submissions,
           check_status, result, checked_at, submitted_at, submission_image_url,
+          created_by,
           students:student_id (name, grade)
         `)
         .eq('homework_type', 'daily')
@@ -146,10 +147,16 @@ export default function DailyHomeworkChecklist() {
       });
       setSubmissionMap(subMap);
 
-      // Fetch student-teacher mappings
+      // Use created_by from homework_assignments for teacher attribution
+      const creatorIds = new Set<string>();
+      (hwData || []).forEach((h: any) => {
+        if (h.created_by) creatorIds.add(h.created_by);
+      });
+
+      // Fallback: also fetch student_subject_teachers for items without created_by
       const studentIds = [...new Set((hwData || []).map((h: any) => h.student_id))];
       const stMap: Record<string, string> = {};
-      const teacherIds = new Set<string>();
+      const teacherIds = new Set<string>([...creatorIds]);
 
       if (studentIds.length > 0) {
         const subjects = filterSubject !== 'all'
@@ -188,7 +195,8 @@ export default function DailyHomeworkChecklist() {
       setTeachers([...teacherIds].map(id => ({ id, name: tMap[id] || '알 수 없음' })).sort((a, b) => a.name.localeCompare(b.name)));
 
       const formatted: DailyHomeworkItem[] = (hwData || []).map((h: any) => {
-        const teacherId = stMap[h.student_id] || 'unassigned';
+        // Prioritize created_by over student_subject_teachers mapping
+        const teacherId = h.created_by || stMap[h.student_id] || 'unassigned';
         return {
           id: h.id,
           student_id: h.student_id,
