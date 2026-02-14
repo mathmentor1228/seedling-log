@@ -26,10 +26,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users } from 'lucide-react';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
+import SubmissionImageCarousel from '@/components/lessons/SubmissionImageCarousel';
 import { isAdmin as checkIsAdmin, isTeacher as checkIsTeacher } from '@/lib/auth';
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'] as const;
@@ -90,6 +97,7 @@ export default function DailyHomeworkChecklist() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [viewMode, setViewMode] = useState<'teacher' | 'calendar' | 'grade'>('teacher');
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
+  const [imageViewItem, setImageViewItem] = useState<DailyHomeworkItem | null>(null);
 
   const isAdmin = checkIsAdmin(role);
   const isTeacher = checkIsTeacher(role);
@@ -345,10 +353,14 @@ export default function DailyHomeworkChecklist() {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {totalImages > 0 && (
-          <span className="flex items-center gap-0.5 text-blue-600">
+          <button
+            type="button"
+            className="flex items-center gap-0.5 text-blue-600 hover:underline cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); setImageViewItem(item); }}
+          >
             <Image className="w-3 h-3" />
             {totalImages}장
-          </span>
+          </button>
         )}
         {item.required_submissions > 1 && (
           <span className={`${item.submission_count >= item.required_submissions ? 'text-green-600' : 'text-amber-600'}`}>
@@ -643,6 +655,58 @@ export default function DailyHomeworkChecklist() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Image View Dialog */}
+      <Dialog open={!!imageViewItem} onOpenChange={(open) => { if (!open) setImageViewItem(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {imageViewItem?.student_name} - {imageViewItem?.subject} 제출 사진
+            </DialogTitle>
+          </DialogHeader>
+          {imageViewItem && (
+            <ImageViewContent item={imageViewItem} submissionMap={submissionMap} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+/** Sub-component to collect and display all images for a homework item */
+function ImageViewContent({ item, submissionMap }: { item: DailyHomeworkItem; submissionMap: Record<string, SubmissionInfo[]> }) {
+  const subs = submissionMap[item.id] || [];
+  const allImages: string[] = [];
+
+  // Collect images from homework_submissions
+  subs.forEach(s => {
+    if (s.image_url) {
+      // image_url may contain multiple URLs separated by commas
+      s.image_url.split(',').forEach(url => {
+        const trimmed = url.trim();
+        if (trimmed) allImages.push(trimmed);
+      });
+    }
+  });
+
+  // Also check inline submission_image_url from homework_assignments
+  if (item.submission_image_url) {
+    item.submission_image_url.split(',').forEach(url => {
+      const trimmed = url.trim();
+      if (trimmed && !allImages.includes(trimmed)) allImages.push(trimmed);
+    });
+  }
+
+  if (allImages.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-4">표시할 사진이 없습니다.</p>;
+  }
+
+  const latestSub = subs.length > 0 ? subs[subs.length - 1] : null;
+
+  return (
+    <SubmissionImageCarousel
+      images={allImages}
+      submittedAt={item.submitted_at || latestSub?.submitted_at}
+    />
   );
 }
