@@ -427,6 +427,7 @@ Deno.serve(async (req) => {
                 generated_at: new Date().toISOString(),
                 debug_info: debugInfoStr,
                 report_quality_tag: qualityTag,
+                parent_visible: false,
               },
               {
                 onConflict: 'student_id,week_start',
@@ -492,6 +493,7 @@ Deno.serve(async (req) => {
                   generated_at: new Date().toISOString(),
                   debug_info: errorDebugStr,
                   report_quality_tag: 'RED',
+                  parent_visible: false,
                 },
                 { onConflict: 'student_id,week_start' }
               );
