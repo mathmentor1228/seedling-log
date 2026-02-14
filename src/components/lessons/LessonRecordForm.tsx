@@ -1023,6 +1023,7 @@ export function LessonRecordForm({
             lesson_record_id: finalDraftId,
             assigned_date: formData.lesson_date,
             content: newHomeworkContent.trim(),
+            created_by: user?.id || null,
           });
         }
       }
@@ -1091,6 +1092,7 @@ export function LessonRecordForm({
             lesson_record_id: finalRecordId,
             assigned_date: formData.lesson_date,
             content: newHomeworkContent.trim(),
+            created_by: user?.id || null,
           });
         }
       }

@@ -533,6 +533,7 @@ export type Database = {
           checked_by: string | null
           content: string
           created_at: string | null
+          created_by: string | null
           end_date: string | null
           homework_type: string
           id: string
@@ -555,6 +556,7 @@ export type Database = {
           checked_by?: string | null
           content: string
           created_at?: string | null
+          created_by?: string | null
           end_date?: string | null
           homework_type?: string
           id?: string
@@ -577,6 +579,7 @@ export type Database = {
           checked_by?: string | null
           content?: string
           created_at?: string | null
+          created_by?: string | null
           end_date?: string | null
           homework_type?: string
           id?: string
