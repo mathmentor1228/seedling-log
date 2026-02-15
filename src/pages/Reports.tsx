@@ -46,7 +46,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { format, startOfWeek, endOfWeek, subWeeks, addWeeks } from 'date-fns';
+import { format, startOfWeek, subWeeks, addWeeks, addDays } from 'date-fns';
 import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -97,6 +97,7 @@ interface StudentForGeneration {
   id: string;
   name: string;
   grade: string | null;
+  alreadyGenerated?: boolean;
 }
 
 // REPORT-ERROR-PANEL-V1: Error structure from edge function
@@ -153,17 +154,40 @@ export default function Reports() {
   // Custom week range state
   const [weekStart, setWeekStart] = useState<string>(() => {
     const lastWeek = subWeeks(new Date(), 1);
-    return format(startOfWeek(lastWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
+    return format(mon, 'yyyy-MM-dd');
   });
   const [weekEnd, setWeekEnd] = useState<string>(() => {
     const lastWeek = subWeeks(new Date(), 1);
-    return format(endOfWeek(lastWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
+    return format(addDays(mon, 5), 'yyyy-MM-dd'); // Saturday
   });
+
+  // Track which students already have reports for the selected week
+  const [existingReportStudentIds, setExistingReportStudentIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchReports();
     fetchAllStudents();
   }, []);
+
+  // Fetch existing reports when week changes to block duplicates
+  useEffect(() => {
+    fetchExistingReportsForWeek();
+  }, [weekStart]);
+
+  async function fetchExistingReportsForWeek() {
+    try {
+      const { data, error } = await supabase
+        .from('weekly_reports')
+        .select('student_id')
+        .eq('week_start', weekStart);
+      if (error) throw error;
+      setExistingReportStudentIds(new Set((data || []).map(r => r.student_id)));
+    } catch (err) {
+      console.error('Error fetching existing reports for week:', err);
+    }
+  }
 
   async function fetchAllStudents() {
     try {
@@ -190,8 +214,9 @@ export default function Reports() {
     const fn = direction === -1 ? subWeeks : addWeeks;
     const baseDate = new Date(weekStart);
     const newBase = fn(baseDate, 1);
-    setWeekStart(format(startOfWeek(newBase, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
-    setWeekEnd(format(endOfWeek(newBase, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+    const mon = startOfWeek(newBase, { weekStartsOn: 1 });
+    setWeekStart(format(mon, 'yyyy-MM-dd'));
+    setWeekEnd(format(addDays(mon, 5), 'yyyy-MM-dd')); // Saturday
   }
 
   // Filter students by search
@@ -202,6 +227,7 @@ export default function Reports() {
   }, [allStudents, studentSearchQuery]);
 
   function toggleStudentSelection(studentId: string) {
+    if (existingReportStudentIds.has(studentId)) return; // Block already-generated
     setSelectedStudentIds(prev => {
       const next = new Set(prev);
       if (next.has(studentId)) {
@@ -216,7 +242,9 @@ export default function Reports() {
   function selectAllFilteredStudents() {
     setSelectedStudentIds(prev => {
       const next = new Set(prev);
-      filteredStudents.forEach(s => next.add(s.id));
+      filteredStudents
+        .filter(s => !existingReportStudentIds.has(s.id))
+        .forEach(s => next.add(s.id));
       return next;
     });
   }
@@ -299,6 +327,7 @@ export default function Reports() {
       }
 
       await fetchReports();
+      await fetchExistingReportsForWeek(); // Refresh blocked students
       if (scope === 'selected') clearSelectedStudents();
     } catch (error: any) {
       console.error('Error generating reports:', error);
@@ -729,25 +758,37 @@ export default function Reports() {
 
           <ScrollArea className="h-48 border rounded-md">
             <div className="p-2 space-y-1">
-              {filteredStudents.map((student) => (
-                <div
-                  key={student.id}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors",
-                    selectedStudentIds.has(student.id) && "bg-primary/10 hover:bg-primary/20"
-                  )}
-                  onClick={() => toggleStudentSelection(student.id)}
-                >
-                  <Checkbox
-                    checked={selectedStudentIds.has(student.id)}
-                    onCheckedChange={() => toggleStudentSelection(student.id)}
-                  />
-                  <span className="font-medium">{student.name}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {student.grade || '학년 미지정'}
-                  </span>
-                </div>
-              ))}
+              {filteredStudents.map((student) => {
+                const alreadyGenerated = existingReportStudentIds.has(student.id);
+                return (
+                  <div
+                    key={student.id}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                      alreadyGenerated
+                        ? "opacity-50 cursor-not-allowed"
+                        : "cursor-pointer hover:bg-muted/50",
+                      !alreadyGenerated && selectedStudentIds.has(student.id) && "bg-primary/10 hover:bg-primary/20"
+                    )}
+                    onClick={() => toggleStudentSelection(student.id)}
+                  >
+                    <Checkbox
+                      checked={selectedStudentIds.has(student.id)}
+                      onCheckedChange={() => toggleStudentSelection(student.id)}
+                      disabled={alreadyGenerated}
+                    />
+                    <span className="font-medium">{student.name}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {student.grade || '학년 미지정'}
+                    </span>
+                    {alreadyGenerated && (
+                      <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                        생성됨
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
               {filteredStudents.length === 0 && (
                 <div className="text-center py-4 text-muted-foreground text-sm">
                   검색 결과가 없습니다
