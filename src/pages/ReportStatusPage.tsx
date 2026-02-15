@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Search, Loader2, ChevronLeft, ChevronRight, FileBarChart,
 } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, subWeeks, addWeeks } from 'date-fns';
+import { format, startOfWeek, subWeeks, addWeeks, addDays } from 'date-fns';
 
 interface ReportRow {
   id: string;
@@ -68,18 +68,21 @@ export default function ReportStatusPage() {
 
   const [weekStart, setWeekStart] = useState(() => {
     const lastWeek = subWeeks(new Date(), 1);
-    return format(startOfWeek(lastWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
+    return format(mon, 'yyyy-MM-dd');
   });
   const [weekEnd, setWeekEnd] = useState(() => {
     const lastWeek = subWeeks(new Date(), 1);
-    return format(endOfWeek(lastWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
+    return format(addDays(mon, 5), 'yyyy-MM-dd'); // Saturday
   });
 
   function shiftWeek(dir: -1 | 1) {
     const fn = dir === -1 ? subWeeks : addWeeks;
     const base = fn(new Date(weekStart), 1);
-    setWeekStart(format(startOfWeek(base, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
-    setWeekEnd(format(endOfWeek(base, { weekStartsOn: 1 }), 'yyyy-MM-dd'));
+    const mon = startOfWeek(base, { weekStartsOn: 1 });
+    setWeekStart(format(mon, 'yyyy-MM-dd'));
+    setWeekEnd(format(addDays(mon, 5), 'yyyy-MM-dd')); // Saturday
   }
 
   useEffect(() => { fetchReports(); }, [weekStart, weekEnd]);
