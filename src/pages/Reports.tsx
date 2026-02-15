@@ -173,15 +173,18 @@ export default function Reports() {
 
   // Fetch existing reports when week changes to block duplicates
   useEffect(() => {
-    fetchExistingReportsForWeek();
-  }, [weekStart]);
+    if (weekStart) {
+      fetchExistingReportsForWeek();
+    }
+  }, [weekStart, weekEnd]);
 
   async function fetchExistingReportsForWeek() {
     try {
       const { data, error } = await supabase
         .from('weekly_reports')
         .select('student_id')
-        .eq('week_start', weekStart);
+        .eq('week_start', weekStart)
+        .eq('week_end', weekEnd);
       if (error) throw error;
       setExistingReportStudentIds(new Set((data || []).map(r => r.student_id)));
     } catch (err) {
@@ -710,14 +713,26 @@ export default function Reports() {
                 <Input
                   type="date"
                   value={weekStart}
-                  onChange={(e) => setWeekStart(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val) {
+                      setWeekStart(val);
+                      // Auto-adjust weekEnd to Saturday (start + 5 days)
+                      const newEnd = format(addDays(new Date(val), 5), 'yyyy-MM-dd');
+                      setWeekEnd(newEnd);
+                    }
+                  }}
                   className="h-8 w-[130px] text-xs"
                 />
                 <span className="text-muted-foreground text-sm">~</span>
                 <Input
                   type="date"
                   value={weekEnd}
-                  onChange={(e) => setWeekEnd(e.target.value)}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setWeekEnd(e.target.value);
+                    }
+                  }}
                   className="h-8 w-[130px] text-xs"
                 />
               </div>
