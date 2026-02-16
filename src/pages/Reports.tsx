@@ -41,7 +41,8 @@ import {
   AlertTriangle,
   MessageSquare,
   RefreshCw,
-  Users
+  Users,
+  Trash2
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -49,6 +50,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { format, startOfWeek, subWeeks, addWeeks, addDays } from 'date-fns';
 import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ReportPromptSettings } from '@/components/ReportPromptSettings';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Share link generation state
 interface ShareLinkState {
@@ -150,6 +162,13 @@ export default function Reports() {
 
   // Share link state
   const [shareLinkState, setShareLinkState] = useState<ShareLinkState>({ loading: false, reportId: null });
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Active main tab
+  const [mainTab, setMainTab] = useState<'generate' | 'prompt'>('generate');
 
   // Custom week range state
   const [weekStart, setWeekStart] = useState<string>(() => {
@@ -511,6 +530,26 @@ export default function Reports() {
     }
   }
 
+  async function handleDeleteReport(reportId: string) {
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('weekly_reports')
+        .delete()
+        .eq('id', reportId);
+      if (error) throw error;
+      toast({ title: '리포트가 삭제되었습니다.' });
+      setDeleteTarget(null);
+      await fetchReports();
+      await fetchExistingReportsForWeek();
+    } catch (error: any) {
+      console.error('Error deleting report:', error);
+      toast({ title: '삭제 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function handleSendReports() {
     if (!user) return;
     
@@ -697,6 +736,15 @@ export default function Reports() {
             학생별 주간 학습 요약 리포트
           </p>
         </div>
+      </div>
+
+      <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'generate' | 'prompt')}>
+        <TabsList>
+          <TabsTrigger value="generate">리포트 생성 / 관리</TabsTrigger>
+          <TabsTrigger value="prompt">프롬프트 설정</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="generate" className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Checkbox
@@ -720,7 +768,6 @@ export default function Reports() {
             선택 전송 (학생 {selectedStudentCount} / 학부모 {selectedParentCount})
           </Button>
         </div>
-      </div>
 
       {/* Per-Student Report Generation Section - REPORT-PER-STUDENT-V1 */}
       <Card className="border-primary/30">
@@ -1172,6 +1219,7 @@ export default function Reports() {
                      <TableHead>미리보기</TableHead>
                      <TableHead>공유 링크</TableHead>
                      <TableHead>학부모 공개</TableHead>
+                     <TableHead>삭제</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1335,6 +1383,19 @@ export default function Reports() {
                             }}
                           />
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget({ id: report.id, name: report.student_name || '알 수 없음' });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -1386,6 +1447,35 @@ export default function Reports() {
           </Card>
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="prompt">
+          <ReportPromptSettings />
+        </TabsContent>
+      </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>리포트 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteTarget?.name}</strong>의 리포트를 삭제하시겠습니까? 삭제 후 다시 생성할 수 있습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && handleDeleteReport(deleteTarget.id)}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Message Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>

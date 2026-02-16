@@ -8,7 +8,7 @@ import {
   BookOpen, 
   ClipboardList, 
   FileBarChart,
-  Send,
+  
   LogOut,
   Menu,
   X,
@@ -78,7 +78,6 @@ const navStructure: NavEntry[] = [
     label: '리포트',
     items: [
       { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
-      { label: '리포트 발송', href: '/reports/send', icon: <Send className="w-4 h-4" />, adminOnly: true },
       { label: '리포트 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
     ],
   },
