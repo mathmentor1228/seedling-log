@@ -163,6 +163,13 @@ export default function Reports() {
     return format(addDays(mon, 5), 'yyyy-MM-dd'); // Saturday
   });
 
+  // Report list week filter — defaults to same as generation week
+  const [reportWeekFilter, setReportWeekFilter] = useState<string>(() => {
+    const lastWeek = subWeeks(new Date(), 1);
+    const mon = startOfWeek(lastWeek, { weekStartsOn: 1 });
+    return format(mon, 'yyyy-MM-dd');
+  });
+
   // Track which students already have reports for the selected week
   const [existingReportStudentIds, setExistingReportStudentIds] = useState<Set<string>>(new Set());
 
@@ -608,29 +615,30 @@ export default function Reports() {
     }
   }
 
-  // Filter by search query and quality tag
+  // Filter by search query, quality tag, and week
   const filteredReports = reports.filter((report) => {
+    // Week filter
+    if (reportWeekFilter && report.week_start !== reportWeekFilter) return false;
+
     // Name filter
     const matchesName = report.student_name?.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesName) return false;
     
     // Quality tag filter
     if (qualityFilter === 'sendable') {
-      // GREEN + YELLOW only (sendable reports)
       return report.report_quality_tag === 'GREEN' || report.report_quality_tag === 'YELLOW' || !report.report_quality_tag;
     } else if (qualityFilter === 'RED') {
-      // RED only (needs follow-up)
       return report.report_quality_tag === 'RED';
     }
-    // 'all' - show everything
     return true;
   });
-  
-  // Count reports by quality tag
+
+  // Count reports by quality tag (within week filter)
+  const weekFilteredReports = reports.filter(r => !reportWeekFilter || r.week_start === reportWeekFilter);
   const qualityCounts = {
-    GREEN: reports.filter(r => r.report_quality_tag === 'GREEN').length,
-    YELLOW: reports.filter(r => r.report_quality_tag === 'YELLOW').length,
-    RED: reports.filter(r => r.report_quality_tag === 'RED').length,
+    GREEN: weekFilteredReports.filter(r => r.report_quality_tag === 'GREEN').length,
+    YELLOW: weekFilteredReports.filter(r => r.report_quality_tag === 'YELLOW').length,
+    RED: weekFilteredReports.filter(r => r.report_quality_tag === 'RED').length,
   };
 
   // Count selected targets - exclude RED reports
@@ -974,6 +982,44 @@ export default function Reports() {
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-4">
+            {/* Week filter navigation */}
+            <div className="flex items-center gap-3">
+              <Calendar className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium">주차 필터:</span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    const prev = format(subWeeks(new Date(reportWeekFilter), 1), 'yyyy-MM-dd');
+                    const mon = format(startOfWeek(new Date(prev), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+                    setReportWeekFilter(mon);
+                  }}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-sm font-mono min-w-[160px] text-center">
+                  {reportWeekFilter} ~ {format(addDays(new Date(reportWeekFilter), 5), 'yyyy-MM-dd')}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    const next = format(addWeeks(new Date(reportWeekFilter), 1), 'yyyy-MM-dd');
+                    const mon = format(startOfWeek(new Date(next), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+                    setReportWeekFilter(mon);
+                  }}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                ({weekFilteredReports.length}건)
+              </span>
+            </div>
+
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -983,10 +1029,6 @@ export default function Reports() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="w-4 h-4" />
-                <span>리포트 생성: 매주 금요일 22:00 KST</span>
               </div>
             </div>
             
