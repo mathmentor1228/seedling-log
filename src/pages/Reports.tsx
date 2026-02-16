@@ -185,15 +185,29 @@ export default function Reports() {
     }
   }, [weekStart, weekEnd]);
 
+  // Track which students have successful (non-RED) reports — RED reports can be retried
+  const [failedReportStudentIds, setFailedReportStudentIds] = useState<Set<string>>(new Set());
+
   async function fetchExistingReportsForWeek() {
     try {
-      // Unique constraint is (student_id, week_start) only — match on week_start alone
+      // Fetch all reports for this week with their quality tag
       const { data, error } = await supabase
         .from('weekly_reports')
-        .select('student_id')
+        .select('student_id, report_quality_tag')
         .eq('week_start', weekStart);
       if (error) throw error;
-      setExistingReportStudentIds(new Set((data || []).map(r => r.student_id)));
+
+      const successIds = new Set<string>();
+      const failedIds = new Set<string>();
+      (data || []).forEach(r => {
+        if (r.report_quality_tag === 'RED') {
+          failedIds.add(r.student_id);
+        } else {
+          successIds.add(r.student_id);
+        }
+      });
+      setExistingReportStudentIds(successIds);
+      setFailedReportStudentIds(failedIds);
     } catch (err) {
       console.error('Error fetching existing reports for week:', err);
     }
@@ -783,6 +797,7 @@ export default function Reports() {
             <div className="p-2 space-y-1">
               {filteredStudents.map((student) => {
                 const alreadyGenerated = existingReportStudentIds.has(student.id);
+                const isFailed = failedReportStudentIds.has(student.id);
                 return (
                   <div
                     key={student.id}
@@ -791,7 +806,8 @@ export default function Reports() {
                       alreadyGenerated
                         ? "opacity-50 cursor-not-allowed"
                         : "cursor-pointer hover:bg-muted/50",
-                      !alreadyGenerated && selectedStudentIds.has(student.id) && "bg-primary/10 hover:bg-primary/20"
+                      !alreadyGenerated && selectedStudentIds.has(student.id) && "bg-primary/10 hover:bg-primary/20",
+                      isFailed && !alreadyGenerated && "border border-destructive/30 bg-destructive/5"
                     )}
                     onClick={() => toggleStudentSelection(student.id)}
                   >
@@ -807,6 +823,12 @@ export default function Reports() {
                     {alreadyGenerated && (
                       <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                         생성됨
+                      </span>
+                    )}
+                    {isFailed && !alreadyGenerated && (
+                      <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-destructive/15 text-destructive font-medium flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3" />
+                        재시도 가능
                       </span>
                     )}
                   </div>
