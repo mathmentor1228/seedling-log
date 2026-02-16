@@ -11,7 +11,7 @@ import StudentsPage from "./pages/StudentsPage";
 import ClassesPage from "./pages/ClassesPage";
 import LessonsPage from "./pages/LessonsPage";
 import ReportsPage from "./pages/ReportsPage";
-import WeeklyReportSendPage from "./pages/WeeklyReportSendPage";
+
 import UserManagementPage from "./pages/UserManagementPage";
 import TimetablePage from "./pages/TimetablePage";
 import AssistantRequestsPage from "./pages/AssistantRequestsPage";
@@ -85,7 +85,7 @@ const App = () => (
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/lessons" element={<LessonsPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/reports/send" element={<WeeklyReportSendPage />} />
+                
                 <Route path="/admin/users" element={<UserManagementPage />} />
                 <Route path="/timetable" element={<TimetablePage />} />
                 <Route path="/assistant-requests" element={<AssistantRequestsPage />} />
