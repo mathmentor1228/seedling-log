@@ -188,6 +188,9 @@ export default function Reports() {
   // Track which students have successful (non-RED) reports — RED reports can be retried
   const [failedReportStudentIds, setFailedReportStudentIds] = useState<Set<string>>(new Set());
 
+  // Allow regeneration of already-generated (GREEN/YELLOW) reports
+  const [allowRegenerate, setAllowRegenerate] = useState(false);
+
   async function fetchExistingReportsForWeek() {
     try {
       // Fetch all reports for this week with their quality tag
@@ -251,7 +254,7 @@ export default function Reports() {
   }, [allStudents, studentSearchQuery]);
 
   function toggleStudentSelection(studentId: string) {
-    if (existingReportStudentIds.has(studentId)) return; // Block already-generated
+    if (!allowRegenerate && existingReportStudentIds.has(studentId)) return; // Block already-generated unless regenerate allowed
     setSelectedStudentIds(prev => {
       const next = new Set(prev);
       if (next.has(studentId)) {
@@ -267,7 +270,7 @@ export default function Reports() {
     setSelectedStudentIds(prev => {
       const next = new Set(prev);
       filteredStudents
-        .filter(s => !existingReportStudentIds.has(s.id))
+        .filter(s => allowRegenerate || !existingReportStudentIds.has(s.id))
         .forEach(s => next.add(s.id));
       return next;
     });
@@ -791,6 +794,16 @@ export default function Reports() {
             >
               선택 해제
             </Button>
+            <div className="flex items-center gap-2 ml-auto">
+              <Switch
+                id="allow-regenerate"
+                checked={allowRegenerate}
+                onCheckedChange={setAllowRegenerate}
+              />
+              <Label htmlFor="allow-regenerate" className="text-xs text-muted-foreground cursor-pointer">
+                재생성 허용
+              </Label>
+            </div>
           </div>
 
           <ScrollArea className="h-48 border rounded-md">
@@ -798,31 +811,39 @@ export default function Reports() {
               {filteredStudents.map((student) => {
                 const alreadyGenerated = existingReportStudentIds.has(student.id);
                 const isFailed = failedReportStudentIds.has(student.id);
+                const isBlocked = alreadyGenerated && !allowRegenerate;
                 return (
                   <div
                     key={student.id}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
-                      alreadyGenerated
+                      isBlocked
                         ? "opacity-50 cursor-not-allowed"
                         : "cursor-pointer hover:bg-muted/50",
-                      !alreadyGenerated && selectedStudentIds.has(student.id) && "bg-primary/10 hover:bg-primary/20",
-                      isFailed && !alreadyGenerated && "border border-destructive/30 bg-destructive/5"
+                      !isBlocked && selectedStudentIds.has(student.id) && "bg-primary/10 hover:bg-primary/20",
+                      isFailed && !alreadyGenerated && "border border-destructive/30 bg-destructive/5",
+                      allowRegenerate && alreadyGenerated && !selectedStudentIds.has(student.id) && "border border-primary/20 bg-primary/5"
                     )}
                     onClick={() => toggleStudentSelection(student.id)}
                   >
                     <Checkbox
                       checked={selectedStudentIds.has(student.id)}
                       onCheckedChange={() => toggleStudentSelection(student.id)}
-                      disabled={alreadyGenerated}
+                      disabled={isBlocked}
                     />
                     <span className="font-medium">{student.name}</span>
                     <span className="text-sm text-muted-foreground">
                       {student.grade || '학년 미지정'}
                     </span>
-                    {alreadyGenerated && (
+                    {alreadyGenerated && !allowRegenerate && (
                       <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                         생성됨
+                      </span>
+                    )}
+                    {alreadyGenerated && allowRegenerate && (
+                      <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary font-medium flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3" />
+                        재생성 가능
                       </span>
                     )}
                     {isFailed && !alreadyGenerated && (
