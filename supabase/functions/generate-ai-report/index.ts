@@ -1273,7 +1273,8 @@ function buildJsonUserPrompt(
   return prompt;
 }
 
-// REPORT_SUBJECT_ISOLATION_V1 + REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Build subject-specific prompt
+// REPORT_SUBJECT_ISOLATION_V1: Build subject-specific prompt
+// When hasCustomPrompt=true, omit hardcoded narrative rules so DB prompt controls style
 function buildSubjectIsolatedPrompt(
   subject: string,
   studentName: string,
@@ -1281,7 +1282,8 @@ function buildSubjectIsolatedPrompt(
   weekEnd: string,
   subjectLessons: LessonRecord[],
   curriculum: CurriculumInfo[],
-  previousLessons: LessonRecord[]
+  previousLessons: LessonRecord[],
+  hasCustomPrompt: boolean = false
 ): string {
   const constraints = SUBJECT_VOCABULARY_CONSTRAINTS[subject];
   const allowedTerms = constraints?.allowed?.join(', ') || '';
@@ -1291,17 +1293,20 @@ function buildSubjectIsolatedPrompt(
     ? '문장 해석, 독해, 어휘, 문법, reading, grammar'
     : '';
 
-  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Check if teacher has sufficient notes
-  const hasTeacherNotes = subjectLessons.some(l => 
-    (l.learning_issues_note && l.learning_issues_note.trim().length > 15) ||
-    (l.next_lesson_goal && l.next_lesson_goal.trim().length > 10)
-  );
-
   let prompt = `학생: ${studentName}
 기간: ${weekStart} ~ ${weekEnd}
 과목: ${subject} (이 과목만 작성)
 
-[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 - ${subject} 전용 지침]
+`;
+
+  // Only add hardcoded narrative rules when NO custom DB prompt is set
+  if (!hasCustomPrompt) {
+    const hasTeacherNotes = subjectLessons.some(l => 
+      (l.learning_issues_note && l.learning_issues_note.trim().length > 15) ||
+      (l.next_lesson_goal && l.next_lesson_goal.trim().length > 10)
+    );
+
+    prompt += `[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 - ${subject} 전용 지침]
 
 **핵심 원칙: 교사가 작성한 내용만 다시 표현**
 
@@ -1324,14 +1329,23 @@ ${!hasTeacherNotes ? `**[주의] 이 과목에 상세 교사 기록이 부족합
 3번째 단락은 반드시: "이번 주에는 기본 학습 점검 위주로 수업이 진행되었습니다."로 작성하세요.
 ` : ''}
 
-${allowedTerms ? `**사용 가능한 용어**: ${allowedTerms}` : ''}
-${disallowedTermsDesc ? `**절대 사용 금지 용어 (다른 과목 용어)**: ${disallowedTermsDesc}` : ''}
-
 [어조 가이드]
 - "이번 수업에서는 ~을 중심으로 진행했습니다."
 - "수업 중에는 ~한 반응을 보였습니다."
 - "선생님은 ~한 방식으로 다시 지도했습니다."
 
+`;
+  }
+
+  // Vocabulary constraints always apply
+  if (allowedTerms) {
+    prompt += `**사용 가능한 용어**: ${allowedTerms}\n`;
+  }
+  if (disallowedTermsDesc) {
+    prompt += `**절대 사용 금지 용어 (다른 과목 용어)**: ${disallowedTermsDesc}\n`;
+  }
+
+  prompt += `
 === ${subject} 수업 데이터 (교사 기록) ===
 
 [${subject}] 수업 ${subjectLessons.length}회
@@ -1413,17 +1427,19 @@ ${disallowedTermsDesc ? `**절대 사용 금지 용어 (다른 과목 용어)**:
 {
   "subject": "${subject}",
   "paragraphs": [
-    "1단락: 이번 수업에서 무엇을 했는지 (교사 기록 기반 사실만)",
-    "2단락: 학생이 어떤 반응을 보였는지 (관찰 사실)",
-    "3단락: 교사가 기록한 다음 방향 또는 '기본 학습 점검 위주로 수업 진행'"
+    "1단락: 관찰 - 구체적 수업 장면",
+    "2단락: 해석 - 학습 흐름에서의 의미",
+    "3단락: 방향 - 다음 수업 방향"
   ],
   "testsSummary": "테스트 결과 (기록된 경우만)",
   "homeworkSummary": "숙제 상태 (기록된 경우만)"
 }
 
-**금지 용어:** 심화, 확장, 고난도, 다음 단계로, 체계적인 접근, 맞춤형 커리큘럼
+- ${subject} 과목 전용 용어만 사용
+- 다른 과목 용어 혼용 절대 금지
+- 글머리 기호(·, -, •) 사용 금지
 
-반드시 유효한 JSON만 출력하세요. ${subject} 과목 용어만 사용하세요.`;
+반드시 유효한 JSON만 출력하세요.`;
 
   return prompt;
 }
@@ -1454,7 +1470,8 @@ async function generateSingleSubjectReport(
     weekEnd,
     subjectLessons,
     curriculum,
-    previousLessons
+    previousLessons,
+    !!customParentPrompt
   );
 
   // REPORT_TEMPLATE_DB_V1: Use custom prompt from DB if available
