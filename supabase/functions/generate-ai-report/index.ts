@@ -913,10 +913,32 @@ Deno.serve(async (req) => {
     }
 
     if (isolatedResult.subjects.length === 0) {
-      adminTag = 'RED';
-      draftStatus = 'needs_input';
-      riskLevel = 'high';
-      parentMessageContent = INSUFFICIENT_DATA_MESSAGE;
+      // If we had lessons but AI generation failed, use YELLOW with fallback instead of RED
+      if (hasSufficientNarrativeData && Object.keys(subjectData).length > 0) {
+        adminTag = 'YELLOW';
+        draftStatus = 'needs_review';
+        riskLevel = 'medium';
+        // Build minimal fallback from teacher notes
+        const fallbackParts: string[] = [];
+        for (const [subj, data] of Object.entries(subjectData)) {
+          fallbackParts.push(`■ ${subj}`);
+          const notes = data.lessons
+            .filter(l => l.learning_issues_note && l.learning_issues_note.trim().length > 5)
+            .map(l => l.learning_issues_note!.trim());
+          if (notes.length > 0) {
+            fallbackParts.push(notes.join(' '));
+          } else {
+            fallbackParts.push(BASIC_LESSON_FALLBACK);
+          }
+          fallbackParts.push('');
+        }
+        parentMessageContent = fallbackParts.join('\n').trim();
+      } else {
+        adminTag = 'RED';
+        draftStatus = 'needs_input';
+        riskLevel = 'high';
+        parentMessageContent = INSUFFICIENT_DATA_MESSAGE;
+      }
     }
 
     // Generate student message
@@ -1419,22 +1441,24 @@ async function generateSingleSubjectReport(
       try {
         const parsed = JSON.parse(jsonStr);
         
-        if (!parsed.paragraphs || !Array.isArray(parsed.paragraphs) || parsed.paragraphs.length !== 3) {
-          console.error(`[generate-ai-report] SUBJECT_ISOLATION ${subject}: Invalid paragraphs`);
+        if (!parsed.paragraphs || !Array.isArray(parsed.paragraphs) || parsed.paragraphs.length < 1) {
+          console.error(`[generate-ai-report] SUBJECT_ISOLATION ${subject}: Invalid paragraphs (length=${parsed.paragraphs?.length})`);
           lastFormatViolations = ['INVALID_PARAGRAPHS'];
           continue;
         }
+        // Normalize: trim to max 4 paragraphs, pad to min 2 if needed
+        const normalizedParagraphs = parsed.paragraphs.slice(0, 4);
 
         lastSubjectReport = {
           subject: parsed.subject || subject,
-          paragraphs: parsed.paragraphs,
+          paragraphs: normalizedParagraphs,
           testsSummary: parsed.testsSummary,
           homeworkSummary: parsed.homeworkSummary,
           attendanceImpact: parsed.attendanceImpact,
         };
 
         // Validate vocabulary for this subject
-        const fullText = parsed.paragraphs.join(' ') + ' ' + (parsed.testsSummary || '') + ' ' + (parsed.homeworkSummary || '');
+        const fullText = normalizedParagraphs.join(' ') + ' ' + (parsed.testsSummary || '') + ' ' + (parsed.homeworkSummary || '');
         const vocabValidation = validateSubjectVocabulary(subject, fullText);
         lastVocabViolations = vocabValidation.violations;
 
