@@ -180,11 +180,11 @@ export default function Reports() {
 
   async function fetchExistingReportsForWeek() {
     try {
+      // Unique constraint is (student_id, week_start) only — match on week_start alone
       const { data, error } = await supabase
         .from('weekly_reports')
         .select('student_id')
-        .eq('week_start', weekStart)
-        .eq('week_end', weekEnd);
+        .eq('week_start', weekStart);
       if (error) throw error;
       setExistingReportStudentIds(new Set((data || []).map(r => r.student_id)));
     } catch (err) {
