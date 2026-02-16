@@ -247,6 +247,63 @@ const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니�
 
 반드시 한국어로 작성하세요.`;
 
+// REPORT_TEMPLATE_DB_V1: Build system prompt from DB template merged with JSON format requirements
+function buildParentSystemPromptFromTemplate(userPrompt: string): string {
+  return `${userPrompt}
+
+**[시스템 필수 규칙 - 출력 형식]**
+
+위 지침을 따르되, 반드시 아래 JSON 형식으로만 출력하세요:
+{
+  "subjects": [
+    {
+      "subject": "과목명",
+      "paragraphs": [
+        "1단락: 관찰 - 이번 수업에서 눈에 띈 구체적 장면",
+        "2단락: 해석 - 그것이 학습 흐름에서 갖는 의미",
+        "3단락: 방향 - 다음 수업 방향"
+      ],
+      "testsSummary": "테스트 결과 해석 (기록된 경우만, 없으면 null)",
+      "homeworkSummary": "숙제 상태 (이슈가 있을 때만, 없으면 null)"
+    }
+  ],
+  "openingNote": "아이 이름으로 시작하는 따뜻한 인사와 전체적인 수업 참여 모습",
+  "closingNote": "다음 주 방향 요약",
+  "adminTag": "GREEN|YELLOW|RED"
+}
+
+**절대 금지 항목:**
+- 글머리 기호 (·, -, •) 사용 금지
+- JSON 외 텍스트 출력 금지
+
+반드시 유효한 JSON만 출력하세요.`;
+}
+
+// REPORT_TEMPLATE_DB_V1: Build per-subject system prompt from DB template
+function buildSubjectSystemPromptFromTemplate(userPrompt: string, subject: string): string {
+  return `${userPrompt}
+
+**[시스템 필수 규칙 - ${subject} 과목 전용]**
+
+위 지침을 따르되, ${subject} 과목만 다루고 반드시 아래 JSON 형식으로 출력하세요:
+{
+  "subject": "${subject}",
+  "paragraphs": [
+    "1단락: 관찰 - 구체적 수업 장면",
+    "2단락: 해석 - 학습 흐름에서의 의미",
+    "3단락: 방향 - 다음 수업 방향"
+  ],
+  "testsSummary": "테스트 결과 해석 (기록된 경우만)",
+  "homeworkSummary": "숙제 상태 (이슈가 있을 때만)"
+}
+
+- ${subject} 과목 전용 용어만 사용
+- 다른 과목 용어 혼용 절대 금지
+- 글머리 기호(·, -, •) 사용 금지
+
+반드시 유효한 JSON만 출력하세요.`;
+}
+
 // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Fallback message when teacher notes are insufficient
 const INSUFFICIENT_DATA_MESSAGE = "이번 주 학습 내용을 충분히 설명하기 위해 교사 추가 관찰이 필요합니다.";
 const BASIC_LESSON_FALLBACK = "이번 주에는 해당 과목에서 기본 학습 점검 위주로 수업이 진행되었습니다.";
@@ -656,7 +713,33 @@ Deno.serve(async (req) => {
     const { student_id, student_name, week_start, week_end } = reqBody;
     const strictNarrative = reqBody.strict_narrative === true;
 
+    // REPORT_TEMPLATE_DB_V1: Fetch active templates from report_templates table
+    const { data: activeTemplates, error: templateError } = await supabase
+      .from('report_templates')
+      .select('template_name, prompt_text, version')
+      .eq('is_active', true);
+
+    if (templateError) {
+      console.error('[generate-ai-report] Failed to fetch templates:', templateError.message);
+    }
+
+    const dbParentTemplate = activeTemplates?.find(t => t.template_name === 'parent');
+    const dbStudentTemplate = activeTemplates?.find(t => t.template_name === 'student');
+
+    // Build the actual system prompts: merge user's custom prompt with JSON format requirements
+    const parentSystemPrompt = dbParentTemplate
+      ? buildParentSystemPromptFromTemplate(dbParentTemplate.prompt_text)
+      : JSON_PARENT_PROMPT;
+    
+    const studentSystemPrompt = dbStudentTemplate
+      ? dbStudentTemplate.prompt_text
+      : NARRATIVE_LOCK_STUDENT_PROMPT;
+
+    const usedParentVersion = dbParentTemplate?.version || 'hardcoded';
+    const usedStudentVersion = dbStudentTemplate?.version || 'hardcoded';
+
     console.log(`[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} formatter=${FORMATTER_NAME}`);
+    console.log(`[REPORT_TEMPLATE_DB_V1] parent_template=${usedParentVersion} student_template=${usedStudentVersion}`);
     console.log(`[generate-ai-report] Generating for ${student_name} (${student_id}), week: ${week_start} to ${week_end}`);
 
     // DATA_DEBUG: Fetch ALL lesson records first (no filters except student + date range)
@@ -806,7 +889,7 @@ Deno.serve(async (req) => {
       // Generate fallback student message
       const studentMessageContent = await generateStudentMessage(
         LOVABLE_API_KEY,
-        NARRATIVE_LOCK_STUDENT_PROMPT,
+        studentSystemPrompt,
         student_name,
         week_start,
         week_end,
@@ -855,7 +938,8 @@ Deno.serve(async (req) => {
       student_name,
       week_start,
       week_end,
-      subjectData
+      subjectData,
+      dbParentTemplate?.prompt_text
     );
 
     // Generate opening and closing notes separately
@@ -864,7 +948,8 @@ Deno.serve(async (req) => {
       student_name,
       week_start,
       week_end,
-      subjectData
+      subjectData,
+      dbParentTemplate?.prompt_text
     );
 
     // Assemble final report from isolated subjects
@@ -944,7 +1029,7 @@ Deno.serve(async (req) => {
     // Generate student message
     const studentMessageContent = await generateStudentMessage(
       LOVABLE_API_KEY,
-      NARRATIVE_LOCK_STUDENT_PROMPT,
+      studentSystemPrompt,
       student_name,
       week_start,
       week_end,
@@ -1353,7 +1438,8 @@ async function generateSingleSubjectReport(
   subjectLessons: LessonRecord[],
   curriculum: CurriculumInfo[],
   previousLessons: LessonRecord[],
-  maxRetries: number = 2
+  maxRetries: number = 2,
+  customParentPrompt?: string
 ): Promise<{ 
   subjectReport: SubjectReport | null; 
   isValid: boolean; 
@@ -1371,8 +1457,10 @@ async function generateSingleSubjectReport(
     previousLessons
   );
 
-  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Updated system prompt
-  const systemPrompt = `당신은 학원 담당 선생님입니다. ${subject} 과목 학습 리포트를 JSON 형식으로 작성합니다.
+  // REPORT_TEMPLATE_DB_V1: Use custom prompt from DB if available
+  const systemPrompt = customParentPrompt
+    ? buildSubjectSystemPromptFromTemplate(customParentPrompt, subject)
+    : `당신은 학원 담당 선생님입니다. ${subject} 과목 학습 리포트를 JSON 형식으로 작성합니다.
 
 [REPORT_TEACHER_GROUNDED_NARRATIVE_V1 규칙]
 
@@ -1505,7 +1593,8 @@ async function generateIsolatedSubjectsReport(
   studentName: string,
   weekStart: string,
   weekEnd: string,
-  subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
+  subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>,
+  customParentPrompt?: string
 ): Promise<{
   subjects: SubjectReport[];
   allValid: boolean;
@@ -1540,7 +1629,9 @@ async function generateIsolatedSubjectsReport(
       weekEnd,
       data.lessons,
       data.curriculum,
-      data.previousLessons
+      data.previousLessons,
+      2,
+      customParentPrompt
     );
 
     subjectAttempts[subject] = result.attempts;
@@ -1570,7 +1661,8 @@ async function generateOpeningClosingNotes(
   studentName: string,
   weekStart: string,
   weekEnd: string,
-  subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>
+  subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>,
+  customParentPrompt?: string
 ): Promise<{ openingNote: string; closingNote: string }> {
   const subjects = Object.keys(subjectData);
   const totalLessons = Object.values(subjectData).reduce((sum, d) => sum + d.lessons.length, 0);
@@ -1585,8 +1677,20 @@ async function generateOpeningClosingNotes(
     }
   }
   
-  // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Updated system prompt
-  const systemPrompt = `당신은 학원 담당 선생님입니다. 주간 리포트의 도입부와 마무리를 JSON 형식으로 작성합니다.
+  // REPORT_TEMPLATE_DB_V1: Use custom prompt for opening/closing if available
+  const systemPrompt = customParentPrompt
+    ? `${customParentPrompt}
+
+**[시스템 필수 규칙 - 도입부와 마무리]**
+
+위 지침의 어조와 원칙을 따르되, 주간 리포트의 도입부와 마무리만 JSON으로 작성하세요.
+
+**아이 이름 호칭:**
+- 도입부(openingNote)에서 반드시 아이 이름을 다정하게 불러주세요.
+- 한국어 호칭: 이름 뒤에 "이" 사용 (예: "세인이는", "민준이는")
+
+반드시 유효한 JSON만 출력하세요.`
+    : `당신은 학원 담당 선생님입니다. 주간 리포트의 도입부와 마무리를 JSON 형식으로 작성합니다.
 
 [REPORT_TEACHER_GROUNDED_NARRATIVE_V1 규칙]
 
