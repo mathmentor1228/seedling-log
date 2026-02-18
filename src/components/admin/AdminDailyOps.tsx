@@ -25,7 +25,8 @@ import {
   AlertTriangle,
   ClipboardCheck,
   FileWarning,
-  Users
+  Users,
+  Mail
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getTodayKST } from '@/lib/utils';
@@ -49,6 +50,8 @@ interface LessonRecord {
   test_result_text: string | null;
   english_pass_fail: string | null;
   attendance_status: string[] | null;
+  notes: string | null;
+  internal_notes: string | null;
   student_name?: string;
   teacher_name?: string;
 }
@@ -80,6 +83,7 @@ export function AdminDailyOps() {
   const [showAttendanceOnly, setShowAttendanceOnly] = useState(false);
   const [showTestsOnly, setShowTestsOnly] = useState(false);
   const [showHomeworkIssuesOnly, setShowHomeworkIssuesOnly] = useState(false);
+  const [showMessagesOnly, setShowMessagesOnly] = useState(false);
   
   // Data
   const [loading, setLoading] = useState(true);
@@ -133,7 +137,9 @@ export function AdminDailyOps() {
           test_title,
           test_result_text,
           english_pass_fail,
-          attendance_status
+          attendance_status,
+          notes,
+          internal_notes
         `)
         .eq('lesson_date', dateStr)
         .order('lesson_date', { ascending: false });
@@ -224,6 +230,14 @@ export function AdminDailyOps() {
     );
   }, [filteredRecords]);
 
+  // Message records (직접전달 or 미전달 메시지)
+  const messageRecords = useMemo(() => {
+    return filteredRecords.filter(r => 
+      (r.notes && r.notes.trim()) ||
+      ((r as any).internal_notes && (r as any).internal_notes.trim())
+    );
+  }, [filteredRecords]);
+
   // KPI calculations
   const kpis = useMemo(() => ({
     comments: commentRecords.length,
@@ -231,7 +245,8 @@ export function AdminDailyOps() {
     homework: homeworkIssueRecords.length,
     tests: testRecords.length,
     testsMissingContent: testMissingContentRecords.length,
-  }), [commentRecords, attendanceIssueRecords, homeworkIssueRecords, testRecords, testMissingContentRecords]);
+    messages: messageRecords.length,
+  }), [commentRecords, attendanceIssueRecords, homeworkIssueRecords, testRecords, testMissingContentRecords, messageRecords]);
 
   // Helper to get test display content
   function getTestDisplayContent(record: LessonRecord): string {
@@ -358,9 +373,9 @@ export function AdminDailyOps() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <button
-            onClick={() => { setShowCommentsOnly(!showCommentsOnly); setShowAttendanceOnly(false); setShowTestsOnly(false); setShowHomeworkIssuesOnly(false); }}
+            onClick={() => { setShowCommentsOnly(!showCommentsOnly); setShowAttendanceOnly(false); setShowTestsOnly(false); setShowHomeworkIssuesOnly(false); setShowMessagesOnly(false); }}
             className={cn(
               "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
               showCommentsOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
@@ -374,7 +389,7 @@ export function AdminDailyOps() {
           </button>
 
           <button
-            onClick={() => { setShowAttendanceOnly(!showAttendanceOnly); setShowCommentsOnly(false); setShowTestsOnly(false); setShowHomeworkIssuesOnly(false); }}
+            onClick={() => { setShowAttendanceOnly(!showAttendanceOnly); setShowCommentsOnly(false); setShowTestsOnly(false); setShowHomeworkIssuesOnly(false); setShowMessagesOnly(false); }}
             className={cn(
               "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
               showAttendanceOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
@@ -388,7 +403,7 @@ export function AdminDailyOps() {
           </button>
 
           <button
-            onClick={() => { setShowHomeworkIssuesOnly(!showHomeworkIssuesOnly); setShowCommentsOnly(false); setShowAttendanceOnly(false); setShowTestsOnly(false); }}
+            onClick={() => { setShowHomeworkIssuesOnly(!showHomeworkIssuesOnly); setShowCommentsOnly(false); setShowAttendanceOnly(false); setShowTestsOnly(false); setShowMessagesOnly(false); }}
             className={cn(
               "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
               showHomeworkIssuesOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
@@ -402,7 +417,7 @@ export function AdminDailyOps() {
           </button>
 
           <button
-            onClick={() => { setShowTestsOnly(!showTestsOnly); setShowCommentsOnly(false); setShowAttendanceOnly(false); setShowHomeworkIssuesOnly(false); }}
+            onClick={() => { setShowTestsOnly(!showTestsOnly); setShowCommentsOnly(false); setShowAttendanceOnly(false); setShowHomeworkIssuesOnly(false); setShowMessagesOnly(false); }}
             className={cn(
               "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
               showTestsOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
@@ -413,6 +428,20 @@ export function AdminDailyOps() {
               <span className="text-[11px] font-medium">테스트</span>
             </div>
             <p className="text-xl font-bold">{kpis.tests}</p>
+          </button>
+
+          <button
+            onClick={() => { setShowMessagesOnly(!showMessagesOnly); setShowCommentsOnly(false); setShowAttendanceOnly(false); setShowTestsOnly(false); setShowHomeworkIssuesOnly(false); }}
+            className={cn(
+              "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
+              showMessagesOnly ? "ring-2 ring-primary bg-primary/5 border-primary/30" : "bg-card border-border"
+            )}
+          >
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <Mail className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium">메시지</span>
+            </div>
+            <p className="text-xl font-bold">{kpis.messages}</p>
           </button>
 
           <div className={cn(
@@ -429,7 +458,7 @@ export function AdminDailyOps() {
       )}
 
       {/* Table 1: Comments */}
-      {(!showAttendanceOnly && !showTestsOnly && !showHomeworkIssuesOnly) && (
+      {(!showAttendanceOnly && !showTestsOnly && !showHomeworkIssuesOnly && !showMessagesOnly) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -503,7 +532,7 @@ export function AdminDailyOps() {
       )}
 
       {/* Table 2: Attendance Issues */}
-      {(!showCommentsOnly && !showTestsOnly && !showHomeworkIssuesOnly) && (
+      {(!showCommentsOnly && !showTestsOnly && !showHomeworkIssuesOnly && !showMessagesOnly) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -557,7 +586,7 @@ export function AdminDailyOps() {
       )}
 
       {/* Table 3: Test Records */}
-      {(!showCommentsOnly && !showAttendanceOnly && !showHomeworkIssuesOnly) && (
+      {(!showCommentsOnly && !showAttendanceOnly && !showHomeworkIssuesOnly && !showMessagesOnly) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -636,7 +665,7 @@ export function AdminDailyOps() {
       )}
 
       {/* Table 4: Homework Issues */}
-      {(!showCommentsOnly && !showAttendanceOnly && !showTestsOnly) && showHomeworkIssuesOnly && (
+      {(!showCommentsOnly && !showAttendanceOnly && !showTestsOnly && !showMessagesOnly) && showHomeworkIssuesOnly && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -687,7 +716,82 @@ export function AdminDailyOps() {
         </Card>
       )}
 
-      {/* View Modal - ADMIN_REPORT_VIEW_MODAL_V1 */}
+      {/* Table 5: Messages (직접전달/미전달) */}
+      {(!showCommentsOnly && !showAttendanceOnly && !showTestsOnly && !showHomeworkIssuesOnly) && showMessagesOnly && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="w-5 h-5" />
+              학부모 메시지 ({messageRecords.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-40" />
+            ) : messageRecords.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">메시지가 없습니다.</p>
+            ) : (
+              <TooltipProvider delayDuration={200}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>학생</TableHead>
+                    <TableHead>과목</TableHead>
+                    <TableHead>담당</TableHead>
+                    <TableHead>직접전달</TableHead>
+                    <TableHead>미전달</TableHead>
+                    <TableHead className="w-[60px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {messageRecords.map(record => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">{record.student_name}</TableCell>
+                      <TableCell>{record.subject}</TableCell>
+                      <TableCell>{record.teacher_name}</TableCell>
+                      <TableCell className="max-w-[200px]">
+                        {record.notes ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="truncate cursor-default text-blue-700">{record.notes.slice(0, 40)}{record.notes.length > 40 ? '...' : ''}</div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm z-[100]">
+                              {record.notes}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[200px]">
+                        {record.internal_notes ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="truncate cursor-default text-amber-700">{record.internal_notes.slice(0, 40)}{record.internal_notes.length > 40 ? '...' : ''}</div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-sm whitespace-pre-wrap text-sm z-[100]">
+                              {record.internal_notes}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => openViewModal(record)}>
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              </TooltipProvider>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {modalContext && (
         <LessonModal
           open={modalOpen}
