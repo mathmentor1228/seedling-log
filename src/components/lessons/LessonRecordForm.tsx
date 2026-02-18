@@ -304,6 +304,7 @@ export function LessonRecordForm({
     learning_issues_note: '',
     next_lesson_goal: '',
     notes: '',
+    internal_notes: '',
     lesson_types: ['정규수업'] as string[],
     attendance_status: ['정상등원'] as string[],
     // MATH-CURRICULUM-TAG-V2: Curriculum fields
@@ -586,6 +587,7 @@ export function LessonRecordForm({
             learning_issues_note: record.learning_issues_note || '',
             next_lesson_goal: record.next_lesson_goal || '',
             notes: record.notes || '',
+            internal_notes: (record as any).internal_notes || '',
             lesson_types: record.lesson_types || ['정규수업'],
             attendance_status: record.attendance_status || ['정상등원'],
             // MATH-CURRICULUM-TAG-V1: Load curriculum fields
@@ -939,6 +941,7 @@ export function LessonRecordForm({
       learning_issues_note: formData.learning_issues_note.trim() || null,
       next_lesson_goal: formData.next_lesson_goal.trim() || null,
       notes: formData.notes.trim() || null,
+      internal_notes: formData.internal_notes.trim() || null,
       lesson_types,
       attendance_status,
       ...curriculumFields,
@@ -1901,13 +1904,28 @@ export function LessonRecordForm({
           />
         </div>
 
-        {/* FORM-WORKFLOW-REFINE-V2: F) Renamed notes field */}
+        {/* 학부모 직접전달 메시지 */}
         <div className="space-y-2">
-          <Label htmlFor="form_notes">원장/학습기록용 메모 (학부모 미전달)</Label>
+          <Label htmlFor="form_notes">학부모 직접전달 메시지</Label>
           <Textarea
             id="form_notes"
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="학부모 리포트에 포함되는 메시지입니다."
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground">
+            주간 리포트 생성 시 학부모에게 전달됩니다.
+          </p>
+        </div>
+
+        {/* 학부모 미전달 메시지 */}
+        <div className="space-y-2">
+          <Label htmlFor="form_internal_notes">학부모 미전달 메시지</Label>
+          <Textarea
+            id="form_internal_notes"
+            value={formData.internal_notes}
+            onChange={(e) => setFormData({ ...formData, internal_notes: e.target.value })}
             placeholder="학부모에게 전송되지 않으며 내부 기록으로 남깁니다."
             rows={3}
           />

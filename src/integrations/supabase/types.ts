@@ -694,6 +694,7 @@ export type Database = {
           homework_check_note: string | null
           homework_status: string
           id: string
+          internal_notes: string | null
           korean_categories: string[] | null
           learning_issues: string[] | null
           learning_issues_note: string | null
@@ -736,6 +737,7 @@ export type Database = {
           homework_check_note?: string | null
           homework_status: string
           id?: string
+          internal_notes?: string | null
           korean_categories?: string[] | null
           learning_issues?: string[] | null
           learning_issues_note?: string | null
@@ -778,6 +780,7 @@ export type Database = {
           homework_check_note?: string | null
           homework_status?: string
           id?: string
+          internal_notes?: string | null
           korean_categories?: string[] | null
           learning_issues?: string[] | null
           learning_issues_note?: string | null
