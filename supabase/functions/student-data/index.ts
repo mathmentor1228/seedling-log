@@ -262,10 +262,26 @@ Deno.serve(async (req) => {
 
         const { data, error } = await supabase
           .from('homework_assignments')
-          .select('id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url, homework_type')
+          .select('id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url, homework_type, required_submissions, end_date')
           .eq('student_id', student_id)
           .gte('assigned_date', thirtyDaysAgo.toISOString().split('T')[0])
           .order('assigned_date', { ascending: false });
+
+        // Fetch submission counts for daily homework
+        const hwIds = (data || []).filter((hw: any) => hw.homework_type === 'daily' && hw.required_submissions > 1).map((hw: any) => hw.id);
+        let submissionCountMap: Record<string, number> = {};
+        if (hwIds.length > 0) {
+          const { data: submissions } = await supabase
+            .from('homework_submissions')
+            .select('homework_id')
+            .in('homework_id', hwIds)
+            .eq('student_id', student_id);
+          if (submissions) {
+            for (const s of submissions) {
+              submissionCountMap[s.homework_id] = (submissionCountMap[s.homework_id] || 0) + 1;
+            }
+          }
+        }
 
         if (error) throw error;
 
@@ -298,25 +314,39 @@ Deno.serve(async (req) => {
           let deadline_at: string | null = null;
           let is_deadline_passed = false;
 
+          // For daily homework with end_date, use end_date for expiration instead of next class
+          const isDaily = hw.homework_type === 'daily' && hw.end_date;
+
           if (hw.check_status === 'unchecked' && !isSubmissionClosed) {
-            // If homework was assigned today, skip today's classes for deadline calc
-            const todayDateStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth() + 1).padStart(2, '0')}-${String(nowKST.getDate()).padStart(2, '0')}`;
-            const assignedToday = hw.assigned_date === todayDateStr;
-            const nextClass = getNextClassDatetimeKST(classSchedules, hw.subject, nowKST, assignedToday);
-            if (nextClass) {
-              const deadline = getDeadlineFromClassTime(nextClass);
-              deadline_at = deadline.toISOString();
-              is_deadline_passed = nowKST >= deadline;
+            if (isDaily) {
+              // Daily homework: deadline is end of end_date (23:59 KST)
+              const endDate = new Date(hw.end_date + 'T23:59:59+09:00');
+              deadline_at = endDate.toISOString();
+              is_deadline_passed = nowKST > endDate;
+            } else {
+              // Regular homework: use next class time
+              const todayDateStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth() + 1).padStart(2, '0')}-${String(nowKST.getDate()).padStart(2, '0')}`;
+              const assignedToday = hw.assigned_date === todayDateStr;
+              const nextClass = getNextClassDatetimeKST(classSchedules, hw.subject, nowKST, assignedToday);
+              if (nextClass) {
+                const deadline = getDeadlineFromClassTime(nextClass);
+                deadline_at = deadline.toISOString();
+                is_deadline_passed = nowKST >= deadline;
+              }
             }
           }
 
+          // Submission count for daily homework
+          const submission_count = submissionCountMap[hw.id] || 0;
+
           return {
             ...hw,
-            is_expired: isOlderThan7Days && hasNewerHomework,
-            is_submission_closed: isSubmissionClosed,
+            is_expired: isDaily ? false : (isOlderThan7Days && hasNewerHomework),
+            is_submission_closed: isDaily ? is_deadline_passed : isSubmissionClosed,
             deadline_at,
-            is_deadline_passed,
+            is_deadline_passed: isDaily ? is_deadline_passed : is_deadline_passed,
             is_no_homework: hw.content?.trim() === '없음',
+            submission_count,
           };
         });
 
@@ -333,16 +363,37 @@ Deno.serve(async (req) => {
           );
         }
 
-        const { data } = await supabase
-          .from('homework_submissions')
-          .select('*')
-          .eq('homework_id', homework_id)
+        // Fetch homework info to check if it's daily with multiple submissions
+        const { data: hwInfo } = await supabase
+          .from('homework_assignments')
+          .select('homework_type, required_submissions, submission_image_url, submitted_at')
+          .eq('id', homework_id)
           .eq('student_id', student_id)
-          .order('submitted_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .single();
 
-        result = { submission: data };
+        if (hwInfo?.homework_type === 'daily' && hwInfo.required_submissions > 1) {
+          // Return all submissions from homework_submissions table
+          const { data: allSubs } = await supabase
+            .from('homework_submissions')
+            .select('*')
+            .eq('homework_id', homework_id)
+            .eq('student_id', student_id)
+            .order('submitted_at', { ascending: false });
+
+          result = { 
+            submission: (allSubs && allSubs.length > 0) ? allSubs[0] : null,
+            submissions: allSubs || [],
+            required_submissions: hwInfo.required_submissions,
+          };
+        } else {
+          // Regular homework: return from homework_assignments fields
+          result = { 
+            submission: hwInfo?.submitted_at ? {
+              image_url: hwInfo.submission_image_url,
+              submitted_at: hwInfo.submitted_at,
+            } : null,
+          };
+        }
         break;
       }
 
@@ -355,10 +406,10 @@ Deno.serve(async (req) => {
           );
         }
 
-        // DEADLINE-V1: Server-side deadline validation
+        // Fetch homework details
         const { data: hwData } = await supabase
           .from('homework_assignments')
-          .select('subject, check_status, assigned_date')
+          .select('subject, check_status, assigned_date, homework_type, required_submissions, end_date')
           .eq('id', homework_id)
           .eq('student_id', student_id)
           .single();
@@ -370,64 +421,120 @@ Deno.serve(async (req) => {
           );
         }
 
-        if (hwData.check_status === 'unchecked') {
-          const classSchedules = await getStudentClassSchedules();
-          const nowKST = getNowKST();
-          const todayDateStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth() + 1).padStart(2, '0')}-${String(nowKST.getDate()).padStart(2, '0')}`;
-          const assignedToday = hwData.assigned_date === todayDateStr;
-          const nextClass = getNextClassDatetimeKST(classSchedules, hwData.subject, nowKST, assignedToday);
+        const isDaily = hwData.homework_type === 'daily' && hwData.required_submissions > 1;
 
-          if (nextClass) {
-            const deadline = getDeadlineFromClassTime(nextClass);
-            if (nowKST >= deadline) {
+        // Deadline validation
+        if (hwData.check_status === 'unchecked') {
+          const nowKST = getNowKST();
+          
+          if (isDaily && hwData.end_date) {
+            // Daily homework: check end_date
+            const endDate = new Date(hwData.end_date + 'T23:59:59+09:00');
+            if (nowKST > endDate) {
               return new Response(
                 JSON.stringify({ error: 'DEADLINE_PASSED', message: '제출 마감 시간이 지났습니다.' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
               );
             }
-          }
-        }
+          } else {
+            // Regular homework: check next class deadline
+            const classSchedules = await getStudentClassSchedules();
+            const todayDateStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth() + 1).padStart(2, '0')}-${String(nowKST.getDate()).padStart(2, '0')}`;
+            const assignedToday = hwData.assigned_date === todayDateStr;
+            const nextClass = getNextClassDatetimeKST(classSchedules, hwData.subject, nowKST, assignedToday);
 
-        // Fetch old submission to delete previous storage files on re-submission
-        const { data: oldHw } = await supabase
-          .from('homework_assignments')
-          .select('submission_image_url')
-          .eq('id', homework_id)
-          .eq('student_id', student_id)
-          .single();
-
-        if (oldHw?.submission_image_url) {
-          const oldUrls = oldHw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
-          const pathsToDelete: string[] = [];
-          for (const url of oldUrls) {
-            const match = url.match(/\/object\/public\/homework-submissions\/(.+)$/);
-            if (match) {
-              pathsToDelete.push(match[1]);
-            }
-          }
-          if (pathsToDelete.length > 0) {
-            const { error: delErr } = await supabase.storage
-              .from('homework-submissions')
-              .remove(pathsToDelete);
-            if (delErr) {
-              console.warn('Failed to delete old submission files:', delErr.message);
+            if (nextClass) {
+              const deadline = getDeadlineFromClassTime(nextClass);
+              if (nowKST >= deadline) {
+                return new Response(
+                  JSON.stringify({ error: 'DEADLINE_PASSED', message: '제출 마감 시간이 지났습니다.' }),
+                  { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+              }
             }
           }
         }
 
-        const { error } = await supabase
-          .from('homework_assignments')
-          .update({
-            submission_image_url: image_url || null,
-            submission_text: submission_text || null,
-            submission_audio_url: audio_url || null,
-            submitted_at: new Date().toISOString(),
-          })
-          .eq('id', homework_id)
-          .eq('student_id', student_id);
+        if (isDaily) {
+          // Daily homework: check submission count
+          const { data: existingSubs } = await supabase
+            .from('homework_submissions')
+            .select('id')
+            .eq('homework_id', homework_id)
+            .eq('student_id', student_id);
 
-        if (error) throw error;
-        result = { success: true };
+          const currentCount = existingSubs?.length || 0;
+          if (currentCount >= hwData.required_submissions) {
+            return new Response(
+              JSON.stringify({ error: 'SUBMISSIONS_COMPLETE', message: '이미 필요한 인증 횟수를 모두 완료했습니다.' }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          // Insert into homework_submissions table
+          const { error: insertErr } = await supabase
+            .from('homework_submissions')
+            .insert({
+              homework_id,
+              student_id,
+              image_url: image_url || null,
+              submission_note: submission_text || null,
+              status: 'pending',
+            });
+
+          if (insertErr) throw insertErr;
+
+          // Also update the parent homework_assignments record
+          await supabase
+            .from('homework_assignments')
+            .update({
+              submission_image_url: image_url || null,
+              submission_text: submission_text || null,
+              submission_audio_url: audio_url || null,
+              submitted_at: new Date().toISOString(),
+            })
+            .eq('id', homework_id)
+            .eq('student_id', student_id);
+
+          result = { success: true, submission_count: currentCount + 1, required_submissions: hwData.required_submissions };
+        } else {
+          // Regular homework: overwrite on homework_assignments as before
+          // Delete old storage files
+          const { data: oldHw } = await supabase
+            .from('homework_assignments')
+            .select('submission_image_url')
+            .eq('id', homework_id)
+            .eq('student_id', student_id)
+            .single();
+
+          if (oldHw?.submission_image_url) {
+            const oldUrls = oldHw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
+            const pathsToDelete: string[] = [];
+            for (const url of oldUrls) {
+              const match = url.match(/\/object\/public\/homework-submissions\/(.+)$/);
+              if (match) {
+                pathsToDelete.push(match[1]);
+              }
+            }
+            if (pathsToDelete.length > 0) {
+              await supabase.storage.from('homework-submissions').remove(pathsToDelete);
+            }
+          }
+
+          const { error } = await supabase
+            .from('homework_assignments')
+            .update({
+              submission_image_url: image_url || null,
+              submission_text: submission_text || null,
+              submission_audio_url: audio_url || null,
+              submitted_at: new Date().toISOString(),
+            })
+            .eq('id', homework_id)
+            .eq('student_id', student_id);
+
+          if (error) throw error;
+          result = { success: true };
+        }
         break;
       }
 
