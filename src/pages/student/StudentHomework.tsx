@@ -50,6 +50,9 @@ interface HomeworkItem {
   is_deadline_passed?: boolean;
   is_no_homework?: boolean;
   submission_audio_url?: string | null;
+  required_submissions?: number;
+  end_date?: string | null;
+  submission_count?: number;
 }
 
 // VOICE-RECORD-V1: Subjects that require/allow voice recording
@@ -186,6 +189,10 @@ export default function StudentHomework() {
     if (hw.is_expired) return true;
     if (hw.is_submission_closed) return true;
     if (hw.is_deadline_passed) return true;
+    // For daily homework: blocked if all submissions done
+    if (hw.homework_type === 'daily' && hw.required_submissions && hw.required_submissions > 1) {
+      if ((hw.submission_count || 0) >= hw.required_submissions) return true;
+    }
     return false;
   };
 
@@ -503,8 +510,31 @@ export default function StudentHomework() {
               </div>
             )}
 
+            {/* Daily homework submission progress */}
+            {selectedHomework.homework_type === 'daily' && selectedHomework.required_submissions && selectedHomework.required_submissions > 1 && (
+              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">인증 진행</span>
+                  <span className="text-sm font-bold text-primary">
+                    {selectedHomework.submission_count || 0} / {selectedHomework.required_submissions}회
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div 
+                    className="bg-primary h-2 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, ((selectedHomework.submission_count || 0) / selectedHomework.required_submissions) * 100)}%` }}
+                  />
+                </div>
+                {selectedHomework.end_date && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    기간: {selectedHomework.assigned_date} ~ {selectedHomework.end_date}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* DEADLINE-V1: Show submit button or deadline-passed message */}
-            {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && !selectedHomework.is_submission_closed && !deadlinePassed && (
+            {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && !selectedHomework.is_submission_closed && !deadlinePassed && !isSubmissionBlocked(selectedHomework) && (
               <div className="space-y-3">
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <p className="text-xs text-amber-700 font-medium">
@@ -517,8 +547,19 @@ export default function StudentHomework() {
                   onClick={() => setShowSubmitDialog(true)}
                 >
                   <Upload className="w-5 h-5 mr-2" />
-                  {selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
+                  {selectedHomework.homework_type === 'daily' && selectedHomework.required_submissions && selectedHomework.required_submissions > 1
+                    ? `${(selectedHomework.submission_count || 0) + 1}번째 인증하기`
+                    : selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
                 </Button>
+              </div>
+            )}
+
+            {/* Daily homework: all submissions complete */}
+            {selectedHomework.homework_type === 'daily' && selectedHomework.required_submissions && selectedHomework.required_submissions > 1 && 
+             (selectedHomework.submission_count || 0) >= selectedHomework.required_submissions && selectedHomework.check_status === 'unchecked' && (
+              <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
+                <CheckCircle className="w-6 h-6 mx-auto mb-1 text-green-500" />
+                <p className="text-sm font-medium text-green-600">모든 인증을 완료했습니다! 🎉</p>
               </div>
             )}
 
@@ -705,7 +746,9 @@ export default function StudentHomework() {
               </Badge>
               {hw.homework_type === 'daily' && (
                 <Badge variant="outline" className="text-xs border-primary/40 text-primary">
-                  데일리
+                  데일리 {hw.required_submissions && hw.required_submissions > 1 
+                    ? `${hw.submission_count || 0}/${hw.required_submissions}` 
+                    : ''}
                 </Badge>
               )}
               {isPending && showVoiceRecorder(hw.subject) && (
