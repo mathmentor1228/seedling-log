@@ -57,7 +57,7 @@ const navStructure: NavEntry[] = [
     label: '수업',
     items: [
       { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
-      { label: '단어 테스트', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+      { label: '시험', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
     ],
   },
   {

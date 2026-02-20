@@ -77,6 +77,16 @@ interface VocabSetting {
   total_days: number | null;
 }
 
+interface TestScheduleItem {
+  id: string;
+  test_date: string;
+  test_time: string | null;
+  subject: string;
+  test_type: string;
+  content: string | null;
+  notes: string | null;
+}
+
 interface WeeklyReport {
   id: string;
   week_start: string;
@@ -100,6 +110,7 @@ export default function StudentDashboard() {
   const [vocabResults, setVocabResults] = useState<VocabResult[]>([]);
   const [vocabSetting, setVocabSetting] = useState<VocabSetting | null>(null);
   const [guerrillaAlerts, setGuerrillaAlerts] = useState<VocabSchedule[]>([]);
+  const [testSchedules, setTestSchedules] = useState<TestScheduleItem[]>([]);
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([]);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -153,6 +164,7 @@ export default function StudentDashboard() {
         setVocabResults(data.vocab_results || []);
         setVocabSetting(data.vocab_setting || null);
         setGuerrillaAlerts(data.guerrilla_alerts || []);
+        setTestSchedules(data.test_schedules || []);
       }
 
       // Fetch weekly reports separately — deduplicate by week_start (keep latest generated_at)
@@ -243,8 +255,25 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Guerrilla Test Alert */}
-      {guerrillaAlerts.length > 0 && (
+      {/* Guerrilla / Upcoming Test Alerts */}
+      {(() => {
+        const guerrillaTestSchedules = testSchedules.filter(ts => ts.test_type === 'guerrilla');
+        const allAlerts = [
+          ...guerrillaAlerts.map(gt => ({
+            id: gt.id,
+            test_date: gt.test_date,
+            test_time: gt.test_time,
+            label: `${gt.book_name} Day ${gt.day_number}`,
+          })),
+          ...guerrillaTestSchedules.map(ts => ({
+            id: ts.id,
+            test_date: ts.test_date,
+            test_time: ts.test_time,
+            label: `[${ts.subject}] ${ts.content || ''}`,
+          })),
+        ];
+        if (allAlerts.length === 0) return null;
+        return (
           <Card className="border-amber-400 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 animate-fade-in">
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
@@ -254,16 +283,16 @@ export default function StudentDashboard() {
                 <div className="flex-1 space-y-1.5">
                   <p className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                     <AlertTriangle className="w-4 h-4" />
-                    게릴라 테스트 예정!
+                    시험 예정!
                   </p>
-                  {guerrillaAlerts.map(gt => {
-                    const d = new Date(gt.test_date + 'T00:00:00');
+                  {allAlerts.map(a => {
+                    const d = new Date(a.test_date + 'T00:00:00');
                     const dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일`;
                     return (
-                      <div key={gt.id} className="text-sm text-amber-700 dark:text-amber-400">
+                      <div key={a.id} className="text-sm text-amber-700 dark:text-amber-400">
                         📌 <span className="font-medium">{dateLabel}</span>
-                        {gt.test_time && <span> {gt.test_time.slice(0, 5)}</span>}
-                        {' · '}{gt.book_name} Day {gt.day_number}
+                        {a.test_time && <span> {a.test_time.slice(0, 5)}</span>}
+                        {' · '}{a.label}
                       </div>
                     );
                   })}
@@ -271,7 +300,8 @@ export default function StudentDashboard() {
               </div>
             </CardContent>
           </Card>
-      )}
+        );
+      })()}
 
       {/* Header */}
       <div className="text-center pt-2">
@@ -319,6 +349,7 @@ export default function StudentDashboard() {
             homework={pendingHomework}
             classes={upcomingClasses}
             vocabSchedules={vocabSchedules}
+            testSchedules={testSchedules}
           />
         </CardContent>
       </Card>
@@ -434,7 +465,48 @@ export default function StudentDashboard() {
         </Card>
       )}
 
-      {/* Pending Homework */}
+      {/* Test Schedules */}
+      {testSchedules.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              다가오는 시험
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {testSchedules.slice(0, 7).map(ts => {
+              const d = new Date(ts.test_date + 'T00:00:00');
+              const dayLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+              const isGuerrilla = ts.test_type === 'guerrilla';
+              return (
+                <div key={ts.id} className={`flex items-center justify-between p-2.5 rounded-lg ${isGuerrilla ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800' : 'bg-muted/50'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">{dayLabel}</span>
+                    <div>
+                      <span className="text-sm">{ts.content || ts.subject}</span>
+                      {ts.test_time && (
+                        <span className="text-[10px] text-muted-foreground ml-1.5">
+                          <Clock className="w-2.5 h-2.5 inline" /> {ts.test_time.slice(0, 5)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px]">{ts.subject}</Badge>
+                    {isGuerrilla && (
+                      <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 dark:text-amber-400">
+                        ⚡ 게릴라
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       {pendingHomework.length > 0 && (
         <Card>
           <CardHeader className="pb-2">

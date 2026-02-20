@@ -1,7 +1,7 @@
 import { format, startOfWeek, addDays, isSameDay, isToday } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { BookOpen, Clock, ClipboardCheck } from 'lucide-react';
+import { BookOpen, Clock, ClipboardCheck, FileText } from 'lucide-react';
 
 interface HomeworkItem {
   id: string;
@@ -28,10 +28,21 @@ interface VocabSchedule {
   test_time?: string | null;
 }
 
+
+interface TestScheduleItem {
+  id: string;
+  test_date: string;
+  test_time: string | null;
+  subject: string;
+  test_type: string;
+  content: string | null;
+}
+
 interface Props {
   homework: HomeworkItem[];
   classes: UpcomingClass[];
   vocabSchedules: VocabSchedule[];
+  testSchedules?: TestScheduleItem[];
 }
 
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
@@ -47,7 +58,7 @@ function getSubjectStyle(subject: string) {
   return SUBJECT_COLORS[subject] || { bg: 'bg-muted', text: 'text-muted-foreground', dot: 'bg-muted-foreground' };
 }
 
-export default function StudentWeeklyCalendar({ homework, classes, vocabSchedules }: Props) {
+export default function StudentWeeklyCalendar({ homework, classes, vocabSchedules, testSchedules = [] }: Props) {
   const today = new Date();
   // Week starts on Monday (weekStartsOn: 1)
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
@@ -73,6 +84,13 @@ export default function StudentWeeklyCalendar({ homework, classes, vocabSchedule
   vocabSchedules.forEach(vs => {
     if (!vocabByDate.has(vs.test_date)) vocabByDate.set(vs.test_date, []);
     vocabByDate.get(vs.test_date)!.push(vs);
+  });
+
+  // Map test schedules by date
+  const testByDate = new Map<string, TestScheduleItem[]>();
+  testSchedules.forEach(ts => {
+    if (!testByDate.has(ts.test_date)) testByDate.set(ts.test_date, []);
+    testByDate.get(ts.test_date)!.push(ts);
   });
 
   return (
@@ -109,7 +127,8 @@ export default function StudentWeeklyCalendar({ homework, classes, vocabSchedule
           const dayHw = hwByDate.get(dateKey) || [];
           const dayCls = classesByDow.get(dow) || [];
           const dayVocab = vocabByDate.get(dateKey) || [];
-          const hasEvents = dayHw.length > 0 || dayCls.length > 0 || dayVocab.length > 0;
+          const dayTests = testByDate.get(dateKey) || [];
+          const hasEvents = dayHw.length > 0 || dayCls.length > 0 || dayVocab.length > 0 || dayTests.length > 0;
 
           return (
             <div
@@ -159,6 +178,19 @@ export default function StudentWeeklyCalendar({ homework, classes, vocabSchedule
                   D{vs.day_number}
                 </div>
               ))}
+              {dayTests.map((ts, j) => {
+                const isGuerrilla = ts.test_type === 'guerrilla';
+                return (
+                  <div
+                    key={`t-${j}`}
+                    className={`rounded px-1 py-0.5 text-[9px] leading-tight font-medium truncate ${isGuerrilla ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-300' : 'bg-sky-50 text-sky-700'}`}
+                    title={`[${ts.subject}] ${ts.content || ''}${isGuerrilla ? ' (게릴라)' : ''}`}
+                  >
+                    {isGuerrilla ? '⚡' : <FileText className="w-2.5 h-2.5 inline mr-0.5" />}
+                    {ts.subject.slice(0, 2)}
+                  </div>
+                );
+              })}
               {!hasEvents && (
                 <div className="flex-1" />
               )}
@@ -168,7 +200,7 @@ export default function StudentWeeklyCalendar({ homework, classes, vocabSchedule
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground justify-center pt-1">
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground justify-center pt-1 flex-wrap">
         <span className="flex items-center gap-1">
           <Clock className="w-3 h-3" /> 수업
         </span>
@@ -177,6 +209,9 @@ export default function StudentWeeklyCalendar({ homework, classes, vocabSchedule
         </span>
         <span className="flex items-center gap-1">
           <BookOpen className="w-3 h-3" /> 단어시험
+        </span>
+        <span className="flex items-center gap-1">
+          <FileText className="w-3 h-3" /> 시험
         </span>
       </div>
     </div>

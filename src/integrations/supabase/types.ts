@@ -1354,6 +1354,53 @@ export type Database = {
           },
         ]
       }
+      test_schedules: {
+        Row: {
+          content: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          student_id: string
+          subject: string
+          teacher_id: string
+          test_date: string
+          test_time: string | null
+          test_type: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          student_id: string
+          subject: string
+          teacher_id: string
+          test_date: string
+          test_time?: string | null
+          test_type?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          student_id?: string
+          subject?: string
+          teacher_id?: string
+          test_date?: string
+          test_time?: string | null
+          test_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_schedules_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       test_visits: {
         Row: {
           created_at: string
