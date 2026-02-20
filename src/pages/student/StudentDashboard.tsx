@@ -99,6 +99,7 @@ export default function StudentDashboard() {
   const [vocabSchedules, setVocabSchedules] = useState<VocabSchedule[]>([]);
   const [vocabResults, setVocabResults] = useState<VocabResult[]>([]);
   const [vocabSetting, setVocabSetting] = useState<VocabSetting | null>(null);
+  const [guerrillaAlerts, setGuerrillaAlerts] = useState<VocabSchedule[]>([]);
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([]);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -151,6 +152,7 @@ export default function StudentDashboard() {
         setVocabSchedules(data.vocab_schedules || []);
         setVocabResults(data.vocab_results || []);
         setVocabSetting(data.vocab_setting || null);
+        setGuerrillaAlerts(data.guerrilla_alerts || []);
       }
 
       // Fetch weekly reports separately — deduplicate by week_start (keep latest generated_at)
@@ -242,10 +244,7 @@ export default function StudentDashboard() {
   return (
     <div className="space-y-6 pb-20">
       {/* Guerrilla Test Alert */}
-      {(() => {
-        const guerrillaTests = vocabSchedules.filter(vs => vs.schedule_type === 'guerrilla');
-        if (guerrillaTests.length === 0) return null;
-        return (
+      {guerrillaAlerts.length > 0 && (
           <Card className="border-amber-400 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 animate-fade-in">
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
@@ -257,7 +256,7 @@ export default function StudentDashboard() {
                     <AlertTriangle className="w-4 h-4" />
                     게릴라 테스트 예정!
                   </p>
-                  {guerrillaTests.map(gt => {
+                  {guerrillaAlerts.map(gt => {
                     const d = new Date(gt.test_date + 'T00:00:00');
                     const dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일`;
                     return (
@@ -272,8 +271,7 @@ export default function StudentDashboard() {
               </div>
             </CardContent>
           </Card>
-        );
-      })()}
+      )}
 
       {/* Header */}
       <div className="text-center pt-2">
