@@ -30,6 +30,24 @@ interface Schedule {
   students?: { name: string; grade: string | null };
 }
 
+interface GeneralTestSchedule {
+  id: string;
+  student_id: string;
+  test_date: string;
+  subject: string;
+  test_type: string;
+  content: string | null;
+  notes: string | null;
+  teacher_id: string;
+  test_time: string | null;
+  result_score: string | null;
+  result_passed: boolean | null;
+  result_notes: string | null;
+  result_recorded_by: string | null;
+  result_recorded_at: string | null;
+  students?: { name: string; grade: string | null };
+}
+
 interface TestResult {
   id: string;
   schedule_id: string;
@@ -61,12 +79,20 @@ interface Teacher {
 export function VocabTestResultsPanel() {
   const { user } = useAuth();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [generalSchedules, setGeneralSchedules] = useState<GeneralTestSchedule[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);
   const [settingsMap, setSettingsMap] = useState<Record<string, VocabSettingInfo>>({});
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // General test result input
+  const [generalResultOpen, setGeneralResultOpen] = useState(false);
+  const [activeGeneralTest, setActiveGeneralTest] = useState<GeneralTestSchedule | null>(null);
+  const [generalScore, setGeneralScore] = useState('');
+  const [generalPassed, setGeneralPassed] = useState<boolean | null>(null);
+  const [generalNotes, setGeneralNotes] = useState('');
 
   // Result input dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -103,7 +129,7 @@ export function VocabTestResultsPanel() {
     const startOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1), 'yyyy-MM-dd');
     const endOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0), 'yyyy-MM-dd');
 
-    const [schedRes, resRes, settingsRes] = await Promise.all([
+    const [schedRes, resRes, settingsRes, generalRes] = await Promise.all([
       supabase
         .from('vocab_schedules')
         .select('*, students(name, grade)')
@@ -119,10 +145,17 @@ export function VocabTestResultsPanel() {
       supabase
         .from('vocab_settings')
         .select('id, days_per_test, bundle_days, teacher_id'),
+      supabase
+        .from('test_schedules')
+        .select('*, students(name, grade)')
+        .gte('test_date', startOfMonth)
+        .lte('test_date', endOfMonth)
+        .order('test_date'),
     ]);
 
     if (schedRes.data) setSchedules(schedRes.data as any);
     if (resRes.data) setResults(resRes.data as any);
+    if (generalRes.data) setGeneralSchedules(generalRes.data as any);
 
     if (settingsRes.data) {
       const map: Record<string, VocabSettingInfo> = {};
@@ -134,6 +167,12 @@ export function VocabTestResultsPanel() {
           teacher_id: s.teacher_id,
         };
         teacherIds.add(s.teacher_id);
+      }
+      // Also collect teacher IDs from general schedules
+      if (generalRes.data) {
+        for (const g of generalRes.data) {
+          teacherIds.add(g.teacher_id);
+        }
       }
       setSettingsMap(map);
 
@@ -158,7 +197,13 @@ export function VocabTestResultsPanel() {
         return setting?.teacher_id === selectedTeacher;
       });
 
-  const todaySchedules = filteredSchedules.filter(s => s.test_date === format(selectedDate, 'yyyy-MM-dd'));
+  const filteredGeneralSchedules = selectedTeacher === 'all'
+    ? generalSchedules
+    : generalSchedules.filter(s => s.teacher_id === selectedTeacher);
+
+  const dateStr = format(selectedDate, 'yyyy-MM-dd');
+  const todaySchedules = filteredSchedules.filter(s => s.test_date === dateStr);
+  const todayGeneralSchedules = filteredGeneralSchedules.filter(s => s.test_date === dateStr);
   const filteredResults = selectedTeacher === 'all'
     ? results
     : results.filter(r => {
@@ -169,6 +214,31 @@ export function VocabTestResultsPanel() {
       });
 
   const getResult = (scheduleId: string) => results.find(r => r.schedule_id === scheduleId);
+
+  // Save general test result
+  const handleSaveGeneralResult = async () => {
+    if (!activeGeneralTest || !user) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from('test_schedules')
+      .update({
+        result_score: generalScore || null,
+        result_passed: generalPassed,
+        result_notes: generalNotes || null,
+        result_recorded_by: user.id,
+        result_recorded_at: new Date().toISOString(),
+      })
+      .eq('id', activeGeneralTest.id);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('결과 저장 완료');
+      setGeneralResultOpen(false);
+      fetchSchedulesAndResults();
+    }
+    setSaving(false);
+  };
 
   const formatDayLabel = (sched: Schedule) => {
     const setting = settingsMap[sched.setting_id];
@@ -432,7 +502,10 @@ export function VocabTestResultsPanel() {
   };
 
   // Dates with schedules (for calendar highlighting)
-  const scheduleDates = [...new Set(filteredSchedules.map(s => s.test_date))];
+  const scheduleDates = [...new Set([
+    ...filteredSchedules.map(s => s.test_date),
+    ...filteredGeneralSchedules.map(s => s.test_date),
+  ])];
 
   if (loading) {
     return (
@@ -490,16 +563,17 @@ export function VocabTestResultsPanel() {
             <span className="text-sm font-medium">
               {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })} 시험
             </span>
-            <Badge variant="secondary" className="text-xs">{todaySchedules.length}건</Badge>
+            <Badge variant="secondary" className="text-xs">{todaySchedules.length + todayGeneralSchedules.length}건</Badge>
           </div>
 
-          {todaySchedules.length === 0 ? (
+          {todaySchedules.length === 0 && todayGeneralSchedules.length === 0 ? (
             <Card>
               <CardContent className="py-6 text-center text-muted-foreground text-sm">
                 해당 날짜에 예정된 시험이 없습니다
               </CardContent>
             </Card>
-          ) : (
+          ) : (<>
+            {todaySchedules.length > 0 && (
             <Card>
               <Table>
                 <TableHeader>
@@ -611,7 +685,72 @@ export function VocabTestResultsPanel() {
                 </TableBody>
               </Table>
             </Card>
+            )}
+
+          {/* General test schedules */}
+          {todayGeneralSchedules.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                일반 시험 <Badge variant="secondary" className="text-xs">{todayGeneralSchedules.length}건</Badge>
+              </h3>
+              <Card>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>학생</TableHead>
+                      <TableHead className="text-center">과목</TableHead>
+                      <TableHead>내용</TableHead>
+                      <TableHead className="text-center">결과</TableHead>
+                      <TableHead className="w-[80px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {todayGeneralSchedules.map(gs => (
+                      <TableRow key={gs.id}>
+                        <TableCell className="font-medium text-sm">
+                          {(gs.students as any)?.name || '—'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className="text-xs">{gs.subject}</Badge>
+                        </TableCell>
+                        <TableCell className="text-xs truncate max-w-[160px]" title={gs.content || ''}>
+                          {gs.content || '—'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {gs.result_passed !== null ? (
+                            <div className="flex items-center justify-center gap-1">
+                              {gs.result_passed ? (
+                                <CheckCircle2 className="w-4 h-4 text-success" />
+                              ) : (
+                                <XCircle className="w-4 h-4 text-destructive" />
+                              )}
+                              {gs.result_score && <span className="text-xs font-mono">{gs.result_score}</span>}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">미입력</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => {
+                            setActiveGeneralTest(gs);
+                            setGeneralScore(gs.result_score || '');
+                            setGeneralPassed(gs.result_passed);
+                            setGeneralNotes(gs.result_notes || '');
+                            setGeneralResultOpen(true);
+                          }}>
+                            <ClipboardList className="w-3.5 h-3.5 mr-1" />
+                            {gs.result_passed !== null ? '수정' : '입력'}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </div>
           )}
+          </>)}
 
           {/* Failed tests needing retest */}
           {filteredResults.filter(r => !r.passed && !r.retest_scheduled).length > 0 && (
@@ -870,6 +1009,64 @@ export function VocabTestResultsPanel() {
               <Button onClick={handlePostpone} disabled={postponeSaving || !postponeDate} className="w-full">
                 {postponeSaving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
                 날짜 변경
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* General test result dialog */}
+      <Dialog open={generalResultOpen} onOpenChange={setGeneralResultOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>시험 결과 입력</DialogTitle>
+          </DialogHeader>
+          {activeGeneralTest && (
+            <div className="space-y-4 pt-2">
+              <div className="bg-muted rounded-md p-3 text-sm">
+                <p className="font-medium">{(activeGeneralTest.students as any)?.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {activeGeneralTest.subject} · {activeGeneralTest.content || '—'}
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">점수/결과</Label>
+                <Input value={generalScore} onChange={e => setGeneralScore(e.target.value)} placeholder="예: 85점, 8/10 등" />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">통과 여부</Label>
+                <div className="flex gap-2">
+                  <Button
+                    variant={generalPassed === true ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setGeneralPassed(true)}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                    통과
+                  </Button>
+                  <Button
+                    variant={generalPassed === false ? 'destructive' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setGeneralPassed(false)}
+                  >
+                    <XCircle className="w-4 h-4 mr-1.5" />
+                    불통과
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">메모</Label>
+                <Input value={generalNotes} onChange={e => setGeneralNotes(e.target.value)} placeholder="선택사항" />
+              </div>
+
+              <Button onClick={handleSaveGeneralResult} disabled={saving} className="w-full">
+                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                저장
               </Button>
             </div>
           )}

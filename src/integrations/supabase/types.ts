@@ -1360,6 +1360,11 @@ export type Database = {
           created_at: string
           id: string
           notes: string | null
+          result_notes: string | null
+          result_passed: boolean | null
+          result_recorded_at: string | null
+          result_recorded_by: string | null
+          result_score: string | null
           student_id: string
           subject: string
           teacher_id: string
@@ -1372,6 +1377,11 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          result_notes?: string | null
+          result_passed?: boolean | null
+          result_recorded_at?: string | null
+          result_recorded_by?: string | null
+          result_score?: string | null
           student_id: string
           subject: string
           teacher_id: string
@@ -1384,6 +1394,11 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          result_notes?: string | null
+          result_passed?: boolean | null
+          result_recorded_at?: string | null
+          result_recorded_by?: string | null
+          result_score?: string | null
           student_id?: string
           subject?: string
           teacher_id?: string
