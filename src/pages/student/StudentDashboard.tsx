@@ -20,7 +20,9 @@ import {
   RefreshCw,
   FileText,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  AlertTriangle,
+  Zap
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -54,6 +56,7 @@ interface VocabSchedule {
   day_number: number;
   book_name: string;
   schedule_type: string;
+  test_time: string | null;
 }
 
 interface VocabResult {
@@ -238,6 +241,40 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Guerrilla Test Alert */}
+      {(() => {
+        const guerrillaTests = vocabSchedules.filter(vs => vs.schedule_type === 'guerrilla');
+        if (guerrillaTests.length === 0) return null;
+        return (
+          <Card className="border-amber-400 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 animate-fade-in">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center flex-shrink-0">
+                  <Zap className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <p className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4" />
+                    게릴라 테스트 예정!
+                  </p>
+                  {guerrillaTests.map(gt => {
+                    const d = new Date(gt.test_date + 'T00:00:00');
+                    const dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+                    return (
+                      <div key={gt.id} className="text-sm text-amber-700 dark:text-amber-400">
+                        📌 <span className="font-medium">{dateLabel}</span>
+                        {gt.test_time && <span> {gt.test_time.slice(0, 5)}</span>}
+                        {' · '}{gt.book_name} Day {gt.day_number}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Header */}
       <div className="text-center pt-2">
         <h1 className="text-xl font-bold">
@@ -337,17 +374,29 @@ export default function StudentDashboard() {
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1.5">📅 다가오는 시험</p>
                 <div className="space-y-1.5">
-                  {vocabSchedules.slice(0, 5).map(vs => {
+                  {vocabSchedules.slice(0, 7).map(vs => {
                     const d = new Date(vs.test_date + 'T00:00:00');
                     const dayLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+                    const isGuerrilla = vs.schedule_type === 'guerrilla';
+                    const isRetest = vs.schedule_type === 'retest';
                     return (
-                      <div key={vs.id} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50">
+                      <div key={vs.id} className={`flex items-center justify-between p-2.5 rounded-lg ${isGuerrilla ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800' : 'bg-muted/50'}`}>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-medium bg-primary/10 text-primary px-2 py-0.5 rounded">{dayLabel}</span>
-                          <span className="text-sm">{vs.book_name}</span>
+                          <div>
+                            <span className="text-sm">{vs.book_name} Day {vs.day_number}</span>
+                            {vs.test_time && (
+                              <span className="text-[10px] text-muted-foreground ml-1.5">
+                                <Clock className="w-2.5 h-2.5 inline" /> {vs.test_time.slice(0, 5)}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <Badge variant={vs.schedule_type === 'retest' ? 'destructive' : vs.schedule_type === 'guerrilla' ? 'outline' : 'secondary'} className="text-[10px]">
-                          Day {vs.day_number} {vs.schedule_type === 'retest' ? '재시험' : vs.schedule_type === 'guerrilla' ? '게릴라' : ''}
+                        <Badge 
+                          variant={isRetest ? 'destructive' : isGuerrilla ? 'outline' : 'secondary'} 
+                          className={`text-[10px] ${isGuerrilla ? 'border-amber-400 text-amber-700 dark:text-amber-400' : ''}`}
+                        >
+                          {isRetest ? '재시험' : isGuerrilla ? '⚡ 게릴라' : '정규'}
                         </Badge>
                       </div>
                     );
