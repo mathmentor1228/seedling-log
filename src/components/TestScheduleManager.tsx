@@ -59,6 +59,8 @@ export function TestScheduleManager() {
 
   // Filter
   const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [studentSearch, setStudentSearch] = useState('');
+  const [gradeFilter, setGradeFilter] = useState<string>('all');
 
   useEffect(() => {
     if (user?.id) {
@@ -364,17 +366,103 @@ export function TestScheduleManager() {
                   {selectedStudents.size === students.length ? '전체 해제' : '전체 선택'}
                 </Button>
               </div>
-              <div className="max-h-48 overflow-y-auto border rounded-lg p-2 space-y-1">
-                {students.map(s => (
-                  <label key={s.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer">
-                    <Checkbox
-                      checked={selectedStudents.has(s.id)}
-                      onCheckedChange={() => toggleStudent(s.id)}
-                    />
-                    <span className="text-sm">{s.name}</span>
-                    {s.grade && <span className="text-xs text-muted-foreground">{s.grade}</span>}
-                  </label>
+              <Input
+                placeholder="이름 검색..."
+                value={studentSearch}
+                onChange={e => setStudentSearch(e.target.value)}
+                className="text-sm mb-2"
+              />
+              <div className="flex gap-1 flex-wrap mb-2">
+                {['all', '중1', '중2', '중3', '고1', '고2', '고3'].map(g => (
+                  <Button
+                    key={g}
+                    variant={gradeFilter === g ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => setGradeFilter(g)}
+                  >
+                    {g === 'all' ? '전체' : g}
+                  </Button>
                 ))}
+              </div>
+              <div className="max-h-48 overflow-y-auto border rounded-lg p-2 space-y-1">
+                {(() => {
+                  const GRADE_GROUPS = ['중1', '중2', '중3', '고1', '고2', '고3'];
+                  const getGradeGroup = (grade: string | null, school: string | null) => {
+                    if (!grade) return null;
+                    for (const g of GRADE_GROUPS) {
+                      if (grade.includes(g)) return g;
+                    }
+                    if (school) {
+                      const level = school.includes('중') ? '중' : school.includes('고') ? '고' : null;
+                      if (level) {
+                        const yearMatch = grade.match(/(\d)/);
+                        if (yearMatch) return `${level}${yearMatch[1]}`;
+                      }
+                    }
+                    return null;
+                  };
+
+                  let filtered = students.filter(s => {
+                    if (studentSearch && !s.name.includes(studentSearch)) return false;
+                    if (gradeFilter !== 'all') {
+                      const group = getGradeGroup(s.grade, s.school);
+                      if (group !== gradeFilter) return false;
+                    }
+                    return true;
+                  });
+
+                  if (gradeFilter === 'all' && !studentSearch) {
+                    // Group by grade
+                    const grouped: Record<string, Student[]> = {};
+                    const ungrouped: Student[] = [];
+                    for (const s of filtered) {
+                      const g = getGradeGroup(s.grade, s.school);
+                      if (g) {
+                        if (!grouped[g]) grouped[g] = [];
+                        grouped[g].push(s);
+                      } else {
+                        ungrouped.push(s);
+                      }
+                    }
+                    return (
+                      <>
+                        {GRADE_GROUPS.map(g => grouped[g] && (
+                          <div key={g}>
+                            <p className="text-[10px] font-semibold text-muted-foreground px-1 pt-1">{g}</p>
+                            {grouped[g].map(s => (
+                              <label key={s.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer">
+                                <Checkbox checked={selectedStudents.has(s.id)} onCheckedChange={() => toggleStudent(s.id)} />
+                                <span className="text-sm">{s.name}</span>
+                                {s.grade && <span className="text-xs text-muted-foreground">{s.grade}</span>}
+                              </label>
+                            ))}
+                          </div>
+                        ))}
+                        {ungrouped.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-semibold text-muted-foreground px-1 pt-1">기타</p>
+                            {ungrouped.map(s => (
+                              <label key={s.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer">
+                                <Checkbox checked={selectedStudents.has(s.id)} onCheckedChange={() => toggleStudent(s.id)} />
+                                <span className="text-sm">{s.name}</span>
+                                {s.grade && <span className="text-xs text-muted-foreground">{s.grade}</span>}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  }
+
+                  return filtered.map(s => (
+                    <label key={s.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer">
+                      <Checkbox checked={selectedStudents.has(s.id)} onCheckedChange={() => toggleStudent(s.id)} />
+                      <span className="text-sm">{s.name}</span>
+                      {s.grade && <span className="text-xs text-muted-foreground">{s.grade}</span>}
+                    </label>
+                  ));
+                })()}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 {selectedStudents.size}명 선택됨
