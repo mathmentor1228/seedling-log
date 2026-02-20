@@ -286,6 +286,15 @@ Deno.serve(async (req) => {
           guerrillaAlerts = myScheduleGuerrillas;
         }
 
+        // Fetch general test schedules for this student
+        const { data: testSchedulesData } = await supabase
+          .from('test_schedules')
+          .select('id, test_date, test_time, subject, test_type, content, notes')
+          .eq('student_id', student_id)
+          .gte('test_date', todayStr)
+          .lte('test_date', futureStr)
+          .order('test_date');
+
         result = {
           total_points: studentData?.total_points || 0,
           pending_homework: (homeworkData || []).filter((hw: any) => hw.content?.trim() !== '없음'),
@@ -294,6 +303,7 @@ Deno.serve(async (req) => {
           vocab_results: vocabResultsRes.data || [],
           vocab_setting: vocabSettingsRes.data || null,
           guerrilla_alerts: guerrillaAlerts,
+          test_schedules: testSchedulesData || [],
         };
         break;
       }
