@@ -74,12 +74,19 @@ export function TestScheduleManager() {
       
       // If teacher (not admin), filter to own students
       if (role === 'teacher') {
-        const { data: links } = await supabase
-          .from('student_subject_teachers')
-          .select('student_id')
-          .eq('teacher_id', user!.id);
+        // Gather student IDs from all ownership sources
+        const [sstRes, csRes, lrRes] = await Promise.all([
+          supabase.from('student_subject_teachers').select('student_id').eq('teacher_id', user!.id),
+          supabase.from('class_students').select('student_id, classes!inner(teacher_id)').eq('classes.teacher_id', user!.id),
+          supabase.from('lesson_records').select('student_id').eq('teacher_id', user!.id),
+        ]);
         
-        const studentIds = (links || []).map(l => l.student_id);
+        const idSet = new Set<string>();
+        (sstRes.data || []).forEach(r => idSet.add(r.student_id));
+        (csRes.data || []).forEach(r => idSet.add(r.student_id));
+        (lrRes.data || []).forEach(r => idSet.add(r.student_id));
+        
+        const studentIds = Array.from(idSet);
         if (studentIds.length > 0) {
           studentQuery = studentQuery.in('id', studentIds);
         } else {
