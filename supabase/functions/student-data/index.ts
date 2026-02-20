@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
         const [vocabScheduleRes, vocabResultsRes, vocabSettingsRes] = await Promise.all([
           supabase
             .from('vocab_schedules')
-            .select('id, test_date, day_number, book_name, schedule_type')
+            .select('id, test_date, day_number, book_name, schedule_type, test_time')
             .eq('student_id', student_id)
             .gte('test_date', todayStr)
             .lte('test_date', futureStr)

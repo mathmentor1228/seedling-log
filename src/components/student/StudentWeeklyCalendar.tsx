@@ -25,6 +25,7 @@ interface VocabSchedule {
   day_number: number;
   book_name: string;
   schedule_type: string;
+  test_time?: string | null;
 }
 
 interface Props {
@@ -151,10 +152,10 @@ export default function StudentWeeklyCalendar({ homework, classes, vocabSchedule
               {dayVocab.map((vs, j) => (
                 <div
                   key={`v-${j}`}
-                  className="rounded px-1 py-0.5 text-[9px] leading-tight font-medium truncate bg-amber-50 text-amber-700"
-                  title={`${vs.book_name} Day ${vs.day_number}`}
+                  className={`rounded px-1 py-0.5 text-[9px] leading-tight font-medium truncate ${vs.schedule_type === 'guerrilla' ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-300' : 'bg-amber-50 text-amber-700'}`}
+                  title={`${vs.book_name} Day ${vs.day_number}${vs.schedule_type === 'guerrilla' ? ' (게릴라)' : ''}`}
                 >
-                  <BookOpen className="w-2.5 h-2.5 inline mr-0.5" />
+                  {vs.schedule_type === 'guerrilla' ? '⚡' : <BookOpen className="w-2.5 h-2.5 inline mr-0.5" />}
                   D{vs.day_number}
                 </div>
               ))}
