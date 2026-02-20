@@ -19,15 +19,29 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   label: `${i + 1}월`,
 }));
 
-const DAY_MAP: Record<string, number[]> = {
-  mon_wed: [1, 3],
-  tue_thu: [2, 4],
+const DAY_CODE_TO_JS: Record<string, number> = {
+  mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
 };
 
-const TEST_DAY_LABELS: Record<string, string> = {
-  mon_wed: '월/수',
-  tue_thu: '화/목',
+const DAY_LABELS: Record<string, string> = {
+  mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토',
 };
+
+// Backward compat: convert old combo values to individual day arrays
+function normalizeTestDays(testDays: string[]): string[] {
+  if (!testDays || testDays.length === 0) return ['mon', 'wed'];
+  const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  if (testDays.every(d => ALL_DAYS.includes(d))) return testDays;
+  const combo = testDays[0];
+  const COMBO_MAP: Record<string, string[]> = {
+    mon_wed: ['mon', 'wed'], tue_thu: ['tue', 'thu'],
+    mon_wed_fri: ['mon', 'wed', 'fri'], tue_thu_fri: ['tue', 'thu', 'fri'],
+    mon_tue_wed_thu: ['mon', 'tue', 'wed', 'thu'],
+    mon_tue_wed_thu_fri: ['mon', 'tue', 'wed', 'thu', 'fri'],
+    mon: ['mon'], tue: ['tue'], wed: ['wed'], thu: ['thu'], fri: ['fri'], sat: ['sat'],
+  };
+  return COMBO_MAP[combo] || ['mon', 'wed'];
+}
 
 interface StudentScheduleInfo {
   settingId: string;
@@ -35,7 +49,7 @@ interface StudentScheduleInfo {
   studentName: string;
   grade: string | null;
   bookName: string;
-  testDays: string;
+  testDays: string[];
   currentDay: number;
   daysPerTest: number;
   bundleDays: boolean;
@@ -113,7 +127,7 @@ export function VocabScheduleGenerator() {
       studentName: s.students?.name || '—',
       grade: s.students?.grade || null,
       bookName: s.book_name,
-      testDays: s.test_days?.[0] || 'mon_wed',
+      testDays: s.test_days || ['mon', 'wed'],
       currentDay: s.current_day_number,
       daysPerTest: s.days_per_test,
       bundleDays: s.bundle_days || false,
@@ -184,7 +198,8 @@ export function VocabScheduleGenerator() {
     const inserts: any[] = [];
     const skippedStudents: string[] = [];
     for (const info of targetSettings) {
-      const allowedDays = DAY_MAP[info.testDays] || [1, 3];
+      const daysCodes = normalizeTestDays(info.testDays);
+      const allowedDays = daysCodes.map(d => DAY_CODE_TO_JS[d]).filter(Boolean);
       const testDates = allDays.filter(d => allowedDays.includes(getDay(d)));
       let dayNumber = info.currentDay;
 
@@ -452,7 +467,7 @@ export function VocabScheduleGenerator() {
                     {info.grade && <span className="text-xs text-muted-foreground ml-1">({info.grade})</span>}
                   </TableCell>
                   <TableCell className="text-sm">{info.bookName}</TableCell>
-                  <TableCell className="text-center text-xs">{TEST_DAY_LABELS[info.testDays] || info.testDays}</TableCell>
+                  <TableCell className="text-center text-xs">{normalizeTestDays(info.testDays).map(d => DAY_LABELS[d] || d).join('/')}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className="text-xs font-mono">Day {info.currentDay}</Badge>
                   </TableCell>
