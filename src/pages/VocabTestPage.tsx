@@ -3,14 +3,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VocabSettingsPanel } from '@/components/vocab/VocabSettingsPanel';
 import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
 import { VocabScheduleGenerator } from '@/components/vocab/VocabScheduleGenerator';
-import { BookOpen, ClipboardList, Settings } from 'lucide-react';
+import { TestScheduleManager } from '@/components/TestScheduleManager';
+import { BookOpen, CalendarDays, ClipboardList, Settings } from 'lucide-react';
 
 function VocabTestContent() {
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h1 className="text-lg font-semibold">영어 단어 테스트</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">학생별 단어 시험 설정, 스케줄 관리, 결과 입력</p>
+        <h1 className="text-lg font-semibold">시험 관리</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">단어 시험 설정/스케줄 및 범용 시험 일정 관리</p>
       </div>
 
       <Tabs defaultValue="results" className="space-y-4">
@@ -27,6 +28,10 @@ function VocabTestContent() {
             <BookOpen className="w-3.5 h-3.5" />
             스케줄 생성
           </TabsTrigger>
+          <TabsTrigger value="test-schedule" className="gap-1.5 text-xs">
+            <CalendarDays className="w-3.5 h-3.5" />
+            시험 일정
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="results">
@@ -39,6 +44,10 @@ function VocabTestContent() {
 
         <TabsContent value="schedule">
           <VocabScheduleGenerator />
+        </TabsContent>
+
+        <TabsContent value="test-schedule">
+          <TestScheduleManager />
         </TabsContent>
       </Tabs>
     </div>

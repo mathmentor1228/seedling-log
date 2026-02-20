@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,6 +47,7 @@ interface StudentScheduleInfo {
 }
 
 export function VocabScheduleGenerator() {
+  const { user, role } = useAuth();
   const now = new Date();
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth()));
@@ -71,6 +73,11 @@ export function VocabScheduleGenerator() {
   const [bulkSelectedStudents, setBulkSelectedStudents] = useState<Set<string>>(new Set());
   const [bulkDayRanges, setBulkDayRanges] = useState<Record<string, { start: number; end: number }>>({}); 
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkSubject, setBulkSubject] = useState('영어');
+  const [bulkContent, setBulkContent] = useState('');
+
+  // All enrolled students (for non-vocab guerrilla)
+  const [allStudents, setAllStudents] = useState<{ id: string; name: string; grade: string | null }[]>([]);
 
   // Hardcoded teacher categories
   const TEACHER_CATEGORIES = [
@@ -99,7 +106,7 @@ export function VocabScheduleGenerator() {
     setLoading(true);
     const { start, end } = getMonthRange();
 
-    const [settingsRes, schedulesRes] = await Promise.all([
+    const [settingsRes, schedulesRes, allStudentsRes] = await Promise.all([
       supabase
         .from('vocab_settings')
         .select('*, students(name, grade)')
@@ -110,6 +117,11 @@ export function VocabScheduleGenerator() {
         .select('id, student_id')
         .gte('test_date', start)
         .lte('test_date', end),
+      supabase
+        .from('students')
+        .select('id, name, grade')
+        .eq('enrollment_status', '재원')
+        .order('name'),
     ]);
 
     const settings = settingsRes.data || [];
@@ -138,6 +150,7 @@ export function VocabScheduleGenerator() {
     }));
 
     setStudentInfos(infos);
+    setAllStudents(allStudentsRes.data || []);
     setSelectedIds(new Set());
     setLoading(false);
   };
@@ -618,7 +631,7 @@ export function VocabScheduleGenerator() {
       </Dialog>
 
       {/* Bulk Guerrilla Dialog */}
-      <Dialog open={bulkGuerrillaOpen} onOpenChange={(o) => { setBulkGuerrillaOpen(o); if (!o) { setBulkSelectedStudents(new Set()); setBulkDayRanges({}); } }}>
+      <Dialog open={bulkGuerrillaOpen} onOpenChange={(o) => { setBulkGuerrillaOpen(o); if (!o) { setBulkSelectedStudents(new Set()); setBulkDayRanges({}); setBulkContent(''); setBulkSubject('영어'); } }}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>일괄 게릴라 시험 추가</DialogTitle>
@@ -630,41 +643,52 @@ export function VocabScheduleGenerator() {
                 <Input type="date" value={bulkDate} onChange={e => setBulkDate(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">선생님</Label>
-                <Select value={bulkTeacher} onValueChange={(v) => {
-                  setBulkTeacher(v);
-                  setBulkSelectedStudents(new Set());
-                  setBulkDayRanges({});
-                }}>
-                  <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                <Label className="text-xs">과목</Label>
+                <Select value={bulkSubject} onValueChange={setBulkSubject}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {TEACHER_CATEGORIES.map(t => (
-                      <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
-                    ))}
+                    <SelectItem value="영어">영어</SelectItem>
+                    <SelectItem value="수학">수학</SelectItem>
+                    <SelectItem value="국어">국어</SelectItem>
+                    <SelectItem value="과학">과학</SelectItem>
+                    <SelectItem value="기타">기타</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {bulkTeacher && (() => {
-              const teacherStudents = studentInfos.filter(s => s.assignedTeacher === bulkTeacher);
-              if (teacherStudents.length === 0) return (
-                <p className="text-sm text-muted-foreground text-center py-4">해당 선생님에 배정된 학생이 없습니다</p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">시험 내용/범위 (비단어 학생용)</Label>
+              <Input value={bulkContent} onChange={e => setBulkContent(e.target.value)} placeholder="예: p.50~60, 1단원 복습" className="text-sm" />
+            </div>
+
+            {/* Student selection - ALL enrolled students */}
+            {(() => {
+              const vocabStudentIds = new Set(studentInfos.map(s => s.studentId));
+              const vocabStudents = studentInfos;
+              const nonVocabStudents = allStudents.filter(s => !vocabStudentIds.has(s.id));
+              const allList = [
+                ...vocabStudents.map(s => ({ id: s.studentId, name: s.studentName, grade: s.grade, hasVocab: true as const, info: s })),
+                ...nonVocabStudents.map(s => ({ id: s.id, name: s.name, grade: s.grade, hasVocab: false as const, info: null })),
+              ];
+
+              if (allList.length === 0) return (
+                <p className="text-sm text-muted-foreground text-center py-4">재원 학생이 없습니다</p>
               );
+
               return (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-medium">학생 선택</Label>
+                    <Label className="text-xs font-medium">학생 선택 ({bulkSelectedStudents.size}/{allList.length})</Label>
                     <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => {
-                      const allIds = new Set(teacherStudents.map(s => s.studentId));
-                      const allChecked = teacherStudents.every(s => bulkSelectedStudents.has(s.studentId));
+                      const allIds = new Set(allList.map(s => s.id));
+                      const allChecked = allList.every(s => bulkSelectedStudents.has(s.id));
                       if (allChecked) {
                         setBulkSelectedStudents(new Set());
                       } else {
                         setBulkSelectedStudents(allIds);
-                        // Init day ranges
                         const ranges: Record<string, { start: number; end: number }> = {};
-                        teacherStudents.forEach(s => { ranges[s.studentId] = { start: s.currentDay, end: s.currentDay }; });
+                        vocabStudents.forEach(s => { ranges[s.studentId] = { start: s.currentDay, end: s.currentDay }; });
                         setBulkDayRanges(prev => ({ ...prev, ...ranges }));
                       }
                     }}>
@@ -672,32 +696,41 @@ export function VocabScheduleGenerator() {
                     </Button>
                   </div>
                   <div className="border rounded-md divide-y max-h-[300px] overflow-y-auto">
-                    {teacherStudents.map(info => {
-                      const checked = bulkSelectedStudents.has(info.studentId);
-                      const range = bulkDayRanges[info.studentId] || { start: info.currentDay, end: info.currentDay };
+                    {allList.map(item => {
+                      const checked = bulkSelectedStudents.has(item.id);
+                      const range = item.hasVocab && item.info
+                        ? (bulkDayRanges[item.id] || { start: item.info.currentDay, end: item.info.currentDay })
+                        : null;
                       return (
-                        <div key={info.studentId} className="p-2 space-y-1.5">
+                        <div key={item.id} className="p-2 space-y-1.5">
                           <div className="flex items-center gap-2">
                             <Checkbox
                               checked={checked}
                               onCheckedChange={(v) => {
                                 const next = new Set(bulkSelectedStudents);
                                 if (v) {
-                                  next.add(info.studentId);
-                                  setBulkDayRanges(prev => ({ ...prev, [info.studentId]: { start: info.currentDay, end: info.currentDay } }));
+                                  next.add(item.id);
+                                  if (item.hasVocab && item.info) {
+                                    setBulkDayRanges(prev => ({ ...prev, [item.id]: { start: item.info!.currentDay, end: item.info!.currentDay } }));
+                                  }
                                 } else {
-                                  next.delete(info.studentId);
+                                  next.delete(item.id);
                                 }
                                 setBulkSelectedStudents(next);
                               }}
                             />
                             <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium">{info.studentName}</span>
-                              {info.grade && <span className="text-xs text-muted-foreground ml-1">({info.grade})</span>}
-                              <span className="text-xs text-muted-foreground ml-2">{info.bookName}</span>
+                              <span className="text-sm font-medium">{item.name}</span>
+                              {item.grade && <span className="text-xs text-muted-foreground ml-1">({item.grade})</span>}
+                              {item.hasVocab && item.info && (
+                                <span className="text-xs text-muted-foreground ml-2">{item.info.bookName}</span>
+                              )}
+                              {!item.hasVocab && (
+                                <Badge variant="outline" className="ml-2 text-[10px]">비단어</Badge>
+                              )}
                             </div>
                           </div>
-                          {checked && (
+                          {checked && item.hasVocab && range && (
                             <div className="flex items-center gap-2 pl-6">
                               <Label className="text-[10px] text-muted-foreground whitespace-nowrap">DAY</Label>
                               <Input
@@ -709,7 +742,7 @@ export function VocabScheduleGenerator() {
                                   const v = Number(e.target.value);
                                   setBulkDayRanges(prev => ({
                                     ...prev,
-                                    [info.studentId]: { start: v, end: Math.max(v, prev[info.studentId]?.end || v) },
+                                    [item.id]: { start: v, end: Math.max(v, prev[item.id]?.end || v) },
                                   }));
                                 }}
                               />
@@ -721,7 +754,7 @@ export function VocabScheduleGenerator() {
                                 value={range.end}
                                 onChange={e => setBulkDayRanges(prev => ({
                                   ...prev,
-                                  [info.studentId]: { ...prev[info.studentId], end: Number(e.target.value) },
+                                  [item.id]: { ...prev[item.id], end: Number(e.target.value) },
                                 }))}
                               />
                               {range.start !== range.end && (
@@ -742,35 +775,63 @@ export function VocabScheduleGenerator() {
               disabled={bulkSaving || bulkSelectedStudents.size === 0 || !bulkDate}
               onClick={async () => {
                 setBulkSaving(true);
-                const inserts: any[] = [];
+                const vocabInserts: any[] = [];
+                const testScheduleInserts: any[] = [];
+                const vocabStudentIds = new Set(studentInfos.map(s => s.studentId));
+
                 for (const studentId of bulkSelectedStudents) {
-                  const info = studentInfos.find(s => s.studentId === studentId);
-                  if (!info) continue;
-                  const range = bulkDayRanges[studentId];
-                  if (!range) continue;
-                  for (let d = range.start; d <= range.end; d++) {
-                    inserts.push({
-                      student_id: info.studentId,
-                      setting_id: info.settingId,
+                  if (vocabStudentIds.has(studentId)) {
+                    // Vocab student → vocab_schedules
+                    const info = studentInfos.find(s => s.studentId === studentId);
+                    if (!info) continue;
+                    const range = bulkDayRanges[studentId];
+                    if (!range) continue;
+                    for (let d = range.start; d <= range.end; d++) {
+                      vocabInserts.push({
+                        student_id: info.studentId,
+                        setting_id: info.settingId,
+                        test_date: bulkDate,
+                        day_number: d,
+                        book_name: info.bookName,
+                        schedule_type: 'guerrilla',
+                      });
+                    }
+                  } else {
+                    // Non-vocab student → test_schedules
+                    testScheduleInserts.push({
+                      student_id: studentId,
+                      teacher_id: user!.id,
                       test_date: bulkDate,
-                      day_number: d,
-                      book_name: info.bookName,
-                      schedule_type: 'guerrilla',
+                      subject: bulkSubject,
+                      test_type: 'guerrilla',
+                      content: bulkContent.trim() || null,
                     });
                   }
                 }
-                if (inserts.length === 0) {
+
+                if (vocabInserts.length === 0 && testScheduleInserts.length === 0) {
                   toast.info('추가할 시험이 없습니다');
                   setBulkSaving(false);
                   return;
                 }
-                const { error } = await supabase.from('vocab_schedules').insert(inserts);
-                if (error) { toast.error(error.message); }
-                else {
-                  toast.success(`${bulkSelectedStudents.size}명, ${inserts.length}건 게릴라 시험 추가 완료`);
+
+                let hasError = false;
+                if (vocabInserts.length > 0) {
+                  const { error } = await supabase.from('vocab_schedules').insert(vocabInserts);
+                  if (error) { toast.error('단어 시험 추가 실패: ' + error.message); hasError = true; }
+                }
+                if (testScheduleInserts.length > 0) {
+                  const { error } = await supabase.from('test_schedules').insert(testScheduleInserts);
+                  if (error) { toast.error('시험 일정 추가 실패: ' + error.message); hasError = true; }
+                }
+
+                if (!hasError) {
+                  const totalCount = vocabInserts.length + testScheduleInserts.length;
+                  toast.success(`${bulkSelectedStudents.size}명, ${totalCount}건 게릴라 시험 추가 완료`);
                   setBulkGuerrillaOpen(false);
                   setBulkSelectedStudents(new Set());
                   setBulkDayRanges({});
+                  setBulkContent('');
                   fetchStudentScheduleInfo();
                 }
                 setBulkSaving(false);
