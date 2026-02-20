@@ -586,8 +586,8 @@ export function TeacherAssistantRequestsView() {
           <Dialog open={detailModalOpen} onOpenChange={(open) => {
             if (!open) handleModalClose();
           }}>
-            <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
-              <DialogHeader>
+            <DialogContent className="max-w-lg max-h-[85vh] flex flex-col gap-0 p-0">
+              <DialogHeader className="px-5 pt-5 pb-3 border-b">
                 <DialogTitle className="flex items-center gap-2 pr-8">
                   <MessageSquare className="w-5 h-5 text-primary" />
                   <span className="truncate">{selectedTask?.title}</span>
@@ -598,122 +598,122 @@ export function TeacherAssistantRequestsView() {
               </DialogHeader>
               
               {selectedTask && (
-                <ScrollArea className="flex-1 max-h-[60vh]">
-                  <div className="space-y-4 pr-4">
-                    {/* Status badges row */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {getStatusBadge(selectedTask.status)}
-                      {getAssigneeBadge(selectedTask.assignee)}
-                      {getDueBadge(selectedTask.due_date)}
-                    </div>
-                    
-                    {/* Metadata */}
-                    <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg p-3 bg-muted/30">
-                      <div>
-                        <span className="text-muted-foreground">작성일시:</span>
-                        <span className="ml-1 font-medium">
-                          {format(new Date(selectedTask.created_at), 'yyyy년 M월 d일 HH:mm', { locale: ko })}
-                        </span>
+                <>
+                  <ScrollArea className="flex-1 min-h-0">
+                    <div className="space-y-4 px-5 py-4">
+                      {/* Status badges row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {getStatusBadge(selectedTask.status)}
+                        {getAssigneeBadge(selectedTask.assignee)}
+                        {getDueBadge(selectedTask.due_date)}
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">상태:</span>
-                        <span className="ml-1 font-medium">
-                          {selectedTask.status === 'doing' ? '진행중' : selectedTask.status === 'done' ? '완료' : selectedTask.status === 'cancelled' ? '취소됨' : '대기'}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Full content */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-muted-foreground">내용</Label>
-                        {selectedTask.notes && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={handleCopyNotes}
-                          >
-                            {copied ? (
-                              <><Check className="w-3 h-3 mr-1" />복사됨</>
-                            ) : (
-                              <><Copy className="w-3 h-3 mr-1" />복사</>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                      <div className="p-3 border rounded-lg bg-background min-h-[80px]">
-                        {selectedTask.notes ? (
-                          <p className="text-sm whitespace-pre-wrap break-words">{selectedTask.notes}</p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground italic">내용 없음</p>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Replies section */}
-                    <div className="space-y-3 pt-2 border-t">
-                      <Label className="text-muted-foreground flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4" />
-                        답글 ({replies.length})
-                      </Label>
                       
-                      {repliesLoading ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                      {/* Metadata */}
+                      <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg p-3 bg-muted/30">
+                        <div>
+                          <span className="text-muted-foreground">작성일시:</span>
+                          <span className="ml-1 font-medium">
+                            {format(new Date(selectedTask.created_at), 'yyyy년 M월 d일 HH:mm', { locale: ko })}
+                          </span>
                         </div>
-                      ) : replies.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic py-2">아직 답글이 없습니다.</p>
-                      ) : (
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                          {replies.map((reply) => (
-                            <div key={reply.id} className="p-2 border rounded-lg bg-secondary/30">
-                              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                                <span className="font-medium text-foreground">{reply.author_name || '알 수 없음'}</span>
-                                <span>{format(new Date(reply.created_at), 'MM/dd HH:mm')}</span>
-                              </div>
-                              <p className="text-sm whitespace-pre-wrap break-words">{reply.body}</p>
-                            </div>
-                          ))}
+                        <div>
+                          <span className="text-muted-foreground">상태:</span>
+                          <span className="ml-1 font-medium">
+                            {selectedTask.status === 'doing' ? '진행중' : selectedTask.status === 'done' ? '완료' : selectedTask.status === 'cancelled' ? '취소됨' : '대기'}
+                          </span>
                         </div>
-                      )}
+                      </div>
                       
-                      {/* Reply input */}
+                      {/* Full content */}
                       <div className="space-y-2">
-                        <Textarea
-                          placeholder="답글을 입력하세요..."
-                          value={replyText}
-                          onChange={(e) => setReplyText(e.target.value)}
-                          className="min-h-[60px] text-sm"
-                          disabled={replySubmitting}
-                        />
-                        <div className="flex justify-end">
-                          <Button 
-                            size="sm" 
-                            onClick={handleSubmitReply}
-                            disabled={!replyText.trim() || replySubmitting}
-                          >
-                            {replySubmitting ? (
-                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                            ) : (
-                              <Send className="w-4 h-4 mr-1" />
-                            )}
-                            답글 등록
-                          </Button>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-muted-foreground">내용</Label>
+                          {selectedTask.notes && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={handleCopyNotes}
+                            >
+                              {copied ? (
+                                <><Check className="w-3 h-3 mr-1" />복사됨</>
+                              ) : (
+                                <><Copy className="w-3 h-3 mr-1" />복사</>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        <div className="p-3 border rounded-lg bg-background min-h-[60px] max-h-[200px] overflow-y-auto">
+                          {selectedTask.notes ? (
+                            <p className="text-sm whitespace-pre-wrap break-words">{selectedTask.notes}</p>
+                          ) : (
+                            <p className="text-sm text-muted-foreground italic">내용 없음</p>
+                          )}
                         </div>
                       </div>
+                      
+                      {/* Replies section */}
+                      <div className="space-y-3 pt-2 border-t">
+                        <Label className="text-muted-foreground flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4" />
+                          답글 ({replies.length})
+                        </Label>
+                        
+                        {repliesLoading ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : replies.length === 0 ? (
+                          <p className="text-sm text-muted-foreground italic py-2">아직 답글이 없습니다.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {replies.map((reply) => (
+                              <div key={reply.id} className="p-2.5 border rounded-lg bg-secondary/30">
+                                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                                  <span className="font-medium text-foreground">{reply.author_name || '알 수 없음'}</span>
+                                  <span>{format(new Date(reply.created_at), 'MM/dd HH:mm')}</span>
+                                </div>
+                                <p className="text-sm whitespace-pre-wrap break-words">{reply.body}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </ScrollArea>
+                  
+                  {/* Reply input - fixed at bottom */}
+                  <div className="border-t px-5 py-3 space-y-2 bg-muted/20">
+                    <div className="flex gap-2">
+                      <Textarea
+                        placeholder="답글을 입력하세요..."
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        className="min-h-[44px] max-h-[100px] text-sm flex-1"
+                        disabled={replySubmitting}
+                        rows={1}
+                      />
+                      <Button 
+                        size="icon"
+                        className="shrink-0 h-[44px] w-[44px]"
+                        onClick={handleSubmitReply}
+                        disabled={!replyText.trim() || replySubmitting}
+                      >
+                        {replySubmitting ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <div className="flex justify-end">
+                      <DialogClose asChild>
+                        <Button variant="outline" size="sm">닫기</Button>
+                      </DialogClose>
                     </div>
                   </div>
-                </ScrollArea>
+                </>
               )}
-              
-              <div className="flex justify-end pt-2 border-t">
-                <DialogClose asChild>
-                  <Button variant="outline" size="sm">
-                    닫기
-                  </Button>
-                </DialogClose>
-              </div>
             </DialogContent>
           </Dialog>
         </CardContent>
