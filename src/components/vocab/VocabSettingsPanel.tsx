@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { Plus, Edit2, Loader2, BookOpen, Trash2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 
 const TEACHER_OPTIONS = [
@@ -49,32 +50,43 @@ interface Student {
 }
 
 const DAY_LABELS: Record<string, string> = {
-  mon: '월', tue: '화', wed: '수', thu: '목', fri: '금',
+  mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토',
 };
 
-const TEST_DAY_OPTIONS = [
-  { value: 'mon_wed', label: '월/수', days: ['mon', 'wed'] },
-  { value: 'tue_thu', label: '화/목', days: ['tue', 'thu'] },
-  { value: 'mon_wed_fri', label: '월/수/금', days: ['mon', 'wed', 'fri'] },
-  { value: 'tue_thu_fri', label: '화/목/금', days: ['tue', 'thu', 'fri'] },
-  { value: 'mon_tue_wed_thu', label: '월/화/수/목', days: ['mon', 'tue', 'wed', 'thu'] },
-  { value: 'mon_tue_wed_thu_fri', label: '월~금', days: ['mon', 'tue', 'wed', 'thu', 'fri'] },
-  { value: 'mon', label: '월', days: ['mon'] },
-  { value: 'tue', label: '화', days: ['tue'] },
-  { value: 'wed', label: '수', days: ['wed'] },
-  { value: 'thu', label: '목', days: ['thu'] },
-  { value: 'fri', label: '금', days: ['fri'] },
-];
+const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
-function getIndividualDays(testDayValue: string): string[] {
-  return TEST_DAY_OPTIONS.find(o => o.value === testDayValue)?.days || [];
+// Backward compat: convert old combo values to individual day arrays
+function normalizeTestDays(testDays: string[]): string[] {
+  if (!testDays || testDays.length === 0) return ['mon', 'wed'];
+  // If already individual days (e.g. ['mon', 'wed', 'fri']), return as-is
+  if (testDays.every(d => ALL_DAYS.includes(d as any))) return testDays;
+  // Old combo format like ['mon_wed'] — expand
+  const combo = testDays[0];
+  const COMBO_MAP: Record<string, string[]> = {
+    mon_wed: ['mon', 'wed'],
+    tue_thu: ['tue', 'thu'],
+    mon_wed_fri: ['mon', 'wed', 'fri'],
+    tue_thu_fri: ['tue', 'thu', 'fri'],
+    mon_tue_wed_thu: ['mon', 'tue', 'wed', 'thu'],
+    mon_tue_wed_thu_fri: ['mon', 'tue', 'wed', 'thu', 'fri'],
+    mon: ['mon'], tue: ['tue'], wed: ['wed'], thu: ['thu'], fri: ['fri'], sat: ['sat'],
+  };
+  return COMBO_MAP[combo] || ['mon', 'wed'];
+}
+
+function formatTestDaysLabel(testDays: string[]): string {
+  const normalized = normalizeTestDays(testDays);
+  return normalized.map(d => DAY_LABELS[d] || d).join('/');
+}
+
+function getIndividualDays(testDays: string[]): string[] {
+  return normalizeTestDays(testDays);
 }
 
 function formatDaysPerTestMap(map: DaysPerTestMap | null, testDays: string[]): string {
   if (!map) return '';
-  const option = TEST_DAY_OPTIONS.find(o => o.value === testDays[0]);
-  if (!option) return '';
-  return option.days
+  const days = normalizeTestDays(testDays);
+  return days
     .map(d => `${DAY_LABELS[d]}${map[d] || 1}`)
     .join(' / ');
 }
@@ -94,7 +106,7 @@ export function VocabSettingsPanel() {
   const [formDaysPerTestMap, setFormDaysPerTestMap] = useState<DaysPerTestMap>({});
   const [formUsePerDayConfig, setFormUsePerDayConfig] = useState(false);
   const [formCutline, setFormCutline] = useState(80);
-  const [formTestDays, setFormTestDays] = useState('mon_wed');
+  const [formTestDays, setFormTestDays] = useState<string[]>(['mon', 'wed']);
   const [formCurrentDay, setFormCurrentDay] = useState(1);
   const [formBundleDays, setFormBundleDays] = useState(false);
   const [formTotalDays, setFormTotalDays] = useState<number | ''>('');
@@ -134,7 +146,7 @@ export function VocabSettingsPanel() {
     setFormDaysPerTestMap({});
     setFormUsePerDayConfig(false);
     setFormCutline(80);
-    setFormTestDays('mon_wed');
+    setFormTestDays(['mon', 'wed']);
     setFormCurrentDay(1);
     setFormBundleDays(false);
     setFormTotalDays('');
@@ -152,7 +164,7 @@ export function VocabSettingsPanel() {
     setFormUsePerDayConfig(!!hasMap);
     setFormDaysPerTestMap(hasMap ? s.days_per_test_map! : {});
     setFormCutline(s.cutline_percent);
-    setFormTestDays(s.test_days[0] || 'mon_wed');
+    setFormTestDays(normalizeTestDays(s.test_days));
     setFormCurrentDay(s.current_day_number);
     setFormBundleDays(s.bundle_days);
     setFormTotalDays(s.total_days || '');
@@ -181,7 +193,7 @@ export function VocabSettingsPanel() {
       days_per_test: effectiveDaysPerTest,
       days_per_test_map: perDayMap,
       cutline_percent: formCutline,
-      test_days: [formTestDays],
+      test_days: formTestDays,
       current_day_number: formCurrentDay,
       bundle_days: formBundleDays,
       total_days: formTotalDays ? Number(formTotalDays) : null,
@@ -272,31 +284,37 @@ export function VocabSettingsPanel() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">시험 요일</Label>
-                  <Select value={formTestDays} onValueChange={(v) => {
-                    setFormTestDays(v);
-                    // Reset per-day map when changing days
-                    if (formUsePerDayConfig) {
-                      const days = getIndividualDays(v);
-                      const newMap: DaysPerTestMap = {};
-                      days.forEach(d => { newMap[d] = formDaysPerTestMap[d] || 1; });
-                      setFormDaysPerTestMap(newMap);
-                    }
-                  }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {TEST_DAY_OPTIONS.map(o => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-1.5">
+                <Label className="text-xs">시험 요일</Label>
+                <div className="flex gap-2 flex-wrap">
+                  {ALL_DAYS.map(day => {
+                    const checked = formTestDays.includes(day);
+                    return (
+                      <label key={day} className="flex items-center gap-1 cursor-pointer">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            const next = v
+                              ? [...formTestDays, day].sort((a, b) => ALL_DAYS.indexOf(a as any) - ALL_DAYS.indexOf(b as any))
+                              : formTestDays.filter(d => d !== day);
+                            if (next.length === 0) return; // at least 1
+                            setFormTestDays(next);
+                            if (formUsePerDayConfig) {
+                              const newMap: DaysPerTestMap = {};
+                              next.forEach(d => { newMap[d] = formDaysPerTestMap[d] || 1; });
+                              setFormDaysPerTestMap(newMap);
+                            }
+                          }}
+                        />
+                        <span className="text-xs">{DAY_LABELS[day]}</span>
+                      </label>
+                    );
+                  })}
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">현재 DAY 번호</Label>
-                  <Input type="number" min={1} value={formCurrentDay} onChange={e => setFormCurrentDay(Number(e.target.value))} />
-                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">현재 DAY 번호</Label>
+                <Input type="number" min={1} value={formCurrentDay} onChange={e => setFormCurrentDay(Number(e.target.value))} />
               </div>
 
               {/* DAY 수 설정: 공통 or 요일별 */}
@@ -436,7 +454,7 @@ export function VocabSettingsPanel() {
                   </TableCell>
                   <TableCell className="text-center text-sm">{s.cutline_percent}%</TableCell>
                   <TableCell className="text-center text-xs">
-                    {s.test_days.map(d => TEST_DAY_OPTIONS.find(o => o.value === d)?.label || d).join(', ')}
+                    {formatTestDaysLabel(s.test_days)}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
