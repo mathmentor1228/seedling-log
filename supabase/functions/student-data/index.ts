@@ -238,12 +238,53 @@ Deno.serve(async (req) => {
             .limit(20),
           supabase
             .from('vocab_settings')
-            .select('book_name, current_day_number, cutline_percent, total_days')
+            .select('book_name, current_day_number, cutline_percent, total_days, assigned_teacher')
             .eq('student_id', student_id)
             .eq('is_active', true)
             .limit(1)
             .maybeSingle(),
         ]);
+
+        // Fetch guerrilla tests for ALL students under the same assigned_teacher
+        let guerrillaAlerts: any[] = [];
+        const myScheduleGuerrillas = (vocabScheduleRes.data || []).filter((s: any) => s.schedule_type === 'guerrilla');
+        
+        // Also find guerrilla tests from other students with the same teacher
+        const assignedTeacher = vocabSettingsRes.data?.assigned_teacher;
+        if (assignedTeacher) {
+          // Get all student_ids with the same assigned_teacher
+          const { data: sameTeacherSettings } = await supabase
+            .from('vocab_settings')
+            .select('student_id')
+            .eq('assigned_teacher', assignedTeacher)
+            .eq('is_active', true);
+          
+          const allStudentIds = (sameTeacherSettings || []).map((s: any) => s.student_id);
+          
+          if (allStudentIds.length > 0) {
+            const { data: allGuerrillas } = await supabase
+              .from('vocab_schedules')
+              .select('id, test_date, day_number, book_name, schedule_type, test_time, student_id')
+              .in('student_id', allStudentIds)
+              .eq('schedule_type', 'guerrilla')
+              .gte('test_date', todayStr)
+              .lte('test_date', futureStr)
+              .order('test_date');
+            
+            // Deduplicate by test_date + book_name + day_number (same guerrilla test across students)
+            const seen = new Set<string>();
+            for (const g of (allGuerrillas || [])) {
+              const key = `${g.test_date}_${g.book_name}_${g.day_number}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                guerrillaAlerts.push(g);
+              }
+            }
+          }
+        } else {
+          // No assigned_teacher — just use own guerrilla schedules
+          guerrillaAlerts = myScheduleGuerrillas;
+        }
 
         result = {
           total_points: studentData?.total_points || 0,
@@ -252,6 +293,7 @@ Deno.serve(async (req) => {
           vocab_schedules: vocabScheduleRes.data || [],
           vocab_results: vocabResultsRes.data || [],
           vocab_setting: vocabSettingsRes.data || null,
+          guerrilla_alerts: guerrillaAlerts,
         };
         break;
       }
