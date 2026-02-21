@@ -772,7 +772,8 @@ export function LessonRecordForm({
         .order('updated_at', { ascending: false })
         .limit(10); // Get more to filter out 휴강/공지사항
 
-      // Filter out 휴강/공지사항 lesson types and find the first valid one with homework
+      // Filter out 휴강/공지사항 lesson types and find the first valid lesson
+      // PREV-LESSON-FIX-V1: Show most recent valid lesson regardless of homework existence
       let validLesson: LessonRecord | null = null;
       let homeworkData: HomeworkAssignment | null = null;
       
@@ -782,6 +783,9 @@ export function LessonRecordForm({
           continue; // Skip 휴강/공지사항 records
         }
         
+        // Use the first valid (non-휴강) lesson as previous lesson
+        validLesson = lesson as LessonRecord;
+        
         // Check if this lesson has homework
         const { data: hw } = await supabase
           .from('homework_assignments')
@@ -790,10 +794,9 @@ export function LessonRecordForm({
           .maybeSingle();
         
         if (hw && hw.content && hw.content.trim() !== '') {
-          validLesson = lesson as LessonRecord;
           homeworkData = hw as HomeworkAssignment;
-          break;
         }
+        break; // Always use the first valid lesson
       }
 
       const totalRows = lessonData?.length || 0;
@@ -1238,8 +1241,9 @@ export function LessonRecordForm({
         toast({ title: '숙제 확인 완료', description: `숙제상태: ${statusLabel}` });
       }
       
-      if (formData.student_id && formData.class_id) {
-        await fetchPreviousLesson(formData.student_id, formData.class_id, formData.lesson_date);
+      // PREV-LESSON-FIX-V1: Pass subject instead of class_id
+      if (formData.student_id && formData.subject) {
+        await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
       }
     } catch (error: any) {
       console.error('Error saving homework check:', error);
