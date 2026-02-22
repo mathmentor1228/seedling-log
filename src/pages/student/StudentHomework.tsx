@@ -123,13 +123,13 @@ export default function StudentHomework() {
   // Auto-refetch when page becomes visible (e.g. teacher deleted homework while student was away)
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && student?.id) {
+      if (document.visibilityState === 'visible' && student?.id && !showSubmitDialog) {
         fetchHomework();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [student?.id]);
+  }, [student?.id, showSubmitDialog]);
 
   useEffect(() => {
     if (homeworkId && homework.length > 0) {
