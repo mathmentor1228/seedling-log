@@ -121,7 +121,6 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
       setAllStudents(studentsData || []);
       const assignedIds = new Set((assignedData || []).map((a) => a.student_id));
       setAssignedStudentIds(assignedIds);
-      onStudentCountChange?.(assignedIds.size);
 
       // Batch fetch all existing assignments for all students with schedule info
       // This avoids N+1 queries
