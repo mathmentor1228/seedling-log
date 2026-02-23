@@ -14,7 +14,7 @@ interface WeeklyReport { id: string; week_start: string; week_end: string; total
 interface VocabScheduleItem { id: string; test_date: string; day_number: number; book_name: string; schedule_type: string; }
 interface VocabResultItem { id: string; test_date: string; day_number: number; book_name: string; score_percent: number | null; passed: boolean; total_words: number | null; correct_words: number | null; }
 interface ClassScheduleItem { class_name: string; subject: string; day_of_week: number; start_time: string; end_time: string; }
-interface UpcomingSupplement { id: string; date: string; subject: string; range: string; course: string | null; }
+interface UpcomingSupplement { id: string; date: string; subject: string; range: string; course: string | null; time: string | null; }
 interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; }
 
 /* ═══════ Constants ═══════ */
@@ -732,6 +732,11 @@ function SupplementSection({ supplements }: { supplements: UpcomingSupplement[] 
               <span className="text-[11px] font-mono font-semibold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">
                 {fmt(s.date)}
               </span>
+              {s.time && (
+                <span className="text-[10px] font-mono text-orange-500 bg-orange-50 px-1 py-0.5 rounded">
+                  {s.time}
+                </span>
+              )}
               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>{s.subject}</span>
               <span className="text-[12px] text-gray-700 truncate flex-1">{s.range}</span>
             </div>

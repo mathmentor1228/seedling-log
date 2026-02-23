@@ -144,12 +144,11 @@ Deno.serve(async (req) => {
         .from("class_students")
         .select("class_id")
         .eq("student_id", studentId),
-      // Upcoming 보충수업 (draft lesson records with future dates)
+      // Upcoming 보충수업 (both draft and submitted lesson records)
       supabase
         .from("lesson_records")
-        .select("id, lesson_date, subject, lesson_range, course, lesson_types")
+        .select("id, lesson_date, subject, lesson_range, course, lesson_types, notes")
         .eq("student_id", studentId)
-        .eq("submitted", false)
         .gte("lesson_date", todayStr)
         .contains("lesson_types", ["보충수업"])
         .order("lesson_date")
@@ -217,13 +216,18 @@ Deno.serve(async (req) => {
         vocab_schedules: vocabSchedRes.data || [],
         vocab_results: vocabResultRes.data || [],
         class_schedule: scheduleItems,
-        upcoming_supplements: (supplRes.data || []).map((s: any) => ({
-          id: s.id,
-          date: s.lesson_date,
-          subject: s.subject,
-          range: s.lesson_range,
-          course: s.course,
-        })),
+        upcoming_supplements: (supplRes.data || []).map((s: any) => {
+          // Extract time from notes: [보충 시간: HH:MM]
+          const timeMatch = s.notes?.match(/\[보충 시간:\s*(\d{1,2}:\d{2})\]/);
+          return {
+            id: s.id,
+            date: s.lesson_date,
+            subject: s.subject,
+            range: s.lesson_range,
+            course: s.course,
+            time: timeMatch ? timeMatch[1] : null,
+          };
+        }),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

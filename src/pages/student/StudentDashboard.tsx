@@ -334,9 +334,13 @@ export default function StudentDashboard() {
                   {upcoming.map(sl => {
                     const d = new Date(sl.lesson_date + 'T00:00:00');
                     const dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+                    // Extract time from notes if present: [보충 시간: HH:MM]
+                    const timeMatch = sl.notes?.match(/\[보충 시간:\s*(\d{1,2}:\d{2})\]/);
+                    const timeLabel = timeMatch ? timeMatch[1] : null;
                     return (
                       <div key={sl.id} className="text-sm text-orange-700 dark:text-orange-400">
                         <span className="font-medium">{dateLabel}</span>
+                        {timeLabel && <span className="ml-1">{timeLabel}</span>}
                         {' · '}{sl.subject}
                         {sl.lesson_range && <span className="text-xs ml-1">({sl.lesson_range})</span>}
                         {sl.teacher_name && <span className="text-xs text-orange-500 ml-1">- {sl.teacher_name} 선생님</span>}

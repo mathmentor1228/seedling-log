@@ -934,6 +934,17 @@ export function LessonRecordForm({
       korean_categories: null,
     };
 
+    // SUPPLEMENT-TIME-V2: Prepend supplement_time to notes for 보충수업
+    const isSupplementary = lesson_types.includes('보충수업');
+    let finalNotes = formData.notes.trim() || null;
+    if (isSupplementary && formData.supplement_time) {
+      const timePrefix = `[보충 시간: ${formData.supplement_time}]`;
+      // Only prepend if not already present
+      if (!finalNotes || !finalNotes.includes('[보충 시간:')) {
+        finalNotes = finalNotes ? `${timePrefix}\n${finalNotes}` : timePrefix;
+      }
+    }
+
     const basePayload = {
       teacher_id: teacherId,
       student_id: formData.student_id,
@@ -947,7 +958,7 @@ export function LessonRecordForm({
       learning_issues: formData.learning_issues,
       learning_issues_note: formData.learning_issues_note.trim() || null,
       next_lesson_goal: formData.next_lesson_goal.trim() || null,
-      notes: formData.notes.trim() || null,
+      notes: finalNotes,
       internal_notes: formData.internal_notes.trim() || null,
       lesson_types,
       attendance_status,
