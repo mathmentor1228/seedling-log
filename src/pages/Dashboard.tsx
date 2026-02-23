@@ -418,6 +418,21 @@ export default function Dashboard() {
     }[];
   }[]>([]);
 
+  // SUPPLEMENT-LESSON-V1: Supplementary lessons for today
+  interface SupplementaryLesson {
+    id: string;
+    student_id: string;
+    student_name: string;
+    class_id: string | null;
+    class_name: string;
+    subject: string;
+    teacher_id: string;
+    teacher_name: string;
+    submitted: boolean;
+    start_time?: string;
+  }
+  const [supplementaryLessons, setSupplementaryLessons] = useState<SupplementaryLesson[]>([]);
+
   useEffect(() => {
     async function fetchDashboardData() {
       if (!user) return;
@@ -491,6 +506,7 @@ export default function Dashboard() {
         if (isTeacher(role) || isAdmin(role) || isAssistant(role)) {
           await fetchTodaySlots();
           await fetchTodayHolidays();
+          await fetchSupplementaryLessons();
         }
 
         // Fetch pending homework (unchecked)
@@ -1456,6 +1472,54 @@ export default function Dashboard() {
     }
   }
 
+  // SUPPLEMENT-LESSON-V1: Fetch supplementary lessons for today
+  async function fetchSupplementaryLessons() {
+    if (!user) return;
+    try {
+      const today = getTodayKST();
+      const { data, error } = await supabase
+        .from('lesson_records')
+        .select('id, student_id, class_id, subject, teacher_id, submitted, students:student_id(name), classes:class_id(name)')
+        .eq('lesson_date', today)
+        .contains('lesson_types', ['보충수업']);
+
+      if (error) {
+        console.error('Error fetching supplementary lessons:', error);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        setSupplementaryLessons([]);
+        return;
+      }
+
+      // Fetch teacher names
+      const teacherIds = [...new Set(data.map((d: any) => d.teacher_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', teacherIds);
+      const teacherNameMap: Record<string, string> = {};
+      (profiles || []).forEach((p: any) => { teacherNameMap[p.id] = p.full_name; });
+
+      const lessons: SupplementaryLesson[] = data.map((d: any) => ({
+        id: d.id,
+        student_id: d.student_id,
+        class_id: d.class_id,
+        class_name: (d.classes as any)?.name || '',
+        subject: d.subject,
+        teacher_id: d.teacher_id,
+        teacher_name: teacherNameMap[d.teacher_id] || '알 수 없음',
+        student_name: (d.students as any)?.name || '알 수 없음',
+        submitted: d.submitted || false,
+      }));
+
+      setSupplementaryLessons(lessons);
+    } catch (error) {
+      console.error('Error fetching supplementary lessons:', error);
+    }
+  }
+
   async function fetchTodayHolidays() {
     if (!user) return;
     
@@ -1928,6 +1992,26 @@ export default function Dashboard() {
                       ? `오늘 수업 - 선생님별 (${adminRosterData?.roster_rows?.length ?? 0}명)`
                       : `오늘 수업 (${todaySlots.length}개)`
                     }
+                    {/* SUPPLEMENT-LESSON-V1: Add supplementary lesson button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-auto h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                      onClick={() => {
+                        setAdminLessonModalContext({
+                          student_id: '',
+                          class_id: '',
+                          subject: '',
+                          lesson_date: '',
+                          lesson_types: ['보충수업'],
+                        });
+                        setAdminLessonModalRecordId(null);
+                        setAdminLessonModalForceNew(true);
+                        setAdminLessonModalOpen(true);
+                      }}
+                    >
+                      + 보충수업
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -2458,6 +2542,59 @@ export default function Dashboard() {
                         ))}
                       </div>
                     )
+                  )}
+
+                  {/* SUPPLEMENT-LESSON-V1: Supplementary lessons section */}
+                  {supplementaryLessons.length > 0 && (
+                    <div className="mt-4 border-t pt-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Badge className="bg-orange-100 text-orange-700 border-orange-300 text-xs">보충수업</Badge>
+                        <span className="text-sm font-medium text-muted-foreground">{supplementaryLessons.length}건</span>
+                      </div>
+                      <div className="space-y-2">
+                        {supplementaryLessons.map((sl) => (
+                          <div key={sl.id} className="border border-orange-200 rounded-lg bg-orange-50/50 px-4 py-3">
+                            <div className="flex items-center justify-between gap-3 mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-sm">{sl.student_name}</span>
+                                <Badge variant="outline" className="text-[11px] border-orange-300 text-orange-700">{sl.subject}</Badge>
+                                {sl.class_name && <span className="text-xs text-muted-foreground">{sl.class_name}</span>}
+                                {isAdmin(role) && <span className="text-xs text-muted-foreground">({sl.teacher_name})</span>}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs px-2.5"
+                                  onClick={() => {
+                                    setAdminLessonModalContext({
+                                      student_id: sl.student_id,
+                                      class_id: sl.class_id || '',
+                                      subject: sl.subject,
+                                      lesson_date: getTodayKST(),
+                                      lesson_types: ['보충수업'],
+                                    });
+                                    setAdminLessonModalRecordId(sl.id);
+                                    setAdminLessonModalForceNew(false);
+                                    setAdminLessonModalOpen(true);
+                                  }}
+                                >
+                                  <FileEdit className="w-3 h-3" />
+                                  <span className="ml-1">일지</span>
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px]">
+                              {sl.submitted ? (
+                                <span className="font-medium text-success">✓ 일지완료</span>
+                              ) : (
+                                <span className="font-medium text-warning">◐ 임시저장</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>
