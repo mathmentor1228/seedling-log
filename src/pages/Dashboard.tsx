@@ -134,6 +134,8 @@ interface TodaySlotStudent {
   homeworkCheckNote?: string | null;
   homeworkCheckLessonId?: string | null;
   prevNextLessonGoal?: string | null;
+  // HW-STATUS-SYNC-V1: homework_status from today's lesson_records (single source of truth)
+  homeworkStatus?: string | null;
   // TEST-CONTENT-DISPLAY-V2: Today's test data for inline display (content-first)
   todayTestData?: {
     test_content: string | null;
@@ -1216,6 +1218,8 @@ export default function Dashboard() {
         photoData?: { urls: string[]; text: string | null; at: string | null } | null;
         // TEST-CONTENT-DISPLAY-V2
         subject?: string;
+        // HW-STATUS-SYNC-V1: homework_status from lesson_records
+        homeworkStatus?: string | null;
         todayTestData?: {
           test_content: string | null;
           test_title: string | null;
@@ -1258,7 +1262,7 @@ export default function Dashboard() {
         // TEST-CONTENT-DISPLAY-V2: Include test_content and submitted as primary fields
         const { data: todayRecords } = await supabase
           .from('lesson_records')
-          .select('id, student_id, class_id, subject, submitted, lesson_types, attendance_status, homework_check_note, test_content, test_title, test_result_text, english_pass_fail')
+          .select('id, student_id, class_id, subject, submitted, lesson_types, attendance_status, homework_check_note, homework_status, test_content, test_title, test_result_text, english_pass_fail')
           .eq('lesson_date', today)
           .in('student_id', studentIds)
           .in('class_id', classIdsForRecords);
@@ -1338,6 +1342,8 @@ export default function Dashboard() {
               hasNextHomework: hwAssignmentSet.has(lr.id),
               hasPhotoSubmission: !!pd,
               photoData: pd || null,
+              // HW-STATUS-SYNC-V1: Include homework_status from lesson_records
+              homeworkStatus: lr.homework_status || null,
               // TEST-CONTENT-DISPLAY-V2
               subject: lr.subject,
               todayTestData: hasTestData ? {
@@ -1418,6 +1424,8 @@ export default function Dashboard() {
             prevNextLessonGoal: prevGoalMap[goalKey] || null,
             // DASH-ROW-TEST-SNIPPET-V1: Add today's test data
             todayTestData: recordInfo?.todayTestData || null,
+            // HW-STATUS-SYNC-V1: Pass homework_status from lesson_records
+            homeworkStatus: recordInfo?.homeworkStatus || null,
           };
         });
       });
@@ -2200,7 +2208,10 @@ export default function Dashboard() {
                                   const testState = latestTests.getStudentState(student.id);
                                   const isTestExpanded = latestTests.isExpanded(student.id);
                                   const rawHwStatus = (() => {
-                                    // For teacher view, derive from previousHomeworkStatus
+                                    // HW-STATUS-SYNC-V1: Use lesson_records.homework_status as primary source (same as admin view)
+                                    // Fall back to RPC-derived previousHomeworkStatus only if no lesson record status
+                                    if (student.homeworkStatus) return student.homeworkStatus;
+                                    // Fallback to RPC result
                                     if (student.previousHomeworkStatus === 'completed') return '완료';
                                     if (student.previousHomeworkStatus === 'partial') return '일부완료';
                                     if (student.previousHomeworkStatus === 'not_done') return '미이행';
@@ -2498,8 +2509,11 @@ export default function Dashboard() {
         context={adminLessonModalContext}
         existingRecordId={adminLessonModalRecordId}
         onSaved={async () => {
-          // Refresh roster data after save
-          await fetchAdminRosterData();
+          // HW-STATUS-SYNC-V1: Refresh both admin and teacher views
+          await Promise.all([
+            fetchAdminRosterData(),
+            fetchTodaySlots(),
+          ]);
         }}
         initialMode="edit"
         forceNewRecord={adminLessonModalForceNew}
@@ -2512,7 +2526,11 @@ export default function Dashboard() {
         context={rosterActionContext}
         mode="HOMEWORK_TEST"
         onSaved={async () => {
-          await fetchAdminRosterData();
+          // HW-STATUS-SYNC-V1: Refresh both admin and teacher views
+          await Promise.all([
+            fetchAdminRosterData(),
+            fetchTodaySlots(),
+          ]);
         }}
       />
 
