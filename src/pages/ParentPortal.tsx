@@ -732,11 +732,9 @@ function SupplementSection({ supplements }: { supplements: UpcomingSupplement[] 
               <span className="text-[11px] font-mono font-semibold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">
                 {fmt(s.date)}
               </span>
-              {s.time && (
-                <span className="text-[10px] font-mono text-orange-500 bg-orange-50 px-1 py-0.5 rounded">
-                  {s.time}
-                </span>
-              )}
+              <span className="text-[10px] font-mono text-orange-500 bg-orange-50 px-1 py-0.5 rounded">
+                {s.time || '시간 미정'}
+              </span>
               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>{s.subject}</span>
               <span className="text-[12px] text-gray-700 truncate flex-1">{s.range}</span>
             </div>
