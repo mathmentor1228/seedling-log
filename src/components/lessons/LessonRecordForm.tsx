@@ -318,6 +318,8 @@ export function LessonRecordForm({
     english_reading_units: [] as string[],
     // KOREAN-CATEGORY-V1: Korean curriculum categories
     korean_categories: [] as string[],
+    // SUPPLEMENT-TIME-V1: Time input for supplementary lessons
+    supplement_time: '',
   });
 
   // MATH-CURRICULUM-TAG-V2: Validation state for custom course
@@ -600,6 +602,8 @@ export function LessonRecordForm({
             english_reading_units: (record as any).english_reading_units || [],
             // KOREAN-CATEGORY-V1: Load Korean curriculum categories
             korean_categories: (record as any).korean_categories || [],
+            // SUPPLEMENT-TIME-V1
+            supplement_time: '',
           });
           // PREFILL-FIX-V6: For existing records with EMPTY curriculum tags, allow prefill from student's last record
           const hasMathTags = !!(record as any).curriculum_version || !!(record as any).course || !!(record as any).curriculum_unit_key;
@@ -1349,32 +1353,45 @@ export function LessonRecordForm({
           )}
         </div>
         
-        {/* Class field */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">클래스:</span>
-          {canSelectStudentClass ? (
-            <Select
-              value={formData.class_id || '_placeholder_'}
-              onValueChange={(value) => {
-                if (value !== '_placeholder_') {
-                  setFormData({ ...formData, class_id: value });
-                }
-              }}
-            >
-              <SelectTrigger className="w-[180px] h-8">
-                <SelectValue placeholder="클래스 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_placeholder_" disabled>클래스 선택</SelectItem>
-                {classes.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name} ({c.subject})</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <span className="font-medium">{className}</span>
-          )}
-        </div>
+        {/* Class field - SUPPLEMENT-TIME-V1: Show time input for 보충수업 instead of class selector */}
+        {formData.lesson_types.includes('보충수업') ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">시간:</span>
+            <Input
+              type="time"
+              className="w-[140px] h-8"
+              value={formData.supplement_time || ''}
+              onChange={(e) => setFormData({ ...formData, supplement_time: e.target.value, class_id: '' })}
+              disabled={isViewMode}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">클래스:</span>
+            {canSelectStudentClass ? (
+              <Select
+                value={formData.class_id || '_placeholder_'}
+                onValueChange={(value) => {
+                  if (value !== '_placeholder_') {
+                    setFormData({ ...formData, class_id: value });
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[180px] h-8">
+                  <SelectValue placeholder="클래스 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_placeholder_" disabled>클래스 선택</SelectItem>
+                  {classes.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.subject})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="font-medium">{className}</span>
+            )}
+          </div>
+        )}
         
         {/* Subject field */}
         <div className="flex items-center gap-2">
