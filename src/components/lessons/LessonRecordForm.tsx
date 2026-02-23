@@ -361,8 +361,7 @@ export function LessonRecordForm({
   // Test fields state
   // WRITE-PERSIST-FIX-V1: Added test_content as required field
   const [testFormData, setTestFormData] = useState({
-    test_name: '',
-    test_content: '', // WRITE-PERSIST-FIX-V1: Primary field for test scope/description
+    test_name: '', // Unified: saves to test_name, test_content, test_title
     test_result_text: '',
     test_result: 'none' as 'pass' | 'fail' | 'none',
     test_notes: '',
@@ -633,8 +632,7 @@ export function LessonRecordForm({
           setIsNewDraft(false);
           // WRITE-PERSIST-FIX-V1: Load test_content from DB
           setTestFormData({
-            test_name: record.test_name || '',
-            test_content: (record as any).test_content || '', // WRITE-PERSIST-FIX-V1
+            test_name: record.test_name || (record as any).test_content || '',
             test_result_text: record.test_result_text || '',
             test_result: (record.test_result as 'pass' | 'fail' | 'none') || 'none',
             test_notes: record.test_notes || '',
@@ -950,12 +948,12 @@ export function LessonRecordForm({
       ...curriculumFields,
     };
 
-    // WRITE-PERSIST-FIX-V1: Include test_content in payload
     if (includeTestFields) {
       return {
         ...basePayload,
         test_name: testFormData.test_name || null,
-        test_content: testFormData.test_content || null, // WRITE-PERSIST-FIX-V1
+        test_content: testFormData.test_name || null, // Unified: same value
+        test_title: testFormData.test_name || null, // Unified: same value
         test_result_text: testFormData.test_result_text || null,
         test_result: formData.subject === '영어' ? testFormData.test_result : 'none',
         test_notes: testFormData.test_notes || null,
@@ -1975,11 +1973,11 @@ export function LessonRecordForm({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-sm">테스트 이름</Label>
+            <Label className="text-sm">테스트 제목 <span className="text-destructive text-xs">(단원/범위 필수)</span></Label>
             <Input
               value={testFormData.test_name}
               onChange={(e) => setTestFormData({ ...testFormData, test_name: e.target.value })}
-              placeholder="예: 단원평가"
+              placeholder="예: 중2 1단원 단원평가 / 영단어 Day5 재시험"
             />
           </div>
           <div className="space-y-1">
