@@ -124,12 +124,16 @@ export function VocabTestResultsPanel() {
     fetchSchedulesAndResults();
   }, [selectedDate]);
 
+  // All failed results needing retest (not limited to current month)
+  const [allFailedResults, setAllFailedResults] = useState<TestResult[]>([]);
+  const [allFailedSchedules, setAllFailedSchedules] = useState<Schedule[]>([]);
+
   const fetchSchedulesAndResults = async () => {
     setLoading(true);
     const startOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1), 'yyyy-MM-dd');
     const endOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0), 'yyyy-MM-dd');
 
-    const [schedRes, resRes, settingsRes, generalRes] = await Promise.all([
+    const [schedRes, resRes, settingsRes, generalRes, allFailedRes] = await Promise.all([
       supabase
         .from('vocab_schedules')
         .select('*, students(name, grade)')
@@ -151,11 +155,32 @@ export function VocabTestResultsPanel() {
         .gte('test_date', startOfMonth)
         .lte('test_date', endOfMonth)
         .order('test_date'),
+      // Fetch ALL failed results that still need retest scheduling (regardless of month)
+      supabase
+        .from('vocab_test_results')
+        .select('*')
+        .eq('passed', false)
+        .eq('retest_scheduled', false)
+        .order('test_date', { ascending: false }),
     ]);
 
     if (schedRes.data) setSchedules(schedRes.data as any);
     if (resRes.data) setResults(resRes.data as any);
     if (generalRes.data) setGeneralSchedules(generalRes.data as any);
+
+    // Fetch schedules for all failed results (to get student names)
+    if (allFailedRes.data && allFailedRes.data.length > 0) {
+      setAllFailedResults(allFailedRes.data as any);
+      const scheduleIds = [...new Set(allFailedRes.data.map((r: any) => r.schedule_id))];
+      const { data: failedScheds } = await supabase
+        .from('vocab_schedules')
+        .select('*, students(name, grade)')
+        .in('id', scheduleIds);
+      if (failedScheds) setAllFailedSchedules(failedScheds as any);
+    } else {
+      setAllFailedResults([]);
+      setAllFailedSchedules([]);
+    }
 
     if (settingsRes.data) {
       const map: Record<string, VocabSettingInfo> = {};
@@ -752,24 +777,23 @@ export function VocabTestResultsPanel() {
           )}
           </>)}
 
-          {/* Failed tests needing retest */}
-          {filteredResults.filter(r => !r.passed && !r.retest_scheduled).length > 0 && (
+          {/* Failed tests needing retest — all months, not just current */}
+          {allFailedResults.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-destructive flex items-center gap-1.5">
                 <XCircle className="w-4 h-4" />
-                재시험 필요
+                재시험 필요 <Badge variant="destructive" className="text-xs">{allFailedResults.length}건</Badge>
               </h3>
               <Card className="border-destructive/30">
                 <Table>
                   <TableBody>
-                    {filteredResults
-                      .filter(r => !r.passed && !r.retest_scheduled)
-                      .map(r => {
-                        const sched = schedules.find(s => s.id === r.schedule_id);
+                    {allFailedResults.map(r => {
+                        const sched = allFailedSchedules.find(s => s.id === r.schedule_id);
                         return (
                           <TableRow key={r.id}>
                             <TableCell className="text-sm font-medium">{(sched as any)?.students?.name || '—'}</TableCell>
                             <TableCell className="text-sm">{r.book_name} Day {r.day_number}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{r.test_date.slice(5)}</TableCell>
                             <TableCell className="text-center text-xs font-mono text-destructive">{r.score_percent}%</TableCell>
                             <TableCell>
                               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openRetestDialog(r)}>
