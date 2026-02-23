@@ -610,7 +610,7 @@ export default function AssistantDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">오늘 수업(조교)</h1>
           <p className="text-muted-foreground mt-1">
-            {isToday ? '오늘' : format(selectedDate, 'M월 d일', { locale: ko })} 수업 전체 현황 및 숙제/테스트 관리
+            {isToday ? '오늘' : format(selectedDate, 'M월 d일', { locale: ko })} 수업 전체 현황 및 숙제·시험 관리
           </p>
         </div>
         
@@ -1033,7 +1033,7 @@ export default function AssistantDashboard() {
                                   }}
                                 >
                                   <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                                  숙제/테스트
+                                  숙제·시험
                                 </Button>
                               </div>
                               </div>

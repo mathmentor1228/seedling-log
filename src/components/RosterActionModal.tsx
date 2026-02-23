@@ -768,7 +768,7 @@ export function RosterActionModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GraduationCap className="w-5 h-5" />
-            숙제/테스트 관리
+            숙제·시험 관리
           </DialogTitle>
         </DialogHeader>
         

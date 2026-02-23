@@ -127,13 +127,16 @@ export function VocabTestResultsPanel() {
   // All failed results needing retest (not limited to current month)
   const [allFailedResults, setAllFailedResults] = useState<TestResult[]>([]);
   const [allFailedSchedules, setAllFailedSchedules] = useState<Schedule[]>([]);
+  // Already scheduled retests
+  const [scheduledRetestResults, setScheduledRetestResults] = useState<TestResult[]>([]);
+  const [scheduledRetestSchedules, setScheduledRetestSchedules] = useState<Schedule[]>([]);
 
   const fetchSchedulesAndResults = async () => {
     setLoading(true);
     const startOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1), 'yyyy-MM-dd');
     const endOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0), 'yyyy-MM-dd');
 
-    const [schedRes, resRes, settingsRes, generalRes, allFailedRes] = await Promise.all([
+    const [schedRes, resRes, settingsRes, generalRes, allFailedRes, scheduledRetestRes] = await Promise.all([
       supabase
         .from('vocab_schedules')
         .select('*, students(name, grade)')
@@ -162,24 +165,44 @@ export function VocabTestResultsPanel() {
         .eq('passed', false)
         .eq('retest_scheduled', false)
         .order('test_date', { ascending: false }),
+      // Fetch ALL failed results that already have retest scheduled
+      supabase
+        .from('vocab_test_results')
+        .select('*')
+        .eq('passed', false)
+        .eq('retest_scheduled', true)
+        .order('retest_date', { ascending: true }),
     ]);
 
     if (schedRes.data) setSchedules(schedRes.data as any);
     if (resRes.data) setResults(resRes.data as any);
     if (generalRes.data) setGeneralSchedules(generalRes.data as any);
 
-    // Fetch schedules for all failed results (to get student names)
-    if (allFailedRes.data && allFailedRes.data.length > 0) {
-      setAllFailedResults(allFailedRes.data as any);
-      const scheduleIds = [...new Set(allFailedRes.data.map((r: any) => r.schedule_id))];
-      const { data: failedScheds } = await supabase
+    // Collect all schedule IDs from both failed sets for student name lookup
+    const allFailedData = allFailedRes.data || [];
+    const scheduledRetestData = scheduledRetestRes.data || [];
+    const allScheduleIds = [
+      ...new Set([
+        ...allFailedData.map((r: any) => r.schedule_id),
+        ...scheduledRetestData.map((r: any) => r.schedule_id),
+      ])
+    ];
+
+    setAllFailedResults(allFailedData as any);
+    setScheduledRetestResults(scheduledRetestData as any);
+
+    if (allScheduleIds.length > 0) {
+      const { data: relatedScheds } = await supabase
         .from('vocab_schedules')
         .select('*, students(name, grade)')
-        .in('id', scheduleIds);
-      if (failedScheds) setAllFailedSchedules(failedScheds as any);
+        .in('id', allScheduleIds);
+      if (relatedScheds) {
+        setAllFailedSchedules(relatedScheds as any);
+        setScheduledRetestSchedules(relatedScheds as any);
+      }
     } else {
-      setAllFailedResults([]);
       setAllFailedSchedules([]);
+      setScheduledRetestSchedules([]);
     }
 
     if (settingsRes.data) {
@@ -803,6 +826,36 @@ export function VocabTestResultsPanel() {
                           </TableRow>
                         );
                       })}
+                  </TableBody>
+                </Table>
+              </Card>
+            </div>
+          )}
+
+          {/* Scheduled retests — already have retest date */}
+          {scheduledRetestResults.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-primary flex items-center gap-1.5">
+                <Clock className="w-4 h-4" />
+                재시험 예정 <Badge variant="secondary" className="text-xs">{scheduledRetestResults.length}건</Badge>
+              </h3>
+              <Card>
+                <Table>
+                  <TableBody>
+                    {scheduledRetestResults.map(r => {
+                      const sched = scheduledRetestSchedules.find(s => s.id === r.schedule_id);
+                      return (
+                        <TableRow key={r.id}>
+                          <TableCell className="text-sm font-medium">{(sched as any)?.students?.name || '—'}</TableCell>
+                          <TableCell className="text-sm">{r.book_name} Day {r.day_number}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">원래: {r.test_date.slice(5)}</TableCell>
+                          <TableCell className="text-center text-xs font-mono text-destructive">{r.score_percent}%</TableCell>
+                          <TableCell className="text-xs font-medium text-primary">
+                            {r.retest_date?.slice(5)} {r.retest_time?.slice(0, 5)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Card>
