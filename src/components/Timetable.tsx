@@ -967,19 +967,21 @@ export function Timetable() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>담당 선생님</Label>
-                <Select value={editForm.teacherId} onValueChange={(v) => setEditForm(f => ({ ...f, teacherId: v }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="선생님 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allTeachers.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {(isAdminUser || isAssistantUser) && (
+                <div className="space-y-2">
+                  <Label>담당 선생님</Label>
+                  <Select value={editForm.teacherId} onValueChange={(v) => setEditForm(f => ({ ...f, teacherId: v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="선생님 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allTeachers.map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => setEditSlot(null)}>취소</Button>
