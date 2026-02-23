@@ -295,6 +295,38 @@ Deno.serve(async (req) => {
           .lte('test_date', futureStr)
           .order('test_date');
 
+        // SUPPLEMENTARY-STUDENT-V1: Fetch supplementary lessons (보충수업) for this student
+        const { data: supplementaryData } = await supabase
+          .from('lesson_records')
+          .select('id, lesson_date, subject, notes, lesson_range, submitted, teacher_id')
+          .eq('student_id', student_id)
+          .contains('lesson_types', ['보충수업'])
+          .gte('lesson_date', twoWeeksAgoStr)
+          .lte('lesson_date', futureStr)
+          .order('lesson_date', { ascending: true });
+
+        // Get teacher names for supplementary lessons
+        let supplementaryLessons: any[] = [];
+        if (supplementaryData && supplementaryData.length > 0) {
+          const teacherIds = [...new Set(supplementaryData.map((s: any) => s.teacher_id).filter(Boolean))];
+          let teacherMap: Record<string, string> = {};
+          if (teacherIds.length > 0) {
+            const { data: teachers } = await supabase
+              .from('profiles')
+              .select('id, full_name')
+              .in('id', teacherIds);
+            if (teachers) {
+              for (const t of teachers) {
+                teacherMap[t.id] = t.full_name;
+              }
+            }
+          }
+          supplementaryLessons = supplementaryData.map((s: any) => ({
+            ...s,
+            teacher_name: teacherMap[s.teacher_id] || null,
+          }));
+        }
+
         result = {
           total_points: studentData?.total_points || 0,
           pending_homework: (homeworkData || []).filter((hw: any) => hw.content?.trim() !== '없음'),
@@ -304,6 +336,7 @@ Deno.serve(async (req) => {
           vocab_setting: vocabSettingsRes.data || null,
           guerrilla_alerts: guerrillaAlerts,
           test_schedules: testSchedulesData || [],
+          supplementary_lessons: supplementaryLessons,
         };
         break;
       }

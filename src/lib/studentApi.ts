@@ -77,6 +77,7 @@ export const studentApi = {
     vocab_setting?: any;
     guerrilla_alerts?: any[];
     test_schedules?: any[];
+    supplementary_lessons?: any[];
   }>('dashboard'),
 
   getHomeworkList: () => studentApiCall<{ homework: any[] }>('homework_list'),

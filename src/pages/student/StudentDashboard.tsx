@@ -87,6 +87,16 @@ interface TestScheduleItem {
   notes: string | null;
 }
 
+interface SupplementaryLesson {
+  id: string;
+  lesson_date: string;
+  subject: string;
+  notes: string | null;
+  lesson_range: string;
+  submitted: boolean;
+  teacher_name: string | null;
+}
+
 interface WeeklyReport {
   id: string;
   week_start: string;
@@ -111,6 +121,7 @@ export default function StudentDashboard() {
   const [vocabSetting, setVocabSetting] = useState<VocabSetting | null>(null);
   const [guerrillaAlerts, setGuerrillaAlerts] = useState<VocabSchedule[]>([]);
   const [testSchedules, setTestSchedules] = useState<TestScheduleItem[]>([]);
+  const [supplementaryLessons, setSupplementaryLessons] = useState<SupplementaryLesson[]>([]);
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([]);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -165,6 +176,7 @@ export default function StudentDashboard() {
         setVocabSetting(data.vocab_setting || null);
         setGuerrillaAlerts(data.guerrilla_alerts || []);
         setTestSchedules(data.test_schedules || []);
+        setSupplementaryLessons(data.supplementary_lessons || []);
       }
 
       // Fetch weekly reports separately — deduplicate by week_start (keep latest generated_at)
@@ -293,6 +305,41 @@ export default function StudentDashboard() {
                         📌 <span className="font-medium">{dateLabel}</span>
                         {a.test_time && <span> {a.test_time.slice(0, 5)}</span>}
                         {' · '}{a.label}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Supplementary Lessons (보충수업) Alert */}
+      {(() => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const upcoming = supplementaryLessons.filter(sl => sl.lesson_date >= todayStr);
+        if (upcoming.length === 0) return null;
+        return (
+          <Card className="border-orange-400 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-700 animate-fade-in">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center flex-shrink-0">
+                  <BookOpen className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <p className="font-semibold text-orange-800 dark:text-orange-300">
+                    📌 보충수업 예정
+                  </p>
+                  {upcoming.map(sl => {
+                    const d = new Date(sl.lesson_date + 'T00:00:00');
+                    const dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+                    return (
+                      <div key={sl.id} className="text-sm text-orange-700 dark:text-orange-400">
+                        <span className="font-medium">{dateLabel}</span>
+                        {' · '}{sl.subject}
+                        {sl.lesson_range && <span className="text-xs ml-1">({sl.lesson_range})</span>}
+                        {sl.teacher_name && <span className="text-xs text-orange-500 ml-1">- {sl.teacher_name} 선생님</span>}
                       </div>
                     );
                   })}
