@@ -576,11 +576,10 @@ export function TestVisitModal({ open, onOpenChange, onSaved }: TestVisitModalPr
                   </Select>
                 </div>
 
-                {/* TEST-CONTENT-REQUIRED-V1: Required test content field */}
                 <div className="space-y-1">
-                  <Label className="text-xs">테스트내용 (무엇을 봤는지) <span className="text-destructive">*</span></Label>
+                  <Label className="text-xs">테스트 제목 <span className="text-destructive">(단원/범위 필수) *</span></Label>
                   <Input
-                    placeholder="예: 중2 1단원 단원평가 / 영어 단어 30개 재시험"
+                    placeholder="예: 중2 1단원 단원평가 / 영단어 Day5 재시험"
                     value={row.testContent}
                     onChange={e => updateTestRow(row.id, 'testContent', e.target.value)}
                   />
