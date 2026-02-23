@@ -157,10 +157,8 @@ export function RosterActionModal({
   // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records
   const [homeworkCheckNote, setHomeworkCheckNote] = useState('');
   const [newHomeworkContent, setNewHomeworkContent] = useState('');
-  // WRITE-PERSIST-FIX-V1: Added test_content as required field
   const [testFormData, setTestFormData] = useState({
-    test_name: '',
-    test_content: '', // WRITE-PERSIST-FIX-V1: Primary field for test scope/description
+    test_name: '', // Unified: saves to test_name, test_content, test_title
     test_result_text: '',
     test_result: 'none' as 'pass' | 'fail' | 'none',
     test_notes: '',
@@ -190,10 +188,8 @@ export function RosterActionModal({
       setHomeworkCheckNotes('');
       setHomeworkCheckNote(''); // ASSISTANT-HW-NO-CARRYOVER-V1: Reset assistant note
       setNewHomeworkContent('');
-      // WRITE-PERSIST-FIX-V1: Reset test_content
       setTestFormData({
         test_name: '',
-        test_content: '', // WRITE-PERSIST-FIX-V1
         test_result_text: '',
         test_result: 'none',
         test_notes: '',
@@ -282,10 +278,8 @@ export function RosterActionModal({
           // ASSISTANT-HW-NO-CARRYOVER-V1: Load homework_check_note for CURRENT record only (lesson-scoped)
           // This is intentionally loaded from the current record, not carried over from previous lessons
           setHomeworkCheckNote(record.homework_check_note || '');
-          // Pre-fill test fields - WRITE-PERSIST-FIX-V1: Include test_content
           setTestFormData({
-            test_name: record.test_name || '',
-            test_content: (record as any).test_content || '', // WRITE-PERSIST-FIX-V1
+            test_name: record.test_name || (record as any).test_content || '',
             test_result_text: record.test_result_text || '',
             test_result: (record.test_result as 'pass' | 'fail' | 'none') || 'none',
             test_notes: record.test_notes || '',
@@ -611,11 +605,10 @@ export function RosterActionModal({
   async function handleSaveTestFields() {
     if (!lessonRecord?.id || !user || !context) return;
     
-    // WRITE-PERSIST-FIX-V1 / TEST-CONTENT-REQUIRED-V1: Validate test_content when saving test results
-    if (testFormData.test_result_text.trim() && !testFormData.test_content.trim()) {
+    if (testFormData.test_result_text.trim() && !testFormData.test_name.trim()) {
       toast({
         title: '입력 필요',
-        description: '테스트내용(무엇을 봤는지)을 입력해주세요.',
+        description: '테스트 제목(단원/범위)을 입력해주세요.',
         variant: 'destructive',
       });
       return;
@@ -623,21 +616,16 @@ export function RosterActionModal({
     
     setIsSavingTest(true);
     try {
-      // WRITE-PERSIST-FIX-V1: Debug log before save
+      const unifiedTitle = testFormData.test_name || null;
       console.log('[TEST_WRITE_DEBUG] Saving test fields:', {
         recordId: lessonRecord.id,
-        sent: {
-          test_content: testFormData.test_content || null,
-          test_name: testFormData.test_name || null,
-          test_result_text: testFormData.test_result_text || null,
-        },
+        sent: { test_name: unifiedTitle, test_result_text: testFormData.test_result_text || null },
       });
 
-      // WRITE-PERSIST-FIX-V1: Include test_content in RPC call
       const { error } = await supabase.rpc('update_lesson_test_fields', {
         _lesson_id: lessonRecord.id,
-        _test_name: testFormData.test_name || null,
-        _test_content: testFormData.test_content || null, // WRITE-PERSIST-FIX-V1
+        _test_name: unifiedTitle,
+        _test_content: unifiedTitle, // Unified: same value
         _test_result_text: testFormData.test_result_text || null,
         _test_result: context.subject === '영어' ? testFormData.test_result : 'none',
         _test_notes: testFormData.test_notes || null,
@@ -663,7 +651,7 @@ export function RosterActionModal({
       
       toast({
         title: '저장 완료',
-        description: `테스트내용=${savedRecord?.test_content || '-'}`,
+        description: `테스트 제목=${savedRecord?.test_name || savedRecord?.test_content || '-'}`,
       });
       
       await fetchData();
@@ -992,30 +980,20 @@ export function RosterActionModal({
                     </p>
                   ) : (
                     <>
-                      {/* WRITE-PERSIST-FIX-V1: test_content is the primary field */}
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-1">
-                          테스트 내용 <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          value={testFormData.test_content}
-                          onChange={(e) => setTestFormData(prev => ({ ...prev, test_content: e.target.value }))}
-                          placeholder="무엇을 봤는지 입력 (필수)"
-                          className={!testFormData.test_content.trim() && testFormData.test_result_text ? 'border-destructive' : ''}
-                        />
-                      </div>
-
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>테스트명 (선택)</Label>
+                          <Label className="flex items-center gap-1">
+                            테스트 제목 <span className="text-destructive text-xs">(단원/범위 필수) *</span>
+                          </Label>
                           <Input
                             value={testFormData.test_name}
                             onChange={(e) => setTestFormData(prev => ({ ...prev, test_name: e.target.value }))}
-                            placeholder="예: 단어 테스트"
+                            placeholder="예: 중2 1단원 단원평가 / 영단어 Day5 재시험"
+                            className={!testFormData.test_name.trim() && testFormData.test_result_text ? 'border-destructive' : ''}
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>결과</Label>
+                          <Label>결과/점수</Label>
                           <Input
                             value={testFormData.test_result_text}
                             onChange={(e) => setTestFormData(prev => ({ ...prev, test_result_text: e.target.value }))}
