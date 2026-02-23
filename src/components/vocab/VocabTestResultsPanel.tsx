@@ -363,7 +363,7 @@ export function VocabTestResultsPanel() {
               subject: '영어' as any,
               lesson_date: activeSchedule.test_date,
               lesson_range: testContent,
-              homework_status: '해당없음',
+              homework_status: 'none_assigned',
               test_title: '단어시험',
               test_content: testContent,
               test_result: passed ? 'pass' : 'fail',
