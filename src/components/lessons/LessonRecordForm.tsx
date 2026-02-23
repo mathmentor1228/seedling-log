@@ -36,6 +36,8 @@ export interface LessonFormContext {
   class_id: string;
   subject: string;
   lesson_date: string;
+  /** SUPPLEMENT-LESSON-V1: Pre-select lesson types (e.g. ['보충수업']) */
+  lesson_types?: string[];
 }
 
 export interface LessonRecordFormProps {
@@ -305,7 +307,7 @@ export function LessonRecordForm({
     next_lesson_goal: '',
     notes: '',
     internal_notes: '',
-    lesson_types: ['정규수업'] as string[],
+    lesson_types: (initialContext?.lesson_types && initialContext.lesson_types.length > 0 ? initialContext.lesson_types : ['정규수업']) as string[],
     attendance_status: ['정상등원'] as string[],
     // MATH-CURRICULUM-TAG-V2: Curriculum fields
     curriculum_version: '',
