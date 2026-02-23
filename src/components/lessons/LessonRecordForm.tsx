@@ -1371,10 +1371,14 @@ export function LessonRecordForm({
             <Input
               type="time"
               className="w-[140px] h-8"
+              placeholder="시간 입력"
               value={formData.supplement_time || ''}
               onChange={(e) => setFormData({ ...formData, supplement_time: e.target.value, class_id: '' })}
               disabled={isViewMode}
             />
+            {!formData.supplement_time && !isViewMode && (
+              <span className="text-xs text-orange-500">⚠ 시간을 입력해주세요</span>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-2">
