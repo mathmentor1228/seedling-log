@@ -275,17 +275,26 @@ export function Timetable() {
           .from('classes')
           .update({ name: editForm.className })
           .eq('id', editSlot.classId);
-        if (error) throw error;
+        if (error) {
+          console.error('[TIMETABLE_EDIT] classes update error:', error);
+          throw error;
+        }
       }
 
-      // Update schedule time and teacher if changed
+      // Update schedule time if changed (teacher_id changes only for admin/assistant)
       const updates: Record<string, any> = {};
       if (editForm.startTime !== editSlot.startTime.slice(0, 5)) updates.start_time = editForm.startTime;
       if (editForm.endTime !== editSlot.endTime.slice(0, 5)) updates.end_time = editForm.endTime;
-      if (editForm.teacherId !== editSlot.teacherId) {
+      
+      // Only process teacher change for admin/assistant (teachers don't see the dropdown)
+      if ((isAdminUser || isAssistantUser) && editForm.teacherId !== editSlot.teacherId) {
         updates.teacher_id = editForm.teacherId;
         // Also update class teacher_id
-        await supabase.from('classes').update({ teacher_id: editForm.teacherId }).eq('id', editSlot.classId);
+        const { error: classTeacherErr } = await supabase.from('classes').update({ teacher_id: editForm.teacherId }).eq('id', editSlot.classId);
+        if (classTeacherErr) {
+          console.error('[TIMETABLE_EDIT] class teacher update error:', classTeacherErr);
+          throw classTeacherErr;
+        }
       }
 
       if (Object.keys(updates).length > 0) {
@@ -293,14 +302,17 @@ export function Timetable() {
           .from('class_schedules')
           .update(updates)
           .eq('id', editSlot.scheduleId);
-        if (error) throw error;
+        if (error) {
+          console.error('[TIMETABLE_EDIT] class_schedules update error:', error);
+          throw error;
+        }
       }
 
       toast({ title: '수정 완료', description: '수업 정보가 저장되었습니다' });
       setEditSlot(null);
       fetchScheduleData();
     } catch (error: any) {
-      console.error('Error saving edit:', error);
+      console.error('[TIMETABLE_EDIT] Error saving edit:', error);
       toast({ title: '오류', description: error.message || '수정에 실패했습니다', variant: 'destructive' });
     } finally {
       setEditSaving(false);
