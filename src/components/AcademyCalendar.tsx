@@ -173,11 +173,13 @@ export function AcademyCalendar() {
   }, [user, filterCategory]);
 
   async function fetchTotalTeachers() {
-    const { count } = await supabase
+    const { data } = await supabase
       .from('user_roles')
-      .select('*', { count: 'exact', head: true })
+      .select('user_id')
       .in('role', ['admin', 'teacher']);
-    setTotalTeachers(count || 0);
+    // Count distinct user_ids to avoid double-counting users with multiple roles
+    const uniqueUserIds = new Set((data || []).map(r => r.user_id));
+    setTotalTeachers(uniqueUserIds.size);
   }
 
   async function fetchAcksForEvents(eventIds: string[]) {
