@@ -84,6 +84,7 @@ export function StudentTimetableLookup() {
     const { data, error } = await supabase
       .from('students')
       .select('id, name')
+      .neq('enrollment_status', '퇴원')
       .order('name');
 
     if (!error && data) {
