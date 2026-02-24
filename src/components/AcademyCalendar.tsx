@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth, isAdmin as checkIsAdmin, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,7 +48,12 @@ import {
   Image,
   Download,
   X,
-  Paperclip
+  Paperclip,
+  ZoomIn,
+  ZoomOut,
+  ChevronLeft,
+  Clock,
+  User
 } from 'lucide-react';
 import { format, addDays, startOfMonth, endOfMonth, isSameDay, isWithinInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -139,6 +144,10 @@ export function AcademyCalendar() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [additionalPosterFiles, setAdditionalPosterFiles] = useState<File[]>([]);
   const [uploadingPosters, setUploadingPosters] = useState(false);
+
+  // Detail dialog state
+  const [detailEvent, setDetailEvent] = useState<AcademyEvent | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -451,9 +460,10 @@ export function AcademyCalendar() {
     return (
       <div 
         key={event.id}
-        className={`flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors hover:bg-accent/50 ${
+        className={`flex items-start gap-3 px-3 py-2.5 rounded-lg transition-colors hover:bg-accent/50 cursor-pointer ${
           event.pinned ? 'bg-blue-500/5' : ''
         }`}
+        onClick={() => { setDetailEvent(event); setDetailDialogOpen(true); }}
       >
         {/* Color bar */}
         <div className={`w-1 self-stretch rounded-full shrink-0 mt-0.5 ${getCategoryColor(event.category)}`} />
@@ -498,14 +508,14 @@ export function AcademyCalendar() {
           {hasPosters && (
             <div className="flex gap-1.5 mt-1.5">
               {event.attachments?.filter(a => isImageType(a.mime_type)).slice(0, 3).map(att => (
-                <PosterThumbnail key={att.id} attachment={att} onClick={() => handleDownloadPoster(att)} />
+                <PosterThumbnail key={att.id} attachment={att} onClick={(e) => { e.stopPropagation(); setDetailEvent(event); setDetailDialogOpen(true); }} />
               ))}
             </div>
           )}
         </div>
         
         {/* Actions */}
-        <div className="flex gap-0.5 shrink-0">
+        <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           {canUploadPosters && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditEvent(event); setEditDialogOpen(true); }}>
               <Image className="w-3.5 h-3.5 text-muted-foreground" />
@@ -904,12 +914,27 @@ export function AcademyCalendar() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Event Detail Dialog */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+          {detailEvent && (
+            <EventDetailView 
+              event={detailEvent} 
+              onClose={() => setDetailDialogOpen(false)}
+              onDownload={handleDownloadPoster}
+              getCategoryBadge={getCategoryBadge}
+              getCategoryColor={getCategoryColor}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Collapsible>
   );
 }
 
 // Poster thumbnail component
-function PosterThumbnail({ attachment, onClick }: { attachment: EventAttachment; onClick: () => void }) {
+function PosterThumbnail({ attachment, onClick }: { attachment: EventAttachment; onClick: (e?: React.MouseEvent) => void }) {
   const [url, setUrl] = useState<string | null>(null);
   
   useEffect(() => {
@@ -933,5 +958,163 @@ function PosterThumbnail({ attachment, onClick }: { attachment: EventAttachment;
       className="w-12 h-12 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
       onClick={onClick}
     />
+  );
+}
+
+// Event Detail View component with inline image viewer
+function EventDetailView({ 
+  event, 
+  onClose, 
+  onDownload,
+  getCategoryBadge,
+  getCategoryColor,
+}: { 
+  event: AcademyEvent; 
+  onClose: () => void;
+  onDownload: (att: EventAttachment) => void;
+  getCategoryBadge: (cat: string) => React.ReactNode;
+  getCategoryColor: (cat: string) => string;
+}) {
+  const eventDate = new Date(event.start_at);
+  const imageAttachments = (event.attachments || []).filter(a => a.mime_type?.startsWith('image/'));
+  const nonImageAttachments = (event.attachments || []).filter(a => !a.mime_type?.startsWith('image/'));
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="px-6 pt-6 pb-4 border-b">
+        <div className="flex items-start gap-3">
+          <div className={`w-1.5 self-stretch rounded-full shrink-0 ${getCategoryColor(event.category)}`} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              {event.pinned && <Pin className="w-4 h-4 text-blue-500 shrink-0" />}
+              <h2 className="text-lg font-bold leading-tight">{event.title}</h2>
+              {getCategoryBadge(event.category)}
+            </div>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays className="w-3.5 h-3.5" />
+                {format(eventDate, 'yyyy년 M월 d일 (EEEE)', { locale: ko })}
+              </span>
+              {!event.all_day && (
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  {format(eventDate, 'HH:mm')}
+                  {event.end_at && ` ~ ${format(new Date(event.end_at), 'HH:mm')}`}
+                </span>
+              )}
+              {event.all_day && <Badge variant="secondary" className="text-[10px]">종일</Badge>}
+            </div>
+            {event.location && (
+              <span className="inline-flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                <MapPin className="w-3.5 h-3.5" />
+                {event.location}
+              </span>
+            )}
+            {event.creator_name && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                <User className="w-3 h-3" />
+                {event.creator_name}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Description */}
+      {event.description && (
+        <div className="px-6 py-4 border-b">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{event.description}</p>
+        </div>
+      )}
+
+      {/* Images - inline enlarged view */}
+      {imageAttachments.length > 0 && (
+        <div className="px-6 py-4 space-y-4">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">첨부 이미지 ({imageAttachments.length})</span>
+          <div className="space-y-3">
+            {imageAttachments.map(att => (
+              <EventImageViewer key={att.id} attachment={att} onDownload={onDownload} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Non-image attachments */}
+      {nonImageAttachments.length > 0 && (
+        <div className="px-6 py-4 border-t">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">첨부 파일</span>
+          <div className="space-y-1.5">
+            {nonImageAttachments.map(att => (
+              <div key={att.id} className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+                <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm truncate flex-1">{att.original_name}</span>
+                <Button variant="ghost" size="sm" onClick={() => onDownload(att)}>
+                  <Download className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Inline image viewer with zoom
+function EventImageViewer({ attachment, onDownload }: { attachment: EventAttachment; onDownload: (att: EventAttachment) => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [zoomed, setZoomed] = useState(false);
+
+  useEffect(() => {
+    async function loadUrl() {
+      const { data } = await supabase.storage
+        .from('attachments')
+        .createSignedUrl(attachment.storage_path, 60 * 10);
+      if (data) setUrl(data.signedUrl);
+    }
+    loadUrl();
+  }, [attachment.storage_path]);
+
+  if (!url) {
+    return <Skeleton className="w-full h-48 rounded-lg" />;
+  }
+
+  return (
+    <div className="space-y-1">
+      <div 
+        className={`relative rounded-lg overflow-hidden border bg-muted/30 cursor-pointer transition-all ${
+          zoomed ? 'max-h-none' : 'max-h-[400px]'
+        }`}
+        onClick={() => setZoomed(!zoomed)}
+      >
+        <img
+          src={url}
+          alt={attachment.original_name}
+          className={`w-full transition-all duration-200 ${
+            zoomed ? 'object-contain' : 'object-contain max-h-[400px]'
+          }`}
+        />
+        <div className="absolute top-2 right-2 flex gap-1">
+          <Button 
+            variant="secondary" 
+            size="icon" 
+            className="h-7 w-7 bg-background/80 backdrop-blur-sm shadow-sm"
+            onClick={(e) => { e.stopPropagation(); setZoomed(!zoomed); }}
+          >
+            {zoomed ? <ZoomOut className="w-3.5 h-3.5" /> : <ZoomIn className="w-3.5 h-3.5" />}
+          </Button>
+          <Button 
+            variant="secondary" 
+            size="icon" 
+            className="h-7 w-7 bg-background/80 backdrop-blur-sm shadow-sm"
+            onClick={(e) => { e.stopPropagation(); onDownload(attachment); }}
+          >
+            <Download className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted-foreground truncate">{attachment.original_name}</p>
+    </div>
   );
 }
