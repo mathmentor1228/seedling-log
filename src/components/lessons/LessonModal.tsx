@@ -51,6 +51,7 @@ export function LessonModal({
   
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
@@ -68,9 +69,10 @@ export function LessonModal({
     setLoading(true);
     setFetchError(null);
     try {
-      const [studentsRes, classesRes] = await Promise.all([
+      const [studentsRes, classesRes, profilesRes] = await Promise.all([
         supabase.from('students').select('id, name').order('name'),
         supabase.from('classes').select('id, name, subject').order('name'),
+        supabase.from('profiles').select('id, full_name').order('full_name'),
       ]);
 
       if (studentsRes.error) {
@@ -84,8 +86,9 @@ export function LessonModal({
 
       setStudents(studentsRes.data || []);
       setClasses(classesRes.data || []);
+      setTeachers((profilesRes.data || []).map(p => ({ id: p.id, name: p.full_name })));
 
-      console.log('[LESSON_MODAL_FETCH] students:', studentsRes.data?.length || 0, 'classes:', classesRes.data?.length || 0);
+      console.log('[LESSON_MODAL_FETCH] students:', studentsRes.data?.length || 0, 'classes:', classesRes.data?.length || 0, 'teachers:', profilesRes.data?.length || 0);
 
       // Fetch original teacher_id if viewing existing record
       if (existingRecordId) {
@@ -174,6 +177,7 @@ export function LessonModal({
             onCancel={handleCancel}
             students={students}
             classes={classes}
+            teachers={teachers}
             mode={mode}
             onRequestEdit={handleRequestEdit}
             originalTeacherId={originalTeacherId}

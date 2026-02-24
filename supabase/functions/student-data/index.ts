@@ -321,10 +321,14 @@ Deno.serve(async (req) => {
               }
             }
           }
-          supplementaryLessons = supplementaryData.map((s: any) => ({
-            ...s,
-            teacher_name: teacherMap[s.teacher_id] || null,
-          }));
+          supplementaryLessons = supplementaryData.map((s: any) => {
+            // Also extract teacher name from notes as fallback: [보충 선생님: name]
+            const teacherMatch = s.notes?.match(/\[보충 선생님:\s*([^\]]+)\]/);
+            return {
+              ...s,
+              teacher_name: teacherMatch ? teacherMatch[1].trim() : (teacherMap[s.teacher_id] || null),
+            };
+          });
         }
 
         result = {
