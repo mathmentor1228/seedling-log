@@ -246,7 +246,7 @@ export function AcademyCalendar() {
       
       setEvents(eventsWithDetails);
       
-      // Fetch acks for notice events
+      // Fetch acks for ALL notice events (pinned or not)
       const noticeEventIds = eventsWithDetails
         .filter(e => e.category === 'notice')
         .map(e => e.id);
@@ -997,7 +997,68 @@ export function AcademyCalendar() {
                       <div className="space-y-0.5 mt-0.5">
                         {dayEvents
                           .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
-                          .map((event) => renderEventRow(event))}
+                          .map((event) => {
+                            const isNotice = event.category === 'notice';
+                            const acks = eventAcks[event.id] || [];
+                            const myAck = acks.find(a => a.user_id === user?.id);
+                            const allConfirmed = totalTeachers > 0 && acks.length >= totalTeachers;
+                            
+                            return (
+                              <div key={event.id}>
+                                {renderEventRow(event)}
+                                {isNotice && (
+                                  <div className="flex items-center gap-2 px-3 pb-2 ml-5">
+                                    {myAck ? (
+                                      <Badge variant="secondary" className="text-[10px] gap-1">
+                                        <Check className="w-3 h-3" />
+                                        확인 완료
+                                      </Badge>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-6 text-[11px] px-2 gap-1"
+                                        disabled={ackLoading === event.id}
+                                        onClick={(e) => { e.stopPropagation(); handleAckNotice(event.id); }}
+                                      >
+                                        {ackLoading === event.id ? (
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <Check className="w-3 h-3" />
+                                        )}
+                                        확인
+                                      </Button>
+                                    )}
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className={`text-[10px] cursor-default ${allConfirmed ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                            {allConfirmed ? (
+                                              <span className="inline-flex items-center gap-0.5"><CheckCheck className="w-3 h-3" /> 전원확인</span>
+                                            ) : (
+                                              `${acks.length}/${totalTeachers}명 확인`
+                                            )}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="text-xs">
+                                          {acks.length > 0 ? (
+                                            <div>
+                                              <p className="font-semibold mb-1">확인한 선생님:</p>
+                                              {acks.map(a => (
+                                                <p key={a.id}>{a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p>아직 확인한 선생님이 없습니다</p>
+                                          )}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                       </div>
                     </div>
                   );
