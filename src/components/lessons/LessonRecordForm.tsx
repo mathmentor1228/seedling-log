@@ -48,6 +48,8 @@ export interface LessonRecordFormProps {
   onCancel?: () => void;
   students: { id: string; name: string }[];
   classes: { id: string; name: string; subject: string }[];
+  /** SUPPLEMENT-TEACHER-V1: Available teachers for supplementary lesson teacher selection */
+  teachers?: { id: string; name: string }[];
   mode?: 'view' | 'edit';
   onRequestEdit?: () => void;
   originalTeacherId?: string | null;
@@ -271,6 +273,7 @@ export function LessonRecordForm({
   onCancel,
   students,
   classes,
+  teachers,
   mode = 'edit',
   onRequestEdit,
   originalTeacherId,
@@ -320,6 +323,8 @@ export function LessonRecordForm({
     korean_categories: [] as string[],
     // SUPPLEMENT-TIME-V1: Time input for supplementary lessons
     supplement_time: '',
+    // SUPPLEMENT-TEACHER-V1: Teacher name for supplementary lessons
+    supplement_teacher_name: '',
   });
 
   // MATH-CURRICULUM-TAG-V2: Validation state for custom course
@@ -604,6 +609,7 @@ export function LessonRecordForm({
             korean_categories: (record as any).korean_categories || [],
             // SUPPLEMENT-TIME-V1
             supplement_time: '',
+            supplement_teacher_name: '',
           });
           // PREFILL-FIX-V6: For existing records with EMPTY curriculum tags, allow prefill from student's last record
           const hasMathTags = !!(record as any).curriculum_version || !!(record as any).course || !!(record as any).curriculum_unit_key;
@@ -934,14 +940,20 @@ export function LessonRecordForm({
       korean_categories: null,
     };
 
-    // SUPPLEMENT-TIME-V2: Prepend supplement_time to notes for 보충수업
+    // SUPPLEMENT-TIME-V2: Prepend supplement_time and teacher to notes for 보충수업
     const isSupplementary = lesson_types.includes('보충수업');
     let finalNotes = formData.notes.trim() || null;
     if (isSupplementary && formData.supplement_time) {
       const timePrefix = `[보충 시간: ${formData.supplement_time}]`;
-      // Only prepend if not already present
       if (!finalNotes || !finalNotes.includes('[보충 시간:')) {
         finalNotes = finalNotes ? `${timePrefix}\n${finalNotes}` : timePrefix;
+      }
+    }
+    // SUPPLEMENT-TEACHER-V1: Prepend teacher name to notes for 보충수업
+    if (isSupplementary && formData.supplement_teacher_name) {
+      const teacherPrefix = `[보충 선생님: ${formData.supplement_teacher_name}]`;
+      if (!finalNotes || !finalNotes.includes('[보충 선생님:')) {
+        finalNotes = finalNotes ? `${teacherPrefix}\n${finalNotes}` : teacherPrefix;
       }
     }
 
@@ -1364,9 +1376,9 @@ export function LessonRecordForm({
           )}
         </div>
         
-        {/* Class field - SUPPLEMENT-TIME-V1: Show time input for 보충수업 instead of class selector */}
+        {/* Class field - SUPPLEMENT-TIME-V1: Show time & teacher input for 보충수업 instead of class selector */}
         {formData.lesson_types.includes('보충수업') ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground">시간:</span>
             <Input
               type="time"
@@ -1378,6 +1390,36 @@ export function LessonRecordForm({
             />
             {!formData.supplement_time && !isViewMode && (
               <span className="text-xs text-orange-500">⚠ 시간을 입력해주세요</span>
+            )}
+            <span className="text-sm text-muted-foreground ml-2">선생님:</span>
+            {teachers && teachers.length > 0 ? (
+              <Select
+                value={formData.supplement_teacher_name || '_placeholder_'}
+                onValueChange={(value) => {
+                  if (value !== '_placeholder_') {
+                    setFormData({ ...formData, supplement_teacher_name: value });
+                  }
+                }}
+                disabled={isViewMode}
+              >
+                <SelectTrigger className="w-[140px] h-8">
+                  <SelectValue placeholder="선생님 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_placeholder_" disabled>선생님 선택</SelectItem>
+                  {teachers.map((t) => (
+                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                className="w-[140px] h-8"
+                placeholder="선생님 이름"
+                value={formData.supplement_teacher_name || ''}
+                onChange={(e) => setFormData({ ...formData, supplement_teacher_name: e.target.value })}
+                disabled={isViewMode}
+              />
             )}
           </div>
         ) : (

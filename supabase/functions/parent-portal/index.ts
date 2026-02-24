@@ -219,6 +219,8 @@ Deno.serve(async (req) => {
         upcoming_supplements: (supplRes.data || []).map((s: any) => {
           // Extract time from notes: [보충 시간: HH:MM]
           const timeMatch = s.notes?.match(/\[보충 시간:\s*(\d{1,2}:\d{2})\]/);
+          // Extract teacher name from notes: [보충 선생님: name]
+          const teacherMatch = s.notes?.match(/\[보충 선생님:\s*([^\]]+)\]/);
           return {
             id: s.id,
             date: s.lesson_date,
@@ -226,6 +228,7 @@ Deno.serve(async (req) => {
             range: s.lesson_range,
             course: s.course,
             time: timeMatch ? timeMatch[1] : null,
+            teacher_name: teacherMatch ? teacherMatch[1].trim() : null,
           };
         }),
       }),
