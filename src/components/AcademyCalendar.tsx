@@ -57,6 +57,7 @@ import {
   User,
   Check,
   CheckCheck,
+  Pencil,
 } from 'lucide-react';
 import { format, addDays, startOfMonth, endOfMonth, isSameDay, isWithinInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -160,6 +161,25 @@ export function AcademyCalendar() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [additionalPosterFiles, setAdditionalPosterFiles] = useState<File[]>([]);
   const [uploadingPosters, setUploadingPosters] = useState(false);
+
+  // Edit event content dialog
+  const [editContentEvent, setEditContentEvent] = useState<AcademyEvent | null>(null);
+  const [editContentOpen, setEditContentOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    description: '',
+    start_date: '',
+    start_time: '09:00',
+    end_date: '',
+    end_time: '',
+    all_day: false,
+    visibility: 'all',
+    location: '',
+    category: 'general',
+    is_announcement: false,
+    pinned: false,
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Detail dialog state
   const [detailEvent, setDetailEvent] = useState<AcademyEvent | null>(null);
@@ -514,6 +534,74 @@ export function AcademyCalendar() {
     }
   }
 
+  function openEditContent(event: AcademyEvent) {
+    setEditContentEvent(event);
+    const startDate = format(new Date(event.start_at), 'yyyy-MM-dd');
+    const startTime = format(new Date(event.start_at), 'HH:mm');
+    const endDate = event.end_at ? format(new Date(event.end_at), 'yyyy-MM-dd') : '';
+    const endTime = event.end_at ? format(new Date(event.end_at), 'HH:mm') : '';
+    setEditFormData({
+      title: event.title,
+      description: event.description || '',
+      start_date: startDate,
+      start_time: startTime,
+      end_date: endDate,
+      end_time: endTime,
+      all_day: event.all_day,
+      visibility: event.visibility,
+      location: event.location || '',
+      category: event.category,
+      is_announcement: event.is_announcement,
+      pinned: event.pinned,
+    });
+    setEditContentOpen(true);
+  }
+
+  async function handleUpdateEvent() {
+    if (!editContentEvent || !editFormData.title.trim()) return;
+    setIsUpdating(true);
+    try {
+      const startAt = editFormData.all_day
+        ? `${editFormData.start_date}T00:00:00+09:00`
+        : `${editFormData.start_date}T${editFormData.start_time}:00+09:00`;
+
+      let endAt = null;
+      if (editFormData.end_date) {
+        endAt = editFormData.all_day
+          ? `${editFormData.end_date}T23:59:59+09:00`
+          : `${editFormData.end_date}T${editFormData.end_time || editFormData.start_time}:00+09:00`;
+      }
+
+      const { error } = await supabase
+        .from('academy_events')
+        .update({
+          title: editFormData.title.trim(),
+          description: editFormData.description.trim() || null,
+          start_at: startAt,
+          end_at: endAt,
+          all_day: editFormData.all_day,
+          visibility: editFormData.visibility,
+          location: editFormData.location.trim() || null,
+          category: editFormData.category,
+          is_announcement: editFormData.is_announcement,
+          pinned: editFormData.pinned,
+        })
+        .eq('id', editContentEvent.id);
+
+      if (error) throw error;
+
+      toast({ title: '수정 완료', description: '일정이 수정되었습니다.' });
+      setEditContentOpen(false);
+      setEditContentEvent(null);
+      fetchEvents();
+    } catch (error: any) {
+      console.error('Error updating event:', error);
+      toast({ title: '오류', description: error.message || '수정에 실패했습니다.', variant: 'destructive' });
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
   function getCategoryBadge(category: string) {
     const option = CATEGORY_OPTIONS.find(o => o.value === category);
     if (!option) return null;
@@ -621,6 +709,11 @@ export function AcademyCalendar() {
         
         {/* Actions */}
         <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {event.created_by === user?.id && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditContent(event)}>
+              <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+            </Button>
+          )}
           {canUploadPosters && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditEvent(event); setEditDialogOpen(true); }}>
               <Image className="w-3.5 h-3.5 text-muted-foreground" />
@@ -1149,6 +1242,163 @@ export function AcademyCalendar() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Event Content Dialog */}
+      <Dialog open={editContentOpen} onOpenChange={setEditContentOpen}>
+        <DialogContent className="max-w-lg" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>일정 수정</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4 max-h-[70vh] overflow-y-auto">
+            <div className="space-y-2">
+              <Label>제목 *</Label>
+              <Input
+                value={editFormData.title}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="일정 제목..."
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>설명</Label>
+              <Textarea
+                value={editFormData.description}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="일정 설명..."
+                rows={2}
+              />
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={editFormData.all_day}
+                onCheckedChange={(checked) => setEditFormData(prev => ({ ...prev, all_day: checked }))}
+              />
+              <Label>종일</Label>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>시작 날짜 *</Label>
+                <Input
+                  type="date"
+                  value={editFormData.start_date}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                />
+              </div>
+              {!editFormData.all_day && (
+                <div className="space-y-2">
+                  <Label>시작 시간</Label>
+                  <Input
+                    type="time"
+                    value={editFormData.start_time}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, start_time: e.target.value }))}
+                  />
+                </div>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>종료 날짜</Label>
+                <Input
+                  type="date"
+                  value={editFormData.end_date}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, end_date: e.target.value }))}
+                />
+              </div>
+              {!editFormData.all_day && editFormData.end_date && (
+                <div className="space-y-2">
+                  <Label>종료 시간</Label>
+                  <Input
+                    type="time"
+                    value={editFormData.end_time}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, end_time: e.target.value }))}
+                  />
+                </div>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>카테고리</Label>
+                <Select
+                  value={editFormData.category}
+                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, category: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>공개 범위</Label>
+                <Select
+                  value={editFormData.visibility}
+                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, visibility: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VISIBILITY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>장소</Label>
+              <Input
+                value={editFormData.location}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, location: e.target.value }))}
+                placeholder="장소..."
+              />
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={editFormData.is_announcement}
+                  onCheckedChange={(checked) => setEditFormData(prev => ({ ...prev, is_announcement: checked }))}
+                />
+                <Label>공지사항</Label>
+              </div>
+              
+              {isAdmin && (
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={editFormData.pinned}
+                    onCheckedChange={(checked) => setEditFormData(prev => ({ ...prev, pinned: checked }))}
+                  />
+                  <Label>상단 고정</Label>
+                </div>
+              )}
+            </div>
+            
+            <Button 
+              onClick={handleUpdateEvent}
+              disabled={!editFormData.title.trim() || isUpdating}
+              className="w-full"
+            >
+              {isUpdating ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Pencil className="w-4 h-4 mr-2" />
+              )}
+              수정 완료
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
