@@ -185,6 +185,8 @@ export default function StudentHomework() {
 
   // DEADLINE-V1: Check if submission is allowed
   const isSubmissionBlocked = (hw: HomeworkItem): boolean => {
+    if (hw.check_status === 'checked') return true;
+    if (hw.check_status === 'resubmit') return false; // Allow resubmission
     if (hw.check_status !== 'unchecked') return true;
     if (hw.is_expired) return true;
     if (hw.is_submission_closed) return true;
@@ -341,14 +343,14 @@ export default function StudentHomework() {
   };
 
   const getStatusBadge = (hw: HomeworkItem) => {
+    if (hw.check_status === 'resubmit') {
+      return <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/30">재제출 요청</Badge>;
+    }
     if (hw.check_status === 'checked') {
-      if (hw.result === 'completed') {
-        return <Badge className="bg-green-500/10 text-green-600">완료</Badge>;
-      } else if (hw.result === 'partial') {
-        return <Badge className="bg-amber-500/10 text-amber-600">일부 완료</Badge>;
-      } else {
-        return <Badge className="bg-red-500/10 text-red-600">미완료</Badge>;
-      }
+      return <Badge className="bg-green-500/10 text-green-600">확인완료</Badge>;
+    }
+    if (hw.submitted_at || (hw.submission_count && hw.submission_count > 0)) {
+      return <Badge className="bg-blue-500/10 text-blue-600">제출완료</Badge>;
     }
     return <Badge className="bg-muted text-muted-foreground">대기중</Badge>;
   };
@@ -467,6 +469,27 @@ export default function StudentHomework() {
               <p className="text-sm whitespace-pre-wrap">{selectedHomework.content}</p>
             </div>
 
+            {/* Teacher feedback / comment */}
+            {(selectedHomework.check_status === 'resubmit' || selectedHomework.check_status === 'checked') && selectedHomework.result && (
+              <div className={`p-3 rounded-lg border ${
+                selectedHomework.check_status === 'resubmit' 
+                  ? 'bg-orange-500/10 border-orange-500/30' 
+                  : 'bg-green-500/10 border-green-500/30'
+              }`}>
+                <p className="text-xs font-medium mb-1">
+                  {selectedHomework.check_status === 'resubmit' ? '📝 선생님 코멘트 (재제출 요청)' : '✅ 선생님 코멘트'}
+                </p>
+                <p className="text-sm whitespace-pre-wrap">{selectedHomework.result}</p>
+              </div>
+            )}
+
+            {selectedHomework.check_status === 'resubmit' && !selectedHomework.result && (
+              <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                <p className="text-sm font-medium">📝 선생님이 다시 제출을 요청했습니다</p>
+                <p className="text-xs text-muted-foreground mt-0.5">아래 버튼을 눌러 숙제를 다시 제출해주세요</p>
+              </div>
+            )}
+
             {selectedHomework.notes && (
               <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
                 <p className="text-xs text-muted-foreground mb-1">선생님 메모</p>
@@ -534,7 +557,7 @@ export default function StudentHomework() {
             )}
 
             {/* DEADLINE-V1: Show submit button or deadline-passed message */}
-            {selectedHomework.check_status === 'unchecked' && !selectedHomework.is_expired && !selectedHomework.is_submission_closed && !deadlinePassed && !isSubmissionBlocked(selectedHomework) && (
+            {(selectedHomework.check_status === 'unchecked' || selectedHomework.check_status === 'resubmit') && !selectedHomework.is_expired && !selectedHomework.is_submission_closed && !deadlinePassed && !isSubmissionBlocked(selectedHomework) && (
               <div className="space-y-3">
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <p className="text-xs text-amber-700 font-medium">
@@ -547,9 +570,11 @@ export default function StudentHomework() {
                   onClick={() => setShowSubmitDialog(true)}
                 >
                   <Upload className="w-5 h-5 mr-2" />
-                  {selectedHomework.homework_type === 'daily' && selectedHomework.required_submissions && selectedHomework.required_submissions > 1
-                    ? `${(selectedHomework.submission_count || 0) + 1}번째 인증하기`
-                    : selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
+                  {selectedHomework.check_status === 'resubmit'
+                    ? '다시 제출하기'
+                    : selectedHomework.homework_type === 'daily' && selectedHomework.required_submissions && selectedHomework.required_submissions > 1
+                      ? `${(selectedHomework.submission_count || 0) + 1}번째 인증하기`
+                      : selectedHomework.submitted_at ? '다시 제출하기' : '숙제 제출하기'}
                 </Button>
               </div>
             )}
@@ -695,7 +720,7 @@ export default function StudentHomework() {
   }
 
   const pendingHomework = homework.filter(hw => 
-    hw.check_status === 'unchecked' && 
+    (hw.check_status === 'unchecked' || hw.check_status === 'resubmit') && 
     !hw.is_expired && 
     !hw.is_submission_closed && 
     !hw.is_deadline_passed &&
@@ -763,7 +788,11 @@ export default function StudentHomework() {
             )}
           </div>
           {isPending ? (
-            hw.is_submission_closed ? (
+            hw.check_status === 'resubmit' ? (
+              <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/30 flex-shrink-0">
+                재제출
+              </Badge>
+            ) : hw.is_submission_closed ? (
               <Badge variant="outline" className="text-xs border-muted text-muted-foreground flex-shrink-0">
                 미제출
               </Badge>
