@@ -384,17 +384,23 @@ export function VocabSettingsPanel() {
                 <Input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="선택 사항" />
               </div>
 
-              {!formUsePerDayConfig && formDaysPerTest > 1 && (
-                <div className="flex items-center justify-between rounded-md border p-3">
-                  <div>
-                    <Label className="text-xs font-medium">DAY 묶음 시험</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formDaysPerTest}개 DAY를 하나의 시험으로 묶어서 봅니다
-                    </p>
+              {(() => {
+                const maxDays = formUsePerDayConfig
+                  ? Math.max(0, ...Object.values(formDaysPerTestMap).map(Number).filter(Boolean))
+                  : formDaysPerTest;
+                if (maxDays <= 1) return null;
+                return (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div>
+                      <Label className="text-xs font-medium">DAY 묶음 시험</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        여러 DAY를 하나의 시험으로 묶어서 봅니다
+                      </p>
+                    </div>
+                    <Switch checked={formBundleDays} onCheckedChange={setFormBundleDays} />
                   </div>
-                  <Switch checked={formBundleDays} onCheckedChange={setFormBundleDays} />
-                </div>
-              )}
+                );
+              })()}
 
               <Button onClick={handleSave} disabled={saving} className="w-full">
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
