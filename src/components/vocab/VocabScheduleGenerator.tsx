@@ -184,14 +184,15 @@ export function VocabScheduleGenerator() {
 
     const targetSettings = studentInfos.filter(s => targetStudentIds.includes(s.studentId));
 
-    // Delete existing regular schedules for these students in this month
+    // Delete existing regular schedules for these students in this month (only from rangeStart onward)
+    const deleteFrom = format(rangeStart > startOfMonth(target) ? rangeStart : startOfMonth(target), 'yyyy-MM-dd');
     for (const info of targetSettings) {
       const { data: existingIds } = await supabase
         .from('vocab_schedules')
         .select('id')
         .eq('student_id', info.studentId)
         .eq('schedule_type', 'regular')
-        .gte('test_date', start)
+        .gte('test_date', deleteFrom)
         .lte('test_date', end);
 
       if (existingIds && existingIds.length > 0) {
