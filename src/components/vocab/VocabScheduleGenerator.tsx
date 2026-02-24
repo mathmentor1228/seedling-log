@@ -78,10 +78,16 @@ export function VocabScheduleGenerator() {
     { label: '김민희', key: 'kim' },
   ];
 
-  // Delete confirmation
+  // Delete confirmation (schedules)
   const [deleteMode, setDeleteMode] = useState<'selected' | 'all' | null>(null);
   const [deleteCount, setDeleteCount] = useState(0);
   const [deleting, setDeleting] = useState(false);
+
+  // Delete setting confirmation
+  const [deleteSettingId, setDeleteSettingId] = useState<string | null>(null);
+  const [deleteSettingName, setDeleteSettingName] = useState('');
+  const [deletingSettings, setDeletingSettings] = useState(false);
+  const [bulkDeleteSettings, setBulkDeleteSettings] = useState(false);
 
   useEffect(() => {
     fetchStudentScheduleInfo();
@@ -308,6 +314,42 @@ export function VocabScheduleGenerator() {
     await fetchStudentScheduleInfo();
   };
 
+  const confirmDeleteSetting = async () => {
+    setDeletingSettings(true);
+    try {
+      const targetIds = bulkDeleteSettings
+        ? Array.from(selectedIds).map(sid => studentInfos.find(s => s.studentId === sid)?.settingId).filter(Boolean) as string[]
+        : deleteSettingId ? [deleteSettingId] : [];
+
+      if (targetIds.length === 0) return;
+
+      for (const settingId of targetIds) {
+        // Delete results linked to schedules of this setting
+        const { data: schedIds } = await supabase
+          .from('vocab_schedules')
+          .select('id')
+          .eq('setting_id', settingId);
+
+        if (schedIds && schedIds.length > 0) {
+          await supabase.from('vocab_test_results').delete().in('schedule_id', schedIds.map(s => s.id));
+          await supabase.from('vocab_schedules').delete().in('id', schedIds.map(s => s.id));
+        }
+
+        // Delete the setting itself
+        await supabase.from('vocab_settings').delete().eq('id', settingId);
+      }
+
+      toast.success(`${targetIds.length}개 설정이 삭제되었습니다`);
+      setDeleteSettingId(null);
+      setBulkDeleteSettings(false);
+      await fetchStudentScheduleInfo();
+    } catch (err: any) {
+      toast.error('설정 삭제 실패: ' + err.message);
+    } finally {
+      setDeletingSettings(false);
+    }
+  };
+
   // Filter by teacher category using assigned_teacher field
   const displayInfos = selectedTeacher === 'all'
     ? studentInfos
@@ -406,7 +448,7 @@ export function VocabScheduleGenerator() {
               onClick={() => openDeleteConfirm('selected')}
             >
               <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-              선택 삭제
+              선택 스케줄 삭제
             </Button>
             <Button
               size="sm"
@@ -416,7 +458,20 @@ export function VocabScheduleGenerator() {
               onClick={() => openDeleteConfirm('all')}
             >
               <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-              전체 삭제
+              전체 스케줄 삭제
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={deletingSettings || !someSelected}
+              onClick={() => {
+                setBulkDeleteSettings(true);
+                setDeleteSettingId(null);
+                setDeleteSettingName(`선택된 ${selectedIds.size}명`);
+              }}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              선택 설정 삭제
             </Button>
           </div>
         </CardContent>
@@ -448,6 +503,7 @@ export function VocabScheduleGenerator() {
                 <TableHead className="text-center">시작 DAY</TableHead>
                 <TableHead className="text-center">총 일차</TableHead>
                 <TableHead className="text-center">{Number(month) + 1}월 스케줄</TableHead>
+                <TableHead className="w-[40px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -481,6 +537,20 @@ export function VocabScheduleGenerator() {
                       <span className="text-xs text-muted-foreground">없음</span>
                     )}
                   </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => {
+                        setDeleteSettingId(info.settingId);
+                        setDeleteSettingName(info.studentName);
+                        setBulkDeleteSettings(false);
+                      }}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -503,6 +573,26 @@ export function VocabScheduleGenerator() {
             <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
               삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Setting delete confirmation */}
+      <AlertDialog open={!!deleteSettingId || bulkDeleteSettings} onOpenChange={(open) => { if (!open) { setDeleteSettingId(null); setBulkDeleteSettings(false); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>설정 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteSettingName}</strong>의 단어 시험 설정을 삭제하시겠습니까?
+              <span className="block mt-1 text-destructive">⚠️ 해당 학생의 모든 스케줄과 시험 결과가 함께 삭제됩니다.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteSetting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deletingSettings && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              설정 삭제
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
