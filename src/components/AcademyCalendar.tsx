@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth, isAdmin as checkIsAdmin, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { 
   CalendarDays, 
@@ -53,10 +54,20 @@ import {
   ZoomOut,
   ChevronLeft,
   Clock,
-  User
+  User,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 import { format, addDays, startOfMonth, endOfMonth, isSameDay, isWithinInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
+
+interface EventAck {
+  id: string;
+  event_id: string;
+  user_id: string;
+  user_name: string;
+  acknowledged_at: string;
+}
 
 interface EventAttachment {
   id: string;
@@ -118,6 +129,11 @@ export function AcademyCalendar() {
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
+  // Ack state
+  const [eventAcks, setEventAcks] = useState<Record<string, EventAck[]>>({});
+  const [totalTeachers, setTotalTeachers] = useState(0);
+  const [ackLoading, setAckLoading] = useState<string | null>(null);
+  
   // Filter
   const [filterCategory, setFilterCategory] = useState<string>('all');
   
@@ -152,8 +168,32 @@ export function AcademyCalendar() {
   useEffect(() => {
     if (user) {
       fetchEvents();
+      fetchTotalTeachers();
     }
   }, [user, filterCategory]);
+
+  async function fetchTotalTeachers() {
+    const { count } = await supabase
+      .from('user_roles')
+      .select('*', { count: 'exact', head: true })
+      .in('role', ['admin', 'teacher']);
+    setTotalTeachers(count || 0);
+  }
+
+  async function fetchAcksForEvents(eventIds: string[]) {
+    if (eventIds.length === 0) return {};
+    const { data } = await (supabase as any)
+      .from('event_acks')
+      .select('*')
+      .in('event_id', eventIds);
+    
+    const grouped: Record<string, EventAck[]> = {};
+    (data || []).forEach((ack: any) => {
+      if (!grouped[ack.event_id]) grouped[ack.event_id] = [];
+      grouped[ack.event_id].push(ack);
+    });
+    return grouped;
+  }
 
   async function fetchEvents() {
     try {
@@ -205,6 +245,13 @@ export function AcademyCalendar() {
       }
       
       setEvents(eventsWithDetails);
+      
+      // Fetch acks for notice events
+      const noticeEventIds = eventsWithDetails
+        .filter(e => e.category === 'notice')
+        .map(e => e.id);
+      const acks = await fetchAcksForEvents(noticeEventIds);
+      setEventAcks(acks);
     } catch (error) {
       console.error('Error fetching events:', error);
       toast({
@@ -412,6 +459,59 @@ export function AcademyCalendar() {
     }
   }
 
+  async function handleAckNotice(eventId: string) {
+    if (!user) return;
+    setAckLoading(eventId);
+    try {
+      // Get user's name from profiles
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      const userName = profile?.full_name || user.email || '알 수 없음';
+      
+      const { error } = await (supabase as any)
+        .from('event_acks')
+        .insert({
+          event_id: eventId,
+          user_id: user.id,
+          user_name: userName,
+        });
+      
+      if (error) {
+        if (error.code === '23505') {
+          toast({ title: '이미 확인하셨습니다.' });
+        } else {
+          throw error;
+        }
+      } else {
+        toast({ title: '확인 완료' });
+      }
+      
+      // Refresh acks
+      const acks = await fetchAcksForEvents([eventId]);
+      setEventAcks(prev => ({ ...prev, ...acks }));
+      
+      // Check if all teachers confirmed -> auto-unpin
+      const updatedAcks = acks[eventId] || [];
+      if (totalTeachers > 0 && updatedAcks.length >= totalTeachers) {
+        await supabase
+          .from('academy_events')
+          .update({ pinned: false })
+          .eq('id', eventId);
+        toast({ title: '전원 확인 완료', description: '상단 고정이 해제되었습니다.' });
+        fetchEvents();
+      }
+    } catch (error: any) {
+      console.error('Ack error:', error);
+      toast({ title: '오류', description: error.message, variant: 'destructive' });
+    } finally {
+      setAckLoading(null);
+    }
+  }
+
   function getCategoryBadge(category: string) {
     const option = CATEGORY_OPTIONS.find(o => o.value === category);
     if (!option) return null;
@@ -448,8 +548,11 @@ export function AcademyCalendar() {
   // Sort dates
   const sortedDateKeys = Object.keys(groupedEvents).sort();
 
-  // Pinned announcements (shown at top)
-  const pinnedAnnouncements = events.filter(e => e.pinned || (e.is_announcement && e.category === 'notice'));
+  // Pinned announcements (shown at top) - only 5 most recent notices
+  const pinnedAnnouncements = events
+    .filter(e => e.pinned || (e.is_announcement && e.category === 'notice'))
+    .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime())
+    .slice(0, 5);
   const regularDateKeys = sortedDateKeys; // all dates shown in groups
 
   function renderEventRow(event: AcademyEvent, showDate: boolean = false) {
@@ -801,10 +904,71 @@ export function AcademyCalendar() {
                   <div className="mb-3">
                     <div className="flex items-center gap-1.5 mb-1.5 px-1">
                       <Bell className="w-3.5 h-3.5 text-blue-500" />
-                      <span className="text-xs font-semibold text-blue-500 uppercase tracking-wide">공지</span>
+                      <span className="text-xs font-semibold text-blue-500 uppercase tracking-wide">공지 (최근 {pinnedAnnouncements.length}개)</span>
                     </div>
-                    <div className="space-y-0.5 border-l-2 border-blue-500/30 ml-1">
-                      {pinnedAnnouncements.map((event) => renderEventRow(event))}
+                    <div className="space-y-1 border-l-2 border-blue-500/30 ml-1">
+                      {pinnedAnnouncements.map((event) => {
+                        const acks = eventAcks[event.id] || [];
+                        const myAck = acks.find(a => a.user_id === user?.id);
+                        const allConfirmed = totalTeachers > 0 && acks.length >= totalTeachers;
+                        
+                        return (
+                          <div key={event.id}>
+                            {renderEventRow(event)}
+                            {/* Ack section for notices */}
+                            {event.category === 'notice' && (
+                              <div className="flex items-center gap-2 px-3 pb-2 ml-5">
+                                {myAck ? (
+                                  <Badge variant="secondary" className="text-[10px] gap-1">
+                                    <Check className="w-3 h-3" />
+                                    확인 완료
+                                  </Badge>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-[11px] px-2 gap-1"
+                                    disabled={ackLoading === event.id}
+                                    onClick={(e) => { e.stopPropagation(); handleAckNotice(event.id); }}
+                                  >
+                                    {ackLoading === event.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <Check className="w-3 h-3" />
+                                    )}
+                                    확인
+                                  </Button>
+                                )}
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className={`text-[10px] cursor-default ${allConfirmed ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                        {allConfirmed ? (
+                                          <span className="inline-flex items-center gap-0.5"><CheckCheck className="w-3 h-3" /> 전원확인</span>
+                                        ) : (
+                                          `${acks.length}/${totalTeachers}명 확인`
+                                        )}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="text-xs">
+                                      {acks.length > 0 ? (
+                                        <div>
+                                          <p className="font-semibold mb-1">확인한 선생님:</p>
+                                          {acks.map(a => (
+                                            <p key={a.id}>{a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p>아직 확인한 선생님이 없습니다</p>
+                                      )}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
