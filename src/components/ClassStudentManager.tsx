@@ -106,6 +106,7 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
       const { data: studentsData, error: studentsError } = await supabase
         .from('students')
         .select('id, name, grade, school')
+        .neq('enrollment_status', '퇴원')
         .order('name');
 
       if (studentsError) throw studentsError;

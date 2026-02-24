@@ -192,7 +192,8 @@ export function Timetable() {
           const { data: studentsData } = await supabase
             .from('students')
             .select('id, name')
-            .in('id', studentIds);
+            .in('id', studentIds)
+            .neq('enrollment_status', '퇴원');
 
           const studentMap: Record<string, string> = {};
           (studentsData || []).forEach((s) => { studentMap[s.id] = s.name; });
@@ -342,7 +343,7 @@ export function Timetable() {
     setStudentsLoading(true);
     try {
       const offset = (studentPage - 1) * STUDENT_PAGE_SIZE;
-      let query = supabase.from('students').select('id, name', { count: 'exact' });
+      let query = supabase.from('students').select('id, name', { count: 'exact' }).neq('enrollment_status', '퇴원');
       if (studentSearchQuery.trim()) {
         query = query.ilike('name', `%${studentSearchQuery.trim()}%`);
       }
