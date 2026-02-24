@@ -405,6 +405,38 @@ export type Database = {
         }
         Relationships: []
       }
+      event_acks: {
+        Row: {
+          acknowledged_at: string
+          event_id: string
+          id: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          acknowledged_at?: string
+          event_id: string
+          id?: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          acknowledged_at?: string
+          event_id?: string
+          id?: string
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_acks_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "academy_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attachments: {
         Row: {
           created_at: string
