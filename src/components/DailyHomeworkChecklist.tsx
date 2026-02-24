@@ -32,7 +32,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Textarea } from '@/components/ui/textarea';
+import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users, MessageSquare, CheckCircle2, RotateCcw, Send } from 'lucide-react';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
@@ -71,6 +77,7 @@ const CHECK_STATUS_LABELS: Record<string, { label: string; className: string }> 
   unchecked: { label: '미확인', className: 'bg-muted text-muted-foreground' },
   checked: { label: '확인완료', className: 'bg-green-500/15 text-green-600 border-green-500/30' },
   submitted: { label: '제출됨', className: 'bg-blue-500/15 text-blue-600 border-blue-500/30' },
+  resubmit: { label: '재제출', className: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
 };
 
 const DAY_LABELS: Record<number, string> = { 0: '일', 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
@@ -98,7 +105,9 @@ export default function DailyHomeworkChecklist() {
   const [viewMode, setViewMode] = useState<'teacher' | 'calendar' | 'grade'>('teacher');
   const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([]);
   const [imageViewItem, setImageViewItem] = useState<DailyHomeworkItem | null>(null);
-
+  const [reviewingItem, setReviewingItem] = useState<string | null>(null);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
   const isAdmin = checkIsAdmin(role);
   const isTeacher = checkIsTeacher(role);
 
@@ -243,6 +252,7 @@ export default function DailyHomeworkChecklist() {
     if (filterStatus === 'submitted') result = result.filter(i => i.submitted_at || i.submission_count > 0);
     if (filterStatus === 'unchecked') result = result.filter(i => i.check_status === 'unchecked' && !i.submitted_at);
     if (filterStatus === 'checked') result = result.filter(i => i.check_status === 'checked');
+    if (filterStatus === 'resubmit') result = result.filter(i => i.check_status === 'resubmit');
     return result;
   }, [items, filterTeacher, filterGrade, filterStatus]);
 
@@ -334,14 +344,124 @@ export default function DailyHomeworkChecklist() {
     }
   }
 
+  async function handleReview(itemId: string, status: 'checked' | 'resubmit', comment?: string) {
+    setReviewLoading(true);
+    try {
+      const updateData: any = {
+        check_status: status,
+        checked_by: user?.id,
+        checked_at: new Date().toISOString(),
+      };
+      if (comment) updateData.result = comment;
+
+      const { error } = await supabase
+        .from('homework_assignments')
+        .update(updateData)
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      toast({
+        title: status === 'checked' ? '확인완료 처리됨' : '재제출 요청됨',
+        description: comment ? `코멘트: ${comment}` : undefined,
+      });
+
+      setReviewingItem(null);
+      setReviewComment('');
+      fetchData();
+    } catch (error: any) {
+      toast({ title: '처리 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setReviewLoading(false);
+    }
+  }
+
   function getStatusBadge(item: DailyHomeworkItem) {
     if (item.check_status === 'checked') {
       return <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">확인완료</Badge>;
+    }
+    if (item.check_status === 'resubmit') {
+      return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs">재제출</Badge>;
     }
     if (item.submitted_at || item.submission_count > 0) {
       return <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">제출됨</Badge>;
     }
     return <Badge className="bg-muted text-muted-foreground text-xs">미확인</Badge>;
+  }
+
+  function renderReviewActions(item: DailyHomeworkItem) {
+    if (!isAdmin && !isTeacher) return null;
+    const isOpen = reviewingItem === item.id;
+
+    return (
+      <Popover open={isOpen} onOpenChange={(open) => {
+        if (open) { setReviewingItem(item.id); setReviewComment(''); }
+        else { setReviewingItem(null); setReviewComment(''); }
+      }}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-64 p-3" align="end" onClick={(e) => e.stopPropagation()}>
+          <div className="space-y-2">
+            <p className="text-xs font-medium">{item.student_name} - 평가</p>
+            <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs flex-1 gap-1 text-green-600 border-green-500/30 hover:bg-green-500/10"
+                disabled={reviewLoading}
+                onClick={() => handleReview(item.id, 'checked')}
+              >
+                <CheckCircle2 className="w-3 h-3" />
+                확인완료
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs flex-1 gap-1 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                disabled={reviewLoading}
+                onClick={() => handleReview(item.id, 'resubmit')}
+              >
+                <RotateCcw className="w-3 h-3" />
+                재제출
+              </Button>
+            </div>
+            <div className="space-y-1">
+              <Textarea
+                placeholder="코멘트 입력 (선택)"
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                rows={2}
+                className="text-xs min-h-[50px]"
+              />
+              {reviewComment.trim() && (
+                <Button
+                  size="sm"
+                  className="w-full h-7 text-xs gap-1"
+                  disabled={reviewLoading}
+                  onClick={() => handleReview(item.id, 'checked', reviewComment.trim())}
+                >
+                  {reviewLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  코멘트와 함께 확인완료
+                </Button>
+              )}
+            </div>
+            {item.result && (
+              <p className="text-[10px] text-muted-foreground border-t pt-1 mt-1">
+                이전 코멘트: {item.result}
+              </p>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
   }
 
   function renderSubmissionDetail(item: DailyHomeworkItem) {
@@ -405,6 +525,11 @@ export default function DailyHomeworkChecklist() {
         <span className="text-muted-foreground truncate flex-1 text-xs" title={item.content}>
           {item.content}
         </span>
+        {item.result && (
+          <span className="text-[10px] text-amber-600 shrink-0 max-w-20 truncate" title={item.result}>
+            💬 {item.result}
+          </span>
+        )}
         {item.end_date && (
           <span className="text-[10px] text-muted-foreground shrink-0">
             ~{format(new Date(item.end_date + 'T00:00:00'), 'M/d')}
@@ -412,6 +537,7 @@ export default function DailyHomeworkChecklist() {
         )}
         <div className="shrink-0">{renderSubmissionDetail(item)}</div>
         <div className="shrink-0">{getStatusBadge(item)}</div>
+        <div className="shrink-0">{renderReviewActions(item)}</div>
       </div>
     );
   }
@@ -552,6 +678,7 @@ export default function DailyHomeworkChecklist() {
                   <SelectItem value="submitted">제출됨</SelectItem>
                   <SelectItem value="unchecked">미제출</SelectItem>
                   <SelectItem value="checked">확인완료</SelectItem>
+                  <SelectItem value="resubmit">재제출</SelectItem>
                 </SelectContent>
               </Select>
             </div>
