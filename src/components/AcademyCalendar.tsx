@@ -941,31 +941,36 @@ export function AcademyCalendar() {
                                     확인
                                   </Button>
                                 )}
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className={`text-[10px] cursor-default ${allConfirmed ? 'text-emerald-600' : 'text-muted-foreground'}`}>
-                                        {allConfirmed ? (
-                                          <span className="inline-flex items-center gap-0.5"><CheckCheck className="w-3 h-3" /> 전원확인</span>
+                                {isAdmin && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className={`text-[10px] cursor-default ${allConfirmed ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                          {allConfirmed ? (
+                                            <span className="inline-flex items-center gap-0.5"><CheckCheck className="w-3 h-3" /> 전원확인</span>
+                                          ) : (
+                                            `${acks.length}/${totalTeachers}명 확인`
+                                          )}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className="text-xs">
+                                        {acks.length > 0 ? (
+                                          <div>
+                                            <p className="font-semibold mb-1">확인한 선생님:</p>
+                                            {acks.map(a => (
+                                              <p key={a.id}>{a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
+                                            ))}
+                                            {totalTeachers > acks.length && (
+                                              <p className="mt-1 text-muted-foreground">미확인: {totalTeachers - acks.length}명</p>
+                                            )}
+                                          </div>
                                         ) : (
-                                          `${acks.length}/${totalTeachers}명 확인`
+                                          <p>아직 확인한 선생님이 없습니다</p>
                                         )}
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="bottom" className="text-xs">
-                                      {acks.length > 0 ? (
-                                        <div>
-                                          <p className="font-semibold mb-1">확인한 선생님:</p>
-                                          {acks.map(a => (
-                                            <p key={a.id}>{a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <p>아직 확인한 선생님이 없습니다</p>
-                                      )}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
                               </div>
                             )}
                           </div>
@@ -1031,31 +1036,36 @@ export function AcademyCalendar() {
                                         확인
                                       </Button>
                                     )}
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <span className={`text-[10px] cursor-default ${allConfirmed ? 'text-emerald-600' : 'text-muted-foreground'}`}>
-                                            {allConfirmed ? (
-                                              <span className="inline-flex items-center gap-0.5"><CheckCheck className="w-3 h-3" /> 전원확인</span>
+                                    {isAdmin && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className={`text-[10px] cursor-default ${allConfirmed ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                              {allConfirmed ? (
+                                                <span className="inline-flex items-center gap-0.5"><CheckCheck className="w-3 h-3" /> 전원확인</span>
+                                              ) : (
+                                                `${acks.length}/${totalTeachers}명 확인`
+                                              )}
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="bottom" className="text-xs">
+                                            {acks.length > 0 ? (
+                                              <div>
+                                                <p className="font-semibold mb-1">확인한 선생님:</p>
+                                                {acks.map(a => (
+                                                  <p key={a.id}>{a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
+                                                ))}
+                                                {totalTeachers > acks.length && (
+                                                  <p className="mt-1 text-muted-foreground">미확인: {totalTeachers - acks.length}명</p>
+                                                )}
+                                              </div>
                                             ) : (
-                                              `${acks.length}/${totalTeachers}명 확인`
+                                              <p>아직 확인한 선생님이 없습니다</p>
                                             )}
-                                          </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom" className="text-xs">
-                                          {acks.length > 0 ? (
-                                            <div>
-                                              <p className="font-semibold mb-1">확인한 선생님:</p>
-                                              {acks.map(a => (
-                                                <p key={a.id}>{a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <p>아직 확인한 선생님이 없습니다</p>
-                                          )}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
                                   </div>
                                 )}
                               </div>
