@@ -55,12 +55,27 @@ const DAY_LABELS: Record<string, string> = {
 
 const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
+const GRADE_GROUPS = ['중1', '중2', '중3', '고1', '고2', '고3'];
+
+function getGradeGroup(grade: string | null, school: string | null): string | null {
+  if (!grade) return null;
+  for (const g of GRADE_GROUPS) {
+    if (grade.includes(g)) return g;
+  }
+  if (school) {
+    const level = school.includes('중') ? '중' : school.includes('고') ? '고' : null;
+    if (level) {
+      const yearMatch = grade.match(/(\d)/);
+      if (yearMatch) return `${level}${yearMatch[1]}`;
+    }
+  }
+  return null;
+}
+
 // Backward compat: convert old combo values to individual day arrays
 function normalizeTestDays(testDays: string[]): string[] {
   if (!testDays || testDays.length === 0) return ['mon', 'wed'];
-  // If already individual days (e.g. ['mon', 'wed', 'fri']), return as-is
   if (testDays.every(d => ALL_DAYS.includes(d as any))) return testDays;
-  // Old combo format like ['mon_wed'] — expand
   const combo = testDays[0];
   const COMBO_MAP: Record<string, string[]> = {
     mon_wed: ['mon', 'wed'],
@@ -115,7 +130,9 @@ export function VocabSettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<VocabSetting | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-
+  const [filterTeacher, setFilterTeacher] = useState<string>('all');
+  const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [filterName, setFilterName] = useState('');
   useEffect(() => {
     fetchData();
   }, []);
@@ -411,6 +428,56 @@ export function VocabSettingsPanel() {
         </Dialog>
       </div>
 
+      {/* Filters */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+          <SelectTrigger className="w-24 h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 선생님</SelectItem>
+            {TEACHER_OPTIONS.map(t => (
+              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterGrade} onValueChange={setFilterGrade}>
+          <SelectTrigger className="w-20 h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 학년</SelectItem>
+            {GRADE_GROUPS.map(g => (
+              <SelectItem key={g} value={g}>{g}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          placeholder="이름 검색..."
+          value={filterName}
+          onChange={e => setFilterName(e.target.value)}
+          className="w-28 h-8 text-xs"
+        />
+        <Badge variant="secondary" className="text-xs">
+          {(() => {
+            const filtered = settings.filter(s => {
+              if (filterTeacher !== 'all' && s.assigned_teacher !== filterTeacher) return false;
+              if (filterGrade !== 'all') {
+                const st = (s as any).students;
+                const group = st ? getGradeGroup(st.grade, st.school) : null;
+                if (group !== filterGrade) return false;
+              }
+              if (filterName) {
+                const st = (s as any).students;
+                if (!st?.name?.includes(filterName)) return false;
+              }
+              return true;
+            });
+            return `${filtered.length}명`;
+          })()}
+        </Badge>
+      </div>
+
       {settings.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
@@ -435,7 +502,19 @@ export function VocabSettingsPanel() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {settings.map(s => (
+              {settings.filter(s => {
+                if (filterTeacher !== 'all' && s.assigned_teacher !== filterTeacher) return false;
+                if (filterGrade !== 'all') {
+                  const st = (s as any).students;
+                  const group = st ? getGradeGroup(st.grade, st.school) : null;
+                  if (group !== filterGrade) return false;
+                }
+                if (filterName) {
+                  const st = (s as any).students;
+                  if (!st?.name?.includes(filterName)) return false;
+                }
+                return true;
+              }).map(s => (
                 <TableRow key={s.id}>
                   <TableCell className="text-xs">
                     {TEACHER_OPTIONS.find(t => t.value === s.assigned_teacher)?.label || '—'}
