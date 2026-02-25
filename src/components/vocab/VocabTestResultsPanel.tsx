@@ -438,10 +438,14 @@ export function VocabTestResultsPanel() {
 
   const openRetestDialog = (result: TestResult) => {
     setRetestResult(result);
-    setRetestDate(undefined);
+    // Default to today so same-day retests are easy
+    const today = new Date();
+    setRetestDate(today);
     setRetestTime('');
     setConflictWarning(null);
     setRetestDialogOpen(true);
+    // Check conflict for today
+    checkRetestConflict(today);
   };
 
   // Check for schedule conflicts when retest date changes
@@ -986,7 +990,11 @@ export function VocabTestResultsPanel() {
                       selected={retestDate}
                       onSelect={(d) => d && checkRetestConflict(d)}
                       locale={ko}
-                      disabled={(d) => d < new Date()}
+                      disabled={(d) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return d < today;
+                      }}
                     />
                   </PopoverContent>
                 </Popover>
