@@ -24,6 +24,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Users, BookOpen, GraduationCap, UserCheck, RefreshCw, BarChart3 } from 'lucide-react';
 import HomeworkStatsSection from '@/components/admin/HomeworkStatsSection';
+import StudentPointsStatsSection from '@/components/admin/StudentPointsStatsSection';
 
 interface EnrollmentStats {
   totals: {
@@ -432,6 +433,8 @@ function StatsContent() {
       </Card>
       {/* Homework Stats Section */}
       <HomeworkStatsSection />
+      {/* Student Points Section */}
+      <StudentPointsStatsSection />
     </div>
   );
 }
