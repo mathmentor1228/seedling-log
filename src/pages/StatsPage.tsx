@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Users, BookOpen, GraduationCap, UserCheck, RefreshCw, BarChart3 } from 'lucide-react';
+import HomeworkStatsSection from '@/components/admin/HomeworkStatsSection';
 
 interface EnrollmentStats {
   totals: {
@@ -429,6 +430,8 @@ function StatsContent() {
           )}
         </CardContent>
       </Card>
+      {/* Homework Stats Section */}
+      <HomeworkStatsSection />
     </div>
   );
 }
