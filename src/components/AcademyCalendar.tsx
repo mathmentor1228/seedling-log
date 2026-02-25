@@ -1038,23 +1038,26 @@ export function AcademyCalendar() {
                                   <TooltipProvider>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <span className={`text-[10px] cursor-default ${allConfirmed ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                        <Badge 
+                                          variant={allConfirmed ? 'default' : 'outline'}
+                                          className={`text-[10px] cursor-default gap-1 ${allConfirmed ? 'bg-emerald-600 hover:bg-emerald-600' : 'border-amber-400 text-amber-600'}`}
+                                        >
                                           {allConfirmed ? (
-                                            <span className="inline-flex items-center gap-0.5"><CheckCheck className="w-3 h-3" /> 전원확인</span>
+                                            <><CheckCheck className="w-3 h-3" /> 전원확인</>
                                           ) : (
-                                            `${acks.length}/${totalTeachers}명 확인`
+                                            <><User className="w-3 h-3" /> {acks.length}/{totalTeachers}명 확인</>
                                           )}
-                                        </span>
+                                        </Badge>
                                       </TooltipTrigger>
-                                      <TooltipContent side="bottom" className="text-xs">
+                                      <TooltipContent side="bottom" className="text-xs max-w-[250px]">
                                         {acks.length > 0 ? (
                                           <div>
-                                            <p className="font-semibold mb-1">확인한 선생님:</p>
+                                            <p className="font-semibold mb-1">✅ 확인한 선생님:</p>
                                             {acks.map(a => (
-                                              <p key={a.id}>{a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
+                                              <p key={a.id} className="text-emerald-400">• {a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
                                             ))}
                                             {totalTeachers > acks.length && (
-                                              <p className="mt-1 text-muted-foreground">미확인: {totalTeachers - acks.length}명</p>
+                                              <p className="mt-1.5 font-semibold text-amber-400">⏳ 미확인: {totalTeachers - acks.length}명</p>
                                             )}
                                           </div>
                                         ) : (
@@ -1133,23 +1136,26 @@ export function AcademyCalendar() {
                                       <TooltipProvider>
                                         <Tooltip>
                                           <TooltipTrigger asChild>
-                                            <span className={`text-[10px] cursor-default ${allConfirmed ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                            <Badge 
+                                              variant={allConfirmed ? 'default' : 'outline'}
+                                              className={`text-[10px] cursor-default gap-1 ${allConfirmed ? 'bg-emerald-600 hover:bg-emerald-600' : 'border-amber-400 text-amber-600'}`}
+                                            >
                                               {allConfirmed ? (
-                                                <span className="inline-flex items-center gap-0.5"><CheckCheck className="w-3 h-3" /> 전원확인</span>
+                                                <><CheckCheck className="w-3 h-3" /> 전원확인</>
                                               ) : (
-                                                `${acks.length}/${totalTeachers}명 확인`
+                                                <><User className="w-3 h-3" /> {acks.length}/{totalTeachers}명 확인</>
                                               )}
-                                            </span>
+                                            </Badge>
                                           </TooltipTrigger>
-                                          <TooltipContent side="bottom" className="text-xs">
+                                          <TooltipContent side="bottom" className="text-xs max-w-[250px]">
                                             {acks.length > 0 ? (
                                               <div>
-                                                <p className="font-semibold mb-1">확인한 선생님:</p>
+                                                <p className="font-semibold mb-1">✅ 확인한 선생님:</p>
                                                 {acks.map(a => (
-                                                  <p key={a.id}>{a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
+                                                  <p key={a.id} className="text-emerald-400">• {a.user_name} ({format(new Date(a.acknowledged_at), 'M/d HH:mm')})</p>
                                                 ))}
                                                 {totalTeachers > acks.length && (
-                                                  <p className="mt-1 text-muted-foreground">미확인: {totalTeachers - acks.length}명</p>
+                                                  <p className="mt-1.5 font-semibold text-amber-400">⏳ 미확인: {totalTeachers - acks.length}명</p>
                                                 )}
                                               </div>
                                             ) : (
