@@ -46,21 +46,13 @@ export default function HomeworkStatsSection() {
     setLoading(true);
     const sinceDate = format(subDays(startOfDay(new Date()), Number(period)), 'yyyy-MM-dd');
 
-    // Fetch homework assignments in period
+    // Fetch homework assignments in period (submissions are stored directly on this table)
     const { data: assignments, error: hwErr } = await supabase
       .from('homework_assignments')
-      .select('id, student_id, subject, assigned_date, check_status, required_submissions, created_by')
+      .select('id, student_id, subject, assigned_date, check_status, required_submissions, created_by, submitted_at, submission_image_url')
       .gte('assigned_date', sinceDate);
 
     if (hwErr) { console.error(hwErr); setLoading(false); return; }
-
-    // Fetch submissions in period
-    const { data: submissions, error: subErr } = await supabase
-      .from('homework_submissions')
-      .select('id, homework_id, student_id, submitted_at, status')
-      .gte('submitted_at', sinceDate + 'T00:00:00');
-
-    if (subErr) { console.error(subErr); setLoading(false); return; }
 
     // Fetch students and teachers
     const { data: students } = await supabase.from('students').select('id, name, grade').eq('enrollment_status', '재원');
@@ -69,12 +61,6 @@ export default function HomeworkStatsSection() {
     const studentMap = new Map((students || []).map(s => [s.id, s]));
     const profileMap = new Map((profiles || []).map(p => [p.id, p]));
 
-    // Submissions by homework_id
-    const subsByHw = new Map<string, number>();
-    for (const sub of submissions || []) {
-      subsByHw.set(sub.homework_id, (subsByHw.get(sub.homework_id) || 0) + 1);
-    }
-
     // --- Teacher stats ---
     const teacherAgg = new Map<string, { assigned: number; withSub: number; checked: number }>();
     for (const hw of assignments || []) {
@@ -82,10 +68,9 @@ export default function HomeworkStatsSection() {
       if (!teacherAgg.has(tid)) teacherAgg.set(tid, { assigned: 0, withSub: 0, checked: 0 });
       const agg = teacherAgg.get(tid)!;
       agg.assigned++;
-      if ((subsByHw.get(hw.id) || 0) > 0) agg.withSub++;
+      if (hw.submitted_at) agg.withSub++;
       if (hw.check_status !== 'unchecked') agg.checked++;
     }
-
     const tStats: TeacherHwStat[] = [];
     for (const [tid, agg] of teacherAgg) {
       const profile = profileMap.get(tid);
@@ -115,7 +100,7 @@ export default function HomeworkStatsSection() {
       const agg = studentAgg.get(sid)!;
       agg.assigned++;
       agg.reqTotal += hw.required_submissions || 1;
-      agg.subs += subsByHw.get(hw.id) || 0;
+      agg.subs += hw.submitted_at ? 1 : 0;
       if (hw.created_by) agg.teachers.add(hw.created_by);
       if (hw.subject) agg.subjects.add(hw.subject);
     }
