@@ -95,10 +95,7 @@ Deno.serve(async (req) => {
     const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
     const todayStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth()+1).padStart(2,'0')}-${String(nowKST.getDate()).padStart(2,'0')}`;
     
-    // D-day: 30 days from now
-    const thirtyDaysLater = new Date(nowKST);
-    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-    const futureStr = `${thirtyDaysLater.getFullYear()}-${String(thirtyDaysLater.getMonth()+1).padStart(2,'0')}-${String(thirtyDaysLater.getDate()).padStart(2,'0')}`;
+    // D-day: no date cap — always show nearest upcoming exam
 
     // Fetch all data in parallel
     const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes] = await Promise.all([
@@ -158,12 +155,11 @@ Deno.serve(async (req) => {
         .contains("lesson_types", ["보충수업"])
         .order("lesson_date")
         .limit(10),
-      // EXAM-DDAY-V1: Fetch upcoming exam events (within 30 days)
+      // EXAM-DDAY-V2: Fetch all upcoming exam events (no date cap)
       supabase
         .from("academy_events")
         .select("id, title, start_at, end_at")
         .eq("category", "exam")
-        .lte("start_at", futureStr + "T23:59:59")
         .order("start_at"),
     ]);
 
