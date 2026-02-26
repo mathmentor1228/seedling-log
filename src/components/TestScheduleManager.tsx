@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Loader2, Plus, Trash2, Calendar, FileText } from 'lucide-react';
+import { Loader2, Plus, Trash2, Calendar, FileText, ArrowUpDown, RotateCcw } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -34,6 +34,11 @@ interface TestSchedule {
   content: string | null;
   notes: string | null;
   created_at: string;
+  result_score: string | null;
+  result_passed: boolean | null;
+  result_notes: string | null;
+  result_recorded_at: string | null;
+  result_recorded_by: string | null;
   students?: { name: string; grade: string | null } | null;
 }
 
@@ -57,10 +62,13 @@ export function TestScheduleManager() {
   const [content, setContent] = useState('');
   const [notes, setNotes] = useState('');
 
-  // Filter
+  // Filter & Sort
   const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'student' | 'time'>('date');
   const [studentSearch, setStudentSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState<string>('all');
+  const [resultClearId, setResultClearId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.id) {
@@ -182,6 +190,25 @@ export function TestScheduleManager() {
     }
   }
 
+  async function handleClearResult() {
+    if (!resultClearId) return;
+    try {
+      const { error } = await supabase.from('test_schedules').update({
+        result_score: null,
+        result_passed: null,
+        result_notes: null,
+        result_recorded_at: null,
+        result_recorded_by: null,
+      }).eq('id', resultClearId);
+      if (error) throw error;
+      toast.success('시험 결과가 삭제되었습니다');
+      setResultClearId(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error('결과 삭제 실패: ' + err.message);
+    }
+  }
+
   const toggleStudent = (id: string) => {
     const next = new Set(selectedStudents);
     if (next.has(id)) next.delete(id);
@@ -197,9 +224,33 @@ export function TestScheduleManager() {
     }
   };
 
-  const filteredSchedules = filterSubject === 'all'
-    ? schedules
-    : schedules.filter(s => s.subject === filterSubject);
+  const getStudentGradeGroup = (sch: TestSchedule) => {
+    const st = (sch.students as any);
+    if (!st?.grade) return null;
+    const grade = st.grade;
+    for (const g of ['중1','중2','중3','고1','고2','고3']) {
+      if (grade.includes(g)) return g;
+    }
+    return null;
+  };
+
+  const filteredSchedules = schedules
+    .filter(s => filterSubject === 'all' || s.subject === filterSubject)
+    .filter(s => {
+      if (filterGrade === 'all') return true;
+      return getStudentGradeGroup(s) === filterGrade;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'student') {
+        const na = (a.students as any)?.name || '';
+        const nb = (b.students as any)?.name || '';
+        return na.localeCompare(nb, 'ko');
+      }
+      if (sortBy === 'time') {
+        return (a.test_time || '99:99').localeCompare(b.test_time || '99:99');
+      }
+      return a.test_date.localeCompare(b.test_date);
+    });
 
   if (loading) {
     return (
@@ -215,17 +266,39 @@ export function TestScheduleManager() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
           <Select value={filterSubject} onValueChange={setFilterSubject}>
             <SelectTrigger className="w-24 h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
+              <SelectItem value="all">전체 과목</SelectItem>
               {SUBJECTS.map(s => (
                 <SelectItem key={s} value={s}>{s}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterGrade} onValueChange={setFilterGrade}>
+            <SelectTrigger className="w-24 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 학년</SelectItem>
+              {['중1','중2','중3','고1','고2','고3'].map(g => (
+                <SelectItem key={g} value={g}>{g}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+            <SelectTrigger className="w-28 h-8 text-xs">
+              <ArrowUpDown className="w-3 h-3 mr-1" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date">날짜순</SelectItem>
+              <SelectItem value="student">이름순</SelectItem>
+              <SelectItem value="time">시간순</SelectItem>
             </SelectContent>
           </Select>
           <Badge variant="secondary" className="text-xs">
@@ -256,31 +329,51 @@ export function TestScheduleManager() {
                   <TableHead className="text-xs w-14">시간</TableHead>
                   <TableHead className="text-xs w-14">과목</TableHead>
                   <TableHead className="text-xs w-16">학생</TableHead>
+                  <TableHead className="text-xs w-14">학년</TableHead>
                   <TableHead className="text-xs">내용</TableHead>
-                  <TableHead className="text-xs w-10"></TableHead>
+                  <TableHead className="text-xs w-20">결과</TableHead>
+                  <TableHead className="text-xs w-16"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredSchedules.map(sch => (
-                  <TableRow key={sch.id}>
-                    <TableCell className="text-xs font-mono">{sch.test_date.slice(5)}</TableCell>
-                    <TableCell className="text-xs">{sch.test_time?.slice(0, 5) || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[10px]">{sch.subject}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs font-medium">
-                      {(sch.students as any)?.name || '-'}
-                    </TableCell>
-                    <TableCell className="text-xs truncate max-w-[160px]" title={sch.content || ''}>
-                      {sch.content || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteId(sch.id)}>
-                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredSchedules.map(sch => {
+                  const hasResult = sch.result_score != null || sch.result_passed != null;
+                  return (
+                    <TableRow key={sch.id}>
+                      <TableCell className="text-xs font-mono">{sch.test_date.slice(5)}</TableCell>
+                      <TableCell className="text-xs">{sch.test_time?.slice(0, 5) || '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px]">{sch.subject}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium">
+                        {(sch.students as any)?.name || '-'}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {(sch.students as any)?.grade || '-'}
+                      </TableCell>
+                      <TableCell className="text-xs truncate max-w-[160px]" title={sch.content || ''}>
+                        {sch.content || '-'}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {hasResult ? (
+                          <span className={sch.result_passed ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>
+                            {sch.result_score || (sch.result_passed ? '합격' : '불합격')}
+                          </span>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="flex gap-0.5">
+                        {hasResult && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="결과 삭제" onClick={() => setResultClearId(sch.id)}>
+                            <RotateCcw className="w-3.5 h-3.5 text-orange-500" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteId(sch.id)}>
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -490,6 +583,20 @@ export function TestScheduleManager() {
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete}>삭제</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Result Confirm */}
+      <AlertDialog open={!!resultClearId} onOpenChange={() => setResultClearId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>시험 결과 삭제</AlertDialogTitle>
+            <AlertDialogDescription>이 시험의 결과 데이터(점수, 합격여부, 비고)를 삭제하시겠습니까? 일정 자체는 유지됩니다.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearResult}>결과 삭제</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
