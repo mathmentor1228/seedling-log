@@ -4,7 +4,8 @@ import { VocabSettingsPanel } from '@/components/vocab/VocabSettingsPanel';
 import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
 import { VocabScheduleGenerator } from '@/components/vocab/VocabScheduleGenerator';
 import { TestScheduleManager } from '@/components/TestScheduleManager';
-import { BookOpen, CalendarDays, ClipboardList, Settings } from 'lucide-react';
+import { TestRoutineManager } from '@/components/TestRoutineManager';
+import { BookOpen, CalendarDays, ClipboardList, Settings, RefreshCw } from 'lucide-react';
 
 function VocabTestContent() {
   return (
@@ -32,6 +33,10 @@ function VocabTestContent() {
             <CalendarDays className="w-3.5 h-3.5" />
             시험 일정
           </TabsTrigger>
+          <TabsTrigger value="test-routine" className="gap-1.5 text-xs">
+            <RefreshCw className="w-3.5 h-3.5" />
+            시험 루틴
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="results">
@@ -48,6 +53,10 @@ function VocabTestContent() {
 
         <TabsContent value="test-schedule">
           <TestScheduleManager />
+        </TabsContent>
+
+        <TabsContent value="test-routine">
+          <TestRoutineManager />
         </TabsContent>
       </Tabs>
     </div>

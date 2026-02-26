@@ -1442,6 +1442,81 @@ export type Database = {
           },
         ]
       }
+      test_routine_students: {
+        Row: {
+          created_at: string
+          id: string
+          routine_id: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          routine_id: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          routine_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_routine_students_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "test_routines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_routine_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_routines: {
+        Row: {
+          content_template: string | null
+          created_at: string
+          day_of_week: number
+          id: string
+          is_active: boolean
+          subject: string
+          teacher_id: string
+          test_time: string | null
+          test_type: string
+          updated_at: string
+        }
+        Insert: {
+          content_template?: string | null
+          created_at?: string
+          day_of_week: number
+          id?: string
+          is_active?: boolean
+          subject: string
+          teacher_id: string
+          test_time?: string | null
+          test_type?: string
+          updated_at?: string
+        }
+        Update: {
+          content_template?: string | null
+          created_at?: string
+          day_of_week?: number
+          id?: string
+          is_active?: boolean
+          subject?: string
+          teacher_id?: string
+          test_time?: string | null
+          test_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       test_schedules: {
         Row: {
           content: string | null
