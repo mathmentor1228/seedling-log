@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Loader2, Plus, Trash2, Calendar, FileText, ArrowUpDown, RotateCcw } from 'lucide-react';
+import { Loader2, Plus, Trash2, Calendar, FileText, ArrowUpDown, RotateCcw, Pencil } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -52,6 +52,7 @@ export function TestScheduleManager() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState<TestSchedule | null>(null);
 
   // Form state
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
@@ -65,6 +66,7 @@ export function TestScheduleManager() {
   // Filter & Sort
   const [filterSubject, setFilterSubject] = useState<string>('all');
   const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [filterPeriod, setFilterPeriod] = useState<string>('upcoming'); // upcoming | past7 | past30 | all
   const [sortBy, setSortBy] = useState<'date' | 'student' | 'time'>('date');
   const [studentSearch, setStudentSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState<string>('all');
@@ -110,12 +112,11 @@ export function TestScheduleManager() {
       const { data: studentsData } = await studentQuery;
       setStudents(studentsData || []);
 
-      // Get existing schedules
+      // Get all schedules (no date filter - filtered in UI)
       let scheduleQuery = supabase
         .from('test_schedules')
         .select('*, students(name, grade)')
-        .gte('test_date', format(new Date(), 'yyyy-MM-dd'))
-        .order('test_date');
+        .order('test_date', { ascending: false });
 
       if (role === 'teacher') {
         scheduleQuery = scheduleQuery.eq('teacher_id', user!.id);
@@ -209,6 +210,46 @@ export function TestScheduleManager() {
     }
   }
 
+  function openEdit(sch: TestSchedule) {
+    setEditingSchedule(sch);
+    setTestDate(sch.test_date);
+    setTestTime(sch.test_time?.slice(0, 5) || '');
+    setSubject(sch.subject);
+    setTestType(sch.test_type);
+    setContent(sch.content || '');
+    setNotes(sch.notes || '');
+    setDialogOpen(true);
+  }
+
+  async function handleUpdate() {
+    if (!editingSchedule) return;
+    if (!content.trim()) {
+      toast.error('시험 내용/범위를 입력해주세요');
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('test_schedules').update({
+        test_date: testDate,
+        test_time: testTime || null,
+        subject,
+        test_type: testType,
+        content: content.trim(),
+        notes: notes.trim() || null,
+      }).eq('id', editingSchedule.id);
+      if (error) throw error;
+      toast.success('시험 일정이 수정되었습니다');
+      setDialogOpen(false);
+      setEditingSchedule(null);
+      resetForm();
+      fetchData();
+    } catch (err: any) {
+      toast.error('수정 실패: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const toggleStudent = (id: string) => {
     const next = new Set(selectedStudents);
     if (next.has(id)) next.delete(id);
@@ -234,7 +275,22 @@ export function TestScheduleManager() {
     return null;
   };
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+
   const filteredSchedules = schedules
+    .filter(s => {
+      // Period filter
+      if (filterPeriod === 'upcoming') return s.test_date >= todayStr;
+      if (filterPeriod === 'past7') {
+        const d = new Date(); d.setDate(d.getDate() - 7);
+        return s.test_date >= format(d, 'yyyy-MM-dd') && s.test_date < todayStr;
+      }
+      if (filterPeriod === 'past30') {
+        const d = new Date(); d.setDate(d.getDate() - 30);
+        return s.test_date >= format(d, 'yyyy-MM-dd') && s.test_date < todayStr;
+      }
+      return true; // 'all'
+    })
     .filter(s => filterSubject === 'all' || s.subject === filterSubject)
     .filter(s => {
       if (filterGrade === 'all') return true;
@@ -268,6 +324,17 @@ export function TestScheduleManager() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <div className="flex items-center gap-2 flex-wrap">
+          <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+            <SelectTrigger className="w-28 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="upcoming">예정된 시험</SelectItem>
+              <SelectItem value="past7">지난 7일</SelectItem>
+              <SelectItem value="past30">지난 30일</SelectItem>
+              <SelectItem value="all">전체 기간</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={filterSubject} onValueChange={setFilterSubject}>
             <SelectTrigger className="w-24 h-8 text-xs">
               <SelectValue />
@@ -305,7 +372,7 @@ export function TestScheduleManager() {
             {filteredSchedules.length}건
           </Badge>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => { resetForm(); setDialogOpen(true); }}>
+        <Button size="sm" className="gap-1.5" onClick={() => { resetForm(); setEditingSchedule(null); setDialogOpen(true); }}>
           <Plus className="w-3.5 h-3.5" />
           시험 등록
         </Button>
@@ -338,8 +405,9 @@ export function TestScheduleManager() {
               <TableBody>
                 {filteredSchedules.map(sch => {
                   const hasResult = sch.result_score != null || sch.result_passed != null;
+                  const isPast = sch.test_date < todayStr;
                   return (
-                    <TableRow key={sch.id}>
+                    <TableRow key={sch.id} className={isPast ? 'opacity-60' : ''}>
                       <TableCell className="text-xs font-mono">{sch.test_date.slice(5)}</TableCell>
                       <TableCell className="text-xs">{sch.test_time?.slice(0, 5) || '-'}</TableCell>
                       <TableCell>
@@ -362,12 +430,15 @@ export function TestScheduleManager() {
                         ) : '-'}
                       </TableCell>
                       <TableCell className="flex gap-0.5">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="수정" onClick={() => openEdit(sch)}>
+                          <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                        </Button>
                         {hasResult && (
                           <Button variant="ghost" size="icon" className="h-7 w-7" title="결과 삭제" onClick={() => setResultClearId(sch.id)}>
                             <RotateCcw className="w-3.5 h-3.5 text-orange-500" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteId(sch.id)}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="삭제" onClick={() => setDeleteId(sch.id)}>
                           <Trash2 className="w-3.5 h-3.5 text-destructive" />
                         </Button>
                       </TableCell>
@@ -380,13 +451,13 @@ export function TestScheduleManager() {
         </Card>
       )}
 
-      {/* Create Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Create/Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingSchedule(null); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              시험 일정 등록
+              {editingSchedule ? '시험 일정 수정' : '시험 일정 등록'}
             </DialogTitle>
           </DialogHeader>
 
@@ -451,7 +522,8 @@ export function TestScheduleManager() {
               <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="선택사항" className="text-sm" />
             </div>
 
-            {/* Student Selection */}
+            {/* Student Selection - hide in edit mode */}
+            {!editingSchedule && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs">대상 학생 *</Label>
@@ -561,13 +633,14 @@ export function TestScheduleManager() {
                 {selectedStudents.size}명 선택됨
               </p>
             </div>
+            )}
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={editingSchedule ? handleUpdate : handleSave} disabled={saving}>
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-              등록
+              {editingSchedule ? '수정' : '등록'}
             </Button>
           </DialogFooter>
         </DialogContent>
