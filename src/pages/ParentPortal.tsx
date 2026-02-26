@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar, Camera, MessageSquare, TrendingUp } from 'lucide-react';
+import { ExamDdayBannerStatic } from '@/components/ExamDdayBanner';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 /* ═══════ Types ═══════ */
@@ -15,7 +16,7 @@ interface VocabScheduleItem { id: string; test_date: string; day_number: number;
 interface VocabResultItem { id: string; test_date: string; day_number: number; book_name: string; score_percent: number | null; passed: boolean; total_words: number | null; correct_words: number | null; }
 interface ClassScheduleItem { class_name: string; subject: string; day_of_week: number; start_time: string; end_time: string; }
 interface UpcomingSupplement { id: string; date: string; subject: string; range: string; course: string | null; time: string | null; teacher_name: string | null; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -115,6 +116,11 @@ export default function ParentPortal() {
       </header>
 
       <main className="max-w-lg mx-auto p-4 space-y-4">
+        {/* EXAM-DDAY-V1: Exam D-day countdown */}
+        {data.exam_events && data.exam_events.length > 0 && (
+          <ExamDdayBannerStatic exams={data.exam_events} />
+        )}
+
         {/* Summary Stats */}
         <SummaryCards lessons={lessons} homework={homework} />
 
