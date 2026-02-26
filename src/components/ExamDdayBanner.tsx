@@ -51,26 +51,35 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
     const kstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
     const todayStr = `${kstNow.getFullYear()}-${String(kstNow.getMonth() + 1).padStart(2, '0')}-${String(kstNow.getDate()).padStart(2, '0')}`;
     
-    // Fetch exam events starting within 30 days from today (or currently ongoing)
-    const thirtyDaysLater = new Date(kstNow);
-    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-    const futureStr = `${thirtyDaysLater.getFullYear()}-${String(thirtyDaysLater.getMonth() + 1).padStart(2, '0')}-${String(thirtyDaysLater.getDate()).padStart(2, '0')}`;
-
+    // Fetch all upcoming exam events (no date cap — always show nearest exam)
     const { data, error } = await supabase
       .from('academy_events')
       .select('id, title, start_at, end_at')
       .eq('category', 'exam')
-      .lte('start_at', futureStr + 'T23:59:59')
+      .gte('start_at', todayStr)
       .order('start_at');
 
     if (error || !data) return;
 
-    // Filter: only exams that haven't fully ended yet
-    const filtered = data.filter((e: any) => {
+    // Also include exams currently ongoing (started but not ended)
+    const { data: ongoingData } = await supabase
+      .from('academy_events')
+      .select('id, title, start_at, end_at')
+      .eq('category', 'exam')
+      .lt('start_at', todayStr)
+      .order('start_at');
+
+    const ongoing = (ongoingData || []).filter((e: any) => {
       const endDate = e.end_at || e.start_at;
-      const endStr = endDate.split('T')[0];
-      return endStr >= todayStr;
+      return endDate.split('T')[0] >= todayStr;
     });
+
+    // Merge ongoing + future, deduplicate by id
+    const allIds = new Set(data.map((e: any) => e.id));
+    const filtered = [...data];
+    for (const e of ongoing) {
+      if (!allIds.has(e.id)) filtered.push(e);
+    }
 
     // If schoolFilter is set, only show exams whose title contains the school name
     const finalExams = schoolFilter
