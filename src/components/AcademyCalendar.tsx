@@ -58,6 +58,7 @@ import {
   Check,
   CheckCheck,
   Pencil,
+  GraduationCap,
 } from 'lucide-react';
 import { format, addDays, startOfMonth, endOfMonth, isSameDay, isWithinInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -222,7 +223,7 @@ export function AcademyCalendar() {
       setLoading(true);
       
       const today = getTodayKST();
-      const futureDate = format(addDays(getKSTDateObject(), 30), 'yyyy-MM-dd');
+      const futureDate = format(addDays(getKSTDateObject(), 90), 'yyyy-MM-dd');
       // Use KST offset (+09:00) to ensure correct timezone comparison
       const todayStart = today + 'T00:00:00+09:00';
       const futureEnd = futureDate + 'T23:59:59+09:00';
@@ -644,6 +645,49 @@ export function AcademyCalendar() {
     .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime())
     .slice(0, 5);
   const regularDateKeys = sortedDateKeys; // all dates shown in groups
+
+  // School-grouped exam view data
+  const SCHOOLS = ['신길중', '신길고', '선부고', '원곡고', '장곡고'];
+  const EXAM_TYPES = ['1학기 중간고사', '1학기 기말고사', '2학기 중간고사', '2학기 기말고사'];
+  
+  const examEvents = filterCategory === 'exam' ? events.filter(e => e.category === 'exam') : [];
+  
+  const getSchoolFromTitle = (title: string): string | null => {
+    for (const school of SCHOOLS) {
+      if (title.includes(school)) return school;
+    }
+    return null;
+  };
+  
+  const getExamTypeFromTitle = (title: string): string | null => {
+    if (title.includes('1학기') && title.includes('중간')) return '1학기 중간고사';
+    if (title.includes('1학기') && title.includes('기말')) return '1학기 기말고사';
+    if (title.includes('2학기') && title.includes('중간')) return '2학기 중간고사';
+    if (title.includes('2학기') && title.includes('기말')) return '2학기 기말고사';
+    return null;
+  };
+
+  // Build school exam schedule matrix
+  const schoolExamMatrix: Record<string, Record<string, AcademyEvent | null>> = {};
+  const ungroupedExamEvents: AcademyEvent[] = [];
+  
+  if (filterCategory === 'exam') {
+    for (const school of SCHOOLS) {
+      schoolExamMatrix[school] = {};
+      for (const examType of EXAM_TYPES) {
+        schoolExamMatrix[school][examType] = null;
+      }
+    }
+    for (const event of examEvents) {
+      const school = getSchoolFromTitle(event.title);
+      const examType = getExamTypeFromTitle(event.title);
+      if (school && examType) {
+        schoolExamMatrix[school][examType] = event;
+      } else {
+        ungroupedExamEvents.push(event);
+      }
+    }
+  }
 
   function renderEventRow(event: AcademyEvent, showDate: boolean = false) {
     const hasPosters = (event.attachments || []).length > 0;
@@ -1087,6 +1131,66 @@ export function AcademyCalendar() {
                   </div>
                 )}
                 
+                {/* School Exam Schedule Grid - shown when exam filter is active */}
+                {filterCategory === 'exam' && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-1.5 mb-2 px-1">
+                      <GraduationCap className="w-3.5 h-3.5 text-red-500" />
+                      <span className="text-xs font-semibold text-red-500 uppercase tracking-wide">학교별 시험 일정</span>
+                    </div>
+                    <div className="overflow-x-auto border rounded-lg">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/60">
+                            <th className="text-left px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap">학교</th>
+                            {EXAM_TYPES.map(et => (
+                              <th key={et} className="text-center px-2 py-2 font-semibold text-muted-foreground whitespace-nowrap">{et}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {SCHOOLS.map(school => (
+                            <tr key={school} className="border-t border-border hover:bg-accent/30">
+                              <td className="px-3 py-2.5 font-medium whitespace-nowrap">{school}</td>
+                              {EXAM_TYPES.map(examType => {
+                                const event = schoolExamMatrix[school]?.[examType];
+                                return (
+                                  <td key={examType} className="text-center px-2 py-2.5">
+                                    {event ? (
+                                      <button
+                                        className="inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 transition-colors cursor-pointer"
+                                        onClick={() => { setDetailEvent(event); setDetailDialogOpen(true); }}
+                                      >
+                                        <span className="font-mono font-medium text-foreground">
+                                          {format(new Date(event.start_at), 'M/d')}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {format(new Date(event.start_at), 'EEE', { locale: ko })}
+                                        </span>
+                                      </button>
+                                    ) : (
+                                      <span className="text-muted-foreground/40">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    {ungroupedExamEvents.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-muted-foreground px-1 mb-1">기타 시험 일정</p>
+                        <div className="space-y-0.5">
+                          {ungroupedExamEvents.map(event => renderEventRow(event, true))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Date-grouped events */}
                 {sortedDateKeys.map((dateKey) => {
                   const dayEvents = groupedEvents[dateKey].filter(
