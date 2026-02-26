@@ -607,9 +607,15 @@ export function LessonRecordForm({
             english_reading_units: (record as any).english_reading_units || [],
             // KOREAN-CATEGORY-V1: Load Korean curriculum categories
             korean_categories: (record as any).korean_categories || [],
-            // SUPPLEMENT-TIME-V1
-            supplement_time: '',
-            supplement_teacher_name: '',
+            // SUPPLEMENT-TIME-V2: Extract time and teacher from notes for 보충수업
+            supplement_time: (() => {
+              const timeMatch = (record.notes || '').match(/\[보충 시간:\s*(\d{1,2}:\d{2})\]/);
+              return timeMatch ? timeMatch[1] : '';
+            })(),
+            supplement_teacher_name: (() => {
+              const teacherMatch = (record.notes || '').match(/\[보충 선생님:\s*([^\]]+)\]/);
+              return teacherMatch ? teacherMatch[1].trim() : '';
+            })(),
           });
           // PREFILL-FIX-V6: For existing records with EMPTY curriculum tags, allow prefill from student's last record
           const hasMathTags = !!(record as any).curriculum_version || !!(record as any).course || !!(record as any).curriculum_unit_key;
@@ -1380,19 +1386,27 @@ export function LessonRecordForm({
         {formData.lesson_types.includes('보충수업') ? (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground">시간:</span>
-            <Input
-              type="time"
-              className="w-[140px] h-8"
-              placeholder="시간 입력"
-              value={formData.supplement_time || ''}
-              onChange={(e) => setFormData({ ...formData, supplement_time: e.target.value, class_id: '' })}
-              disabled={isViewMode}
-            />
-            {!formData.supplement_time && !isViewMode && (
+            {/* SUPPLEMENT-LOCK-V1: Lock time once saved in existing record */}
+            {editingLesson && formData.supplement_time ? (
+              <Badge variant="secondary" className="h-8 px-3 text-sm font-mono">{formData.supplement_time}</Badge>
+            ) : (
+              <Input
+                type="time"
+                className="w-[140px] h-8"
+                placeholder="시간 입력"
+                value={formData.supplement_time || ''}
+                onChange={(e) => setFormData({ ...formData, supplement_time: e.target.value, class_id: '' })}
+                disabled={isViewMode}
+              />
+            )}
+            {!formData.supplement_time && !isViewMode && !editingLesson && (
               <span className="text-xs text-orange-500">⚠ 시간을 입력해주세요</span>
             )}
             <span className="text-sm text-muted-foreground ml-2">선생님:</span>
-            {teachers && teachers.length > 0 ? (
+            {/* SUPPLEMENT-LOCK-V1: Lock teacher once saved in existing record */}
+            {editingLesson && formData.supplement_teacher_name ? (
+              <Badge variant="secondary" className="h-8 px-3 text-sm">{formData.supplement_teacher_name}</Badge>
+            ) : teachers && teachers.length > 0 ? (
               <Select
                 value={formData.supplement_teacher_name || '_placeholder_'}
                 onValueChange={(value) => {

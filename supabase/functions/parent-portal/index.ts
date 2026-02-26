@@ -94,9 +94,14 @@ Deno.serve(async (req) => {
 
     const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
     const todayStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth()+1).padStart(2,'0')}-${String(nowKST.getDate()).padStart(2,'0')}`;
+    
+    // D-day: 30 days from now
+    const thirtyDaysLater = new Date(nowKST);
+    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+    const futureStr = `${thirtyDaysLater.getFullYear()}-${String(thirtyDaysLater.getMonth()+1).padStart(2,'0')}-${String(thirtyDaysLater.getDate()).padStart(2,'0')}`;
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url")
@@ -153,6 +158,13 @@ Deno.serve(async (req) => {
         .contains("lesson_types", ["보충수업"])
         .order("lesson_date")
         .limit(10),
+      // EXAM-DDAY-V1: Fetch upcoming exam events (within 30 days)
+      supabase
+        .from("academy_events")
+        .select("id, title, start_at, end_at")
+        .eq("category", "exam")
+        .lte("start_at", futureStr + "T23:59:59")
+        .order("start_at"),
     ]);
 
     // Fetch class schedules for the student's classes
@@ -231,6 +243,19 @@ Deno.serve(async (req) => {
             teacher_name: teacherMatch ? teacherMatch[1].trim() : null,
           };
         }),
+        // EXAM-DDAY-V1: Filter exam events by student's school and not yet ended
+        exam_events: (() => {
+          const allExams = examEventsRes.data || [];
+          const schoolName = student.school;
+          return allExams
+            .filter((e: any) => {
+              const endDate = (e.end_at || e.start_at).split('T')[0];
+              if (endDate < todayStr) return false;
+              if (schoolName && !e.title.includes(schoolName)) return false;
+              return true;
+            })
+            .map((e: any) => ({ id: e.id, title: e.title, start_at: e.start_at, end_at: e.end_at }));
+        })(),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

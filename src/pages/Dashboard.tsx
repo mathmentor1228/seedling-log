@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
+import { ExamDdayBanner } from '@/components/ExamDdayBanner';
 import { 
   Users, 
   BookOpen, 
@@ -1658,6 +1659,9 @@ export default function Dashboard() {
       
       {/* Attention Summary Bar */}
       <AttentionSummaryBar items={attentionItems} />
+
+      {/* EXAM-DDAY-V1: Exam D-day countdown */}
+      <ExamDdayBanner />
 
       {/* Stats Grid - Visible for admin and teacher */}
       {!isAssistant(role) && (

@@ -28,6 +28,7 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import StudentWeeklyCalendar from '@/components/student/StudentWeeklyCalendar';
+import { ExamDdayBanner } from '@/components/ExamDdayBanner';
 import {
   Collapsible,
   CollapsibleContent,
@@ -363,6 +364,9 @@ export default function StudentDashboard() {
           {format(new Date(), 'M월 d일 EEEE', { locale: ko })}
         </p>
       </div>
+
+      {/* EXAM-DDAY-V1: Exam D-day countdown (filtered by student's school) */}
+      <ExamDdayBanner schoolFilter={student?.school || null} />
 
       {/* Points Card */}
       <Card className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0">
