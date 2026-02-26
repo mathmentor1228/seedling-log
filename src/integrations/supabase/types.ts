@@ -478,6 +478,62 @@ export type Database = {
           },
         ]
       }
+      exam_subject_details: {
+        Row: {
+          created_at: string
+          event_id: string
+          exam_date: string | null
+          exam_scope: string | null
+          exam_time: string | null
+          id: string
+          paper_file_size: number | null
+          paper_mime_type: string | null
+          paper_original_name: string | null
+          paper_storage_path: string | null
+          subject_name: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          exam_date?: string | null
+          exam_scope?: string | null
+          exam_time?: string | null
+          id?: string
+          paper_file_size?: number | null
+          paper_mime_type?: string | null
+          paper_original_name?: string | null
+          paper_storage_path?: string | null
+          subject_name: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          exam_date?: string | null
+          exam_scope?: string | null
+          exam_time?: string | null
+          id?: string
+          paper_file_size?: number | null
+          paper_mime_type?: string | null
+          paper_original_name?: string | null
+          paper_storage_path?: string | null
+          subject_name?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_subject_details_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "academy_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holidays: {
         Row: {
           created_at: string
