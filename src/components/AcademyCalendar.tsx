@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth, isAdmin as checkIsAdmin, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { ExamSubjectDetails } from '@/components/ExamSubjectDetails';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1163,9 +1164,7 @@ export function AcademyCalendar() {
                                       >
                                         <span className="font-mono font-medium text-foreground">
                                           {format(new Date(event.start_at), 'M/d')}
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground">
-                                          {format(new Date(event.start_at), 'EEE', { locale: ko })}
+                                          {event.end_at && ` ~ ${format(new Date(event.end_at), 'M/d')}`}
                                         </span>
                                       </button>
                                     ) : (
@@ -1600,19 +1599,27 @@ function EventDetailView({
               {getCategoryBadge(event.category)}
             </div>
             <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-              <span className="inline-flex items-center gap-1">
-                <CalendarDays className="w-3.5 h-3.5" />
-                {format(eventDate, 'yyyy년 M월 d일 (EEEE)', { locale: ko })}
-              </span>
-              {!event.all_day && (
                 <span className="inline-flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  {format(eventDate, 'HH:mm')}
-                  {event.end_at && ` ~ ${format(new Date(event.end_at), 'HH:mm')}`}
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  {format(eventDate, 'yyyy년 M월 d일 (EEEE)', { locale: ko })}
+                  {event.end_at && (() => {
+                    const endDate = new Date(event.end_at!);
+                    const startDateStr = format(eventDate, 'yyyy-MM-dd');
+                    const endDateStr = format(endDate, 'yyyy-MM-dd');
+                    if (startDateStr !== endDateStr) {
+                      return <> ~ {format(endDate, 'M월 d일 (EEEE)', { locale: ko })}</>;
+                    }
+                    return null;
+                  })()}
                 </span>
-              )}
-              {event.all_day && <Badge variant="secondary" className="text-[10px]">종일</Badge>}
-            </div>
+                {!event.all_day && !event.end_at && (
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    {format(eventDate, 'HH:mm')}
+                  </span>
+                )}
+                {event.all_day && <Badge variant="secondary" className="text-[10px]">종일</Badge>}
+              </div>
             {event.location && (
               <span className="inline-flex items-center gap-1 text-sm text-muted-foreground mt-1">
                 <MapPin className="w-3.5 h-3.5" />
@@ -1633,6 +1640,17 @@ function EventDetailView({
       {event.description && (
         <div className="px-6 py-4 border-b">
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{event.description}</p>
+        </div>
+      )}
+
+      {/* Exam Subject Details - for exam events */}
+      {event.category === 'exam' && (
+        <div className="px-6 py-4 border-b">
+          <ExamSubjectDetails 
+            eventId={event.id}
+            examStartDate={format(eventDate, 'yyyy-MM-dd')}
+            examEndDate={event.end_at ? format(new Date(event.end_at), 'yyyy-MM-dd') : null}
+          />
         </div>
       )}
 
