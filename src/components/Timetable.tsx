@@ -199,10 +199,12 @@ export function Timetable() {
           (studentsData || []).forEach((s) => { studentMap[s.id] = s.name; });
 
           classStudents.forEach((cs) => {
+            // Skip withdrawn students (not found in filtered studentMap)
+            if (!studentMap[cs.student_id]) return;
             if (!studentsByClass[cs.class_id]) studentsByClass[cs.class_id] = [];
             studentsByClass[cs.class_id].push({
               id: cs.student_id,
-              name: studentMap[cs.student_id] || '이름없음',
+              name: studentMap[cs.student_id],
             });
           });
 
