@@ -956,17 +956,28 @@ export function AcademyCalendar() {
                 </TabsList>
               </Tabs>
               
-              <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  {CATEGORY_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                <Button
+                  variant={filterCategory === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 px-2.5 text-xs shrink-0"
+                  onClick={() => setFilterCategory('all')}
+                >
+                  전체
+                </Button>
+                {CATEGORY_OPTIONS.map((opt) => (
+                  <Button
+                    key={opt.value}
+                    variant={filterCategory === opt.value ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 px-2.5 text-xs shrink-0"
+                    onClick={() => setFilterCategory(opt.value)}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${opt.color} mr-1 shrink-0`} />
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
             </div>
             
             {loading ? (
