@@ -39,7 +39,7 @@ interface TestSchedule {
   result_notes: string | null;
   result_recorded_at: string | null;
   result_recorded_by: string | null;
-  students?: { name: string; grade: string | null } | null;
+  students?: { name: string; grade: string | null; school: string | null } | null;
 }
 
 const SUBJECTS = ['수학', '영어', '국어', '과학', '기타'];
@@ -66,11 +66,13 @@ export function TestScheduleManager() {
   // Filter & Sort
   const [filterSubject, setFilterSubject] = useState<string>('all');
   const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [filterTeacher, setFilterTeacher] = useState<string>('all');
   const [filterPeriod, setFilterPeriod] = useState<string>('upcoming'); // upcoming | past7 | past30 | all
   const [sortBy, setSortBy] = useState<'date' | 'student' | 'time'>('date');
   const [studentSearch, setStudentSearch] = useState('');
   const [gradeFilter, setGradeFilter] = useState<string>('all');
   const [resultClearId, setResultClearId] = useState<string | null>(null);
+  const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
 
   useEffect(() => {
     if (user?.id) {
@@ -81,12 +83,15 @@ export function TestScheduleManager() {
   async function fetchData() {
     setLoading(true);
     try {
+      // Fetch teachers for filter
+      const { data: teacherData } = await supabase.from('profiles').select('id, full_name').order('full_name');
+      setTeachers(teacherData || []);
+
       // Get teacher's students
       let studentQuery = supabase.from('students').select('id, name, grade, school').eq('enrollment_status', '재원').order('name');
       
       // If teacher (not admin), filter to own students
       if (role === 'teacher') {
-        // Gather student IDs from all ownership sources
         const [sstRes, csRes, lrRes] = await Promise.all([
           supabase.from('student_subject_teachers').select('student_id').eq('teacher_id', user!.id),
           supabase.from('class_students').select('student_id, classes!inner(teacher_id)').eq('classes.teacher_id', user!.id),
@@ -115,7 +120,7 @@ export function TestScheduleManager() {
       // Get all schedules (no date filter - filtered in UI)
       let scheduleQuery = supabase
         .from('test_schedules')
-        .select('*, students(name, grade)')
+        .select('*, students(name, grade, school)')
         .order('test_date', { ascending: false });
 
       if (role === 'teacher') {
@@ -268,9 +273,19 @@ export function TestScheduleManager() {
   const getStudentGradeGroup = (sch: TestSchedule) => {
     const st = (sch.students as any);
     if (!st?.grade) return null;
-    const grade = st.grade;
-    for (const g of ['중1','중2','중3','고1','고2','고3']) {
+    const grade = st.grade as string;
+    // Direct match (e.g., grade already contains "중1")
+    for (const g of ['중1','중2','중3','고1','고2','고3','초1','초2','초3','초4','초5','초6']) {
       if (grade.includes(g)) return g;
+    }
+    // Infer from school name + grade year (e.g., school="신길중", grade="2학년" → "중2")
+    const yearMatch = grade.match(/(\d)/);
+    if (yearMatch) {
+      const year = yearMatch[1];
+      const school = (st.school || '') as string;
+      if (school.includes('중')) return `중${year}`;
+      if (school.includes('고')) return `고${year}`;
+      if (school.includes('초')) return `초${year}`;
     }
     return null;
   };
@@ -292,6 +307,7 @@ export function TestScheduleManager() {
       return true; // 'all'
     })
     .filter(s => filterSubject === 'all' || s.subject === filterSubject)
+    .filter(s => filterTeacher === 'all' || s.teacher_id === filterTeacher)
     .filter(s => {
       if (filterGrade === 'all') return true;
       return getStudentGradeGroup(s) === filterGrade;
@@ -357,6 +373,19 @@ export function TestScheduleManager() {
               ))}
             </SelectContent>
           </Select>
+          {role === 'admin' && (
+          <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+            <SelectTrigger className="w-28 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 선생님</SelectItem>
+              {teachers.map(t => (
+                <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          )}
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
             <SelectTrigger className="w-28 h-8 text-xs">
               <ArrowUpDown className="w-3 h-3 mr-1" />
@@ -395,6 +424,7 @@ export function TestScheduleManager() {
                   <TableHead className="text-xs w-20">날짜</TableHead>
                   <TableHead className="text-xs w-14">시간</TableHead>
                   <TableHead className="text-xs w-14">과목</TableHead>
+                  {role === 'admin' && <TableHead className="text-xs w-16">선생님</TableHead>}
                   <TableHead className="text-xs w-16">학생</TableHead>
                   <TableHead className="text-xs w-14">학년</TableHead>
                   <TableHead className="text-xs">내용</TableHead>
@@ -413,11 +443,16 @@ export function TestScheduleManager() {
                       <TableCell>
                         <Badge variant="outline" className="text-[10px]">{sch.subject}</Badge>
                       </TableCell>
+                      {role === 'admin' && (
+                        <TableCell className="text-xs text-muted-foreground">
+                          {teachers.find(t => t.id === sch.teacher_id)?.full_name || '-'}
+                        </TableCell>
+                      )}
                       <TableCell className="text-xs font-medium">
                         {(sch.students as any)?.name || '-'}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {(sch.students as any)?.grade || '-'}
+                        {getStudentGradeGroup(sch) || (sch.students as any)?.grade || '-'}
                       </TableCell>
                       <TableCell className="text-xs truncate max-w-[160px]" title={sch.content || ''}>
                         {sch.content || '-'}
