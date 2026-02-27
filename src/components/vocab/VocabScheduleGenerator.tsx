@@ -208,7 +208,22 @@ export function VocabScheduleGenerator() {
       const daysCodes = normalizeTestDays(info.testDays);
       const allowedDays = daysCodes.map(d => DAY_CODE_TO_JS[d]).filter(Boolean);
       const testDates = allDays.filter(d => allowedDays.includes(getDay(d)));
+
+      // VOCAB-CONTINUE-DAY-V1: Check last day_number from previous schedules to continue seamlessly
       let dayNumber = info.currentDay;
+      const { data: lastSched } = await supabase
+        .from('vocab_schedules')
+        .select('day_number')
+        .eq('setting_id', info.settingId)
+        .lt('test_date', deleteFrom)
+        .order('day_number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastSched) {
+        // Continue from the next day after the last scheduled one
+        dayNumber = lastSched.day_number + (info.bundleDays ? info.daysPerTest : 1);
+      }
 
       for (const testDate of testDates) {
         // Check total_days cap
