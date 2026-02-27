@@ -896,6 +896,54 @@ export default function Dashboard() {
           };
         });
         
+        // TEST-SCHEDULES-DASH-V1: Fetch today's test_schedules results to supplement lesson_records test data
+        if (studentIds.length > 0) {
+          const { data: testScheds } = await supabase
+            .from('test_schedules')
+            .select('student_id, subject, content, result_score, result_passed, test_type')
+            .eq('test_date', today)
+            .in('student_id', studentIds)
+            .or('result_score.neq.,result_passed.not.is.null');
+          
+          if (testScheds && testScheds.length > 0) {
+            // Build a map by student_id:subject
+            const testSchedMap: Record<string, typeof testScheds[0]> = {};
+            testScheds.forEach((ts: any) => {
+              const k = `${ts.student_id}:${ts.subject}`;
+              testSchedMap[k] = ts; // latest wins
+            });
+            
+            // Merge into statusMap where no lesson_records test data exists
+            rosterRows.forEach((row: any) => {
+              const key = `${row.student_id}:${row.class_id}:${row.subject}`;
+              const tsKey = `${row.student_id}:${row.subject}`;
+              const ts = testSchedMap[tsKey];
+              if (!ts) return;
+              
+              const existing = statusMap[key];
+              if (existing && !existing.todayTestData) {
+                existing.todayTestData = {
+                  test_content: ts.content || null,
+                  test_title: `${ts.test_type === 'guerrilla' ? '게릴라' : '시험'}`,
+                  test_result_text: ts.result_score || (ts.result_passed != null ? (ts.result_passed ? '통과' : '불통과') : null),
+                  english_pass_fail: ts.subject === '영어' && ts.result_passed != null ? (ts.result_passed ? 'pass' : 'fail') : null,
+                };
+              } else if (!existing) {
+                statusMap[key] = {
+                  submitted: false, recordId: null, homeworkStatus: null, hasNextHomework: false,
+                  hasPhotoSubmission: photoSubmissionSet.has(tsKey),
+                  todayTestData: {
+                    test_content: ts.content || null,
+                    test_title: `${ts.test_type === 'guerrilla' ? '게릴라' : '시험'}`,
+                    test_result_text: ts.result_score || (ts.result_passed != null ? (ts.result_passed ? '통과' : '불통과') : null),
+                    english_pass_fail: ts.subject === '영어' && ts.result_passed != null ? (ts.result_passed ? 'pass' : 'fail') : null,
+                  },
+                };
+              }
+            });
+          }
+        }
+
         // Also populate statusMap for students with photo submissions but no lesson record
         rosterRows.forEach((row: any) => {
           const key = `${row.student_id}:${row.class_id}:${row.subject}`;
@@ -1374,6 +1422,59 @@ export default function Dashboard() {
           });
         }
         
+        // TEST-SCHEDULES-DASH-V1: Fetch today's test_schedules results for teacher view
+        if (studentIds.length > 0) {
+          const { data: testScheds } = await supabase
+            .from('test_schedules')
+            .select('student_id, subject, content, result_score, result_passed, test_type')
+            .eq('test_date', today)
+            .in('student_id', studentIds)
+            .or('result_score.neq.,result_passed.not.is.null');
+          
+          if (testScheds && testScheds.length > 0) {
+            // Build student_id:subject -> class_id lookup from roster
+            const subjectClassMap: Record<string, string> = {};
+            allStudentClassPairs.forEach(p => {
+              subjectClassMap[`${p.studentId}:${p.subject}`] = p.classId;
+            });
+            
+            testScheds.forEach((ts: any) => {
+              const classId = subjectClassMap[`${ts.student_id}:${ts.subject}`];
+              if (!classId) return;
+              const key = `${ts.student_id}:${classId}`;
+              const existing = lessonRecordMap[key];
+              if (existing && !existing.todayTestData) {
+                existing.todayTestData = {
+                  test_content: ts.content || null,
+                  test_title: `${ts.test_type === 'guerrilla' ? '게릴라' : '시험'}`,
+                  test_result_text: ts.result_score || (ts.result_passed != null ? (ts.result_passed ? '통과' : '불통과') : null),
+                  english_pass_fail: ts.subject === '영어' && ts.result_passed != null ? (ts.result_passed ? 'pass' : 'fail') : null,
+                };
+              } else if (!existing) {
+                lessonRecordMap[key] = {
+                  hyugangRecordId: null,
+                  attendanceStatus: ['정상등원'],
+                  lessonRecordId: null,
+                  submitted: false,
+                  homeworkCheckNote: null,
+                  homeworkCheckLessonId: null,
+                  hasNextHomework: false,
+                  hasPhotoSubmission: false,
+                  photoData: null,
+                  homeworkStatus: null,
+                  subject: ts.subject,
+                  todayTestData: {
+                    test_content: ts.content || null,
+                    test_title: `${ts.test_type === 'guerrilla' ? '게릴라' : '시험'}`,
+                    test_result_text: ts.result_score || (ts.result_passed != null ? (ts.result_passed ? '통과' : '불통과') : null),
+                    english_pass_fail: ts.subject === '영어' && ts.result_passed != null ? (ts.result_passed ? 'pass' : 'fail') : null,
+                  },
+                };
+              }
+            });
+          }
+        }
+
         // TEACHER-HW-ALERT-V2: Fetch recent lesson records with next_lesson_goal for "지난 목표"
         // For each student/subject pair, find the most recent submitted lesson
         const subjects = [...new Set(allStudentClassPairs.map(p => p.subject))].filter(Boolean);

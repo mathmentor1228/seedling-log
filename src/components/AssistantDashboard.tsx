@@ -379,6 +379,38 @@ export default function AssistantDashboard() {
           }
         });
 
+        // TEST-SCHEDULES-DASH-V1: Fetch today's test_schedules results for assistant view
+        {
+          const { data: testScheds } = await supabase
+            .from('test_schedules')
+            .select('student_id, subject, content, result_score, result_passed, test_type')
+            .eq('test_date', dateStr)
+            .in('student_id', studentIds)
+            .or('result_score.neq.,result_passed.not.is.null');
+          
+          if (testScheds && testScheds.length > 0) {
+            // Build student_id:subject -> class_id lookup from roster
+            const subjectClassMap: Record<string, string> = {};
+            rosterRowsRaw.forEach(r => {
+              subjectClassMap[`${r.student_id}:${r.subject}`] = r.class_id;
+            });
+            
+            testScheds.forEach((ts: any) => {
+              const classId = subjectClassMap[`${ts.student_id}:${ts.subject}`];
+              if (!classId) return;
+              const key = `${ts.student_id}:${classId}`;
+              if (!todayTestDataMap[key]) {
+                todayTestDataMap[key] = {
+                  test_content: ts.content || null,
+                  test_title: `${ts.test_type === 'guerrilla' ? '게릴라' : '시험'}`,
+                  test_result_text: ts.result_score || (ts.result_passed != null ? (ts.result_passed ? '통과' : '불통과') : null),
+                  english_pass_fail: ts.subject === '영어' && ts.result_passed != null ? (ts.result_passed ? 'pass' : 'fail') : null,
+                };
+              }
+            });
+          }
+        }
+
         // NEXT-HW-BADGE-V1: Fetch homework assignments for today's records
         if (recordIds.length > 0) {
           const { data: hwAssignments } = await supabase
