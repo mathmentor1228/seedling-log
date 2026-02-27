@@ -2114,7 +2114,7 @@ export type Database = {
           subject: string
         }[]
       }
-      get_teacher_roster_sheet: { Args: { _date?: string }; Returns: Json }
+      get_teacher_roster_sheet: { Args: { _date: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
