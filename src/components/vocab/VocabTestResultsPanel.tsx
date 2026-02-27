@@ -86,6 +86,7 @@ export function VocabTestResultsPanel() {
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [displayMonth, setDisplayMonth] = useState<Date>(new Date());
 
   // General test result input
   const [generalResultOpen, setGeneralResultOpen] = useState(false);
@@ -122,7 +123,7 @@ export function VocabTestResultsPanel() {
 
   useEffect(() => {
     fetchSchedulesAndResults();
-  }, [selectedDate]);
+  }, [selectedDate, displayMonth]);
 
   // All failed results needing retest (not limited to current month)
   const [allFailedResults, setAllFailedResults] = useState<TestResult[]>([]);
@@ -133,8 +134,8 @@ export function VocabTestResultsPanel() {
 
   const fetchSchedulesAndResults = async () => {
     setLoading(true);
-    const startOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1), 'yyyy-MM-dd');
-    const endOfMonth = format(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0), 'yyyy-MM-dd');
+    const startOfMonth = format(new Date(displayMonth.getFullYear(), displayMonth.getMonth(), 1), 'yyyy-MM-dd');
+    const endOfMonth = format(new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 0), 'yyyy-MM-dd');
 
     const [schedRes, resRes, settingsRes, generalRes, allFailedRes, scheduledRetestRes] = await Promise.all([
       supabase
@@ -639,6 +640,8 @@ export function VocabTestResultsPanel() {
               mode="single"
               selected={selectedDate}
               onSelect={(d) => d && setSelectedDate(d)}
+              month={displayMonth}
+              onMonthChange={setDisplayMonth}
               locale={ko}
               modifiers={{
                 hasSchedule: scheduleDates.map(d => new Date(d + 'T00:00:00')),
