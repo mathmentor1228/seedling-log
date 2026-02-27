@@ -490,23 +490,65 @@ export function VocabTestResultsPanel() {
     if (!postponeTarget || !postponeDate) return;
     setPostponeSaving(true);
     const newDate = format(postponeDate, 'yyyy-MM-dd');
-    const { error } = await supabase
-      .from('vocab_schedules')
-      .update({ test_date: newDate })
-      .eq('id', postponeTarget.id);
+    const originalDate = new Date(postponeTarget.test_date + 'T00:00:00');
+    const targetDate = new Date(newDate + 'T00:00:00');
+    const diffMs = targetDate.getTime() - originalDate.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
-    const existingResult = getResult(postponeTarget.id);
-    if (!error && existingResult) {
-      await supabase
-        .from('vocab_test_results')
-        .update({ test_date: newDate })
-        .eq('id', existingResult.id);
+    if (diffDays <= 0) {
+      toast.error('미루기는 현재 날짜 이후로만 가능합니다');
+      setPostponeSaving(false);
+      return;
     }
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`시험이 ${newDate}로 변경되었습니다`);
+    // Fetch all schedules for this student & setting from the target date onward
+    const { data: allSchedules, error: fetchErr } = await supabase
+      .from('vocab_schedules')
+      .select('id, test_date')
+      .eq('student_id', postponeTarget.student_id)
+      .eq('setting_id', postponeTarget.setting_id)
+      .gte('test_date', postponeTarget.test_date)
+      .order('test_date', { ascending: true });
+
+    if (fetchErr) {
+      toast.error(fetchErr.message);
+      setPostponeSaving(false);
+      return;
+    }
+
+    const schedulesToShift = allSchedules || [];
+    let errorOccurred = false;
+    let shiftedCount = 0;
+
+    for (const sched of schedulesToShift) {
+      const oldDate = new Date(sched.test_date + 'T00:00:00');
+      const shifted = new Date(oldDate.getTime() + diffDays * 24 * 60 * 60 * 1000);
+      const shiftedStr = format(shifted, 'yyyy-MM-dd');
+
+      const { error } = await supabase
+        .from('vocab_schedules')
+        .update({ test_date: shiftedStr })
+        .eq('id', sched.id);
+
+      if (error) {
+        errorOccurred = true;
+        toast.error(`스케줄 이동 실패: ${error.message}`);
+        break;
+      }
+
+      // Also shift linked test results
+      const existingResult = results.find(r => r.schedule_id === sched.id);
+      if (existingResult) {
+        await supabase
+          .from('vocab_test_results')
+          .update({ test_date: shiftedStr })
+          .eq('id', existingResult.id);
+      }
+      shiftedCount++;
+    }
+
+    if (!errorOccurred) {
+      toast.success(`${shiftedCount}건의 일정이 ${diffDays}일 뒤로 이동되었습니다`);
       setPostponeTarget(null);
       fetchSchedulesAndResults();
     }
@@ -1059,7 +1101,7 @@ export function VocabTestResultsPanel() {
       <Dialog open={!!postponeTarget} onOpenChange={(open) => !open && setPostponeTarget(null)}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>시험 날짜 변경</DialogTitle>
+            <DialogTitle>일정 미루기</DialogTitle>
           </DialogHeader>
           {postponeTarget && (
             <div className="space-y-4 pt-2">
@@ -1069,6 +1111,10 @@ export function VocabTestResultsPanel() {
                   {postponeTarget.book_name} · Day {postponeTarget.day_number}
                 </p>
                 <p className="text-xs text-muted-foreground">현재: {postponeTarget.test_date}</p>
+              </div>
+
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-2.5 text-xs text-amber-700 dark:text-amber-400">
+                ⚠️ 선택한 날짜 이후의 <strong>전체 일정</strong>이 동일한 일수만큼 뒤로 밀립니다.
               </div>
 
               <div className="space-y-1.5">
@@ -1089,11 +1135,16 @@ export function VocabTestResultsPanel() {
                     />
                   </PopoverContent>
                 </Popover>
+                {postponeDate && (
+                  <p className="text-[10px] text-muted-foreground">
+                    {Math.round((postponeDate.getTime() - new Date(postponeTarget.test_date + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24))}일 뒤로 전체 이동
+                  </p>
+                )}
               </div>
 
               <Button onClick={handlePostpone} disabled={postponeSaving || !postponeDate} className="w-full">
                 {postponeSaving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-                날짜 변경
+                전체 일정 미루기
               </Button>
             </div>
           )}
