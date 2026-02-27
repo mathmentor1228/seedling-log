@@ -545,6 +545,52 @@ export function LessonRecordForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingRecordId, initialContext, isViewMode, forceNewRecord]);
 
+  // TEST-SCHEDULE-PREFILL-V1: Fetch test data from test_schedules to prefill when lesson_records has no test data
+  async function prefillFromTestSchedules(studentId: string, subject: string, lessonDate: string) {
+    try {
+      const { data: testSched } = await supabase
+        .from('test_schedules')
+        .select('content, result_score, result_passed, test_type, test_time, notes')
+        .eq('student_id', studentId)
+        .eq('subject', subject)
+        .eq('test_date', lessonDate)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (testSched) {
+        const hasContent = !!(testSched.content?.trim());
+        const hasResult = !!(testSched.result_score?.trim()) || testSched.result_passed != null;
+        
+        if (hasContent || hasResult) {
+          setTestFormData(prev => {
+            // Only prefill if current test data is empty
+            if (prev.test_name?.trim()) return prev;
+            
+            const resultText = testSched.result_score || 
+              (testSched.result_passed != null ? (testSched.result_passed ? '통과' : '불통과') : '');
+            const testResult = subject === '영어' && testSched.result_passed != null
+              ? (testSched.result_passed ? 'pass' as const : 'fail' as const)
+              : 'none' as const;
+            
+            console.log('[TEST-SCHEDULE-PREFILL-V1] Prefilling test data from test_schedules:', testSched);
+            return {
+              ...prev,
+              test_name: testSched.content || '',
+              test_result_text: resultText,
+              test_result: testResult,
+              test_notes: testSched.notes || prev.test_notes,
+              test_date: lessonDate,
+              test_time: testSched.test_time || prev.test_time,
+            };
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[TEST-SCHEDULE-PREFILL-V1] Error:', err);
+    }
+  }
+
   async function initializeForm() {
     if (!user) return;
     setLoading(true);
@@ -649,8 +695,9 @@ export function LessonRecordForm({
           }
           setIsNewDraft(false);
           // WRITE-PERSIST-FIX-V1: Load test_content from DB
+          const loadedTestName = record.test_name || (record as any).test_content || '';
           setTestFormData({
-            test_name: record.test_name || (record as any).test_content || '',
+            test_name: loadedTestName,
             test_result_text: record.test_result_text || '',
             test_result: (record.test_result as 'pass' | 'fail' | 'none') || 'none',
             test_notes: record.test_notes || '',
@@ -658,6 +705,11 @@ export function LessonRecordForm({
             test_time: record.test_time || '',
             test_assistant: record.test_assistant || '',
           });
+
+          // TEST-SCHEDULE-PREFILL-V1: If lesson record has no test data, try to prefill from test_schedules
+          if (!loadedTestName.trim() && !record.test_result_text?.trim()) {
+            await prefillFromTestSchedules(record.student_id, record.subject, record.lesson_date);
+          }
 
           // Load homework content
           const { data: existingHw } = await supabase
@@ -715,6 +767,9 @@ export function LessonRecordForm({
             setIsNewRecordMode(true);
             setIsNewDraft(true);
             console.log('[PREFILL-FIX-V5] New draft created, isNewRecordMode=true, isNewDraft=true, subject=', newSubject);
+            // TEST-SCHEDULE-PREFILL-V1: Prefill test data from test_schedules for new drafts
+            const draftDate = initialContext.lesson_date || getTodayKST();
+            await prefillFromTestSchedules(initialContext.student_id, newSubject, draftDate);
           }
         }
       } else {
