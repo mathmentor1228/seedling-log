@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Loader2, Plus, Trash2, Calendar, FileText, ArrowUpDown, RotateCcw, Pencil } from 'lucide-react';
+import { Loader2, Plus, Trash2, Calendar, FileText, ArrowUpDown, RotateCcw, Pencil, Link2 } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -73,6 +73,20 @@ export function TestScheduleManager() {
   const [gradeFilter, setGradeFilter] = useState<string>('all');
   const [resultClearId, setResultClearId] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncDialogData, setSyncDialogData] = useState<{
+    scheduleId: string;
+    records: Array<{
+      id: string;
+      lesson_date: string;
+      test_content: string | null;
+      test_title: string | null;
+      test_name: string | null;
+      test_result_text: string | null;
+      english_pass_fail: string | null;
+      test_result: string;
+    }>;
+  } | null>(null);
 
   useEffect(() => {
     if (user?.id) {
@@ -212,6 +226,70 @@ export function TestScheduleManager() {
       fetchData();
     } catch (err: any) {
       toast.error('결과 삭제 실패: ' + err.message);
+    }
+  }
+
+  // Sync test result from lesson_records
+  async function handleSyncFromLesson(sch: TestSchedule) {
+    setSyncingId(sch.id);
+    try {
+      const { data: records, error } = await supabase
+        .from('lesson_records')
+        .select('id, lesson_date, test_content, test_title, test_name, test_result_text, english_pass_fail, test_result')
+        .eq('student_id', sch.student_id)
+        .eq('subject', sch.subject as any)
+        .eq('submitted', true)
+        .or('test_content.neq.,test_title.neq.,test_name.neq.')
+        .order('lesson_date', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      // Filter to records that actually have test data
+      const withTest = (records || []).filter(r => 
+        (r.test_content?.trim()) || (r.test_title?.trim()) || (r.test_name?.trim())
+      );
+
+      if (withTest.length === 0) {
+        toast.info('해당 학생/과목의 수업일지에 테스트 기록이 없습니다');
+        setSyncingId(null);
+        return;
+      }
+
+      setSyncDialogData({ scheduleId: sch.id, records: withTest });
+    } catch (err: any) {
+      toast.error('수업일지 조회 실패: ' + err.message);
+    } finally {
+      setSyncingId(null);
+    }
+  }
+
+  async function applySyncResult(recordId: string) {
+    if (!syncDialogData) return;
+    const record = syncDialogData.records.find(r => r.id === recordId);
+    if (!record) return;
+
+    try {
+      const resultScore = record.test_result_text || null;
+      const resultPassed = record.english_pass_fail === 'pass' ? true : 
+                           record.english_pass_fail === 'fail' ? false :
+                           record.test_result === 'pass' ? true :
+                           record.test_result === 'fail' ? false : null;
+
+      const { error } = await supabase.from('test_schedules').update({
+        result_score: resultScore,
+        result_passed: resultPassed,
+        result_notes: `수업일지 연동 (${record.lesson_date})`,
+        result_recorded_at: new Date().toISOString(),
+        result_recorded_by: user!.id,
+      }).eq('id', syncDialogData.scheduleId);
+
+      if (error) throw error;
+      toast.success('수업일지 테스트 결과가 연동되었습니다');
+      setSyncDialogData(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error('연동 실패: ' + err.message);
     }
   }
 
@@ -465,6 +543,9 @@ export function TestScheduleManager() {
                         ) : '-'}
                       </TableCell>
                       <TableCell className="flex gap-0.5">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="수업일지 연동" onClick={() => handleSyncFromLesson(sch)} disabled={syncingId === sch.id}>
+                          {syncingId === sch.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5 text-primary" />}
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" title="수정" onClick={() => openEdit(sch)}>
                           <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
                         </Button>
@@ -708,6 +789,43 @@ export function TestScheduleManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sync from Lesson Record Dialog */}
+      <Dialog open={!!syncDialogData} onOpenChange={() => setSyncDialogData(null)}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="w-5 h-5" />
+              수업일지 테스트 연동
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">아래 수업일지의 테스트 기록 중 연동할 항목을 선택하세요.</p>
+          <div className="space-y-2">
+            {syncDialogData?.records.map(r => {
+              const testLabel = r.test_content?.trim() || r.test_title?.trim() || r.test_name?.trim() || '(제목 없음)';
+              const resultLabel = r.test_result_text || (r.english_pass_fail === 'pass' ? '통과' : r.english_pass_fail === 'fail' ? '불통과' : r.test_result === 'pass' ? '합격' : r.test_result === 'fail' ? '불합격' : '결과 없음');
+              return (
+                <button
+                  key={r.id}
+                  className="w-full text-left border rounded-lg p-3 hover:bg-accent transition-colors"
+                  onClick={() => applySyncResult(r.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono text-muted-foreground">{r.lesson_date}</span>
+                    <Badge variant={r.test_result === 'pass' || r.english_pass_fail === 'pass' ? 'default' : r.test_result === 'fail' || r.english_pass_fail === 'fail' ? 'destructive' : 'secondary'} className="text-[10px]">
+                      {resultLabel}
+                    </Badge>
+                  </div>
+                  <p className="text-sm font-medium mt-1 truncate">{testLabel}</p>
+                </button>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSyncDialogData(null)}>닫기</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
