@@ -1177,9 +1177,10 @@ export default function Dashboard() {
           .from('class_students')
           .select(`
             class_id,
-            students:student_id (id, name)
+            students:student_id!inner (id, name, enrollment_status)
           `)
-          .in('class_id', classIds);
+          .in('class_id', classIds)
+          .neq('students.enrollment_status', '퇴원');
 
         if (studentsError) {
           console.error('Error fetching class students:', studentsError);
