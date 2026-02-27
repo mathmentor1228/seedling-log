@@ -493,14 +493,46 @@ export function VocabTestResultsPanel() {
     const newDate = format(postponeDate, 'yyyy-MM-dd');
     const originalDate = new Date(postponeTarget.test_date + 'T00:00:00');
     const targetDate = new Date(newDate + 'T00:00:00');
-    const diffMs = targetDate.getTime() - originalDate.getTime();
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 0) {
+    if (targetDate <= originalDate) {
       toast.error('미루기는 현재 날짜 이후로만 가능합니다');
       setPostponeSaving(false);
       return;
     }
+
+    // Fetch the student's test_days setting to know allowed weekdays
+    const { data: settingData } = await supabase
+      .from('vocab_settings')
+      .select('test_days')
+      .eq('id', postponeTarget.setting_id)
+      .single();
+
+    const DAY_CODE_TO_JS: Record<string, number> = {
+      sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+    };
+    const COMBO_MAP: Record<string, string[]> = {
+      mon_wed: ['mon', 'wed'], tue_thu: ['tue', 'thu'],
+      mon_wed_fri: ['mon', 'wed', 'fri'], tue_thu_fri: ['tue', 'thu', 'fri'],
+      mon_tue_wed_thu: ['mon', 'tue', 'wed', 'thu'],
+      mon_tue_wed_thu_fri: ['mon', 'tue', 'wed', 'thu', 'fri'],
+      mon: ['mon'], tue: ['tue'], wed: ['wed'], thu: ['thu'], fri: ['fri'], sat: ['sat'],
+    };
+    const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const rawTestDays = settingData?.test_days || ['mon', 'wed'];
+    const normalizedDays = rawTestDays.every((d: string) => ALL_DAYS.includes(d))
+      ? rawTestDays
+      : (COMBO_MAP[rawTestDays[0]] || ['mon', 'wed']);
+    const allowedJsDays = new Set(normalizedDays.map((d: string) => DAY_CODE_TO_JS[d]).filter((v: number | undefined) => v !== undefined));
+
+    // Helper: find the next allowed test day on or after a given date
+    const findNextTestDay = (from: Date): Date => {
+      const d = new Date(from);
+      for (let i = 0; i < 14; i++) {
+        if (allowedJsDays.has(d.getDay())) return d;
+        d.setDate(d.getDate() + 1);
+      }
+      return d; // fallback
+    };
 
     // Fetch all schedules for this student & setting from the target date onward
     const { data: allSchedules, error: fetchErr } = await supabase
@@ -521,14 +553,16 @@ export function VocabTestResultsPanel() {
     let errorOccurred = false;
     let shiftedCount = 0;
 
+    // Assign new dates: first one gets the user-selected date (snapped to next test day),
+    // subsequent ones get the next test day after the previous one
+    let cursor = findNextTestDay(targetDate);
+
     for (const sched of schedulesToShift) {
-      const oldDate = new Date(sched.test_date + 'T00:00:00');
-      const shifted = new Date(oldDate.getTime() + diffDays * 24 * 60 * 60 * 1000);
-      const shiftedStr = format(shifted, 'yyyy-MM-dd');
+      const newDateStr = format(cursor, 'yyyy-MM-dd');
 
       const { error } = await supabase
         .from('vocab_schedules')
-        .update({ test_date: shiftedStr })
+        .update({ test_date: newDateStr })
         .eq('id', sched.id);
 
       if (error) {
@@ -542,14 +576,18 @@ export function VocabTestResultsPanel() {
       if (existingResult) {
         await supabase
           .from('vocab_test_results')
-          .update({ test_date: shiftedStr })
+          .update({ test_date: newDateStr })
           .eq('id', existingResult.id);
       }
       shiftedCount++;
+
+      // Move cursor to next test day
+      cursor.setDate(cursor.getDate() + 1);
+      cursor = findNextTestDay(cursor);
     }
 
     if (!errorOccurred) {
-      toast.success(`${shiftedCount}건의 일정이 ${diffDays}일 뒤로 이동되었습니다`);
+      toast.success(`${shiftedCount}건의 일정이 시험 요일에 맞춰 재배치되었습니다`);
       setPostponeTarget(null);
       fetchSchedulesAndResults();
     }
@@ -1117,7 +1155,7 @@ export function VocabTestResultsPanel() {
               </div>
 
               <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-2.5 text-xs text-amber-700 dark:text-amber-400">
-                ⚠️ 선택한 날짜 이후의 <strong>전체 일정</strong>이 동일한 일수만큼 뒤로 밀립니다.
+                ⚠️ 이후 전체 일정이 설정된 <strong>시험 요일</strong>에 맞춰 순서대로 재배치됩니다.
               </div>
 
               <div className="space-y-1.5">
@@ -1140,14 +1178,14 @@ export function VocabTestResultsPanel() {
                 </Popover>
                 {postponeDate && (
                   <p className="text-[10px] text-muted-foreground">
-                    {Math.round((postponeDate.getTime() - new Date(postponeTarget.test_date + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24))}일 뒤로 전체 이동
+                    선택일부터 시험 요일에 맞춰 재배치
                   </p>
                 )}
               </div>
 
               <Button onClick={handlePostpone} disabled={postponeSaving || !postponeDate} className="w-full">
                 {postponeSaving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-                전체 일정 미루기
+                시험 요일 맞춰 미루기
               </Button>
             </div>
           )}
