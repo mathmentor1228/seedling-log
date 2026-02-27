@@ -133,8 +133,9 @@ export default function ReportStatusPage() {
 
           const { data: csData } = await supabase
             .from('class_students')
-            .select('student_id, class_id')
-            .in('class_id', classesRes.data.map((c: any) => c.id));
+            .select('student_id, class_id, students:student_id!inner(enrollment_status)')
+            .in('class_id', classesRes.data.map((c: any) => c.id))
+            .neq('students.enrollment_status', '퇴원');
           (csData || []).forEach((cs: any) => {
             addStudentSubject(cs.student_id, classSubjectMap.get(cs.class_id));
           });
