@@ -264,7 +264,7 @@ export function VocabTestResultsPanel() {
 
   const getResult = (scheduleId: string) => results.find(r => r.schedule_id === scheduleId);
 
-  // Save general test result
+  // Save general test result + sync to lesson_records
   const handleSaveGeneralResult = async () => {
     if (!activeGeneralTest || !user) return;
     setSaving(true);
@@ -283,6 +283,47 @@ export function VocabTestResultsPanel() {
       toast.error(error.message);
     } else {
       toast.success('결과 저장 완료');
+
+      // TEST-SYNC-TO-LESSON-V1: Sync result back to matching lesson_records
+      try {
+        const testContent = activeGeneralTest.content || '';
+        const resultText = generalScore || (generalPassed != null ? (generalPassed ? '통과' : '불통과') : '');
+        const testResult = activeGeneralTest.subject === '영어' && generalPassed != null
+          ? (generalPassed ? 'pass' : 'fail')
+          : (generalPassed != null ? (generalPassed ? 'pass' : 'fail') : 'none');
+        const englishPassFail = activeGeneralTest.subject === '영어' && generalPassed != null
+          ? (generalPassed ? 'pass' : 'fail')
+          : null;
+
+        // Find matching lesson_records for this student/subject/date
+        const { data: matchingRecords } = await supabase
+          .from('lesson_records')
+          .select('id, test_name, test_content, test_result_text')
+          .eq('student_id', activeGeneralTest.student_id)
+          .eq('subject', activeGeneralTest.subject as any)
+          .eq('lesson_date', activeGeneralTest.test_date);
+
+        if (matchingRecords && matchingRecords.length > 0) {
+          for (const rec of matchingRecords) {
+            // Update test fields in lesson_record (overwrite with latest test_schedule data)
+            await supabase.from('lesson_records').update({
+              test_name: testContent,
+              test_content: testContent,
+              test_title: testContent,
+              test_result_text: resultText,
+              test_result: testResult,
+              english_pass_fail: englishPassFail,
+              test_date: activeGeneralTest.test_date,
+              test_time: activeGeneralTest.test_time,
+            }).eq('id', rec.id);
+          }
+          console.log('[TEST-SYNC-TO-LESSON-V1] Synced test result to', matchingRecords.length, 'lesson record(s)');
+        }
+      } catch (syncErr) {
+        console.error('[TEST-SYNC-TO-LESSON-V1] Sync error:', syncErr);
+        // Don't block the main flow
+      }
+
       setGeneralResultOpen(false);
       fetchSchedulesAndResults();
     }

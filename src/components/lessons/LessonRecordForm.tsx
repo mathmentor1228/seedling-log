@@ -569,11 +569,12 @@ export function LessonRecordForm({
             
             const resultText = testSched.result_score || 
               (testSched.result_passed != null ? (testSched.result_passed ? '통과' : '불통과') : '');
-            const testResult = subject === '영어' && testSched.result_passed != null
+            // TEST-SCHEDULE-PREFILL-V2: Set test_result for all subjects (not just English)
+            const testResult = testSched.result_passed != null
               ? (testSched.result_passed ? 'pass' as const : 'fail' as const)
               : 'none' as const;
             
-            console.log('[TEST-SCHEDULE-PREFILL-V1] Prefilling test data from test_schedules:', testSched);
+            console.log('[TEST-SCHEDULE-PREFILL-V2] Prefilling test data from test_schedules:', testSched);
             return {
               ...prev,
               test_name: testSched.content || '',
