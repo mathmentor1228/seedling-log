@@ -1,7 +1,6 @@
 import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
 import { getTodayKST } from '@/lib/utils';
-import { Calendar } from 'lucide-react';
+import { Calendar, LayoutDashboard } from 'lucide-react';
 
 interface DashboardHeaderProps {
   userName?: string;
@@ -24,20 +23,28 @@ export function DashboardHeader({ userName, role }: DashboardHeaderProps) {
   const roleLabel = role === 'admin' ? '학원 전체 현황' : role === 'teacher' ? '나의 수업 현황' : '';
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-primary/8 via-card to-card border border-primary/15 rounded-2xl p-6 shadow-sm">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+    <div className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-card to-card border border-primary/15 rounded-2xl p-6 shadow-sm">
+      {/* Decorative elements */}
+      <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="absolute bottom-0 left-1/2 w-24 h-24 bg-primary/3 rounded-full translate-y-1/2" />
+      
       <div className="relative flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            {greeting} 👋
-          </h1>
-          <p className="text-muted-foreground mt-1.5 text-sm">
-            {roleLabel && <span className="font-semibold text-primary">{roleLabel}</span>}
-            {roleLabel && ' · '}
-            {format(dateObj, 'yyyy년 M월 d일')} ({dayNames[dayOfWeek]})
-          </p>
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex w-12 h-12 rounded-2xl bg-primary/10 items-center justify-center">
+            <LayoutDashboard className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+              {greeting} 👋
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {roleLabel && <span className="font-semibold text-primary">{roleLabel}</span>}
+              {roleLabel && ' · '}
+              {format(dateObj, 'yyyy년 M월 d일')} ({dayNames[dayOfWeek]})
+            </p>
+          </div>
         </div>
-        <div className="hidden sm:flex items-center gap-2 text-sm text-primary bg-primary/10 px-4 py-2 rounded-xl font-medium">
+        <div className="hidden sm:flex items-center gap-2 text-sm text-primary bg-primary/8 px-4 py-2.5 rounded-xl font-semibold border border-primary/10">
           <Calendar className="w-4 h-4" />
           <span>{format(dateObj, 'M/d')} ({dayNames[dayOfWeek]})</span>
         </div>

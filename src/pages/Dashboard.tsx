@@ -1697,17 +1697,19 @@ export default function Dashboard() {
   // Loading state
   if (loading) {
     return (
-      <div className="space-y-8">
-        <div>
-          <Skeleton className="h-8 w-48 mb-2" />
-          <Skeleton className="h-4 w-64" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-xl" />
+      <div className="space-y-6">
+        <Skeleton className="h-24 rounded-2xl" />
+        <div className="flex gap-2.5">
+          {[1, 2].map((i) => (
+            <Skeleton key={i} className="h-12 w-40 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-64 rounded-xl" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-80 rounded-xl" />
       </div>
     );
   }
@@ -1756,55 +1758,66 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <DashboardHeader role={role || ''} />
       
-      {/* Attention Summary Bar */}
-      <AttentionSummaryBar items={attentionItems} />
+      {/* ━━━ 섹션 1: 주의사항 & 알림 ━━━ */}
+      <div className="space-y-3">
+        <AttentionSummaryBar items={attentionItems} />
+        <ExamDdayBanner />
+      </div>
 
-      {/* EXAM-DDAY-V1: Exam D-day countdown */}
-      <ExamDdayBanner />
-
-      {/* Stats Grid - Visible for admin and teacher */}
+      {/* ━━━ 섹션 2: 핵심 지표 ━━━ */}
       {!isAssistant(role) && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {isAdmin(role) && (
-            <>
-              <StatCard
-                title="전체 학생"
-                value={stats.totalStudents}
-                icon={<Users className="w-5 h-5" />}
-              />
-              <StatCard
-                title="활성 클래스"
-                value={stats.totalClasses}
-                icon={<BookOpen className="w-5 h-5" />}
-              />
-            </>
-          )}
-          <StatCard
-            title="이번 주 수업"
-            value={stats.lessonsThisWeek}
-            icon={<ClipboardList className="w-5 h-5" />}
-          />
-          <StatCard
-            title="평균 이해도"
-            value={stats.avgUnderstanding || '-'}
-            subtitle="5점 만점"
-            icon={<TrendingUp className="w-5 h-5" />}
-          />
-          {isAdmin(role) && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 rounded-full bg-primary" />
+            <h2 className="text-sm font-semibold text-muted-foreground tracking-wide">핵심 현황</h2>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {isAdmin(role) && (
+              <>
+                <StatCard
+                  title="전체 학생"
+                  value={stats.totalStudents}
+                  icon={<Users className="w-4.5 h-4.5" />}
+                  iconColor="primary"
+                />
+                <StatCard
+                  title="활성 클래스"
+                  value={stats.totalClasses}
+                  icon={<BookOpen className="w-4.5 h-4.5" />}
+                  iconColor="muted"
+                />
+              </>
+            )}
             <StatCard
-              title="고위험 학생"
-              value={stats.highRiskStudents}
-              icon={<AlertTriangle className="w-5 h-5" />}
-              className={stats.highRiskStudents > 0 ? 'border-destructive/30 bg-destructive/5' : ''}
+              title="이번 주 수업"
+              value={stats.lessonsThisWeek}
+              icon={<ClipboardList className="w-4.5 h-4.5" />}
+              iconColor="success"
             />
-          )}
+            <StatCard
+              title="평균 이해도"
+              value={stats.avgUnderstanding || '-'}
+              subtitle="5점 만점"
+              icon={<TrendingUp className="w-4.5 h-4.5" />}
+              iconColor="warning"
+            />
+            {isAdmin(role) && (
+              <StatCard
+                title="고위험 학생"
+                value={stats.highRiskStudents}
+                icon={<AlertTriangle className="w-4.5 h-4.5" />}
+                iconColor="destructive"
+                className={stats.highRiskStudents > 0 ? 'border-red-500/30' : ''}
+              />
+            )}
+          </div>
         </div>
       )}
 
-      {/* TEACHER-OVERDUE-WARN-V1: Teacher's own overdue lessons warning */}
+      {/* ━━━ 섹션 3: 미제출/출결 이슈 ━━━ */}
       {isTeacher(role) && teacherOverdueLessons.length > 0 && (
         <Collapsible open={overdueOpen} onOpenChange={setOverdueOpen}>
           <Card className="border-destructive/30 bg-destructive/5 animate-slide-up">
@@ -2018,9 +2031,9 @@ export default function Dashboard() {
         </Collapsible>
       )}
 
+      {/* ━━━ 섹션 4: 오늘 수업 로스터 ━━━ */}
       {(isTeacher(role) || isAdmin(role) || isAssistant(role)) && (
-        <>
-          {/* Holiday Banner - show for all roles when there's a holiday */}
+        <div className="space-y-3">
           {allTodayHolidays.length > 0 && (
             <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
               <CardContent className="py-4">
@@ -2088,16 +2101,24 @@ export default function Dashboard() {
             if (hideRoster) return null;
             
             return (
-              <Card className="border-primary/20 shadow-sm animate-slide-up">
+              <Card className="border-primary/15 shadow-md animate-slide-up overflow-hidden">
+                {/* Roster header with accent bar */}
+                <div className="h-1 bg-gradient-to-r from-primary via-primary/60 to-transparent" />
                 <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <GraduationCap className="w-4.5 h-4.5 text-primary" />
+                  <CardTitle className="flex items-center gap-2.5 text-lg">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <GraduationCap className="w-5 h-5 text-primary" />
                     </div>
                     {isAdmin(role) 
-                      ? `오늘 수업 - 선생님별 (${adminRosterData?.roster_rows?.length ?? 0}명)`
-                      : `오늘 수업 (${todaySlots.length}개)`
+                      ? `오늘 수업 — 선생님별`
+                      : `오늘 수업`
                     }
+                    <Badge variant="secondary" className="text-xs font-bold ml-1">
+                      {isAdmin(role) 
+                        ? `${adminRosterData?.roster_rows?.length ?? 0}명`
+                        : `${todaySlots.length}개`
+                      }
+                    </Badge>
                     {/* SUPPLEMENT-LESSON-V1: Add supplementary lesson button */}
                     <Button
                       variant="outline"
@@ -2706,34 +2727,38 @@ export default function Dashboard() {
               </Card>
             );
           })()}
-        </>
-      )}
-
-      {/* Assistant Requests Widget - Teacher & Admin */}
-      {(isAdmin(role) || isTeacher(role)) && (
-        <AssistantRequestsWidget />
-      )}
-
-      {/* DAILY-HOMEWORK-V1: Quick access to daily homework manager */}
-      {(isAdmin(role) || isTeacher(role)) && (
-        <div className="flex justify-end">
-          <DailyHomeworkManager />
         </div>
       )}
 
-
-      {/* LEARNING-ANALYSIS-V1: Student progress analysis widget */}
-      {(isTeacher(role) || isAdmin(role)) && (
-        <StudentProgressWidget />
+      {/* ━━━ 섹션 5: 도구 & 분석 ━━━ */}
+      {(isAdmin(role) || isTeacher(role)) && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pt-2">
+            <div className="w-1 h-4 rounded-full bg-primary/50" />
+            <h2 className="text-sm font-semibold text-muted-foreground tracking-wide">도구 & 분석</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <AssistantRequestsWidget />
+            <div className="flex items-end">
+              <DailyHomeworkManager />
+            </div>
+          </div>
+          
+          <StudentProgressWidget />
+        </div>
       )}
 
-      {/* Admin Management Section */}
+      {/* ━━━ 섹션 6: 학원 관리 (Admin only) ━━━ */}
       {isAdmin(role) && (
         <div className="space-y-4 pt-2">
-          <h2 className="text-lg font-semibold text-muted-foreground flex items-center gap-2">
-            <GraduationCap className="w-5 h-5" />
-            학원 관리
-          </h2>
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 rounded-full bg-primary/30" />
+            <h2 className="text-sm font-semibold text-muted-foreground tracking-wide flex items-center gap-2">
+              <GraduationCap className="w-4 h-4" />
+              학원 관리
+            </h2>
+          </div>
           <AdminStatsSection />
           <HolidayManagement />
           <WeeklyScheduleVerification />
