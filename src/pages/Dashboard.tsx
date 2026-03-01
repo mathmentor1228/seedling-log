@@ -26,6 +26,7 @@ import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerificat
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
 import { ExamDdayBanner } from '@/components/ExamDdayBanner';
+import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { 
   Users, 
   BookOpen, 
@@ -43,7 +44,10 @@ import {
   PenLine,
   TestTube2,
   Loader2,
-  ChevronDown
+  ChevronDown,
+  BarChart3,
+  Settings2,
+  Wrench
 } from 'lucide-react';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
@@ -1770,11 +1774,12 @@ export default function Dashboard() {
       {/* ━━━ 섹션 2: 핵심 지표 ━━━ */}
       {!isAssistant(role) && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 rounded-full bg-primary" />
-            <h2 className="text-sm font-semibold text-muted-foreground tracking-wide">핵심 현황</h2>
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <SectionHeader 
+            icon={<BarChart3 className="w-4 h-4" />} 
+            title="핵심 현황" 
+            description="실시간 학원 운영 지표"
+          />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
             {isAdmin(role) && (
               <>
                 <StatCard
@@ -2733,10 +2738,11 @@ export default function Dashboard() {
       {/* ━━━ 섹션 5: 도구 & 분석 ━━━ */}
       {(isAdmin(role) || isTeacher(role)) && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2 pt-2">
-            <div className="w-1 h-4 rounded-full bg-primary/50" />
-            <h2 className="text-sm font-semibold text-muted-foreground tracking-wide">도구 & 분석</h2>
-          </div>
+          <SectionHeader 
+            icon={<Wrench className="w-4 h-4" />}
+            title="도구 & 분석" 
+            description="숙제 관리, 요청, 학습 분석"
+          />
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <AssistantRequestsWidget />
@@ -2752,13 +2758,11 @@ export default function Dashboard() {
       {/* ━━━ 섹션 6: 학원 관리 (Admin only) ━━━ */}
       {isAdmin(role) && (
         <div className="space-y-4 pt-2">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 rounded-full bg-primary/30" />
-            <h2 className="text-sm font-semibold text-muted-foreground tracking-wide flex items-center gap-2">
-              <GraduationCap className="w-4 h-4" />
-              학원 관리
-            </h2>
-          </div>
+          <SectionHeader 
+            icon={<Settings2 className="w-4 h-4" />}
+            title="학원 관리" 
+            description="통계, 휴강, 시간표 관리"
+          />
           <AdminStatsSection />
           <HolidayManagement />
           <WeeklyScheduleVerification />
