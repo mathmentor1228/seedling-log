@@ -167,6 +167,11 @@ export default function Reports() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Bulk delete state
+  const [bulkDeleteIds, setBulkDeleteIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   // Active main tab
   const [mainTab, setMainTab] = useState<'generate' | 'prompt'>('generate');
 
@@ -547,6 +552,45 @@ export default function Reports() {
       toast({ title: '삭제 실패', description: error.message, variant: 'destructive' });
     } finally {
       setDeleting(false);
+    }
+  }
+
+  function toggleBulkDelete(reportId: string) {
+    setBulkDeleteIds(prev => {
+      const next = new Set(prev);
+      if (next.has(reportId)) next.delete(reportId);
+      else next.add(reportId);
+      return next;
+    });
+  }
+
+  function toggleBulkDeleteAll() {
+    if (bulkDeleteIds.size === filteredReports.length) {
+      setBulkDeleteIds(new Set());
+    } else {
+      setBulkDeleteIds(new Set(filteredReports.map(r => r.id)));
+    }
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(bulkDeleteIds);
+      const { error } = await supabase
+        .from('weekly_reports')
+        .delete()
+        .in('id', ids);
+      if (error) throw error;
+      toast({ title: `${ids.length}건의 리포트가 삭제되었습니다.` });
+      setBulkDeleteIds(new Set());
+      setShowBulkDeleteConfirm(false);
+      await fetchReports();
+      await fetchExistingReportsForWeek();
+    } catch (error: any) {
+      console.error('Error bulk deleting reports:', error);
+      toast({ title: '일괄 삭제 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -1202,9 +1246,42 @@ export default function Reports() {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              {/* Bulk delete action bar */}
+              {bulkDeleteIds.size > 0 && (
+                <div className="flex items-center gap-3 mb-3 p-3 bg-destructive/5 border border-destructive/20 rounded-lg">
+                  <Checkbox
+                    checked={bulkDeleteIds.size === filteredReports.length && filteredReports.length > 0}
+                    onCheckedChange={toggleBulkDeleteAll}
+                  />
+                  <span className="text-sm font-medium">
+                    {bulkDeleteIds.size}건 선택됨
+                  </span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowBulkDeleteConfirm(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    선택 삭제
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setBulkDeleteIds(new Set())}
+                  >
+                    선택 해제
+                  </Button>
+                </div>
+              )}
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[40px]">
+                      <Checkbox
+                        checked={bulkDeleteIds.size === filteredReports.length && filteredReports.length > 0}
+                        onCheckedChange={toggleBulkDeleteAll}
+                      />
+                    </TableHead>
                     <TableHead className="w-[90px]">학생 전송</TableHead>
                     <TableHead className="w-[90px]">학부모 전송</TableHead>
                     <TableHead>학생</TableHead>
@@ -1238,6 +1315,12 @@ export default function Reports() {
                           isRed && 'bg-destructive/5'
                         )}
                       >
+                        <TableCell>
+                          <Checkbox
+                            checked={bulkDeleteIds.has(report.id)}
+                            onCheckedChange={() => toggleBulkDelete(report.id)}
+                          />
+                        </TableCell>
                         <TableCell>
                           <Checkbox
                             checked={target?.sendStudent ?? false}
@@ -1472,6 +1555,29 @@ export default function Reports() {
             >
               {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>리포트 일괄 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              선택한 <strong>{bulkDeleteIds.size}건</strong>의 리포트를 삭제하시겠습니까? 삭제 후 다시 생성할 수 있습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {bulkDeleteIds.size}건 삭제
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
