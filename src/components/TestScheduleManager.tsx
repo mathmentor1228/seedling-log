@@ -87,6 +87,8 @@ export function TestScheduleManager() {
       test_result: string;
     }>;
   } | null>(null);
+  const [editingContentId, setEditingContentId] = useState<string | null>(null);
+  const [editingContentValue, setEditingContentValue] = useState('');
 
   useEffect(() => {
     if (user?.id) {
@@ -290,6 +292,19 @@ export function TestScheduleManager() {
       fetchData();
     } catch (err: any) {
       toast.error('연동 실패: ' + err.message);
+    }
+  }
+
+  async function handleInlineContentSave(id: string) {
+    try {
+      const { error } = await supabase.from('test_schedules').update({
+        content: editingContentValue.trim() || null,
+      }).eq('id', id);
+      if (error) throw error;
+      setSchedules(prev => prev.map(s => s.id === id ? { ...s, content: editingContentValue.trim() || null } : s));
+      setEditingContentId(null);
+    } catch (err: any) {
+      toast.error('저장 실패: ' + err.message);
     }
   }
 
@@ -532,8 +547,28 @@ export function TestScheduleManager() {
                       <TableCell className="text-xs text-muted-foreground">
                         {getStudentGradeGroup(sch) || (sch.students as any)?.grade || '-'}
                       </TableCell>
-                      <TableCell className="text-xs truncate max-w-[160px]" title={sch.content || ''}>
-                        {sch.content || '-'}
+                      <TableCell className="text-xs max-w-[160px]">
+                        {editingContentId === sch.id ? (
+                          <Input
+                            autoFocus
+                            value={editingContentValue}
+                            onChange={e => setEditingContentValue(e.target.value)}
+                            onBlur={() => handleInlineContentSave(sch.id)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleInlineContentSave(sch.id);
+                              if (e.key === 'Escape') setEditingContentId(null);
+                            }}
+                            className="h-7 text-xs"
+                          />
+                        ) : (
+                          <span
+                            className="cursor-pointer hover:text-primary truncate block"
+                            title={sch.content || '클릭하여 테스트명 입력'}
+                            onClick={() => { setEditingContentId(sch.id); setEditingContentValue(sch.content || ''); }}
+                          >
+                            {sch.content || <span className="text-muted-foreground italic">미입력</span>}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs">
                         {hasResult ? (
