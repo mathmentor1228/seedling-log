@@ -464,6 +464,23 @@ export function TeamNotesBoard() {
     setReplies([]);
     setDetailModalOpen(true);
     fetchReplies(note.id);
+    // TEAM-NOTE-REPLY-NOTIFICATION-V1: Mark replies as read
+    markRepliesAsRead(note.id);
+  }
+
+  async function markRepliesAsRead(noteId: string) {
+    if (!user) return;
+    try {
+      await supabase
+        .from('team_note_reply_reads')
+        .upsert({
+          user_id: user.id,
+          note_id: noteId,
+          last_read_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,note_id' });
+    } catch (err) {
+      console.error('Error marking replies as read:', err);
+    }
   }
 
   async function handleCopyBody() {

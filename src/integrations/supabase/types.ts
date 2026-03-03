@@ -1370,6 +1370,35 @@ export type Database = {
           },
         ]
       }
+      team_note_reply_reads: {
+        Row: {
+          id: string
+          last_read_at: string
+          note_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          note_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          note_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_note_reply_reads_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "team_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_notes: {
         Row: {
           body: string | null
