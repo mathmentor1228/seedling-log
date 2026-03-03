@@ -2040,7 +2040,17 @@ export default function Dashboard() {
                               variant="outline"
                               size="sm"
                               className="h-7 text-xs"
-                              onClick={() => navigate(`/lessons?student_id=${lesson.student_id}&class_id=${lesson.class_id || ''}&subject=${encodeURIComponent(lesson.subject)}&lesson_date=${lesson.lesson_date}`)}
+                              onClick={() => {
+                                setAdminLessonModalContext({
+                                  student_id: lesson.student_id,
+                                  class_id: lesson.class_id || '',
+                                  subject: lesson.subject as any,
+                                  lesson_date: lesson.lesson_date,
+                                });
+                                setAdminLessonModalRecordId(lesson.id);
+                                setAdminLessonModalForceNew(false);
+                                setAdminLessonModalOpen(true);
+                              }}
                             >
                               <FileEdit className="w-3 h-3 mr-1" />
                               지금 작성
@@ -2680,7 +2690,17 @@ export default function Dashboard() {
                                             variant="outline"
                                             size="sm"
                                             className="h-7 text-xs px-2.5"
-                                            onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                            onClick={() => {
+                                              setAdminLessonModalContext({
+                                                student_id: student.id,
+                                                class_id: slot.class_id,
+                                                subject: slot.subject as any,
+                                                lesson_date: getTodayKST(),
+                                              });
+                                              setAdminLessonModalRecordId(student.hyugangRecordId || null);
+                                              setAdminLessonModalForceNew(!student.hyugangRecordId);
+                                              setAdminLessonModalOpen(true);
+                                            }}
                                           >
                                             <FileEdit className="w-3 h-3" />
                                             <span className="ml-1">휴강 기록</span>
@@ -2748,7 +2768,18 @@ export default function Dashboard() {
                                             variant="outline"
                                             size="sm"
                                             className="h-7 text-xs px-2.5"
-                                            onClick={() => navigate(`/lessons?student_id=${student.id}&class_id=${slot.class_id}&subject=${encodeURIComponent(slot.subject)}&lesson_date=${getTodayKST()}`)}
+                                            onClick={() => {
+                                              const ls = lessonStatusMap[`${student.id}_${slot.class_id}`];
+                                              setAdminLessonModalContext({
+                                                student_id: student.id,
+                                                class_id: slot.class_id,
+                                                subject: slot.subject as any,
+                                                lesson_date: getTodayKST(),
+                                              });
+                                              setAdminLessonModalRecordId(ls?.recordId || null);
+                                              setAdminLessonModalForceNew(!ls?.recordId);
+                                              setAdminLessonModalOpen(true);
+                                            }}
                                           >
                                             <FileEdit className="w-3 h-3" />
                                             <span className="ml-1">일지</span>
