@@ -129,7 +129,7 @@ export function TeamNotesBoard() {
     body: '',
     target_type: 'all' as 'all' | 'role' | 'user',
     target_role: '',
-    target_user_id: '',
+    target_user_ids: [] as string[],
     scope: 'general',
     priority: 'normal',
     due_date: '',
@@ -283,37 +283,52 @@ export function TeamNotesBoard() {
       
       if (formData.target_type === 'role' && formData.target_role) {
         insertData.target_role = formData.target_role;
-      } else if (formData.target_type === 'user' && formData.target_user_id) {
-        insertData.target_user_id = formData.target_user_id;
       }
       
-      const { data: newNote, error: insertError } = await supabase
-        .from('team_notes')
-        .insert(insertData)
-        .select()
-        .single();
+      // For multi-user targets, create one note per user
+      const targetUserIds = formData.target_type === 'user' && formData.target_user_ids.length > 0
+        ? formData.target_user_ids
+        : [null];
       
-      if (insertError) throw insertError;
+      const createdNoteIds: string[] = [];
       
-      // Upload attachments
-      for (const file of uploadingFiles) {
-        const filePath = `team_notes/${newNote.id}/${crypto.randomUUID()}_${file.name}`;
+      for (const targetUserId of targetUserIds) {
+        const noteData = { ...insertData };
+        if (targetUserId) {
+          noteData.target_user_id = targetUserId;
+        }
         
-        const { error: uploadError } = await supabase.storage
-          .from('team_files')
-          .upload(filePath, file);
+        const { data: newNote, error: insertError } = await supabase
+          .from('team_notes')
+          .insert(noteData)
+          .select()
+          .single();
         
-        if (!uploadError) {
-          await supabase
-            .from('team_note_attachments')
-            .insert({
-              note_id: newNote.id,
-              storage_path: filePath,
-              original_name: file.name,
-              mime_type: file.type,
-              file_size: file.size,
-              uploaded_by: user.id,
-            });
+        if (insertError) throw insertError;
+        createdNoteIds.push(newNote.id);
+      }
+      
+      // Upload attachments to all created notes
+      for (const noteId of createdNoteIds) {
+        for (const file of uploadingFiles) {
+          const filePath = `team_notes/${noteId}/${crypto.randomUUID()}_${file.name}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('team_files')
+            .upload(filePath, file);
+          
+          if (!uploadError) {
+            await supabase
+              .from('team_note_attachments')
+              .insert({
+                note_id: noteId,
+                storage_path: filePath,
+                original_name: file.name,
+                mime_type: file.type,
+                file_size: file.size,
+                uploaded_by: user.id,
+              });
+          }
         }
       }
       
@@ -328,7 +343,7 @@ export function TeamNotesBoard() {
         body: '',
         target_type: 'all',
         target_role: '',
-        target_user_id: '',
+        target_user_ids: [],
         scope: 'general',
         priority: 'normal',
         due_date: '',
@@ -600,7 +615,7 @@ export function TeamNotesBoard() {
                             ...prev, 
                             target_type: value,
                             target_role: '',
-                            target_user_id: '',
+                            target_user_ids: [],
                           }))}
                         >
                           <SelectTrigger>
@@ -635,22 +650,36 @@ export function TeamNotesBoard() {
                       
                       {formData.target_type === 'user' && (
                         <div className="space-y-2">
-                          <Label>사용자 선택</Label>
-                          <Select
-                            value={formData.target_user_id}
-                            onValueChange={(value) => setFormData(prev => ({ ...prev, target_user_id: value }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="선택..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {users.map((u) => (
-                                <SelectItem key={u.id} value={u.id}>
-                                  {u.name} ({u.role === 'admin' ? '원장' : u.role === 'teacher' ? '선생님' : u.role === 'assistant' ? '조교' : u.role})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Label>사용자 선택 (복수 가능)</Label>
+                          <div className="border rounded-md max-h-40 overflow-y-auto p-2 space-y-1">
+                            {users.map((u) => {
+                              const isChecked = formData.target_user_ids.includes(u.id);
+                              return (
+                                <label key={u.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      setFormData(prev => ({
+                                        ...prev,
+                                        target_user_ids: isChecked
+                                          ? prev.target_user_ids.filter(id => id !== u.id)
+                                          : [...prev.target_user_ids, u.id],
+                                      }));
+                                    }}
+                                    className="rounded border-input"
+                                  />
+                                  <span>{u.name}</span>
+                                  <span className="text-muted-foreground text-xs">
+                                    ({u.role === 'admin' ? '원장' : u.role === 'teacher' ? '선생님' : u.role === 'assistant' ? '조교' : u.role})
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {formData.target_user_ids.length > 0 && (
+                            <p className="text-xs text-muted-foreground">{formData.target_user_ids.length}명 선택됨</p>
+                          )}
                         </div>
                       )}
                     </div>
