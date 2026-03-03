@@ -1091,14 +1091,38 @@ export function LessonRecordForm({
           .eq('id', draftId);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
+        // DRAFT-OVERWRITE-V1: Check for existing record with same student+class+date+subject before inserting
+        const { data: existingRecord } = await supabase
           .from('lesson_records')
-          .insert({ ...payload, submitted: false })
-          .select()
-          .single();
-        if (error) throw error;
-        setCurrentDraftId(data.id);
-        finalDraftId = data.id;
+          .select('id')
+          .eq('student_id', payload.student_id)
+          .eq('class_id', payload.class_id)
+          .eq('lesson_date', payload.lesson_date)
+          .eq('subject', payload.subject)
+          .eq('submitted', false)
+          .maybeSingle();
+
+        if (existingRecord) {
+          // Overwrite existing draft with latest data
+          console.log('[DRAFT-OVERWRITE-V1] Found existing draft, overwriting:', existingRecord.id);
+          const { homework_status: _hwIgnored, ...updatePayload } = payload;
+          const { error } = await supabase
+            .from('lesson_records')
+            .update({ ...updatePayload, submitted: false })
+            .eq('id', existingRecord.id);
+          if (error) throw error;
+          setCurrentDraftId(existingRecord.id);
+          finalDraftId = existingRecord.id;
+        } else {
+          const { data, error } = await supabase
+            .from('lesson_records')
+            .insert({ ...payload, submitted: false })
+            .select()
+            .single();
+          if (error) throw error;
+          setCurrentDraftId(data.id);
+          finalDraftId = data.id;
+        }
       }
 
       // Save homework

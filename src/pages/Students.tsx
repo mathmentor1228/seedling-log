@@ -334,13 +334,18 @@ export default function Students() {
   };
 
   const filteredStudents = students.filter((student) => {
-    // Text search
-    const q = searchQuery.toLowerCase();
-    const matchesSearch = !q || 
-      student.name.toLowerCase().includes(q) ||
-      student.email?.toLowerCase().includes(q) ||
-      student.grade?.toLowerCase().includes(q) ||
-      student.school?.toLowerCase().includes(q);
+    // Text search - includes name, email, grade, school, phone numbers
+    const q = searchQuery.toLowerCase().replace(/\D/g, '') || searchQuery.toLowerCase();
+    const qRaw = searchQuery.toLowerCase();
+    const matchesSearch = !searchQuery || 
+      student.name.toLowerCase().includes(qRaw) ||
+      student.email?.toLowerCase().includes(qRaw) ||
+      student.grade?.toLowerCase().includes(qRaw) ||
+      student.school?.toLowerCase().includes(qRaw) ||
+      (student.phone && normalizePhone(student.phone).includes(q)) ||
+      (student.parent_phone && normalizePhone(student.parent_phone).includes(q)) ||
+      (student.student_phone && normalizePhone(student.student_phone).includes(q)) ||
+      (student.student_code?.toLowerCase().includes(qRaw));
     if (!matchesSearch) return false;
 
     // School level filter
@@ -554,7 +559,7 @@ export default function Students() {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search students..."
+                placeholder="이름, 전화번호, 학교 검색..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
