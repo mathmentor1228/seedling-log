@@ -1001,6 +1001,66 @@ export type Database = {
         }
         Relationships: []
       }
+      schedule_overrides: {
+        Row: {
+          class_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          new_date: string | null
+          new_end_time: string | null
+          new_start_time: string | null
+          original_date: string
+          override_type: string
+          reason: string | null
+          schedule_id: string
+          teacher_id: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_date?: string | null
+          new_end_time?: string | null
+          new_start_time?: string | null
+          original_date: string
+          override_type?: string
+          reason?: string | null
+          schedule_id: string
+          teacher_id: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_date?: string | null
+          new_end_time?: string | null
+          new_start_time?: string | null
+          original_date?: string
+          override_type?: string
+          reason?: string | null
+          schedule_id?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_overrides_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_overrides_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "class_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_accounts: {
         Row: {
           created_at: string

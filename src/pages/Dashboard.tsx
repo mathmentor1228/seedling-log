@@ -48,8 +48,10 @@ import {
   BarChart3,
   Settings2,
   Wrench,
-  MessageSquare
+  MessageSquare,
+  ArrowLeftRight
 } from 'lucide-react';
+import { ScheduleOverrideModal } from '@/components/ScheduleOverrideModal';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 
@@ -159,6 +161,24 @@ interface TodaySlot {
   start_time: string;
   end_time: string;
   students: TodaySlotStudent[];
+  isOverridden?: boolean; // SCHEDULE-OVERRIDE-V1: slot has been moved/cancelled
+  overrideType?: 'moved' | 'cancelled';
+  overrideReason?: string;
+  isMovedIn?: boolean; // SCHEDULE-OVERRIDE-V1: this slot was moved here from another day
+  movedFromDate?: string;
+}
+
+interface ScheduleOverride {
+  id: string;
+  schedule_id: string;
+  class_id: string;
+  teacher_id: string;
+  original_date: string;
+  override_type: 'moved' | 'cancelled';
+  new_date: string | null;
+  new_start_time: string | null;
+  new_end_time: string | null;
+  reason: string | null;
 }
 
 interface Holiday {
@@ -441,6 +461,19 @@ export default function Dashboard() {
     start_time?: string;
   }
   const [supplementaryLessons, setSupplementaryLessons] = useState<SupplementaryLesson[]>([]);
+
+  // SCHEDULE-OVERRIDE-V1: Override modal state
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [overrideModalContext, setOverrideModalContext] = useState<{
+    scheduleId: string;
+    classId: string;
+    className: string;
+    subject: string;
+    teacherId: string;
+    originalDate: string;
+    originalStartTime: string;
+    originalEndTime: string;
+  } | null>(null);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -1602,16 +1635,84 @@ export default function Dashboard() {
         });
       });
 
+      // SCHEDULE-OVERRIDE-V1: Fetch overrides for today and overrides targeting today
+      const todayKST = getTodayKST();
+      const scheduleIds = (activeSchedules || []).map((s: any) => s.id).filter(Boolean);
+      
+      let overridesForToday: ScheduleOverride[] = [];
+      let overridesMovedToToday: ScheduleOverride[] = [];
+      
+      if (scheduleIds.length > 0) {
+        // Overrides where original_date = today (these slots should be marked as changed)
+        const { data: ov1 } = await (supabase.from('schedule_overrides' as any) as any)
+          .select('*')
+          .in('schedule_id', scheduleIds)
+          .eq('original_date', todayKST);
+        overridesForToday = (ov1 || []) as ScheduleOverride[];
+      }
+      
+      // Overrides where new_date = today (these are moved-in slots) - for current teacher only
+      const { data: ov2 } = await (supabase.from('schedule_overrides' as any) as any)
+        .select('*')
+        .eq('new_date', todayKST)
+        .eq('override_type', 'moved')
+        .eq('teacher_id', user.id);
+      overridesMovedToToday = (ov2 || []) as ScheduleOverride[];
+
+      // Build a set of overridden schedule_ids for today
+      const overriddenScheduleIds = new Set(overridesForToday.map(o => o.schedule_id));
+      const overrideMap = new Map(overridesForToday.map(o => [o.schedule_id, o]));
+
       // Build slots array from activeSchedules
-      const slots: TodaySlot[] = (activeSchedules || []).map((s: any) => ({
-        id: s.id,
-        class_id: s.classes?.id || '',
-        class_name: s.classes?.name || '알 수 없음',
-        subject: s.classes?.subject || '-',
-        start_time: s.start_time,
-        end_time: s.end_time,
-        students: studentsMap[s.classes?.id] || [],
-      }));
+      const slots: TodaySlot[] = (activeSchedules || []).map((s: any) => {
+        const override = overrideMap.get(s.id);
+        return {
+          id: s.id,
+          class_id: s.classes?.id || '',
+          class_name: s.classes?.name || '알 수 없음',
+          subject: s.classes?.subject || '-',
+          start_time: s.start_time,
+          end_time: s.end_time,
+          students: studentsMap[s.classes?.id] || [],
+          isOverridden: !!override,
+          overrideType: override?.override_type as 'moved' | 'cancelled' | undefined,
+          overrideReason: override?.reason || undefined,
+        };
+      });
+
+      // Add moved-in slots (from other days moved to today)
+      if (overridesMovedToToday.length > 0) {
+        // Fetch schedule details for moved-in overrides
+        const movedScheduleIds = overridesMovedToToday.map(o => o.schedule_id);
+        const { data: movedSchedules } = await supabase
+          .from('class_schedules')
+          .select('id, class_id, start_time, end_time, teacher_id, classes!inner(id, name, subject)')
+          .in('id', movedScheduleIds);
+        
+        const scheduleDetailMap = new Map((movedSchedules || []).map((s: any) => [s.id, s]));
+        
+        for (const ov of overridesMovedToToday) {
+          const cs = scheduleDetailMap.get(ov.schedule_id) as any;
+          if (!cs) continue;
+          const cls = cs.classes;
+          if (!cls) continue;
+          
+          slots.push({
+            id: `override-${ov.id}`,
+            class_id: cls.id,
+            class_name: cls.name || '알 수 없음',
+            subject: cls.subject || '-',
+            start_time: ov.new_start_time || cs.start_time,
+            end_time: ov.new_end_time || cs.end_time,
+            students: studentsMap[cls.id] || [],
+            isMovedIn: true,
+            movedFromDate: ov.original_date,
+          });
+        }
+      }
+
+      // Sort slots by start_time
+      slots.sort((a, b) => a.start_time.localeCompare(b.start_time));
 
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(lessonRecordMap).length;
@@ -2469,19 +2570,85 @@ export default function Dashboard() {
                     ) : (
                       <div className="space-y-4">
                         {(todaySlots || []).map((slot) => (
-                          <div key={slot.id} className="border rounded-lg bg-background overflow-hidden">
+                          <div key={slot.id} className={`border rounded-lg bg-background overflow-hidden ${slot.isOverridden ? 'opacity-60 border-amber-400/50' : ''} ${slot.isMovedIn ? 'border-blue-400/50 ring-1 ring-blue-400/20' : ''}`}>
                             {/* Slot header */}
-                            <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b">
+                            <div className={`flex items-center justify-between px-4 py-2.5 border-b ${slot.isOverridden ? 'bg-amber-50 dark:bg-amber-900/10' : slot.isMovedIn ? 'bg-blue-50 dark:bg-blue-900/10' : 'bg-muted/40'}`}>
                               <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-muted-foreground" />
                                 <span className="font-semibold text-sm">{slot.class_name}</span>
                                 <Badge variant="outline" className="text-[11px]">{slot.subject}</Badge>
+                                {slot.isOverridden && (
+                                  <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">
+                                    수업일정 변경
+                                  </Badge>
+                                )}
+                                {slot.isMovedIn && (
+                                  <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[10px]">
+                                    추가수업 ({slot.movedFromDate?.slice(5)}에서 이동)
+                                  </Badge>
+                                )}
                               </div>
-                              <span className="text-sm text-muted-foreground font-medium">
-                                {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground font-medium">
+                                  {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
+                                </span>
+                                {!slot.isOverridden && !slot.isMovedIn && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-muted-foreground hover:text-foreground"
+                                    title="수업 일정 변경"
+                                    onClick={() => {
+                                      setOverrideModalContext({
+                                        scheduleId: slot.id,
+                                        classId: slot.class_id,
+                                        className: slot.class_name,
+                                        subject: slot.subject,
+                                        teacherId: user?.id || '',
+                                        originalDate: getTodayKST(),
+                                        originalStartTime: slot.start_time,
+                                        originalEndTime: slot.end_time,
+                                      });
+                                      setOverrideModalOpen(true);
+                                    }}
+                                  >
+                                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                            {(slot?.students || []).length > 0 ? (
+                            {/* SCHEDULE-OVERRIDE-V1: Show override message if slot is overridden */}
+                            {slot.isOverridden ? (
+                              <div className="px-4 py-4 text-center text-sm text-amber-700 bg-amber-50/50 dark:bg-amber-900/10">
+                                <ArrowLeftRight className="w-5 h-5 mx-auto mb-1 text-amber-500" />
+                                <p className="font-medium">수업 일정이 변경되었습니다</p>
+                                {slot.overrideReason && (
+                                  <p className="text-xs text-muted-foreground mt-1">{slot.overrideReason}</p>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="mt-2 h-7 text-xs text-destructive hover:text-destructive"
+                                  onClick={async () => {
+                                    if (!confirm('일정 변경을 취소하시겠습니까?')) return;
+                                    try {
+                                      const schedId = slot.id;
+                                      const todayKST = getTodayKST();
+                                      await (supabase.from('schedule_overrides' as any) as any)
+                                        .delete()
+                                        .eq('schedule_id', schedId)
+                                        .eq('original_date', todayKST);
+                                      await fetchTodaySlots();
+                                      toast({ title: '변경 취소됨', description: '원래 일정으로 복원되었습니다' });
+                                    } catch (err) {
+                                      console.error('Error reverting override:', err);
+                                    }
+                                  }}
+                                >
+                                  변경 취소
+                                </Button>
+                              </div>
+                            ) : (slot?.students || []).length > 0 ? (
                               <div className="divide-y divide-border/50">
                                 {(slot?.students || []).map((student) => {
                                   const testState = latestTests.getStudentState(student.id);
@@ -2903,6 +3070,25 @@ export default function Dashboard() {
             />
           </DialogContent>
         </Dialog>
+      )}
+      {/* SCHEDULE-OVERRIDE-V1: Schedule Override Modal */}
+      {overrideModalContext && (
+        <ScheduleOverrideModal
+          open={overrideModalOpen}
+          onOpenChange={setOverrideModalOpen}
+          scheduleId={overrideModalContext.scheduleId}
+          classId={overrideModalContext.classId}
+          className={overrideModalContext.className}
+          subject={overrideModalContext.subject}
+          teacherId={overrideModalContext.teacherId}
+          originalDate={overrideModalContext.originalDate}
+          originalStartTime={overrideModalContext.originalStartTime}
+          originalEndTime={overrideModalContext.originalEndTime}
+          onSuccess={async () => {
+            await fetchTodaySlots();
+            if (isAdmin(role)) await fetchAdminRosterData();
+          }}
+        />
       )}
     </div>
   );
