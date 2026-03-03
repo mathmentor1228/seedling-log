@@ -2579,7 +2579,7 @@ export default function Dashboard() {
                                 <Badge variant="outline" className="text-[11px]">{slot.subject}</Badge>
                                 {slot.isOverridden && (
                                   <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">
-                                    수업일정 변경
+                                    수업일자 변경
                                   </Badge>
                                 )}
                                 {slot.isMovedIn && (
@@ -2592,7 +2592,7 @@ export default function Dashboard() {
                                 <span className="text-sm text-muted-foreground font-medium">
                                   {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
                                 </span>
-                                {!slot.isOverridden && !slot.isMovedIn && (
+                                {!slot.isMovedIn && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -2618,17 +2618,19 @@ export default function Dashboard() {
                               </div>
                             </div>
                             {/* SCHEDULE-OVERRIDE-V1: Show override message if slot is overridden */}
-                            {slot.isOverridden ? (
-                              <div className="px-4 py-4 text-center text-sm text-amber-700 bg-amber-50/50 dark:bg-amber-900/10">
-                                <ArrowLeftRight className="w-5 h-5 mx-auto mb-1 text-amber-500" />
-                                <p className="font-medium">수업 일정이 변경되었습니다</p>
-                                {slot.overrideReason && (
-                                  <p className="text-xs text-muted-foreground mt-1">{slot.overrideReason}</p>
-                                )}
+                            {slot.isOverridden && (
+                              <div className="px-4 py-3 flex items-center justify-between bg-amber-50/50 dark:bg-amber-900/10 border-b border-amber-200/50">
+                                <div className="flex items-center gap-2 text-sm text-amber-700">
+                                  <ArrowLeftRight className="w-4 h-4 text-amber-500" />
+                                  <span className="font-medium">수업일자 변경</span>
+                                  {slot.overrideReason && (
+                                    <span className="text-xs text-muted-foreground">({slot.overrideReason})</span>
+                                  )}
+                                </div>
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="mt-2 h-7 text-xs text-destructive hover:text-destructive"
+                                  className="h-7 text-xs text-destructive hover:text-destructive"
                                   onClick={async () => {
                                     if (!confirm('일정 변경을 취소하시겠습니까?')) return;
                                     try {
@@ -2648,7 +2650,8 @@ export default function Dashboard() {
                                   변경 취소
                                 </Button>
                               </div>
-                            ) : (slot?.students || []).length > 0 ? (
+                            )}
+                            {(slot?.students || []).length > 0 ? (
                               <div className="divide-y divide-border/50">
                                 {(slot?.students || []).map((student) => {
                                   const testState = latestTests.getStudentState(student.id);
