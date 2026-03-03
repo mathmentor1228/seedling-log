@@ -92,6 +92,7 @@ export function Timetable() {
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
+  const [selectedDayFilter, setSelectedDayFilter] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'time' | 'teacher_time'>('time');
   const [editClassId, setEditClassId] = useState<string | null>(null);
@@ -446,9 +447,11 @@ export function Timetable() {
   // ── Derived data ──
 
   const filteredRows = useMemo(() => {
-    if (selectedTeacherId === 'all') return scheduleRows;
-    return scheduleRows.filter((r) => r.teacherId === selectedTeacherId);
-  }, [scheduleRows, selectedTeacherId]);
+    let rows = scheduleRows;
+    if (selectedTeacherId !== 'all') rows = rows.filter((r) => r.teacherId === selectedTeacherId);
+    if (selectedDayFilter !== 'all') rows = rows.filter((r) => r.dayOfWeek === parseInt(selectedDayFilter));
+    return rows;
+  }, [scheduleRows, selectedTeacherId, selectedDayFilter]);
 
   const byDay = useMemo(() => {
     const map: Record<number, ScheduleRow[]> = {};
@@ -681,7 +684,7 @@ export function Timetable() {
           <TabsContent value="day" className="space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
               <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="선생님 필터" />
                 </SelectTrigger>
                 <SelectContent>
@@ -691,19 +694,72 @@ export function Timetable() {
                   ))}
                 </SelectContent>
               </Select>
+              {(selectedTeacherId !== 'all' || selectedDayFilter !== 'all') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-muted-foreground"
+                  onClick={() => { setSelectedTeacherId('all'); setSelectedDayFilter('all'); }}
+                >
+                  필터 초기화
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 text-xs"
+                className="gap-1.5 text-xs ml-auto"
                 onClick={() => setSortMode(prev => prev === 'time' ? 'teacher_time' : 'time')}
               >
                 <ArrowUpDown className="w-3.5 h-3.5" />
                 {sortMode === 'time' ? '시간순' : '선생님→시간순'}
               </Button>
             </div>
+            
+            {/* Quick day filter chips */}
+            <div className="flex gap-1.5 flex-wrap">
+              <button
+                onClick={() => setSelectedDayFilter('all')}
+                className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                  selectedDayFilter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                전체
+              </button>
+              {DAYS_OF_WEEK.map((d) => {
+                const count = scheduleRows.filter(r => r.dayOfWeek === d.value && (selectedTeacherId === 'all' || r.teacherId === selectedTeacherId)).length;
+                if (count === 0) return null;
+                return (
+                  <button
+                    key={d.value}
+                    onClick={() => setSelectedDayFilter(d.value.toString())}
+                    className={cn(
+                      'px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                      selectedDayFilter === d.value.toString()
+                        ? 'bg-primary text-primary-foreground'
+                        : d.value === today
+                          ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    )}
+                  >
+                    {d.label} <span className="opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {(selectedTeacherId !== 'all' || selectedDayFilter !== 'all') && filteredRows.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                검색 결과: {filteredRows.length}개 수업
+              </div>
+            )}
 
             {filteredRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">시간표가 없습니다</p>
+              <p className="text-sm text-muted-foreground text-center py-8">
+                {selectedTeacherId !== 'all' || selectedDayFilter !== 'all' 
+                  ? '해당 조건의 수업이 없습니다' 
+                  : '시간표가 없습니다'}
+              </p>
             ) : (
               <div className="space-y-6">
                 {DAYS_OF_WEEK.map(({ value, full }) => {
