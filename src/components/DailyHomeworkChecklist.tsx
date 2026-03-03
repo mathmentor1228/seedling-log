@@ -38,7 +38,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
-import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users, MessageSquare, CheckCircle2, RotateCcw, Send } from 'lucide-react';
+import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users, MessageSquare, CheckCircle2, RotateCcw, Send, ArrowRight } from 'lucide-react';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
@@ -108,6 +108,7 @@ export default function DailyHomeworkChecklist() {
   const [reviewingItem, setReviewingItem] = useState<string | null>(null);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [carryForwardLoading, setCarryForwardLoading] = useState<string | null>(null);
   const isAdmin = checkIsAdmin(role);
   const isTeacher = checkIsTeacher(role);
 
@@ -458,6 +459,61 @@ export default function DailyHomeworkChecklist() {
                 이전 코멘트: {item.result}
               </p>
             )}
+            {/* HOMEWORK-CARRY-FORWARD-V1 */}
+            <div className="border-t pt-2 mt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                disabled={carryForwardLoading === item.id}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setCarryForwardLoading(item.id);
+                  try {
+                    // Get next class date for this student+subject
+                    // For simplicity, use tomorrow's date as assigned_date
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const nextDate = format(tomorrow, 'yyyy-MM-dd');
+                    
+                    const { error } = await supabase
+                      .from('homework_assignments')
+                      .insert({
+                        student_id: item.student_id,
+                        subject: item.subject as any,
+                        content: item.content,
+                        assigned_date: nextDate,
+                        homework_type: 'daily',
+                        required_submissions: item.required_submissions,
+                        created_by: user?.id,
+                      });
+                    if (error) throw error;
+                    
+                    // Mark current as checked with note
+                    await supabase
+                      .from('homework_assignments')
+                      .update({
+                        check_status: 'checked',
+                        checked_by: user?.id,
+                        checked_at: new Date().toISOString(),
+                        result: '다음시간 검사예정으로 이월',
+                      })
+                      .eq('id', item.id);
+                    
+                    toast({ title: '다음시간으로 이월됨', description: `${item.student_name} - ${item.content}` });
+                    setReviewingItem(null);
+                    fetchData();
+                  } catch (err: any) {
+                    toast({ title: '이월 실패', description: err.message, variant: 'destructive' });
+                  } finally {
+                    setCarryForwardLoading(null);
+                  }
+                }}
+              >
+                {carryForwardLoading === item.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
+                다음시간 검사예정
+              </Button>
+            </div>
           </div>
         </PopoverContent>
       </Popover>

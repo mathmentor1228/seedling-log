@@ -47,7 +47,8 @@ import {
   ChevronDown,
   BarChart3,
   Settings2,
-  Wrench
+  Wrench,
+  MessageSquare
 } from 'lucide-react';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
@@ -405,6 +406,9 @@ export default function Dashboard() {
   const [attendanceOpen, setAttendanceOpen] = useState(false);
   const [adminOverdueOpen, setAdminOverdueOpen] = useState(true);
   
+  // TEAM-NOTE-REPLY-NOTIFICATION-V1: Unread reply count
+  const [unreadReplyCount, setUnreadReplyCount] = useState(0);
+  
   // PHOTO-VIEW-V1: Photo viewer state for pending homework
   const [photoViewHw, setPhotoViewHw] = useState<PendingHomework | null>(null);
   
@@ -557,6 +561,51 @@ export default function Dashboard() {
     }
 
     fetchDashboardData();
+    
+    // TEAM-NOTE-REPLY-NOTIFICATION-V1: Fetch unread reply count
+    async function fetchUnreadReplies() {
+      if (!user) return;
+      try {
+        // Get notes created by this user
+        const { data: myNotes } = await supabase
+          .from('team_notes')
+          .select('id')
+          .eq('created_by', user.id);
+        if (!myNotes || myNotes.length === 0) { setUnreadReplyCount(0); return; }
+        
+        const noteIds = myNotes.map(n => n.id);
+        
+        // Get all replies on my notes (not by me)
+        const { data: allReplies } = await supabase
+          .from('team_note_replies')
+          .select('id, note_id, created_at')
+          .in('note_id', noteIds)
+          .neq('created_by', user.id);
+        if (!allReplies || allReplies.length === 0) { setUnreadReplyCount(0); return; }
+        
+        // Get my read records
+        const { data: readRecords } = await supabase
+          .from('team_note_reply_reads')
+          .select('note_id, last_read_at')
+          .eq('user_id', user.id)
+          .in('note_id', noteIds);
+        
+        const readMap = new Map<string, string>();
+        (readRecords || []).forEach((r: any) => readMap.set(r.note_id, r.last_read_at));
+        
+        let unread = 0;
+        allReplies.forEach((reply: any) => {
+          const lastRead = readMap.get(reply.note_id);
+          if (!lastRead || new Date(reply.created_at) > new Date(lastRead)) {
+            unread++;
+          }
+        });
+        setUnreadReplyCount(unread);
+      } catch (err) {
+        console.error('Error fetching unread replies:', err);
+      }
+    }
+    fetchUnreadReplies();
   }, [user, role]);
 
   // Refetch roster data when window regains focus (user returns from /lessons page)
@@ -1758,6 +1807,20 @@ export default function Dashboard() {
       count: issueCount,
       color: 'bg-destructive/10 border-destructive/20 text-destructive',
       onClick: () => setAttendanceOpen(prev => !prev),
+    });
+  }
+  
+  // TEAM-NOTE-REPLY-NOTIFICATION-V1: Unread reply notification
+  if (unreadReplyCount > 0) {
+    attentionItems.push({
+      icon: <MessageSquare className="w-4 h-4" />,
+      label: '새 답글',
+      count: unreadReplyCount,
+      color: 'bg-blue-500/10 border-blue-500/20 text-blue-600',
+      onClick: () => {
+        // Scroll to team notes section (at top of dashboard)
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      },
     });
   }
 
