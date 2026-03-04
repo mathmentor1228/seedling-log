@@ -1064,57 +1064,81 @@ export type Database = {
       school_exam_archives: {
         Row: {
           academic_year: number
+          academy_prep_notes: string | null
           created_at: string
           created_by: string | null
+          difficulty_level: string | null
+          exam_analysis_detail: string | null
+          exam_average_score: number | null
           exam_date_end: string | null
           exam_date_start: string | null
           exam_scope: string | null
           exam_type: string
+          grade_ratio: string | null
           grade_year: number
           id: string
           notes: string | null
+          performance_assessment_info: string | null
           post_exam_analysis: string | null
+          preparing_teachers: string[] | null
           school_level: string
           school_name: string
           semester: string
+          status: string
           subject: string
           textbook_publisher: string | null
           updated_at: string
         }
         Insert: {
           academic_year?: number
+          academy_prep_notes?: string | null
           created_at?: string
           created_by?: string | null
+          difficulty_level?: string | null
+          exam_analysis_detail?: string | null
+          exam_average_score?: number | null
           exam_date_end?: string | null
           exam_date_start?: string | null
           exam_scope?: string | null
           exam_type?: string
+          grade_ratio?: string | null
           grade_year?: number
           id?: string
           notes?: string | null
+          performance_assessment_info?: string | null
           post_exam_analysis?: string | null
+          preparing_teachers?: string[] | null
           school_level?: string
           school_name: string
           semester?: string
+          status?: string
           subject: string
           textbook_publisher?: string | null
           updated_at?: string
         }
         Update: {
           academic_year?: number
+          academy_prep_notes?: string | null
           created_at?: string
           created_by?: string | null
+          difficulty_level?: string | null
+          exam_analysis_detail?: string | null
+          exam_average_score?: number | null
           exam_date_end?: string | null
           exam_date_start?: string | null
           exam_scope?: string | null
           exam_type?: string
+          grade_ratio?: string | null
           grade_year?: number
           id?: string
           notes?: string | null
+          performance_assessment_info?: string | null
           post_exam_analysis?: string | null
+          preparing_teachers?: string[] | null
           school_level?: string
           school_name?: string
           semester?: string
+          status?: string
           subject?: string
           textbook_publisher?: string | null
           updated_at?: string
