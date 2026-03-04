@@ -21,7 +21,8 @@ import {
   FileText,
   CalendarDays,
   BookOpenCheck,
-  ChevronDown
+  ChevronDown,
+  School
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
@@ -58,6 +59,7 @@ const navStructure: NavEntry[] = [
     items: [
       { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
       { label: '시험', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+      { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
     ],
   },
   {

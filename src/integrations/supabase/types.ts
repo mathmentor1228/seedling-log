@@ -1061,6 +1061,113 @@ export type Database = {
           },
         ]
       }
+      school_exam_archives: {
+        Row: {
+          academic_year: number
+          created_at: string
+          created_by: string | null
+          exam_date_end: string | null
+          exam_date_start: string | null
+          exam_scope: string | null
+          exam_type: string
+          grade_year: number
+          id: string
+          notes: string | null
+          post_exam_analysis: string | null
+          school_level: string
+          school_name: string
+          semester: string
+          subject: string
+          textbook_publisher: string | null
+          updated_at: string
+        }
+        Insert: {
+          academic_year?: number
+          created_at?: string
+          created_by?: string | null
+          exam_date_end?: string | null
+          exam_date_start?: string | null
+          exam_scope?: string | null
+          exam_type?: string
+          grade_year?: number
+          id?: string
+          notes?: string | null
+          post_exam_analysis?: string | null
+          school_level?: string
+          school_name: string
+          semester?: string
+          subject: string
+          textbook_publisher?: string | null
+          updated_at?: string
+        }
+        Update: {
+          academic_year?: number
+          created_at?: string
+          created_by?: string | null
+          exam_date_end?: string | null
+          exam_date_start?: string | null
+          exam_scope?: string | null
+          exam_type?: string
+          grade_year?: number
+          id?: string
+          notes?: string | null
+          post_exam_analysis?: string | null
+          school_level?: string
+          school_name?: string
+          semester?: string
+          subject?: string
+          textbook_publisher?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      school_exam_materials: {
+        Row: {
+          archive_id: string
+          created_at: string
+          description: string | null
+          file_category: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          original_name: string
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          archive_id: string
+          created_at?: string
+          description?: string | null
+          file_category?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name: string
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          archive_id?: string
+          created_at?: string
+          description?: string | null
+          file_category?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name?: string
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_exam_materials_archive_id_fkey"
+            columns: ["archive_id"]
+            isOneToOne: false
+            referencedRelation: "school_exam_archives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_accounts: {
         Row: {
           created_at: string
