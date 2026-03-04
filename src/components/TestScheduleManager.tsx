@@ -51,6 +51,8 @@ export function TestScheduleManager() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingSchedule, setEditingSchedule] = useState<TestSchedule | null>(null);
 
@@ -206,11 +208,43 @@ export function TestScheduleManager() {
       if (error) throw error;
       toast.success('삭제되었습니다');
       setDeleteId(null);
+      setBulkSelectedIds(prev => { const n = new Set(prev); n.delete(deleteId); return n; });
       fetchData();
     } catch (err: any) {
       toast.error('삭제 실패: ' + err.message);
     }
   }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(bulkSelectedIds);
+    if (ids.length === 0) return;
+    try {
+      const { error } = await supabase.from('test_schedules').delete().in('id', ids);
+      if (error) throw error;
+      toast.success(`${ids.length}건의 시험 일정이 삭제되었습니다`);
+      setBulkSelectedIds(new Set());
+      setShowBulkDeleteConfirm(false);
+      fetchData();
+    } catch (err: any) {
+      toast.error('일괄 삭제 실패: ' + err.message);
+    }
+  }
+
+  const toggleBulkSelect = (id: string) => {
+    setBulkSelectedIds(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleBulkSelectAll = () => {
+    if (bulkSelectedIds.size === filteredSchedules.length && filteredSchedules.length > 0) {
+      setBulkSelectedIds(new Set());
+    } else {
+      setBulkSelectedIds(new Set(filteredSchedules.map(s => s.id)));
+    }
+  };
 
   async function handleClearResult() {
     if (!resultClearId) return;
@@ -500,6 +534,22 @@ export function TestScheduleManager() {
         </Button>
       </div>
 
+      {/* Bulk delete bar */}
+      {bulkSelectedIds.size > 0 && (
+        <div className="flex items-center gap-3 p-2.5 rounded-lg bg-destructive/10 border border-destructive/20">
+          <Checkbox
+            checked={bulkSelectedIds.size === filteredSchedules.length && filteredSchedules.length > 0}
+            onCheckedChange={toggleBulkSelectAll}
+          />
+          <span className="text-sm font-medium">{bulkSelectedIds.size}건 선택됨</span>
+          <Button size="sm" variant="destructive" className="gap-1 ml-auto" onClick={() => setShowBulkDeleteConfirm(true)}>
+            <Trash2 className="w-3.5 h-3.5" />
+            선택 삭제
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setBulkSelectedIds(new Set())}>해제</Button>
+        </div>
+      )}
+
       {/* Schedules Table */}
       {filteredSchedules.length === 0 ? (
         <Card>
@@ -514,6 +564,12 @@ export function TestScheduleManager() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8">
+                    <Checkbox
+                      checked={bulkSelectedIds.size === filteredSchedules.length && filteredSchedules.length > 0}
+                      onCheckedChange={toggleBulkSelectAll}
+                    />
+                  </TableHead>
                   <TableHead className="text-xs w-20">날짜</TableHead>
                   <TableHead className="text-xs w-14">시간</TableHead>
                   <TableHead className="text-xs w-14">과목</TableHead>
@@ -531,6 +587,12 @@ export function TestScheduleManager() {
                   const isPast = sch.test_date < todayStr;
                   return (
                     <TableRow key={sch.id} className={isPast ? 'opacity-60' : ''}>
+                      <TableCell className="p-2">
+                        <Checkbox
+                          checked={bulkSelectedIds.has(sch.id)}
+                          onCheckedChange={() => toggleBulkSelect(sch.id)}
+                        />
+                      </TableCell>
                       <TableCell className="text-xs font-mono">{sch.test_date.slice(5)}</TableCell>
                       <TableCell className="text-xs">{sch.test_time?.slice(0, 5) || '-'}</TableCell>
                       <TableCell>
@@ -861,6 +923,20 @@ export function TestScheduleManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Delete Confirm */}
+      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>시험 일정 일괄 삭제</AlertDialogTitle>
+            <AlertDialogDescription>선택한 {bulkSelectedIds.size}건의 시험 일정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete}>삭제</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
