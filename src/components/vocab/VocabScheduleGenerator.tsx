@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { Loader2, Wand2, Trash2, RefreshCw } from 'lucide-react';
+import { Loader2, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i),
@@ -27,7 +27,6 @@ const DAY_LABELS: Record<string, string> = {
   mon: '월', tue: '화', wed: '수', thu: '목', fri: '금', sat: '토',
 };
 
-// Backward compat: convert old combo values to individual day arrays
 function normalizeTestDays(testDays: string[]): string[] {
   if (!testDays || testDays.length === 0) return ['mon', 'wed'];
   const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -59,6 +58,14 @@ interface StudentScheduleInfo {
   scheduleCount: number;
 }
 
+interface IndividualSchedule {
+  id: string;
+  test_date: string;
+  day_number: number;
+  book_name: string;
+  schedule_type: string;
+}
+
 export function VocabScheduleGenerator() {
   const { user, role } = useAuth();
   const now = new Date();
@@ -71,23 +78,29 @@ export function VocabScheduleGenerator() {
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
 
+  // Expanded rows for individual schedule management
+  const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
+  const [studentSchedules, setStudentSchedules] = useState<Record<string, IndividualSchedule[]>>({});
+  const [selectedScheduleIds, setSelectedScheduleIds] = useState<Set<string>>(new Set());
+  const [loadingSchedules, setLoadingSchedules] = useState<Set<string>>(new Set());
+  const [deletingIndividual, setDeletingIndividual] = useState(false);
 
-  // Hardcoded teacher categories
   const TEACHER_CATEGORIES = [
     { label: '서미정', key: 'seo' },
     { label: '김민희', key: 'kim' },
   ];
 
-  // Delete confirmation (schedules)
   const [deleteMode, setDeleteMode] = useState<'selected' | 'all' | null>(null);
   const [deleteCount, setDeleteCount] = useState(0);
   const [deleting, setDeleting] = useState(false);
 
-  // Delete setting confirmation
   const [deleteSettingId, setDeleteSettingId] = useState<string | null>(null);
   const [deleteSettingName, setDeleteSettingName] = useState('');
   const [deletingSettings, setDeletingSettings] = useState(false);
   const [bulkDeleteSettings, setBulkDeleteSettings] = useState(false);
+
+  // Individual schedule delete confirmation
+  const [showIndividualDeleteDialog, setShowIndividualDeleteDialog] = useState(false);
 
   useEffect(() => {
     fetchStudentScheduleInfo();
@@ -121,7 +134,6 @@ export function VocabScheduleGenerator() {
     const settings = settingsRes.data || [];
     const schedules = schedulesRes.data || [];
 
-    // Count schedules per student
     const countMap: Record<string, number> = {};
     for (const s of schedules) {
       countMap[s.student_id] = (countMap[s.student_id] || 0) + 1;
@@ -145,6 +157,9 @@ export function VocabScheduleGenerator() {
 
     setStudentInfos(infos);
     setSelectedIds(new Set());
+    setExpandedStudents(new Set());
+    setSelectedScheduleIds(new Set());
+    setStudentSchedules({});
     setLoading(false);
   };
 
@@ -184,7 +199,6 @@ export function VocabScheduleGenerator() {
 
     const targetSettings = studentInfos.filter(s => targetStudentIds.includes(s.studentId));
 
-    // Delete existing regular schedules for these students in this month (only from rangeStart onward)
     const deleteFrom = format(rangeStart > startOfMonth(target) ? rangeStart : startOfMonth(target), 'yyyy-MM-dd');
     for (const info of targetSettings) {
       const { data: existingIds } = await supabase
@@ -201,7 +215,6 @@ export function VocabScheduleGenerator() {
       }
     }
 
-    // Generate new schedules
     const inserts: any[] = [];
     const skippedStudents: string[] = [];
     for (const info of targetSettings) {
@@ -209,7 +222,6 @@ export function VocabScheduleGenerator() {
       const allowedDays = daysCodes.map(d => DAY_CODE_TO_JS[d]).filter(Boolean);
       const testDates = allDays.filter(d => allowedDays.includes(getDay(d)));
 
-      // VOCAB-CONTINUE-DAY-V1: Check last day_number from previous schedules to continue seamlessly
       let dayNumber = info.currentDay;
       const { data: lastSched } = await supabase
         .from('vocab_schedules')
@@ -221,12 +233,10 @@ export function VocabScheduleGenerator() {
         .maybeSingle();
 
       if (lastSched) {
-        // Continue from the next day after the last scheduled one
         dayNumber = lastSched.day_number + (info.bundleDays ? info.daysPerTest : 1);
       }
 
       for (const testDate of testDates) {
-        // Check total_days cap
         if (info.totalDays && dayNumber > info.totalDays) {
           if (!skippedStudents.includes(info.studentName)) skippedStudents.push(info.studentName);
           break;
@@ -340,7 +350,6 @@ export function VocabScheduleGenerator() {
       if (targetIds.length === 0) return;
 
       for (const settingId of targetIds) {
-        // Delete results linked to schedules of this setting
         const { data: schedIds } = await supabase
           .from('vocab_schedules')
           .select('id')
@@ -351,7 +360,6 @@ export function VocabScheduleGenerator() {
           await supabase.from('vocab_schedules').delete().in('id', schedIds.map(s => s.id));
         }
 
-        // Delete the setting itself
         await supabase.from('vocab_settings').delete().eq('id', settingId);
       }
 
@@ -366,13 +374,112 @@ export function VocabScheduleGenerator() {
     }
   };
 
-  // Filter by teacher category using assigned_teacher field
+  // --- Individual schedule management ---
+  const toggleExpand = async (studentId: string) => {
+    const next = new Set(expandedStudents);
+    if (next.has(studentId)) {
+      next.delete(studentId);
+      // Clear selected schedule ids for this student
+      const studentScheds = studentSchedules[studentId] || [];
+      setSelectedScheduleIds(prev => {
+        const n = new Set(prev);
+        studentScheds.forEach(s => n.delete(s.id));
+        return n;
+      });
+    } else {
+      next.add(studentId);
+      if (!studentSchedules[studentId]) {
+        await fetchIndividualSchedules(studentId);
+      }
+    }
+    setExpandedStudents(next);
+  };
+
+  const fetchIndividualSchedules = async (studentId: string) => {
+    const { start, end } = getMonthRange();
+    setLoadingSchedules(prev => new Set(prev).add(studentId));
+    const { data } = await supabase
+      .from('vocab_schedules')
+      .select('id, test_date, day_number, book_name, schedule_type')
+      .eq('student_id', studentId)
+      .gte('test_date', start)
+      .lte('test_date', end)
+      .order('test_date')
+      .order('day_number');
+    setStudentSchedules(prev => ({ ...prev, [studentId]: (data || []) as IndividualSchedule[] }));
+    setLoadingSchedules(prev => {
+      const n = new Set(prev);
+      n.delete(studentId);
+      return n;
+    });
+  };
+
+  const toggleScheduleSelect = (schedId: string) => {
+    setSelectedScheduleIds(prev => {
+      const next = new Set(prev);
+      if (next.has(schedId)) next.delete(schedId);
+      else next.add(schedId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllSchedulesForStudent = (studentId: string) => {
+    const scheds = studentSchedules[studentId] || [];
+    const allSelected = scheds.every(s => selectedScheduleIds.has(s.id));
+    setSelectedScheduleIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        scheds.forEach(s => next.delete(s.id));
+      } else {
+        scheds.forEach(s => next.add(s.id));
+      }
+      return next;
+    });
+  };
+
+  const confirmDeleteIndividualSchedules = async () => {
+    setDeletingIndividual(true);
+    try {
+      const ids = Array.from(selectedScheduleIds);
+      if (ids.length === 0) return;
+
+      // Delete results then schedules
+      await supabase.from('vocab_test_results').delete().in('schedule_id', ids);
+      await supabase.from('vocab_schedules').delete().in('id', ids);
+
+      toast.success(`${ids.length}건의 스케줄이 삭제되었습니다`);
+      setSelectedScheduleIds(new Set());
+      setShowIndividualDeleteDialog(false);
+
+      // Refresh expanded students' schedules and counts
+      const affectedStudents = new Set<string>();
+      for (const [studentId, scheds] of Object.entries(studentSchedules)) {
+        if (scheds.some(s => ids.includes(s.id))) {
+          affectedStudents.add(studentId);
+        }
+      }
+      await fetchStudentScheduleInfo();
+      // Re-fetch for still-expanded students
+      for (const sid of affectedStudents) {
+        if (expandedStudents.has(sid)) {
+          await fetchIndividualSchedules(sid);
+        }
+      }
+    } catch (err: any) {
+      toast.error('삭제 실패: ' + err.message);
+    } finally {
+      setDeletingIndividual(false);
+    }
+  };
+
   const displayInfos = selectedTeacher === 'all'
     ? studentInfos
     : studentInfos.filter(s => s.assignedTeacher === selectedTeacher);
 
   const allSelected = displayInfos.length > 0 && displayInfos.every(s => selectedIds.has(s.studentId));
   const someSelected = selectedIds.size > 0;
+
+  const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
   return (
     <div className="space-y-4">
@@ -490,6 +597,31 @@ export function VocabScheduleGenerator() {
               선택 설정 삭제
             </Button>
           </div>
+
+          {/* Individual schedule delete button */}
+          {selectedScheduleIds.size > 0 && (
+            <div className="flex items-center gap-2 p-2 bg-destructive/10 rounded-md border border-destructive/20">
+              <Badge variant="destructive" className="text-xs">
+                {selectedScheduleIds.size}건 선택됨
+              </Badge>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setShowIndividualDeleteDialog(true)}
+                disabled={deletingIndividual}
+              >
+                {deletingIndividual ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+                선택 스케줄 개별 삭제
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedScheduleIds(new Set())}
+              >
+                선택 해제
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -523,58 +655,135 @@ export function VocabScheduleGenerator() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayInfos.map(info => (
-                <TableRow key={info.studentId}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedIds.has(info.studentId)}
-                      onCheckedChange={() => toggleSelect(info.studentId)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {info.assignedTeacher === 'seo' ? '서미정' : info.assignedTeacher === 'kim' ? '김민희' : '—'}
-                  </TableCell>
-                  <TableCell className="font-medium text-sm">
-                    {info.studentName}
-                    {info.grade && <span className="text-xs text-muted-foreground ml-1">({info.grade})</span>}
-                  </TableCell>
-                  <TableCell className="text-sm">{info.bookName}</TableCell>
-                  <TableCell className="text-center text-xs">{normalizeTestDays(info.testDays).map(d => DAY_LABELS[d] || d).join('/')}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="secondary" className="text-xs font-mono">Day {info.currentDay}</Badge>
-                  </TableCell>
-                  <TableCell className="text-center text-xs font-mono">
-                    {info.totalDays ? `${info.totalDays}일` : '—'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {info.scheduleCount > 0 ? (
-                      <Badge variant="outline" className="text-xs">{info.scheduleCount}건</Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">없음</span>
+              {displayInfos.map(info => {
+                const isExpanded = expandedStudents.has(info.studentId);
+                const scheds = studentSchedules[info.studentId] || [];
+                const isLoadingScheds = loadingSchedules.has(info.studentId);
+                const studentSchedIds = scheds.map(s => s.id);
+                const allSchedsSelected = scheds.length > 0 && scheds.every(s => selectedScheduleIds.has(s.id));
+
+                return (
+                  <>
+                    <TableRow key={info.studentId}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(info.studentId)}
+                          onCheckedChange={() => toggleSelect(info.studentId)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {info.assignedTeacher === 'seo' ? '서미정' : info.assignedTeacher === 'kim' ? '김민희' : '—'}
+                      </TableCell>
+                      <TableCell className="font-medium text-sm">
+                        {info.studentName}
+                        {info.grade && <span className="text-xs text-muted-foreground ml-1">({info.grade})</span>}
+                      </TableCell>
+                      <TableCell className="text-sm">{info.bookName}</TableCell>
+                      <TableCell className="text-center text-xs">{normalizeTestDays(info.testDays).map(d => DAY_LABELS[d] || d).join('/')}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="text-xs font-mono">Day {info.currentDay}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center text-xs font-mono">
+                        {info.totalDays ? `${info.totalDays}일` : '—'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {info.scheduleCount > 0 ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs gap-1"
+                            onClick={() => toggleExpand(info.studentId)}
+                          >
+                            {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            <Badge variant="outline" className="text-xs">{info.scheduleCount}건</Badge>
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">없음</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            setDeleteSettingId(info.settingId);
+                            setDeleteSettingName(info.studentName);
+                            setBulkDeleteSettings(false);
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    {/* Expanded individual schedules */}
+                    {isExpanded && (
+                      <TableRow key={`${info.studentId}-expanded`}>
+                        <TableCell colSpan={9} className="p-0">
+                          <div className="bg-muted/30 border-t px-4 py-2">
+                            {isLoadingScheds ? (
+                              <div className="flex items-center gap-2 py-2">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span className="text-xs text-muted-foreground">로딩...</span>
+                              </div>
+                            ) : scheds.length === 0 ? (
+                              <p className="text-xs text-muted-foreground py-2">스케줄이 없습니다.</p>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <Checkbox
+                                    checked={allSchedsSelected}
+                                    onCheckedChange={() => toggleSelectAllSchedulesForStudent(info.studentId)}
+                                  />
+                                  <span className="text-[10px] font-semibold text-muted-foreground">전체 선택</span>
+                                  {studentSchedIds.some(id => selectedScheduleIds.has(id)) && (
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      {studentSchedIds.filter(id => selectedScheduleIds.has(id)).length}건 선택
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {scheds.map(sched => {
+                                    const d = new Date(sched.test_date + 'T00:00:00');
+                                    const dayName = DAY_NAMES[d.getDay()];
+                                    const isSelected = selectedScheduleIds.has(sched.id);
+                                    return (
+                                      <label
+                                        key={sched.id}
+                                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs cursor-pointer transition-colors ${
+                                          isSelected
+                                            ? 'bg-destructive/10 border-destructive/40 text-destructive'
+                                            : 'bg-card border-border hover:bg-accent/50'
+                                        }`}
+                                      >
+                                        <Checkbox
+                                          checked={isSelected}
+                                          onCheckedChange={() => toggleScheduleSelect(sched.id)}
+                                          className="h-3 w-3"
+                                        />
+                                        <span className="font-mono">
+                                          {format(d, 'M/d')}({dayName})
+                                        </span>
+                                        <span className="text-muted-foreground">Day{sched.day_number}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => {
-                        setDeleteSettingId(info.settingId);
-                        setDeleteSettingName(info.studentName);
-                        setBulkDeleteSettings(false);
-                      }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                  </>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
       )}
 
-      {/* Delete confirmation */}
+      {/* Delete confirmation (bulk by student) */}
       <AlertDialog open={!!deleteMode} onOpenChange={(open) => !open && setDeleteMode(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -614,6 +823,28 @@ export function VocabScheduleGenerator() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Individual schedule delete confirmation */}
+      <AlertDialog open={showIndividualDeleteDialog} onOpenChange={setShowIndividualDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>개별 스케줄 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              선택한 <strong>{selectedScheduleIds.size}건</strong>의 스케줄을 삭제하시겠습니까?
+              <span className="block mt-1 text-destructive">⚠️ 연결된 시험 결과도 함께 삭제됩니다.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteIndividualSchedules}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingIndividual && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
