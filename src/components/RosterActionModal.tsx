@@ -123,8 +123,8 @@ const HOMEWORK_RESULT_OPTIONS = [
   { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle, color: 'text-muted-foreground' },
 ];
 
-const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
-  const hour = 16 + Math.floor(i / 2);
+const TEST_TIME_OPTIONS = Array.from({ length: 25 }, (_, i) => {
+  const hour = 9 + Math.floor(i / 2);
   const minute = (i % 2) * 30;
   return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 });

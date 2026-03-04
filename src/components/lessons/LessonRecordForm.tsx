@@ -229,11 +229,13 @@ function setLastSelectedSubject(userId: string | null | undefined, subject: Subj
   localStorage.setItem(subjectStorageKey(userId), subject);
 }
 
-const TEST_TIME_OPTIONS = Array.from({ length: 11 }, (_, i) => {
-  const hour = 16 + Math.floor(i / 2);
+// SUPPLEMENT-TIME-V3: Include morning hours (09:00~12:00) and afternoon hours (13:00~21:00)
+const SUPPLEMENT_TIME_OPTIONS = Array.from({ length: 25 }, (_, i) => {
+  const hour = 9 + Math.floor(i / 2);
   const minute = (i % 2) * 30;
   return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 });
+const TEST_TIME_OPTIONS = SUPPLEMENT_TIME_OPTIONS;
 
 /**
  * LessonRecordForm - Shared component for lesson record creation and editing
@@ -1994,7 +1996,8 @@ export function LessonRecordForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">선택 안함</SelectItem>
-                  {TEST_TIME_OPTIONS.map((time) => (
+                  <SelectItem value="미정">시간 미정</SelectItem>
+                  {SUPPLEMENT_TIME_OPTIONS.map((time) => (
                     <SelectItem key={time} value={time}>{time}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2004,15 +2007,16 @@ export function LessonRecordForm({
           <AlertDialogFooter>
             <AlertDialogCancel>아니오</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!supplementDate || !supplementTime || isSavingSupplementary}
+              disabled={!supplementDate || isSavingSupplementary}
               onClick={async (e) => {
                 e.preventDefault();
-                if (!supplementDate || !supplementTime || !user || !formData.student_id) return;
+                if (!supplementDate || !user || !formData.student_id) return;
                 setIsSavingSupplementary(true);
                 try {
                   const teacherName = teachers?.find(t => t.id === user.id)?.name || '';
+                  const timeLabel = supplementTime && supplementTime !== '미정' ? supplementTime : '미정';
                   const notesContent = [
-                    `[보충 시간: ${supplementTime}]`,
+                    `[보충 시간: ${timeLabel}]`,
                     teacherName ? `[보충 선생님: ${teacherName}]` : '',
                   ].filter(Boolean).join('\n');
 
@@ -2032,7 +2036,7 @@ export function LessonRecordForm({
                       submitted: false,
                     });
                   if (error) throw error;
-                  toast({ title: '보충수업 일정 등록 완료', description: `${supplementDate} ${supplementTime}` });
+                  toast({ title: '보충수업 일정 등록 완료', description: `${supplementDate} ${timeLabel === '미정' ? '(시간 미정)' : timeLabel}` });
                   setShowAbsenceSupplementDialog(false);
                 } catch (err: any) {
                   toast({ title: '보충수업 등록 실패', description: err.message, variant: 'destructive' });
