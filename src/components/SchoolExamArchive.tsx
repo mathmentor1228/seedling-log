@@ -391,20 +391,69 @@ export function SchoolExamArchive() {
     return acc;
   }, {});
 
-  const renderMaterialsByCategory = (archiveId: string, category: string) => {
+  // Signed URL cache for inline image preview
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+
+  const getSignedUrl = useCallback(async (storagePath: string) => {
+    if (signedUrls[storagePath]) return signedUrls[storagePath];
+    const { data, error } = await supabase.storage.from('school-exam-materials').createSignedUrl(storagePath, 3600);
+    if (!error && data?.signedUrl) {
+      setSignedUrls(prev => ({ ...prev, [storagePath]: data.signedUrl }));
+      return data.signedUrl;
+    }
+    return null;
+  }, [signedUrls]);
+
+  // Load signed URLs for image materials when materials change
+  useEffect(() => {
+    const imageMats: Material[] = [];
+    Object.values(materials).forEach(mats => {
+      mats.forEach(m => {
+        if (m.mime_type?.startsWith('image/') && !signedUrls[m.storage_path]) {
+          imageMats.push(m);
+        }
+      });
+    });
+    if (imageMats.length > 0) {
+      imageMats.forEach(m => getSignedUrl(m.storage_path));
+    }
+  }, [materials]);
+
+  const renderMaterialsByCategory = (archiveId: string, category: string, showInlineImages = false) => {
     const mats = (materials[archiveId] || []).filter(m => m.file_category === category);
     if (mats.length === 0) return null;
-    return mats.map(mat => (
-      <div key={mat.id} className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted/50 group text-xs">
-        {getFileIcon(mat.mime_type)}
-        <span className="truncate flex-1">{mat.original_name}</span>
-        <span className="text-muted-foreground">{formatFileSize(mat.file_size)}</span>
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDownloadFile(mat)}><Download className="w-3 h-3" /></Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteMaterial(mat)}><Trash2 className="w-3 h-3" /></Button>
-        </div>
+    return (
+      <div className="space-y-2">
+        {mats.map(mat => {
+          const isImage = mat.mime_type?.startsWith('image/');
+          const url = isImage ? signedUrls[mat.storage_path] : null;
+          return (
+            <div key={mat.id} className="space-y-1">
+              <div className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted/50 group text-xs">
+                {getFileIcon(mat.mime_type)}
+                <span className="truncate flex-1">{mat.original_name}</span>
+                <span className="text-muted-foreground">{formatFileSize(mat.file_size)}</span>
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDownloadFile(mat)}><Download className="w-3 h-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteMaterial(mat)}><Trash2 className="w-3 h-3" /></Button>
+                </div>
+              </div>
+              {showInlineImages && isImage && url && (
+                <div className="rounded-md overflow-hidden border bg-background">
+                  <img
+                    src={url}
+                    alt={mat.original_name}
+                    className="w-full max-h-[600px] object-contain cursor-pointer"
+                    onClick={() => window.open(url, '_blank')}
+                  />
+                </div>
+              )}
+              {mat.description && <p className="text-xs text-muted-foreground pl-6">{mat.description}</p>}
+            </div>
+          );
+        })}
       </div>
-    ));
+    );
   };
 
   return (
@@ -755,7 +804,7 @@ export function SchoolExamArchive() {
                                 <FileUp className="w-3 h-3 mr-1" /> 업로드
                               </Button>
                             </div>
-                            {renderMaterialsByCategory(archive.id, '시험지(실제)') || (
+                            {renderMaterialsByCategory(archive.id, '시험지(실제)', true) || (
                               <p className="text-xs text-muted-foreground text-center py-1">시험지가 아직 업로드되지 않았습니다</p>
                             )}
                           </div>
@@ -767,7 +816,7 @@ export function SchoolExamArchive() {
                                 <FileUp className="w-3 h-3 mr-1" /> 업로드
                               </Button>
                             </div>
-                            {renderMaterialsByCategory(archive.id, '시험분석서') || (
+                            {renderMaterialsByCategory(archive.id, '시험분석서', true) || (
                               <p className="text-xs text-muted-foreground text-center py-1">시험분석서가 없습니다</p>
                             )}
                           </div>
