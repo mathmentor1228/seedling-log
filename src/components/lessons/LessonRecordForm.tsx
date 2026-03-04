@@ -22,7 +22,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2, Camera, Star, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2, Camera, Star, X, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import { MathCurriculumTag } from './MathCurriculumTag';
@@ -366,6 +376,15 @@ export function LessonRecordForm({
   const [studentSubmission, setStudentSubmission] = useState<HomeworkSubmission | null>(null);
   const [pointHistory, setPointHistory] = useState<PointHistoryEntry[]>([]);
   const [showSubmissionImageModal, setShowSubmissionImageModal] = useState(false);
+
+  // CARRY-FORWARD-FORM-V1: Carry forward homework from lesson form
+  const [carryForwardLoading, setCarryForwardLoading] = useState(false);
+
+  // ABSENCE-SUPPLEMENT-V1: Absence → supplementary lesson scheduling
+  const [showAbsenceSupplementDialog, setShowAbsenceSupplementDialog] = useState(false);
+  const [supplementDate, setSupplementDate] = useState('');
+  const [supplementTime, setSupplementTime] = useState('');
+  const [isSavingSupplementary, setIsSavingSupplementary] = useState(false);
 
   // Test fields state
   // WRITE-PERSIST-FIX-V1: Added test_content as required field
@@ -1764,16 +1783,69 @@ export function LessonRecordForm({
                         rows={2}
                         className="text-sm"
                       />
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={handleSaveHomeworkCheck}
-                        disabled={!homeworkCheckResult || isSavingHomeworkCheck}
-                      >
-                        {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                        <CheckCircle2 className="w-4 h-4 mr-1" />
-                        확인 저장
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleSaveHomeworkCheck}
+                          disabled={!homeworkCheckResult || isSavingHomeworkCheck}
+                        >
+                          {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                          <CheckCircle2 className="w-4 h-4 mr-1" />
+                          확인 저장
+                        </Button>
+                        {/* CARRY-FORWARD-FORM-V1: Carry forward button */}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="gap-1"
+                          disabled={carryForwardLoading}
+                          onClick={async () => {
+                            if (!previousLessonHomework || !user) return;
+                            setCarryForwardLoading(true);
+                            try {
+                              const tomorrow = new Date();
+                              tomorrow.setDate(tomorrow.getDate() + 1);
+                              const nextDate = format(tomorrow, 'yyyy-MM-dd');
+                              
+                              const { error } = await supabase
+                                .from('homework_assignments')
+                                .insert({
+                                  student_id: previousLessonHomework.student_id,
+                                  subject: previousLessonHomework.subject as any,
+                                  content: previousLessonHomework.content,
+                                  assigned_date: nextDate,
+                                  homework_type: 'daily',
+                                  created_by: user.id,
+                                });
+                              if (error) throw error;
+                              
+                              await supabase
+                                .from('homework_assignments')
+                                .update({
+                                  check_status: 'checked',
+                                  checked_by: user.id,
+                                  checked_at: new Date().toISOString(),
+                                  result: '다음시간 검사예정으로 이월',
+                                })
+                                .eq('id', previousLessonHomework.id);
+                              
+                              toast({ title: '다음시간으로 이월됨', description: `${previousLessonHomework.content}` });
+                              if (formData.student_id && formData.subject) {
+                                await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
+                              }
+                            } catch (err: any) {
+                              toast({ title: '이월 실패', description: err.message, variant: 'destructive' });
+                            } finally {
+                              setCarryForwardLoading(false);
+                            }
+                          }}
+                        >
+                          {carryForwardLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
+                          다음시간 검사예정
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1871,7 +1943,14 @@ export function LessonRecordForm({
                   checked={formData.attendance_status.includes(opt.value)}
                   onCheckedChange={(checked) => {
                     if (checked) {
-                      setFormData({ ...formData, attendance_status: [...formData.attendance_status, opt.value] });
+                      const newStatus = [...formData.attendance_status, opt.value];
+                      setFormData({ ...formData, attendance_status: newStatus });
+                      // ABSENCE-SUPPLEMENT-V1: Prompt for supplementary scheduling on absence
+                      if (ABSENCE_STATUSES.includes(opt.value)) {
+                        setSupplementDate('');
+                        setSupplementTime('');
+                        setShowAbsenceSupplementDialog(true);
+                      }
                     } else {
                       const newStatus = formData.attendance_status.filter(s => s !== opt.value);
                       setFormData({ ...formData, attendance_status: newStatus.length === 0 ? ['정상등원'] : newStatus });
@@ -1884,6 +1963,90 @@ export function LessonRecordForm({
           </div>
         </div>
       </div>
+
+      {/* ABSENCE-SUPPLEMENT-V1: Supplementary lesson scheduling dialog */}
+      <AlertDialog open={showAbsenceSupplementDialog} onOpenChange={setShowAbsenceSupplementDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>보충수업 일정을 잡으시겠습니까?</AlertDialogTitle>
+            <AlertDialogDescription>
+              결석 처리된 학생의 보충수업 날짜와 시간을 지정할 수 있습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label className="text-sm">보충수업 날짜</Label>
+              <Input
+                type="date"
+                value={supplementDate}
+                onChange={(e) => setSupplementDate(e.target.value)}
+                min={formData.lesson_date}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">보충수업 시간</Label>
+              <Select
+                value={supplementTime || '__none__'}
+                onValueChange={(v) => setSupplementTime(v === '__none__' ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="시간 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">선택 안함</SelectItem>
+                  {TEST_TIME_OPTIONS.map((time) => (
+                    <SelectItem key={time} value={time}>{time}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>아니오</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!supplementDate || !supplementTime || isSavingSupplementary}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!supplementDate || !supplementTime || !user || !formData.student_id) return;
+                setIsSavingSupplementary(true);
+                try {
+                  const teacherName = teachers?.find(t => t.id === user.id)?.name || '';
+                  const notesContent = [
+                    `[보충 시간: ${supplementTime}]`,
+                    teacherName ? `[보충 선생님: ${teacherName}]` : '',
+                  ].filter(Boolean).join('\n');
+
+                  const { error } = await supabase
+                    .from('lesson_records')
+                    .insert({
+                      teacher_id: user.id,
+                      student_id: formData.student_id,
+                      class_id: formData.class_id || null,
+                      subject: formData.subject as any,
+                      lesson_date: supplementDate,
+                      lesson_range: '보충수업 예정',
+                      homework_status: 'none_assigned',
+                      lesson_types: ['보충수업'],
+                      attendance_status: ['정상등원'],
+                      notes: notesContent,
+                      submitted: false,
+                    });
+                  if (error) throw error;
+                  toast({ title: '보충수업 일정 등록 완료', description: `${supplementDate} ${supplementTime}` });
+                  setShowAbsenceSupplementDialog(false);
+                } catch (err: any) {
+                  toast({ title: '보충수업 등록 실패', description: err.message, variant: 'destructive' });
+                } finally {
+                  setIsSavingSupplementary(false);
+                }
+              }}
+            >
+              {isSavingSupplementary ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              등록
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Main lesson fields */}
       <div className={`space-y-4 ${isAssistant || formData.lesson_types.includes('휴강') ? 'opacity-60 pointer-events-none' : ''}`}>
