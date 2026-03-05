@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, FileUp, Trash2, Download, FileText, Image, File, Pencil, School, ChevronDown, ChevronRight, Paperclip, CalendarDays, Users, BarChart3, ClipboardCheck } from 'lucide-react';
+import { Plus, FileUp, Trash2, Download, FileText, Image, File, Pencil, School, ChevronDown, ChevronRight, Paperclip, CalendarDays, Users, BarChart3, ClipboardCheck, Upload, X } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -419,6 +419,92 @@ export function SchoolExamArchive() {
     }
   }, [materials]);
 
+  // School calendar images
+  interface CalendarImage {
+    id: string;
+    school_name: string;
+    school_level: string;
+    academic_year: number;
+    semester: string;
+    storage_path: string;
+    original_name: string;
+    mime_type: string | null;
+    created_at: string;
+  }
+
+  const [calendarImages, setCalendarImages] = useState<Record<string, CalendarImage[]>>({});
+  const [calendarUrls, setCalendarUrls] = useState<Record<string, string>>({});
+  const [calendarPreview, setCalendarPreview] = useState<string | null>(null);
+  const [uploadingCalendar, setUploadingCalendar] = useState<string | null>(null);
+
+  const loadCalendarImages = useCallback(async () => {
+    const { data, error } = await (supabase as any)
+      .from('school_calendar_images')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) { console.error(error); return; }
+    const grouped: Record<string, CalendarImage[]> = {};
+    for (const img of (data || [])) {
+      const key = `${img.school_name} (${img.school_level})`;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(img);
+    }
+    setCalendarImages(grouped);
+    // Load signed URLs
+    for (const img of (data || [])) {
+      if (!calendarUrls[img.storage_path]) {
+        supabase.storage.from('school-exam-materials').createSignedUrl(img.storage_path, 3600)
+          .then(({ data: urlData }) => {
+            if (urlData?.signedUrl) {
+              setCalendarUrls(prev => ({ ...prev, [img.storage_path]: urlData.signedUrl }));
+            }
+          });
+      }
+    }
+  }, []);
+
+  useEffect(() => { loadCalendarImages(); }, [loadCalendarImages]);
+
+  const handleUploadCalendarImage = async (schoolName: string, schoolLevel: string, file: File) => {
+    const key = `${schoolName} (${schoolLevel})`;
+    setUploadingCalendar(key);
+    try {
+      const path = `calendars/${schoolName}_${schoolLevel}_${Date.now()}_${file.name}`;
+      const { error: storageError } = await supabase.storage.from('school-exam-materials').upload(path, file);
+      if (storageError) throw storageError;
+
+      const { error: dbError } = await (supabase as any).from('school_calendar_images').insert({
+        school_name: schoolName,
+        school_level: schoolLevel,
+        academic_year: parseInt(filterYear) || currentYear,
+        semester: filterSemester !== 'all' ? filterSemester : '1학기',
+        storage_path: path,
+        original_name: file.name,
+        mime_type: file.type || null,
+        file_size: file.size || null,
+        uploaded_by: user?.id,
+      });
+      if (dbError) throw dbError;
+      toast.success('학사일정표 업로드 완료');
+      loadCalendarImages();
+    } catch (err: any) {
+      toast.error('업로드 실패: ' + err.message);
+    } finally {
+      setUploadingCalendar(null);
+    }
+  };
+
+  const handleDeleteCalendarImage = async (img: CalendarImage) => {
+    try {
+      await supabase.storage.from('school-exam-materials').remove([img.storage_path]);
+      await (supabase as any).from('school_calendar_images').delete().eq('id', img.id);
+      toast.success('학사일정표 삭제됨');
+      loadCalendarImages();
+    } catch (err: any) {
+      toast.error('삭제 실패: ' + err.message);
+    }
+  };
+
   const renderMaterialsByCategory = (archiveId: string, category: string, showInlineImages = false) => {
     const mats = (materials[archiveId] || []).filter(m => m.file_category === category);
     if (mats.length === 0) return null;
@@ -530,9 +616,61 @@ export function SchoolExamArchive() {
           </Button>
         </div>
       ) : (
-        Object.entries(groupedArchives).map(([schoolKey, items]) => (
+        Object.entries(groupedArchives).map(([schoolKey, items]) => {
+          // Extract school_name and school_level from key like "신길중 (중)"
+          const schoolName = items[0]?.school_name || '';
+          const schoolLevel = items[0]?.school_level || '중';
+          const calImgs = calendarImages[schoolKey] || [];
+
+          return (
           <div key={schoolKey} className="space-y-2">
             <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1">{schoolKey}</h3>
+
+            {/* School Calendar Images */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {calImgs.map(img => {
+                const url = calendarUrls[img.storage_path];
+                return (
+                  <div key={img.id} className="relative group">
+                    {url ? (
+                      <img
+                        src={url}
+                        alt={img.original_name}
+                        className="h-16 w-auto rounded-md border cursor-pointer hover:opacity-80 transition-opacity object-cover"
+                        onClick={() => setCalendarPreview(url)}
+                      />
+                    ) : (
+                      <div className="h-16 w-20 rounded-md border bg-muted flex items-center justify-center">
+                        <CalendarDays className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                    )}
+                    <button
+                      className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDeleteCalendarImage(img)}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="text-[9px] text-muted-foreground block text-center mt-0.5 truncate max-w-[80px]">
+                      {img.semester}
+                    </span>
+                  </div>
+                );
+              })}
+              <label className={`h-16 w-16 rounded-md border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-accent/30 transition-colors ${uploadingCalendar === schoolKey ? 'opacity-50 pointer-events-none' : ''}`}>
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                <span className="text-[9px] text-muted-foreground mt-0.5">일정표</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadCalendarImage(schoolName, schoolLevel, file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
             {items.map(archive => {
               const isExpanded = expandedArchives.has(archive.id);
               const archiveMaterials = materials[archive.id] || [];
@@ -834,7 +972,8 @@ export function SchoolExamArchive() {
               );
             })}
           </div>
-        ))
+        );
+        })
       )}
 
       {/* Create/Edit Dialog */}
@@ -1004,6 +1143,28 @@ export function SchoolExamArchive() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Calendar Image Preview Modal */}
+      {calendarPreview && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={() => setCalendarPreview(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <button
+              className="absolute -top-3 -right-3 bg-background border rounded-full w-8 h-8 flex items-center justify-center shadow-lg hover:bg-accent z-10"
+              onClick={() => setCalendarPreview(null)}
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img
+              src={calendarPreview}
+              alt="학사일정표"
+              className="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

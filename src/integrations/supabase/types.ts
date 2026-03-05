@@ -1061,6 +1061,48 @@ export type Database = {
           },
         ]
       }
+      school_calendar_images: {
+        Row: {
+          academic_year: number
+          created_at: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          original_name: string
+          school_level: string
+          school_name: string
+          semester: string
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          academic_year?: number
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name: string
+          school_level?: string
+          school_name: string
+          semester?: string
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          academic_year?: number
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name?: string
+          school_level?: string
+          school_name?: string
+          semester?: string
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       school_exam_archives: {
         Row: {
           academic_year: number
