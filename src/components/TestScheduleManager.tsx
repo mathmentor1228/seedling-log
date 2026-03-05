@@ -91,6 +91,8 @@ export function TestScheduleManager() {
   } | null>(null);
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
   const [editingContentValue, setEditingContentValue] = useState('');
+  const [resultDialogSchedule, setResultDialogSchedule] = useState<TestSchedule | null>(null);
+  const [resultForm, setResultForm] = useState({ score: '', passed: '' as '' | 'pass' | 'fail', notes: '', content: '' });
 
   useEffect(() => {
     if (user?.id) {
@@ -339,6 +341,39 @@ export function TestScheduleManager() {
       setEditingContentId(null);
     } catch (err: any) {
       toast.error('저장 실패: ' + err.message);
+    }
+  }
+
+  function openResultDialog(sch: TestSchedule) {
+    setResultDialogSchedule(sch);
+    setResultForm({
+      score: sch.result_score || '',
+      passed: sch.result_passed === true ? 'pass' : sch.result_passed === false ? 'fail' : '',
+      notes: sch.result_notes || '',
+      content: sch.content || '',
+    });
+  }
+
+  async function handleResultSave() {
+    if (!resultDialogSchedule) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('test_schedules').update({
+        content: resultForm.content.trim() || null,
+        result_score: resultForm.score.trim() || null,
+        result_passed: resultForm.passed === 'pass' ? true : resultForm.passed === 'fail' ? false : null,
+        result_notes: resultForm.notes.trim() || null,
+        result_recorded_at: new Date().toISOString(),
+        result_recorded_by: user!.id,
+      }).eq('id', resultDialogSchedule.id);
+      if (error) throw error;
+      toast.success('시험 결과가 저장되었습니다');
+      setResultDialogSchedule(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error('저장 실패: ' + err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -632,12 +667,12 @@ export function TestScheduleManager() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className="text-xs cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => openResultDialog(sch)} title="클릭하여 결과 입력">
                         {hasResult ? (
                           <span className={sch.result_passed ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>
                             {sch.result_score || (sch.result_passed ? '합격' : '불합격')}
                           </span>
-                        ) : '-'}
+                        ) : <span className="text-muted-foreground italic">결과입력</span>}
                       </TableCell>
                       <TableCell className="flex gap-0.5">
                         <Button variant="ghost" size="icon" className="h-7 w-7" title="수업일지 연동" onClick={() => handleSyncFromLesson(sch)} disabled={syncingId === sch.id}>
@@ -937,6 +972,70 @@ export function TestScheduleManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Result Input Dialog */}
+      <Dialog open={!!resultDialogSchedule} onOpenChange={() => setResultDialogSchedule(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm">시험 결과 입력</DialogTitle>
+          </DialogHeader>
+          {resultDialogSchedule && (
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">
+                {(resultDialogSchedule.students as any)?.name} · {resultDialogSchedule.subject} · {resultDialogSchedule.test_date}
+              </div>
+              <div>
+                <Label className="text-xs">시험 내용/범위</Label>
+                <Textarea
+                  value={resultForm.content}
+                  onChange={e => setResultForm(p => ({ ...p, content: e.target.value }))}
+                  placeholder="시험 내용을 입력하세요"
+                  className="text-sm mt-1"
+                  rows={2}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">점수/결과</Label>
+                <Input
+                  value={resultForm.score}
+                  onChange={e => setResultForm(p => ({ ...p, score: e.target.value }))}
+                  placeholder="예: 85점, 17/20"
+                  className="text-sm mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">합격 여부</Label>
+                <Select value={resultForm.passed || 'none'} onValueChange={(v) => setResultForm(p => ({ ...p, passed: v === 'none' ? '' : v as 'pass' | 'fail' }))}>
+                  <SelectTrigger className="text-sm mt-1">
+                    <SelectValue placeholder="선택 (선택사항)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">미선택</SelectItem>
+                    <SelectItem value="pass">합격</SelectItem>
+                    <SelectItem value="fail">불합격</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">비고</Label>
+                <Input
+                  value={resultForm.notes}
+                  onChange={e => setResultForm(p => ({ ...p, notes: e.target.value }))}
+                  placeholder="선택사항"
+                  className="text-sm mt-1"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setResultDialogSchedule(null)}>취소</Button>
+            <Button size="sm" onClick={handleResultSave} disabled={saving}>
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
+              저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
