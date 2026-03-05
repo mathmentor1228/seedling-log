@@ -104,7 +104,7 @@ export function TestScheduleManager() {
     setLoading(true);
     try {
       // Fetch teachers for filter
-      const { data: teacherData } = await supabase.from('profiles').select('id, full_name').order('full_name');
+      const { data: teacherData } = await supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name');
       setTeachers(teacherData || []);
 
       // Get teacher's students

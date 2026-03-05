@@ -262,7 +262,7 @@ export function Timetable() {
 
   async function fetchAllTeachers() {
     try {
-      const { data } = await supabase.from('profiles').select('id, full_name').order('full_name');
+      const { data } = await supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name');
       setAllTeachers((data || []).map(p => ({ id: p.id, name: p.full_name })));
     } catch (e) {
       console.error('Error fetching all teachers:', e);

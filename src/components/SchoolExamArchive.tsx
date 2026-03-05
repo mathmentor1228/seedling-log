@@ -172,7 +172,7 @@ export function SchoolExamArchive() {
   }, []);
 
   const loadTeachers = useCallback(async () => {
-    const { data } = await supabase.from('profiles').select('id, full_name').order('full_name');
+    const { data } = await supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name');
     if (data) setTeacherList(data.map(p => ({ id: p.id, name: p.full_name })));
   }, []);
 

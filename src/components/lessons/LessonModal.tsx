@@ -72,7 +72,7 @@ export function LessonModal({
       const [studentsRes, classesRes, profilesRes] = await Promise.all([
         supabase.from('students').select('id, name').order('name'),
         supabase.from('classes').select('id, name, subject').order('name'),
-        supabase.from('profiles').select('id, full_name').order('full_name'),
+        supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       ]);
 
       if (studentsRes.error) {

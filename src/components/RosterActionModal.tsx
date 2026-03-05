@@ -1058,7 +1058,7 @@ export function RosterActionModal({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__none__">미정</SelectItem>
-                              <SelectItem value="다인조교">다인조교</SelectItem>
+                              <SelectItem value="은서조교">은서조교</SelectItem>
                               <SelectItem value="유빈조교">유빈조교</SelectItem>
                             </SelectContent>
                           </Select>

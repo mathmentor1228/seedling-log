@@ -344,7 +344,7 @@ export function TeacherAssistantRequestsView() {
   const getAssigneeBadge = (assignee: string) => {
     const colorMap: Record<string, string> = {
       '유빈조교': 'bg-purple-500/15 text-purple-600 border-purple-500/30',
-      '다인조교': 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
+      '은서조교': 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
       '미배정': 'bg-muted text-muted-foreground border-muted'
     };
     return (
@@ -408,7 +408,7 @@ export function TeacherAssistantRequestsView() {
                     <SelectContent>
                       <SelectItem value="미배정">미배정</SelectItem>
                       <SelectItem value="유빈조교">유빈조교</SelectItem>
-                      <SelectItem value="다인조교">다인조교</SelectItem>
+                      <SelectItem value="은서조교">은서조교</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
