@@ -142,6 +142,8 @@ interface TodaySlotStudent {
   homeworkCheckNote?: string | null;
   homeworkCheckLessonId?: string | null;
   prevNextLessonGoal?: string | null;
+  // HOMEWORK-CHECK-STATUS-SYNC-V1: latest previous homework assignment check status
+  latestAssignmentCheckStatus?: string | null;
   // HW-STATUS-SYNC-V1: homework_status from today's lesson_records (single source of truth)
   homeworkStatus?: string | null;
   // TEST-CONTENT-DISPLAY-V2: Today's test data for inline display (content-first)
@@ -207,6 +209,8 @@ function getHomeworkStatusLabel(status: string | null | undefined): string {
   if (['not_done', '미이행', '미완료'].includes(normalized)) return '미이행';
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return '일부완료';
   if (['completed', '완료'].includes(normalized)) return '완료';
+  if (['checked', '확인함', '확인됨'].includes(normalized)) return '확인함';
+  if (['unchecked', '확인요망', '확인대기'].includes(normalized)) return '확인요망';
   if (['none_assigned', '없음'].includes(normalized)) return '미배정';
   return '확인요망';
 }
@@ -217,7 +221,8 @@ function getHomeworkStatusBadgeClass(status: string | null | undefined): string 
   const normalized = status.toLowerCase().trim();
   if (['not_done', '미이행', '미완료'].includes(normalized)) return 'bg-red-500/15 text-red-600 border-red-500/30';
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
-  if (['completed', '완료'].includes(normalized)) return 'bg-green-500/15 text-green-600 border-green-500/30';
+  if (['completed', '완료', 'checked', '확인함', '확인됨'].includes(normalized)) return 'bg-green-500/15 text-green-600 border-green-500/30';
+  if (['unchecked', '확인요망', '확인대기'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
   if (['none_assigned', '없음'].includes(normalized)) return 'bg-muted text-muted-foreground';
   return 'bg-muted text-muted-foreground';
 }
@@ -405,7 +410,7 @@ export default function Dashboard() {
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
   // NEXT-HW-BADGE-V1: Include hasNextHomework
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { urls: string[]; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { urls: string[]; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
@@ -884,6 +889,8 @@ export default function Dashboard() {
         // PHOTO-STABLE-V2: Fetch photo submissions from homework_submissions (stable, not affected by check_status)
         // Also fallback to homework_assignments.submission_image_url
         let photoDataMap: Record<string, { urls: string[]; text: string | null; at: string | null }> = {};
+        // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
+        let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
           // Primary source: homework_submissions table (joined via homework_assignments for subject)
           const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
@@ -914,7 +921,7 @@ export default function Dashboard() {
           // If the latest homework has no photo, do NOT fall back to older homework photos.
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text, check_status')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
@@ -923,6 +930,11 @@ export default function Dashboard() {
           const seenLatest = new Set<string>();
           (hwAll || []).forEach((hw: any) => {
             const photoKey = `${hw.student_id}:${hw.subject}`;
+
+            if (hw.assigned_date < today && latestAssignmentCheckStatusMap[photoKey] === undefined) {
+              latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
+            }
+
             if (seenLatest.has(photoKey)) return; // skip older assignments
             seenLatest.add(photoKey);
             // Only populate photo if THIS (latest) assignment has a submission
@@ -974,7 +986,11 @@ export default function Dashboard() {
           const pd = photoDataMap[photoKey];
           const hasTestData = (lr.test_content && lr.test_content.trim() !== '') || (lr.test_title && lr.test_title.trim() !== '') || (lr.test_result_text && lr.test_result_text.trim() !== '');
           statusMap[key] = { 
-            submitted: lr.submitted, recordId: lr.id, homeworkStatus: lr.homework_status || null, hasNextHomework: hwAssignmentSet.has(lr.id), 
+            submitted: lr.submitted,
+            recordId: lr.id,
+            homeworkStatus: lr.homework_status || null,
+            latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
+            hasNextHomework: hwAssignmentSet.has(lr.id), 
             hasPhotoSubmission: photoSubmissionSet.has(photoKey),
             prevNextLessonGoal: adminPrevGoalMap[goalKey] || null,
             todayTestData: hasTestData ? { test_content: lr.test_content || null, test_title: lr.test_title || null, test_result_text: lr.test_result_text || null, english_pass_fail: lr.english_pass_fail || null } : null,
@@ -1016,7 +1032,11 @@ export default function Dashboard() {
                 };
               } else if (!existing) {
                 statusMap[key] = {
-                  submitted: false, recordId: null, homeworkStatus: null, hasNextHomework: false,
+                  submitted: false,
+                  recordId: null,
+                  homeworkStatus: null,
+                  latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[tsKey] || null,
+                  hasNextHomework: false,
                   hasPhotoSubmission: photoSubmissionSet.has(tsKey),
                   todayTestData: {
                     test_content: ts.content || null,
@@ -1037,7 +1057,11 @@ export default function Dashboard() {
           if (!statusMap[key] && photoSubmissionSet.has(photoKey)) {
             const pd = photoDataMap[photoKey];
             statusMap[key] = {
-              submitted: false, recordId: null, homeworkStatus: null, hasNextHomework: false,
+              submitted: false,
+              recordId: null,
+              homeworkStatus: null,
+              latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
+              hasNextHomework: false,
               hasPhotoSubmission: true,
               ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[row.student_id] || '학생' } } : {})
             };
@@ -1372,6 +1396,8 @@ export default function Dashboard() {
         subject?: string;
         // HW-STATUS-SYNC-V1: homework_status from lesson_records
         homeworkStatus?: string | null;
+        // HOMEWORK-CHECK-STATUS-SYNC-V1: latest previous assignment check status
+        latestAssignmentCheckStatus?: string | null;
         todayTestData?: {
           test_content: string | null;
           test_title: string | null;
@@ -1433,6 +1459,8 @@ export default function Dashboard() {
 
         // Fetch photo submissions for teacher's students
         let teacherPhotoDataMap: Record<string, { urls: string[]; text: string | null; at: string | null }> = {};
+        // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
+        let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
           const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
           const { data: submissions } = await supabase
@@ -1459,7 +1487,7 @@ export default function Dashboard() {
           // Fallback: homework_assignments.submission_image_url
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text, check_status')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
@@ -1467,6 +1495,11 @@ export default function Dashboard() {
           const seenLatest = new Set<string>();
           (hwAll || []).forEach((hw: any) => {
             const photoKey = `${hw.student_id}:${hw.subject}`;
+
+            if (hw.assigned_date < today && latestAssignmentCheckStatusMap[photoKey] === undefined) {
+              latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
+            }
+
             if (seenLatest.has(photoKey)) return;
             seenLatest.add(photoKey);
             if (hw.submitted_at && hw.submission_image_url && !teacherPhotoDataMap[photoKey]) {
@@ -1496,6 +1529,8 @@ export default function Dashboard() {
               photoData: pd || null,
               // HW-STATUS-SYNC-V1: Include homework_status from lesson_records
               homeworkStatus: lr.homework_status || null,
+              // HOMEWORK-CHECK-STATUS-SYNC-V1: Include latest previous assignment check status
+              latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
               // TEST-CONTENT-DISPLAY-V2
               subject: lr.subject,
               todayTestData: hasTestData ? {
@@ -1548,6 +1583,7 @@ export default function Dashboard() {
                   hasPhotoSubmission: false,
                   photoData: null,
                   homeworkStatus: null,
+                  latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[`${ts.student_id}:${ts.subject}`] || null,
                   subject: ts.subject,
                   todayTestData: {
                     test_content: ts.content || null,
@@ -1627,6 +1663,8 @@ export default function Dashboard() {
             homeworkCheckNote: recordInfo?.homeworkCheckNote || null,
             homeworkCheckLessonId: recordInfo?.homeworkCheckLessonId || null,
             prevNextLessonGoal: prevGoalMap[goalKey] || null,
+            // HOMEWORK-CHECK-STATUS-SYNC-V1: Add latest previous assignment check status
+            latestAssignmentCheckStatus: recordInfo?.latestAssignmentCheckStatus || null,
             // DASH-ROW-TEST-SNIPPET-V1: Add today's test data
             todayTestData: recordInfo?.todayTestData || null,
             // HW-STATUS-SYNC-V1: Pass homework_status from lesson_records
@@ -1831,6 +1869,7 @@ export default function Dashboard() {
                 submitted: d.submitted || false,
                 recordId: d.id,
                 homeworkStatus: d.homework_status || null,
+                latestAssignmentCheckStatus: null,
                 hasNextHomework: false,
                 hasPhotoSubmission: false,
                 todayTestData: hasTestData ? { test_content: d.test_content || null, test_title: d.test_title || null, test_result_text: d.test_result_text || null, english_pass_fail: d.english_pass_fail || null } : null,
@@ -2449,8 +2488,14 @@ export default function Dashboard() {
                                     {slot.rows.map((row: any) => {
                                       const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
                                       const ls = lessonStatusMap[statusKey];
-                                      // HW-STATUS-DRAFT-FIX-V1: If record is draft (not submitted) and homework_status is default 'none_assigned', treat as null so RPC fallback can work
-                                      const rawHwStatus = (ls?.homeworkStatus === 'none_assigned' && !ls?.submitted) ? null : (ls?.homeworkStatus || null);
+                                      const rawHwStatus = (() => {
+                                        const hwFromRecord = ls?.homeworkStatus;
+                                        const isDefaultDraft = hwFromRecord === 'none_assigned' && !ls?.submitted;
+                                        if (hwFromRecord && !isDefaultDraft) return hwFromRecord;
+                                        if (ls?.latestAssignmentCheckStatus === 'checked') return 'checked';
+                                        if (ls?.latestAssignmentCheckStatus === 'unchecked') return 'unchecked';
+                                        return null;
+                                      })();
                                       const testState = latestTests.getStudentState(row.student_id);
                                       const isTestExpanded = latestTests.isExpanded(row.student_id);
 
@@ -2547,9 +2592,10 @@ export default function Dashboard() {
                                                 (() => {
                                                   const label = getHomeworkStatusLabel(rawHwStatus);
                                                   if (label === '완료') return 'text-success';
+                                                  if (label === '확인함') return 'text-success';
                                                   if (label === '미이행') return 'text-destructive';
                                                   if (label === '일부완료') return 'text-warning';
-                                                  if (label === '확인대기') return 'text-warning';
+                                                  if (label === '확인요망') return 'text-warning';
                                                   return 'text-muted-foreground';
                                                 })()
                                               }`}>
@@ -2749,10 +2795,12 @@ export default function Dashboard() {
                                   const testState = latestTests.getStudentState(student.id);
                                   const isTestExpanded = latestTests.isExpanded(student.id);
                                   const rawHwStatus = (() => {
-                                    // HW-STATUS-DRAFT-FIX-V1: If record is draft (not submitted) and homework_status is default 'none_assigned', skip to RPC fallback
+                                    // HW-STATUS-DRAFT-FIX-V1: If record is draft (not submitted) and homework_status is default 'none_assigned', skip to fallback
                                     const hwFromRecord = student.homeworkStatus;
                                     const isDefaultDraft = hwFromRecord === 'none_assigned' && !student.lessonSubmitted;
                                     if (hwFromRecord && !isDefaultDraft) return hwFromRecord;
+                                    if (student.latestAssignmentCheckStatus === 'checked') return 'checked';
+                                    if (student.latestAssignmentCheckStatus === 'unchecked') return 'unchecked';
                                     // Fallback to RPC result
                                     if (student.previousHomeworkStatus === 'completed') return '완료';
                                     if (student.previousHomeworkStatus === 'partial') return '일부완료';
@@ -2914,6 +2962,7 @@ export default function Dashboard() {
                                             (() => {
                                               const label = getHomeworkStatusLabel(rawHwStatus);
                                               if (label === '완료') return 'text-success';
+                                              if (label === '확인함') return 'text-success';
                                               if (label === '미이행') return 'text-destructive';
                                               if (label === '일부완료') return 'text-warning';
                                               if (label === '확인요망') return 'text-warning';
