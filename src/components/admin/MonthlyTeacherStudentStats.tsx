@@ -43,13 +43,32 @@ export default function MonthlyTeacherStudentStats() {
       const from = format(startOfMonth(subMonths(new Date(), n - 1)), 'yyyy-MM-dd');
       const to = format(endOfMonth(new Date()), 'yyyy-MM-dd');
 
-      // Fetch lesson records with teacher info
-      const { data: lessons, error } = await supabase
-        .from('lesson_records')
-        .select('teacher_id, student_id, lesson_date, subject')
-        .gte('lesson_date', from)
-        .lte('lesson_date', to)
-        .eq('submitted', true);
+      // Fetch lesson records (including drafts) - paginate to avoid 1000 row limit
+      let allLessons: { teacher_id: string; student_id: string; lesson_date: string; subject: string }[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: batch, error: batchError } = await supabase
+          .from('lesson_records')
+          .select('teacher_id, student_id, lesson_date, subject')
+          .gte('lesson_date', from)
+          .lte('lesson_date', to)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (batchError) {
+          console.error('Monthly stats error:', batchError);
+          setLoading(false);
+          return;
+        }
+        allLessons = allLessons.concat(batch || []);
+        hasMore = (batch?.length || 0) === pageSize;
+        page++;
+      }
+
+      const lessons = allLessons;
+      const error = null;
 
       if (error) {
         console.error('Monthly stats error:', error);
