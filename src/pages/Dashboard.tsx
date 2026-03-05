@@ -2449,7 +2449,8 @@ export default function Dashboard() {
                                     {slot.rows.map((row: any) => {
                                       const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
                                       const ls = lessonStatusMap[statusKey];
-                                      const rawHwStatus = ls?.homeworkStatus || null;
+                                      // HW-STATUS-DRAFT-FIX-V1: If record is draft (not submitted) and homework_status is default 'none_assigned', treat as null so RPC fallback can work
+                                      const rawHwStatus = (ls?.homeworkStatus === 'none_assigned' && !ls?.submitted) ? null : (ls?.homeworkStatus || null);
                                       const testState = latestTests.getStudentState(row.student_id);
                                       const isTestExpanded = latestTests.isExpanded(row.student_id);
 
@@ -2748,9 +2749,10 @@ export default function Dashboard() {
                                   const testState = latestTests.getStudentState(student.id);
                                   const isTestExpanded = latestTests.isExpanded(student.id);
                                   const rawHwStatus = (() => {
-                                    // HW-STATUS-SYNC-V1: Use lesson_records.homework_status as primary source (same as admin view)
-                                    // Fall back to RPC-derived previousHomeworkStatus only if no lesson record status
-                                    if (student.homeworkStatus) return student.homeworkStatus;
+                                    // HW-STATUS-DRAFT-FIX-V1: If record is draft (not submitted) and homework_status is default 'none_assigned', skip to RPC fallback
+                                    const hwFromRecord = student.homeworkStatus;
+                                    const isDefaultDraft = hwFromRecord === 'none_assigned' && !student.lessonSubmitted;
+                                    if (hwFromRecord && !isDefaultDraft) return hwFromRecord;
                                     // Fallback to RPC result
                                     if (student.previousHomeworkStatus === 'completed') return '완료';
                                     if (student.previousHomeworkStatus === 'partial') return '일부완료';
