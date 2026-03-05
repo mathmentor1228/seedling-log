@@ -114,7 +114,7 @@ const TEMPLATES = [
   { type: 'makeup_check', label: '보강 확인', title: '보강 수업 확인' },
 ];
 
-const ASSIGNEES = ['유빈조교', '다인조교'];
+const ASSIGNEES = ['유빈조교', '은서조교'];
 
 const PRIORITIES = [
   { value: 'low', label: '낮음', className: 'bg-muted text-muted-foreground' },

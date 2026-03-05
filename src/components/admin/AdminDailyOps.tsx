@@ -107,6 +107,7 @@ export function AdminDailyOps() {
       const { data } = await supabase
         .from('profiles')
         .select('id, full_name')
+        .eq('is_active', true)
         .order('full_name');
       setTeachers(data || []);
     } catch (error) {

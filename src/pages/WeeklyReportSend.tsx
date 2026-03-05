@@ -185,7 +185,7 @@ export default function WeeklyReportSend() {
     try {
       const [classesRes, teachersRes] = await Promise.all([
         supabase.from('classes').select('id, name').order('name'),
-        supabase.from('profiles').select('id, full_name').order('full_name'),
+        supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       ]);
 
       if (classesRes.data) setClasses(classesRes.data);

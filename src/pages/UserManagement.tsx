@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Loader2, UserCog, Shield, GraduationCap, Users, Clock, Trash2 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
@@ -30,6 +31,7 @@ interface UserWithRole {
   full_name: string;
   email: string;
   created_at: string;
+  is_active: boolean;
   roles: AppRole[];
   trial_expires_at?: string | null;
 }
@@ -47,7 +49,7 @@ export default function UserManagement() {
       // Fetch all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, created_at')
+        .select('id, full_name, email, created_at, is_active')
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -161,6 +163,24 @@ export default function UserManagement() {
     }
   };
 
+  const handleToggleActive = async (userId: string, active: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_active: active } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      toast({
+        title: '완료',
+        description: active ? '사용자가 활성화되었습니다.' : '사용자가 비활성화되었습니다.',
+      });
+      await fetchUsers();
+    } catch (error) {
+      console.error('Error toggling active:', error);
+      toast({ title: '오류', description: '상태 변경에 실패했습니다.', variant: 'destructive' });
+    }
+  };
+
   const getRoleBadge = (roles: AppRole[]) => {
     if (roles.length === 0) {
       return (
@@ -267,13 +287,14 @@ export default function UserManagement() {
                 <TableHead>이메일</TableHead>
                 <TableHead>가입일</TableHead>
                 <TableHead>현재 권한</TableHead>
+                <TableHead>활성</TableHead>
                 <TableHead>권한 변경</TableHead>
                 <TableHead className="w-[100px]">저장</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((user) => (
-                <TableRow key={user.id}>
+                <TableRow key={user.id} className={!user.is_active ? 'opacity-50' : ''}>
                   <TableCell className="font-medium">{user.full_name}</TableCell>
                   <TableCell className="text-muted-foreground">{user.email}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -281,6 +302,12 @@ export default function UserManagement() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">{getRoleBadge(user.roles)}</div>
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={user.is_active}
+                      onCheckedChange={(checked) => handleToggleActive(user.id, checked)}
+                    />
                   </TableCell>
                   <TableCell>
                     <Select
@@ -317,7 +344,7 @@ export default function UserManagement() {
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     등록된 사용자가 없습니다.
                   </TableCell>
                 </TableRow>
