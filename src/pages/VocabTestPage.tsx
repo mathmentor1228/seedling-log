@@ -5,7 +5,9 @@ import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel'
 import { VocabScheduleGenerator } from '@/components/vocab/VocabScheduleGenerator';
 import { TestScheduleManager } from '@/components/TestScheduleManager';
 import { TestRoutineManager } from '@/components/TestRoutineManager';
-import { BookOpen, CalendarDays, ClipboardList, Settings, RefreshCw } from 'lucide-react';
+import { BookOpen, CalendarDays, ClipboardList, Settings, RefreshCw, FileEdit } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 function VocabTestContent() {
   return (
