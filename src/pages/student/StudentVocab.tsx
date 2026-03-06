@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RotateCcw, Eye, EyeOff, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen } from 'lucide-react';
+import { RotateCcw, Eye, EyeOff, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface VocabWord {
@@ -111,6 +111,16 @@ export default function StudentVocab() {
     if (currentIdx > 0) {
       setCurrentIdx(prev => prev - 1);
       setFlipped(false);
+    }
+  };
+
+  const speakWord = (word: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
     }
   };
 
@@ -304,7 +314,17 @@ export default function StudentVocab() {
                   <p className="text-2xl font-bold leading-relaxed px-4">
                     {mode === 'eng_to_kor' ? currentCard.english : currentCard.meaning}
                   </p>
-                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-4">
+                  {mode === 'eng_to_kor' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={(e) => { e.stopPropagation(); speakWord(currentCard.english); }}
+                    >
+                      <Volume2 className="w-4 h-4 mr-1" /> 발음 듣기
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-2">
                     <Eye className="w-3 h-3" /> 탭하여 정답 확인
                   </p>
                 </>
@@ -316,9 +336,19 @@ export default function StudentVocab() {
                   <p className="text-2xl font-bold text-primary leading-relaxed px-4">
                     {mode === 'eng_to_kor' ? currentCard.meaning : currentCard.english}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {mode === 'eng_to_kor' ? currentCard.english : currentCard.meaning}
-                  </p>
+                  <div className="flex items-center justify-center gap-2 mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      {mode === 'eng_to_kor' ? currentCard.english : currentCard.meaning}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground"
+                      onClick={(e) => { e.stopPropagation(); speakWord(currentCard.english); }}
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </>
               )}
             </CardContent>
