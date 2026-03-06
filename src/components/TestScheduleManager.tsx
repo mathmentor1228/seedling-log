@@ -31,6 +31,7 @@ interface TestSchedule {
   test_time: string | null;
   subject: string;
   test_type: string;
+  title: string | null;
   content: string | null;
   notes: string | null;
   created_at: string;
@@ -92,7 +93,7 @@ export function TestScheduleManager() {
   const [editingContentId, setEditingContentId] = useState<string | null>(null);
   const [editingContentValue, setEditingContentValue] = useState('');
   const [resultDialogSchedule, setResultDialogSchedule] = useState<TestSchedule | null>(null);
-  const [resultForm, setResultForm] = useState({ score: '', passed: '' as '' | 'pass' | 'fail', notes: '', content: '' });
+  const [resultForm, setResultForm] = useState({ score: '', passed: '' as '' | 'pass' | 'fail', notes: '', content: '', title: '' });
 
   useEffect(() => {
     if (user?.id) {
@@ -351,6 +352,7 @@ export function TestScheduleManager() {
       passed: sch.result_passed === true ? 'pass' : sch.result_passed === false ? 'fail' : '',
       notes: sch.result_notes || '',
       content: sch.content || '',
+      title: sch.title || '',
     });
   }
 
@@ -359,6 +361,7 @@ export function TestScheduleManager() {
     setSaving(true);
     try {
       const { error } = await supabase.from('test_schedules').update({
+        title: resultForm.title.trim() || null,
         content: resultForm.content.trim() || null,
         result_score: resultForm.score.trim() || null,
         result_passed: resultForm.passed === 'pass' ? true : resultForm.passed === 'fail' ? false : null,
@@ -981,17 +984,17 @@ export function TestScheduleManager() {
           </DialogHeader>
           {resultDialogSchedule && (
             <div className="space-y-3">
-              <div className="text-xs text-muted-foreground">
-                {(resultDialogSchedule.students as any)?.name} · {resultDialogSchedule.subject} · {resultDialogSchedule.test_date}
+              <div className="bg-muted/50 rounded-lg p-3">
+                <p className="text-sm font-medium">{(resultDialogSchedule.students as any)?.name}</p>
+                <p className="text-xs text-muted-foreground">{resultDialogSchedule.subject} · {resultDialogSchedule.content || '—'}</p>
               </div>
               <div>
-                <Label className="text-xs">시험 내용/범위</Label>
-                <Textarea
-                  value={resultForm.content}
-                  onChange={e => setResultForm(p => ({ ...p, content: e.target.value }))}
-                  placeholder="시험 내용을 입력하세요"
+                <Label className="text-xs">시험 제목</Label>
+                <Input
+                  value={resultForm.title}
+                  onChange={e => setResultForm(p => ({ ...p, title: e.target.value }))}
+                  placeholder="예: 중2 1단원 단어시험"
                   className="text-sm mt-1"
-                  rows={2}
                 />
               </div>
               <div>
@@ -999,25 +1002,35 @@ export function TestScheduleManager() {
                 <Input
                   value={resultForm.score}
                   onChange={e => setResultForm(p => ({ ...p, score: e.target.value }))}
-                  placeholder="예: 85점, 17/20"
+                  placeholder="예: 85점, 8/10 등"
                   className="text-sm mt-1"
                 />
               </div>
               <div>
-                <Label className="text-xs">합격 여부</Label>
-                <Select value={resultForm.passed || 'none'} onValueChange={(v) => setResultForm(p => ({ ...p, passed: v === 'none' ? '' : v as 'pass' | 'fail' }))}>
-                  <SelectTrigger className="text-sm mt-1">
-                    <SelectValue placeholder="선택 (선택사항)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">미선택</SelectItem>
-                    <SelectItem value="pass">합격</SelectItem>
-                    <SelectItem value="fail">불합격</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">통과 여부</Label>
+                <div className="flex gap-2 mt-1">
+                  <Button
+                    type="button"
+                    variant={resultForm.passed === 'pass' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1 gap-1.5"
+                    onClick={() => setResultForm(p => ({ ...p, passed: p.passed === 'pass' ? '' : 'pass' }))}
+                  >
+                    ⊙ 통과
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={resultForm.passed === 'fail' ? 'destructive' : 'outline'}
+                    size="sm"
+                    className="flex-1 gap-1.5"
+                    onClick={() => setResultForm(p => ({ ...p, passed: p.passed === 'fail' ? '' : 'fail' }))}
+                  >
+                    ⊗ 불통과
+                  </Button>
+                </div>
               </div>
               <div>
-                <Label className="text-xs">비고</Label>
+              <Label className="text-xs">메모</Label>
                 <Input
                   value={resultForm.notes}
                   onChange={e => setResultForm(p => ({ ...p, notes: e.target.value }))}
