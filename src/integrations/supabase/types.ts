@@ -1921,6 +1921,41 @@ export type Database = {
         }
         Relationships: []
       }
+      vocab_folders: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          parent_id: string | null
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          parent_id?: string | null
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "vocab_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vocab_generated_tests: {
         Row: {
           created_at: string
@@ -2196,6 +2231,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          folder_id: string | null
           id: string
           round_number: number
           title: string
@@ -2204,6 +2240,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
+          folder_id?: string | null
           id?: string
           round_number?: number
           title: string
@@ -2212,12 +2249,21 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
+          folder_id?: string | null
           id?: string
           round_number?: number
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vocab_word_sets_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "vocab_folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       weekly_jobs_log: {
         Row: {
