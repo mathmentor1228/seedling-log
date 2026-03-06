@@ -3,9 +3,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VocabSettingsPanel } from '@/components/vocab/VocabSettingsPanel';
 import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
 import { VocabScheduleGenerator } from '@/components/vocab/VocabScheduleGenerator';
+import { StudentVocabAssignment } from '@/components/vocab/StudentVocabAssignment';
 import { TestScheduleManager } from '@/components/TestScheduleManager';
 import { TestRoutineManager } from '@/components/TestRoutineManager';
-import { BookOpen, CalendarDays, ClipboardList, Settings, RefreshCw, FileEdit } from 'lucide-react';
+import { BookOpen, CalendarDays, ClipboardList, Settings, RefreshCw, FileEdit, Languages } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
@@ -28,7 +29,7 @@ function VocabTestContent() {
       </div>
 
       <Tabs defaultValue="results" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="results" className="gap-1.5 text-xs">
             <ClipboardList className="w-3.5 h-3.5" />
             시험 결과
@@ -36,6 +37,10 @@ function VocabTestContent() {
           <TabsTrigger value="settings" className="gap-1.5 text-xs">
             <Settings className="w-3.5 h-3.5" />
             학생 설정
+          </TabsTrigger>
+          <TabsTrigger value="vocab-assign" className="gap-1.5 text-xs">
+            <Languages className="w-3.5 h-3.5" />
+            암기카드 배정
           </TabsTrigger>
           <TabsTrigger value="schedule" className="gap-1.5 text-xs">
             <BookOpen className="w-3.5 h-3.5" />
@@ -57,6 +62,10 @@ function VocabTestContent() {
 
         <TabsContent value="settings">
           <VocabSettingsPanel />
+        </TabsContent>
+
+        <TabsContent value="vocab-assign">
+          <StudentVocabAssignment />
         </TabsContent>
 
         <TabsContent value="schedule">

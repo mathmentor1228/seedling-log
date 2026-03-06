@@ -36,6 +36,7 @@ import StudentHomework from "./pages/student/StudentHomework";
 import StudentPoints from "./pages/student/StudentPoints";
 import StudentSchedule from "./pages/student/StudentSchedule";
 import StudentFeedback from "./pages/student/StudentFeedback";
+import StudentVocab from "./pages/student/StudentVocab";
 import { StudentLayout } from "@/components/student/StudentLayout";
 
 const queryClient = new QueryClient();
@@ -81,6 +82,9 @@ const App = () => (
                 } />
                 <Route path="/student/feedback" element={
                   <StudentAuthProvider><StudentLayout><StudentFeedback /></StudentLayout></StudentAuthProvider>
+                } />
+                <Route path="/student/vocab" element={
+                  <StudentAuthProvider><StudentLayout><StudentVocab /></StudentLayout></StudentAuthProvider>
                 } />
 
                 {/* Admin App Routes */}

@@ -779,6 +779,61 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'vocab_cards': {
+        // Get word sets assigned to this student with words
+        const { data: assignments, error: aErr } = await supabase
+          .from('student_vocab_assignments')
+          .select('word_set_id')
+          .eq('student_id', student_id);
+
+        if (aErr) throw aErr;
+
+        const setIds = (assignments || []).map((a: any) => a.word_set_id);
+        if (setIds.length === 0) {
+          result = { sets: [] };
+          break;
+        }
+
+        // Get set info with folder name
+        const { data: setsData } = await supabase
+          .from('vocab_word_sets')
+          .select('id, title, folder_id')
+          .in('id', setIds);
+
+        // Get folder names
+        const folderIds = (setsData || []).map((s: any) => s.folder_id).filter(Boolean);
+        let folderMap: Record<string, string> = {};
+        if (folderIds.length > 0) {
+          const { data: foldersData } = await supabase
+            .from('vocab_folders')
+            .select('id, name')
+            .in('id', folderIds);
+          if (foldersData) {
+            folderMap = Object.fromEntries(foldersData.map((f: any) => [f.id, f.name]));
+          }
+        }
+
+        // Get words for each set
+        const { data: allWords } = await supabase
+          .from('vocab_word_items')
+          .select('set_id, english, meaning, sort_order')
+          .in('set_id', setIds)
+          .order('sort_order');
+
+        const sets = (setsData || []).map((s: any) => ({
+          set_id: s.id,
+          set_title: s.title,
+          folder_name: s.folder_id ? (folderMap[s.folder_id] || null) : null,
+          words: (allWords || []).filter((w: any) => w.set_id === s.id).map((w: any) => ({
+            english: w.english,
+            meaning: w.meaning,
+          })),
+        }));
+
+        result = { sets };
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),
