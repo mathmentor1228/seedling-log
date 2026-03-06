@@ -103,4 +103,6 @@ export const studentApi = {
   getFeedback: () => studentApiCall<{ feedback: any[] }>('feedback'),
 
   getWeeklyReports: () => studentApiCall<{ reports: any[] }>('weekly_reports'),
+
+  getVocabCards: () => studentApiCall<{ sets: any[] }>('vocab_cards'),
 };
