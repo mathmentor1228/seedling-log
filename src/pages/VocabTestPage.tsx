@@ -13,8 +13,18 @@ function VocabTestContent() {
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h1 className="text-lg font-semibold">시험 관리</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">단어 시험 설정/스케줄 및 범용 시험 일정 관리</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold">시험 관리</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">단어 시험 설정/스케줄 및 범용 시험 일정 관리</p>
+          </div>
+          <Link to="/vocab-generator">
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <FileEdit className="w-3.5 h-3.5" />
+              단어 시험 출제
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <Tabs defaultValue="results" className="space-y-4">
