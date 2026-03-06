@@ -114,6 +114,16 @@ export default function StudentVocab() {
     }
   };
 
+  const speakWord = (word: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   const currentCard = cards[currentIdx];
   const correctCount = results.filter(r => r === 'correct').length;
   const wrongCount = results.filter(r => r === 'wrong').length;
