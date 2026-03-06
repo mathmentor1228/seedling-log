@@ -1,10 +1,10 @@
  // STUDENT-APP-V1: Student authentication via student_code + PIN
  import { createClient } from 'npm:@supabase/supabase-js@2';
  
- const corsHeaders = {
-   'Access-Control-Allow-Origin': '*',
-   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
- };
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+};
  
  // Simple hash function for PIN (in production, use proper bcrypt)
  async function hashPin(pin: string): Promise<string> {
