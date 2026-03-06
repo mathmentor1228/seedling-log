@@ -781,16 +781,21 @@ Deno.serve(async (req) => {
 
       case 'vocab_cards': {
         // Get word sets assigned to this student with words
-        const { data: assignments, error: aErr } = await supabase
+        const { data: assignmentsData, error: aErr } = await supabase
           .from('student_vocab_assignments')
-          .select('word_set_id')
+          .select('word_set_id, required_rounds')
           .eq('student_id', student_id);
 
         if (aErr) throw aErr;
 
-        const setIds = (assignments || []).map((a: any) => a.word_set_id);
+        const setIds = (assignmentsData || []).map((a: any) => a.word_set_id);
+        const roundsMap: Record<string, number> = {};
+        for (const a of (assignmentsData || [])) {
+          roundsMap[a.word_set_id] = a.required_rounds || 0;
+        }
+
         if (setIds.length === 0) {
-          result = { sets: [] };
+          result = { sets: [], completions: [] };
           break;
         }
 
@@ -820,17 +825,53 @@ Deno.serve(async (req) => {
           .in('set_id', setIds)
           .order('sort_order');
 
+        // Get completions for this student (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const { data: completionsData } = await supabase
+          .from('vocab_card_completions')
+          .select('id, word_set_ids, correct_count, wrong_count, total_count, mode, completed_at')
+          .eq('student_id', student_id)
+          .gte('completed_at', thirtyDaysAgo.toISOString())
+          .order('completed_at', { ascending: false });
+
         const sets = (setsData || []).map((s: any) => ({
           set_id: s.id,
           set_title: s.title,
           folder_name: s.folder_id ? (folderMap[s.folder_id] || null) : null,
+          required_rounds: roundsMap[s.id] || 0,
           words: (allWords || []).filter((w: any) => w.set_id === s.id).map((w: any) => ({
             english: w.english,
             meaning: w.meaning,
           })),
         }));
 
-        result = { sets };
+        result = { sets, completions: completionsData || [] };
+        break;
+      }
+
+      case 'submit_vocab_completion': {
+        const { word_set_ids, correct_count, wrong_count, total_count, mode } = params;
+        if (!word_set_ids || !Array.isArray(word_set_ids)) {
+          return new Response(
+            JSON.stringify({ error: 'Missing word_set_ids' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: insertErr } = await supabase
+          .from('vocab_card_completions')
+          .insert({
+            student_id,
+            word_set_ids,
+            correct_count: correct_count || 0,
+            wrong_count: wrong_count || 0,
+            total_count: total_count || 0,
+            mode: mode || 'eng_to_kor',
+          });
+
+        if (insertErr) throw insertErr;
+        result = { success: true };
         break;
       }
 
