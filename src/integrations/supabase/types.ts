@@ -1799,6 +1799,7 @@ export type Database = {
           test_date: string
           test_time: string | null
           test_type: string
+          title: string | null
         }
         Insert: {
           content?: string | null
@@ -1816,6 +1817,7 @@ export type Database = {
           test_date: string
           test_time?: string | null
           test_type?: string
+          title?: string | null
         }
         Update: {
           content?: string | null
@@ -1833,6 +1835,7 @@ export type Database = {
           test_date?: string
           test_time?: string | null
           test_type?: string
+          title?: string | null
         }
         Relationships: [
           {

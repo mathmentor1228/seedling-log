@@ -86,6 +86,10 @@ export function TestRoutineManager() {
   // Delete
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  // Filters
+  const [filterTeacher, setFilterTeacher] = useState<string>('all');
+  const [filterDay, setFilterDay] = useState<string>('all');
+
   useEffect(() => {
     if (user?.id) fetchData();
   }, [user?.id]);
@@ -310,12 +314,42 @@ export function TestRoutineManager() {
     );
   }
 
+  const filteredRoutines = routines.filter(r => {
+    if (filterTeacher !== 'all' && r.teacher_id !== filterTeacher) return false;
+    if (filterDay !== 'all' && String(r.day_of_week) !== filterDay) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <h3 className="text-sm font-semibold">시험 루틴 설정</h3>
-          <p className="text-xs text-muted-foreground">특정 요일/시간에 반복되는 시험 일정을 자동 생성합니다</p>
+          {isAdmin && (
+            <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+              <SelectTrigger className="w-28 h-8 text-xs">
+                <SelectValue placeholder="선생님" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 선생님</SelectItem>
+                {teachers.map(t => (
+                  <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={filterDay} onValueChange={setFilterDay}>
+            <SelectTrigger className="w-24 h-8 text-xs">
+              <SelectValue placeholder="요일" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 요일</SelectItem>
+              {DAY_LABELS.map((label, i) => (
+                <SelectItem key={i} value={String(i)}>{label}요일</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Badge variant="secondary" className="text-xs">{filteredRoutines.length}건</Badge>
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => { resetForm(); setDialogOpen(true); }}>
           <Plus className="w-3.5 h-3.5" />
@@ -323,17 +357,23 @@ export function TestRoutineManager() {
         </Button>
       </div>
 
-      {routines.length === 0 ? (
+      <p className="text-xs text-muted-foreground">특정 요일/시간에 반복되는 시험 일정을 자동 생성합니다</p>
+
+      {filteredRoutines.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
             <Settings className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">등록된 시험 루틴이 없습니다</p>
-            <p className="text-xs mt-1">루틴을 추가하면 특정 요일/시간에 학생들의 시험 일정을 자동으로 생성할 수 있습니다</p>
+            <p className="text-sm">
+              {routines.length === 0 ? '등록된 시험 루틴이 없습니다' : '필터 조건에 맞는 루틴이 없습니다'}
+            </p>
+            {routines.length === 0 && (
+              <p className="text-xs mt-1">루틴을 추가하면 특정 요일/시간에 학생들의 시험 일정을 자동으로 생성할 수 있습니다</p>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-3">
-          {routines.map(routine => {
+          {filteredRoutines.map(routine => {
             const studentCount = getStudentCount(routine.id);
             return (
               <Card key={routine.id} className={!routine.is_active ? 'opacity-50' : ''}>

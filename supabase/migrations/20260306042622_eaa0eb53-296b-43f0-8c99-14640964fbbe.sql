@@ -1,0 +1,1 @@
+ALTER TABLE public.test_schedules ADD COLUMN title text;
