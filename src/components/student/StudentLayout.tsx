@@ -9,7 +9,8 @@
    Calendar, 
    BookOpen,
    LogOut,
-   User
+   User,
+   Languages
  } from 'lucide-react';
  import { Button } from '@/components/ui/button';
  import {
