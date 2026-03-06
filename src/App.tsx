@@ -22,6 +22,7 @@ import AdminReportPage from "./pages/AdminReportPage";
 import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
 import ReportStatusPage from "./pages/ReportStatusPage";
 import VocabTestPage from "./pages/VocabTestPage";
+import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
 import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
 import NotFound from "./pages/NotFound";
 import TrialSignup from "./pages/TrialSignup";
@@ -98,6 +99,7 @@ const App = () => (
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
+                <Route path="/vocab-generator" element={<VocabTestGeneratorPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
