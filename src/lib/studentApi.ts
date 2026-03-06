@@ -104,5 +104,14 @@ export const studentApi = {
 
   getWeeklyReports: () => studentApiCall<{ reports: any[] }>('weekly_reports'),
 
-  getVocabCards: () => studentApiCall<{ sets: any[] }>('vocab_cards'),
+  getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[] }>('vocab_cards'),
+
+  submitVocabCompletion: (wordSetIds: string[], correctCount: number, wrongCount: number, totalCount: number, mode: string) =>
+    studentApiCall<{ success: boolean }>('submit_vocab_completion', {
+      word_set_ids: wordSetIds,
+      correct_count: correctCount,
+      wrong_count: wrongCount,
+      total_count: totalCount,
+      mode,
+    }),
 };

@@ -1,12 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
 import { studentApi } from '@/lib/studentApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RotateCcw, Eye, EyeOff, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2 } from 'lucide-react';
+import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
+import { toast } from '@/hooks/use-toast';
 
 interface VocabWord {
   english: string;
@@ -17,13 +19,25 @@ interface VocabSetInfo {
   set_id: string;
   set_title: string;
   folder_name: string | null;
+  required_rounds: number;
   words: VocabWord[];
+}
+
+interface VocabCompletion {
+  id: string;
+  word_set_ids: string[];
+  correct_count: number;
+  wrong_count: number;
+  total_count: number;
+  mode: string;
+  completed_at: string;
 }
 
 export default function StudentVocab() {
   const { student } = useStudentAuth();
   const [loading, setLoading] = useState(true);
   const [vocabSets, setVocabSets] = useState<VocabSetInfo[]>([]);
+  const [completions, setCompletions] = useState<VocabCompletion[]>([]);
   const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
 
   // Flashcard state
@@ -33,6 +47,7 @@ export default function StudentVocab() {
   const [mode, setMode] = useState<'eng_to_kor' | 'kor_to_eng'>('eng_to_kor');
   const [started, setStarted] = useState(false);
   const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     loadVocabSets();
@@ -44,8 +59,22 @@ export default function StudentVocab() {
     if (data?.sets) {
       setVocabSets(data.sets);
     }
+    if (data?.completions) {
+      setCompletions(data.completions);
+    }
     setLoading(false);
   };
+
+  // Count completions per set
+  const completionCountBySet = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of completions) {
+      for (const setId of c.word_set_ids) {
+        map[setId] = (map[setId] || 0) + 1;
+      }
+    }
+    return map;
+  }, [completions]);
 
   const toggleSetSelection = (setId: string) => {
     setSelectedSetIds(prev =>
@@ -59,7 +88,6 @@ export default function StudentVocab() {
       .flatMap(s => s.words);
     if (allWords.length === 0) return;
 
-    // Shuffle
     const shuffled = [...allWords];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -91,7 +119,6 @@ export default function StudentVocab() {
       next[currentIdx] = result;
       return next;
     });
-    // Auto-advance
     if (currentIdx < cards.length - 1) {
       setTimeout(() => {
         setCurrentIdx(prev => prev + 1);
@@ -124,11 +151,46 @@ export default function StudentVocab() {
     }
   };
 
+  const submitCompletion = useCallback(async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const correct = results.filter(r => r === 'correct').length;
+    const wrong = results.filter(r => r === 'wrong').length;
+    const { error } = await studentApi.submitVocabCompletion(
+      selectedSetIds,
+      correct,
+      wrong,
+      cards.length,
+      mode
+    );
+    if (!error) {
+      toast({ title: '학습 기록 저장 완료! ✅' });
+      // Update local completions
+      setCompletions(prev => [{
+        id: crypto.randomUUID(),
+        word_set_ids: selectedSetIds,
+        correct_count: correct,
+        wrong_count: wrong,
+        total_count: cards.length,
+        mode,
+        completed_at: new Date().toISOString(),
+      }, ...prev]);
+    }
+    setSubmitting(false);
+  }, [submitting, results, selectedSetIds, cards.length, mode]);
+
   const currentCard = cards[currentIdx];
   const correctCount = results.filter(r => r === 'correct').length;
   const wrongCount = results.filter(r => r === 'wrong').length;
   const answeredCount = correctCount + wrongCount;
   const isComplete = answeredCount === cards.length && cards.length > 0;
+
+  // Auto-submit when complete
+  useEffect(() => {
+    if (isComplete && !submitting) {
+      submitCompletion();
+    }
+  }, [isComplete]);
 
   // Group sets by folder
   const groupedSets = useMemo(() => {
@@ -140,6 +202,9 @@ export default function StudentVocab() {
     }
     return groups;
   }, [vocabSets]);
+
+  // Check if any set has homework (required_rounds > 0)
+  const hasHomework = vocabSets.some(s => s.required_rounds > 0);
 
   if (loading) {
     return (
@@ -163,6 +228,37 @@ export default function StudentVocab() {
           <p className="text-xs text-muted-foreground mt-0.5">범위를 선택하고 카드로 단어를 외워보세요</p>
         </div>
 
+        {/* Homework progress section */}
+        {hasHomework && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="pt-4 space-y-2">
+              <p className="text-sm font-medium flex items-center gap-1.5">
+                <Target className="w-4 h-4 text-primary" />
+                숙제 진행 현황
+              </p>
+              {vocabSets.filter(s => s.required_rounds > 0).map(s => {
+                const done = completionCountBySet[s.set_id] || 0;
+                const target = s.required_rounds;
+                const percent = Math.min(100, Math.round(done / target * 100));
+                const isDone = done >= target;
+                return (
+                  <div key={s.set_id} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={isDone ? 'text-green-600 font-medium' : ''}>
+                        {isDone ? '✅ ' : ''}{s.set_title}
+                      </span>
+                      <span className={isDone ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
+                        {done}/{target}회
+                      </span>
+                    </div>
+                    <Progress value={percent} className="h-1.5" />
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
+
         {vocabSets.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-sm text-muted-foreground">
@@ -180,18 +276,30 @@ export default function StudentVocab() {
                       📁 {folderName}
                     </p>
                     <div className="space-y-1 pl-2">
-                      {sets.map(s => (
-                        <label key={s.set_id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer text-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedSetIds.includes(s.set_id)}
-                            onChange={() => toggleSetSelection(s.set_id)}
-                            className="rounded border-input"
-                          />
-                          <span>{s.set_title}</span>
-                          <Badge variant="secondary" className="ml-auto text-[10px]">{s.words.length}단어</Badge>
-                        </label>
-                      ))}
+                      {sets.map(s => {
+                        const done = completionCountBySet[s.set_id] || 0;
+                        const hasTarget = s.required_rounds > 0;
+                        const targetMet = hasTarget && done >= s.required_rounds;
+                        return (
+                          <label key={s.set_id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer text-sm">
+                            <input
+                              type="checkbox"
+                              checked={selectedSetIds.includes(s.set_id)}
+                              onChange={() => toggleSetSelection(s.set_id)}
+                              className="rounded border-input"
+                            />
+                            <span>{s.set_title}</span>
+                            <div className="ml-auto flex items-center gap-1">
+                              {hasTarget && (
+                                <Badge variant={targetMet ? 'default' : 'outline'} className="text-[10px]">
+                                  {done}/{s.required_rounds}회
+                                </Badge>
+                              )}
+                              <Badge variant="secondary" className="text-[10px]">{s.words.length}단어</Badge>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -277,9 +385,9 @@ export default function StudentVocab() {
               <span className="font-bold">{cards.length}</span>
               <span className="text-muted-foreground ml-2">({Math.round(correctCount / cards.length * 100)}%)</span>
             </div>
+            <p className="text-xs text-muted-foreground">학습 기록이 자동 저장되었습니다</p>
             {wrongCount > 0 && (
               <Button variant="outline" onClick={() => {
-                // Retry only wrong ones
                 const wrongCards = cards.filter((_, i) => results[i] === 'wrong');
                 const shuffled = [...wrongCards];
                 for (let i = shuffled.length - 1; i > 0; i--) {

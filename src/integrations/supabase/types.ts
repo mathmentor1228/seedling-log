@@ -1364,6 +1364,7 @@ export type Database = {
           assigned_at: string
           assigned_by: string
           id: string
+          required_rounds: number
           student_id: string
           word_set_id: string
         }
@@ -1371,6 +1372,7 @@ export type Database = {
           assigned_at?: string
           assigned_by: string
           id?: string
+          required_rounds?: number
           student_id: string
           word_set_id: string
         }
@@ -1378,6 +1380,7 @@ export type Database = {
           assigned_at?: string
           assigned_by?: string
           id?: string
+          required_rounds?: number
           student_id?: string
           word_set_id?: string
         }
@@ -1959,6 +1962,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      vocab_card_completions: {
+        Row: {
+          completed_at: string
+          correct_count: number
+          id: string
+          mode: string
+          student_id: string
+          total_count: number
+          word_set_ids: string[]
+          wrong_count: number
+        }
+        Insert: {
+          completed_at?: string
+          correct_count?: number
+          id?: string
+          mode?: string
+          student_id: string
+          total_count?: number
+          word_set_ids?: string[]
+          wrong_count?: number
+        }
+        Update: {
+          completed_at?: string
+          correct_count?: number
+          id?: string
+          mode?: string
+          student_id?: string
+          total_count?: number
+          word_set_ids?: string[]
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_card_completions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vocab_folders: {
         Row: {
