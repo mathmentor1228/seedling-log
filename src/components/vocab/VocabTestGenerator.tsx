@@ -584,12 +584,13 @@ export function VocabTestGenerator() {
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
             엑셀이나 메모장에서 복사한 내용을 붙여넣으세요.<br />
-            각 줄에 <strong>영어[탭/쉼표/공백]뜻</strong> 형식으로 입력합니다.
+            <strong>□ 형식</strong>도 자동 인식합니다 (예: □ ever adv. 지금까지).<br />
+            또는 각 줄에 <strong>영어[탭/쉼표/공백]뜻</strong> 형식도 지원합니다.
           </p>
           <Textarea
             value={bulkText}
             onChange={e => setBulkText(e.target.value)}
-            placeholder={`apple\t사과\nbanana\t바나나\ncherry\t체리`}
+            placeholder={`□ ever adv. 지금까지, 언젠가\n□ find v. ~을 발견하다\n□ suddenly adv. 갑자기\n\n또는\n\napple\t사과\nbanana\t바나나`}
             rows={12}
             className="text-sm font-mono"
           />
