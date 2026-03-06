@@ -51,6 +51,7 @@ const App = () => (
           <Route path="/report/view" element={<PublicReport />} />
           <Route path="/parent" element={<ParentPortal />} />
           <Route path="/trial" element={<TrialSignup />} />
+          <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
 
           {/* All authenticated routes */}
           <Route path="/*" element={
