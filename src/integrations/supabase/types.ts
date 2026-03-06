@@ -2118,6 +2118,68 @@ export type Database = {
           },
         ]
       }
+      vocab_word_items: {
+        Row: {
+          created_at: string
+          english: string
+          id: string
+          meaning: string
+          set_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          english: string
+          id?: string
+          meaning: string
+          set_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          english?: string
+          id?: string
+          meaning?: string
+          set_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_word_items_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "vocab_word_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vocab_word_sets: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          round_number: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          round_number?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          round_number?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       weekly_jobs_log: {
         Row: {
           created_at: string
