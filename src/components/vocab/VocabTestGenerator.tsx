@@ -11,7 +11,7 @@ import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload } from 'lucide-react';
+import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface WordItem {
@@ -35,6 +35,17 @@ interface GeneratedQuestion {
   answer: string;
 }
 
+interface SavedTest {
+  id: string;
+  title: string;
+  test_data: GeneratedQuestion[];
+  question_count: number;
+  eng_to_kor_percent: number;
+  share_token: string | null;
+  created_at: string;
+  notes: string | null;
+}
+
 export function VocabTestGenerator() {
   const { user } = useAuth();
   const [tab, setTab] = useState('edit');
@@ -55,15 +66,23 @@ export function VocabTestGenerator() {
   const [showAnswers, setShowAnswers] = useState(false);
   const [testTitle, setTestTitle] = useState('');
 
+  // Saved tests
+  const [savedTests, setSavedTests] = useState<SavedTest[]>([]);
+  const [savingTest, setSavingTest] = useState(false);
+  const [currentTestId, setCurrentTestId] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+
   // Bulk paste
   const [bulkText, setBulkText] = useState('');
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
 
-  // Load sets
+  // Load sets & saved tests
   useEffect(() => {
     loadSets();
+    loadSavedTests();
   }, []);
 
   const loadSets = async () => {
@@ -72,6 +91,14 @@ export function VocabTestGenerator() {
       .select('*')
       .order('round_number', { ascending: false });
     if (data) setSets(data);
+  };
+
+  const loadSavedTests = async () => {
+    const { data } = await supabase
+      .from('vocab_generated_tests')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (data) setSavedTests(data.map(d => ({ ...d, test_data: d.test_data as unknown as GeneratedQuestion[] })));
   };
 
   // Load words for a set
@@ -167,38 +194,31 @@ export function VocabTestGenerator() {
     const raw = bulkText;
     let newWords: WordItem[] = [];
 
-    // Strategy 1: □ symbol format (e.g. "□ ever adv. 지금까지, 언젠가")
     const hasBoxSymbol = raw.includes('□');
     if (hasBoxSymbol) {
-      // Split by □ to get each entry block
       const blocks = raw.split('□').filter(b => b.trim());
       const posPattern = /^(.*?)\b(adv?|v|n|a|prep|conj|int|pron)\.\s*/;
       const phraseKoreanSplit = /^([a-zA-Z~\s''\-]+(?:\s+[a-zA-Z~\s''\-]+)*)\s+([\u3131-\uD79D].*)$/s;
 
       for (const block of blocks) {
-        // Join all lines of this block, collapse whitespace
         const text = block.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
         if (!text) continue;
 
         let english = '';
         let meaning = '';
 
-        // Try matching with part-of-speech marker
         const posMatch = text.match(posPattern);
         if (posMatch) {
           english = posMatch[1].trim();
-          const pos = posMatch[2];
           meaning = text.slice(posMatch[0].length).trim();
-          // Include pos abbreviation in english for context
           if (english) {
             newWords.push({
-              english: english,
+              english,
               meaning: meaning.replace(/\s+/g, ' ').trim(),
               sort_order: newWords.length,
             });
           }
         } else {
-          // No POS marker — try splitting at first Korean character
           const korMatch = text.match(phraseKoreanSplit);
           if (korMatch) {
             english = korMatch[1].trim();
@@ -211,7 +231,6 @@ export function VocabTestGenerator() {
       }
     }
 
-    // Strategy 2: Tab / multi-space / comma separated (fallback)
     if (newWords.length === 0) {
       const lines = raw.split('\n').filter(l => l.trim());
       for (const line of lines) {
@@ -232,7 +251,6 @@ export function VocabTestGenerator() {
       toast({ title: '파싱할 수 없습니다', description: '□ 형식, 탭, 쉼표, 또는 공백으로 구분하세요', variant: 'destructive' });
       return;
     }
-    // Filter out entries with empty english or meaning
     newWords = newWords.filter(w => w.english && w.meaning);
     setWords(newWords);
     setShowBulkModal(false);
@@ -253,7 +271,6 @@ export function VocabTestGenerator() {
       toast({ title: '회차를 선택하세요', variant: 'destructive' });
       return;
     }
-    // Fetch all words from selected sets
     const { data: allItems } = await supabase
       .from('vocab_word_items')
       .select('english, meaning')
@@ -266,9 +283,7 @@ export function VocabTestGenerator() {
     const pool = [...allItems];
     const count = Math.min(questionCount, pool.length);
     const engToKorCount = Math.round(count * (engToKorPercent / 100));
-    const korToEngCount = count - engToKorCount;
 
-    // Shuffle pool
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -277,7 +292,6 @@ export function VocabTestGenerator() {
     const selected = pool.slice(0, count);
     const questions: GeneratedQuestion[] = [];
 
-    // First engToKorCount items: English -> Korean
     for (let i = 0; i < engToKorCount && i < selected.length; i++) {
       questions.push({
         questionNumber: i + 1,
@@ -286,7 +300,6 @@ export function VocabTestGenerator() {
         answer: selected[i].meaning,
       });
     }
-    // Remaining: Korean -> English
     for (let i = engToKorCount; i < selected.length; i++) {
       questions.push({
         questionNumber: i + 1,
@@ -296,15 +309,14 @@ export function VocabTestGenerator() {
       });
     }
 
-    // Shuffle questions again for mixed ordering
     for (let i = questions.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [questions[i], questions[j]] = [questions[j], questions[i]];
     }
-    // Re-number
     questions.forEach((q, i) => (q.questionNumber = i + 1));
 
     setGenerated(questions);
+    setCurrentTestId(null);
     setShowAnswers(false);
     setTab('result');
   };
@@ -315,6 +327,77 @@ export function VocabTestGenerator() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  // Save generated test
+  const handleSaveTest = async () => {
+    if (generated.length === 0) return;
+    setSavingTest(true);
+    try {
+      const { data: tokenData } = await supabase.rpc('generate_vocab_test_token');
+      const token = tokenData as string;
+
+      const { data, error } = await supabase.from('vocab_generated_tests').insert({
+        title: testTitle || '단어 시험',
+        test_data: generated as unknown as any,
+        eng_to_kor_percent: engToKorPercent,
+        question_count: generated.length,
+        source_set_ids: selectedSetIds,
+        share_token: token,
+        created_by: user!.id,
+      }).select().single();
+
+      if (error) throw error;
+      setCurrentTestId(data.id);
+      toast({ title: '시험지 저장 완료' });
+      loadSavedTests();
+    } catch (e: any) {
+      toast({ title: '저장 실패', description: e.message, variant: 'destructive' });
+    }
+    setSavingTest(false);
+  };
+
+  // Share test
+  const handleShare = async (testId: string) => {
+    const test = savedTests.find(t => t.id === testId);
+    if (!test) return;
+
+    let token = test.share_token;
+    if (!token) {
+      const { data: tokenData } = await supabase.rpc('generate_vocab_test_token');
+      token = tokenData as string;
+      await supabase.from('vocab_generated_tests').update({ share_token: token }).eq('id', testId);
+      loadSavedTests();
+    }
+
+    const url = `${window.location.origin}/vocab-test-view?token=${token}`;
+    setShareUrl(url);
+    setShowShareModal(true);
+  };
+
+  const copyShareUrl = () => {
+    if (shareUrl) {
+      navigator.clipboard.writeText(shareUrl);
+      toast({ title: '링크가 복사되었습니다' });
+    }
+  };
+
+  // Load saved test into result view
+  const handleLoadSavedTest = (test: SavedTest) => {
+    setGenerated(test.test_data);
+    setTestTitle(test.title);
+    setCurrentTestId(test.id);
+    setShowAnswers(false);
+    setTab('result');
+  };
+
+  // Delete saved test
+  const handleDeleteSavedTest = async (id: string) => {
+    if (!confirm('이 시험지를 삭제하시겠습니까?')) return;
+    await supabase.from('vocab_generated_tests').delete().eq('id', id);
+    if (currentTestId === id) setCurrentTestId(null);
+    loadSavedTests();
+    toast({ title: '삭제 완료' });
   };
 
   return (
@@ -337,6 +420,10 @@ export function VocabTestGenerator() {
           <TabsTrigger value="result" className="gap-1.5 text-xs" disabled={generated.length === 0}>
             <Printer className="w-3.5 h-3.5" />
             시험지 / 답지
+          </TabsTrigger>
+          <TabsTrigger value="saved" className="gap-1.5 text-xs">
+            <FolderOpen className="w-3.5 h-3.5" />
+            저장된 시험지
           </TabsTrigger>
         </TabsList>
 
@@ -447,7 +534,6 @@ export function VocabTestGenerator() {
         {/* === TAB: Generate === */}
         <TabsContent value="generate">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Set selection */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>출제 회차 선택</CardTitle>
@@ -467,7 +553,6 @@ export function VocabTestGenerator() {
               </CardContent>
             </Card>
 
-            {/* Options */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle>출제 옵션</CardTitle>
@@ -537,10 +622,19 @@ export function VocabTestGenerator() {
                 <Button variant="outline" size="sm" onClick={handleGenerate}>
                   <Shuffle className="w-3.5 h-3.5 mr-1" /> 다시 섞기
                 </Button>
+                <div className="flex-1" />
+                {!currentTestId ? (
+                  <Button size="sm" onClick={handleSaveTest} disabled={savingTest}>
+                    <Save className="w-3.5 h-3.5 mr-1" /> {savingTest ? '저장 중...' : '시험지 저장'}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => handleShare(currentTestId)}>
+                    <Share2 className="w-3.5 h-3.5 mr-1" /> 공유 링크
+                  </Button>
+                )}
               </div>
 
               <div ref={printRef} className="print-area">
-                {/* Test header */}
                 <div className="text-center mb-6 border-b pb-4">
                   <h2 className="text-lg font-bold">{testTitle || '단어 시험'}</h2>
                   <div className="flex justify-center gap-8 mt-2 text-sm text-muted-foreground">
@@ -550,7 +644,6 @@ export function VocabTestGenerator() {
                   </div>
                 </div>
 
-                {/* Questions in 2 columns */}
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                   {generated.map(q => (
                     <div key={q.questionNumber} className="flex items-baseline gap-2 py-1 border-b border-dashed text-sm">
@@ -573,6 +666,44 @@ export function VocabTestGenerator() {
               </div>
             </div>
           )}
+        </TabsContent>
+
+        {/* === TAB: Saved Tests === */}
+        <TabsContent value="saved">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>저장된 시험지</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {savedTests.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">저장된 시험지가 없습니다. 시험을 출제한 후 저장하세요.</p>
+              ) : (
+                <div className="space-y-2">
+                  {savedTests.map(t => (
+                    <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">{t.title}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {t.question_count}문제 · 영→한 {t.eng_to_kor_percent}% · {new Date(t.created_at).toLocaleDateString('ko-KR')}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                        <Button size="sm" variant="outline" onClick={() => handleLoadSavedTest(t)}>
+                          <FileText className="w-3.5 h-3.5 mr-1" /> 보기
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleShare(t.id)}>
+                          <Share2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDeleteSavedTest(t.id)}>
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
@@ -598,6 +729,27 @@ export function VocabTestGenerator() {
             <Button variant="outline" size="sm" onClick={() => setShowBulkModal(false)}>취소</Button>
             <Button size="sm" onClick={handleBulkPaste}>
               <Upload className="w-3.5 h-3.5 mr-1" /> 불러오기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share modal */}
+      <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link className="w-4 h-4" />
+              시험지 공유
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            아래 링크를 조교에게 공유하면 시험지와 답지를 확인할 수 있습니다.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input value={shareUrl || ''} readOnly className="text-xs font-mono" />
+            <Button size="sm" onClick={copyShareUrl}>
+              <Copy className="w-3.5 h-3.5" />
             </Button>
           </div>
         </DialogContent>

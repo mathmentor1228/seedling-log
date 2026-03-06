@@ -1921,6 +1921,45 @@ export type Database = {
         }
         Relationships: []
       }
+      vocab_generated_tests: {
+        Row: {
+          created_at: string
+          created_by: string
+          eng_to_kor_percent: number
+          id: string
+          notes: string | null
+          question_count: number
+          share_token: string | null
+          source_set_ids: string[]
+          test_data: Json
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          eng_to_kor_percent?: number
+          id?: string
+          notes?: string | null
+          question_count?: number
+          share_token?: string | null
+          source_set_ids?: string[]
+          test_data?: Json
+          title: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          eng_to_kor_percent?: number
+          id?: string
+          notes?: string | null
+          question_count?: number
+          share_token?: string | null
+          source_set_ids?: string[]
+          test_data?: Json
+          title?: string
+        }
+        Relationships: []
+      }
       vocab_schedules: {
         Row: {
           absence_reason: string | null
@@ -2397,6 +2436,7 @@ export type Database = {
       }
       generate_parent_token: { Args: never; Returns: string }
       generate_share_token: { Args: never; Returns: string }
+      generate_vocab_test_token: { Args: never; Returns: string }
       generate_weekly_reports: {
         Args: {
           _student_ids?: string[]
