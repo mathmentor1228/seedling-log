@@ -83,6 +83,9 @@ const App = () => (
                 <Route path="/student/feedback" element={
                   <StudentAuthProvider><StudentLayout><StudentFeedback /></StudentLayout></StudentAuthProvider>
                 } />
+                <Route path="/student/vocab" element={
+                  <StudentAuthProvider><StudentLayout><StudentVocab /></StudentLayout></StudentAuthProvider>
+                } />
 
                 {/* Admin App Routes */}
                 <Route path="/dashboard" element={<DashboardPage />} />
