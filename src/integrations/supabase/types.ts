@@ -1359,6 +1359,45 @@ export type Database = {
           },
         ]
       }
+      student_vocab_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          id: string
+          student_id: string
+          word_set_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by: string
+          id?: string
+          student_id: string
+          word_set_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          id?: string
+          student_id?: string
+          word_set_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_vocab_assignments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_vocab_assignments_word_set_id_fkey"
+            columns: ["word_set_id"]
+            isOneToOne: false
+            referencedRelation: "vocab_word_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
           created_at: string
