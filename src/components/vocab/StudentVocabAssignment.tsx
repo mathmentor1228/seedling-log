@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
-import { Search, Save, Folder, Users, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, Save, Folder, Users, ChevronDown, ChevronRight, Target, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 
 interface VocabFolder {
   id: string;
@@ -30,42 +31,65 @@ interface Student {
   school_level: string | null;
 }
 
+interface Assignment {
+  word_set_id: string;
+  required_rounds: number;
+}
+
+interface Completion {
+  student_id: string;
+  word_set_ids: string[];
+  completed_at: string;
+}
+
 export function StudentVocabAssignment() {
   const { user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [sets, setSets] = useState<WordSet[]>([]);
   const [folders, setFolders] = useState<VocabFolder[]>([]);
-  const [assignments, setAssignments] = useState<Record<string, string[]>>({}); // student_id -> set_ids
+  const [assignments, setAssignments] = useState<Record<string, Assignment[]>>({});
+  const [completions, setCompletions] = useState<Completion[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [defaultRounds, setDefaultRounds] = useState(3);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
-    const [studentsRes, setsRes, foldersRes, assignRes] = await Promise.all([
+    const [studentsRes, setsRes, foldersRes, assignRes, completionsRes] = await Promise.all([
       supabase.from('students').select('id, name, school, grade_year, school_level').eq('enrollment_status', 'active').order('name'),
       supabase.from('vocab_word_sets').select('id, title, round_number, folder_id').order('round_number'),
       supabase.from('vocab_folders').select('id, name, parent_id').order('sort_order'),
-      supabase.from('student_vocab_assignments').select('student_id, word_set_id'),
+      supabase.from('student_vocab_assignments').select('student_id, word_set_id, required_rounds'),
+      supabase.from('vocab_card_completions').select('student_id, word_set_ids, completed_at').order('completed_at', { ascending: false }).limit(1000),
     ]);
 
     if (studentsRes.data) setStudents(studentsRes.data);
     if (setsRes.data) setSets(setsRes.data as WordSet[]);
     if (foldersRes.data) setFolders(foldersRes.data);
+    if (completionsRes.data) setCompletions(completionsRes.data as Completion[]);
 
-    // Build assignment map
-    const map: Record<string, string[]> = {};
+    const map: Record<string, Assignment[]> = {};
     if (assignRes.data) {
       for (const a of assignRes.data) {
         if (!map[a.student_id]) map[a.student_id] = [];
-        map[a.student_id].push(a.word_set_id);
+        map[a.student_id].push({
+          word_set_id: a.word_set_id,
+          required_rounds: (a as any).required_rounds || 0,
+        });
       }
     }
     setAssignments(map);
+  };
+
+  const getCompletionCount = (studentId: string, setId: string) => {
+    return completions.filter(c =>
+      c.student_id === studentId && c.word_set_ids.includes(setId)
+    ).length;
   };
 
   const toggleFolder = (id: string) => {
@@ -83,12 +107,21 @@ export function StudentVocabAssignment() {
     return [...directSets, ...childSetIds];
   };
 
+  const getStudentAssignment = (studentId: string, setId: string): Assignment | undefined => {
+    return (assignments[studentId] || []).find(a => a.word_set_id === setId);
+  };
+
+  const isSetAssigned = (studentId: string, setId: string) => {
+    return !!getStudentAssignment(studentId, setId);
+  };
+
   const toggleSetForStudent = (studentId: string, setId: string) => {
     setAssignments(prev => {
       const current = prev[studentId] || [];
-      const next = current.includes(setId)
-        ? current.filter(id => id !== setId)
-        : [...current, setId];
+      const exists = current.find(a => a.word_set_id === setId);
+      const next = exists
+        ? current.filter(a => a.word_set_id !== setId)
+        : [...current, { word_set_id: setId, required_rounds: defaultRounds }];
       return { ...prev, [studentId]: next };
     });
   };
@@ -96,28 +129,48 @@ export function StudentVocabAssignment() {
   const toggleFolderForStudent = (studentId: string, folderId: string) => {
     const ids = getSetIdsInFolder(folderId);
     const current = assignments[studentId] || [];
-    const allSelected = ids.every(id => current.includes(id));
+    const allSelected = ids.every(id => current.some(a => a.word_set_id === id));
     if (allSelected) {
-      setAssignments(prev => ({ ...prev, [studentId]: current.filter(id => !ids.includes(id)) }));
+      setAssignments(prev => ({
+        ...prev,
+        [studentId]: current.filter(a => !ids.includes(a.word_set_id)),
+      }));
     } else {
-      setAssignments(prev => ({ ...prev, [studentId]: [...new Set([...current, ...ids])] }));
+      const newAssignments = ids
+        .filter(id => !current.some(a => a.word_set_id === id))
+        .map(id => ({ word_set_id: id, required_rounds: defaultRounds }));
+      setAssignments(prev => ({
+        ...prev,
+        [studentId]: [...current, ...newAssignments],
+      }));
     }
+  };
+
+  const updateRounds = (studentId: string, setId: string, rounds: number) => {
+    setAssignments(prev => {
+      const current = prev[studentId] || [];
+      return {
+        ...prev,
+        [studentId]: current.map(a =>
+          a.word_set_id === setId ? { ...a, required_rounds: rounds } : a
+        ),
+      };
+    });
   };
 
   const handleSave = async () => {
     if (!selectedStudentId) return;
     setSaving(true);
     try {
-      // Delete existing assignments
       await supabase.from('student_vocab_assignments').delete().eq('student_id', selectedStudentId);
 
-      // Insert new assignments
-      const setIds = assignments[selectedStudentId] || [];
-      if (setIds.length > 0) {
-        const rows = setIds.map(word_set_id => ({
+      const currentAssignments = assignments[selectedStudentId] || [];
+      if (currentAssignments.length > 0) {
+        const rows = currentAssignments.map(a => ({
           student_id: selectedStudentId,
-          word_set_id,
+          word_set_id: a.word_set_id,
           assigned_by: user!.id,
+          required_rounds: a.required_rounds,
         }));
         const { error } = await supabase.from('student_vocab_assignments').insert(rows);
         if (error) throw error;
@@ -136,13 +189,22 @@ export function StudentVocabAssignment() {
   const selectedStudent = students.find(s => s.id === selectedStudentId);
   const selectedAssignments = selectedStudentId ? (assignments[selectedStudentId] || []) : [];
 
+  // Summary for student list: homework progress
+  const getStudentProgress = (studentId: string) => {
+    const studentAssigns = assignments[studentId] || [];
+    const withTarget = studentAssigns.filter(a => a.required_rounds > 0);
+    if (withTarget.length === 0) return null;
+    const completed = withTarget.filter(a => getCompletionCount(studentId, a.word_set_id) >= a.required_rounds).length;
+    return { completed, total: withTarget.length };
+  };
+
   const renderFolderTree = (parentId: string | null, depth: number = 0) => {
     const childFolders = folders.filter(f => f.parent_id === parentId);
     return childFolders.map(folder => {
       const isExpanded = expandedFolders.has(folder.id);
       const folderSetIds = getSetIdsInFolder(folder.id);
-      const allChecked = folderSetIds.length > 0 && folderSetIds.every(id => selectedAssignments.includes(id));
-      const someChecked = folderSetIds.some(id => selectedAssignments.includes(id));
+      const allChecked = folderSetIds.length > 0 && folderSetIds.every(id => isSetAssigned(selectedStudentId!, id));
+      const someChecked = folderSetIds.some(id => isSetAssigned(selectedStudentId!, id));
       const folderSets = sets.filter(s => s.folder_id === folder.id);
 
       return (
@@ -168,22 +230,48 @@ export function StudentVocabAssignment() {
           {isExpanded && (
             <div>
               {renderFolderTree(folder.id, depth + 1)}
-              {folderSets.map(s => (
-                <label
-                  key={s.id}
-                  className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted cursor-pointer text-sm"
-                  style={{ paddingLeft: `${(depth + 1) * 16 + 20}px` }}
-                >
-                  {selectedStudentId && (
-                    <Checkbox
-                      checked={selectedAssignments.includes(s.id)}
-                      onCheckedChange={() => toggleSetForStudent(selectedStudentId, s.id)}
-                    />
-                  )}
-                  <span className="text-xs text-muted-foreground">#{s.round_number}</span>
-                  <span className="truncate">{s.title}</span>
-                </label>
-              ))}
+              {folderSets.map(s => {
+                const assigned = isSetAssigned(selectedStudentId!, s.id);
+                const assignment = getStudentAssignment(selectedStudentId!, s.id);
+                const completionCount = getCompletionCount(selectedStudentId!, s.id);
+                const targetMet = assignment && assignment.required_rounds > 0 && completionCount >= assignment.required_rounds;
+
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted text-sm"
+                    style={{ paddingLeft: `${(depth + 1) * 16 + 20}px` }}
+                  >
+                    {selectedStudentId && (
+                      <Checkbox
+                        checked={assigned}
+                        onCheckedChange={() => toggleSetForStudent(selectedStudentId, s.id)}
+                      />
+                    )}
+                    <span className="text-xs text-muted-foreground">#{s.round_number}</span>
+                    <span className="truncate flex-1">{s.title}</span>
+                    {assigned && (
+                      <div className="flex items-center gap-1">
+                        {targetMet && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                        {assignment!.required_rounds > 0 && (
+                          <span className={`text-[10px] ${targetMet ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {completionCount}/{assignment!.required_rounds}회
+                          </span>
+                        )}
+                        <Input
+                          type="number"
+                          min={0}
+                          max={99}
+                          value={assignment!.required_rounds}
+                          onChange={e => updateRounds(selectedStudentId!, s.id, parseInt(e.target.value) || 0)}
+                          className="w-14 h-6 text-xs text-center p-0"
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -212,21 +300,34 @@ export function StudentVocabAssignment() {
           </div>
         </CardHeader>
         <CardContent className="space-y-0.5 max-h-[500px] overflow-y-auto">
-          {filteredStudents.map(s => (
-            <div
-              key={s.id}
-              className={`flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors ${selectedStudentId === s.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'}`}
-              onClick={() => setSelectedStudentId(s.id)}
-            >
-              <div>
-                <span>{s.name}</span>
-                {s.school && <span className="text-xs text-muted-foreground ml-1.5">{s.school}</span>}
+          {filteredStudents.map(s => {
+            const progress = getStudentProgress(s.id);
+            return (
+              <div
+                key={s.id}
+                className={`flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors ${selectedStudentId === s.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'}`}
+                onClick={() => setSelectedStudentId(s.id)}
+              >
+                <div>
+                  <span>{s.name}</span>
+                  {s.school && <span className="text-xs text-muted-foreground ml-1.5">{s.school}</span>}
+                </div>
+                <div className="flex items-center gap-1">
+                  {progress && (
+                    <Badge
+                      variant={progress.completed === progress.total ? 'default' : 'outline'}
+                      className="text-[10px]"
+                    >
+                      {progress.completed === progress.total ? '✅' : `${progress.completed}/${progress.total}`}
+                    </Badge>
+                  )}
+                  {(assignments[s.id]?.length || 0) > 0 && (
+                    <Badge variant="secondary" className="text-[10px]">{assignments[s.id].length}개</Badge>
+                  )}
+                </div>
               </div>
-              {(assignments[s.id]?.length || 0) > 0 && (
-                <Badge variant="secondary" className="text-[10px]">{assignments[s.id].length}개</Badge>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
 
@@ -245,6 +346,21 @@ export function StudentVocabAssignment() {
               </Button>
             )}
           </CardTitle>
+          {selectedStudentId && (
+            <div className="flex items-center gap-2 mt-2">
+              <Target className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">기본 목표 회차:</span>
+              <Input
+                type="number"
+                min={0}
+                max={99}
+                value={defaultRounds}
+                onChange={e => setDefaultRounds(parseInt(e.target.value) || 0)}
+                className="w-16 h-6 text-xs text-center p-0"
+              />
+              <span className="text-xs text-muted-foreground">회</span>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="max-h-[500px] overflow-y-auto">
           {!selectedStudentId ? (
@@ -255,16 +371,38 @@ export function StudentVocabAssignment() {
               {unfiledSets.length > 0 && (
                 <>
                   {folders.length > 0 && <div className="text-[10px] text-muted-foreground pt-2 pb-1 border-t mt-1">미분류</div>}
-                  {unfiledSets.map(s => (
-                    <label key={s.id} className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted cursor-pointer text-sm" style={{ paddingLeft: '20px' }}>
-                      <Checkbox
-                        checked={selectedAssignments.includes(s.id)}
-                        onCheckedChange={() => toggleSetForStudent(selectedStudentId, s.id)}
-                      />
-                      <span className="text-xs text-muted-foreground">#{s.round_number}</span>
-                      <span className="truncate">{s.title}</span>
-                    </label>
-                  ))}
+                  {unfiledSets.map(s => {
+                    const assigned = isSetAssigned(selectedStudentId, s.id);
+                    const assignment = getStudentAssignment(selectedStudentId, s.id);
+                    const completionCount = getCompletionCount(selectedStudentId, s.id);
+                    return (
+                      <div key={s.id} className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted text-sm" style={{ paddingLeft: '20px' }}>
+                        <Checkbox
+                          checked={assigned}
+                          onCheckedChange={() => toggleSetForStudent(selectedStudentId, s.id)}
+                        />
+                        <span className="text-xs text-muted-foreground">#{s.round_number}</span>
+                        <span className="truncate flex-1">{s.title}</span>
+                        {assigned && assignment && (
+                          <div className="flex items-center gap-1">
+                            {assignment.required_rounds > 0 && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {completionCount}/{assignment.required_rounds}회
+                              </span>
+                            )}
+                            <Input
+                              type="number"
+                              min={0}
+                              max={99}
+                              value={assignment.required_rounds}
+                              onChange={e => updateRounds(selectedStudentId, s.id, parseInt(e.target.value) || 0)}
+                              className="w-14 h-6 text-xs text-center p-0"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </>
               )}
             </div>
