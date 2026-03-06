@@ -99,6 +99,7 @@ const App = () => (
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
+                <Route path="/vocab-generator" element={<VocabTestGeneratorPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
