@@ -180,17 +180,73 @@ export function VocabTestResultsPanel() {
     if (generalRes.data) setGeneralSchedules(generalRes.data as any);
 
     // Collect all schedule IDs from both failed sets for student name lookup
-    const allFailedData = allFailedRes.data || [];
-    const scheduledRetestData = scheduledRetestRes.data || [];
+    const allFailedData = (allFailedRes.data || []) as TestResult[];
+    const scheduledRetestData = (scheduledRetestRes.data || []) as TestResult[];
+
+    // Filter out failed results where a retest has already been taken and PASSED
+    // A retest is identified by: same student_id + book_name + day_number, schedule_type = 'retest', and a passing result exists
+    const retestScheduleIds = new Set(
+      (schedRes.data || [])
+        .filter((s: any) => s.schedule_type === 'retest')
+        .map((s: any) => s.id)
+    );
+
+    // Also fetch retest schedules not in current month
+    const allRetestScheduleIds = [...allFailedData, ...scheduledRetestData].map(r => r.schedule_id);
+    let allRetestSchedulesMap: Record<string, any> = {};
+
+    // Get all retest schedules for these students to check if passed retests exist
+    const failedStudentIds = [...new Set([...allFailedData, ...scheduledRetestData].map(r => r.student_id))];
+    let passedRetestKeys = new Set<string>();
+
+    if (failedStudentIds.length > 0) {
+      // Find all retest schedules for these students
+      const { data: retestScheds } = await supabase
+        .from('vocab_schedules')
+        .select('id, student_id, day_number, book_name')
+        .eq('schedule_type', 'retest')
+        .in('student_id', failedStudentIds);
+
+      if (retestScheds && retestScheds.length > 0) {
+        const retestSchedIds = retestScheds.map((s: any) => s.id);
+        // Find passing results for these retest schedules
+        const { data: retestResults } = await supabase
+          .from('vocab_test_results')
+          .select('schedule_id, passed')
+          .in('schedule_id', retestSchedIds)
+          .eq('passed', true);
+
+        if (retestResults) {
+          for (const rr of retestResults) {
+            const sched = retestScheds.find((s: any) => s.id === rr.schedule_id);
+            if (sched) {
+              // Key: student_id + book_name + day_number
+              passedRetestKeys.add(`${sched.student_id}_${sched.book_name}_${sched.day_number}`);
+            }
+          }
+        }
+      }
+    }
+
+    // Filter: remove items where a passing retest exists
+    const filteredFailed = allFailedData.filter(r => {
+      const key = `${r.student_id}_${r.book_name}_${r.day_number}`;
+      return !passedRetestKeys.has(key);
+    });
+    const filteredScheduledRetest = scheduledRetestData.filter(r => {
+      const key = `${r.student_id}_${r.book_name}_${r.day_number}`;
+      return !passedRetestKeys.has(key);
+    });
+
     const allScheduleIds = [
       ...new Set([
-        ...allFailedData.map((r: any) => r.schedule_id),
-        ...scheduledRetestData.map((r: any) => r.schedule_id),
+        ...filteredFailed.map(r => r.schedule_id),
+        ...filteredScheduledRetest.map(r => r.schedule_id),
       ])
     ];
 
-    setAllFailedResults(allFailedData as any);
-    setScheduledRetestResults(scheduledRetestData as any);
+    setAllFailedResults(filteredFailed);
+    setScheduledRetestResults(filteredScheduledRetest);
 
     if (allScheduleIds.length > 0) {
       const { data: relatedScheds } = await supabase
