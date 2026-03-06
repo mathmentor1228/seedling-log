@@ -63,7 +63,9 @@ const SCHOOL_LEVELS = ['초', '중', '고'];
 const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '기타'];
 const SEMESTERS = ['1학기', '2학기'];
 const EXAM_TYPES = ['중간고사', '기말고사', '기타'];
-const FILE_CATEGORIES = ['교과서', '기출시험지', '프린트', '시험범위', '시험지(실제)', '학원수업자료', '시험분석서', '기타'];
+const FILE_CATEGORIES = ['교과서', '기출시험지', '프린트', '시험범위', '시험지(실제)', '학원수업자료', '학교제공자료', '시험분석서', '기타'];
+const ACADEMY_FILE_CATEGORIES = ['학원수업자료'];
+const SCHOOL_FILE_CATEGORIES = ['학교제공자료', '교과서', '프린트', '시험범위'];
 const DIFFICULTY_LEVELS = ['매우 쉬움', '쉬움', '보통', '어려움', '매우 어려움'];
 const STATUS_OPTIONS = [
   { value: '자료수집전', label: '자료수집전', color: 'bg-muted text-muted-foreground' },
@@ -758,7 +760,7 @@ export function SchoolExamArchive() {
                         <TabsList className="h-8 flex-wrap">
                           <TabsTrigger value="info" className="text-xs h-7">📋 기본정보</TabsTrigger>
                           <TabsTrigger value="assessment" className="text-xs h-7">📊 평가구조</TabsTrigger>
-                          <TabsTrigger value="prep" className="text-xs h-7">📚 학원준비자료</TabsTrigger>
+                          <TabsTrigger value="prep" className="text-xs h-7">📚 자료관리</TabsTrigger>
                           <TabsTrigger value="materials" className="text-xs h-7">📎 첨부 ({archiveMaterials.length})</TabsTrigger>
                           <TabsTrigger value="analysis" className="text-xs h-7">🔍 시험후분석</TabsTrigger>
                         </TabsList>
@@ -771,68 +773,98 @@ export function SchoolExamArchive() {
                             <InfoRow label="담당 선생님" value={archive.preparing_teachers?.join(', ')} />
                           </div>
                           {archive.exam_scope && (
-                            <div className="mt-2">
-                              <span className="text-xs font-medium text-muted-foreground">시험 범위:</span>
-                              <p className="text-sm whitespace-pre-wrap mt-0.5 p-2 bg-muted/30 rounded-md">{archive.exam_scope}</p>
+                            <div className="p-3 bg-muted/30 rounded-md">
+                              <span className="text-xs font-semibold">시험 범위</span>
+                              <p className="text-sm whitespace-pre-wrap mt-1">{archive.exam_scope}</p>
                             </div>
                           )}
                           {archive.notes && (
-                            <div>
-                              <span className="text-xs font-medium text-muted-foreground">메모:</span>
-                              <p className="text-sm whitespace-pre-wrap mt-0.5">{archive.notes}</p>
+                            <div className="p-3 bg-muted/30 rounded-md">
+                              <span className="text-xs font-semibold">메모</span>
+                              <p className="text-sm whitespace-pre-wrap mt-1">{archive.notes}</p>
                             </div>
-                          )}
-                          {!archive.textbook_publisher && !archive.exam_scope && !archive.notes && (
-                            <p className="text-sm text-muted-foreground">등록된 정보가 없습니다. 수정 버튼을 눌러 정보를 추가해주세요.</p>
                           )}
                         </TabsContent>
 
                         {/* 평가구조 탭 */}
                         <TabsContent value="assessment" className="space-y-3 mt-2">
-                          <div className="grid grid-cols-1 gap-2">
-                            {archive.grade_ratio && (
-                              <div className="p-3 bg-muted/30 rounded-md">
-                                <div className="flex items-center gap-1.5 mb-1">
-                                  <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />
-                                  <span className="text-xs font-semibold">반영 비율</span>
+                          {archive.grade_ratio || archive.performance_assessment_info ? (
+                            <div className="space-y-3">
+                              {archive.grade_ratio && (
+                                <div className="p-3 bg-primary/5 rounded-md border border-primary/10">
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <BarChart3 className="w-3.5 h-3.5 text-primary" />
+                                    <span className="text-xs font-bold text-primary">반영 비율</span>
+                                  </div>
+                                  <p className="text-sm font-medium">{archive.grade_ratio}</p>
                                 </div>
-                                <p className="text-sm">{archive.grade_ratio}</p>
-                              </div>
-                            )}
-                            {archive.performance_assessment_info && (
-                              <div className="p-3 bg-muted/30 rounded-md">
-                                <div className="flex items-center gap-1.5 mb-1">
-                                  <ClipboardCheck className="w-3.5 h-3.5 text-muted-foreground" />
-                                  <span className="text-xs font-semibold">수행평가 정보</span>
+                              )}
+                              {archive.performance_assessment_info && (
+                                <div className="p-3 bg-accent/30 rounded-md border border-accent/20">
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <ClipboardCheck className="w-3.5 h-3.5 text-accent-foreground" />
+                                    <span className="text-xs font-bold">수행평가 상세</span>
+                                  </div>
+                                  <p className="text-sm whitespace-pre-wrap">{archive.performance_assessment_info}</p>
                                 </div>
-                                <p className="text-sm whitespace-pre-wrap">{archive.performance_assessment_info}</p>
-                              </div>
-                            )}
-                          </div>
-                          {!archive.grade_ratio && !archive.performance_assessment_info && (
+                              )}
+                            </div>
+                          ) : (
                             <p className="text-sm text-muted-foreground text-center py-4">
                               평가 구조 정보가 없습니다. 수정 버튼을 눌러 반영비율, 수행평가 정보를 입력해주세요.
                             </p>
                           )}
                         </TabsContent>
 
-                        {/* 학원준비자료 탭 */}
-                        <TabsContent value="prep" className="space-y-2 mt-2">
-                          {archive.academy_prep_notes && (
-                            <div className="p-3 bg-muted/30 rounded-md">
-                              <span className="text-xs font-semibold">학원 수업/준비 내용</span>
-                              <p className="text-sm whitespace-pre-wrap mt-1">{archive.academy_prep_notes}</p>
-                            </div>
-                          )}
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-muted-foreground">학원수업자료 파일</span>
+                        {/* 자료관리 탭 - 학원 vs 학교 분리 */}
+                        <TabsContent value="prep" className="space-y-4 mt-2">
+                          {/* 학원 준비 자료 섹션 */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Badge className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-0">학원</Badge>
+                                <span className="text-xs font-semibold">학원 준비 자료</span>
+                              </div>
                               <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('학원수업자료'); }}>
                                 <FileUp className="w-3 h-3 mr-1" /> 추가
                               </Button>
                             </div>
+                            {archive.academy_prep_notes && (
+                              <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-md border border-blue-100 dark:border-blue-900">
+                                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">학원 수업/준비 메모</span>
+                                <p className="text-sm whitespace-pre-wrap mt-1">{archive.academy_prep_notes}</p>
+                              </div>
+                            )}
                             {renderMaterialsByCategory(archive.id, '학원수업자료') || (
-                              <p className="text-xs text-muted-foreground text-center py-2">학원수업자료가 없습니다</p>
+                              <p className="text-xs text-muted-foreground text-center py-2">학원 준비 자료가 없습니다</p>
+                            )}
+                          </div>
+
+                          <div className="border-t" />
+
+                          {/* 학교 제공 자료 섹션 */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <Badge className="text-[10px] bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0">학교</Badge>
+                                <span className="text-xs font-semibold">학교 제공 자료</span>
+                              </div>
+                              <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('학교제공자료'); }}>
+                                <FileUp className="w-3 h-3 mr-1" /> 추가
+                              </Button>
+                            </div>
+                            {SCHOOL_FILE_CATEGORIES.map(cat => {
+                              const rendered = renderMaterialsByCategory(archive.id, cat);
+                              if (!rendered) return null;
+                              return (
+                                <div key={cat}>
+                                  <span className="text-[10px] font-medium text-muted-foreground ml-1">{cat}</span>
+                                  {rendered}
+                                </div>
+                              );
+                            })}
+                            {!SCHOOL_FILE_CATEGORIES.some(cat => (materials[archive.id] || []).some(m => m.file_category === cat)) && (
+                              <p className="text-xs text-muted-foreground text-center py-2">학교 제공 자료가 없습니다</p>
                             )}
                           </div>
                         </TabsContent>
@@ -1089,14 +1121,14 @@ export function SchoolExamArchive() {
             </div>
 
             {/* 평가 구조 */}
-            <p className="text-xs font-semibold text-muted-foreground border-b pb-1 pt-2">평가 구조</p>
+            <p className="text-xs font-semibold text-muted-foreground border-b pb-1 pt-2">평가 구조 (시험 · 수행평가)</p>
             <div>
-              <Label>반영 비율 (시험:수행평가)</Label>
-              <Input value={formData.grade_ratio} onChange={e => setFormData(p => ({ ...p, grade_ratio: e.target.value }))} placeholder="예: 시험 60% / 수행평가 40%" />
+              <Label>반영 비율 (지필평가 : 수행평가)</Label>
+              <Input value={formData.grade_ratio} onChange={e => setFormData(p => ({ ...p, grade_ratio: e.target.value }))} placeholder="예: 지필 60% / 수행 40%, 또는 중간 30% + 기말 30% + 수행 40%" />
             </div>
             <div>
-              <Label>수행평가 정보</Label>
-              <Textarea value={formData.performance_assessment_info} onChange={e => setFormData(p => ({ ...p, performance_assessment_info: e.target.value }))} placeholder="수행평가 종류, 일정, 내용 등을 입력" rows={3} />
+              <Label>수행평가 상세 (종류·내용·일정)</Label>
+              <Textarea value={formData.performance_assessment_info} onChange={e => setFormData(p => ({ ...p, performance_assessment_info: e.target.value }))} placeholder="예:&#10;1. 서술형 평가 (10%) - 3월 셋째주&#10;2. 포트폴리오 (15%) - 학기말 제출&#10;3. 구술평가 (15%) - 5월 중" rows={4} />
             </div>
 
             {/* 학원 준비 */}
