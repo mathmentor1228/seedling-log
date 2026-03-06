@@ -304,7 +304,17 @@ export default function StudentVocab() {
                   <p className="text-2xl font-bold leading-relaxed px-4">
                     {mode === 'eng_to_kor' ? currentCard.english : currentCard.meaning}
                   </p>
-                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-4">
+                  {mode === 'eng_to_kor' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={(e) => { e.stopPropagation(); speakWord(currentCard.english); }}
+                    >
+                      <Volume2 className="w-4 h-4 mr-1" /> 발음 듣기
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-2">
                     <Eye className="w-3 h-3" /> 탭하여 정답 확인
                   </p>
                 </>
@@ -316,9 +326,19 @@ export default function StudentVocab() {
                   <p className="text-2xl font-bold text-primary leading-relaxed px-4">
                     {mode === 'eng_to_kor' ? currentCard.meaning : currentCard.english}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {mode === 'eng_to_kor' ? currentCard.english : currentCard.meaning}
-                  </p>
+                  <div className="flex items-center justify-center gap-2 mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      {mode === 'eng_to_kor' ? currentCard.english : currentCard.meaning}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground"
+                      onClick={(e) => { e.stopPropagation(); speakWord(currentCard.english); }}
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </>
               )}
             </CardContent>
