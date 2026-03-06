@@ -164,25 +164,76 @@ export function VocabTestGenerator() {
 
   // Bulk paste handler
   const handleBulkPaste = () => {
-    const lines = bulkText.split('\n').filter(l => l.trim());
-    const newWords: WordItem[] = [];
-    for (const line of lines) {
-      // Try tab, then multiple spaces, then comma separation
-      let parts = line.split('\t');
-      if (parts.length < 2) parts = line.split(/\s{2,}/);
-      if (parts.length < 2) parts = line.split(',');
-      if (parts.length >= 2) {
-        newWords.push({
-          english: parts[0].trim(),
-          meaning: parts.slice(1).join(', ').trim(),
-          sort_order: newWords.length,
-        });
+    const raw = bulkText;
+    let newWords: WordItem[] = [];
+
+    // Strategy 1: □ symbol format (e.g. "□ ever adv. 지금까지, 언젠가")
+    const hasBoxSymbol = raw.includes('□');
+    if (hasBoxSymbol) {
+      // Split by □ to get each entry block
+      const blocks = raw.split('□').filter(b => b.trim());
+      const posPattern = /^(.*?)\b(adv?|v|n|a|prep|conj|int|pron)\.\s*/;
+      const phraseKoreanSplit = /^([a-zA-Z~\s''\-]+(?:\s+[a-zA-Z~\s''\-]+)*)\s+([\u3131-\uD79D].*)$/s;
+
+      for (const block of blocks) {
+        // Join all lines of this block, collapse whitespace
+        const text = block.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!text) continue;
+
+        let english = '';
+        let meaning = '';
+
+        // Try matching with part-of-speech marker
+        const posMatch = text.match(posPattern);
+        if (posMatch) {
+          english = posMatch[1].trim();
+          const pos = posMatch[2];
+          meaning = text.slice(posMatch[0].length).trim();
+          // Include pos abbreviation in english for context
+          if (english) {
+            newWords.push({
+              english: english,
+              meaning: meaning.replace(/\s+/g, ' ').trim(),
+              sort_order: newWords.length,
+            });
+          }
+        } else {
+          // No POS marker — try splitting at first Korean character
+          const korMatch = text.match(phraseKoreanSplit);
+          if (korMatch) {
+            english = korMatch[1].trim();
+            meaning = korMatch[2].replace(/\s+/g, ' ').trim();
+            if (english && meaning) {
+              newWords.push({ english, meaning, sort_order: newWords.length });
+            }
+          }
+        }
       }
     }
+
+    // Strategy 2: Tab / multi-space / comma separated (fallback)
     if (newWords.length === 0) {
-      toast({ title: '파싱할 수 없습니다', description: '탭, 쉼표, 또는 공백으로 영어와 뜻을 구분하세요', variant: 'destructive' });
+      const lines = raw.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        let parts = line.split('\t');
+        if (parts.length < 2) parts = line.split(/\s{2,}/);
+        if (parts.length < 2) parts = line.split(',');
+        if (parts.length >= 2) {
+          newWords.push({
+            english: parts[0].trim(),
+            meaning: parts.slice(1).join(', ').trim(),
+            sort_order: newWords.length,
+          });
+        }
+      }
+    }
+
+    if (newWords.length === 0) {
+      toast({ title: '파싱할 수 없습니다', description: '□ 형식, 탭, 쉼표, 또는 공백으로 구분하세요', variant: 'destructive' });
       return;
     }
+    // Filter out entries with empty english or meaning
+    newWords = newWords.filter(w => w.english && w.meaning);
     setWords(newWords);
     setShowBulkModal(false);
     setBulkText('');
@@ -533,12 +584,13 @@ export function VocabTestGenerator() {
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
             엑셀이나 메모장에서 복사한 내용을 붙여넣으세요.<br />
-            각 줄에 <strong>영어[탭/쉼표/공백]뜻</strong> 형식으로 입력합니다.
+            <strong>□ 형식</strong>도 자동 인식합니다 (예: □ ever adv. 지금까지).<br />
+            또는 각 줄에 <strong>영어[탭/쉼표/공백]뜻</strong> 형식도 지원합니다.
           </p>
           <Textarea
             value={bulkText}
             onChange={e => setBulkText(e.target.value)}
-            placeholder={`apple\t사과\nbanana\t바나나\ncherry\t체리`}
+            placeholder={`□ ever adv. 지금까지, 언젠가\n□ find v. ~을 발견하다\n□ suddenly adv. 갑자기\n\n또는\n\napple\t사과\nbanana\t바나나`}
             rows={12}
             className="text-sm font-mono"
           />
