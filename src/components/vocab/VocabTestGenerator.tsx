@@ -164,25 +164,76 @@ export function VocabTestGenerator() {
 
   // Bulk paste handler
   const handleBulkPaste = () => {
-    const lines = bulkText.split('\n').filter(l => l.trim());
-    const newWords: WordItem[] = [];
-    for (const line of lines) {
-      // Try tab, then multiple spaces, then comma separation
-      let parts = line.split('\t');
-      if (parts.length < 2) parts = line.split(/\s{2,}/);
-      if (parts.length < 2) parts = line.split(',');
-      if (parts.length >= 2) {
-        newWords.push({
-          english: parts[0].trim(),
-          meaning: parts.slice(1).join(', ').trim(),
-          sort_order: newWords.length,
-        });
+    const raw = bulkText;
+    let newWords: WordItem[] = [];
+
+    // Strategy 1: □ symbol format (e.g. "□ ever adv. 지금까지, 언젠가")
+    const hasBoxSymbol = raw.includes('□');
+    if (hasBoxSymbol) {
+      // Split by □ to get each entry block
+      const blocks = raw.split('□').filter(b => b.trim());
+      const posPattern = /^(.*?)\b(adv?|v|n|a|prep|conj|int|pron)\.\s*/;
+      const phraseKoreanSplit = /^([a-zA-Z~\s''\-]+(?:\s+[a-zA-Z~\s''\-]+)*)\s+([\u3131-\uD79D].*)$/s;
+
+      for (const block of blocks) {
+        // Join all lines of this block, collapse whitespace
+        const text = block.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!text) continue;
+
+        let english = '';
+        let meaning = '';
+
+        // Try matching with part-of-speech marker
+        const posMatch = text.match(posPattern);
+        if (posMatch) {
+          english = posMatch[1].trim();
+          const pos = posMatch[2];
+          meaning = text.slice(posMatch[0].length).trim();
+          // Include pos abbreviation in english for context
+          if (english) {
+            newWords.push({
+              english: english,
+              meaning: meaning.replace(/\s+/g, ' ').trim(),
+              sort_order: newWords.length,
+            });
+          }
+        } else {
+          // No POS marker — try splitting at first Korean character
+          const korMatch = text.match(phraseKoreanSplit);
+          if (korMatch) {
+            english = korMatch[1].trim();
+            meaning = korMatch[2].replace(/\s+/g, ' ').trim();
+            if (english && meaning) {
+              newWords.push({ english, meaning, sort_order: newWords.length });
+            }
+          }
+        }
       }
     }
+
+    // Strategy 2: Tab / multi-space / comma separated (fallback)
     if (newWords.length === 0) {
-      toast({ title: '파싱할 수 없습니다', description: '탭, 쉼표, 또는 공백으로 영어와 뜻을 구분하세요', variant: 'destructive' });
+      const lines = raw.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        let parts = line.split('\t');
+        if (parts.length < 2) parts = line.split(/\s{2,}/);
+        if (parts.length < 2) parts = line.split(',');
+        if (parts.length >= 2) {
+          newWords.push({
+            english: parts[0].trim(),
+            meaning: parts.slice(1).join(', ').trim(),
+            sort_order: newWords.length,
+          });
+        }
+      }
+    }
+
+    if (newWords.length === 0) {
+      toast({ title: '파싱할 수 없습니다', description: '□ 형식, 탭, 쉼표, 또는 공백으로 구분하세요', variant: 'destructive' });
       return;
     }
+    // Filter out entries with empty english or meaning
+    newWords = newWords.filter(w => w.english && w.meaning);
     setWords(newWords);
     setShowBulkModal(false);
     setBulkText('');
