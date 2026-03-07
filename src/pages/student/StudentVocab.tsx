@@ -362,6 +362,35 @@ export default function StudentVocab() {
     );
   }
 
+  // Test mode view
+  if (testMode) {
+    return (
+      <VocabSelfTest
+        words={cards}
+        mode={mode}
+        onFinish={async (correct, wrong, total) => {
+          // Save completion
+          const { error } = await studentApi.submitVocabCompletion(
+            selectedSetIds, correct, wrong, total, mode + '_test'
+          );
+          if (!error) {
+            toast({ title: '테스트 기록 저장 완료! ✅' });
+            setCompletions(prev => [{
+              id: crypto.randomUUID(),
+              word_set_ids: selectedSetIds,
+              correct_count: correct,
+              wrong_count: wrong,
+              total_count: total,
+              mode: mode + '_test',
+              completed_at: new Date().toISOString(),
+            }, ...prev]);
+          }
+        }}
+        onBack={() => { setStarted(false); setTestMode(false); }}
+      />
+    );
+  }
+
   // Flashcard view
   return (
     <div className="space-y-4 p-4 max-w-lg mx-auto">
