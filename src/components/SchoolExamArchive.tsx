@@ -1148,8 +1148,6 @@ export function SchoolExamArchive() {
         })
       )}
 
-      {/* Helper function to render grade content */}
-      {null && renderGradeContent({ regular: [], mock: [] }, 0)}
 
       {/* Create/Edit Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
