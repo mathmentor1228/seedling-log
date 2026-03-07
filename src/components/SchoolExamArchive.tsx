@@ -444,7 +444,7 @@ export function SchoolExamArchive() {
       .from('school_calendar_images')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) { console.error(error); return; }
+    if (error) { console.error('Calendar images load error:', error); return; }
     const grouped: Record<string, CalendarImage[]> = {};
     for (const img of (data || [])) {
       const key = `${img.school_name} (${img.school_level})`;
@@ -452,16 +452,24 @@ export function SchoolExamArchive() {
       grouped[key].push(img);
     }
     setCalendarImages(grouped);
-    // Load signed URLs
-    for (const img of (data || [])) {
-      if (!calendarUrls[img.storage_path]) {
-        supabase.storage.from('school-exam-materials').createSignedUrl(img.storage_path, 3600)
-          .then(({ data: urlData }) => {
-            if (urlData?.signedUrl) {
-              setCalendarUrls(prev => ({ ...prev, [img.storage_path]: urlData.signedUrl }));
-            }
-          });
-      }
+    // Load signed URLs for all images
+    const urlPromises = (data || []).map(async (img: CalendarImage) => {
+      try {
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from('school-exam-materials')
+          .createSignedUrl(img.storage_path, 3600);
+        if (urlError) { console.error('Signed URL error:', urlError, img.storage_path); return null; }
+        if (urlData?.signedUrl) {
+          return { path: img.storage_path, url: urlData.signedUrl };
+        }
+      } catch (e) { console.error('Signed URL exception:', e); }
+      return null;
+    });
+    const results = await Promise.all(urlPromises);
+    const newUrls: Record<string, string> = {};
+    results.forEach(r => { if (r) newUrls[r.path] = r.url; });
+    if (Object.keys(newUrls).length > 0) {
+      setCalendarUrls(prev => ({ ...prev, ...newUrls }));
     }
   }, []);
 
