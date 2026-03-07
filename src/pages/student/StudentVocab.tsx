@@ -324,6 +324,28 @@ export default function StudentVocab() {
                 </Select>
               </div>
 
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">학습 방법</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant={studyType === 'flashcard' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStudyType('flashcard')}
+                    className="w-full"
+                  >
+                    <Eye className="w-3.5 h-3.5 mr-1" /> 플래시카드
+                  </Button>
+                  <Button
+                    variant={studyType === 'test' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStudyType('test')}
+                    className="w-full"
+                  >
+                    <PenLine className="w-3.5 h-3.5 mr-1" /> 셀프 테스트
+                  </Button>
+                </div>
+              </div>
+
               <Button
                 onClick={startFlashcards}
                 disabled={selectedSetIds.length === 0}
@@ -331,7 +353,7 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                카드 시작 ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
+                {studyType === 'test' ? '테스트 시작' : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
               </Button>
             </div>
           </>
