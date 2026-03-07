@@ -574,50 +574,52 @@ export function SchoolExamArchive() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <Select value={filterYear} onValueChange={setFilterYear}>
-          <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 연도</SelectItem>
-            {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}년</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterSchool} onValueChange={setFilterSchool}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 학교</SelectItem>
-            {schoolList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterLevel} onValueChange={setFilterLevel}>
-          <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체</SelectItem>
-            {SCHOOL_LEVELS.map(l => <SelectItem key={l} value={l}>{l}등학교</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterSubject} onValueChange={setFilterSubject}>
-          <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 과목</SelectItem>
-            {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterSemester} onValueChange={setFilterSemester}>
-          <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 학기</SelectItem>
-            {SEMESTERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
-            {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <Card className="p-3">
+        <div className="flex flex-wrap gap-2">
+          <Select value={filterYear} onValueChange={setFilterYear}>
+            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 연도</SelectItem>
+              {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}년</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterSchool} onValueChange={setFilterSchool}>
+            <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 학교</SelectItem>
+              {schoolList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterLevel} onValueChange={setFilterLevel}>
+            <SelectTrigger className="w-[90px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              {SCHOOL_LEVELS.map(l => <SelectItem key={l} value={l}>{l}등학교</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterSubject} onValueChange={setFilterSubject}>
+            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 과목</SelectItem>
+              {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterSemester} onValueChange={setFilterSemester}>
+            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 학기</SelectItem>
+              {SEMESTERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 상태</SelectItem>
+              {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
 
       {/* Archive List */}
       {loading ? (
