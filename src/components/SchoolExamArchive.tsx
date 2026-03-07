@@ -391,18 +391,76 @@ export function SchoolExamArchive() {
     }));
   };
 
-  // Group archives by school, sorted by earliest date first
+  // Group archives: school → grade+semester+examType → subjects
   const sortedArchives = [...archives].sort((a, b) => {
-    const dateA = a.exam_date_start || '9999-12-31';
-    const dateB = b.exam_date_start || '9999-12-31';
-    return dateA.localeCompare(dateB);
+    // Sort by semester then exam type order
+    const semOrder = a.semester.localeCompare(b.semester);
+    if (semOrder !== 0) return semOrder;
+    const examOrder = ['중간고사', '기말고사', '기타'].indexOf(a.exam_type) - ['중간고사', '기말고사', '기타'].indexOf(b.exam_type);
+    if (examOrder !== 0) return examOrder;
+    return a.subject.localeCompare(b.subject);
   });
-  const groupedArchives = sortedArchives.reduce<Record<string, Archive[]>>((acc, a) => {
+
+  // School-level grouping
+  const schoolGroups = sortedArchives.reduce<Record<string, Archive[]>>((acc, a) => {
     const key = `${a.school_name} (${a.school_level})`;
     if (!acc[key]) acc[key] = [];
     acc[key].push(a);
     return acc;
   }, {});
+
+  // Within each school, group by grade+semester+examType
+  interface ExamGroup {
+    key: string;
+    gradeYear: number;
+    semester: string;
+    examType: string;
+    examDateStart: string | null;
+    examDateEnd: string | null;
+    subjects: Archive[];
+  }
+
+  function buildExamGroups(items: Archive[]): ExamGroup[] {
+    const map = new Map<string, ExamGroup>();
+    for (const a of items) {
+      const key = `${a.grade_year}-${a.semester}-${a.exam_type}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          gradeYear: a.grade_year,
+          semester: a.semester,
+          examType: a.exam_type,
+          examDateStart: a.exam_date_start,
+          examDateEnd: a.exam_date_end,
+          subjects: [],
+        });
+      }
+      const group = map.get(key)!;
+      group.subjects.push(a);
+      // Use earliest date
+      if (a.exam_date_start && (!group.examDateStart || a.exam_date_start < group.examDateStart)) {
+        group.examDateStart = a.exam_date_start;
+      }
+      if (a.exam_date_end && (!group.examDateEnd || a.exam_date_end > group.examDateEnd)) {
+        group.examDateEnd = a.exam_date_end;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.gradeYear !== b.gradeYear) return a.gradeYear - b.gradeYear;
+      const semA = a.semester, semB = b.semester;
+      if (semA !== semB) return semA.localeCompare(semB);
+      const examTypeOrder = ['중간고사', '기말고사', '기타'];
+      return examTypeOrder.indexOf(a.examType) - examTypeOrder.indexOf(b.examType);
+    });
+  }
+
+  const SUBJECT_COLORS: Record<string, string> = {
+    '수학': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    '영어': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+    '국어': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+    '과학': 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+    '사회': 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+  };
 
   // Signed URL cache for inline image preview
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
