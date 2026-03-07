@@ -153,15 +153,7 @@ export default function StudentVocab() {
     }
   };
 
-  const speakWord = (word: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(word);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  // speakWord replaced by speakEnglish from ttsUtils
 
   const submitCompletion = useCallback(async () => {
     if (submitting) return;
