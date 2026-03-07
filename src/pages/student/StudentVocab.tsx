@@ -99,6 +99,14 @@ export default function StudentVocab() {
     }
 
     setCards(shuffled);
+    
+    if (studyType === 'test') {
+      setTestMode(true);
+      setStarted(true);
+      return;
+    }
+    
+    setTestMode(false);
     setCurrentIdx(0);
     setFlipped(false);
     setResults(new Array(shuffled.length).fill(null));
