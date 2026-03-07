@@ -453,7 +453,7 @@ export default function StudentVocab() {
                       variant="ghost"
                       size="sm"
                       className="text-muted-foreground"
-                      onClick={(e) => { e.stopPropagation(); speakWord(currentCard.english); }}
+                      onClick={(e) => { e.stopPropagation(); speakEnglish(currentCard.english); }}
                     >
                       <Volume2 className="w-4 h-4 mr-1" /> 발음 듣기
                     </Button>
