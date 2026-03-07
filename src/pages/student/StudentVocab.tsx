@@ -478,7 +478,7 @@ export default function StudentVocab() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 text-muted-foreground"
-                      onClick={(e) => { e.stopPropagation(); speakWord(currentCard.english); }}
+                      onClick={(e) => { e.stopPropagation(); speakEnglish(currentCard.english); }}
                     >
                       <Volume2 className="w-3.5 h-3.5" />
                     </Button>
