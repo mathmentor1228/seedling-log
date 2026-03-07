@@ -393,7 +393,6 @@ export function SchoolExamArchive() {
 
   // Group archives: school → grade+semester+examType → subjects
   const sortedArchives = [...archives].sort((a, b) => {
-    // Sort by semester then exam type order
     const semOrder = a.semester.localeCompare(b.semester);
     if (semOrder !== 0) return semOrder;
     const examOrder = ['중간고사', '기말고사', '기타'].indexOf(a.exam_type) - ['중간고사', '기말고사', '기타'].indexOf(b.exam_type);
@@ -410,6 +409,7 @@ export function SchoolExamArchive() {
   }, {});
 
   // Within each school, group by grade+semester+examType
+  // For '기타' type, further sub-group by notes field (each mock exam name)
   interface ExamGroup {
     key: string;
     gradeYear: number;
@@ -418,12 +418,24 @@ export function SchoolExamArchive() {
     examDateStart: string | null;
     examDateEnd: string | null;
     subjects: Archive[];
+    displayTitle?: string; // For 기타: use notes as title
+  }
+
+  interface MockExamRow {
+    title: string;
+    subjects: Archive[];
+    examDateStart: string | null;
+    examDateEnd: string | null;
   }
 
   function buildExamGroups(items: Archive[]): ExamGroup[] {
     const map = new Map<string, ExamGroup>();
     for (const a of items) {
-      const key = `${a.grade_year}-${a.semester}-${a.exam_type}`;
+      // For 기타 type, group by notes (each mock exam becomes its own group)
+      const isEtc = a.exam_type === '기타';
+      const key = isEtc
+        ? `${a.grade_year}-${a.semester}-기타-${a.notes || '기타'}`
+        : `${a.grade_year}-${a.semester}-${a.exam_type}`;
       if (!map.has(key)) {
         map.set(key, {
           key,
@@ -433,11 +445,11 @@ export function SchoolExamArchive() {
           examDateStart: a.exam_date_start,
           examDateEnd: a.exam_date_end,
           subjects: [],
+          displayTitle: isEtc ? (a.notes || '기타') : undefined,
         });
       }
       const group = map.get(key)!;
       group.subjects.push(a);
-      // Use earliest date
       if (a.exam_date_start && (!group.examDateStart || a.exam_date_start < group.examDateStart)) {
         group.examDateStart = a.exam_date_start;
       }
@@ -450,8 +462,26 @@ export function SchoolExamArchive() {
       const semA = a.semester, semB = b.semester;
       if (semA !== semB) return semA.localeCompare(semB);
       const examTypeOrder = ['중간고사', '기말고사', '기타'];
-      return examTypeOrder.indexOf(a.examType) - examTypeOrder.indexOf(b.examType);
+      const typeA = examTypeOrder.indexOf(a.examType), typeB = examTypeOrder.indexOf(b.examType);
+      if (typeA !== typeB) return typeA - typeB;
+      // For same type (기타), sort by exam date
+      if (a.examDateStart && b.examDateStart) return a.examDateStart.localeCompare(b.examDateStart);
+      return (a.displayTitle || '').localeCompare(b.displayTitle || '');
     });
+  }
+
+  // Build grade-level tabs for a school
+  function getGradeGroups(examGroups: ExamGroup[]): Record<number, { regular: ExamGroup[]; mock: ExamGroup[] }> {
+    const result: Record<number, { regular: ExamGroup[]; mock: ExamGroup[] }> = {};
+    for (const g of examGroups) {
+      if (!result[g.gradeYear]) result[g.gradeYear] = { regular: [], mock: [] };
+      if (g.examType === '기타') {
+        result[g.gradeYear].mock.push(g);
+      } else {
+        result[g.gradeYear].regular.push(g);
+      }
+    }
+    return result;
   }
 
   const SUBJECT_COLORS: Record<string, string> = {
