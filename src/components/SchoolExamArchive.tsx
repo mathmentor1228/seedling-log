@@ -656,6 +656,316 @@ export function SchoolExamArchive() {
     );
   };
 
+  // Render subject card with expand/collapse (reused for both regular and mock)
+  const renderSubjectCard = (archive: Archive) => {
+    const isExpanded = expandedArchives.has(archive.id);
+    const archiveMaterials = materials[archive.id] || [];
+    const subjectColor = SUBJECT_COLORS[archive.subject] || 'bg-muted text-foreground border-border';
+
+    return (
+      <div key={archive.id} className={`rounded-lg border p-2.5 transition-all ${subjectColor} ${isExpanded ? 'col-span-1 sm:col-span-2 lg:col-span-4' : ''}`}>
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => toggleExpand(archive.id)}>
+          <span className="text-sm font-bold flex-1">{archive.subject}</span>
+          {getStatusBadge(archive.status)}
+          {archiveMaterials.length > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px] opacity-70"><Paperclip className="w-2.5 h-2.5" />{archiveMaterials.length}</span>
+          )}
+          {isExpanded ? <ChevronDown className="w-3.5 h-3.5 opacity-50" /> : <ChevronRight className="w-3.5 h-3.5 opacity-50" />}
+        </div>
+        {!isExpanded && (
+          <div className="mt-1.5 space-y-0.5 text-[11px] opacity-80">
+            {archive.textbook_publisher && <p className="truncate">📖 {archive.textbook_publisher}</p>}
+            {archive.exam_scope && <p className="truncate">📋 {archive.exam_scope}</p>}
+          </div>
+        )}
+        {isExpanded && renderExpandedDetail(archive, archiveMaterials)}
+      </div>
+    );
+  };
+
+  // Render expanded detail panel
+  const renderExpandedDetail = (archive: Archive, archiveMaterials: Material[]) => (
+    <div className="mt-3 space-y-3 bg-background/80 rounded-md p-3 border" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center gap-1 justify-end">
+        <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => openEditDialog(archive)}>
+          <Pencil className="w-3 h-3 mr-1" /> 수정
+        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" className="h-6 text-[10px] text-destructive border-destructive/30">
+              <Trash2 className="w-3 h-3 mr-1" /> 삭제
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>자료 삭제</AlertDialogTitle>
+              <AlertDialogDescription>이 자료와 첨부된 모든 파일이 삭제됩니다.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>취소</AlertDialogCancel>
+              <AlertDialogAction onClick={() => handleDeleteArchive(archive.id)}>삭제</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-[10px] font-medium text-muted-foreground mr-1">상태:</span>
+        {STATUS_OPTIONS.map(s => (
+          <Button key={s.value} variant={archive.status === s.value ? 'default' : 'outline'} size="sm" className="h-5 text-[9px] px-1.5" onClick={() => handleQuickStatusChange(archive.id, s.value)}>
+            {s.label}
+          </Button>
+        ))}
+      </div>
+      <Tabs defaultValue="info" className="mt-1">
+        <TabsList className="h-7 flex-wrap">
+          <TabsTrigger value="info" className="text-[10px] h-6 px-2">기본정보</TabsTrigger>
+          <TabsTrigger value="assessment" className="text-[10px] h-6 px-2">평가구조</TabsTrigger>
+          <TabsTrigger value="prep" className="text-[10px] h-6 px-2">자료관리</TabsTrigger>
+          <TabsTrigger value="materials" className="text-[10px] h-6 px-2">첨부 ({archiveMaterials.length})</TabsTrigger>
+          <TabsTrigger value="analysis" className="text-[10px] h-6 px-2">시험후분석</TabsTrigger>
+        </TabsList>
+        <TabsContent value="info" className="space-y-2 mt-2">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <InfoRow label="교과서 출판사" value={archive.textbook_publisher} />
+            <InfoRow label="시험 기간" value={archive.exam_date_start ? `${archive.exam_date_start}${archive.exam_date_end && archive.exam_date_end !== archive.exam_date_start ? ` ~ ${archive.exam_date_end}` : ''}` : null} />
+            <InfoRow label="담당 선생님" value={archive.preparing_teachers?.join(', ')} />
+          </div>
+          {archive.exam_scope && (
+            <div className="p-2.5 bg-muted/30 rounded-md">
+              <span className="text-[10px] font-semibold">시험 범위</span>
+              <p className="text-sm whitespace-pre-wrap mt-0.5">{archive.exam_scope}</p>
+            </div>
+          )}
+          {archive.notes && (
+            <div className="p-2.5 bg-muted/30 rounded-md">
+              <span className="text-[10px] font-semibold">메모</span>
+              <p className="text-sm whitespace-pre-wrap mt-0.5">{archive.notes}</p>
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="assessment" className="space-y-3 mt-2">
+          {archive.grade_ratio || archive.performance_assessment_info ? (
+            <div className="space-y-2">
+              {archive.grade_ratio && (
+                <div className="p-2.5 bg-primary/5 rounded-md border border-primary/10">
+                  <div className="flex items-center gap-1.5 mb-1"><BarChart3 className="w-3 h-3 text-primary" /><span className="text-[10px] font-bold text-primary">반영 비율</span></div>
+                  <p className="text-sm font-medium">{archive.grade_ratio}</p>
+                </div>
+              )}
+              {archive.performance_assessment_info && (
+                <div className="p-2.5 bg-accent/30 rounded-md border border-accent/20">
+                  <div className="flex items-center gap-1.5 mb-1"><ClipboardCheck className="w-3 h-3" /><span className="text-[10px] font-bold">수행평가 상세</span></div>
+                  <p className="text-sm whitespace-pre-wrap">{archive.performance_assessment_info}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-3">평가 구조 정보 없음</p>
+          )}
+        </TabsContent>
+        <TabsContent value="prep" className="space-y-3 mt-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold">학원 준비 자료</span>
+              <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('학원수업자료'); }}><FileUp className="w-2.5 h-2.5 mr-0.5" /> 추가</Button>
+            </div>
+            {archive.academy_prep_notes && <div className="p-2 bg-muted/40 rounded text-sm whitespace-pre-wrap">{archive.academy_prep_notes}</div>}
+            {renderMaterialsByCategory(archive.id, '학원수업자료') || <p className="text-[10px] text-muted-foreground text-center py-1">없음</p>}
+          </div>
+          <div className="border-t" />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold">학교 제공 자료</span>
+              <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('학교제공자료'); }}><FileUp className="w-2.5 h-2.5 mr-0.5" /> 추가</Button>
+            </div>
+            {SCHOOL_FILE_CATEGORIES.map(cat => {
+              const rendered = renderMaterialsByCategory(archive.id, cat);
+              if (!rendered) return null;
+              return <div key={cat}><span className="text-[9px] text-muted-foreground ml-1">{cat}</span>{rendered}</div>;
+            })}
+            {!SCHOOL_FILE_CATEGORIES.some(cat => (materials[archive.id] || []).some(m => m.file_category === cat)) && (
+              <p className="text-[10px] text-muted-foreground text-center py-1">없음</p>
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="materials" className="space-y-3 mt-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-muted-foreground">전체 첨부파일</span>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('기타'); }}><FileUp className="w-2.5 h-2.5 mr-0.5" /> 파일 추가</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader><DialogTitle>파일 업로드</DialogTitle></DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label>파일 분류</Label>
+                    <Select value={uploadCategory} onValueChange={setUploadCategory}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>{FILE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>파일 선택</Label><Input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} /></div>
+                  <div><Label>설명 (선택)</Label><Input value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} placeholder="파일에 대한 간단한 설명" /></div>
+                  <Button onClick={handleUploadFile} disabled={!uploadFile || uploading} className="w-full">{uploading ? '업로드 중...' : '업로드'}</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+          {archiveMaterials.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-3">첨부 파일 없음</p>
+          ) : (
+            <div className="space-y-1">
+              {archiveMaterials.map(mat => (
+                <div key={mat.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 group">
+                  {getFileIcon(mat.mime_type)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="text-[9px] px-1 py-0">{mat.file_category}</Badge>
+                      <span className="text-xs truncate">{mat.original_name}</span>
+                      <span className="text-[10px] text-muted-foreground">{formatFileSize(mat.file_size)}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDownloadFile(mat)}><Download className="w-3 h-3" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteMaterial(mat)}><Trash2 className="w-3 h-3" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="analysis" className="space-y-3 mt-2">
+          <div className="grid grid-cols-2 gap-2">
+            {archive.difficulty_level && (
+              <div className="p-2 bg-muted/30 rounded-md"><span className="text-[10px] text-muted-foreground">시험 난도</span><p className="text-sm font-semibold">{archive.difficulty_level}</p></div>
+            )}
+            {archive.exam_average_score != null && (
+              <div className="p-2 bg-muted/30 rounded-md"><span className="text-[10px] text-muted-foreground">시험 평균</span><p className="text-sm font-semibold">{archive.exam_average_score}점</p></div>
+            )}
+          </div>
+          {archive.post_exam_analysis && (
+            <div><span className="text-[10px] font-semibold">출제 경향 분석</span><div className="whitespace-pre-wrap text-sm p-2.5 bg-muted/30 rounded-md mt-1">{archive.post_exam_analysis}</div></div>
+          )}
+          {archive.exam_analysis_detail && (
+            <div><span className="text-[10px] font-semibold">세부 분석</span><div className="whitespace-pre-wrap text-sm p-2.5 bg-muted/30 rounded-md mt-1">{archive.exam_analysis_detail}</div></div>
+          )}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold text-muted-foreground">시험지 (실제)</span>
+              <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('시험지(실제)'); }}><FileUp className="w-2.5 h-2.5 mr-0.5" /> 업로드</Button>
+            </div>
+            {renderMaterialsByCategory(archive.id, '시험지(실제)', true) || <p className="text-[10px] text-muted-foreground text-center py-1">없음</p>}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold text-muted-foreground">시험분석서</span>
+              <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('시험분석서'); }}><FileUp className="w-2.5 h-2.5 mr-0.5" /> 업로드</Button>
+            </div>
+            {renderMaterialsByCategory(archive.id, '시험분석서', true) || <p className="text-[10px] text-muted-foreground text-center py-1">없음</p>}
+          </div>
+          {!archive.post_exam_analysis && !archive.exam_analysis_detail && !archive.difficulty_level && archive.exam_average_score == null && (
+            <p className="text-xs text-muted-foreground text-center py-2">시험 분석 미작성</p>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+
+  // Render a regular exam group (중간/기말)
+  const renderRegularExamGroup = (group: ExamGroup) => {
+    const dday = getDdayText(group.examDateStart);
+    const showDday = dday && group.subjects.some(s => ['자료수집전', '자료수집완료', '시험대비중'].includes(s.status));
+    const dateLabel = group.examDateStart
+      ? `${format(parseISO(group.examDateStart), 'M/d(EEE)', { locale: ko })}${group.examDateEnd && group.examDateEnd !== group.examDateStart ? ` ~ ${format(parseISO(group.examDateEnd), 'M/d(EEE)', { locale: ko })}` : ''}`
+      : '';
+
+    return (
+      <Card key={group.key} className="overflow-hidden">
+        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 border-b">
+          <span className="text-sm font-bold">{group.semester} {group.examType}</span>
+          {dateLabel && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1"><CalendarDays className="w-3 h-3" />{dateLabel}</span>
+          )}
+          {showDday && <Badge variant="destructive" className="text-[10px] animate-pulse ml-auto">{dday}</Badge>}
+        </div>
+        <div className="p-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {group.subjects.map(renderSubjectCard)}
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
+  // Render mock exam groups as a compact table
+  const renderMockExamTable = (mockGroups: ExamGroup[]) => {
+    if (mockGroups.length === 0) return null;
+
+    return (
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-accent/30 border-b">
+          <BarChart3 className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-bold">모의고사 · 학력평가</span>
+          <Badge variant="secondary" className="text-[10px] ml-auto">{mockGroups.length}회</Badge>
+        </div>
+        <div className="divide-y">
+          {mockGroups.map(group => {
+            const dateLabel = group.examDateStart
+              ? format(parseISO(group.examDateStart), 'M/d(EEE)', { locale: ko })
+              : '';
+            const dday = getDdayText(group.examDateStart);
+
+            return (
+              <div key={group.key} className="px-4 py-2.5 hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {dateLabel && (
+                    <span className="text-xs font-mono text-muted-foreground w-[70px] shrink-0">{dateLabel}</span>
+                  )}
+                  <span className="text-sm font-semibold flex-1 min-w-0 truncate">
+                    {group.displayTitle || `${group.semester} 기타`}
+                  </span>
+                  {dday && <Badge variant="destructive" className="text-[10px] animate-pulse">{dday}</Badge>}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {group.subjects.map(archive => {
+                    const subjectColor = SUBJECT_COLORS[archive.subject] || 'bg-muted text-foreground border-border';
+                    const isExpanded = expandedArchives.has(archive.id);
+                    return (
+                      <div key={archive.id} className={`${isExpanded ? 'w-full' : ''}`}>
+                        <button
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] transition-all hover:shadow-sm ${subjectColor} ${isExpanded ? 'w-full justify-start' : ''}`}
+                          onClick={() => toggleExpand(archive.id)}
+                        >
+                          <span className="font-bold">{archive.subject}</span>
+                          {!isExpanded && archive.exam_scope && (
+                            <span className="opacity-70 truncate max-w-[200px]">— {archive.exam_scope}</span>
+                          )}
+                          {isExpanded ? <ChevronDown className="w-3 h-3 opacity-50 ml-auto" /> : <ChevronRight className="w-3 h-3 opacity-50" />}
+                        </button>
+                        {isExpanded && renderExpandedDetail(archive, materials[archive.id] || [])}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    );
+  };
+
+  // Render content for a grade
+  function renderGradeContent(data: { regular: ExamGroup[]; mock: ExamGroup[] }, _gradeYear: number) {
+    return (
+      <>
+        {data.regular.map(renderRegularExamGroup)}
+        {renderMockExamTable(data.mock)}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
