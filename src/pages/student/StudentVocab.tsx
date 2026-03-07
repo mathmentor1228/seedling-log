@@ -50,6 +50,7 @@ export default function StudentVocab() {
   const [studyType, setStudyType] = useState<'flashcard' | 'test'>('flashcard');
   const [started, setStarted] = useState(false);
   const [testMode, setTestMode] = useState(false);
+  const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
