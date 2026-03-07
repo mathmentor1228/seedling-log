@@ -391,18 +391,76 @@ export function SchoolExamArchive() {
     }));
   };
 
-  // Group archives by school, sorted by earliest date first
+  // Group archives: school → grade+semester+examType → subjects
   const sortedArchives = [...archives].sort((a, b) => {
-    const dateA = a.exam_date_start || '9999-12-31';
-    const dateB = b.exam_date_start || '9999-12-31';
-    return dateA.localeCompare(dateB);
+    // Sort by semester then exam type order
+    const semOrder = a.semester.localeCompare(b.semester);
+    if (semOrder !== 0) return semOrder;
+    const examOrder = ['중간고사', '기말고사', '기타'].indexOf(a.exam_type) - ['중간고사', '기말고사', '기타'].indexOf(b.exam_type);
+    if (examOrder !== 0) return examOrder;
+    return a.subject.localeCompare(b.subject);
   });
-  const groupedArchives = sortedArchives.reduce<Record<string, Archive[]>>((acc, a) => {
+
+  // School-level grouping
+  const schoolGroups = sortedArchives.reduce<Record<string, Archive[]>>((acc, a) => {
     const key = `${a.school_name} (${a.school_level})`;
     if (!acc[key]) acc[key] = [];
     acc[key].push(a);
     return acc;
   }, {});
+
+  // Within each school, group by grade+semester+examType
+  interface ExamGroup {
+    key: string;
+    gradeYear: number;
+    semester: string;
+    examType: string;
+    examDateStart: string | null;
+    examDateEnd: string | null;
+    subjects: Archive[];
+  }
+
+  function buildExamGroups(items: Archive[]): ExamGroup[] {
+    const map = new Map<string, ExamGroup>();
+    for (const a of items) {
+      const key = `${a.grade_year}-${a.semester}-${a.exam_type}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          gradeYear: a.grade_year,
+          semester: a.semester,
+          examType: a.exam_type,
+          examDateStart: a.exam_date_start,
+          examDateEnd: a.exam_date_end,
+          subjects: [],
+        });
+      }
+      const group = map.get(key)!;
+      group.subjects.push(a);
+      // Use earliest date
+      if (a.exam_date_start && (!group.examDateStart || a.exam_date_start < group.examDateStart)) {
+        group.examDateStart = a.exam_date_start;
+      }
+      if (a.exam_date_end && (!group.examDateEnd || a.exam_date_end > group.examDateEnd)) {
+        group.examDateEnd = a.exam_date_end;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.gradeYear !== b.gradeYear) return a.gradeYear - b.gradeYear;
+      const semA = a.semester, semB = b.semester;
+      if (semA !== semB) return semA.localeCompare(semB);
+      const examTypeOrder = ['중간고사', '기말고사', '기타'];
+      return examTypeOrder.indexOf(a.examType) - examTypeOrder.indexOf(b.examType);
+    });
+  }
+
+  const SUBJECT_COLORS: Record<string, string> = {
+    '수학': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    '영어': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+    '국어': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+    '과학': 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+    '사회': 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+  };
 
   // Signed URL cache for inline image preview
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
@@ -644,18 +702,27 @@ export function SchoolExamArchive() {
           </Button>
         </div>
       ) : (
-        Object.entries(groupedArchives).map(([schoolKey, items]) => {
-          // Extract school_name and school_level from key like "신길중 (중)"
+        Object.entries(schoolGroups).map(([schoolKey, items]) => {
           const schoolName = items[0]?.school_name || '';
           const schoolLevel = items[0]?.school_level || '중';
           const calImgs = calendarImages[schoolKey] || [];
+          const examGroups = buildExamGroups(items);
+
+          // Collect unique grades
+          const grades = [...new Set(items.map(a => a.grade_year))].sort();
 
           return (
           <div key={schoolKey} className="space-y-3">
-            <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
-              <School className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-bold">{schoolKey}</h3>
-              <Badge variant="outline" className="text-[10px] ml-auto">{items.length}건</Badge>
+            {/* School Header */}
+            <div className="flex items-center gap-2 bg-primary/5 border border-primary/10 rounded-lg px-4 py-2.5">
+              <School className="w-5 h-5 text-primary" />
+              <h3 className="text-base font-bold">{schoolKey}</h3>
+              <div className="flex items-center gap-1.5 ml-auto">
+                {grades.map(g => (
+                  <Badge key={g} variant="outline" className="text-[10px]">{g}학년</Badge>
+                ))}
+                <Badge variant="secondary" className="text-[10px]">{items.length}건</Badge>
+              </div>
             </div>
 
             {/* School Calendar Images */}
@@ -704,7 +771,7 @@ export function SchoolExamArchive() {
                   <input
                     type="file"
                     className="hidden"
-                    accept="image/*"
+                    accept="image/*,.pdf"
                     onChange={e => {
                       const file = e.target.files?.[0];
                       if (file) handleUploadCalendarImage(schoolName, schoolLevel, file);
@@ -714,337 +781,320 @@ export function SchoolExamArchive() {
                 </label>
               </div>
             )}
-            {items.map(archive => {
-              const isExpanded = expandedArchives.has(archive.id);
-              const archiveMaterials = materials[archive.id] || [];
-              const dday = getDdayText(archive.exam_date_start);
-              const showDday = dday && ['자료수집전', '자료수집완료', '시험대비중'].includes(archive.status);
+
+            {/* Exam Groups - grouped by grade+semester+examType */}
+            {examGroups.map(group => {
+              const dday = getDdayText(group.examDateStart);
+              const showDday = dday && group.subjects.some(s => ['자료수집전', '자료수집완료', '시험대비중'].includes(s.status));
+              const dateLabel = group.examDateStart
+                ? `${format(parseISO(group.examDateStart), 'M/d(EEE)', { locale: ko })}${group.examDateEnd && group.examDateEnd !== group.examDateStart ? ` ~ ${format(parseISO(group.examDateEnd), 'M/d(EEE)', { locale: ko })}` : ''}`
+                : '';
 
               return (
-                <Card key={archive.id} className="overflow-hidden">
-                  <div
-                    className="flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/30 transition-colors"
-                    onClick={() => toggleExpand(archive.id)}
-                  >
-                    {isExpanded ? <ChevronDown className="w-4 h-4 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 flex-shrink-0" />}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {getStatusBadge(archive.status)}
-                        <Badge variant="outline" className="text-xs">{archive.academic_year}</Badge>
-                        <Badge variant="secondary" className="text-xs">{archive.school_level}{archive.grade_year}</Badge>
-                        <Badge className="text-xs">{archive.subject}</Badge>
-                        <span className="text-sm font-medium">
-                          {archive.exam_type === '기타'
-                            ? (archive.notes?.split('\n')[0] || archive.exam_scope || `${archive.semester} 기타`)
-                            : `${archive.semester} ${archive.exam_type}`}
-                        </span>
-                        {showDday && (
-                          <Badge variant="destructive" className="text-[10px] animate-pulse">{dday}</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                        {archive.textbook_publisher && <span>📖 {archive.textbook_publisher}</span>}
-                        {archive.exam_date_start && (
-                          <span>📅 {archive.exam_date_start}{archive.exam_date_end && archive.exam_date_end !== archive.exam_date_start ? `~${archive.exam_date_end}` : ''}</span>
-                        )}
-                        {archive.grade_ratio && <span>📊 {archive.grade_ratio}</span>}
-                        {archive.preparing_teachers && archive.preparing_teachers.length > 0 && (
-                          <span>👩‍🏫 {archive.preparing_teachers.join(', ')}</span>
-                        )}
-                        {archive.exam_average_score != null && (
-                          <span>📈 평균 {archive.exam_average_score}점</span>
-                        )}
-                        {archiveMaterials.length > 0 && (
-                          <span className="flex items-center gap-0.5"><Paperclip className="w-3 h-3" />{archiveMaterials.length}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(archive)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>자료 삭제</AlertDialogTitle>
-                            <AlertDialogDescription>이 자료와 첨부된 모든 파일이 삭제됩니다. 계속하시겠습니까?</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>취소</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteArchive(archive.id)}>삭제</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
+                <Card key={group.key} className="overflow-hidden">
+                  {/* Exam group header */}
+                  <div className="flex items-center gap-2.5 px-4 py-2.5 bg-muted/30 border-b">
+                    <Badge variant="secondary" className="text-xs font-bold">{group.gradeYear}학년</Badge>
+                    <span className="text-sm font-bold">
+                      {group.examType === '기타' ? `${group.semester} 기타` : `${group.semester} ${group.examType}`}
+                    </span>
+                    {dateLabel && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3" />
+                        {dateLabel}
+                      </span>
+                    )}
+                    {showDday && (
+                      <Badge variant="destructive" className="text-[10px] animate-pulse ml-auto">{dday}</Badge>
+                    )}
                   </div>
 
-                  {isExpanded && (
-                    <CardContent className="pt-0 pb-3 space-y-3 border-t">
-                      {/* Quick status change */}
-                      <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-                        <span className="text-xs font-medium text-muted-foreground mr-1">진행상황:</span>
-                        {STATUS_OPTIONS.map(s => (
-                          <Button
-                            key={s.value}
-                            variant={archive.status === s.value ? 'default' : 'outline'}
-                            size="sm"
-                            className="h-6 text-[10px] px-2"
-                            onClick={() => handleQuickStatusChange(archive.id, s.value)}
-                          >
-                            {s.label}
-                          </Button>
-                        ))}
-                      </div>
+                  {/* Subject cards grid */}
+                  <div className="p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      {group.subjects.map(archive => {
+                        const isExpanded = expandedArchives.has(archive.id);
+                        const archiveMaterials = materials[archive.id] || [];
+                        const subjectColor = SUBJECT_COLORS[archive.subject] || 'bg-muted text-foreground border-border';
 
-                      <Tabs defaultValue="info" className="mt-2">
-                        <TabsList className="h-8 flex-wrap">
-                          <TabsTrigger value="info" className="text-xs h-7">📋 기본정보</TabsTrigger>
-                          <TabsTrigger value="assessment" className="text-xs h-7">📊 평가구조</TabsTrigger>
-                          <TabsTrigger value="prep" className="text-xs h-7">📚 자료관리</TabsTrigger>
-                          <TabsTrigger value="materials" className="text-xs h-7">📎 첨부 ({archiveMaterials.length})</TabsTrigger>
-                          <TabsTrigger value="analysis" className="text-xs h-7">🔍 시험후분석</TabsTrigger>
-                        </TabsList>
-
-                        {/* 기본정보 탭 */}
-                        <TabsContent value="info" className="space-y-2 mt-2">
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                            <InfoRow label="교과서 출판사" value={archive.textbook_publisher} />
-                            <InfoRow label="시험 기간" value={archive.exam_date_start ? `${archive.exam_date_start}${archive.exam_date_end && archive.exam_date_end !== archive.exam_date_start ? ` ~ ${archive.exam_date_end}` : ''}` : null} />
-                            <InfoRow label="담당 선생님" value={archive.preparing_teachers?.join(', ')} />
-                          </div>
-                          {archive.exam_scope && (
-                            <div className="p-3 bg-muted/30 rounded-md">
-                              <span className="text-xs font-semibold">시험 범위</span>
-                              <p className="text-sm whitespace-pre-wrap mt-1">{archive.exam_scope}</p>
-                            </div>
-                          )}
-                          {archive.notes && (
-                            <div className="p-3 bg-muted/30 rounded-md">
-                              <span className="text-xs font-semibold">메모</span>
-                              <p className="text-sm whitespace-pre-wrap mt-1">{archive.notes}</p>
-                            </div>
-                          )}
-                        </TabsContent>
-
-                        {/* 평가구조 탭 */}
-                        <TabsContent value="assessment" className="space-y-3 mt-2">
-                          {archive.grade_ratio || archive.performance_assessment_info ? (
-                            <div className="space-y-3">
-                              {archive.grade_ratio && (
-                                <div className="p-3 bg-primary/5 rounded-md border border-primary/10">
-                                  <div className="flex items-center gap-1.5 mb-2">
-                                    <BarChart3 className="w-3.5 h-3.5 text-primary" />
-                                    <span className="text-xs font-bold text-primary">반영 비율</span>
-                                  </div>
-                                  <p className="text-sm font-medium">{archive.grade_ratio}</p>
-                                </div>
+                        return (
+                          <div key={archive.id} className={`rounded-lg border p-2.5 transition-all ${subjectColor} ${isExpanded ? 'col-span-1 sm:col-span-2 lg:col-span-4' : ''}`}>
+                            {/* Subject header row */}
+                            <div
+                              className="flex items-center gap-2 cursor-pointer"
+                              onClick={() => toggleExpand(archive.id)}
+                            >
+                              <span className="text-sm font-bold flex-1">{archive.subject}</span>
+                              {getStatusBadge(archive.status)}
+                              {archiveMaterials.length > 0 && (
+                                <span className="flex items-center gap-0.5 text-[10px] opacity-70"><Paperclip className="w-2.5 h-2.5" />{archiveMaterials.length}</span>
                               )}
-                              {archive.performance_assessment_info && (
-                                <div className="p-3 bg-accent/30 rounded-md border border-accent/20">
-                                  <div className="flex items-center gap-1.5 mb-2">
-                                    <ClipboardCheck className="w-3.5 h-3.5 text-accent-foreground" />
-                                    <span className="text-xs font-bold">수행평가 상세</span>
-                                  </div>
-                                  <p className="text-sm whitespace-pre-wrap">{archive.performance_assessment_info}</p>
-                                </div>
-                              )}
+                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5 opacity-50" /> : <ChevronRight className="w-3.5 h-3.5 opacity-50" />}
                             </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              평가 구조 정보가 없습니다. 수정 버튼을 눌러 반영비율, 수행평가 정보를 입력해주세요.
-                            </p>
-                          )}
-                        </TabsContent>
 
-                        {/* 자료관리 탭 - 학원 vs 학교 분리 */}
-                        <TabsContent value="prep" className="space-y-4 mt-2">
-                          {/* 학원 준비 자료 섹션 */}
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <Badge className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-0">학원</Badge>
-                                <span className="text-xs font-semibold">학원 준비 자료</span>
-                              </div>
-                              <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('학원수업자료'); }}>
-                                <FileUp className="w-3 h-3 mr-1" /> 추가
-                              </Button>
-                            </div>
-                            {archive.academy_prep_notes && (
-                              <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-md border border-blue-100 dark:border-blue-900">
-                                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">학원 수업/준비 메모</span>
-                                <p className="text-sm whitespace-pre-wrap mt-1">{archive.academy_prep_notes}</p>
+                            {/* Compact info preview */}
+                            {!isExpanded && (
+                              <div className="mt-1.5 space-y-0.5 text-[11px] opacity-80">
+                                {archive.textbook_publisher && (
+                                  <p className="truncate">📖 {archive.textbook_publisher}</p>
+                                )}
+                                {archive.exam_scope && (
+                                  <p className="truncate">📋 {archive.exam_scope}</p>
+                                )}
                               </div>
                             )}
-                            {renderMaterialsByCategory(archive.id, '학원수업자료') || (
-                              <p className="text-xs text-muted-foreground text-center py-2">학원 준비 자료가 없습니다</p>
-                            )}
-                          </div>
 
-                          <div className="border-t" />
-
-                          {/* 학교 제공 자료 섹션 */}
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <Badge className="text-[10px] bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0">학교</Badge>
-                                <span className="text-xs font-semibold">학교 제공 자료</span>
-                              </div>
-                              <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('학교제공자료'); }}>
-                                <FileUp className="w-3 h-3 mr-1" /> 추가
-                              </Button>
-                            </div>
-                            {SCHOOL_FILE_CATEGORIES.map(cat => {
-                              const rendered = renderMaterialsByCategory(archive.id, cat);
-                              if (!rendered) return null;
-                              return (
-                                <div key={cat}>
-                                  <span className="text-[10px] font-medium text-muted-foreground ml-1">{cat}</span>
-                                  {rendered}
-                                </div>
-                              );
-                            })}
-                            {!SCHOOL_FILE_CATEGORIES.some(cat => (materials[archive.id] || []).some(m => m.file_category === cat)) && (
-                              <p className="text-xs text-muted-foreground text-center py-2">학교 제공 자료가 없습니다</p>
-                            )}
-                          </div>
-                        </TabsContent>
-
-                        {/* 첨부파일 탭 */}
-                        <TabsContent value="materials" className="space-y-2 mt-2">
-                          <div className="flex justify-end">
-                            <Dialog open={uploadArchiveId === archive.id} onOpenChange={(open) => { if (!open) setUploadArchiveId(null); }}>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" size="sm" onClick={() => setUploadArchiveId(archive.id)}>
-                                  <FileUp className="w-3.5 h-3.5 mr-1" /> 파일 추가
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader><DialogTitle>파일 업로드</DialogTitle></DialogHeader>
-                                <div className="space-y-3">
-                                  <div>
-                                    <Label>파일 분류</Label>
-                                    <Select value={uploadCategory} onValueChange={setUploadCategory}>
-                                      <SelectTrigger><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        {FILE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div>
-                                    <Label>파일</Label>
-                                    <Input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} />
-                                  </div>
-                                  <div>
-                                    <Label>설명 (선택)</Label>
-                                    <Input value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} placeholder="파일에 대한 간단한 설명" />
-                                  </div>
-                                  <Button onClick={handleUploadFile} disabled={!uploadFile || uploading} className="w-full">
-                                    {uploading ? '업로드 중...' : '업로드'}
+                            {/* Expanded detail */}
+                            {isExpanded && (
+                              <div className="mt-3 space-y-3 bg-background/80 rounded-md p-3 border" onClick={e => e.stopPropagation()}>
+                                {/* Action buttons */}
+                                <div className="flex items-center gap-1 justify-end">
+                                  <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => openEditDialog(archive)}>
+                                    <Pencil className="w-3 h-3 mr-1" /> 수정
                                   </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="outline" size="sm" className="h-6 text-[10px] text-destructive border-destructive/30">
+                                        <Trash2 className="w-3 h-3 mr-1" /> 삭제
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>자료 삭제</AlertDialogTitle>
+                                        <AlertDialogDescription>이 자료와 첨부된 모든 파일이 삭제됩니다.</AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>취소</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteArchive(archive.id)}>삭제</AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
                                 </div>
-                              </DialogContent>
-                            </Dialog>
-                          </div>
 
-                          {archiveMaterials.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">첨부된 파일이 없습니다</p>
-                          ) : (
-                            <div className="space-y-1">
-                              {archiveMaterials.map(mat => (
-                                <div key={mat.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-muted/50 group">
-                                  {getFileIcon(mat.mime_type)}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">{mat.file_category}</Badge>
-                                      <span className="text-sm truncate">{mat.original_name}</span>
-                                      <span className="text-xs text-muted-foreground">{formatFileSize(mat.file_size)}</span>
+                                {/* Quick status */}
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className="text-[10px] font-medium text-muted-foreground mr-1">상태:</span>
+                                  {STATUS_OPTIONS.map(s => (
+                                    <Button
+                                      key={s.value}
+                                      variant={archive.status === s.value ? 'default' : 'outline'}
+                                      size="sm"
+                                      className="h-5 text-[9px] px-1.5"
+                                      onClick={() => handleQuickStatusChange(archive.id, s.value)}
+                                    >
+                                      {s.label}
+                                    </Button>
+                                  ))}
+                                </div>
+
+                                <Tabs defaultValue="info" className="mt-1">
+                                  <TabsList className="h-7 flex-wrap">
+                                    <TabsTrigger value="info" className="text-[10px] h-6 px-2">기본정보</TabsTrigger>
+                                    <TabsTrigger value="assessment" className="text-[10px] h-6 px-2">평가구조</TabsTrigger>
+                                    <TabsTrigger value="prep" className="text-[10px] h-6 px-2">자료관리</TabsTrigger>
+                                    <TabsTrigger value="materials" className="text-[10px] h-6 px-2">첨부 ({archiveMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="analysis" className="text-[10px] h-6 px-2">시험후분석</TabsTrigger>
+                                  </TabsList>
+
+                                  <TabsContent value="info" className="space-y-2 mt-2">
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                      <InfoRow label="교과서 출판사" value={archive.textbook_publisher} />
+                                      <InfoRow label="시험 기간" value={archive.exam_date_start ? `${archive.exam_date_start}${archive.exam_date_end && archive.exam_date_end !== archive.exam_date_start ? ` ~ ${archive.exam_date_end}` : ''}` : null} />
+                                      <InfoRow label="담당 선생님" value={archive.preparing_teachers?.join(', ')} />
                                     </div>
-                                    {mat.description && <p className="text-xs text-muted-foreground truncate">{mat.description}</p>}
-                                  </div>
-                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadFile(mat)}>
-                                      <Download className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteMaterial(mat)}>
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </TabsContent>
+                                    {archive.exam_scope && (
+                                      <div className="p-2.5 bg-muted/30 rounded-md">
+                                        <span className="text-[10px] font-semibold">시험 범위</span>
+                                        <p className="text-sm whitespace-pre-wrap mt-0.5">{archive.exam_scope}</p>
+                                      </div>
+                                    )}
+                                    {archive.notes && (
+                                      <div className="p-2.5 bg-muted/30 rounded-md">
+                                        <span className="text-[10px] font-semibold">메모</span>
+                                        <p className="text-sm whitespace-pre-wrap mt-0.5">{archive.notes}</p>
+                                      </div>
+                                    )}
+                                  </TabsContent>
 
-                        {/* 시험후분석 탭 */}
-                        <TabsContent value="analysis" className="space-y-3 mt-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            {archive.difficulty_level && (
-                              <div className="p-2 bg-muted/30 rounded-md">
-                                <span className="text-[10px] font-medium text-muted-foreground">시험 난도</span>
-                                <p className="text-sm font-semibold">{archive.difficulty_level}</p>
+                                  <TabsContent value="assessment" className="space-y-3 mt-2">
+                                    {archive.grade_ratio || archive.performance_assessment_info ? (
+                                      <div className="space-y-2">
+                                        {archive.grade_ratio && (
+                                          <div className="p-2.5 bg-primary/5 rounded-md border border-primary/10">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                              <BarChart3 className="w-3 h-3 text-primary" />
+                                              <span className="text-[10px] font-bold text-primary">반영 비율</span>
+                                            </div>
+                                            <p className="text-sm font-medium">{archive.grade_ratio}</p>
+                                          </div>
+                                        )}
+                                        {archive.performance_assessment_info && (
+                                          <div className="p-2.5 bg-accent/30 rounded-md border border-accent/20">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                              <ClipboardCheck className="w-3 h-3" />
+                                              <span className="text-[10px] font-bold">수행평가 상세</span>
+                                            </div>
+                                            <p className="text-sm whitespace-pre-wrap">{archive.performance_assessment_info}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground text-center py-3">평가 구조 정보 없음</p>
+                                    )}
+                                  </TabsContent>
+
+                                  <TabsContent value="prep" className="space-y-3 mt-2">
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-semibold">학원 준비 자료</span>
+                                        <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('학원수업자료'); }}>
+                                          <FileUp className="w-2.5 h-2.5 mr-0.5" /> 추가
+                                        </Button>
+                                      </div>
+                                      {archive.academy_prep_notes && (
+                                        <div className="p-2 bg-muted/40 rounded text-sm whitespace-pre-wrap">{archive.academy_prep_notes}</div>
+                                      )}
+                                      {renderMaterialsByCategory(archive.id, '학원수업자료') || (
+                                        <p className="text-[10px] text-muted-foreground text-center py-1">없음</p>
+                                      )}
+                                    </div>
+                                    <div className="border-t" />
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-semibold">학교 제공 자료</span>
+                                        <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('학교제공자료'); }}>
+                                          <FileUp className="w-2.5 h-2.5 mr-0.5" /> 추가
+                                        </Button>
+                                      </div>
+                                      {SCHOOL_FILE_CATEGORIES.map(cat => {
+                                        const rendered = renderMaterialsByCategory(archive.id, cat);
+                                        if (!rendered) return null;
+                                        return <div key={cat}><span className="text-[9px] text-muted-foreground ml-1">{cat}</span>{rendered}</div>;
+                                      })}
+                                      {!SCHOOL_FILE_CATEGORIES.some(cat => (materials[archive.id] || []).some(m => m.file_category === cat)) && (
+                                        <p className="text-[10px] text-muted-foreground text-center py-1">없음</p>
+                                      )}
+                                    </div>
+                                  </TabsContent>
+
+                                  <TabsContent value="materials" className="space-y-2 mt-2">
+                                    <div className="flex justify-end">
+                                      <Dialog open={uploadArchiveId === archive.id} onOpenChange={(open) => { if (!open) setUploadArchiveId(null); }}>
+                                        <DialogTrigger asChild>
+                                          <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => setUploadArchiveId(archive.id)}>
+                                            <FileUp className="w-3 h-3 mr-1" /> 파일 추가
+                                          </Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                          <DialogHeader><DialogTitle>파일 업로드</DialogTitle></DialogHeader>
+                                          <div className="space-y-3">
+                                            <div>
+                                              <Label>파일 분류</Label>
+                                              <Select value={uploadCategory} onValueChange={setUploadCategory}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>{FILE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                                              </Select>
+                                            </div>
+                                            <div>
+                                              <Label>파일</Label>
+                                              <Input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} />
+                                            </div>
+                                            <div>
+                                              <Label>설명 (선택)</Label>
+                                              <Input value={uploadDescription} onChange={e => setUploadDescription(e.target.value)} placeholder="파일에 대한 간단한 설명" />
+                                            </div>
+                                            <Button onClick={handleUploadFile} disabled={!uploadFile || uploading} className="w-full">
+                                              {uploading ? '업로드 중...' : '업로드'}
+                                            </Button>
+                                          </div>
+                                        </DialogContent>
+                                      </Dialog>
+                                    </div>
+                                    {archiveMaterials.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground text-center py-3">첨부 파일 없음</p>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {archiveMaterials.map(mat => (
+                                          <div key={mat.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 group">
+                                            {getFileIcon(mat.mime_type)}
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-1.5">
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0">{mat.file_category}</Badge>
+                                                <span className="text-xs truncate">{mat.original_name}</span>
+                                                <span className="text-[10px] text-muted-foreground">{formatFileSize(mat.file_size)}</span>
+                                              </div>
+                                            </div>
+                                            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDownloadFile(mat)}><Download className="w-3 h-3" /></Button>
+                                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteMaterial(mat)}><Trash2 className="w-3 h-3" /></Button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </TabsContent>
+
+                                  <TabsContent value="analysis" className="space-y-3 mt-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {archive.difficulty_level && (
+                                        <div className="p-2 bg-muted/30 rounded-md">
+                                          <span className="text-[10px] text-muted-foreground">시험 난도</span>
+                                          <p className="text-sm font-semibold">{archive.difficulty_level}</p>
+                                        </div>
+                                      )}
+                                      {archive.exam_average_score != null && (
+                                        <div className="p-2 bg-muted/30 rounded-md">
+                                          <span className="text-[10px] text-muted-foreground">시험 평균</span>
+                                          <p className="text-sm font-semibold">{archive.exam_average_score}점</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {archive.post_exam_analysis && (
+                                      <div>
+                                        <span className="text-[10px] font-semibold">출제 경향 분석</span>
+                                        <div className="whitespace-pre-wrap text-sm p-2.5 bg-muted/30 rounded-md mt-1">{archive.post_exam_analysis}</div>
+                                      </div>
+                                    )}
+                                    {archive.exam_analysis_detail && (
+                                      <div>
+                                        <span className="text-[10px] font-semibold">세부 분석</span>
+                                        <div className="whitespace-pre-wrap text-sm p-2.5 bg-muted/30 rounded-md mt-1">{archive.exam_analysis_detail}</div>
+                                      </div>
+                                    )}
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-semibold text-muted-foreground">시험지 (실제)</span>
+                                        <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('시험지(실제)'); }}>
+                                          <FileUp className="w-2.5 h-2.5 mr-0.5" /> 업로드
+                                        </Button>
+                                      </div>
+                                      {renderMaterialsByCategory(archive.id, '시험지(실제)', true) || (
+                                        <p className="text-[10px] text-muted-foreground text-center py-1">없음</p>
+                                      )}
+                                    </div>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-semibold text-muted-foreground">시험분석서</span>
+                                        <Button variant="outline" size="sm" className="h-5 text-[9px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('시험분석서'); }}>
+                                          <FileUp className="w-2.5 h-2.5 mr-0.5" /> 업로드
+                                        </Button>
+                                      </div>
+                                      {renderMaterialsByCategory(archive.id, '시험분석서', true) || (
+                                        <p className="text-[10px] text-muted-foreground text-center py-1">없음</p>
+                                      )}
+                                    </div>
+                                    {!archive.post_exam_analysis && !archive.exam_analysis_detail && !archive.difficulty_level && archive.exam_average_score == null && (
+                                      <p className="text-xs text-muted-foreground text-center py-2">시험 분석 미작성</p>
+                                    )}
+                                  </TabsContent>
+                                </Tabs>
                               </div>
                             )}
-                            {archive.exam_average_score != null && (
-                              <div className="p-2 bg-muted/30 rounded-md">
-                                <span className="text-[10px] font-medium text-muted-foreground">시험 평균</span>
-                                <p className="text-sm font-semibold">{archive.exam_average_score}점</p>
-                              </div>
-                            )}
                           </div>
-
-                          {archive.post_exam_analysis && (
-                            <div>
-                              <span className="text-xs font-semibold">출제 경향 분석</span>
-                              <div className="whitespace-pre-wrap text-sm p-3 bg-muted/30 rounded-md mt-1">{archive.post_exam_analysis}</div>
-                            </div>
-                          )}
-
-                          {archive.exam_analysis_detail && (
-                            <div>
-                              <span className="text-xs font-semibold">세부 시험 분석</span>
-                              <div className="whitespace-pre-wrap text-sm p-3 bg-muted/30 rounded-md mt-1">{archive.exam_analysis_detail}</div>
-                            </div>
-                          )}
-
-                          {/* Exam paper & analysis files */}
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-muted-foreground">시험지 (실제)</span>
-                              <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('시험지(실제)'); }}>
-                                <FileUp className="w-3 h-3 mr-1" /> 업로드
-                              </Button>
-                            </div>
-                            {renderMaterialsByCategory(archive.id, '시험지(실제)', true) || (
-                              <p className="text-xs text-muted-foreground text-center py-1">시험지가 아직 업로드되지 않았습니다</p>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-muted-foreground">시험분석서</span>
-                              <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => { setUploadArchiveId(archive.id); setUploadCategory('시험분석서'); }}>
-                                <FileUp className="w-3 h-3 mr-1" /> 업로드
-                              </Button>
-                            </div>
-                            {renderMaterialsByCategory(archive.id, '시험분석서', true) || (
-                              <p className="text-xs text-muted-foreground text-center py-1">시험분석서가 없습니다</p>
-                            )}
-                          </div>
-
-                          {!archive.post_exam_analysis && !archive.exam_analysis_detail && !archive.difficulty_level && archive.exam_average_score == null && (
-                            <p className="text-sm text-muted-foreground text-center py-2">
-                              시험 분석이 아직 작성되지 않았습니다. 수정 버튼을 눌러 작성해주세요.
-                            </p>
-                          )}
-                        </TabsContent>
-                      </Tabs>
-                    </CardContent>
-                  )}
+                        );
+                      })}
+                    </div>
+                  </div>
                 </Card>
               );
             })}
@@ -1060,7 +1110,6 @@ export function SchoolExamArchive() {
             <DialogTitle>{editingArchive ? '자료 수정' : '새 자료 추가'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            {/* 기본 정보 */}
             <p className="text-xs font-semibold text-muted-foreground border-b pb-1">기본 정보</p>
             <div className="grid grid-cols-2 gap-2">
               <div>
