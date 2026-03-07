@@ -60,7 +60,7 @@ interface Material {
 }
 
 const SCHOOL_LEVELS = ['초', '중', '고'];
-const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '기타'];
+const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '공통', '기타'];
 const SEMESTERS = ['1학기', '2학기'];
 const EXAM_TYPES = ['중간고사', '기말고사', '기타'];
 const FILE_CATEGORIES = ['교과서', '기출시험지', '프린트', '시험범위', '시험지(실제)', '학원수업자료', '학교제공자료', '시험분석서', '기타'];
@@ -444,7 +444,7 @@ export function SchoolExamArchive() {
       .from('school_calendar_images')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) { console.error(error); return; }
+    if (error) { console.error('Calendar images load error:', error); return; }
     const grouped: Record<string, CalendarImage[]> = {};
     for (const img of (data || [])) {
       const key = `${img.school_name} (${img.school_level})`;
@@ -452,16 +452,24 @@ export function SchoolExamArchive() {
       grouped[key].push(img);
     }
     setCalendarImages(grouped);
-    // Load signed URLs
-    for (const img of (data || [])) {
-      if (!calendarUrls[img.storage_path]) {
-        supabase.storage.from('school-exam-materials').createSignedUrl(img.storage_path, 3600)
-          .then(({ data: urlData }) => {
-            if (urlData?.signedUrl) {
-              setCalendarUrls(prev => ({ ...prev, [img.storage_path]: urlData.signedUrl }));
-            }
-          });
-      }
+    // Load signed URLs for all images
+    const urlPromises = (data || []).map(async (img: CalendarImage) => {
+      try {
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from('school-exam-materials')
+          .createSignedUrl(img.storage_path, 3600);
+        if (urlError) { console.error('Signed URL error:', urlError, img.storage_path); return null; }
+        if (urlData?.signedUrl) {
+          return { path: img.storage_path, url: urlData.signedUrl };
+        }
+      } catch (e) { console.error('Signed URL exception:', e); }
+      return null;
+    });
+    const results = await Promise.all(urlPromises);
+    const newUrls: Record<string, string> = {};
+    results.forEach(r => { if (r) newUrls[r.path] = r.url; });
+    if (Object.keys(newUrls).length > 0) {
+      setCalendarUrls(prev => ({ ...prev, ...newUrls }));
     }
   }, []);
 
@@ -471,8 +479,13 @@ export function SchoolExamArchive() {
     const key = `${schoolName} (${schoolLevel})`;
     setUploadingCalendar(key);
     try {
-      const path = `calendars/${schoolName}_${schoolLevel}_${Date.now()}_${file.name}`;
-      const { error: storageError } = await supabase.storage.from('school-exam-materials').upload(path, file);
+      // Use sanitized filename to avoid encoding issues with Korean/special chars
+      const ext = file.name.split('.').pop() || 'jpg';
+      const safeName = `cal_${Date.now()}.${ext}`;
+      const path = `calendars/${safeName}`;
+      const { error: storageError } = await supabase.storage.from('school-exam-materials').upload(path, file, {
+        contentType: file.type || 'image/jpeg',
+      });
       if (storageError) throw storageError;
 
       const { error: dbError } = await (supabase as any).from('school_calendar_images').insert({
@@ -545,7 +558,7 @@ export function SchoolExamArchive() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
@@ -561,50 +574,52 @@ export function SchoolExamArchive() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <Select value={filterYear} onValueChange={setFilterYear}>
-          <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 연도</SelectItem>
-            {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}년</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterSchool} onValueChange={setFilterSchool}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 학교</SelectItem>
-            {schoolList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterLevel} onValueChange={setFilterLevel}>
-          <SelectTrigger className="w-[90px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체</SelectItem>
-            {SCHOOL_LEVELS.map(l => <SelectItem key={l} value={l}>{l}등학교</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterSubject} onValueChange={setFilterSubject}>
-          <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 과목</SelectItem>
-            {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterSemester} onValueChange={setFilterSemester}>
-          <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 학기</SelectItem>
-            {SEMESTERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
-            {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <Card className="p-3">
+        <div className="flex flex-wrap gap-2">
+          <Select value={filterYear} onValueChange={setFilterYear}>
+            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 연도</SelectItem>
+              {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}년</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterSchool} onValueChange={setFilterSchool}>
+            <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 학교</SelectItem>
+              {schoolList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterLevel} onValueChange={setFilterLevel}>
+            <SelectTrigger className="w-[90px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              {SCHOOL_LEVELS.map(l => <SelectItem key={l} value={l}>{l}등학교</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterSubject} onValueChange={setFilterSubject}>
+            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 과목</SelectItem>
+              {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterSemester} onValueChange={setFilterSemester}>
+            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 학기</SelectItem>
+              {SEMESTERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 상태</SelectItem>
+              {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
 
       {/* Archive List */}
       {loading ? (
@@ -625,54 +640,69 @@ export function SchoolExamArchive() {
           const calImgs = calendarImages[schoolKey] || [];
 
           return (
-          <div key={schoolKey} className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1">{schoolKey}</h3>
+          <div key={schoolKey} className="space-y-3">
+            <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+              <School className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-bold">{schoolKey}</h3>
+              <Badge variant="outline" className="text-[10px] ml-auto">{items.length}건</Badge>
+            </div>
 
             {/* School Calendar Images */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {calImgs.map(img => {
-                const url = calendarUrls[img.storage_path];
-                return (
-                  <div key={img.id} className="relative group">
-                    {url ? (
-                      <img
-                        src={url}
-                        alt={img.original_name}
-                        className="h-16 w-auto rounded-md border cursor-pointer hover:opacity-80 transition-opacity object-cover"
-                        onClick={() => setCalendarPreview(url)}
-                      />
-                    ) : (
-                      <div className="h-16 w-20 rounded-md border bg-muted flex items-center justify-center">
-                        <CalendarDays className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                    )}
-                    <button
-                      className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleDeleteCalendarImage(img)}
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                    <span className="text-[9px] text-muted-foreground block text-center mt-0.5 truncate max-w-[80px]">
-                      {img.semester}
-                    </span>
-                  </div>
-                );
-              })}
-              <label className={`h-16 w-16 rounded-md border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-accent/30 transition-colors ${uploadingCalendar === schoolKey ? 'opacity-50 pointer-events-none' : ''}`}>
-                <Upload className="w-4 h-4 text-muted-foreground" />
-                <span className="text-[9px] text-muted-foreground mt-0.5">일정표</span>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) handleUploadCalendarImage(schoolName, schoolLevel, file);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </div>
+            {(calImgs.length > 0 || true) && (
+              <div className="flex items-center gap-2.5 flex-wrap ml-1 mb-1">
+                <span className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                  <CalendarDays className="w-3 h-3" /> 학사일정
+                </span>
+                {calImgs.map(img => {
+                  const url = calendarUrls[img.storage_path];
+                  return (
+                    <div key={img.id} className="relative group">
+                      {url ? (
+                        <img
+                          src={url}
+                          alt={img.original_name}
+                          className="h-14 w-auto rounded border cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all object-cover"
+                          onClick={() => setCalendarPreview(url)}
+                        />
+                      ) : (
+                        <div className="h-14 w-18 rounded border bg-muted animate-pulse flex items-center justify-center">
+                          <CalendarDays className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <button
+                        className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleDeleteCalendarImage(img)}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                      <span className="text-[9px] text-muted-foreground block text-center mt-0.5 truncate max-w-[80px]">
+                        {img.semester}
+                      </span>
+                    </div>
+                  );
+                })}
+                <label className={`h-14 w-14 rounded border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-accent/30 transition-colors ${uploadingCalendar === schoolKey ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {uploadingCalendar === schoolKey ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-[8px] text-muted-foreground mt-0.5">추가</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadCalendarImage(schoolName, schoolLevel, file);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            )}
             {items.map(archive => {
               const isExpanded = expandedArchives.has(archive.id);
               const archiveMaterials = materials[archive.id] || [];
