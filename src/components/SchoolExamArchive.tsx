@@ -252,9 +252,15 @@ export function SchoolExamArchive() {
       if (error) { toast.error('수정 실패'); return; }
       toast.success('자료 수정 완료');
     } else {
-      const { error } = await (supabase as any).from('school_exam_archives').insert({ ...payload, created_by: user?.id });
+      // For 중간고사/기말고사, auto-create per-subject entries (수학/영어/국어/과학)
+      const DEFAULT_EXAM_SUBJECTS = ['수학', '영어', '국어', '과학'];
+      const isExam = ['중간고사', '기말고사'].includes(payload.exam_type);
+      const insertRows = isExam
+        ? DEFAULT_EXAM_SUBJECTS.map(subj => ({ ...payload, subject: subj, created_by: user?.id }))
+        : [{ ...payload, created_by: user?.id }];
+      const { error } = await (supabase as any).from('school_exam_archives').insert(insertRows);
       if (error) { toast.error('생성 실패'); console.error(error); return; }
-      toast.success('자료 생성 완료');
+      toast.success(isExam ? `자료 생성 완료 (${DEFAULT_EXAM_SUBJECTS.join('/')} ${insertRows.length}건)` : '자료 생성 완료');
     }
 
     setShowCreateDialog(false);
