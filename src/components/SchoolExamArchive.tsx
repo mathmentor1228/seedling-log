@@ -60,7 +60,7 @@ interface Material {
 }
 
 const SCHOOL_LEVELS = ['초', '중', '고'];
-const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '기타'];
+const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '공통', '기타'];
 const SEMESTERS = ['1학기', '2학기'];
 const EXAM_TYPES = ['중간고사', '기말고사', '기타'];
 const FILE_CATEGORIES = ['교과서', '기출시험지', '프린트', '시험범위', '시험지(실제)', '학원수업자료', '학교제공자료', '시험분석서', '기타'];
