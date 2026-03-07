@@ -385,8 +385,13 @@ export function SchoolExamArchive() {
     }));
   };
 
-  // Group archives by school
-  const groupedArchives = archives.reduce<Record<string, Archive[]>>((acc, a) => {
+  // Group archives by school, sorted by earliest date first
+  const sortedArchives = [...archives].sort((a, b) => {
+    const dateA = a.exam_date_start || '9999-12-31';
+    const dateB = b.exam_date_start || '9999-12-31';
+    return dateA.localeCompare(dateB);
+  });
+  const groupedArchives = sortedArchives.reduce<Record<string, Archive[]>>((acc, a) => {
     const key = `${a.school_name} (${a.school_level})`;
     if (!acc[key]) acc[key] = [];
     acc[key].push(a);
@@ -722,7 +727,11 @@ export function SchoolExamArchive() {
                         <Badge variant="outline" className="text-xs">{archive.academic_year}</Badge>
                         <Badge variant="secondary" className="text-xs">{archive.school_level}{archive.grade_year}</Badge>
                         <Badge className="text-xs">{archive.subject}</Badge>
-                        <span className="text-sm font-medium">{archive.semester} {archive.exam_type}</span>
+                        <span className="text-sm font-medium">
+                          {archive.exam_type === '기타'
+                            ? (archive.notes?.split('\n')[0] || archive.exam_scope || `${archive.semester} 기타`)
+                            : `${archive.semester} ${archive.exam_type}`}
+                        </span>
                         {showDday && (
                           <Badge variant="destructive" className="text-[10px] animate-pulse">{dday}</Badge>
                         )}
