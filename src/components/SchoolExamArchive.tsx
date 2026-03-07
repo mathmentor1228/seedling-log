@@ -479,8 +479,13 @@ export function SchoolExamArchive() {
     const key = `${schoolName} (${schoolLevel})`;
     setUploadingCalendar(key);
     try {
-      const path = `calendars/${schoolName}_${schoolLevel}_${Date.now()}_${file.name}`;
-      const { error: storageError } = await supabase.storage.from('school-exam-materials').upload(path, file);
+      // Use sanitized filename to avoid encoding issues with Korean/special chars
+      const ext = file.name.split('.').pop() || 'jpg';
+      const safeName = `cal_${Date.now()}.${ext}`;
+      const path = `calendars/${safeName}`;
+      const { error: storageError } = await supabase.storage.from('school-exam-materials').upload(path, file, {
+        contentType: file.type || 'image/jpeg',
+      });
       if (storageError) throw storageError;
 
       const { error: dbError } = await (supabase as any).from('school_calendar_images').insert({
