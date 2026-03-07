@@ -640,8 +640,12 @@ export function SchoolExamArchive() {
           const calImgs = calendarImages[schoolKey] || [];
 
           return (
-          <div key={schoolKey} className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1">{schoolKey}</h3>
+          <div key={schoolKey} className="space-y-3">
+            <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+              <School className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-bold">{schoolKey}</h3>
+              <Badge variant="outline" className="text-[10px] ml-auto">{items.length}건</Badge>
+            </div>
 
             {/* School Calendar Images */}
             <div className="flex items-center gap-2 flex-wrap">
