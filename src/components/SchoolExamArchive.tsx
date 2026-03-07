@@ -385,8 +385,13 @@ export function SchoolExamArchive() {
     }));
   };
 
-  // Group archives by school
-  const groupedArchives = archives.reduce<Record<string, Archive[]>>((acc, a) => {
+  // Group archives by school, sorted by earliest date first
+  const sortedArchives = [...archives].sort((a, b) => {
+    const dateA = a.exam_date_start || '9999-12-31';
+    const dateB = b.exam_date_start || '9999-12-31';
+    return dateA.localeCompare(dateB);
+  });
+  const groupedArchives = sortedArchives.reduce<Record<string, Archive[]>>((acc, a) => {
     const key = `${a.school_name} (${a.school_level})`;
     if (!acc[key]) acc[key] = [];
     acc[key].push(a);
