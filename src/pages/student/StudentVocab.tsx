@@ -5,10 +5,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target } from 'lucide-react';
+import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target, PenLine } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
+import { speakEnglish } from '@/lib/ttsUtils';
+import VocabSelfTest from '@/components/student/VocabSelfTest';
 
 interface VocabWord {
   english: string;
@@ -45,7 +47,9 @@ export default function StudentVocab() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [mode, setMode] = useState<'eng_to_kor' | 'kor_to_eng'>('eng_to_kor');
+  const [studyType, setStudyType] = useState<'flashcard' | 'test'>('flashcard');
   const [started, setStarted] = useState(false);
+  const [testMode, setTestMode] = useState(false);
   const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -95,6 +99,14 @@ export default function StudentVocab() {
     }
 
     setCards(shuffled);
+    
+    if (studyType === 'test') {
+      setTestMode(true);
+      setStarted(true);
+      return;
+    }
+    
+    setTestMode(false);
     setCurrentIdx(0);
     setFlipped(false);
     setResults(new Array(shuffled.length).fill(null));
@@ -141,15 +153,7 @@ export default function StudentVocab() {
     }
   };
 
-  const speakWord = (word: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(word);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  // speakWord replaced by speakEnglish from ttsUtils
 
   const submitCompletion = useCallback(async () => {
     if (submitting) return;
@@ -320,6 +324,28 @@ export default function StudentVocab() {
                 </Select>
               </div>
 
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">학습 방법</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant={studyType === 'flashcard' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStudyType('flashcard')}
+                    className="w-full"
+                  >
+                    <Eye className="w-3.5 h-3.5 mr-1" /> 플래시카드
+                  </Button>
+                  <Button
+                    variant={studyType === 'test' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStudyType('test')}
+                    className="w-full"
+                  >
+                    <PenLine className="w-3.5 h-3.5 mr-1" /> 셀프 테스트
+                  </Button>
+                </div>
+              </div>
+
               <Button
                 onClick={startFlashcards}
                 disabled={selectedSetIds.length === 0}
@@ -327,12 +353,41 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                카드 시작 ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
+                {studyType === 'test' ? '테스트 시작' : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
               </Button>
             </div>
           </>
         )}
       </div>
+    );
+  }
+
+  // Test mode view
+  if (testMode) {
+    return (
+      <VocabSelfTest
+        words={cards}
+        mode={mode}
+        onFinish={async (correct, wrong, total) => {
+          // Save completion
+          const { error } = await studentApi.submitVocabCompletion(
+            selectedSetIds, correct, wrong, total, mode + '_test'
+          );
+          if (!error) {
+            toast({ title: '테스트 기록 저장 완료! ✅' });
+            setCompletions(prev => [{
+              id: crypto.randomUUID(),
+              word_set_ids: selectedSetIds,
+              correct_count: correct,
+              wrong_count: wrong,
+              total_count: total,
+              mode: mode + '_test',
+              completed_at: new Date().toISOString(),
+            }, ...prev]);
+          }
+        }}
+        onBack={() => { setStarted(false); setTestMode(false); }}
+      />
     );
   }
 
@@ -427,7 +482,7 @@ export default function StudentVocab() {
                       variant="ghost"
                       size="sm"
                       className="text-muted-foreground"
-                      onClick={(e) => { e.stopPropagation(); speakWord(currentCard.english); }}
+                      onClick={(e) => { e.stopPropagation(); speakEnglish(currentCard.english); }}
                     >
                       <Volume2 className="w-4 h-4 mr-1" /> 발음 듣기
                     </Button>
@@ -452,7 +507,7 @@ export default function StudentVocab() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 text-muted-foreground"
-                      onClick={(e) => { e.stopPropagation(); speakWord(currentCard.english); }}
+                      onClick={(e) => { e.stopPropagation(); speakEnglish(currentCard.english); }}
                     >
                       <Volume2 className="w-3.5 h-3.5" />
                     </Button>
