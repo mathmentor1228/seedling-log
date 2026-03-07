@@ -648,50 +648,61 @@ export function SchoolExamArchive() {
             </div>
 
             {/* School Calendar Images */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {calImgs.map(img => {
-                const url = calendarUrls[img.storage_path];
-                return (
-                  <div key={img.id} className="relative group">
-                    {url ? (
-                      <img
-                        src={url}
-                        alt={img.original_name}
-                        className="h-16 w-auto rounded-md border cursor-pointer hover:opacity-80 transition-opacity object-cover"
-                        onClick={() => setCalendarPreview(url)}
-                      />
-                    ) : (
-                      <div className="h-16 w-20 rounded-md border bg-muted flex items-center justify-center">
-                        <CalendarDays className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                    )}
-                    <button
-                      className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleDeleteCalendarImage(img)}
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                    <span className="text-[9px] text-muted-foreground block text-center mt-0.5 truncate max-w-[80px]">
-                      {img.semester}
-                    </span>
-                  </div>
-                );
-              })}
-              <label className={`h-16 w-16 rounded-md border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-accent/30 transition-colors ${uploadingCalendar === schoolKey ? 'opacity-50 pointer-events-none' : ''}`}>
-                <Upload className="w-4 h-4 text-muted-foreground" />
-                <span className="text-[9px] text-muted-foreground mt-0.5">일정표</span>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) handleUploadCalendarImage(schoolName, schoolLevel, file);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </div>
+            {(calImgs.length > 0 || true) && (
+              <div className="flex items-center gap-2.5 flex-wrap ml-1 mb-1">
+                <span className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                  <CalendarDays className="w-3 h-3" /> 학사일정
+                </span>
+                {calImgs.map(img => {
+                  const url = calendarUrls[img.storage_path];
+                  return (
+                    <div key={img.id} className="relative group">
+                      {url ? (
+                        <img
+                          src={url}
+                          alt={img.original_name}
+                          className="h-14 w-auto rounded border cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all object-cover"
+                          onClick={() => setCalendarPreview(url)}
+                        />
+                      ) : (
+                        <div className="h-14 w-18 rounded border bg-muted animate-pulse flex items-center justify-center">
+                          <CalendarDays className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <button
+                        className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleDeleteCalendarImage(img)}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                      <span className="text-[9px] text-muted-foreground block text-center mt-0.5 truncate max-w-[80px]">
+                        {img.semester}
+                      </span>
+                    </div>
+                  );
+                })}
+                <label className={`h-14 w-14 rounded border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-accent/30 transition-colors ${uploadingCalendar === schoolKey ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {uploadingCalendar === schoolKey ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-[8px] text-muted-foreground mt-0.5">추가</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadCalendarImage(schoolName, schoolLevel, file);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            )}
             {items.map(archive => {
               const isExpanded = expandedArchives.has(archive.id);
               const archiveMaterials = materials[archive.id] || [];
