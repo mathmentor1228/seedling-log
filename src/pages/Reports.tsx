@@ -598,6 +598,24 @@ export default function Reports() {
     }
   }
 
+  async function handleBulkParentVisible(visible: boolean) {
+    setBulkVisibleUpdating(true);
+    try {
+      const ids = Array.from(bulkDeleteIds);
+      const { error } = await supabase
+        .from('weekly_reports')
+        .update({ parent_visible: visible } as any)
+        .in('id', ids);
+      if (error) throw error;
+      setReports(prev => prev.map(r => ids.includes(r.id) ? { ...r, parent_visible: visible } : r));
+      toast({ title: `${ids.length}건 ${visible ? '학부모 공개' : '학부모 비공개'} 처리 완료` });
+    } catch (error: any) {
+      toast({ title: '처리 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setBulkVisibleUpdating(false);
+    }
+  }
+
   async function handleSendReports() {
     if (!user) return;
     
