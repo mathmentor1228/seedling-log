@@ -84,6 +84,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
         grade: `${schoolLevel}${gradeYear}`,
         school: school.trim() || null,
         parent_phone: parentPhone.trim() || null,
+        student_phone: studentPhone.trim() || null,
         enrollment_status: enrollmentStatus,
         notes: [
           subjects ? `수강과목: ${subjects}` : '',
