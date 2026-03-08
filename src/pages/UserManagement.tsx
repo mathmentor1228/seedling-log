@@ -293,6 +293,8 @@ export default function UserManagement() {
                 <TableHead>가입일</TableHead>
                 <TableHead>현재 권한</TableHead>
                 <TableHead>담당 과목</TableHead>
+                <TableHead>학년</TableHead>
+                <TableHead>과정</TableHead>
                 <TableHead>활성</TableHead>
                 <TableHead>권한 변경</TableHead>
                 <TableHead className="w-[100px]">저장</TableHead>
