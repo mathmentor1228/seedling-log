@@ -55,7 +55,7 @@ serve(async (req) => {
 
     // Extract text from PDF (send raw bytes to AI for analysis)
     const pdfBytes = await fileData.arrayBuffer();
-    const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+    const pdfBase64 = encodeBase64(new Uint8Array(pdfBytes));
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
