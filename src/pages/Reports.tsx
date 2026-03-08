@@ -245,6 +245,7 @@ export default function Reports() {
       const { data, error } = await supabase
         .from('students')
         .select('id, name, grade')
+        .eq('enrollment_status', '재원')
         .order('name');
       
       if (error) throw error;
