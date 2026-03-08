@@ -35,6 +35,8 @@ interface UserWithRole {
   roles: AppRole[];
   trial_expires_at?: string | null;
   assigned_subject?: string | null;
+  student_grade?: string | null;
+  student_course?: string | null;
 }
 
 export default function UserManagement() {
@@ -50,7 +52,7 @@ export default function UserManagement() {
       // Fetch all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, created_at, is_active, assigned_subject')
+        .select('id, full_name, email, created_at, is_active, assigned_subject, student_grade, student_course')
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -72,10 +74,12 @@ export default function UserManagement() {
           roles,
           trial_expires_at: trialEntry?.trial_expires_at || null,
           assigned_subject: profile.assigned_subject || null,
+          student_grade: profile.student_grade || null,
+          student_course: profile.student_course || null,
         };
       });
 
-      setUsers(usersWithRoles);
+
 
       // Initialize selected roles state
       const initialSelected: Record<string, AppRole | 'none'> = {};
@@ -290,6 +294,8 @@ export default function UserManagement() {
                 <TableHead>가입일</TableHead>
                 <TableHead>현재 권한</TableHead>
                 <TableHead>담당 과목</TableHead>
+                <TableHead>학년</TableHead>
+                <TableHead>과정</TableHead>
                 <TableHead>활성</TableHead>
                 <TableHead>권한 변경</TableHead>
                 <TableHead className="w-[100px]">저장</TableHead>
@@ -308,6 +314,12 @@ export default function UserManagement() {
                   </TableCell>
                   <TableCell>
                     <SubjectSelect userId={user.id} currentSubject={user.assigned_subject || null} onSaved={fetchUsers} />
+                  </TableCell>
+                  <TableCell>
+                    <GradeSelect userId={user.id} currentGrade={user.student_grade || null} onSaved={fetchUsers} />
+                  </TableCell>
+                  <TableCell>
+                    <CourseSelect userId={user.id} currentGrade={user.student_grade || null} currentCourse={user.student_course || null} onSaved={fetchUsers} />
                   </TableCell>
                   <TableCell>
                     <Switch
@@ -350,7 +362,7 @@ export default function UserManagement() {
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                     등록된 사용자가 없습니다.
                   </TableCell>
                 </TableRow>
@@ -512,6 +524,85 @@ function SubjectSelect({ userId, currentSubject, onSaved }: { userId: string; cu
         <SelectItem value="영어">영어</SelectItem>
         <SelectItem value="국어">국어</SelectItem>
         <SelectItem value="과학">과학</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+const GRADE_OPTIONS = ['중1', '중2', '중3', '고1', '고2', '고3'];
+const COURSE_MAP: Record<string, string[]> = {
+  '중1': ['중1-1', '중1-2'],
+  '중2': ['중2-1', '중2-2'],
+  '중3': ['중3-1', '중3-2'],
+  '고1': ['수학(상)', '수학(하)'],
+  '고2': ['수학I', '수학II', '미적분', '확률과통계'],
+  '고3': ['미적분', '기하', '확률과통계'],
+};
+
+function GradeSelect({ userId, currentGrade, onSaved }: { userId: string; currentGrade: string | null; onSaved: () => Promise<void> }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+
+  const handleChange = async (value: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ student_grade: value === 'none' ? null : value, student_course: null } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      toast({ title: '완료', description: '학년이 변경되었습니다.' });
+      await onSaved();
+    } catch (error) {
+      toast({ title: '오류', description: '변경 실패', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Select value={currentGrade || 'none'} onValueChange={handleChange} disabled={saving}>
+      <SelectTrigger className="w-[80px]">
+        <SelectValue placeholder="학년" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">미지정</SelectItem>
+        {GRADE_OPTIONS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function CourseSelect({ userId, currentGrade, currentCourse, onSaved }: { userId: string; currentGrade: string | null; currentCourse: string | null; onSaved: () => Promise<void> }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const courses = currentGrade ? COURSE_MAP[currentGrade] || [] : [];
+
+  const handleChange = async (value: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ student_course: value === 'none' ? null : value } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      toast({ title: '완료', description: '과정이 변경되었습니다.' });
+      await onSaved();
+    } catch (error) {
+      toast({ title: '오류', description: '변경 실패', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Select value={currentCourse || 'none'} onValueChange={handleChange} disabled={saving || courses.length === 0}>
+      <SelectTrigger className="w-[100px]">
+        <SelectValue placeholder="과정" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">미지정</SelectItem>
+        {courses.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
       </SelectContent>
     </Select>
   );

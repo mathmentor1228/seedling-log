@@ -27,6 +27,7 @@ import ReportStatusPage from "./pages/ReportStatusPage";
 import VocabTestPage from "./pages/VocabTestPage";
 import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
 import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
+import MathConceptPage from "./pages/MathConceptPage";
 import NotFound from "./pages/NotFound";
 import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
@@ -112,6 +113,7 @@ const App = () => (
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
                 <Route path="/vocab-generator" element={<VocabTestGeneratorPage />} />
                 <Route path="/materials/:subject" element={<SubjectMaterialPage />} />
+                <Route path="/math-concepts" element={<MathConceptPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
