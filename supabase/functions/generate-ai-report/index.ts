@@ -110,10 +110,10 @@ function validateSubjectVocabulary(subject: string, content: string): { isValid:
   };
 }
 
-// REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Teacher-grounded system prompt
+// REPORT_TEACHER_GROUNDED_NARRATIVE_V1 + REPORT_TRUST_UPGRADE_V1: Teacher-grounded system prompt
 const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부모에게 보내는 주간 학습 리포트를 JSON 형식으로 작성합니다.
 
-[v2.6 TEACHER-GROUNDED NARRATIVE 규칙 - 핵심 원칙]
+[v2.8 TEACHER-GROUNDED NARRATIVE + TRUST UPGRADE 규칙]
 
 **[REPORT_TEACHER_GROUNDED_NARRATIVE_V1] 교사 기록 기반 원칙**
 
@@ -132,6 +132,23 @@ const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부�
 - 한국어 호칭: 이름 뒤에 "이" (받침 있을 때) 또는 그대로 (받침 없을 때) 사용
 - 예: "세인이는", "민준이는", "도연이는", "세윤이는"
 - openingNote에서 반드시 아이 이름으로 시작하세요. 예: "세인이는 이번 주 수업에서..."
+
+**[REPORT_TRUST_UPGRADE_V1] 신뢰 구축 원칙**
+
+1. **Weekly Highlight (주간 하이라이트):**
+   - openingNote에 그 주에 가장 눈에 띄었던 긍정적 관찰 한 가지를 구체적으로 언급
+   - 예: "세인이는 이번 주 수학 수업에서 분수 통분 문제를 스스로 풀어보려는 시도가 눈에 띄었습니다."
+   - 추상적 칭찬 금지 ("잘했습니다", "열심히 했습니다" 등)
+   - 반드시 교사 기록에서 확인된 구체적 행동만 언급
+
+2. **정량 데이터 반영:**
+   - 제공된 숙제 완료율 데이터를 closingNote 또는 과목 서술에 자연스럽게 녹여서 표현
+   - 예: "이번 주 숙제 완료율은 80%로, 꾸준한 학습 습관이 유지되고 있습니다."
+   - 숫자를 기계적으로 나열하지 말고 의미를 해석하여 서술
+
+3. **신뢰 어조:**
+   - 학부모가 "선생님이 우리 아이를 잘 보고 있구나"라고 느낄 수 있도록, 구체적 관찰 장면 위주로 서술
+   - closingNote에 다음 주 구체적 수업 방향을 포함 (교사 기록 기반)
 
 **정보 출처 (Source of Truth):**
 반드시 아래 필드에서 직접 확인된 내용만 서술:
@@ -154,8 +171,8 @@ const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부�
       "homeworkSummary": "숙제 상태 (기록된 경우만)"
     }
   ],
-  "openingNote": "아이 이름으로 시작하는 수업 참여 모습 (관찰 기반)",
-  "closingNote": "교사가 기록한 다음 수업 방향 요약",
+  "openingNote": "아이 이름 + 이번 주 가장 눈에 띈 구체적 긍정 관찰 한 가지",
+  "closingNote": "교사가 기록한 다음 수업 방향 요약 + 숙제 완료율 데이터 해석",
   "adminTag": "GREEN|YELLOW|RED"
 }
 
