@@ -64,6 +64,9 @@ export function MathConceptManager() {
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
 
+  // All quizzes for assignment manager
+  const [allQuizzes, setAllQuizzes] = useState<any[]>([]);
+
   const fetchConcepts = async () => {
     const { data, error } = await supabase
       .from('math_concepts')
