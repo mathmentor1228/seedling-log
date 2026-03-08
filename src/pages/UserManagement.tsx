@@ -34,6 +34,7 @@ interface UserWithRole {
   is_active: boolean;
   roles: AppRole[];
   trial_expires_at?: string | null;
+  assigned_subject?: string | null;
 }
 
 export default function UserManagement() {
@@ -49,7 +50,7 @@ export default function UserManagement() {
       // Fetch all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, created_at, is_active')
+        .select('id, full_name, email, created_at, is_active, assigned_subject')
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
@@ -62,7 +63,7 @@ export default function UserManagement() {
       if (rolesError) throw rolesError;
 
       // Merge profiles with roles
-      const usersWithRoles: UserWithRole[] = (profiles || []).map((profile) => {
+      const usersWithRoles: UserWithRole[] = ((profiles || []) as any[]).map((profile) => {
         const userRoleEntries = (userRoles || []).filter((ur) => ur.user_id === profile.id);
         const roles = userRoleEntries.map((ur) => ur.role);
         const trialEntry = userRoleEntries.find((ur) => ur.trial_expires_at);
@@ -70,6 +71,7 @@ export default function UserManagement() {
           ...profile,
           roles,
           trial_expires_at: trialEntry?.trial_expires_at || null,
+          assigned_subject: profile.assigned_subject || null,
         };
       });
 
@@ -287,6 +289,7 @@ export default function UserManagement() {
                 <TableHead>이메일</TableHead>
                 <TableHead>가입일</TableHead>
                 <TableHead>현재 권한</TableHead>
+                <TableHead>담당 과목</TableHead>
                 <TableHead>활성</TableHead>
                 <TableHead>권한 변경</TableHead>
                 <TableHead className="w-[100px]">저장</TableHead>
@@ -302,6 +305,9 @@ export default function UserManagement() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">{getRoleBadge(user.roles)}</div>
+                  </TableCell>
+                  <TableCell>
+                    <SubjectSelect userId={user.id} currentSubject={user.assigned_subject || null} onSaved={fetchUsers} />
                   </TableCell>
                   <TableCell>
                     <Switch
@@ -344,7 +350,7 @@ export default function UserManagement() {
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     등록된 사용자가 없습니다.
                   </TableCell>
                 </TableRow>
@@ -470,5 +476,43 @@ function TrialUsersCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SubjectSelect({ userId, currentSubject, onSaved }: { userId: string; currentSubject: string | null; onSaved: () => Promise<void> }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+
+  const handleChange = async (value: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ assigned_subject: value === 'none' ? null : value } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      toast({ title: '완료', description: '담당 과목이 변경되었습니다.' });
+      await onSaved();
+    } catch (error) {
+      console.error('Error saving subject:', error);
+      toast({ title: '오류', description: '과목 변경에 실패했습니다.', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Select value={currentSubject || 'none'} onValueChange={handleChange} disabled={saving}>
+      <SelectTrigger className="w-[100px]">
+        <SelectValue placeholder="과목" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">미지정</SelectItem>
+        <SelectItem value="수학">수학</SelectItem>
+        <SelectItem value="영어">영어</SelectItem>
+        <SelectItem value="국어">국어</SelectItem>
+        <SelectItem value="과학">과학</SelectItem>
+      </SelectContent>
+    </Select>
   );
 }

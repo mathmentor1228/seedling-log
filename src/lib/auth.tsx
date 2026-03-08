@@ -8,6 +8,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   role: AppRole | null;
+  assignedSubject: string | null;
   loading: boolean;
   isTrial: boolean;
   trialExpiresAt: string | null;
@@ -23,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [assignedSubject, setAssignedSubject] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [trialExpiresAt, setTrialExpiresAt] = useState<string | null>(null);
 
@@ -41,19 +43,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { role: null, trialExpiresAt: null };
     }
 
-    // If user has multiple roles, return the highest priority one
-    // Priority: admin > teacher > assistant
     const roles = data.map(r => r.role as AppRole);
     let selectedRole: AppRole | null = null;
     if (roles.includes('admin')) selectedRole = 'admin';
     else if (roles.includes('teacher')) selectedRole = 'teacher';
     else if (roles.includes('assistant')) selectedRole = 'assistant';
 
-    // Get trial expiry from the matching role record
     const matchingRecord = data.find(r => r.role === selectedRole);
     const expires = matchingRecord?.trial_expires_at || null;
     
     return { role: selectedRole, trialExpiresAt: expires };
+  };
+
+  const fetchAssignedSubject = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('assigned_subject')
+      .eq('id', userId)
+      .single();
+    return (data as any)?.assigned_subject || null;
   };
 
   useEffect(() => {
@@ -64,14 +72,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session?.user) {
           setTimeout(() => {
-            fetchUserRole(session.user.id).then(result => {
+            Promise.all([
+              fetchUserRole(session.user.id),
+              fetchAssignedSubject(session.user.id),
+            ]).then(([result, subject]) => {
               setRole(result.role);
               setTrialExpiresAt(result.trialExpiresAt);
+              setAssignedSubject(subject);
             });
           }, 0);
         } else {
           setRole(null);
           setTrialExpiresAt(null);
+          setAssignedSubject(null);
         }
       }
     );
@@ -81,9 +94,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        fetchUserRole(session.user.id).then((result) => {
+        Promise.all([
+          fetchUserRole(session.user.id),
+          fetchAssignedSubject(session.user.id),
+        ]).then(([result, subject]) => {
           setRole(result.role);
           setTrialExpiresAt(result.trialExpiresAt);
+          setAssignedSubject(subject);
           setLoading(false);
         });
       } else {
@@ -118,13 +135,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setRole(null);
     setTrialExpiresAt(null);
+    setAssignedSubject(null);
   };
 
   const isTrial = !!trialExpiresAt;
   const isTrialExpired = isTrial && new Date(trialExpiresAt) < new Date();
 
   return (
-    <AuthContext.Provider value={{ user, session, role, loading, isTrial, trialExpiresAt, isTrialExpired, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, role, assignedSubject, loading, isTrial, trialExpiresAt, isTrialExpired, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
