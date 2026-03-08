@@ -1,10 +1,23 @@
 import { useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { NotionBlockRenderer } from '@/components/NotionBlockRenderer';
+
+// Extract page ID from Notion URLs (remove dashes, take last 32 chars)
+function extractPageId(url: string): string {
+  const match = url.match(/([a-f0-9]{32})$/);
+  if (match) return match[1];
+  // Try with dashes
+  const match2 = url.match(/([a-f0-9-]{36})$/);
+  if (match2) return match2[1].replace(/-/g, '');
+  // Fallback: take last segment after last dash
+  const parts = url.split('-');
+  return parts[parts.length - 1];
+}
 
 const SUBJECT_CONFIG: Record<string, { label: string; notionUrl: string }> = {
   math: {
@@ -28,50 +41,35 @@ const SUBJECT_CONFIG: Record<string, { label: string; notionUrl: string }> = {
 export default function SubjectMaterialPage() {
   const { subject } = useParams<{ subject: string }>();
   const config = subject ? SUBJECT_CONFIG[subject] : null;
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [pageTitle, setPageTitle] = useState('');
+
+  const loadPage = async () => {
+    if (!config) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const pageId = extractPageId(config.notionUrl);
+      const { data, error: fnError } = await supabase.functions.invoke('notion-proxy', {
+        body: { pageId },
+      });
+
+      if (fnError) throw fnError;
+      
+      setBlocks(data?.blocks || []);
+      setPageTitle(data?.pageTitle || '');
+    } catch (err: any) {
+      console.error('Failed to load Notion page:', err);
+      setError('페이지를 불러오는데 실패했습니다. 노션 연결 상태를 확인해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!config) return;
-
-    const loadNotionPage = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error: fnError } = await supabase.functions.invoke('notion-proxy', {
-          body: { url: config.notionUrl },
-        });
-
-        if (fnError) throw fnError;
-
-        // data is the HTML string
-        const htmlContent = typeof data === 'string' ? data : '';
-        
-        if (iframeRef.current) {
-          const doc = iframeRef.current.contentDocument;
-          if (doc) {
-            doc.open();
-            doc.write(htmlContent);
-            doc.close();
-            
-            // Make all links open in new tab
-            const links = doc.querySelectorAll('a');
-            links.forEach(link => {
-              link.setAttribute('target', '_blank');
-              link.setAttribute('rel', 'noopener noreferrer');
-            });
-          }
-        }
-      } catch (err: any) {
-        console.error('Failed to load Notion page:', err);
-        setError('페이지를 불러오는데 실패했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadNotionPage();
+    loadPage();
   }, [config?.notionUrl]);
 
   if (!config) {
@@ -86,49 +84,19 @@ export default function SubjectMaterialPage() {
     );
   }
 
-  const handleReload = () => {
-    setLoading(true);
-    setError(null);
-    const loadNotionPage = async () => {
-      try {
-        const { data, error: fnError } = await supabase.functions.invoke('notion-proxy', {
-          body: { url: config.notionUrl },
-        });
-        if (fnError) throw fnError;
-        const htmlContent = typeof data === 'string' ? data : '';
-        if (iframeRef.current) {
-          const doc = iframeRef.current.contentDocument;
-          if (doc) {
-            doc.open();
-            doc.write(htmlContent);
-            doc.close();
-          }
-        }
-      } catch (err) {
-        setError('페이지를 불러오는데 실패했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadNotionPage();
-  };
-
   return (
     <ProtectedRoute>
       <AppLayout>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-foreground">{config.label} 자료실</h1>
-            <Button variant="outline" size="sm" onClick={handleReload} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={loadPage} className="gap-1.5">
               <RefreshCw className="w-3.5 h-3.5" />
               새로고침
             </Button>
           </div>
 
-          <div
-            className="relative w-full rounded-lg border border-border overflow-hidden bg-card"
-            style={{ height: 'calc(100vh - 160px)', minHeight: '600px' }}
-          >
+          <div className="relative w-full rounded-lg border border-border overflow-hidden bg-card p-6" style={{ minHeight: '600px' }}>
             {loading && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -137,17 +105,14 @@ export default function SubjectMaterialPage() {
             {error && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background z-10">
                 <p className="text-muted-foreground">{error}</p>
-                <Button variant="outline" size="sm" onClick={handleReload}>
+                <Button variant="outline" size="sm" onClick={loadPage}>
                   다시 시도
                 </Button>
               </div>
             )}
-            <iframe
-              ref={iframeRef}
-              className="w-full h-full border-0"
-              title={`${config.label} 자료실`}
-              sandbox="allow-scripts allow-same-origin allow-popups"
-            />
+            {!loading && !error && (
+              <NotionBlockRenderer blocks={blocks} />
+            )}
           </div>
         </div>
       </AppLayout>
