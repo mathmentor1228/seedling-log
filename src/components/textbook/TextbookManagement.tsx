@@ -9,7 +9,8 @@ const PAYMENT_ALLOWED_EMAILS = ['bfkor8810@naver.com'];
 
 export function TextbookManagement() {
   const { user, role } = useAuth();
-  const canSeePayment = role === 'admin' || role === 'assistant' || PAYMENT_ALLOWED_EMAILS.includes(user?.email || '');
+  const normalizedEmail = (user?.email || '').trim().toLowerCase();
+  const canSeePayment = role === 'admin' || role === 'assistant' || PAYMENT_ALLOWED_EMAILS.some((email) => email.trim().toLowerCase() === normalizedEmail);
 
   return (
     <div className="space-y-6">

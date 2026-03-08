@@ -15,6 +15,12 @@ interface ProtectedRouteProps {
   allowedEmails?: string[];
 }
 
+const isEmailAllowed = (userEmail: string | undefined, allowedEmails?: string[]) => {
+  const normalizedUserEmail = (userEmail || '').trim().toLowerCase();
+  if (!normalizedUserEmail || !allowedEmails?.length) return false;
+  return allowedEmails.some((email) => email.trim().toLowerCase() === normalizedUserEmail);
+};
+
 export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails }: ProtectedRouteProps) {
   const { user, loading, role, isTrial, trialExpiresAt, isTrialExpired, signOut } = useAuth();
   const navigate = useNavigate();
@@ -32,7 +38,7 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
 
     if (!loading && user && role) {
       // Check if user has required role
-      const emailAllowed = allowedEmails?.includes(user.email || '');
+      const emailAllowed = isEmailAllowed(user.email, allowedEmails);
       const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role) || emailAllowed;
       
       if (!hasAccess) {
@@ -40,7 +46,7 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [user, loading, role, navigate, allowedRoles]);
+  }, [user, loading, role, navigate, allowedRoles, allowedEmails]);
 
   if (loading) {
     return (
@@ -98,7 +104,7 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
   }
 
   // Check access
-  const emailAllowed = allowedEmails?.includes(user.email || '');
+  const emailAllowed = isEmailAllowed(user.email, allowedEmails);
   const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role) || emailAllowed;
   if (!hasAccess) {
     return null;
