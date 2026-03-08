@@ -2094,6 +2094,11 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ━━━ 숙제 이행률 차트 ━━━ */}
+      {!isAssistant(role) && (
+        <HomeworkCompletionChart />
+      )}
+
       {/* ━━━ 섹션 3: 미제출/출결 이슈 ━━━ */}
       {isTeacher(role) && teacherOverdueLessons.length > 0 && (
         <Collapsible open={overdueOpen} onOpenChange={setOverdueOpen}>
