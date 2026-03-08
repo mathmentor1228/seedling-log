@@ -1,0 +1,1 @@
+ALTER TABLE public.textbook_orders ADD COLUMN subject TEXT NOT NULL DEFAULT '수학';

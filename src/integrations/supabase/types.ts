@@ -2237,6 +2237,7 @@ export type Database = {
           requested_by: string
           requested_by_name: string
           status: string
+          subject: string
           textbook_name: string
           unit_price: number
           updated_at: string
@@ -2251,6 +2252,7 @@ export type Database = {
           requested_by: string
           requested_by_name: string
           status?: string
+          subject?: string
           textbook_name: string
           unit_price?: number
           updated_at?: string
@@ -2265,6 +2267,7 @@ export type Database = {
           requested_by?: string
           requested_by_name?: string
           status?: string
+          subject?: string
           textbook_name?: string
           unit_price?: number
           updated_at?: string

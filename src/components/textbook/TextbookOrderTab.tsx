@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Plus, Loader2, Package, PackageCheck, Trash2 } from 'lucide-react';
@@ -14,6 +15,7 @@ interface TextbookOrder {
   id: string;
   textbook_name: string;
   quantity: number;
+  subject: string;
   unit_price: number;
   status: string;
   requested_by: string;
@@ -33,6 +35,7 @@ export function TextbookOrderTab() {
   const [userName, setUserName] = useState('');
 
   const [name, setName] = useState('');
+  const [subject, setSubject] = useState('수학');
   const [qty, setQty] = useState('1');
   const [price, setPrice] = useState('');
   const [notes, setNotes] = useState('');
@@ -78,6 +81,7 @@ export function TextbookOrderTab() {
     setCreating(true);
     const { error } = await supabase.from('textbook_orders').insert({
       textbook_name: name.trim(),
+      subject,
       quantity: parseInt(qty) || 1,
       unit_price: parseInt(price) || 0,
       requested_by: user!.id,
@@ -88,7 +92,7 @@ export function TextbookOrderTab() {
     else {
       toast.success('교재 신청이 등록되었습니다');
       setShowDialog(false);
-      setName(''); setQty('1'); setPrice(''); setNotes('');
+      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes('');
       fetchOrders();
     }
     setCreating(false);
@@ -128,9 +132,20 @@ export function TextbookOrderTab() {
           <DialogContent>
             <DialogHeader><DialogTitle>교재 신청</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-2">
-              <div>
-                <label className="text-sm font-medium text-foreground">교재명 *</label>
-                <Input value={name} onChange={e => setName(e.target.value)} placeholder="교재명 입력" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-foreground">교재명 *</label>
+                  <Input value={name} onChange={e => setName(e.target.value)} placeholder="교재명 입력" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">과목</label>
+                  <Select value={subject} onValueChange={setSubject}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {['수학', '영어', '국어', '과학'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
