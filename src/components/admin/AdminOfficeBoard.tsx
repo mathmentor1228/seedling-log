@@ -205,7 +205,10 @@ export function AdminOfficeBoard() {
         </TabsContent>
 
         <TabsContent value="tasks" className="space-y-6">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowNewStudentDialog(true)}>
+          <UserPlus className="w-4 h-4" />신규생 등록
+        </Button>
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="w-4 h-4" />업무 등록</Button>
