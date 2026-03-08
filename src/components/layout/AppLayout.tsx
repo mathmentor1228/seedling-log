@@ -129,7 +129,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null): N
 };
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { user, role, signOut } = useAuth();
+  const { user, role, assignedSubject, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
