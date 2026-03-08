@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Calculator, RotateCcw, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -19,17 +18,15 @@ const DAY_INDEX: Record<string, number> = {
   mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
 };
 
-function getSessionDatesInMonth(year: number, month: number, selectedDays: string[]): Date[] {
+function getSessionDatesInRange(startDate: Date, endDate: Date, selectedDays: string[]): Date[] {
   const dayIndices = selectedDays.map(d => DAY_INDEX[d]);
   const dates: Date[] = [];
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month, d);
-    const dow = date.getDay(); // 0=Sun, 1=Mon, ...
-    if (dayIndices.includes(dow)) {
-      dates.push(date);
+  const current = new Date(startDate);
+  while (current <= endDate) {
+    if (dayIndices.includes(current.getDay())) {
+      dates.push(new Date(current));
     }
+    current.setDate(current.getDate() + 1);
   }
   return dates;
 }
@@ -42,13 +39,30 @@ export function TuitionCalculator() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth()); // 0-indexed
+  const [startDay, setStartDay] = useState(1); // 수업 시작일
   const [selectedDays, setSelectedDays] = useState<string[]>(['mon', 'wed', 'fri']);
   const [totalFee, setTotalFee] = useState<string>('');
   const [attendedIndices, setAttendedIndices] = useState<Set<number>>(new Set());
 
+  // 시작일~종료일 계산: startDay일 ~ 다음달 (startDay-1)일
+  const { periodStart, periodEnd, periodLabel } = useMemo(() => {
+    const start = new Date(year, month, startDay);
+    let end: Date;
+    if (startDay === 1) {
+      // 1일 시작이면 해당월 말일까지
+      end = new Date(year, month + 1, 0);
+    } else {
+      // N일 시작이면 다음달 (N-1)일까지
+      end = new Date(year, month + 1, startDay - 1);
+    }
+    const startLabel = `${start.getFullYear()}.${start.getMonth() + 1}.${start.getDate()}`;
+    const endLabel = `${end.getFullYear()}.${end.getMonth() + 1}.${end.getDate()}`;
+    return { periodStart: start, periodEnd: end, periodLabel: `${startLabel} ~ ${endLabel}` };
+  }, [year, month, startDay]);
+
   const sessionDates = useMemo(
-    () => getSessionDatesInMonth(year, month, selectedDays),
-    [year, month, selectedDays]
+    () => getSessionDatesInRange(periodStart, periodEnd, selectedDays),
+    [periodStart, periodEnd, selectedDays]
   );
 
   const totalSessions = sessionDates.length;
@@ -85,10 +99,12 @@ export function TuitionCalculator() {
     setAttendedIndices(new Set());
     setMonth(now.getMonth());
     setYear(now.getFullYear());
+    setStartDay(1);
   };
 
   const handleCopy = () => {
-    const text = `[원비 정산]\n월: ${year}년 ${month + 1}월\n수업 요일: ${selectedDays.map(d => DAYS_OF_WEEK.find(x => x.key === d)?.label).join(', ')}\n총 회차: ${totalSessions}회\n수강 회차: ${attendedSessions}회\n월 수업료: ${feeNum.toLocaleString()}원\n정산 금액: ${prorated.toLocaleString()}원`;
+    const dayLabels = selectedDays.map(d => DAYS_OF_WEEK.find(x => x.key === d)?.label).join(', ');
+    const text = `[원비 정산]\n기간: ${periodLabel}\n수업 요일: ${dayLabels}\n총 회차: ${totalSessions}회\n수강 회차: ${attendedSessions}회\n월 수업료: ${feeNum.toLocaleString()}원\n정산 금액: ${prorated.toLocaleString()}원`;
     navigator.clipboard.writeText(text);
     toast.success('정산 내역이 복사되었습니다');
   };
@@ -110,9 +126,16 @@ export function TuitionCalculator() {
     setAttendedIndices(new Set());
   };
 
+  const handleStartDayChange = (val: string) => {
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num >= 1 && num <= 28) {
+      setStartDay(num);
+      setAttendedIndices(new Set());
+    }
+  };
+
   return (
     <div className="space-y-5">
-      {/* Month selector */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-foreground flex items-center gap-2">
@@ -129,6 +152,26 @@ export function TuitionCalculator() {
           <Button variant="outline" size="sm" onClick={prevMonth}>◀</Button>
           <span className="text-lg font-bold text-foreground">{year}년 {month + 1}월</span>
           <Button variant="outline" size="sm" onClick={nextMonth}>▶</Button>
+        </div>
+
+        {/* 수업 시작일 */}
+        <div className="mb-4">
+          <label className="text-sm font-medium text-foreground mb-1.5 block">수업 시작일 (매월 N일)</label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">매월</span>
+            <Input
+              type="number"
+              min={1}
+              max={28}
+              value={startDay}
+              onChange={e => handleStartDayChange(e.target.value)}
+              className="w-20 text-center font-semibold"
+            />
+            <span className="text-sm text-muted-foreground">일 시작</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1.5 bg-muted/50 rounded-md px-2.5 py-1.5">
+            📅 적용 기간: <strong className="text-foreground">{periodLabel}</strong>
+          </p>
         </div>
 
         {/* Day of week selector */}
