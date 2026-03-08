@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Upload, Brain, FileText, RefreshCw, Trash2 } from 'lucide-react';
 import { MathQuizPreview } from './MathQuizPreview';
 import { QuizSubmissionReview } from './QuizSubmissionReview';
+import { MathQuizAssignManager } from './MathQuizAssignManager';
 
 interface MathConcept {
   id: string;
