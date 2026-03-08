@@ -43,6 +43,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [tuitionFee, setTuitionFee] = useState('');
   const [classTime, setClassTime] = useState('');
+  const [studentPhone, setStudentPhone] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -56,6 +57,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     setStartDate(undefined);
     setTuitionFee('');
     setClassTime('');
+    setStudentPhone('');
     setParentPhone('');
     setNotes('');
     setCreated(false);
@@ -82,6 +84,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
         grade: `${schoolLevel}${gradeYear}`,
         school: school.trim() || null,
         parent_phone: parentPhone.trim() || null,
+        student_phone: studentPhone.trim() || null,
         enrollment_status: enrollmentStatus,
         notes: [
           subjects ? `수강과목: ${subjects}` : '',
@@ -110,6 +113,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       tuitionFee ? `수강료: ${tuitionFee}` : '',
       classTime ? `수업시간: ${classTime}` : '',
       parentPhone ? `학부모연락처: ${parentPhone}` : '',
+      studentPhone ? `학생연락처: ${studentPhone}` : '',
       `등록상태: ${enrollmentStatus}`,
       notes ? `비고: ${notes}` : '',
     ].filter(Boolean).join('\n');
@@ -256,6 +260,12 @@ ${studentName} 학생의 등록이 완료되었습니다.
             <div>
               <label className="text-sm font-medium text-foreground">수업 시간</label>
               <Input value={classTime} onChange={e => setClassTime(e.target.value)} placeholder="예: 월수금 16:00~18:00" />
+            </div>
+
+            {/* 학생 연락처 */}
+            <div>
+              <label className="text-sm font-medium text-foreground">학생 연락처</label>
+              <Input value={studentPhone} onChange={e => setStudentPhone(e.target.value)} placeholder="010-0000-0000" />
             </div>
 
             {/* 학부모 연락처 */}
