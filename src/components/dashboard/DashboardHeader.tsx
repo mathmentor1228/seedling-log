@@ -22,26 +22,26 @@ export function DashboardHeader({ userName, role }: DashboardHeaderProps) {
   const roleLabel = role === 'admin' ? '학원장' : role === 'teacher' ? '선생님' : '';
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sidebar-background via-sidebar-background to-sidebar-accent p-6 sm:p-8 shadow-lg">
-      {/* Decorative blobs */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/3 translate-x-1/3 blur-2xl" />
-      <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/3 rounded-full translate-y-1/2 -translate-x-1/4 blur-xl" />
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sidebar-background via-sidebar-background/95 to-sidebar-accent p-7 sm:p-9 shadow-elevated">
+      {/* Decorative elements */}
+      <div className="absolute top-0 right-0 w-80 h-80 bg-white/[0.04] rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl" />
+      <div className="absolute bottom-0 left-16 w-48 h-48 bg-primary/10 rounded-full translate-y-1/2 blur-2xl" />
       
-      <div className="relative flex flex-col sm:flex-row items-start sm:items-end justify-between gap-3">
+      <div className="relative flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
         <div>
-          <p className="text-sidebar-foreground/60 text-xs font-medium tracking-widest uppercase mb-1">
+          <p className="text-sidebar-foreground/50 text-[11px] font-semibold tracking-[0.2em] uppercase mb-2">
             {format(dateObj, 'yyyy년 M월 d일')} ({dayNames[dayOfWeek]})
           </p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-sidebar-foreground tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-sidebar-foreground tracking-tight">
             {greeting} 👋
           </h1>
           {roleLabel && (
-            <p className="text-sidebar-foreground/70 mt-1 text-sm">
+            <p className="text-sidebar-foreground/60 mt-1.5 text-sm font-medium">
               {roleLabel} 대시보드
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 text-sidebar-foreground/80 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl text-sm font-medium">
+        <div className="flex items-center gap-2.5 text-sidebar-foreground/90 bg-white/[0.08] backdrop-blur-md px-4 py-2.5 rounded-xl text-sm font-medium border border-white/[0.06]">
           <span className="inline-block w-2 h-2 rounded-full bg-success animate-pulse" />
           오늘 {format(dateObj, 'M/d')} ({dayNames[dayOfWeek]})
         </div>
