@@ -30,6 +30,7 @@ interface QuizData {
 
 export interface QuizQuestion {
   question_number: number;
+  question_type: 'fill_blank' | 'true_false' | 'short_answer';
   question_text: string;
   answer: string;
   explanation: string;
