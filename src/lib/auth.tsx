@@ -135,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setRole(null);
     setTrialExpiresAt(null);
+    setAssignedSubject(null);
   };
 
   const isTrial = !!trialExpiresAt;
