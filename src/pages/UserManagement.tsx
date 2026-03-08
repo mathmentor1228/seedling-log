@@ -77,8 +77,9 @@ export default function UserManagement() {
           student_grade: profile.student_grade || null,
           student_course: profile.student_course || null,
         };
+      });
 
-      setUsers(usersWithRoles);
+
 
       // Initialize selected roles state
       const initialSelected: Record<string, AppRole | 'none'> = {};
