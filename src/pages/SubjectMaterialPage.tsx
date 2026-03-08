@@ -1,22 +1,28 @@
 import { useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-const SUBJECT_CONFIG: Record<string, { label: string; notionUrl: string }> = {
+const SUBJECT_CONFIG: Record<string, { label: string; notionUrl: string; emoji: string }> = {
   math: {
     label: '수학',
+    emoji: '📐',
     notionUrl: 'https://mentorms.notion.site/Storage_-31d4390663e5802d9c86d77c6c6fcb43',
   },
   english: {
     label: '영어',
+    emoji: '📖',
     notionUrl: 'https://mentorms.notion.site/Storage_-31d4390663e5801c859edadffa651d1c',
   },
   korean: {
     label: '국어',
+    emoji: '📝',
     notionUrl: 'https://mentorms.notion.site/Storage_-31d4390663e58011b6eac1cb71514cfa',
   },
   science: {
     label: '과학',
+    emoji: '🔬',
     notionUrl: 'https://mentorms.notion.site/Storage_-31d4390663e58096a1cecffc651a5a67',
   },
 };
@@ -40,15 +46,19 @@ export default function SubjectMaterialPage() {
   return (
     <ProtectedRoute>
       <AppLayout>
-        <div className="space-y-4">
-          <h1 className="text-2xl font-bold text-foreground">{config.label} 자료실</h1>
-          <div className="w-full rounded-lg border border-border overflow-hidden bg-card" style={{ height: 'calc(100vh - 160px)', minHeight: '600px' }}>
-            <iframe
-              src={config.notionUrl}
-              className="w-full h-full border-0"
-              title={`${config.label} 자료실`}
-              allowFullScreen
-            />
+        <div className="flex flex-col items-center justify-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
+          <div className="text-center space-y-6 max-w-md">
+            <div className="text-6xl">{config.emoji}</div>
+            <h1 className="text-2xl font-bold text-foreground">{config.label} 자료실</h1>
+            <p className="text-muted-foreground">
+              노션에서 {config.label} 수업 자료를 확인하세요.
+            </p>
+            <Button asChild size="lg" className="gap-2">
+              <a href={config.notionUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="w-4 h-4" />
+                노션에서 열기
+              </a>
+            </Button>
           </div>
         </div>
       </AppLayout>
