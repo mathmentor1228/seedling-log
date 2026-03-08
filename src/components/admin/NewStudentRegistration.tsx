@@ -42,7 +42,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
   const { user } = useAuth();
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
-  const [copied, setCopied] = useState(false);
+  // copied state moved to copiedType below
   const [parentPortalUrl, setParentPortalUrl] = useState('');
 
   // Form fields
@@ -73,7 +73,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     setParentPhone('');
     setNotes('');
     setCreated(false);
-    setCopied(false);
+    setCopiedType(null);
     setParentPortalUrl('');
   };
 
@@ -221,16 +221,15 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     onCreated();
   };
 
-  const generateMessage = () => {
+  const generateParentMessage = () => {
     const classroomLines = getClassroomInfo();
     const classroomSection = classroomLines.length > 0
       ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n`
       : '';
 
-    const studentPageUrl = `${window.location.origin}/student`;
     const portalSection = parentPortalUrl
-      ? `\n📱 수업 관리 페이지\n• 학부모 수업관리: ${parentPortalUrl}\n• 학생 로그인: ${studentPageUrl}\n`
-      : `\n📱 학생 로그인: ${studentPageUrl}\n`;
+      ? `\n📱 수업 관리 페이지\n• 학부모 수업관리: ${parentPortalUrl}\n`
+      : '';
 
     return `안녕하세요, 학부모님.
 
@@ -241,18 +240,50 @@ ${studentName} 학생의 등록이 완료되었습니다.
 • 담당 선생님: ${assigneeText}
 • 수업 시작일: ${startDate ? format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko }) : '-'}
 • 수업 시간: ${classTime || '-'}
-• 수강료: ${tuitionFee || '-'}
 ${classroomSection}${portalSection}
 준비물 및 기타 안내사항은 첫 수업 시 안내드리겠습니다.
-감사합니다.`;
+
+📍원비안내
+
+중등 영어/수학 45만원
+
+신한 110-265-698329(황은지)
+
+카드결제 가능합니다.
+
+앱결제도 가능합니다.
+
+믿고 맡겨주신만큼,
+세심하게 신경쓰겠습니다.
+편안한 하루 되세요^^`;
   };
 
-  const handleCopy = async () => {
+  const generateStudentMessage = () => {
+    const studentPageUrl = `${window.location.origin}/student`;
+
+    return `안녕 ${studentName}!
+
+📋 수업 안내
+• 수강 과목: ${subjectsText}
+• 담당 선생님: ${assigneeText}
+• 수업 시작일: ${startDate ? format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko }) : '-'}
+• 수업 시간: ${classTime || '-'}
+
+📱 학생 로그인 페이지
+${studentPageUrl}
+
+멘토쌤이야. 앞으로 잘해보자!`;
+  };
+
+  const [copiedType, setCopiedType] = useState<'parent' | 'student' | null>(null);
+
+  const handleCopy = async (type: 'parent' | 'student') => {
     try {
-      await navigator.clipboard.writeText(generateMessage());
-      setCopied(true);
-      toast.success('문자 내용이 복사되었습니다');
-      setTimeout(() => setCopied(false), 2000);
+      const text = type === 'parent' ? generateParentMessage() : generateStudentMessage();
+      await navigator.clipboard.writeText(text);
+      setCopiedType(type);
+      toast.success(type === 'parent' ? '학부모 문자 복사됨' : '학생 문자 복사됨');
+      setTimeout(() => setCopiedType(null), 2000);
     } catch {
       toast.error('복사에 실패했습니다');
     }
@@ -426,15 +457,28 @@ ${classroomSection}${portalSection}
             </Card>
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">📩 등록 안내 문자</label>
+              <label className="text-sm font-medium text-foreground mb-2 block">📩 학부모 안내 문자</label>
               <Card className="p-3 bg-muted/30">
                 <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">
-                  {generateMessage()}
+                  {generateParentMessage()}
                 </pre>
               </Card>
-              <Button onClick={handleCopy} variant="outline" className="w-full mt-2 gap-1.5">
-                {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-                {copied ? '복사됨!' : '문자 내용 복사'}
+              <Button onClick={() => handleCopy('parent')} variant="outline" className="w-full mt-2 gap-1.5">
+                {copiedType === 'parent' ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                {copiedType === 'parent' ? '복사됨!' : '학부모 문자 복사'}
+              </Button>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">📩 학생 안내 문자</label>
+              <Card className="p-3 bg-muted/30">
+                <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">
+                  {generateStudentMessage()}
+                </pre>
+              </Card>
+              <Button onClick={() => handleCopy('student')} variant="outline" className="w-full mt-2 gap-1.5">
+                {copiedType === 'student' ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                {copiedType === 'student' ? '복사됨!' : '학생 문자 복사'}
               </Button>
             </div>
 
