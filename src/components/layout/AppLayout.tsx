@@ -152,9 +152,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const canSeeItem = (item: NavItem): boolean => {
-    const email = user?.email || '';
+    const email = (user?.email || '').trim().toLowerCase();
     // If allowedEmails is set, grant access if email matches (regardless of role)
-    if (item.allowedEmails && item.allowedEmails.includes(email)) return true;
+    if (item.allowedEmails?.some((allowedEmail) => allowedEmail.trim().toLowerCase() === email)) return true;
     if (item.allowedRoles) return !!(role && item.allowedRoles.includes(role));
     return !item.adminOnly || role === 'admin';
   };
