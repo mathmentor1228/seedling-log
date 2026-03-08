@@ -310,19 +310,19 @@ function MiniCalendar({ lessons, homework, attendance, selectedDate, onSelectDat
   const todayKey = toDateKey(new Date());
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
-        <button onClick={() => setWeekOffset(w => w - 1)} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
-          <ChevronLeft className="w-4 h-4 text-gray-500" />
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <button onClick={() => setWeekOffset(w => w - 1)} className="p-1 rounded-md hover:bg-accent transition-colors">
+          <ChevronLeft className="w-4 h-4 text-muted-foreground" />
         </button>
-        <span className="text-xs font-semibold text-gray-600">{weekLabel}</span>
+        <span className="text-xs font-semibold text-foreground">{weekLabel}</span>
         <button
           onClick={() => setWeekOffset(w => Math.min(w + 1, 0))}
           disabled={weekOffset >= 0}
-          className="p-1 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-30"
+          className="p-1 rounded-md hover:bg-accent transition-colors disabled:opacity-30"
         >
-          <ChevronRight className="w-4 h-4 text-gray-500" />
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
 
@@ -342,14 +342,14 @@ function MiniCalendar({ lessons, homework, attendance, selectedDate, onSelectDat
               key={key}
               onClick={() => onSelectDate(isSelected ? null : key)}
               className={`flex flex-col items-center py-2.5 px-1 transition-colors relative
-                ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                ${isSelected ? 'bg-primary/5' : 'hover:bg-accent'}
                 ${isWeekend ? 'opacity-60' : ''}`}
             >
-              <span className={`text-[10px] mb-1 ${isWeekend ? 'text-gray-400' : 'text-gray-500'}`}>
+              <span className={`text-[10px] mb-1 ${isWeekend ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
                 {WEEKDAYS[day.getDay()]}
               </span>
               <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
-                ${isToday ? 'bg-blue-600 text-white' : isSelected ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}`}>
+                ${isToday ? 'bg-primary text-primary-foreground' : isSelected ? 'bg-primary/10 text-primary' : 'text-foreground'}`}>
                 {day.getDate()}
               </span>
 
@@ -360,13 +360,13 @@ function MiniCalendar({ lessons, homework, attendance, selectedDate, onSelectDat
                     <div key={i} className={`w-1.5 h-1.5 rounded-full ${(SUBJECT_COLORS[subj] || DEFAULT_COLOR).dot}`} />
                   ))
                 )}
-                {hasHw && <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
+                {hasHw && <div className="w-1.5 h-1.5 rounded-full bg-warning" />}
               </div>
 
               {/* Attendance indicator */}
               {att && att !== 'present' && (
                 <div className={`absolute top-1 right-1 w-2 h-2 rounded-full
-                  ${att === '인정결석' ? 'bg-yellow-400' : att === '무단결석' ? 'bg-red-400' : 'bg-gray-400'}`}
+                  ${att === '인정결석' ? 'bg-warning' : att === '무단결석' ? 'bg-destructive' : 'bg-muted-foreground'}`}
                 />
               )}
             </button>
@@ -375,16 +375,16 @@ function MiniCalendar({ lessons, homework, attendance, selectedDate, onSelectDat
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-50 flex-wrap">
+      <div className="flex items-center gap-3 px-4 py-2 border-t border-border flex-wrap">
         {Object.entries(SUBJECT_COLORS).map(([subj, c]) => (
           <div key={subj} className="flex items-center gap-1">
             <div className={`w-2 h-2 rounded-full ${c.dot}`} />
-            <span className="text-[9px] text-gray-500">{subj}</span>
+            <span className="text-[9px] text-muted-foreground">{subj}</span>
           </div>
         ))}
         <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded-full bg-orange-400" />
-          <span className="text-[9px] text-gray-500">숙제</span>
+          <div className="w-2 h-2 rounded-full bg-warning" />
+          <span className="text-[9px] text-muted-foreground">숙제</span>
         </div>
       </div>
     </div>
