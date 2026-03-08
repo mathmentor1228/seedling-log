@@ -889,7 +889,7 @@ Deno.serve(async (req) => {
           const { data, error: qErr } = await supabase
             .from('math_concept_quizzes')
             .select('id, concept_id, questions, status, created_at, math_concepts(title, course, grade)')
-            .eq('status', 'published')
+            .in('status', ['draft', 'published'])
             .in('id', quizIds)
             .order('created_at', { ascending: false });
           if (qErr) throw qErr;
