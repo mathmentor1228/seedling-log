@@ -53,7 +53,7 @@ serve(async (req) => {
 
     if (downloadError || !fileData) throw new Error("Failed to download PDF");
 
-    // Extract text from PDF (send raw bytes to AI for analysis)
+    // Convert PDF to base64 safely
     const pdfBytes = await fileData.arrayBuffer();
     const pdfBase64 = encodeBase64(new Uint8Array(pdfBytes));
 
@@ -71,22 +71,27 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `당신은 수학 교육 전문가입니다. 주어진 수학 개념 PDF의 내용을 분석하여 '빈칸 채우기 퀴즈' 5문항을 생성해야 합니다.
+            content: `당신은 수학 교육 전문가입니다. 주어진 수학 개념 PDF의 **모든 내용**을 빠짐없이 분석하여 퀴즈를 생성해야 합니다.
 
-규칙:
-1. 각 문제는 핵심 개념을 묻는 빈칸 채우기 형식이어야 합니다.
-2. 수학 기호는 반드시 LaTeX 형식으로 작성하세요 (예: \\frac{1}{2}, \\sqrt{3}, x^2).
-3. 빈칸은 ___BLANK___ 로 표시하세요.
-4. 각 문제에 정답과 간단한 해설을 포함하세요.
-
-반드시 아래 JSON 형식으로 응답하세요.`
+핵심 규칙:
+1. **문항 수는 PDF 내용의 분량에 비례**합니다. 개념이 많으면 15~30문항, 적으면 8~15문항을 생성하세요. 절대 5문항에 그치지 마세요.
+2. PDF에 나오는 **모든 정의, 공식, 정리, 예제, 성질**을 빠짐없이 퀴즈로 만드세요.
+3. 세 가지 유형을 골고루 섞으세요:
+   - "fill_blank": 빈칸 채우기 (핵심 정의/공식에서 중요 부분을 ___BLANK___로)
+   - "true_false": 참/거짓 (개념의 미묘한 차이를 묻는 진술문, 정답은 "참" 또는 "거짓")
+   - "short_answer": 단답형 (계산 결과나 용어를 직접 작성)
+4. 난이도를 다양하게: easy 30%, medium 50%, hard 20% 비율
+5. 수학 기호는 반드시 LaTeX 형식 (예: \\frac{1}{2}, \\sqrt{3}, x^2)
+6. 빈칸 채우기의 빈칸은 ___BLANK___ 로 표시
+7. 각 문제에 정답과 간단한 해설을 포함`
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: `이 PDF의 수학 개념을 분석하고 빈칸 채우기 퀴즈 5문항을 생성해주세요. 과정: ${concept.course}, 제목: ${concept.title}`
+                text: `이 PDF의 수학 개념을 **전체** 분석하고, 내용에 비례하여 충분한 수의 퀴즈를 생성해주세요. 최소 10문항 이상 생성하세요.
+과정: ${concept.course}, 제목: ${concept.title}`
               },
               {
                 type: "image_url",
@@ -102,7 +107,7 @@ serve(async (req) => {
             type: "function",
             function: {
               name: "generate_quiz",
-              description: "Generate fill-in-the-blank math quiz questions",
+              description: "Generate math quiz questions covering all concepts in the PDF",
               parameters: {
                 type: "object",
                 properties: {
@@ -112,12 +117,13 @@ serve(async (req) => {
                       type: "object",
                       properties: {
                         question_number: { type: "number" },
+                        question_type: { type: "string", enum: ["fill_blank", "true_false", "short_answer"], description: "문제 유형" },
                         question_text: { type: "string", description: "문제 텍스트 (빈칸은 ___BLANK___로 표시, 수식은 LaTeX)" },
-                        answer: { type: "string", description: "정답 (LaTeX 포함 가능)" },
+                        answer: { type: "string", description: "정답 (LaTeX 포함 가능, 참/거짓은 '참' 또는 '거짓')" },
                         explanation: { type: "string", description: "간단한 해설" },
                         difficulty: { type: "string", enum: ["easy", "medium", "hard"] }
                       },
-                      required: ["question_number", "question_text", "answer", "explanation", "difficulty"],
+                      required: ["question_number", "question_type", "question_text", "answer", "explanation", "difficulty"],
                       additionalProperties: false
                     }
                   }
