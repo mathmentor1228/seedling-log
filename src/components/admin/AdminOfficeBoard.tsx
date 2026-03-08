@@ -16,7 +16,8 @@ import { format } from 'date-fns';
 import { TuitionCalculator } from './TuitionCalculator';
 import { NewStudentRegistration } from './NewStudentRegistration';
 
-const CATEGORIES = ['신규생 정보', '등록 문자', '시간표', '원비 수납', '미납 확인', '교재비 정리', '기타'];
+const CATEGORIES = ['신규생 정보', '퇴원생 안내', '수강과목 변경', '등록 문자', '시간표', '원비 수납', '미납 확인', '교재비 정리', '기타'];
+const STUDENT_NAME_CATEGORIES = ['퇴원생 안내', '수강과목 변경'];
 const STATUSES = ['대기 중', '진행 중', '완료'] as const;
 
 type Status = typeof STATUSES[number];
@@ -63,6 +64,7 @@ export function AdminOfficeBoard() {
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newAssignee, setNewAssignee] = useState('');
+  const [newStudentName, setNewStudentName] = useState('');
   const [creating, setCreating] = useState(false);
   const [showNewStudentDialog, setShowNewStudentDialog] = useState(false);
 
@@ -104,7 +106,7 @@ export function AdminOfficeBoard() {
     else {
       toast.success('업무가 등록되었습니다');
       setShowCreateDialog(false);
-      setNewTitle(''); setNewDescription(''); setNewAssignee('');
+      setNewTitle(''); setNewDescription(''); setNewAssignee(''); setNewStudentName('');
       fetchTasks();
     }
     setCreating(false);
@@ -225,6 +227,16 @@ export function AdminOfficeBoard() {
                   </SelectContent>
                 </Select>
               </div>
+              {STUDENT_NAME_CATEGORIES.includes(newCategory) && (
+                <div>
+                  <label className="text-sm font-medium text-foreground">학생 이름</label>
+                  <Input value={newStudentName} onChange={e => {
+                    setNewStudentName(e.target.value);
+                    const prefix = newCategory === '퇴원생 안내' ? '[퇴원]' : '[과목변경]';
+                    setNewTitle(`${prefix} ${e.target.value}`);
+                  }} placeholder="학생 이름 입력" />
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium text-foreground">제목 *</label>
                 <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="업무 제목" />
