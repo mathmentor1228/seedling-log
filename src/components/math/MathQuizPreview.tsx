@@ -104,6 +104,7 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
             <div key={idx} className="border rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-lg">Q{q.question_number}.</span>
+                {typeBadge(q.question_type || 'fill_blank')}
                 {diffBadge(q.difficulty)}
               </div>
 
