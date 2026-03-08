@@ -430,19 +430,28 @@ export function MathQuizAssignManager({ quizzes }: Props) {
                         </div>
 
                         {isEditing ? (
-                          <div className="max-h-[250px] overflow-y-auto border rounded-lg divide-y">
-                            {students.map(s => (
-                              <div key={s.id} className="flex items-center gap-3 p-2 hover:bg-muted/30">
-                                <Checkbox
-                                  checked={groupMemberSelection.has(s.id)}
-                                  onCheckedChange={(checked) => {
-                                    const newSet = new Set(groupMemberSelection);
-                                    if (checked) newSet.add(s.id); else newSet.delete(s.id);
-                                    setGroupMemberSelection(newSet);
-                                  }}
-                                />
-                                <span className="text-sm">{s.name}</span>
-                                <Badge variant="secondary" className="text-xs">{gradeLabel(s)}</Badge>
+                          <div className="max-h-[250px] overflow-y-auto border rounded-lg">
+                            {groupByLevel(students).map(section => (
+                              <div key={section.level}>
+                                <div className="sticky top-0 z-10 bg-muted px-3 py-1.5 text-xs font-bold text-muted-foreground border-b">
+                                  {section.label}
+                                </div>
+                                {section.students.map(s => (
+                                  <div key={s.id} className="flex items-center gap-3 p-2 hover:bg-muted/30 border-b last:border-b-0">
+                                    <Checkbox
+                                      checked={groupMemberSelection.has(s.id)}
+                                      onCheckedChange={(checked) => {
+                                        const newSet = new Set(groupMemberSelection);
+                                        if (checked) newSet.add(s.id); else newSet.delete(s.id);
+                                        setGroupMemberSelection(newSet);
+                                      }}
+                                    />
+                                    <span className="text-sm">{s.name}</span>
+                                    <Badge variant="secondary" className="text-xs">{gradeLabel(s)}</Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
                               </div>
                             ))}
                           </div>
