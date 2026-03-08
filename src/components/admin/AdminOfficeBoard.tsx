@@ -106,7 +106,7 @@ export function AdminOfficeBoard() {
     else {
       toast.success('업무가 등록되었습니다');
       setShowCreateDialog(false);
-      setNewTitle(''); setNewDescription(''); setNewAssignee('');
+      setNewTitle(''); setNewDescription(''); setNewAssignee(''); setNewStudentName('');
       fetchTasks();
     }
     setCreating(false);
