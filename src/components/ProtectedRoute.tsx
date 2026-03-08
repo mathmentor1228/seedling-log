@@ -12,6 +12,7 @@ type AllowedRole = 'admin' | 'teacher' | 'assistant' | 'any';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: AllowedRole[];
+  allowedEmails?: string[];
 }
 
 export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRouteProps) {
