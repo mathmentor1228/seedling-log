@@ -195,21 +195,21 @@ function SummaryCards({ lessons, homework }: { lessons: LessonRecord[]; homework
   const status = getOverallStatus(avgScore, hwRate, notDone, incomplete, totalLessons);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {/* Emoji Status Banner */}
-      <div className={`rounded-2xl px-5 py-4 flex items-center gap-4 border shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${status.bgClass}`}>
+      <div className={`rounded-2xl px-5 py-4 flex items-center gap-4 border shadow-card ${status.bgClass}`}>
         <span className="text-4xl">{status.emoji}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold ${status.titleColor}`}>{status.title}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{status.desc}</p>
+          <p className={`text-sm font-bold ${status.titleColor}`}>{status.title}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{status.desc}</p>
         </div>
       </div>
 
       {/* Compact Stats */}
-      <div className="grid grid-cols-3 gap-2">
-        <MiniStat value={totalLessons} label="수업" unit="회" color="text-blue-600" />
-        <MiniStat value={avgScore != null ? avgScore.toFixed(1) : '-'} label="이해도" unit="/5" color="text-violet-600" />
-        <MiniStat value={hwRate != null ? `${hwRate}` : '-'} label="숙제완료" unit="%" color="text-emerald-600" />
+      <div className="grid grid-cols-3 gap-2.5">
+        <MiniStat value={totalLessons} label="수업" unit="회" color="text-primary" />
+        <MiniStat value={avgScore != null ? avgScore.toFixed(1) : '-'} label="이해도" unit="/5" color="text-chart-5" />
+        <MiniStat value={hwRate != null ? `${hwRate}` : '-'} label="숙제완료" unit="%" color="text-success" />
       </div>
     </div>
   );
@@ -217,11 +217,11 @@ function SummaryCards({ lessons, homework }: { lessons: LessonRecord[]; homework
 
 function MiniStat({ value, label, unit, color }: { value: string | number; label: string; unit: string; color: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 py-2.5 px-2 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+    <div className="bg-card rounded-xl border border-border py-3 px-2.5 text-center shadow-card">
       <p className={`text-base font-bold ${color}`}>
-        {value}<span className="text-[10px] font-normal text-gray-400">{unit}</span>
+        {value}<span className="text-[10px] font-normal text-muted-foreground">{unit}</span>
       </p>
-      <p className="text-[10px] text-gray-400">{label}</p>
+      <p className="text-[10px] text-muted-foreground font-medium">{label}</p>
     </div>
   );
 }
