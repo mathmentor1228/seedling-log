@@ -11,8 +11,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2 } from 'lucide-react';
+import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator } from 'lucide-react';
 import { format } from 'date-fns';
+import { TuitionCalculator } from './TuitionCalculator';
 
 const CATEGORIES = ['신규생 정보', '등록 문자', '시간표', '원비 수납', '미납 확인', '교재비 정리', '기타'];
 const STATUSES = ['대기 중', '진행 중', '완료'] as const;
@@ -189,6 +190,20 @@ export function AdminOfficeBoard() {
           <h1 className="text-2xl font-bold text-foreground">행정 업무 관리</h1>
           <p className="text-sm text-muted-foreground mt-1">원장 · 행정 담당자 전용 업무 보드</p>
         </div>
+      </div>
+
+      <Tabs defaultValue="tasks">
+        <TabsList className="mb-4">
+          <TabsTrigger value="tasks">업무 보드</TabsTrigger>
+          <TabsTrigger value="calculator" className="gap-1.5"><Calculator className="w-3.5 h-3.5" />원비 계산기</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="calculator">
+          <TuitionCalculator />
+        </TabsContent>
+
+        <TabsContent value="tasks" className="space-y-6">
+      <div className="flex items-center justify-end">
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="w-4 h-4" />업무 등록</Button>
@@ -375,6 +390,8 @@ export function AdminOfficeBoard() {
           )}
         </DialogContent>
       </Dialog>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
