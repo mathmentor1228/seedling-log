@@ -68,15 +68,12 @@ export function MathConceptManager() {
   const [allQuizzes, setAllQuizzes] = useState<any[]>([]);
 
   const fetchConcepts = async () => {
-    const { data, error } = await supabase
-      .from('math_concepts')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error(error);
-    } else {
-      setConcepts((data as any[]) || []);
-    }
+    const [conceptsRes, quizzesRes] = await Promise.all([
+      supabase.from('math_concepts').select('*').order('created_at', { ascending: false }),
+      supabase.from('math_concept_quizzes').select('id, concept_id, status, math_concepts(title, course, grade)') as any,
+    ]);
+    if (!conceptsRes.error) setConcepts((conceptsRes.data as any[]) || []);
+    if (!quizzesRes.error) setAllQuizzes(quizzesRes.data || []);
     setLoading(false);
   };
 
