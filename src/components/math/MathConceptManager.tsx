@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Upload, Brain, FileText, RefreshCw, Trash2 } from 'lucide-react';
 import { MathQuizPreview } from './MathQuizPreview';
+import { QuizSubmissionReview } from './QuizSubmissionReview';
 
 interface MathConcept {
   id: string;
@@ -334,6 +335,9 @@ export function MathConceptManager() {
           regenerating={generating === selectedConceptId}
         />
       )}
+
+      {/* Submission Review */}
+      <QuizSubmissionReview />
     </div>
   );
 }

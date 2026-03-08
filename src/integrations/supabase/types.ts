@@ -1218,6 +1218,88 @@ export type Database = {
         }
         Relationships: []
       }
+      math_quiz_submissions: {
+        Row: {
+          ai_grading_result: Json | null
+          ai_total_questions: number | null
+          ai_total_score: number | null
+          concept_id: string
+          created_at: string
+          id: string
+          image_urls: string[]
+          points_awarded: number | null
+          quiz_id: string
+          status: string
+          student_id: string
+          submitted_at: string
+          teacher_feedback: string | null
+          teacher_override_result: Json | null
+          teacher_reviewed_at: string | null
+          teacher_reviewed_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_grading_result?: Json | null
+          ai_total_questions?: number | null
+          ai_total_score?: number | null
+          concept_id: string
+          created_at?: string
+          id?: string
+          image_urls?: string[]
+          points_awarded?: number | null
+          quiz_id: string
+          status?: string
+          student_id: string
+          submitted_at?: string
+          teacher_feedback?: string | null
+          teacher_override_result?: Json | null
+          teacher_reviewed_at?: string | null
+          teacher_reviewed_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_grading_result?: Json | null
+          ai_total_questions?: number | null
+          ai_total_score?: number | null
+          concept_id?: string
+          created_at?: string
+          id?: string
+          image_urls?: string[]
+          points_awarded?: number | null
+          quiz_id?: string
+          status?: string
+          student_id?: string
+          submitted_at?: string
+          teacher_feedback?: string | null
+          teacher_override_result?: Json | null
+          teacher_reviewed_at?: string | null
+          teacher_reviewed_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "math_quiz_submissions_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "math_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "math_quiz_submissions_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "math_concept_quizzes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "math_quiz_submissions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ops_changelog: {
         Row: {
           author_id: string | null
