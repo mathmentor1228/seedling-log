@@ -2,8 +2,10 @@ import { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Calculator, RotateCcw, Copy } from 'lucide-react';
+import { Input as InputUI } from '@/components/ui/input';
+import { Calculator, RotateCcw, Copy, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
 
 const DAYS_OF_WEEK = [
   { key: 'mon', label: '월' },
