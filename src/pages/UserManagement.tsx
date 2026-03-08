@@ -307,6 +307,9 @@ export default function UserManagement() {
                     <div className="flex gap-1 flex-wrap">{getRoleBadge(user.roles)}</div>
                   </TableCell>
                   <TableCell>
+                    <SubjectSelect userId={user.id} currentSubject={user.assigned_subject || null} onSaved={fetchUsers} />
+                  </TableCell>
+                  <TableCell>
                     <Switch
                       checked={user.is_active}
                       onCheckedChange={(checked) => handleToggleActive(user.id, checked)}
