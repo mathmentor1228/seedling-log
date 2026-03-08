@@ -47,6 +47,7 @@ interface Assignment {
 
 // Sort students by grade: 초1,초2,...중1,중2,중3,고1,고2,고3
 const LEVEL_ORDER: Record<string, number> = { '초': 0, '중': 1, '고': 2 };
+const LEVEL_LABEL: Record<string, string> = { '초': '초등', '중': '중등', '고': '고등' };
 
 function sortStudents(students: Student[]): Student[] {
   return [...students].sort((a, b) => {
@@ -63,6 +64,21 @@ function sortStudents(students: Student[]): Student[] {
 function gradeLabel(s: Student): string {
   if (s.school_level && s.grade_year) return `${s.school_level}${s.grade_year}`;
   return s.grade || '-';
+}
+
+/** Group sorted students by school level, returning sections with headers */
+function groupByLevel(studentList: Student[]): { level: string; label: string; students: Student[] }[] {
+  const sections: { level: string; label: string; students: Student[] }[] = [];
+  let currentLevel = '';
+  for (const s of studentList) {
+    const lvl = s.school_level || '기타';
+    if (lvl !== currentLevel) {
+      currentLevel = lvl;
+      sections.push({ level: lvl, label: LEVEL_LABEL[lvl] || '기타', students: [] });
+    }
+    sections[sections.length - 1].students.push(s);
+  }
+  return sections;
 }
 
 interface Props {
