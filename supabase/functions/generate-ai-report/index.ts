@@ -1697,7 +1697,7 @@ async function generateIsolatedSubjectsReport(
   };
 }
 
-// REPORT_SUBJECT_ISOLATION_V1: Generate opening and closing notes separately
+// REPORT_SUBJECT_ISOLATION_V1 + REPORT_TRUST_UPGRADE_V1: Generate opening and closing notes with trust data
 async function generateOpeningClosingNotes(
   apiKey: string,
   studentName: string,
@@ -1711,13 +1711,33 @@ async function generateOpeningClosingNotes(
   
   // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Collect teacher-written next_lesson_goals
   const teacherGoals: string[] = [];
-  for (const data of Object.values(subjectData)) {
+  // REPORT_TRUST_UPGRADE_V1: Collect best observation for weekly highlight
+  const positiveObservations: string[] = [];
+  
+  for (const [subj, data] of Object.entries(subjectData)) {
     for (const lesson of data.lessons) {
       if (lesson.next_lesson_goal && lesson.next_lesson_goal.trim().length > 5) {
-        teacherGoals.push(lesson.next_lesson_goal.trim());
+        teacherGoals.push(`[${subj}] ${lesson.next_lesson_goal.trim()}`);
+      }
+      if (lesson.learning_issues_note && lesson.learning_issues_note.trim().length > 10) {
+        positiveObservations.push(`[${subj} ${lesson.lesson_date}] ${lesson.learning_issues_note.trim()}`);
       }
     }
   }
+
+  // REPORT_TRUST_UPGRADE_V1: Calculate homework completion stats
+  let hwCompleted = 0, hwPartial = 0, hwNotDone = 0, hwTotal = 0;
+  for (const data of Object.values(subjectData)) {
+    for (const lesson of data.lessons) {
+      if (lesson.homework_status && lesson.homework_status !== 'none_assigned' && lesson.homework_status !== 'none') {
+        hwTotal++;
+        if (lesson.homework_status === 'completed') hwCompleted++;
+        else if (lesson.homework_status === 'partial') hwPartial++;
+        else if (lesson.homework_status === 'not_done') hwNotDone++;
+      }
+    }
+  }
+  const hwRate = hwTotal > 0 ? Math.round((hwCompleted / hwTotal) * 100) : null;
   
   // REPORT_TEMPLATE_DB_V1: Use custom prompt for opening/closing if available
   const systemPrompt = customParentPrompt
@@ -1731,20 +1751,30 @@ async function generateOpeningClosingNotes(
 - 도입부(openingNote)에서 반드시 아이 이름을 다정하게 불러주세요.
 - 한국어 호칭: 이름 뒤에 "이" 사용 (예: "세인이는", "민준이는")
 
+**[REPORT_TRUST_UPGRADE_V1] 주간 하이라이트 & 정량 데이터:**
+- openingNote: 아이 이름 + 이번 주 가장 눈에 띈 구체적 관찰 장면 1개
+- closingNote: 다음 주 수업 방향 + 숙제 완료율 데이터를 자연스럽게 녹여서 서술
+
 반드시 유효한 JSON만 출력하세요.`
     : `당신은 학원 담당 선생님입니다. 주간 리포트의 도입부와 마무리를 JSON 형식으로 작성합니다.
 
-[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 규칙]
+[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 + TRUST_UPGRADE 규칙]
 
 **핵심:** 교사가 기록한 내용만 다시 표현. 추측/창작 금지.
 
 **아이 이름 호칭:**
 - 도입부(openingNote)에서 반드시 아이 이름을 다정하게 불러주세요.
 - 한국어 호칭: 이름 뒤에 "이" 사용 (예: "세인이는", "민준이는", "도연이는")
-- 예: "세인이는 이번 주에도 꾸준히 수업에 참여했습니다."
 
-- 도입부: 아이 이름으로 시작하는 수업 참여 모습 (관찰 기반)
-- 마무리: 교사가 기록한 next_lesson_goal 내용 요약 (없으면 일반 문구)
+**[REPORT_TRUST_UPGRADE_V1] 도입부 - Weekly Highlight:**
+- 아이 이름으로 시작하고, 이번 주 관찰 기록 중 가장 구체적인 긍정 장면 하나를 언급
+- "전반적으로 안정", "잘 따라옴" 같은 추상적 표현 금지
+- 예: "세인이는 이번 주 수학 수업에서 분수 통분 문제를 직접 풀어보려는 시도가 있었습니다."
+
+**[REPORT_TRUST_UPGRADE_V1] 마무리 - 정량 데이터 + 다음 방향:**
+- 교사가 기록한 next_lesson_goal 내용 요약
+- 숙제 완료율 정보를 한 문장으로 자연스럽게 포함
+- 예: "이번 주 숙제 완료율은 75%였으며, 다음 주에는 ~을 중심으로 수업을 이어갈 예정입니다."
 
 **금지:** 
 - "전반적으로", "안정적"
@@ -1758,11 +1788,13 @@ async function generateOpeningClosingNotes(
 기간: ${weekStart} ~ ${weekEnd}
 과목: ${subjects.join(', ')}
 총 수업: ${totalLessons}회
-${teacherGoals.length > 0 ? `\n[교사가 기록한 다음 수업 방향]:\n${teacherGoals.slice(0, 3).map(g => `- ${g}`).join('\n')}` : '\n[교사가 기록한 다음 수업 방향]: 없음'}
+${hwRate !== null ? `\n[이번 주 숙제 완료율]: ${hwRate}% (완료 ${hwCompleted}회 / 일부완료 ${hwPartial}회 / 미완료 ${hwNotDone}회, 총 ${hwTotal}회)` : '\n[이번 주 숙제]: 배정 없음'}
+${positiveObservations.length > 0 ? `\n[이번 주 교사 관찰 기록 (하이라이트 소스)]:\n${positiveObservations.slice(0, 3).join('\n')}` : ''}
+${teacherGoals.length > 0 ? `\n[교사가 기록한 다음 수업 방향]:\n${teacherGoals.slice(0, 3).join('\n')}` : '\n[교사가 기록한 다음 수업 방향]: 없음'}
 
 {
-  "openingNote": "학생의 수업 참여 모습 (전반적으로/안정적 금지)",
-  "closingNote": "${teacherGoals.length > 0 ? '교사가 기록한 다음 방향 요약' : '다음 주도 학습을 이어가겠습니다'}"
+  "openingNote": "아이 이름 + 이번 주 가장 눈에 띈 구체적 관찰 1개 (전반적으로/안정적 금지)",
+  "closingNote": "${teacherGoals.length > 0 ? '다음 수업 방향 요약 + 숙제 완료율 자연스럽게 포함' : '다음 주도 학습을 이어가겠습니다'}"
 }
 
 JSON만 출력하세요.`;
