@@ -149,11 +149,17 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const canSeeItem = (item: NavItem): boolean => {
+    if (item.allowedEmails) {
+      const email = user?.email || '';
+      const emailAllowed = item.allowedEmails.includes(email);
+      const isAdmin = role === 'admin';
+      if (!emailAllowed && !isAdmin) return false;
+    }
     if (item.allowedRoles) return !!(role && item.allowedRoles.includes(role));
     return !item.adminOnly || role === 'admin';
   };
 
-  const navStructure = getNavStructure(assignedSubject, role);
+  const navStructure = getNavStructure(assignedSubject, role, user?.email || null);
 
   // Auto-open groups containing the active route
   const getFilteredEntries = () => {
