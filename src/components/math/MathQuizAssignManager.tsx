@@ -312,42 +312,49 @@ export function MathQuizAssignManager({ quizzes }: Props) {
                           onChange={e => setSearchQuery(e.target.value)}
                         />
                       </div>
-                      <div className="max-h-[300px] overflow-y-auto border rounded-lg divide-y">
-                        {filteredStudents.map(s => {
-                          const alreadyAssigned = getAssignedStudents(selectedQuizId).has(s.id);
-                          const isSelected = assignSelection.has(s.id);
-                          return (
-                            <div key={s.id} className="flex items-center gap-3 p-2.5 hover:bg-muted/30">
-                              <Checkbox
-                                checked={isSelected || alreadyAssigned}
-                                disabled={alreadyAssigned}
-                                onCheckedChange={(checked) => {
-                                  const newSet = new Set(assignSelection);
-                                  if (checked) newSet.add(s.id); else newSet.delete(s.id);
-                                  setAssignSelection(newSet);
-                                }}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm font-medium">{s.name}</span>
-                                <Badge variant="secondary" className="ml-2 text-xs">{gradeLabel(s)}</Badge>
-                              </div>
-                              {alreadyAssigned && (
-                                <div className="flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                                  <span className="text-xs text-green-600">배정됨</span>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    onClick={() => handleUnassign(selectedQuizId, s.id)}
-                                  >
-                                    <Trash2 className="w-3 h-3 text-destructive" />
-                                  </Button>
-                                </div>
-                              )}
+                      <div className="max-h-[300px] overflow-y-auto border rounded-lg">
+                        {groupByLevel(filteredStudents).map(section => (
+                          <div key={section.level}>
+                            <div className="sticky top-0 z-10 bg-muted px-3 py-1.5 text-xs font-bold text-muted-foreground border-b">
+                              {section.label}
                             </div>
-                          );
-                        })}
+                            {section.students.map(s => {
+                              const alreadyAssigned = getAssignedStudents(selectedQuizId).has(s.id);
+                              const isSelected = assignSelection.has(s.id);
+                              return (
+                                <div key={s.id} className="flex items-center gap-3 p-2.5 hover:bg-muted/30 border-b last:border-b-0">
+                                  <Checkbox
+                                    checked={isSelected || alreadyAssigned}
+                                    disabled={alreadyAssigned}
+                                    onCheckedChange={(checked) => {
+                                      const newSet = new Set(assignSelection);
+                                      if (checked) newSet.add(s.id); else newSet.delete(s.id);
+                                      setAssignSelection(newSet);
+                                    }}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium">{s.name}</span>
+                                    <Badge variant="secondary" className="ml-2 text-xs">{gradeLabel(s)}</Badge>
+                                  </div>
+                                  {alreadyAssigned && (
+                                    <div className="flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                                      <span className="text-xs text-green-600">배정됨</span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6"
+                                        onClick={() => handleUnassign(selectedQuizId, s.id)}
+                                      >
+                                        <Trash2 className="w-3 h-3 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">
