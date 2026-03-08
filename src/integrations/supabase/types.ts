@@ -1218,6 +1218,45 @@ export type Database = {
         }
         Relationships: []
       }
+      math_quiz_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          id: string
+          quiz_id: string
+          student_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by: string
+          id?: string
+          quiz_id: string
+          student_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          id?: string
+          quiz_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "math_quiz_assignments_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "math_concept_quizzes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "math_quiz_assignments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       math_quiz_submissions: {
         Row: {
           ai_grading_result: Json | null
@@ -1299,6 +1338,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      math_student_group_members: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "math_student_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "math_student_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "math_student_group_members_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      math_student_groups: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       ops_changelog: {
         Row: {
