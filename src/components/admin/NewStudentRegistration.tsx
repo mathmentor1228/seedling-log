@@ -73,7 +73,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     setParentPhone('');
     setNotes('');
     setCreated(false);
-    setCopied(false);
+    setCopiedType(null);
     setParentPortalUrl('');
   };
 
