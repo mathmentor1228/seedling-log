@@ -876,14 +876,25 @@ Deno.serve(async (req) => {
       }
 
       case 'math_quizzes': {
-        // Fetch all published quizzes with concept info
-        const { data: quizzes, error: qErr } = await supabase
-          .from('math_concept_quizzes')
-          .select('id, concept_id, questions, status, created_at, math_concepts(title, course, grade)')
-          .eq('status', 'published')
-          .order('created_at', { ascending: false });
+        // Fetch quizzes assigned to this student
+        const { data: assignedQuizIds } = await supabase
+          .from('math_quiz_assignments')
+          .select('quiz_id')
+          .eq('student_id', student_id);
 
-        if (qErr) throw qErr;
+        const quizIds = (assignedQuizIds || []).map((a: any) => a.quiz_id);
+
+        let quizzes: any[] = [];
+        if (quizIds.length > 0) {
+          const { data, error: qErr } = await supabase
+            .from('math_concept_quizzes')
+            .select('id, concept_id, questions, status, created_at, math_concepts(title, course, grade)')
+            .eq('status', 'published')
+            .in('id', quizIds)
+            .order('created_at', { ascending: false });
+          if (qErr) throw qErr;
+          quizzes = data || [];
+        }
 
         // Fetch student's submissions
         const { data: submissions } = await supabase
@@ -892,7 +903,7 @@ Deno.serve(async (req) => {
           .eq('student_id', student_id)
           .order('submitted_at', { ascending: false });
 
-        result = { quizzes: quizzes || [], submissions: submissions || [] };
+        result = { quizzes, submissions: submissions || [] };
         break;
       }
 
