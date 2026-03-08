@@ -11,9 +11,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator } from 'lucide-react';
+import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { TuitionCalculator } from './TuitionCalculator';
+import { NewStudentRegistration } from './NewStudentRegistration';
 
 const CATEGORIES = ['신규생 정보', '등록 문자', '시간표', '원비 수납', '미납 확인', '교재비 정리', '기타'];
 const STATUSES = ['대기 중', '진행 중', '완료'] as const;
@@ -63,6 +64,7 @@ export function AdminOfficeBoard() {
   const [newDescription, setNewDescription] = useState('');
   const [newAssignee, setNewAssignee] = useState('');
   const [creating, setCreating] = useState(false);
+  const [showNewStudentDialog, setShowNewStudentDialog] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -203,7 +205,10 @@ export function AdminOfficeBoard() {
         </TabsContent>
 
         <TabsContent value="tasks" className="space-y-6">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowNewStudentDialog(true)}>
+          <UserPlus className="w-4 h-4" />신규생 등록
+        </Button>
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="w-4 h-4" />업무 등록</Button>
@@ -392,6 +397,13 @@ export function AdminOfficeBoard() {
       </Dialog>
         </TabsContent>
       </Tabs>
+
+      <NewStudentRegistration
+        open={showNewStudentDialog}
+        onOpenChange={setShowNewStudentDialog}
+        userName={userName}
+        onCreated={fetchTasks}
+      />
     </div>
   );
 }
