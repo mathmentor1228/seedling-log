@@ -185,7 +185,16 @@ export function TextbookOrderTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">교재를 신청하고 입고 상태를 관리합니다.</p>
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <div className="flex items-center gap-2">
+          <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileImport} />
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={handleDownloadTemplate}>
+            <Download className="w-3.5 h-3.5" />양식
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+            {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+            일괄 등록
+          </Button>
+          <Dialog open={showDialog} onOpenChange={setShowDialog}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="w-4 h-4" />교재 신청</Button>
           </DialogTrigger>
