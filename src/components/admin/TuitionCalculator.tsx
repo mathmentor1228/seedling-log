@@ -292,23 +292,38 @@ export function TuitionCalculator() {
               학부모 안내 문자
             </h4>
 
-            <div className="mb-3">
-              <label className="text-sm font-medium text-foreground mb-1.5 block">학생 이름</label>
-              <Input
-                placeholder="예: 홍길동"
-                value={studentName}
-                onChange={e => setStudentName(e.target.value)}
-                className="text-sm"
-              />
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">학생 이름</label>
+                <Input
+                  placeholder="예: 홍길동"
+                  value={studentName}
+                  onChange={e => setStudentName(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">수업 과목</label>
+                <Input
+                  placeholder="예: 수학"
+                  value={subjectName}
+                  onChange={e => setSubjectName(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
             </div>
 
             {(() => {
               const dayLabels = selectedDays.map(d => DAYS_OF_WEEK.find(x => x.key === d)?.label).join(', ');
               const name = studentName || '○○○';
+              const subject = subjectName || '○○';
               const isPartial = attendedSessions > 0 && attendedSessions < totalSessions;
-              const msg = isPartial
-                ? `안녕하세요, ${name} 학생 학부모님.\n\n${name} 학생의 수업료 정산 안내드립니다.\n\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 수강 회차: ${attendedSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n■ 1회당 수업료: ${Math.round(perSession).toLocaleString()}원\n■ 정산 금액: ${prorated.toLocaleString()}원\n\n(${feeNum.toLocaleString()}원 ÷ ${totalSessions}회 × ${attendedSessions}회 = ${prorated.toLocaleString()}원)\n\n궁금하신 점이 있으시면 편하게 연락 주세요.\n감사합니다.`
-                : `안녕하세요, ${name} 학생 학부모님.\n\n${name} 학생의 수업료 안내드립니다.\n\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n\n궁금하신 점이 있으시면 편하게 연락 주세요.\n감사합니다.`;
+
+              const settlementBlock = isPartial
+                ? `■ 수업 과목: ${subject}\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 수강 회차: ${attendedSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n■ 1회당 수업료: ${Math.round(perSession).toLocaleString()}원\n■ 정산 금액: ${prorated.toLocaleString()}원\n\n(${feeNum.toLocaleString()}원 ÷ ${totalSessions}회 × ${attendedSessions}회 = ${prorated.toLocaleString()}원)`
+                : `■ 수업 과목: ${subject}\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원`;
+
+              const msg = `[더멘토 수업료 정산안내]\n\n안녕하세요. ${name} 학부모님\n${name} 학생 수업료 정산 안내드립니다.\n\n${settlementBlock}\n\n해당 결제는\n✔ 앱 결제\n✔ 원내 방문 키오스크 결제\n✔ 계좌이체\n모두 가능합니다.\n\n자세한 수납 안내가 필요하신 경우\n문자 남겨주시면 안내 드리겠습니다.\n\n귀한 아이 믿고 맡겨주셔서 감사합니다.`;
 
               return (
                 <>
