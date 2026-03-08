@@ -104,6 +104,10 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     const start = startOfDay(startDate);
     const enrollmentStatus = isAfter(start, today) ? '재원예정' : '재원';
 
+    // Generate parent token
+    const { data: tokenData } = await supabase.rpc('generate_parent_token' as any);
+    const parentToken = tokenData as string || '';
+
     const { data: studentData, error: studentError } = await supabase
       .from('students')
       .insert({
@@ -115,6 +119,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
         parent_phone: parentPhone.trim() || null,
         student_phone: studentPhone.trim() || null,
         enrollment_status: enrollmentStatus,
+        parent_token: parentToken || null,
         notes: [
           selectedSubjects.length ? `수강과목: ${subjectsText}` : '',
           selectedAssignees.length ? `담당: ${assigneeText}` : '',
@@ -131,6 +136,12 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       console.error(studentError);
       setCreating(false);
       return;
+    }
+
+    // Build parent portal URL
+    if (parentToken) {
+      const baseUrl = window.location.origin;
+      setParentPortalUrl(`${baseUrl}/parent?token=${parentToken}`);
     }
 
     const description = [
