@@ -173,7 +173,7 @@ export default function WeeklyReportSend() {
       const { data, error } = await supabase
         .from('students')
         .select('id, name, grade')
-        .neq('enrollment_status', '퇴원')
+        .eq('enrollment_status', '재원')
         .order('name');
       if (data) setAllStudents(data);
       if (error) console.error('Error fetching students:', error);
