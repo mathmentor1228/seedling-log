@@ -43,6 +43,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [parentPortalUrl, setParentPortalUrl] = useState('');
 
   // Form fields
   const [studentName, setStudentName] = useState('');
