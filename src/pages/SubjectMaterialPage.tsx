@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   Loader2, FolderPlus, Upload, Trash2, ChevronRight, Home,
   FileText, FileImage, File as FileIcon, Download, FolderOpen, Folder,
-  Link as LinkIcon, ExternalLink, Plus
+  Link as LinkIcon, ExternalLink, Plus, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
