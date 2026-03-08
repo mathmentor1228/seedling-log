@@ -1251,7 +1251,7 @@ export default function Reports() {
             <div className="overflow-x-auto">
               {/* Bulk delete action bar */}
               {bulkDeleteIds.size > 0 && (
-                <div className="flex items-center gap-3 mb-3 p-3 bg-destructive/5 border border-destructive/20 rounded-lg">
+                <div className="flex items-center gap-3 mb-3 p-3 bg-muted/50 border border-border rounded-lg flex-wrap">
                   <Checkbox
                     checked={bulkDeleteIds.size === filteredReports.length && filteredReports.length > 0}
                     onCheckedChange={toggleBulkDeleteAll}
@@ -1259,6 +1259,23 @@ export default function Reports() {
                   <span className="text-sm font-medium">
                     {bulkDeleteIds.size}건 선택됨
                   </span>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled={bulkVisibleUpdating}
+                    onClick={() => handleBulkParentVisible(true)}
+                  >
+                    {bulkVisibleUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                    학부모 공개
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={bulkVisibleUpdating}
+                    onClick={() => handleBulkParentVisible(false)}
+                  >
+                    학부모 비공개
+                  </Button>
                   <Button
                     variant="destructive"
                     size="sm"
