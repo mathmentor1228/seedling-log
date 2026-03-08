@@ -25,7 +25,8 @@ import {
   School,
   FolderOpen,
   Briefcase,
-  BookCopy
+  BookCopy,
+  Brain
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
