@@ -185,6 +185,11 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n`
       : '';
 
+    const studentPageUrl = `${window.location.origin}/student`;
+    const portalSection = parentPortalUrl
+      ? `\n📱 수업 관리 페이지\n• 학부모 수업관리: ${parentPortalUrl}\n• 학생 로그인: ${studentPageUrl}\n`
+      : `\n📱 학생 로그인: ${studentPageUrl}\n`;
+
     return `안녕하세요, 학부모님.
 
 ${studentName} 학생의 등록이 완료되었습니다.
@@ -195,7 +200,7 @@ ${studentName} 학생의 등록이 완료되었습니다.
 • 수업 시작일: ${startDate ? format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko }) : '-'}
 • 수업 시간: ${classTime || '-'}
 • 수강료: ${tuitionFee || '-'}
-${classroomSection}
+${classroomSection}${portalSection}
 준비물 및 기타 안내사항은 첫 수업 시 안내드리겠습니다.
 감사합니다.`;
   };
