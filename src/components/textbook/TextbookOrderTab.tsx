@@ -236,6 +236,7 @@ export function TextbookOrderTab() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Summary */}
