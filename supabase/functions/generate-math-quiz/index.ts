@@ -94,10 +94,12 @@ serve(async (req) => {
 - "short_answer": 단답형 — 용어를 묻거나 간단한 공식 결과를 작성 (예: "$(a+b)^2$을 전개하면?")
 
 추가 규칙:
+- ⚠️ **문제 순서를 반드시 랜덤으로 섞으세요!** PDF 내용의 등장 순서대로 나열하지 마세요. 앞부분/중간/뒷부분 내용을 뒤섞어 출제하세요.
 - 난이도: easy 30%, medium 50%, hard 20%
 - 수학 기호는 반드시 LaTeX (예: \\frac{1}{2}, \\sqrt{3}, x^2)
 - 빈칸은 ___BLANK___로 표시
-- 각 문제에 정답과 간단한 해설 포함`
+- 각 문제에 정답과 간단한 해설 포함
+- question_number는 1부터 순서대로 매기되, 내용의 순서와는 무관하게 섞으세요`
           },
           {
             role: "user",
@@ -183,6 +185,14 @@ serve(async (req) => {
     if (questions.length === 0) {
       throw new Error("AI가 퀴즈를 생성하지 못했습니다.");
     }
+
+    // Shuffle questions (Fisher-Yates) to avoid PDF order
+    for (let i = questions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [questions[i], questions[j]] = [questions[j], questions[i]];
+    }
+    // Re-number after shuffle
+    questions = questions.map((q: any, idx: number) => ({ ...q, question_number: idx + 1 }));
 
     // Upsert quiz
     const { data: existingQuiz } = await supabase
