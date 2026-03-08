@@ -61,7 +61,7 @@ const SUBJECT_KEY_MAP: Record<string, string> = {
   '과학': 'science',
 };
 
-const getNavStructure = (assignedSubject: string | null, role: string | null): NavEntry[] => {
+const getNavStructure = (assignedSubject: string | null, role: string | null, userEmail: string | null): NavEntry[] => {
   const allSubjects = [
     { label: '수학', href: '/materials/math', icon: <FolderOpen className="w-4 h-4" /> },
     { label: '영어', href: '/materials/english', icon: <FolderOpen className="w-4 h-4" /> },
