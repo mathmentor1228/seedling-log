@@ -91,6 +91,9 @@ const App = () => (
                 <Route path="/student/vocab" element={
                   <StudentAuthProvider><StudentLayout><StudentVocab /></StudentLayout></StudentAuthProvider>
                 } />
+                <Route path="/student/math-quiz" element={
+                  <StudentAuthProvider><StudentLayout><StudentMathQuiz /></StudentLayout></StudentAuthProvider>
+                } />
 
                 {/* Admin App Routes */}
                 <Route path="/dashboard" element={<DashboardPage />} />

@@ -27,14 +27,15 @@
    children: ReactNode;
  }
  
- const NAV_ITEMS = [
-   { path: '/student', icon: Home, label: '홈' },
-   { path: '/student/homework', icon: Upload, label: '숙제' },
-   { path: '/student/vocab', icon: Languages, label: '단어' },
-   { path: '/student/points', icon: Star, label: '포인트' },
-   { path: '/student/schedule', icon: Calendar, label: '일정' },
-   { path: '/student/feedback', icon: BookOpen, label: '피드백' },
- ];
+const NAV_ITEMS = [
+  { path: '/student', icon: Home, label: '홈' },
+  { path: '/student/homework', icon: Upload, label: '숙제' },
+  { path: '/student/vocab', icon: Languages, label: '단어' },
+  { path: '/student/math-quiz', icon: Calculator, label: '수학' },
+  { path: '/student/points', icon: Star, label: '포인트' },
+  { path: '/student/schedule', icon: Calendar, label: '일정' },
+  { path: '/student/feedback', icon: BookOpen, label: '피드백' },
+];
  
  export function StudentLayout({ children }: StudentLayoutProps) {
    const { student, isLoading, logout } = useStudentAuth();
