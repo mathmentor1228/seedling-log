@@ -390,6 +390,8 @@ export function AdminOfficeBoard() {
           )}
         </DialogContent>
       </Dialog>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
