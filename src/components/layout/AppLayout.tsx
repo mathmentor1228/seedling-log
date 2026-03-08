@@ -23,7 +23,8 @@ import {
   BookOpenCheck,
   ChevronDown,
   School,
-  FolderOpen
+  FolderOpen,
+  Briefcase
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
