@@ -81,6 +81,7 @@ export function TextbookOrderTab() {
     setCreating(true);
     const { error } = await supabase.from('textbook_orders').insert({
       textbook_name: name.trim(),
+      subject,
       quantity: parseInt(qty) || 1,
       unit_price: parseInt(price) || 0,
       requested_by: user!.id,
