@@ -236,15 +236,29 @@ export default function SubjectMaterialPage() {
     setCreatingLink(false);
   };
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     if (!selectedFiles.length || !subject) return;
     if (fileInputRef.current) fileInputRef.current.value = '';
 
+    const oversized = selectedFiles.filter(f => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      toast({
+        title: '파일 크기 초과',
+        description: `${oversized.map(f => f.name).join(', ')}은(는) 10MB를 초과합니다. 큰 파일은 OneDrive 등 외부 링크로 등록해주세요.`,
+        variant: 'destructive',
+      });
+    }
+
+    const validFiles = selectedFiles.filter(f => f.size <= MAX_FILE_SIZE);
+    if (!validFiles.length) { return; }
+
     setUploading(true);
     let successCount = 0;
 
-    for (const file of selectedFiles) {
+    for (const file of validFiles) {
       const ext = file.name.split('.').pop() || '';
       const storagePath = `${subject}/${currentFolderId || 'root'}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
 
