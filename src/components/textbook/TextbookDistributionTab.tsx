@@ -29,7 +29,7 @@ interface Distribution {
   payment_status: string;
   distributed_by_name: string;
   created_at: string;
-  textbook_orders?: { textbook_name: string; unit_price: number } | null;
+  textbook_orders?: { textbook_name: string; unit_price: number; subject: string } | null;
 }
 
 interface Student {
