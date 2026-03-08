@@ -132,9 +132,20 @@ export function TextbookOrderTab() {
           <DialogContent>
             <DialogHeader><DialogTitle>교재 신청</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-2">
-              <div>
-                <label className="text-sm font-medium text-foreground">교재명 *</label>
-                <Input value={name} onChange={e => setName(e.target.value)} placeholder="교재명 입력" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-foreground">교재명 *</label>
+                  <Input value={name} onChange={e => setName(e.target.value)} placeholder="교재명 입력" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">과목</label>
+                  <Select value={subject} onValueChange={setSubject}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {['수학', '영어', '국어', '과학'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
