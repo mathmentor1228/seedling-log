@@ -15,7 +15,7 @@ interface ProtectedRouteProps {
   allowedEmails?: string[];
 }
 
-export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails }: ProtectedRouteProps) {
   const { user, loading, role, isTrial, trialExpiresAt, isTrialExpired, signOut } = useAuth();
   const navigate = useNavigate();
 
