@@ -397,6 +397,13 @@ export function AdminOfficeBoard() {
       </Dialog>
         </TabsContent>
       </Tabs>
+
+      <NewStudentRegistration
+        open={showNewStudentDialog}
+        onOpenChange={setShowNewStudentDialog}
+        userName={userName}
+        onCreated={fetchTasks}
+      />
     </div>
   );
 }
