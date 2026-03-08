@@ -116,6 +116,66 @@ export function TextbookOrderTab() {
     else { toast.success('삭제되었습니다'); fetchOrders(); }
   };
 
+  // CSV/Excel bulk import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  const handleDownloadTemplate = () => {
+    const bom = '\uFEFF';
+    const csv = bom + '교재명,과목,권수,단가,비고\n개념원리 수학1,수학,10,15000,\n능률 영어 중2,영어,5,13000,2학기용';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '교재_일괄등록_양식.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+
+    const text = await file.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    
+    // Skip header row
+    const dataLines = lines.slice(1);
+    if (dataLines.length === 0) {
+      toast.error('데이터가 없습니다');
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const rows = dataLines.map(line => {
+      const cols = line.split(',').map(c => c.trim());
+      return {
+        textbook_name: cols[0] || '',
+        subject: cols[1] || '수학',
+        quantity: parseInt(cols[2]) || 1,
+        unit_price: parseInt(cols[3]) || 0,
+        notes: cols[4] || null,
+        requested_by: user!.id,
+        requested_by_name: userName,
+        status: '입고완료',
+      };
+    }).filter(r => r.textbook_name && r.unit_price > 0);
+
+    if (rows.length === 0) {
+      toast.error('유효한 데이터가 없습니다. 교재명과 단가를 확인해주세요.');
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const { error } = await supabase.from('textbook_orders').insert(rows as any);
+    if (error) { toast.error('일괄 등록 실패'); console.error(error); }
+    else { toast.success(`${rows.length}건의 교재가 일괄 등록되었습니다`); fetchOrders(); }
+    
+    setImporting(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   const pending = orders.filter(o => o.status === '신청');
