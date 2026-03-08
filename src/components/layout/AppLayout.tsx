@@ -150,6 +150,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     return !item.adminOnly || role === 'admin';
   };
 
+  const navStructure = getNavStructure(assignedSubject, role);
+
   // Auto-open groups containing the active route
   const getFilteredEntries = () => {
     return navStructure.map(entry => {
