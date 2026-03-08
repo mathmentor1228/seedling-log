@@ -226,6 +226,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <span className="font-semibold text-sidebar-foreground text-sm">MENTOR LOG</span>
           </div>
         </div>
+        <AdminOfficeBell />
       </header>
 
       {/* Sidebar */}
