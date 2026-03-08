@@ -16,7 +16,8 @@ import { format } from 'date-fns';
 import { TuitionCalculator } from './TuitionCalculator';
 import { NewStudentRegistration } from './NewStudentRegistration';
 
-const CATEGORIES = ['신규생 정보', '등록 문자', '시간표', '원비 수납', '미납 확인', '교재비 정리', '기타'];
+const CATEGORIES = ['신규생 정보', '퇴원생 안내', '수강과목 변경', '등록 문자', '시간표', '원비 수납', '미납 확인', '교재비 정리', '기타'];
+const STUDENT_NAME_CATEGORIES = ['퇴원생 안내', '수강과목 변경'];
 const STATUSES = ['대기 중', '진행 중', '완료'] as const;
 
 type Status = typeof STATUSES[number];
