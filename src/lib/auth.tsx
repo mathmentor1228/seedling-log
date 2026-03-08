@@ -72,14 +72,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session?.user) {
           setTimeout(() => {
-            fetchUserRole(session.user.id).then(result => {
+            Promise.all([
+              fetchUserRole(session.user.id),
+              fetchAssignedSubject(session.user.id),
+            ]).then(([result, subject]) => {
               setRole(result.role);
               setTrialExpiresAt(result.trialExpiresAt);
+              setAssignedSubject(subject);
             });
           }, 0);
         } else {
           setRole(null);
           setTrialExpiresAt(null);
+          setAssignedSubject(null);
         }
       }
     );
