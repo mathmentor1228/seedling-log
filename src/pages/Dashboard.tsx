@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { StatCard } from '@/components/ui/stat-card';
 import { AttentionSummaryBar, type AttentionItem } from '@/components/dashboard/AttentionSummaryBar';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { HomeworkCompletionChart } from '@/components/dashboard/HomeworkCompletionChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -2091,6 +2092,11 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ━━━ 숙제 이행률 차트 ━━━ */}
+      {!isAssistant(role) && (
+        <HomeworkCompletionChart />
       )}
 
       {/* ━━━ 섹션 3: 미제출/출결 이슈 ━━━ */}

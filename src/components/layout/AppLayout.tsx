@@ -265,7 +265,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main content */}
       <main className="lg:ml-56 min-h-screen pt-14 lg:pt-0">
-        <div className="p-4 lg:p-6 max-w-7xl">
+        <div className="p-5 lg:p-8 max-w-7xl mx-auto">
           {/* Shared dashboard components: Comment Board + Calendar */}
           {isDashboard && (
             <div className="space-y-5 mb-6">
