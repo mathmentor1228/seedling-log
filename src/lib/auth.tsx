@@ -43,19 +43,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { role: null, trialExpiresAt: null };
     }
 
-    // If user has multiple roles, return the highest priority one
-    // Priority: admin > teacher > assistant
     const roles = data.map(r => r.role as AppRole);
     let selectedRole: AppRole | null = null;
     if (roles.includes('admin')) selectedRole = 'admin';
     else if (roles.includes('teacher')) selectedRole = 'teacher';
     else if (roles.includes('assistant')) selectedRole = 'assistant';
 
-    // Get trial expiry from the matching role record
     const matchingRecord = data.find(r => r.role === selectedRole);
     const expires = matchingRecord?.trial_expires_at || null;
     
     return { role: selectedRole, trialExpiresAt: expires };
+  };
+
+  const fetchAssignedSubject = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('assigned_subject')
+      .eq('id', userId)
+      .single();
+    return (data as any)?.assigned_subject || null;
   };
 
   useEffect(() => {
