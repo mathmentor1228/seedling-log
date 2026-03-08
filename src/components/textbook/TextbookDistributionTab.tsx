@@ -106,9 +106,17 @@ export function TextbookDistributionTab() {
   const handleCopyMessage = (dist: Distribution) => {
     const bookName = dist.textbook_orders?.textbook_name || '교재';
     const subject = dist.textbook_orders?.subject || '수학';
-    const msg = `우리 아이의 가능성을 믿습니다.\n\n#${dist.student_name} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : #${bookName}\n2. 교재가격 : #${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 담장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
+    const msg = `우리 아이의 가능성을 믿습니다.\n\n#${dist.student_name} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : #${bookName}\n2. 교재가격 : #${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
     navigator.clipboard.writeText(msg);
     toast.success('안내 문자가 복사되었습니다');
+  };
+
+  const handleCopySelfPurchaseMessage = (dist: Distribution) => {
+    const bookName = dist.textbook_orders?.textbook_name || '교재';
+    const subject = dist.textbook_orders?.subject || '수학';
+    const msg = `우리 아이의 가능성을 믿습니다.\n\n#${dist.student_name} 학생 ${subject} 교재 개별 구매 안내\n\n1. 교재명 : #${bookName}\n\n해당 교재는 가정에서 직접 구매해주셔야 합니다.\n인터넷 서점(교보문고, 알라딘, YES24 등)에서 구매 가능합니다.\n\n수업 진행을 위해 빠른 준비 부탁드립니다.\n감사합니다.`;
+    navigator.clipboard.writeText(msg);
+    toast.success('개별구매 안내 문자가 복사되었습니다');
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
