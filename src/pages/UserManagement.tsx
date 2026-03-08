@@ -35,6 +35,8 @@ interface UserWithRole {
   roles: AppRole[];
   trial_expires_at?: string | null;
   assigned_subject?: string | null;
+  student_grade?: string | null;
+  student_course?: string | null;
 }
 
 export default function UserManagement() {
