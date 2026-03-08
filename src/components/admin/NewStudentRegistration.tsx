@@ -43,6 +43,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [tuitionFee, setTuitionFee] = useState('');
   const [classTime, setClassTime] = useState('');
+  const [studentPhone, setStudentPhone] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [notes, setNotes] = useState('');
 
