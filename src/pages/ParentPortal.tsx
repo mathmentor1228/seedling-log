@@ -74,21 +74,21 @@ export default function ParentPortal() {
   }, [data?.reports]);
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary/5 to-background">
       <div className="flex flex-col items-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <p className="text-gray-500 text-sm">불러오는 중...</p>
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-muted-foreground text-sm">불러오는 중...</p>
       </div>
     </div>
   );
 
   if (error || !data) return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-red-50 to-white p-4">
-      <Card className="max-w-sm w-full">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-destructive/5 to-background p-4">
+      <Card className="max-w-sm w-full shadow-elevated">
         <CardContent className="pt-6 text-center">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-          <h2 className="font-semibold text-lg mb-2">접속할 수 없습니다</h2>
-          <p className="text-gray-500 text-sm">{error}</p>
+          <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-3" />
+          <h2 className="font-bold text-lg mb-2 text-foreground">접속할 수 없습니다</h2>
+          <p className="text-muted-foreground text-sm">{error}</p>
         </CardContent>
       </Card>
     </div>
@@ -102,20 +102,20 @@ export default function ParentPortal() {
   const label = `${student.name}${student.school_level && student.grade_year ? ` (${student.school_level}${student.grade_year})` : ''}`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <header className="bg-white border-b px-4 py-3 shadow-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-b from-primary/[0.03] to-background">
+      <header className="bg-card/80 backdrop-blur-xl border-b border-border px-4 py-3.5 sticky top-0 z-10">
         <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
-            <GraduationCap className="w-4 h-4 text-white" />
+          <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-sm">
+            <GraduationCap className="w-4.5 h-4.5 text-primary-foreground" />
           </div>
           <div>
-            <p className="font-semibold text-sm leading-tight">{label}</p>
-            <p className="text-[11px] text-gray-400">학습 현황</p>
+            <p className="font-bold text-sm leading-tight text-foreground">{label}</p>
+            <p className="text-[11px] text-muted-foreground">학습 현황</p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto p-4 space-y-4">
+      <main className="max-w-lg mx-auto p-4 space-y-5">
         {/* EXAM-DDAY-V1: Exam D-day countdown */}
         {data.exam_events && data.exam_events.length > 0 && (
           <ExamDdayBannerStatic exams={data.exam_events} />
@@ -167,12 +167,12 @@ export default function ParentPortal() {
         {/* Reports */}
         {reports.length > 0 && (
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold text-gray-500 px-1">📋 주간 리포트</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground px-1">📋 주간 리포트</h3>
             <ReportsSection reports={reports} />
           </div>
         )}
 
-        <p className="text-center text-[10px] text-gray-300 pt-4 pb-8">더멘토학원 · MENTOR LOG</p>
+        <p className="text-center text-[10px] text-muted-foreground/50 pt-4 pb-8">더멘토학원 · MENTOR LOG</p>
       </main>
     </div>
   );
