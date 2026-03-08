@@ -104,6 +104,7 @@ export function TuitionCalculator() {
     setYear(now.getFullYear());
     setStartDay(1);
     setStudentName('');
+    setSubjectName('');
   };
 
   const handleCopy = () => {
