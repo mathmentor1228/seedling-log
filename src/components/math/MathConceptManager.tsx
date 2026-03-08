@@ -88,7 +88,8 @@ export function MathConceptManager() {
 
     setUploading(true);
     try {
-      const path = `${grade}/${course}/${Date.now()}_${file.name}`;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `concepts/${Date.now()}_${safeName}`;
       const { error: uploadError } = await supabase.storage
         .from('math-concepts')
         .upload(path, file);
