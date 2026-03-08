@@ -452,8 +452,6 @@ export function MathQuizAssignManager({ quizzes }: Props) {
                                 ))}
                               </div>
                             ))}
-                              </div>
-                            ))}
                           </div>
                         ) : (
                           <div className="flex flex-wrap gap-1.5">
