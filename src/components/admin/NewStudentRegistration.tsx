@@ -74,6 +74,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     setNotes('');
     setCreated(false);
     setCopied(false);
+    setParentPortalUrl('');
   };
 
   const toggleItem = (list: string[], item: string, setter: (v: string[]) => void) => {
