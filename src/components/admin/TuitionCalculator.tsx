@@ -282,6 +282,54 @@ export function TuitionCalculator() {
             <Copy className="w-3.5 h-3.5" /> 정산 내역 복사
           </Button>
         </Card>
+
+        {/* 학부모 안내 문자 */}
+        <Card className="p-5 border-accent/30">
+          <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            학부모 안내 문자
+          </h4>
+
+          <div className="mb-3">
+            <label className="text-sm font-medium text-foreground mb-1.5 block">학생 이름</label>
+            <InputUI
+              placeholder="예: 홍길동"
+              value={studentName}
+              onChange={e => setStudentName(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+
+          {(() => {
+            const dayLabels = selectedDays.map(d => DAYS_OF_WEEK.find(x => x.key === d)?.label).join(', ');
+            const name = studentName || '○○○';
+            const isPartial = attendedSessions > 0 && attendedSessions < totalSessions;
+            const msg = isPartial
+              ? `안녕하세요, ${name} 학생 학부모님.\n\n${name} 학생의 수업료 정산 안내드립니다.\n\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 수강 회차: ${attendedSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n■ 1회당 수업료: ${Math.round(perSession).toLocaleString()}원\n■ 정산 금액: ${prorated.toLocaleString()}원\n\n(${feeNum.toLocaleString()}원 ÷ ${totalSessions}회 × ${attendedSessions}회 = ${prorated.toLocaleString()}원)\n\n궁금하신 점이 있으시면 편하게 연락 주세요.\n감사합니다.`
+              : `안녕하세요, ${name} 학생 학부모님.\n\n${name} 학생의 수업료 안내드립니다.\n\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n\n궁금하신 점이 있으시면 편하게 연락 주세요.\n감사합니다.`;
+
+            return (
+              <>
+                <Textarea
+                  readOnly
+                  value={msg}
+                  className="text-sm min-h-[200px] bg-muted/30 resize-none"
+                />
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="gap-1.5 w-full mt-3"
+                  onClick={() => {
+                    navigator.clipboard.writeText(msg);
+                    toast.success('안내 문자가 복사되었습니다');
+                  }}
+                >
+                  <Copy className="w-3.5 h-3.5" /> 안내 문자 복사
+                </Button>
+              </>
+            );
+          })()}
+        </Card>
       )}
     </div>
   );
