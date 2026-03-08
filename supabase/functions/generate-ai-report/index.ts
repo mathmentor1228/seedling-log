@@ -5,12 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// v2.7-student-voice: Student report with teacher-voice tone
+// v2.8-trust-upgrade: Weekly highlight + next lesson preview + quantitative data
 // REPORT-ENGINE-DEBUG-V1
 // REPORT_SUBJECT_ISOLATION_V1: Per-subject generation with terminology validation
 // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: AI must ONLY rephrase teacher-written content
 // STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Natural, observation-first, non-formulaic student reports
-const TEMPLATE_VERSION = 'v2.7-student-voice';
+// REPORT_TRUST_UPGRADE_V1: Weekly highlight, next lesson preview, quantitative homework data
+const TEMPLATE_VERSION = 'v2.8-trust-upgrade';
 const FORMATTER_NAME = 'renderReportFromJson-v2.7';
 
 // Forbidden patterns for FINAL text validation (runs before save)
