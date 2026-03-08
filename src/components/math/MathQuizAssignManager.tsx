@@ -254,7 +254,7 @@ export function MathQuizAssignManager({ quizzes }: Props) {
                 <div className="space-y-2">
                   <p className="text-sm font-medium">1. 퀴즈 선택</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {publishedQuizzes.map(q => {
+                    {availableQuizzes.map(q => {
                       const assigned = getAssignedStudents(q.id);
                       return (
                         <div
