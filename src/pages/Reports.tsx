@@ -171,6 +171,7 @@ export default function Reports() {
   const [bulkDeleteIds, setBulkDeleteIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkVisibleUpdating, setBulkVisibleUpdating] = useState(false);
 
   // Active main tab
   const [mainTab, setMainTab] = useState<'generate' | 'prompt'>('generate');
@@ -594,6 +595,24 @@ export default function Reports() {
       toast({ title: '일괄 삭제 실패', description: error.message, variant: 'destructive' });
     } finally {
       setBulkDeleting(false);
+    }
+  }
+
+  async function handleBulkParentVisible(visible: boolean) {
+    setBulkVisibleUpdating(true);
+    try {
+      const ids = Array.from(bulkDeleteIds);
+      const { error } = await supabase
+        .from('weekly_reports')
+        .update({ parent_visible: visible } as any)
+        .in('id', ids);
+      if (error) throw error;
+      setReports(prev => prev.map(r => ids.includes(r.id) ? { ...r, parent_visible: visible } : r));
+      toast({ title: `${ids.length}건 ${visible ? '학부모 공개' : '학부모 비공개'} 처리 완료` });
+    } catch (error: any) {
+      toast({ title: '처리 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setBulkVisibleUpdating(false);
     }
   }
 
@@ -1251,7 +1270,7 @@ export default function Reports() {
             <div className="overflow-x-auto">
               {/* Bulk delete action bar */}
               {bulkDeleteIds.size > 0 && (
-                <div className="flex items-center gap-3 mb-3 p-3 bg-destructive/5 border border-destructive/20 rounded-lg">
+                <div className="flex items-center gap-3 mb-3 p-3 bg-muted/50 border border-border rounded-lg flex-wrap">
                   <Checkbox
                     checked={bulkDeleteIds.size === filteredReports.length && filteredReports.length > 0}
                     onCheckedChange={toggleBulkDeleteAll}
@@ -1259,6 +1278,23 @@ export default function Reports() {
                   <span className="text-sm font-medium">
                     {bulkDeleteIds.size}건 선택됨
                   </span>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled={bulkVisibleUpdating}
+                    onClick={() => handleBulkParentVisible(true)}
+                  >
+                    {bulkVisibleUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                    학부모 공개
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={bulkVisibleUpdating}
+                    onClick={() => handleBulkParentVisible(false)}
+                  >
+                    학부모 비공개
+                  </Button>
                   <Button
                     variant="destructive"
                     size="sm"
