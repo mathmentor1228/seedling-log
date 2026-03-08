@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.student-progress-analysis]
 verify_jwt = false
+
+[functions.notion-proxy]
+verify_jwt = false
