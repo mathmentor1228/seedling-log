@@ -74,8 +74,9 @@ export default function UserManagement() {
           roles,
           trial_expires_at: trialEntry?.trial_expires_at || null,
           assigned_subject: profile.assigned_subject || null,
+          student_grade: profile.student_grade || null,
+          student_course: profile.student_course || null,
         };
-      });
 
       setUsers(usersWithRoles);
 
