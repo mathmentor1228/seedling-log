@@ -127,6 +127,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       ],
     },
     { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, adminOnly: true },
+    { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, adminOnly: true, allowedEmails: ['bfkor8810@naver.com'] },
   ];
 };
 
