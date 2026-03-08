@@ -43,6 +43,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [parentPortalUrl, setParentPortalUrl] = useState('');
 
   // Form fields
   const [studentName, setStudentName] = useState('');
@@ -73,6 +74,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     setNotes('');
     setCreated(false);
     setCopied(false);
+    setParentPortalUrl('');
   };
 
   const toggleItem = (list: string[], item: string, setter: (v: string[]) => void) => {
@@ -102,6 +104,10 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     const start = startOfDay(startDate);
     const enrollmentStatus = isAfter(start, today) ? '재원예정' : '재원';
 
+    // Generate parent token
+    const { data: tokenData } = await supabase.rpc('generate_parent_token' as any);
+    const parentToken = tokenData as string || '';
+
     const { data: studentData, error: studentError } = await supabase
       .from('students')
       .insert({
@@ -113,6 +119,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
         parent_phone: parentPhone.trim() || null,
         student_phone: studentPhone.trim() || null,
         enrollment_status: enrollmentStatus,
+        parent_token: parentToken || null,
         notes: [
           selectedSubjects.length ? `수강과목: ${subjectsText}` : '',
           selectedAssignees.length ? `담당: ${assigneeText}` : '',
@@ -129,6 +136,12 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       console.error(studentError);
       setCreating(false);
       return;
+    }
+
+    // Build parent portal URL
+    if (parentToken) {
+      const baseUrl = window.location.origin;
+      setParentPortalUrl(`${baseUrl}/parent?token=${parentToken}`);
     }
 
     const description = [
@@ -172,6 +185,11 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n`
       : '';
 
+    const studentPageUrl = `${window.location.origin}/student`;
+    const portalSection = parentPortalUrl
+      ? `\n📱 수업 관리 페이지\n• 학부모 수업관리: ${parentPortalUrl}\n• 학생 로그인: ${studentPageUrl}\n`
+      : `\n📱 학생 로그인: ${studentPageUrl}\n`;
+
     return `안녕하세요, 학부모님.
 
 ${studentName} 학생의 등록이 완료되었습니다.
@@ -182,7 +200,7 @@ ${studentName} 학생의 등록이 완료되었습니다.
 • 수업 시작일: ${startDate ? format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko }) : '-'}
 • 수업 시간: ${classTime || '-'}
 • 수강료: ${tuitionFee || '-'}
-${classroomSection}
+${classroomSection}${portalSection}
 준비물 및 기타 안내사항은 첫 수업 시 안내드리겠습니다.
 감사합니다.`;
   };
