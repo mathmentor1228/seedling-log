@@ -110,6 +110,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       items: [
         { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
         { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
+        { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
       ],
     },
     {
