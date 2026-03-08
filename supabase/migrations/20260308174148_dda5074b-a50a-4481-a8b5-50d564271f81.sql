@@ -1,0 +1,2 @@
+ALTER TABLE public.students DROP CONSTRAINT students_enrollment_status_check;
+ALTER TABLE public.students ADD CONSTRAINT students_enrollment_status_check CHECK (enrollment_status = ANY (ARRAY['재원'::text, '재원예정'::text, '휴원'::text, '퇴원'::text]));
