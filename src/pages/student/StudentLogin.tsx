@@ -17,7 +17,7 @@
    const { login } = useStudentAuth();
    const navigate = useNavigate();
    const { toast } = useToast();
- 
+
    const handleSubmit = async (e: React.FormEvent) => {
      e.preventDefault();
      
@@ -29,9 +29,9 @@
        });
        return;
      }
- 
+
      setIsSubmitting(true);
- 
+
      try {
        const result = await login(studentCode.trim(), pin.trim());
        
@@ -52,19 +52,19 @@
        setIsSubmitting(false);
      }
    };
- 
+
    return (
      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary/5 to-background px-4">
        <div className="w-full max-w-sm animate-fade-in">
          <div className="flex flex-col items-center mb-8">
-           <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+           <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-elevated">
              <GraduationCap className="w-8 h-8 text-primary-foreground" />
            </div>
-           <h1 className="text-xl font-bold text-foreground">더멘토 학생</h1>
+           <h1 className="text-xl font-extrabold text-foreground tracking-tight">더멘토 학생</h1>
            <p className="text-sm text-muted-foreground mt-1">숙제 제출 & 학습 현황</p>
          </div>
- 
-         <Card className="shadow-xl border-0">
+
+         <Card className="shadow-elevated border-0">
            <CardHeader className="pb-4 text-center">
              <CardTitle className="text-lg">로그인</CardTitle>
              <CardDescription>
@@ -82,11 +82,11 @@
                    value={studentCode}
                    onChange={(e) => setStudentCode(e.target.value.toUpperCase())}
                    disabled={isSubmitting}
-                   className="text-center text-lg tracking-wider"
+                   className="text-center text-lg tracking-wider h-12"
                    autoComplete="username"
                  />
                </div>
- 
+
                <div className="space-y-2">
                  <Label htmlFor="pin">PIN</Label>
                  <Input
@@ -99,14 +99,14 @@
                    value={pin}
                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                    disabled={isSubmitting}
-                   className="text-center text-2xl tracking-[0.5em]"
+                   className="text-center text-2xl tracking-[0.5em] h-12"
                    autoComplete="current-password"
                  />
                </div>
- 
+
                <Button 
                  type="submit" 
-                 className="w-full h-12 text-base" 
+                 className="w-full h-12 text-base font-semibold" 
                  disabled={isSubmitting}
                >
                  {isSubmitting ? (
@@ -119,7 +119,7 @@
                  )}
                </Button>
              </form>
- 
+
              <p className="mt-6 text-center text-xs text-muted-foreground">
                PIN을 모르시나요? 선생님께 문의하세요.
              </p>

@@ -74,21 +74,21 @@ export default function ParentPortal() {
   }, [data?.reports]);
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary/5 to-background">
       <div className="flex flex-col items-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <p className="text-gray-500 text-sm">불러오는 중...</p>
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-muted-foreground text-sm">불러오는 중...</p>
       </div>
     </div>
   );
 
   if (error || !data) return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-red-50 to-white p-4">
-      <Card className="max-w-sm w-full">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-destructive/5 to-background p-4">
+      <Card className="max-w-sm w-full shadow-elevated">
         <CardContent className="pt-6 text-center">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-          <h2 className="font-semibold text-lg mb-2">접속할 수 없습니다</h2>
-          <p className="text-gray-500 text-sm">{error}</p>
+          <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-3" />
+          <h2 className="font-bold text-lg mb-2 text-foreground">접속할 수 없습니다</h2>
+          <p className="text-muted-foreground text-sm">{error}</p>
         </CardContent>
       </Card>
     </div>
@@ -102,20 +102,20 @@ export default function ParentPortal() {
   const label = `${student.name}${student.school_level && student.grade_year ? ` (${student.school_level}${student.grade_year})` : ''}`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <header className="bg-white border-b px-4 py-3 shadow-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-b from-primary/[0.03] to-background">
+      <header className="bg-card/80 backdrop-blur-xl border-b border-border px-4 py-3.5 sticky top-0 z-10">
         <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
-            <GraduationCap className="w-4 h-4 text-white" />
+          <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-sm">
+            <GraduationCap className="w-4.5 h-4.5 text-primary-foreground" />
           </div>
           <div>
-            <p className="font-semibold text-sm leading-tight">{label}</p>
-            <p className="text-[11px] text-gray-400">학습 현황</p>
+            <p className="font-bold text-sm leading-tight text-foreground">{label}</p>
+            <p className="text-[11px] text-muted-foreground">학습 현황</p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto p-4 space-y-4">
+      <main className="max-w-lg mx-auto p-4 space-y-5">
         {/* EXAM-DDAY-V1: Exam D-day countdown */}
         {data.exam_events && data.exam_events.length > 0 && (
           <ExamDdayBannerStatic exams={data.exam_events} />
@@ -167,12 +167,12 @@ export default function ParentPortal() {
         {/* Reports */}
         {reports.length > 0 && (
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold text-gray-500 px-1">📋 주간 리포트</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground px-1">📋 주간 리포트</h3>
             <ReportsSection reports={reports} />
           </div>
         )}
 
-        <p className="text-center text-[10px] text-gray-300 pt-4 pb-8">더멘토학원 · MENTOR LOG</p>
+        <p className="text-center text-[10px] text-muted-foreground/50 pt-4 pb-8">더멘토학원 · MENTOR LOG</p>
       </main>
     </div>
   );
@@ -195,21 +195,21 @@ function SummaryCards({ lessons, homework }: { lessons: LessonRecord[]; homework
   const status = getOverallStatus(avgScore, hwRate, notDone, incomplete, totalLessons);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {/* Emoji Status Banner */}
-      <div className={`rounded-2xl px-5 py-4 flex items-center gap-4 border shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${status.bgClass}`}>
+      <div className={`rounded-2xl px-5 py-4 flex items-center gap-4 border shadow-card ${status.bgClass}`}>
         <span className="text-4xl">{status.emoji}</span>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-semibold ${status.titleColor}`}>{status.title}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{status.desc}</p>
+          <p className={`text-sm font-bold ${status.titleColor}`}>{status.title}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{status.desc}</p>
         </div>
       </div>
 
       {/* Compact Stats */}
-      <div className="grid grid-cols-3 gap-2">
-        <MiniStat value={totalLessons} label="수업" unit="회" color="text-blue-600" />
-        <MiniStat value={avgScore != null ? avgScore.toFixed(1) : '-'} label="이해도" unit="/5" color="text-violet-600" />
-        <MiniStat value={hwRate != null ? `${hwRate}` : '-'} label="숙제완료" unit="%" color="text-emerald-600" />
+      <div className="grid grid-cols-3 gap-2.5">
+        <MiniStat value={totalLessons} label="수업" unit="회" color="text-primary" />
+        <MiniStat value={avgScore != null ? avgScore.toFixed(1) : '-'} label="이해도" unit="/5" color="text-chart-5" />
+        <MiniStat value={hwRate != null ? `${hwRate}` : '-'} label="숙제완료" unit="%" color="text-success" />
       </div>
     </div>
   );
@@ -217,11 +217,11 @@ function SummaryCards({ lessons, homework }: { lessons: LessonRecord[]; homework
 
 function MiniStat({ value, label, unit, color }: { value: string | number; label: string; unit: string; color: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 py-2.5 px-2 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+    <div className="bg-card rounded-xl border border-border py-3 px-2.5 text-center shadow-card">
       <p className={`text-base font-bold ${color}`}>
-        {value}<span className="text-[10px] font-normal text-gray-400">{unit}</span>
+        {value}<span className="text-[10px] font-normal text-muted-foreground">{unit}</span>
       </p>
-      <p className="text-[10px] text-gray-400">{label}</p>
+      <p className="text-[10px] text-muted-foreground font-medium">{label}</p>
     </div>
   );
 }
@@ -310,19 +310,19 @@ function MiniCalendar({ lessons, homework, attendance, selectedDate, onSelectDat
   const todayKey = toDateKey(new Date());
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
-        <button onClick={() => setWeekOffset(w => w - 1)} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
-          <ChevronLeft className="w-4 h-4 text-gray-500" />
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <button onClick={() => setWeekOffset(w => w - 1)} className="p-1 rounded-md hover:bg-accent transition-colors">
+          <ChevronLeft className="w-4 h-4 text-muted-foreground" />
         </button>
-        <span className="text-xs font-semibold text-gray-600">{weekLabel}</span>
+        <span className="text-xs font-semibold text-foreground">{weekLabel}</span>
         <button
           onClick={() => setWeekOffset(w => Math.min(w + 1, 0))}
           disabled={weekOffset >= 0}
-          className="p-1 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-30"
+          className="p-1 rounded-md hover:bg-accent transition-colors disabled:opacity-30"
         >
-          <ChevronRight className="w-4 h-4 text-gray-500" />
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
 
@@ -342,14 +342,14 @@ function MiniCalendar({ lessons, homework, attendance, selectedDate, onSelectDat
               key={key}
               onClick={() => onSelectDate(isSelected ? null : key)}
               className={`flex flex-col items-center py-2.5 px-1 transition-colors relative
-                ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                ${isSelected ? 'bg-primary/5' : 'hover:bg-accent'}
                 ${isWeekend ? 'opacity-60' : ''}`}
             >
-              <span className={`text-[10px] mb-1 ${isWeekend ? 'text-gray-400' : 'text-gray-500'}`}>
+              <span className={`text-[10px] mb-1 ${isWeekend ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
                 {WEEKDAYS[day.getDay()]}
               </span>
               <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
-                ${isToday ? 'bg-blue-600 text-white' : isSelected ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}`}>
+                ${isToday ? 'bg-primary text-primary-foreground' : isSelected ? 'bg-primary/10 text-primary' : 'text-foreground'}`}>
                 {day.getDate()}
               </span>
 
@@ -360,13 +360,13 @@ function MiniCalendar({ lessons, homework, attendance, selectedDate, onSelectDat
                     <div key={i} className={`w-1.5 h-1.5 rounded-full ${(SUBJECT_COLORS[subj] || DEFAULT_COLOR).dot}`} />
                   ))
                 )}
-                {hasHw && <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
+                {hasHw && <div className="w-1.5 h-1.5 rounded-full bg-warning" />}
               </div>
 
               {/* Attendance indicator */}
               {att && att !== 'present' && (
                 <div className={`absolute top-1 right-1 w-2 h-2 rounded-full
-                  ${att === '인정결석' ? 'bg-yellow-400' : att === '무단결석' ? 'bg-red-400' : 'bg-gray-400'}`}
+                  ${att === '인정결석' ? 'bg-warning' : att === '무단결석' ? 'bg-destructive' : 'bg-muted-foreground'}`}
                 />
               )}
             </button>
@@ -375,16 +375,16 @@ function MiniCalendar({ lessons, homework, attendance, selectedDate, onSelectDat
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-50 flex-wrap">
+      <div className="flex items-center gap-3 px-4 py-2 border-t border-border flex-wrap">
         {Object.entries(SUBJECT_COLORS).map(([subj, c]) => (
           <div key={subj} className="flex items-center gap-1">
             <div className={`w-2 h-2 rounded-full ${c.dot}`} />
-            <span className="text-[9px] text-gray-500">{subj}</span>
+            <span className="text-[9px] text-muted-foreground">{subj}</span>
           </div>
         ))}
         <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded-full bg-orange-400" />
-          <span className="text-[9px] text-gray-500">숙제</span>
+          <div className="w-2 h-2 rounded-full bg-warning" />
+          <span className="text-[9px] text-muted-foreground">숙제</span>
         </div>
       </div>
     </div>
