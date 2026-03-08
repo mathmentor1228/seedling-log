@@ -111,6 +111,75 @@ function NotionBlock({ block }: { block: any }) {
       ) : null;
     }
     
+    case 'file': {
+      const fileUrl = data?.file?.url || data?.external?.url;
+      const fileName = data?.name || '파일 다운로드';
+      const caption = data?.caption;
+      return fileUrl ? (
+        <div className="my-3 p-3 rounded-lg border border-border bg-muted/30 flex items-center gap-3">
+          <span className="text-xl">📎</span>
+          <div className="flex-1 min-w-0">
+            <a href={fileUrl} target="_blank" rel="noopener noreferrer" 
+               className="text-primary underline hover:text-primary/80 font-medium break-all text-sm">
+              {fileName}
+            </a>
+            {caption?.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5">{renderRichText(caption)}</p>
+            )}
+          </div>
+        </div>
+      ) : null;
+    }
+
+    case 'pdf': {
+      const pdfUrl = data?.file?.url || data?.external?.url;
+      return pdfUrl ? (
+        <div className="my-3">
+          <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
+             className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 text-primary underline hover:text-primary/80 font-medium">
+            <span className="text-xl">📄</span>
+            PDF 파일 보기
+          </a>
+        </div>
+      ) : null;
+    }
+
+    case 'video': {
+      const videoUrl = data?.file?.url || data?.external?.url;
+      return videoUrl ? (
+        <div className="my-3">
+          {data?.type === 'external' ? (
+            <a href={videoUrl} target="_blank" rel="noopener noreferrer"
+               className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 text-primary underline hover:text-primary/80 font-medium">
+              <span className="text-xl">🎬</span>
+              영상 보기
+            </a>
+          ) : (
+            <video src={videoUrl} controls className="rounded-lg max-w-full" />
+          )}
+        </div>
+      ) : null;
+    }
+
+    case 'audio': {
+      const audioUrl = data?.file?.url || data?.external?.url;
+      return audioUrl ? (
+        <audio src={audioUrl} controls className="my-3 w-full" />
+      ) : null;
+    }
+
+    case 'embed': {
+      return data?.url ? (
+        <div className="my-3">
+          <a href={data.url} target="_blank" rel="noopener noreferrer"
+             className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 text-primary underline hover:text-primary/80 font-medium break-all">
+            <span className="text-xl">🔗</span>
+            {data.url}
+          </a>
+        </div>
+      ) : null;
+    }
+
     case 'bookmark':
     case 'link_preview':
       return data?.url ? (
