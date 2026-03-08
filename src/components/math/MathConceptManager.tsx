@@ -334,6 +334,9 @@ export function MathConceptManager() {
           regenerating={generating === selectedConceptId}
         />
       )}
+
+      {/* Submission Review */}
+      <QuizSubmissionReview />
     </div>
   );
 }
