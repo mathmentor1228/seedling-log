@@ -64,6 +64,7 @@ export function AdminOfficeBoard() {
   const [newDescription, setNewDescription] = useState('');
   const [newAssignee, setNewAssignee] = useState('');
   const [creating, setCreating] = useState(false);
+  const [showNewStudentDialog, setShowNewStudentDialog] = useState(false);
 
   useEffect(() => {
     if (user) {
