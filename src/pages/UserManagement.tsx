@@ -539,11 +539,11 @@ const COURSE_MAP: Record<string, string[]> = {
   '고3': ['미적분', '기하', '확률과통계'],
 };
 
-function GradeCourseSelect({ userId, currentGrade, currentCourse, onSaved }: { userId: string; currentGrade: string | null; currentCourse: string | null; onSaved: () => Promise<void> }) {
+function GradeSelect({ userId, currentGrade, onSaved }: { userId: string; currentGrade: string | null; onSaved: () => Promise<void> }) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
 
-  const handleGradeChange = async (value: string) => {
+  const handleChange = async (value: string) => {
     setSaving(true);
     try {
       const { error } = await supabase
@@ -560,7 +560,25 @@ function GradeCourseSelect({ userId, currentGrade, currentCourse, onSaved }: { u
     }
   };
 
-  const handleCourseChange = async (value: string) => {
+  return (
+    <Select value={currentGrade || 'none'} onValueChange={handleChange} disabled={saving}>
+      <SelectTrigger className="w-[80px]">
+        <SelectValue placeholder="학년" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">미지정</SelectItem>
+        {GRADE_OPTIONS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function CourseSelect({ userId, currentGrade, currentCourse, onSaved }: { userId: string; currentGrade: string | null; currentCourse: string | null; onSaved: () => Promise<void> }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const courses = currentGrade ? COURSE_MAP[currentGrade] || [] : [];
+
+  const handleChange = async (value: string) => {
     setSaving(true);
     try {
       const { error } = await supabase
@@ -577,19 +595,15 @@ function GradeCourseSelect({ userId, currentGrade, currentCourse, onSaved }: { u
     }
   };
 
-  const courses = currentGrade ? COURSE_MAP[currentGrade] || [] : [];
-
   return (
-    <>
-      <Select value={currentGrade || 'none'} onValueChange={handleGradeChange} disabled={saving}>
-        <SelectTrigger className="w-[80px]">
-          <SelectValue placeholder="학년" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">미지정</SelectItem>
-          {GRADE_OPTIONS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      </>
+    <Select value={currentCourse || 'none'} onValueChange={handleChange} disabled={saving || courses.length === 0}>
+      <SelectTrigger className="w-[100px]">
+        <SelectValue placeholder="과정" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">미지정</SelectItem>
+        {courses.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+      </SelectContent>
+    </Select>
   );
 }
