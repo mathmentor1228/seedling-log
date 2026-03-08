@@ -52,49 +52,81 @@ function isGroup(entry: NavEntry): entry is NavGroup {
   return 'items' in entry;
 }
 
-const navStructure: NavEntry[] = [
-  { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-  { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
-  {
-    label: '수업',
-    items: [
-      { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
-      { label: '시험', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-      { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
-    ],
-  },
-  {
-    label: '조교',
-    items: [
-      { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-      { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-    ],
-  },
-  {
-    label: '관리',
-    items: [
-      { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
-      { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
-    ],
-  },
-  {
-    label: '리포트',
-    items: [
-      { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
-      { label: '리포트 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
-    ],
-  },
-  {
-    label: '원장',
-    items: [
-      { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
-      { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
-      { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
-      { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },
-    ],
-  },
-  { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, adminOnly: true },
-];
+const SUBJECT_KEY_MAP: Record<string, string> = {
+  '수학': 'math',
+  '영어': 'english',
+  '국어': 'korean',
+  '과학': 'science',
+};
+
+const getNavStructure = (assignedSubject: string | null, role: string | null): NavEntry[] => {
+  const allSubjects = [
+    { label: '수학', href: '/materials/math', icon: <FolderOpen className="w-4 h-4" /> },
+    { label: '영어', href: '/materials/english', icon: <FolderOpen className="w-4 h-4" /> },
+    { label: '국어', href: '/materials/korean', icon: <FolderOpen className="w-4 h-4" /> },
+    { label: '과학', href: '/materials/science', icon: <FolderOpen className="w-4 h-4" /> },
+  ];
+
+  // Admin sees all subjects; teacher sees only assigned subject
+  const visibleSubjects = role === 'admin'
+    ? allSubjects
+    : allSubjects.filter(s => {
+        if (!assignedSubject) return false;
+        return s.href === `/materials/${SUBJECT_KEY_MAP[assignedSubject] || ''}`;
+      });
+
+  const materialGroup: NavEntry[] = visibleSubjects.length > 0
+    ? [{
+        label: '과목 자료실',
+        items: visibleSubjects,
+      }]
+    : [];
+
+  return [
+    { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
+    {
+      label: '수업',
+      items: [
+        { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
+        { label: '시험', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
+      ],
+    },
+    ...materialGroup,
+    {
+      label: '조교',
+      items: [
+        { label: '조교', href: '/assistant', icon: <UserCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '조교요청', href: '/assistant-requests', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+      ],
+    },
+    {
+      label: '관리',
+      items: [
+        { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
+        { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
+      ],
+    },
+    {
+      label: '리포트',
+      items: [
+        { label: '주간 리포트', href: '/reports', icon: <FileBarChart className="w-4 h-4" />, adminOnly: true },
+        { label: '리포트 현황', href: '/reports/status', icon: <FileBarChart className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
+      ],
+    },
+    {
+      label: '원장',
+      items: [
+        { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
+        { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
+        { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
+        { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },
+      ],
+    },
+    { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, adminOnly: true },
+  ];
+};
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, role, signOut } = useAuth();
