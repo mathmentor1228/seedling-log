@@ -996,6 +996,50 @@ export type Database = {
           },
         ]
       }
+      material_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          folder_id: string | null
+          id: string
+          sort_order: number
+          subject: string
+          title: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          folder_id?: string | null
+          id?: string
+          sort_order?: number
+          subject: string
+          title: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          folder_id?: string | null
+          id?: string
+          sort_order?: number
+          subject?: string
+          title?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_links_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "material_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ops_changelog: {
         Row: {
           author_id: string | null
