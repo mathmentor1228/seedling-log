@@ -317,7 +317,6 @@ export default function UserManagement() {
                   <TableCell>
                     <GradeCourseSelect userId={user.id} currentGrade={user.student_grade || null} currentCourse={user.student_course || null} onSaved={fetchUsers} />
                   </TableCell>
-                  </TableCell>
                   <TableCell>
                     <Switch
                       checked={user.is_active}
