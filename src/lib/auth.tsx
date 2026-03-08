@@ -8,6 +8,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   role: AppRole | null;
+  assignedSubject: string | null;
   loading: boolean;
   isTrial: boolean;
   trialExpiresAt: string | null;
