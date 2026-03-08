@@ -457,15 +457,28 @@ ${studentPageUrl}
             </Card>
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">📩 등록 안내 문자</label>
+              <label className="text-sm font-medium text-foreground mb-2 block">📩 학부모 안내 문자</label>
               <Card className="p-3 bg-muted/30">
                 <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">
-                  {generateMessage()}
+                  {generateParentMessage()}
                 </pre>
               </Card>
-              <Button onClick={handleCopy} variant="outline" className="w-full mt-2 gap-1.5">
-                {copied ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-                {copied ? '복사됨!' : '문자 내용 복사'}
+              <Button onClick={() => handleCopy('parent')} variant="outline" className="w-full mt-2 gap-1.5">
+                {copiedType === 'parent' ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                {copiedType === 'parent' ? '복사됨!' : '학부모 문자 복사'}
+              </Button>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">📩 학생 안내 문자</label>
+              <Card className="p-3 bg-muted/30">
+                <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">
+                  {generateStudentMessage()}
+                </pre>
+              </Card>
+              <Button onClick={() => handleCopy('student')} variant="outline" className="w-full mt-2 gap-1.5">
+                {copiedType === 'student' ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                {copiedType === 'student' ? '복사됨!' : '학생 문자 복사'}
               </Button>
             </div>
 
