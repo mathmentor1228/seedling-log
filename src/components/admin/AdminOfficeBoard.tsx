@@ -263,7 +263,10 @@ export function AdminOfficeBoard() {
         {filtered.map(task => (
           <Card
             key={task.id}
-            className="p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+            className={cn(
+              "p-4 cursor-pointer hover:bg-muted/30 transition-colors",
+              task.status === '대기 중' && "border-l-4 border-l-warning bg-warning/5"
+            )}
             onClick={() => handleOpenTask(task)}
           >
             <div className="flex items-start justify-between gap-3">
