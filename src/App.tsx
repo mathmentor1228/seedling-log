@@ -21,6 +21,7 @@ import StatsPage from "./pages/StatsPage";
 import AdminBriefingPage from "./pages/AdminBriefingPage";
 import AdminReportPage from "./pages/AdminReportPage";
 import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
+import AdminOfficePage from "./pages/AdminOfficePage";
 import ReportStatusPage from "./pages/ReportStatusPage";
 import VocabTestPage from "./pages/VocabTestPage";
 import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
@@ -103,6 +104,7 @@ const App = () => (
                 <Route path="/admin/briefing" element={<AdminBriefingPage />} />
                 <Route path="/admin/report" element={<AdminReportPage />} />
                 <Route path="/admin/daily" element={<AdminDailyOpsPage />} />
+                <Route path="/admin/office" element={<AdminOfficePage />} />
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />

@@ -23,7 +23,8 @@ import {
   BookOpenCheck,
   ChevronDown,
   School,
-  FolderOpen
+  FolderOpen,
+  Briefcase
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
@@ -39,6 +40,7 @@ interface NavItem {
   icon: ReactNode;
   adminOnly?: boolean;
   allowedRoles?: ('admin' | 'teacher' | 'assistant')[];
+  allowedEmails?: string[];
 }
 
 interface NavGroup {
@@ -59,7 +61,7 @@ const SUBJECT_KEY_MAP: Record<string, string> = {
   '과학': 'science',
 };
 
-const getNavStructure = (assignedSubject: string | null, role: string | null): NavEntry[] => {
+const getNavStructure = (assignedSubject: string | null, role: string | null, userEmail: string | null): NavEntry[] => {
   const allSubjects = [
     { label: '수학', href: '/materials/math', icon: <FolderOpen className="w-4 h-4" /> },
     { label: '영어', href: '/materials/english', icon: <FolderOpen className="w-4 h-4" /> },
@@ -125,6 +127,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null): N
       ],
     },
     { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, adminOnly: true },
+    { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, adminOnly: true, allowedEmails: ['bfkor8810@naver.com'] },
   ];
 };
 
@@ -146,11 +149,17 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const canSeeItem = (item: NavItem): boolean => {
+    if (item.allowedEmails) {
+      const email = user?.email || '';
+      const emailAllowed = item.allowedEmails.includes(email);
+      const isAdmin = role === 'admin';
+      if (!emailAllowed && !isAdmin) return false;
+    }
     if (item.allowedRoles) return !!(role && item.allowedRoles.includes(role));
     return !item.adminOnly || role === 'admin';
   };
 
-  const navStructure = getNavStructure(assignedSubject, role);
+  const navStructure = getNavStructure(assignedSubject, role, user?.email || null);
 
   // Auto-open groups containing the active route
   const getFilteredEntries = () => {
