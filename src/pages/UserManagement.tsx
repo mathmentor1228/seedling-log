@@ -525,3 +525,68 @@ function SubjectSelect({ userId, currentSubject, onSaved }: { userId: string; cu
     </Select>
   );
 }
+
+const GRADE_OPTIONS = ['중1', '중2', '중3', '고1', '고2', '고3'];
+const COURSE_MAP: Record<string, string[]> = {
+  '중1': ['중1-1', '중1-2'],
+  '중2': ['중2-1', '중2-2'],
+  '중3': ['중3-1', '중3-2'],
+  '고1': ['수학(상)', '수학(하)'],
+  '고2': ['수학I', '수학II', '미적분', '확률과통계'],
+  '고3': ['미적분', '기하', '확률과통계'],
+};
+
+function GradeCourseSelect({ userId, currentGrade, currentCourse, onSaved }: { userId: string; currentGrade: string | null; currentCourse: string | null; onSaved: () => Promise<void> }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+
+  const handleGradeChange = async (value: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ student_grade: value === 'none' ? null : value, student_course: null } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      toast({ title: '완료', description: '학년이 변경되었습니다.' });
+      await onSaved();
+    } catch (error) {
+      toast({ title: '오류', description: '변경 실패', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCourseChange = async (value: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ student_course: value === 'none' ? null : value } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      toast({ title: '완료', description: '과정이 변경되었습니다.' });
+      await onSaved();
+    } catch (error) {
+      toast({ title: '오류', description: '변경 실패', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const courses = currentGrade ? COURSE_MAP[currentGrade] || [] : [];
+
+  return (
+    <>
+      <Select value={currentGrade || 'none'} onValueChange={handleGradeChange} disabled={saving}>
+        <SelectTrigger className="w-[80px]">
+          <SelectValue placeholder="학년" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">미지정</SelectItem>
+          {GRADE_OPTIONS.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      </>
+  );
+}
