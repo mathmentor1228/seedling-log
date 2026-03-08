@@ -40,6 +40,7 @@ interface NavItem {
   icon: ReactNode;
   adminOnly?: boolean;
   allowedRoles?: ('admin' | 'teacher' | 'assistant')[];
+  allowedEmails?: string[];
 }
 
 interface NavGroup {
