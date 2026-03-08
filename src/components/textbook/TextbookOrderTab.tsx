@@ -35,6 +35,7 @@ export function TextbookOrderTab() {
   const [userName, setUserName] = useState('');
 
   const [name, setName] = useState('');
+  const [subject, setSubject] = useState('수학');
   const [qty, setQty] = useState('1');
   const [price, setPrice] = useState('');
   const [notes, setNotes] = useState('');
