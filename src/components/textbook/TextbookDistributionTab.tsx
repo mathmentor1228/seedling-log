@@ -198,9 +198,14 @@ export function TextbookDistributionTab() {
                       배부: {dist.distributed_by_name} · {format(new Date(dist.created_at), 'MM/dd')}
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" className="gap-1" onClick={() => handleCopyMessage(dist)}>
-                    <Copy className="w-3.5 h-3.5" />안내문자
-                  </Button>
+                  <div className="flex flex-col gap-1.5">
+                    <Button size="sm" variant="outline" className="gap-1" onClick={() => handleCopyMessage(dist)}>
+                      <Copy className="w-3.5 h-3.5" />안내문자
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1 text-muted-foreground" onClick={() => handleCopySelfPurchaseMessage(dist)}>
+                      <ShoppingCart className="w-3.5 h-3.5" />개별구매
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}
