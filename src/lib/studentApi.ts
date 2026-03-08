@@ -114,4 +114,13 @@ export const studentApi = {
       total_count: totalCount,
       mode,
     }),
+
+  getMathQuizzes: () => studentApiCall<{ quizzes: any[]; submissions: any[] }>('math_quizzes'),
+
+  submitMathQuiz: (quizId: string, conceptId: string, imageUrls: string[]) =>
+    studentApiCall<{ submission_id: string; grading: any; points_awarded: number }>('submit_math_quiz', {
+      quiz_id: quizId,
+      concept_id: conceptId,
+      image_urls: imageUrls,
+    }),
 };

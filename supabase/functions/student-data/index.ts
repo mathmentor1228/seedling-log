@@ -875,6 +875,75 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'math_quizzes': {
+        // Fetch all published quizzes with concept info
+        const { data: quizzes, error: qErr } = await supabase
+          .from('math_concept_quizzes')
+          .select('id, concept_id, questions, status, created_at, math_concepts(title, course, grade)')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false });
+
+        if (qErr) throw qErr;
+
+        // Fetch student's submissions
+        const { data: submissions } = await supabase
+          .from('math_quiz_submissions')
+          .select('id, quiz_id, status, ai_total_score, ai_total_questions, points_awarded, submitted_at, ai_grading_result, teacher_feedback')
+          .eq('student_id', student_id)
+          .order('submitted_at', { ascending: false });
+
+        result = { quizzes: quizzes || [], submissions: submissions || [] };
+        break;
+      }
+
+      case 'submit_math_quiz': {
+        const { quiz_id, concept_id, image_urls } = params;
+        if (!quiz_id || !concept_id || !image_urls || !Array.isArray(image_urls) || image_urls.length === 0) {
+          return new Response(
+            JSON.stringify({ error: 'quiz_id, concept_id, image_urls required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Insert submission
+        const { data: submission, error: subErr } = await supabase
+          .from('math_quiz_submissions')
+          .insert({
+            student_id,
+            concept_id,
+            quiz_id,
+            image_urls,
+            status: 'submitted',
+          })
+          .select()
+          .single();
+
+        if (subErr) throw subErr;
+
+        // Trigger AI grading via the grade-quiz-submission function
+        const gradeUrl = `${supabaseUrl}/functions/v1/grade-quiz-submission`;
+        const gradeResp = await fetch(gradeUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${serviceRoleKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ submission_id: submission.id }),
+        });
+
+        const gradeData = await gradeResp.json();
+        if (gradeData.error) {
+          result = { submission_id: submission.id, grading: null, error: gradeData.error };
+        } else {
+          result = { 
+            submission_id: submission.id, 
+            grading: gradeData.grading, 
+            points_awarded: gradeData.points_awarded 
+          };
+        }
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),
