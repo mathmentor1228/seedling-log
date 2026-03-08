@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Upload, Brain, FileText, RefreshCw, Trash2 } from 'lucide-react';
 import { MathQuizPreview } from './MathQuizPreview';
@@ -274,54 +275,76 @@ export function MathConceptManager() {
           ) : concepts.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">업로드된 개념이 없습니다.</p>
           ) : (
-            <div className="space-y-3">
-              {concepts.map(concept => (
-                <div
-                  key={concept.id}
-                  className={`flex items-center justify-between p-4 border rounded-lg cursor-pointer transition-colors ${
-                    selectedConceptId === concept.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                  }`}
-                  onClick={() => {
-                    setSelectedConceptId(concept.id);
-                    loadQuiz(concept.id);
-                  }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline">{concept.grade}</Badge>
-                      <Badge variant="outline">{concept.course}</Badge>
-                      {statusBadge(concept.status)}
-                    </div>
-                    <p className="font-medium truncate">{concept.title}</p>
-                    <p className="text-xs text-muted-foreground">{concept.pdf_original_name}</p>
-                  </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={e => { e.stopPropagation(); handleGenerateQuiz(concept.id); }}
-                      disabled={generating === concept.id}
-                    >
-                      {generating === concept.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                      ) : concept.status === 'quiz_generated' ? (
-                        <RefreshCw className="w-4 h-4 mr-1" />
-                      ) : (
-                        <Brain className="w-4 h-4 mr-1" />
-                      )}
-                      {concept.status === 'quiz_generated' ? '다시 생성' : '퀴즈 생성'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={e => { e.stopPropagation(); handleDeleteConcept(concept); }}
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Tabs defaultValue={GRADES[0]}>
+              <TabsList className="w-full">
+                {GRADES.map(g => {
+                  const count = concepts.filter(c => c.grade === g).length;
+                  return (
+                    <TabsTrigger key={g} value={g} className="flex-1 text-xs sm:text-sm">
+                      {g} ({count})
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+              {GRADES.map(g => {
+                const filtered = concepts.filter(c => c.grade === g);
+                return (
+                  <TabsContent key={g} value={g} className="mt-3">
+                    {filtered.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-6">이 학년의 개념이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {filtered.map(concept => (
+                          <div
+                            key={concept.id}
+                            className={`flex items-center justify-between p-4 border rounded-lg cursor-pointer transition-colors ${
+                              selectedConceptId === concept.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                            }`}
+                            onClick={() => {
+                              setSelectedConceptId(concept.id);
+                              loadQuiz(concept.id);
+                            }}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline">{concept.course}</Badge>
+                                {statusBadge(concept.status)}
+                              </div>
+                              <p className="font-medium truncate">{concept.title}</p>
+                              <p className="text-xs text-muted-foreground">{concept.pdf_original_name}</p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={e => { e.stopPropagation(); handleGenerateQuiz(concept.id); }}
+                                disabled={generating === concept.id}
+                              >
+                                {generating === concept.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                                ) : concept.status === 'quiz_generated' ? (
+                                  <RefreshCw className="w-4 h-4 mr-1" />
+                                ) : (
+                                  <Brain className="w-4 h-4 mr-1" />
+                                )}
+                                {concept.status === 'quiz_generated' ? '다시 생성' : '퀴즈 생성'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={e => { e.stopPropagation(); handleDeleteConcept(concept); }}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
           )}
         </CardContent>
       </Card>
