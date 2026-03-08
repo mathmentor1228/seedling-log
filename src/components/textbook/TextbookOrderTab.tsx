@@ -15,6 +15,7 @@ interface TextbookOrder {
   id: string;
   textbook_name: string;
   quantity: number;
+  subject: string;
   unit_price: number;
   status: string;
   requested_by: string;
