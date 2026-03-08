@@ -246,7 +246,7 @@ export function MathQuizAssignManager({ quizzes }: Props) {
 
           {/* === Assign Tab === */}
           <TabsContent value="assign" className="space-y-4 mt-4">
-            {publishedQuizzes.length === 0 ? (
+            {availableQuizzes.length === 0 ? (
               <p className="text-center text-muted-foreground py-6">배정 가능한 퀴즈가 없습니다. 먼저 퀴즈를 생성하세요.</p>
             ) : (
               <>
