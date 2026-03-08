@@ -292,7 +292,7 @@ export function TuitionCalculator() {
 
           <div className="mb-3">
             <label className="text-sm font-medium text-foreground mb-1.5 block">학생 이름</label>
-            <InputUI
+            <Input
               placeholder="예: 홍길동"
               value={studentName}
               onChange={e => setStudentName(e.target.value)}
