@@ -57,6 +57,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     setStartDate(undefined);
     setTuitionFee('');
     setClassTime('');
+    setStudentPhone('');
     setParentPhone('');
     setNotes('');
     setCreated(false);
