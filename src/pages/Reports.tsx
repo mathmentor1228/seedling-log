@@ -171,6 +171,7 @@ export default function Reports() {
   const [bulkDeleteIds, setBulkDeleteIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkVisibleUpdating, setBulkVisibleUpdating] = useState(false);
 
   // Active main tab
   const [mainTab, setMainTab] = useState<'generate' | 'prompt'>('generate');
