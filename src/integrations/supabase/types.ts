@@ -65,6 +65,24 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_office_read_status: {
+        Row: {
+          id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       admin_office_task_comments: {
         Row: {
           author_id: string
