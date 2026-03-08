@@ -108,7 +108,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     {
       label: '관리',
       items: [
-        { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true },
+        { label: '학생 관리', href: '/students', icon: <Users className="w-4 h-4" />, adminOnly: true, allowedEmails: ['bfkor8810@naver.com'] },
         { label: '반 관리', href: '/classes', icon: <BookOpen className="w-4 h-4" />, adminOnly: true },
         { label: '교재 관리', href: '/textbooks', icon: <BookCopy className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
       ],
