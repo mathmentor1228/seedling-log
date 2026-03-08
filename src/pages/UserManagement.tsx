@@ -478,3 +478,41 @@ function TrialUsersCard({
     </Card>
   );
 }
+
+function SubjectSelect({ userId, currentSubject, onSaved }: { userId: string; currentSubject: string | null; onSaved: () => Promise<void> }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+
+  const handleChange = async (value: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ assigned_subject: value === 'none' ? null : value } as any)
+        .eq('id', userId);
+      if (error) throw error;
+      toast({ title: '완료', description: '담당 과목이 변경되었습니다.' });
+      await onSaved();
+    } catch (error) {
+      console.error('Error saving subject:', error);
+      toast({ title: '오류', description: '과목 변경에 실패했습니다.', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Select value={currentSubject || 'none'} onValueChange={handleChange} disabled={saving}>
+      <SelectTrigger className="w-[100px]">
+        <SelectValue placeholder="과목" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">미지정</SelectItem>
+        <SelectItem value="수학">수학</SelectItem>
+        <SelectItem value="영어">영어</SelectItem>
+        <SelectItem value="국어">국어</SelectItem>
+        <SelectItem value="과학">과학</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
