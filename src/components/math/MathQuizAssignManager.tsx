@@ -104,7 +104,7 @@ export function MathQuizAssignManager({ quizzes }: Props) {
   const [assignSelection, setAssignSelection] = useState<Set<string>>(new Set());
   const [assigning, setAssigning] = useState(false);
 
-  const publishedQuizzes = quizzes.filter(q => q.status === 'published');
+  const availableQuizzes = quizzes.filter(q => q.status === 'draft' || q.status === 'published');
 
   const fetchAll = async () => {
     setLoading(true);
@@ -246,7 +246,7 @@ export function MathQuizAssignManager({ quizzes }: Props) {
 
           {/* === Assign Tab === */}
           <TabsContent value="assign" className="space-y-4 mt-4">
-            {publishedQuizzes.length === 0 ? (
+            {availableQuizzes.length === 0 ? (
               <p className="text-center text-muted-foreground py-6">배정 가능한 퀴즈가 없습니다. 먼저 퀴즈를 생성하세요.</p>
             ) : (
               <>
@@ -254,7 +254,7 @@ export function MathQuizAssignManager({ quizzes }: Props) {
                 <div className="space-y-2">
                   <p className="text-sm font-medium">1. 퀴즈 선택</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {publishedQuizzes.map(q => {
+                    {availableQuizzes.map(q => {
                       const assigned = getAssignedStudents(q.id);
                       return (
                         <div
