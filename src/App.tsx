@@ -27,6 +27,7 @@ import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
 import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
 import NotFound from "./pages/NotFound";
 import TrialSignup from "./pages/TrialSignup";
+import SubjectMaterialPage from "./pages/SubjectMaterialPage";
 import PublicReport from "./pages/PublicReport";
 import ParentPortal from "./pages/ParentPortal";
 import { StudentAuthProvider } from "@/lib/studentAuth";
