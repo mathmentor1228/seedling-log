@@ -245,6 +245,7 @@ export default function Reports() {
       const { data, error } = await supabase
         .from('students')
         .select('id, name, grade')
+        .eq('enrollment_status', '재원')
         .order('name');
       
       if (error) throw error;
@@ -398,18 +399,20 @@ export default function Reports() {
         .from('weekly_reports')
         .select(`
           *,
-          students:student_id (name, parent_phone, student_phone)
+          students:student_id (name, parent_phone, student_phone, enrollment_status)
         `)
         .order('generated_at', { ascending: false });
 
       if (error) throw error;
 
-      const formattedReports: WeeklyReport[] = (data || []).map((r: any) => ({
-        ...r,
-        student_name: r.students?.name,
-        parent_phone: r.students?.parent_phone,
-        student_phone: r.students?.student_phone,
-      }));
+      const formattedReports: WeeklyReport[] = (data || [])
+        .filter((r: any) => r.students?.enrollment_status === '재원')
+        .map((r: any) => ({
+          ...r,
+          student_name: r.students?.name,
+          parent_phone: r.students?.parent_phone,
+          student_phone: r.students?.student_phone,
+        }));
 
       setReports(formattedReports);
       
