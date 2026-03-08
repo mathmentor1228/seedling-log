@@ -65,6 +65,86 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_office_task_comments: {
+        Row: {
+          author_id: string
+          author_name: string
+          body: string
+          created_at: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          author_id: string
+          author_name: string
+          body: string
+          created_at?: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          author_id?: string
+          author_name?: string
+          body?: string
+          created_at?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_office_task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "admin_office_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_office_tasks: {
+        Row: {
+          assignee_name: string | null
+          category: string
+          completed_at: string | null
+          completed_by_name: string | null
+          created_at: string
+          created_by: string
+          created_by_name: string
+          description: string | null
+          id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_name?: string | null
+          category?: string
+          completed_at?: string | null
+          completed_by_name?: string | null
+          created_at?: string
+          created_by: string
+          created_by_name: string
+          description?: string | null
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_name?: string | null
+          category?: string
+          completed_at?: string | null
+          completed_by_name?: string | null
+          created_at?: string
+          created_by?: string
+          created_by_name?: string
+          description?: string | null
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       assistant_tasks: {
         Row: {
           assignee: string
@@ -2750,6 +2830,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_staff: { Args: never; Returns: boolean }
       teacher_owns_student: {
         Args: { _student_id: string; _teacher_id: string }
         Returns: boolean
