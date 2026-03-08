@@ -914,6 +914,88 @@ export type Database = {
           },
         ]
       }
+      material_files: {
+        Row: {
+          created_at: string
+          file_size: number | null
+          folder_id: string | null
+          id: string
+          mime_type: string | null
+          original_name: string
+          storage_path: string
+          subject: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_size?: number | null
+          folder_id?: string | null
+          id?: string
+          mime_type?: string | null
+          original_name: string
+          storage_path: string
+          subject: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_size?: number | null
+          folder_id?: string | null
+          id?: string
+          mime_type?: string | null
+          original_name?: string
+          storage_path?: string
+          subject?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_files_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "material_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      material_folders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          sort_order: number
+          subject: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          sort_order?: number
+          subject: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          sort_order?: number
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "material_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ops_changelog: {
         Row: {
           author_id: string | null
