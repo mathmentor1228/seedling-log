@@ -24,7 +24,8 @@ import {
   ChevronDown,
   School,
   FolderOpen,
-  Briefcase
+  Briefcase,
+  BookCopy
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
