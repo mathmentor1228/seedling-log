@@ -62,7 +62,7 @@ export function TextbookDistributionTab() {
 
   const fetchData = useCallback(async () => {
     const [distRes, orderRes, studentRes] = await Promise.all([
-      supabase.from('textbook_distributions').select('*, textbook_orders(textbook_name, unit_price)').order('created_at', { ascending: false }),
+      supabase.from('textbook_distributions').select('*, textbook_orders(textbook_name, unit_price, subject)').order('created_at', { ascending: false }),
       supabase.from('textbook_orders').select('*').eq('status', '입고완료').order('created_at', { ascending: false }),
       supabase.from('students').select('id, name').eq('enrollment_status', '재원').order('name'),
     ]);
