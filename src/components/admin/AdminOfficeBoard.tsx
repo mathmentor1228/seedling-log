@@ -190,6 +190,20 @@ export function AdminOfficeBoard() {
           <h1 className="text-2xl font-bold text-foreground">행정 업무 관리</h1>
           <p className="text-sm text-muted-foreground mt-1">원장 · 행정 담당자 전용 업무 보드</p>
         </div>
+      </div>
+
+      <Tabs defaultValue="tasks">
+        <TabsList className="mb-4">
+          <TabsTrigger value="tasks">업무 보드</TabsTrigger>
+          <TabsTrigger value="calculator" className="gap-1.5"><Calculator className="w-3.5 h-3.5" />원비 계산기</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="calculator">
+          <TuitionCalculator />
+        </TabsContent>
+
+        <TabsContent value="tasks" className="space-y-6">
+      <div className="flex items-center justify-end">
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5"><Plus className="w-4 h-4" />업무 등록</Button>
