@@ -5,11 +5,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Loader2, FolderPlus, Upload, Trash2, ChevronRight, Home,
-  FileText, FileImage, File as FileIcon, Download, FolderOpen, Folder
+  FileText, FileImage, File as FileIcon, Download, FolderOpen, Folder,
+  Link as LinkIcon, ExternalLink, Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog';
@@ -45,6 +48,17 @@ interface MaterialFile {
   created_at: string;
 }
 
+interface MaterialLink {
+  id: string;
+  subject: string;
+  folder_id: string | null;
+  title: string;
+  url: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 function formatFileSize(bytes: number | null): string {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
@@ -54,9 +68,17 @@ function formatFileSize(bytes: number | null): string {
 
 function getFileIcon(mimeType: string | null) {
   if (!mimeType) return <FileIcon className="w-5 h-5 text-muted-foreground" />;
-  if (mimeType.startsWith('image/')) return <FileImage className="w-5 h-5 text-blue-500" />;
-  if (mimeType.includes('pdf')) return <FileText className="w-5 h-5 text-red-500" />;
+  if (mimeType.startsWith('image/')) return <FileImage className="w-5 h-5 text-primary" />;
+  if (mimeType.includes('pdf')) return <FileText className="w-5 h-5 text-destructive" />;
   return <FileIcon className="w-5 h-5 text-muted-foreground" />;
+}
+
+function getLinkIcon(url: string) {
+  if (url.includes('onedrive') || url.includes('sharepoint') || url.includes('1drv'))
+    return <span className="text-sm">📁</span>;
+  if (url.includes('drive.google'))
+    return <span className="text-sm">📂</span>;
+  return <LinkIcon className="w-4 h-4 text-primary" />;
 }
 
 export default function SubjectMaterialPage() {
@@ -66,6 +88,7 @@ export default function SubjectMaterialPage() {
 
   const [folders, setFolders] = useState<MaterialFolder[]>([]);
   const [files, setFiles] = useState<MaterialFile[]>([]);
+  const [links, setLinks] = useState<MaterialLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [breadcrumb, setBreadcrumb] = useState<{ id: string | null; name: string }[]>([]);
@@ -75,8 +98,15 @@ export default function SubjectMaterialPage() {
   const [newFolderName, setNewFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'file' | 'folder'; id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'file' | 'folder' | 'link'; id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Link dialog
+  const [showNewLink, setShowNewLink] = useState(false);
+  const [newLinkTitle, setNewLinkTitle] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [newLinkDesc, setNewLinkDesc] = useState('');
+  const [creatingLink, setCreatingLink] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -97,18 +127,28 @@ export default function SubjectMaterialPage() {
       .eq('subject', subject)
       .order('created_at', { ascending: false });
 
+    const linkQuery = supabase
+      .from('material_links')
+      .select('*')
+      .eq('subject', subject)
+      .order('sort_order')
+      .order('title');
+
     if (currentFolderId) {
       folderQuery.eq('parent_id', currentFolderId);
       fileQuery.eq('folder_id', currentFolderId);
+      linkQuery.eq('folder_id', currentFolderId);
     } else {
       folderQuery.is('parent_id', null);
       fileQuery.is('folder_id', null);
+      linkQuery.is('folder_id', null);
     }
 
-    const [foldersRes, filesRes] = await Promise.all([folderQuery, fileQuery]);
+    const [foldersRes, filesRes, linksRes] = await Promise.all([folderQuery, fileQuery, linkQuery]);
 
     setFolders((foldersRes.data as MaterialFolder[]) || []);
     setFiles((filesRes.data as MaterialFile[]) || []);
+    setLinks((linksRes.data as MaterialLink[]) || []);
     setLoading(false);
   }, [subject, currentFolderId]);
 
@@ -116,7 +156,6 @@ export default function SubjectMaterialPage() {
     loadContents();
   }, [loadContents]);
 
-  // Build breadcrumb when navigating
   const navigateToFolder = async (folderId: string | null) => {
     if (folderId === null) {
       setCurrentFolderId(null);
@@ -124,7 +163,6 @@ export default function SubjectMaterialPage() {
       return;
     }
 
-    // Build breadcrumb path
     const path: { id: string | null; name: string }[] = [];
     let currentId: string | null = folderId;
 
@@ -166,6 +204,36 @@ export default function SubjectMaterialPage() {
       loadContents();
     }
     setCreatingFolder(false);
+  };
+
+  const handleCreateLink = async () => {
+    if (!newLinkTitle.trim() || !newLinkUrl.trim() || !subject) return;
+    setCreatingLink(true);
+
+    let url = newLinkUrl.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+
+    const { error } = await supabase.from('material_links').insert({
+      subject,
+      folder_id: currentFolderId,
+      title: newLinkTitle.trim(),
+      url,
+      description: newLinkDesc.trim() || null,
+    });
+
+    if (error) {
+      toast({ title: '링크 추가 실패', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: '링크가 추가되었습니다' });
+      setNewLinkTitle('');
+      setNewLinkUrl('');
+      setNewLinkDesc('');
+      setShowNewLink(false);
+      loadContents();
+    }
+    setCreatingLink(false);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -239,12 +307,13 @@ export default function SubjectMaterialPage() {
         await supabase.storage.from('materials').remove([file.storage_path]);
       }
       await supabase.from('material_files').delete().eq('id', deleteTarget.id);
+    } else if (deleteTarget.type === 'link') {
+      await supabase.from('material_links').delete().eq('id', deleteTarget.id);
     } else {
-      // Delete folder (cascade will handle children in DB, but we need to clean storage)
       await supabase.from('material_folders').delete().eq('id', deleteTarget.id);
     }
 
-    toast({ title: `${deleteTarget.type === 'folder' ? '폴더' : '파일'}가 삭제되었습니다` });
+    toast({ title: `삭제되었습니다` });
     setDeleteTarget(null);
     setDeleting(false);
     loadContents();
@@ -262,6 +331,8 @@ export default function SubjectMaterialPage() {
     );
   }
 
+  const hasContent = folders.length > 0 || files.length > 0 || links.length > 0;
+
   return (
     <ProtectedRoute>
       <AppLayout>
@@ -269,10 +340,14 @@ export default function SubjectMaterialPage() {
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h1 className="text-2xl font-bold text-foreground">{config.label} 자료실</h1>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button variant="outline" size="sm" onClick={() => setShowNewFolder(true)} className="gap-1.5">
                 <FolderPlus className="w-4 h-4" />
-                새 폴더
+                <span className="hidden sm:inline">새 폴더</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowNewLink(true)} className="gap-1.5">
+                <LinkIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">링크 추가</span>
               </Button>
               <Button
                 variant="default"
@@ -282,7 +357,7 @@ export default function SubjectMaterialPage() {
                 className="gap-1.5"
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                파일 업로드
+                <span className="hidden sm:inline">파일 업로드</span>
               </Button>
             </div>
           </div>
@@ -319,11 +394,18 @@ export default function SubjectMaterialPage() {
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
-            ) : folders.length === 0 && files.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
+            ) : !hasContent ? (
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
                 <FolderOpen className="w-12 h-12 opacity-40" />
                 <p>이 폴더는 비어있습니다</p>
-                <p className="text-xs">폴더를 만들거나 파일을 업로드하세요</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowNewFolder(true)} className="gap-1">
+                    <FolderPlus className="w-3.5 h-3.5" /> 폴더 만들기
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowNewLink(true)} className="gap-1">
+                    <LinkIcon className="w-3.5 h-3.5" /> 링크 추가
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -347,6 +429,44 @@ export default function SubjectMaterialPage() {
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
+                  </div>
+                ))}
+
+                {/* Links (OneDrive etc.) */}
+                {links.map((link) => (
+                  <div
+                    key={link.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors group"
+                  >
+                    <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                      {getLinkIcon(link.url)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{link.title}</p>
+                      {link.description && (
+                        <p className="text-xs text-muted-foreground truncate">{link.description}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 sm:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        asChild
+                      >
+                        <a href={link.url} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => setDeleteTarget({ type: 'link', id: link.id, name: link.title })}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
 
@@ -414,8 +534,46 @@ export default function SubjectMaterialPage() {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowNewFolder(false)}>취소</Button>
                 <Button onClick={handleCreateFolder} disabled={!newFolderName.trim() || creatingFolder}>
-                  {creatingFolder ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                  {creatingFolder && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
                   만들기
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* New Link Dialog */}
+          <Dialog open={showNewLink} onOpenChange={setShowNewLink}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>외부 링크 추가</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Input
+                  placeholder="링크 제목 (예: 중3 수학 문제집)"
+                  value={newLinkTitle}
+                  onChange={(e) => setNewLinkTitle(e.target.value)}
+                  autoFocus
+                />
+                <Input
+                  placeholder="URL (OneDrive, Google Drive 등)"
+                  value={newLinkUrl}
+                  onChange={(e) => setNewLinkUrl(e.target.value)}
+                />
+                <Textarea
+                  placeholder="설명 (선택)"
+                  value={newLinkDesc}
+                  onChange={(e) => setNewLinkDesc(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowNewLink(false)}>취소</Button>
+                <Button
+                  onClick={handleCreateLink}
+                  disabled={!newLinkTitle.trim() || !newLinkUrl.trim() || creatingLink}
+                >
+                  {creatingLink && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                  추가
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -425,9 +583,7 @@ export default function SubjectMaterialPage() {
           <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {deleteTarget?.type === 'folder' ? '폴더 삭제' : '파일 삭제'}
-                </AlertDialogTitle>
+                <AlertDialogTitle>삭제 확인</AlertDialogTitle>
                 <AlertDialogDescription>
                   "{deleteTarget?.name}"을(를) 삭제하시겠습니까?
                   {deleteTarget?.type === 'folder' && ' 하위 파일과 폴더도 함께 삭제됩니다.'}
@@ -436,7 +592,7 @@ export default function SubjectMaterialPage() {
               <AlertDialogFooter>
                 <AlertDialogCancel>취소</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-destructive-foreground">
-                  {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                  {deleting && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
                   삭제
                 </AlertDialogAction>
               </AlertDialogFooter>
