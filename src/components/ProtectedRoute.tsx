@@ -12,9 +12,10 @@ type AllowedRole = 'admin' | 'teacher' | 'assistant' | 'any';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: AllowedRole[];
+  allowedEmails?: string[];
 }
 
-export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails }: ProtectedRouteProps) {
   const { user, loading, role, isTrial, trialExpiresAt, isTrialExpired, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -31,7 +32,8 @@ export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRo
 
     if (!loading && user && role) {
       // Check if user has required role
-      const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role);
+      const emailAllowed = allowedEmails?.includes(user.email || '');
+      const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role) || emailAllowed;
       
       if (!hasAccess) {
         // Users without access get redirected to dashboard (accessible by all roles)
@@ -96,7 +98,8 @@ export function ProtectedRoute({ children, allowedRoles = ['any'] }: ProtectedRo
   }
 
   // Check access
-  const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role);
+  const emailAllowed = allowedEmails?.includes(user.email || '');
+  const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role) || emailAllowed;
   if (!hasAccess) {
     return null;
   }

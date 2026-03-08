@@ -3,7 +3,7 @@ import Students from './Students';
 
 export default function StudentsPage() {
   return (
-    <ProtectedRoute allowedRoles={['admin']}>
+    <ProtectedRoute allowedRoles={['admin']} allowedEmails={['bfkor8810@naver.com']}>
       <Students />
     </ProtectedRoute>
   );

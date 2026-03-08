@@ -5,9 +5,11 @@ import { TextbookDistributionTab } from './TextbookDistributionTab';
 import { TextbookPaymentTab } from './TextbookPaymentTab';
 import { useAuth } from '@/lib/auth';
 
+const PAYMENT_ALLOWED_EMAILS = ['bfkor8810@naver.com'];
+
 export function TextbookManagement() {
-  const { role } = useAuth();
-  const canSeePayment = role === 'admin' || role === 'assistant';
+  const { user, role } = useAuth();
+  const canSeePayment = role === 'admin' || role === 'assistant' || PAYMENT_ALLOWED_EMAILS.includes(user?.email || '');
 
   return (
     <div className="space-y-6">
