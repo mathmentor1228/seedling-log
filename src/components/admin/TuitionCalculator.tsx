@@ -251,85 +251,87 @@ export function TuitionCalculator() {
 
       {/* Result */}
       {feeNum > 0 && totalSessions > 0 && (
-        <Card className="p-5 bg-primary/5 border-primary/20">
-          <h4 className="text-sm font-semibold text-foreground mb-4">정산 결과</h4>
-          <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-            <div className="bg-card rounded-lg p-3 border border-border">
-              <p className="text-muted-foreground text-xs">총 회차</p>
-              <p className="text-xl font-bold text-foreground">{totalSessions}<span className="text-sm font-normal">회</span></p>
+        <>
+          <Card className="p-5 bg-primary/5 border-primary/20">
+            <h4 className="text-sm font-semibold text-foreground mb-4">정산 결과</h4>
+            <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+              <div className="bg-card rounded-lg p-3 border border-border">
+                <p className="text-muted-foreground text-xs">총 회차</p>
+                <p className="text-xl font-bold text-foreground">{totalSessions}<span className="text-sm font-normal">회</span></p>
+              </div>
+              <div className="bg-card rounded-lg p-3 border border-border">
+                <p className="text-muted-foreground text-xs">수강 회차</p>
+                <p className="text-xl font-bold text-primary">{attendedSessions}<span className="text-sm font-normal">회</span></p>
+              </div>
+              <div className="bg-card rounded-lg p-3 border border-border">
+                <p className="text-muted-foreground text-xs">1회당 수업료</p>
+                <p className="text-lg font-bold text-foreground">{Math.round(perSession).toLocaleString()}<span className="text-sm font-normal">원</span></p>
+              </div>
+              <div className="bg-card rounded-lg p-3 border border-primary/30">
+                <p className="text-muted-foreground text-xs">정산 금액</p>
+                <p className="text-xl font-bold text-primary">{prorated.toLocaleString()}<span className="text-sm font-normal">원</span></p>
+              </div>
             </div>
-            <div className="bg-card rounded-lg p-3 border border-border">
-              <p className="text-muted-foreground text-xs">수강 회차</p>
-              <p className="text-xl font-bold text-primary">{attendedSessions}<span className="text-sm font-normal">회</span></p>
+
+            {attendedSessions > 0 && attendedSessions < totalSessions && (
+              <div className="text-xs text-muted-foreground bg-card rounded-md p-2.5 border border-border mb-3">
+                💡 {feeNum.toLocaleString()}원 ÷ {totalSessions}회 × {attendedSessions}회 = <strong className="text-foreground">{prorated.toLocaleString()}원</strong>
+              </div>
+            )}
+
+            <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5 w-full">
+              <Copy className="w-3.5 h-3.5" /> 정산 내역 복사
+            </Button>
+          </Card>
+
+          {/* 학부모 안내 문자 */}
+          <Card className="p-5 border-accent/30">
+            <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              학부모 안내 문자
+            </h4>
+
+            <div className="mb-3">
+              <label className="text-sm font-medium text-foreground mb-1.5 block">학생 이름</label>
+              <Input
+                placeholder="예: 홍길동"
+                value={studentName}
+                onChange={e => setStudentName(e.target.value)}
+                className="text-sm"
+              />
             </div>
-            <div className="bg-card rounded-lg p-3 border border-border">
-              <p className="text-muted-foreground text-xs">1회당 수업료</p>
-              <p className="text-lg font-bold text-foreground">{Math.round(perSession).toLocaleString()}<span className="text-sm font-normal">원</span></p>
-            </div>
-            <div className="bg-card rounded-lg p-3 border border-primary/30">
-              <p className="text-muted-foreground text-xs">정산 금액</p>
-              <p className="text-xl font-bold text-primary">{prorated.toLocaleString()}<span className="text-sm font-normal">원</span></p>
-            </div>
-          </div>
 
-          {attendedSessions > 0 && attendedSessions < totalSessions && (
-            <div className="text-xs text-muted-foreground bg-card rounded-md p-2.5 border border-border mb-3">
-              💡 {feeNum.toLocaleString()}원 ÷ {totalSessions}회 × {attendedSessions}회 = <strong className="text-foreground">{prorated.toLocaleString()}원</strong>
-            </div>
-          )}
+            {(() => {
+              const dayLabels = selectedDays.map(d => DAYS_OF_WEEK.find(x => x.key === d)?.label).join(', ');
+              const name = studentName || '○○○';
+              const isPartial = attendedSessions > 0 && attendedSessions < totalSessions;
+              const msg = isPartial
+                ? `안녕하세요, ${name} 학생 학부모님.\n\n${name} 학생의 수업료 정산 안내드립니다.\n\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 수강 회차: ${attendedSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n■ 1회당 수업료: ${Math.round(perSession).toLocaleString()}원\n■ 정산 금액: ${prorated.toLocaleString()}원\n\n(${feeNum.toLocaleString()}원 ÷ ${totalSessions}회 × ${attendedSessions}회 = ${prorated.toLocaleString()}원)\n\n궁금하신 점이 있으시면 편하게 연락 주세요.\n감사합니다.`
+                : `안녕하세요, ${name} 학생 학부모님.\n\n${name} 학생의 수업료 안내드립니다.\n\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n\n궁금하신 점이 있으시면 편하게 연락 주세요.\n감사합니다.`;
 
-          <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5 w-full">
-            <Copy className="w-3.5 h-3.5" /> 정산 내역 복사
-          </Button>
-        </Card>
-
-        {/* 학부모 안내 문자 */}
-        <Card className="p-5 border-accent/30">
-          <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-            <MessageSquare className="w-4 h-4" />
-            학부모 안내 문자
-          </h4>
-
-          <div className="mb-3">
-            <label className="text-sm font-medium text-foreground mb-1.5 block">학생 이름</label>
-            <Input
-              placeholder="예: 홍길동"
-              value={studentName}
-              onChange={e => setStudentName(e.target.value)}
-              className="text-sm"
-            />
-          </div>
-
-          {(() => {
-            const dayLabels = selectedDays.map(d => DAYS_OF_WEEK.find(x => x.key === d)?.label).join(', ');
-            const name = studentName || '○○○';
-            const isPartial = attendedSessions > 0 && attendedSessions < totalSessions;
-            const msg = isPartial
-              ? `안녕하세요, ${name} 학생 학부모님.\n\n${name} 학생의 수업료 정산 안내드립니다.\n\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 수강 회차: ${attendedSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n■ 1회당 수업료: ${Math.round(perSession).toLocaleString()}원\n■ 정산 금액: ${prorated.toLocaleString()}원\n\n(${feeNum.toLocaleString()}원 ÷ ${totalSessions}회 × ${attendedSessions}회 = ${prorated.toLocaleString()}원)\n\n궁금하신 점이 있으시면 편하게 연락 주세요.\n감사합니다.`
-              : `안녕하세요, ${name} 학생 학부모님.\n\n${name} 학생의 수업료 안내드립니다.\n\n■ 수업 기간: ${periodLabel}\n■ 수업 요일: ${dayLabels}\n■ 전체 수업 회차: ${totalSessions}회\n■ 월 수업료: ${feeNum.toLocaleString()}원\n\n궁금하신 점이 있으시면 편하게 연락 주세요.\n감사합니다.`;
-
-            return (
-              <>
-                <Textarea
-                  readOnly
-                  value={msg}
-                  className="text-sm min-h-[200px] bg-muted/30 resize-none"
-                />
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="gap-1.5 w-full mt-3"
-                  onClick={() => {
-                    navigator.clipboard.writeText(msg);
-                    toast.success('안내 문자가 복사되었습니다');
-                  }}
-                >
-                  <Copy className="w-3.5 h-3.5" /> 안내 문자 복사
-                </Button>
-              </>
-            );
-          })()}
-        </Card>
+              return (
+                <>
+                  <Textarea
+                    readOnly
+                    value={msg}
+                    className="text-sm min-h-[200px] bg-muted/30 resize-none"
+                  />
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-1.5 w-full mt-3"
+                    onClick={() => {
+                      navigator.clipboard.writeText(msg);
+                      toast.success('안내 문자가 복사되었습니다');
+                    }}
+                  >
+                    <Copy className="w-3.5 h-3.5" /> 안내 문자 복사
+                  </Button>
+                </>
+              );
+            })()}
+          </Card>
+        </>
       )}
     </div>
   );
