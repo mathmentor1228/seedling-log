@@ -47,6 +47,7 @@ interface Assignment {
 
 // Sort students by grade: 초1,초2,...중1,중2,중3,고1,고2,고3
 const LEVEL_ORDER: Record<string, number> = { '초': 0, '중': 1, '고': 2 };
+const LEVEL_LABEL: Record<string, string> = { '초': '초등', '중': '중등', '고': '고등' };
 
 function sortStudents(students: Student[]): Student[] {
   return [...students].sort((a, b) => {
@@ -63,6 +64,21 @@ function sortStudents(students: Student[]): Student[] {
 function gradeLabel(s: Student): string {
   if (s.school_level && s.grade_year) return `${s.school_level}${s.grade_year}`;
   return s.grade || '-';
+}
+
+/** Group sorted students by school level, returning sections with headers */
+function groupByLevel(studentList: Student[]): { level: string; label: string; students: Student[] }[] {
+  const sections: { level: string; label: string; students: Student[] }[] = [];
+  let currentLevel = '';
+  for (const s of studentList) {
+    const lvl = s.school_level || '기타';
+    if (lvl !== currentLevel) {
+      currentLevel = lvl;
+      sections.push({ level: lvl, label: LEVEL_LABEL[lvl] || '기타', students: [] });
+    }
+    sections[sections.length - 1].students.push(s);
+  }
+  return sections;
 }
 
 interface Props {
@@ -296,42 +312,49 @@ export function MathQuizAssignManager({ quizzes }: Props) {
                           onChange={e => setSearchQuery(e.target.value)}
                         />
                       </div>
-                      <div className="max-h-[300px] overflow-y-auto border rounded-lg divide-y">
-                        {filteredStudents.map(s => {
-                          const alreadyAssigned = getAssignedStudents(selectedQuizId).has(s.id);
-                          const isSelected = assignSelection.has(s.id);
-                          return (
-                            <div key={s.id} className="flex items-center gap-3 p-2.5 hover:bg-muted/30">
-                              <Checkbox
-                                checked={isSelected || alreadyAssigned}
-                                disabled={alreadyAssigned}
-                                onCheckedChange={(checked) => {
-                                  const newSet = new Set(assignSelection);
-                                  if (checked) newSet.add(s.id); else newSet.delete(s.id);
-                                  setAssignSelection(newSet);
-                                }}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm font-medium">{s.name}</span>
-                                <Badge variant="secondary" className="ml-2 text-xs">{gradeLabel(s)}</Badge>
-                              </div>
-                              {alreadyAssigned && (
-                                <div className="flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                                  <span className="text-xs text-green-600">배정됨</span>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    onClick={() => handleUnassign(selectedQuizId, s.id)}
-                                  >
-                                    <Trash2 className="w-3 h-3 text-destructive" />
-                                  </Button>
-                                </div>
-                              )}
+                      <div className="max-h-[300px] overflow-y-auto border rounded-lg">
+                        {groupByLevel(filteredStudents).map(section => (
+                          <div key={section.level}>
+                            <div className="sticky top-0 z-10 bg-muted px-3 py-1.5 text-xs font-bold text-muted-foreground border-b">
+                              {section.label}
                             </div>
-                          );
-                        })}
+                            {section.students.map(s => {
+                              const alreadyAssigned = getAssignedStudents(selectedQuizId).has(s.id);
+                              const isSelected = assignSelection.has(s.id);
+                              return (
+                                <div key={s.id} className="flex items-center gap-3 p-2.5 hover:bg-muted/30 border-b last:border-b-0">
+                                  <Checkbox
+                                    checked={isSelected || alreadyAssigned}
+                                    disabled={alreadyAssigned}
+                                    onCheckedChange={(checked) => {
+                                      const newSet = new Set(assignSelection);
+                                      if (checked) newSet.add(s.id); else newSet.delete(s.id);
+                                      setAssignSelection(newSet);
+                                    }}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-medium">{s.name}</span>
+                                    <Badge variant="secondary" className="ml-2 text-xs">{gradeLabel(s)}</Badge>
+                                  </div>
+                                  {alreadyAssigned && (
+                                    <div className="flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                                      <span className="text-xs text-green-600">배정됨</span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6"
+                                        onClick={() => handleUnassign(selectedQuizId, s.id)}
+                                      >
+                                        <Trash2 className="w-3 h-3 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">
@@ -407,19 +430,26 @@ export function MathQuizAssignManager({ quizzes }: Props) {
                         </div>
 
                         {isEditing ? (
-                          <div className="max-h-[250px] overflow-y-auto border rounded-lg divide-y">
-                            {students.map(s => (
-                              <div key={s.id} className="flex items-center gap-3 p-2 hover:bg-muted/30">
-                                <Checkbox
-                                  checked={groupMemberSelection.has(s.id)}
-                                  onCheckedChange={(checked) => {
-                                    const newSet = new Set(groupMemberSelection);
-                                    if (checked) newSet.add(s.id); else newSet.delete(s.id);
-                                    setGroupMemberSelection(newSet);
-                                  }}
-                                />
-                                <span className="text-sm">{s.name}</span>
-                                <Badge variant="secondary" className="text-xs">{gradeLabel(s)}</Badge>
+                          <div className="max-h-[250px] overflow-y-auto border rounded-lg">
+                            {groupByLevel(students).map(section => (
+                              <div key={section.level}>
+                                <div className="sticky top-0 z-10 bg-muted px-3 py-1.5 text-xs font-bold text-muted-foreground border-b">
+                                  {section.label}
+                                </div>
+                                {section.students.map(s => (
+                                  <div key={s.id} className="flex items-center gap-3 p-2 hover:bg-muted/30 border-b last:border-b-0">
+                                    <Checkbox
+                                      checked={groupMemberSelection.has(s.id)}
+                                      onCheckedChange={(checked) => {
+                                        const newSet = new Set(groupMemberSelection);
+                                        if (checked) newSet.add(s.id); else newSet.delete(s.id);
+                                        setGroupMemberSelection(newSet);
+                                      }}
+                                    />
+                                    <span className="text-sm">{s.name}</span>
+                                    <Badge variant="secondary" className="text-xs">{gradeLabel(s)}</Badge>
+                                  </div>
+                                ))}
                               </div>
                             ))}
                           </div>
