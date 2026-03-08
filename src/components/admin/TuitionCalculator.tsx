@@ -45,6 +45,7 @@ export function TuitionCalculator() {
   const [totalFee, setTotalFee] = useState<string>('');
   const [attendedIndices, setAttendedIndices] = useState<Set<number>>(new Set());
   const [studentName, setStudentName] = useState('');
+  const [subjectName, setSubjectName] = useState('');
 
   // 시작일~종료일 계산: startDay일 ~ 다음달 (startDay-1)일
   const { periodStart, periodEnd, periodLabel } = useMemo(() => {
