@@ -1138,6 +1138,86 @@ export type Database = {
           },
         ]
       }
+      math_concept_quizzes: {
+        Row: {
+          concept_id: string
+          created_at: string
+          id: string
+          questions: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          concept_id: string
+          created_at?: string
+          id?: string
+          questions?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          concept_id?: string
+          created_at?: string
+          id?: string
+          questions?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "math_concept_quizzes_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "math_concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      math_concepts: {
+        Row: {
+          course: string
+          created_at: string
+          created_by: string | null
+          extracted_text: string | null
+          grade: string
+          id: string
+          pdf_file_size: number | null
+          pdf_original_name: string
+          pdf_storage_path: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          course: string
+          created_at?: string
+          created_by?: string | null
+          extracted_text?: string | null
+          grade: string
+          id?: string
+          pdf_file_size?: number | null
+          pdf_original_name: string
+          pdf_storage_path: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          course?: string
+          created_at?: string
+          created_by?: string | null
+          extracted_text?: string | null
+          grade?: string
+          id?: string
+          pdf_file_size?: number | null
+          pdf_original_name?: string
+          pdf_storage_path?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ops_changelog: {
         Row: {
           author_id: string | null
@@ -1179,6 +1259,8 @@ export type Database = {
           full_name: string
           id: string
           is_active: boolean
+          student_course: string | null
+          student_grade: string | null
           updated_at: string
         }
         Insert: {
@@ -1188,6 +1270,8 @@ export type Database = {
           full_name: string
           id: string
           is_active?: boolean
+          student_course?: string | null
+          student_grade?: string | null
           updated_at?: string
         }
         Update: {
@@ -1197,6 +1281,8 @@ export type Database = {
           full_name?: string
           id?: string
           is_active?: boolean
+          student_course?: string | null
+          student_grade?: string | null
           updated_at?: string
         }
         Relationships: []
