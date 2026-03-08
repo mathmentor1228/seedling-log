@@ -104,7 +104,7 @@ export function MathQuizAssignManager({ quizzes }: Props) {
   const [assignSelection, setAssignSelection] = useState<Set<string>>(new Set());
   const [assigning, setAssigning] = useState(false);
 
-  const publishedQuizzes = quizzes.filter(q => q.status === 'published');
+  const availableQuizzes = quizzes.filter(q => q.status === 'draft' || q.status === 'published');
 
   const fetchAll = async () => {
     setLoading(true);
