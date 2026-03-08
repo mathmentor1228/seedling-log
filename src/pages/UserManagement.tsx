@@ -34,6 +34,7 @@ interface UserWithRole {
   is_active: boolean;
   roles: AppRole[];
   trial_expires_at?: string | null;
+  assigned_subject?: string | null;
 }
 
 export default function UserManagement() {
