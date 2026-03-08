@@ -63,7 +63,7 @@ export default function UserManagement() {
       if (rolesError) throw rolesError;
 
       // Merge profiles with roles
-      const usersWithRoles: UserWithRole[] = (profiles || []).map((profile) => {
+      const usersWithRoles: UserWithRole[] = ((profiles || []) as any[]).map((profile) => {
         const userRoleEntries = (userRoles || []).filter((ur) => ur.user_id === profile.id);
         const roles = userRoleEntries.map((ur) => ur.role);
         const trialEntry = userRoleEntries.find((ur) => ur.trial_expires_at);
@@ -71,6 +71,7 @@ export default function UserManagement() {
           ...profile,
           roles,
           trial_expires_at: trialEntry?.trial_expires_at || null,
+          assigned_subject: profile.assigned_subject || null,
         };
       });
 
