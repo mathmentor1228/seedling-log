@@ -262,6 +262,12 @@ ${studentName} 학생의 등록이 완료되었습니다.
               <Input value={classTime} onChange={e => setClassTime(e.target.value)} placeholder="예: 월수금 16:00~18:00" />
             </div>
 
+            {/* 학생 연락처 */}
+            <div>
+              <label className="text-sm font-medium text-foreground">학생 연락처</label>
+              <Input value={studentPhone} onChange={e => setStudentPhone(e.target.value)} placeholder="010-0000-0000" />
+            </div>
+
             {/* 학부모 연락처 */}
             <div>
               <label className="text-sm font-medium text-foreground">학부모 연락처</label>
