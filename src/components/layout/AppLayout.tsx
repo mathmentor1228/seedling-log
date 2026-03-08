@@ -243,9 +243,12 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="w-8 h-8 bg-sidebar-foreground rounded flex items-center justify-center flex-shrink-0">
               <span className="text-sidebar-background font-bold text-base">M</span>
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h1 className="font-semibold text-sidebar-foreground text-sm tracking-tight">MENTOR LOG</h1>
               <p className="text-[10px] text-sidebar-foreground/60 truncate">더멘토학원 학습·운영 관리</p>
+            </div>
+            <div className="hidden lg:block">
+              <AdminOfficeBell />
             </div>
           </div>
 
