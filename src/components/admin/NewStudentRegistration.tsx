@@ -275,12 +275,15 @@ ${studentPageUrl}
 멘토쌤이야. 앞으로 잘해보자!`;
   };
 
-  const handleCopy = async () => {
+  const [copiedType, setCopiedType] = useState<'parent' | 'student' | null>(null);
+
+  const handleCopy = async (type: 'parent' | 'student') => {
     try {
-      await navigator.clipboard.writeText(generateMessage());
-      setCopied(true);
-      toast.success('문자 내용이 복사되었습니다');
-      setTimeout(() => setCopied(false), 2000);
+      const text = type === 'parent' ? generateParentMessage() : generateStudentMessage();
+      await navigator.clipboard.writeText(text);
+      setCopiedType(type);
+      toast.success(type === 'parent' ? '학부모 문자 복사됨' : '학생 문자 복사됨');
+      setTimeout(() => setCopiedType(null), 2000);
     } catch {
       toast.error('복사에 실패했습니다');
     }
