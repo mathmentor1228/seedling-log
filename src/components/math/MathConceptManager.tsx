@@ -337,6 +337,9 @@ export function MathConceptManager() {
         />
       )}
 
+      {/* Quiz Assignment */}
+      <MathQuizAssignManager quizzes={allQuizzes} />
+
       {/* Submission Review */}
       <QuizSubmissionReview />
     </div>
