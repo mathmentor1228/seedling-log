@@ -7,11 +7,12 @@
    Upload, 
    Star, 
    Calendar, 
-   BookOpen,
-   LogOut,
-   User,
-   Languages
- } from 'lucide-react';
+  BookOpen,
+  LogOut,
+  User,
+  Languages,
+  Calculator
+} from 'lucide-react';
  import { Button } from '@/components/ui/button';
  import {
    DropdownMenu,
