@@ -103,6 +103,7 @@ export function TuitionCalculator() {
     setMonth(now.getMonth());
     setYear(now.getFullYear());
     setStartDay(1);
+    setStudentName('');
   };
 
   const handleCopy = () => {
