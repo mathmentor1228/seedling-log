@@ -186,6 +186,14 @@ serve(async (req) => {
       throw new Error("AI가 퀴즈를 생성하지 못했습니다.");
     }
 
+    // Shuffle questions (Fisher-Yates) to avoid PDF order
+    for (let i = questions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [questions[i], questions[j]] = [questions[j], questions[i]];
+    }
+    // Re-number after shuffle
+    questions = questions.map((q: any, idx: number) => ({ ...q, question_number: idx + 1 }));
+
     // Upsert quiz
     const { data: existingQuiz } = await supabase
       .from("math_concept_quizzes")
