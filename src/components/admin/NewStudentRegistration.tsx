@@ -113,6 +113,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       tuitionFee ? `수강료: ${tuitionFee}` : '',
       classTime ? `수업시간: ${classTime}` : '',
       parentPhone ? `학부모연락처: ${parentPhone}` : '',
+      studentPhone ? `학생연락처: ${studentPhone}` : '',
       `등록상태: ${enrollmentStatus}`,
       notes ? `비고: ${notes}` : '',
     ].filter(Boolean).join('\n');
