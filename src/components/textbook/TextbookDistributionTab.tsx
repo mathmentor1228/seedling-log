@@ -105,7 +105,8 @@ export function TextbookDistributionTab() {
 
   const handleCopyMessage = (dist: Distribution) => {
     const bookName = dist.textbook_orders?.textbook_name || '교재';
-    const msg = `[더멘토 교재비 안내]\n\n안녕하세요. ${dist.student_name} 학부모님\n${dist.student_name} 학생의 교재비 안내드립니다.\n\n■ 교재명: ${bookName}\n■ 수량: ${dist.quantity}권\n■ 금액: ${dist.total_amount.toLocaleString()}원\n\n해당 결제는\n✔ 앱 결제\n✔ 원내 방문 키오스크 결제\n✔ 계좌이체 (${ACCOUNT_INFO})\n모두 가능합니다.\n\n자세한 수납안내가 필요하신 경우\n문자 남겨주시면 안내 드리겠습니다.\n귀한아이 믿고 맡겨주셔서 감사합니다.`;
+    const subject = '수학'; // TODO: could be dynamic based on order context
+    const msg = `우리 아이의 가능성을 믿습니다.\n\n#${dist.student_name} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : #${bookName}\n2. 교재가격 : #${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 담장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
     navigator.clipboard.writeText(msg);
     toast.success('안내 문자가 복사되었습니다');
   };
