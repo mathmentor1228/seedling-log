@@ -2166,6 +2166,111 @@ export type Database = {
           },
         ]
       }
+      textbook_distributions: {
+        Row: {
+          confirmed_by: string | null
+          created_at: string
+          distributed_by: string
+          distributed_by_name: string
+          id: string
+          order_id: string
+          paid_at: string | null
+          payment_status: string
+          quantity: number
+          student_id: string
+          student_name: string
+          total_amount: number
+        }
+        Insert: {
+          confirmed_by?: string | null
+          created_at?: string
+          distributed_by: string
+          distributed_by_name: string
+          id?: string
+          order_id: string
+          paid_at?: string | null
+          payment_status?: string
+          quantity?: number
+          student_id: string
+          student_name: string
+          total_amount?: number
+        }
+        Update: {
+          confirmed_by?: string | null
+          created_at?: string
+          distributed_by?: string
+          distributed_by_name?: string
+          id?: string
+          order_id?: string
+          paid_at?: string | null
+          payment_status?: string
+          quantity?: number
+          student_id?: string
+          student_name?: string
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "textbook_distributions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "textbook_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "textbook_distributions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      textbook_orders: {
+        Row: {
+          approved_at: string | null
+          approved_by_name: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          quantity: number
+          requested_by: string
+          requested_by_name: string
+          status: string
+          textbook_name: string
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by_name?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          quantity?: number
+          requested_by: string
+          requested_by_name: string
+          status?: string
+          textbook_name: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by_name?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          quantity?: number
+          requested_by?: string
+          requested_by_name?: string
+          status?: string
+          textbook_name?: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
