@@ -168,6 +168,48 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       assignee_name: assigneeText !== '-' ? assigneeText : null,
     } as any);
 
+    // Create teacher notification requests for the day before start date
+    if (selectedAssignees.length > 0) {
+      const dayBefore = new Date(startDate);
+      dayBefore.setDate(dayBefore.getDate() - 1);
+      const taskDate = format(dayBefore, 'yyyy-MM-dd');
+
+      // Look up teacher profiles by name
+      const { data: teacherProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('full_name', selectedAssignees);
+
+      const classroomLines = getClassroomInfo();
+      const taskNotes = [
+        `📋 신규생 기본정보`,
+        `• 이름: ${studentName.trim()}`,
+        `• 학교: ${school.trim() || '미입력'}`,
+        `• 학년: ${schoolLevel}${gradeYear}`,
+        `• 수업시간: ${classTime || '미정'}`,
+        classroomLines.length > 0 ? `\n🏫 강의실\n${classroomLines.join('\n')}` : '',
+      ].filter(Boolean).join('\n');
+
+      if (teacherProfiles && teacherProfiles.length > 0) {
+        const taskInserts = teacherProfiles.map(tp => ({
+          title: `[신규생 안내] ${studentName.trim()} (${schoolLevel}${gradeYear}) — ${format(startDate, 'M/d')} 수업 시작`,
+          task_type: '공지',
+          task_date: taskDate,
+          due_date: taskDate,
+          assignee: tp.full_name,
+          related_teacher_id: tp.id,
+          related_student_id: (studentData as any)?.id || null,
+          notes: taskNotes,
+          status: 'todo',
+          priority: 'high',
+          created_by: user!.id,
+          created_by_role: 'admin',
+        }));
+
+        await supabase.from('assistant_tasks').insert(taskInserts as any);
+      }
+    }
+
     toast.success(
       enrollmentStatus === '재원예정'
         ? `${studentName} 학생이 '재원예정'으로 등록되었습니다`
