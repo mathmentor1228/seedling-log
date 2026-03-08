@@ -227,6 +227,16 @@ export function AdminOfficeBoard() {
                   </SelectContent>
                 </Select>
               </div>
+              {STUDENT_NAME_CATEGORIES.includes(newCategory) && (
+                <div>
+                  <label className="text-sm font-medium text-foreground">학생 이름</label>
+                  <Input value={newStudentName} onChange={e => {
+                    setNewStudentName(e.target.value);
+                    const prefix = newCategory === '퇴원생 안내' ? '[퇴원]' : '[과목변경]';
+                    setNewTitle(`${prefix} ${e.target.value}`);
+                  }} placeholder="학생 이름 입력" />
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium text-foreground">제목 *</label>
                 <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="업무 제목" />
