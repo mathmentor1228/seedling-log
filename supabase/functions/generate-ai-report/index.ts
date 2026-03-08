@@ -5,12 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// v2.7-student-voice: Student report with teacher-voice tone
+// v2.8-trust-upgrade: Weekly highlight + next lesson preview + quantitative data
 // REPORT-ENGINE-DEBUG-V1
 // REPORT_SUBJECT_ISOLATION_V1: Per-subject generation with terminology validation
 // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: AI must ONLY rephrase teacher-written content
 // STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Natural, observation-first, non-formulaic student reports
-const TEMPLATE_VERSION = 'v2.7-student-voice';
+// REPORT_TRUST_UPGRADE_V1: Weekly highlight, next lesson preview, quantitative homework data
+const TEMPLATE_VERSION = 'v2.8-trust-upgrade';
 const FORMATTER_NAME = 'renderReportFromJson-v2.7';
 
 // Forbidden patterns for FINAL text validation (runs before save)
@@ -109,10 +110,10 @@ function validateSubjectVocabulary(subject: string, content: string): { isValid:
   };
 }
 
-// REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Teacher-grounded system prompt
+// REPORT_TEACHER_GROUNDED_NARRATIVE_V1 + REPORT_TRUST_UPGRADE_V1: Teacher-grounded system prompt
 const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부모에게 보내는 주간 학습 리포트를 JSON 형식으로 작성합니다.
 
-[v2.6 TEACHER-GROUNDED NARRATIVE 규칙 - 핵심 원칙]
+[v2.8 TEACHER-GROUNDED NARRATIVE + TRUST UPGRADE 규칙]
 
 **[REPORT_TEACHER_GROUNDED_NARRATIVE_V1] 교사 기록 기반 원칙**
 
@@ -131,6 +132,23 @@ const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부�
 - 한국어 호칭: 이름 뒤에 "이" (받침 있을 때) 또는 그대로 (받침 없을 때) 사용
 - 예: "세인이는", "민준이는", "도연이는", "세윤이는"
 - openingNote에서 반드시 아이 이름으로 시작하세요. 예: "세인이는 이번 주 수업에서..."
+
+**[REPORT_TRUST_UPGRADE_V1] 신뢰 구축 원칙**
+
+1. **Weekly Highlight (주간 하이라이트):**
+   - openingNote에 그 주에 가장 눈에 띄었던 긍정적 관찰 한 가지를 구체적으로 언급
+   - 예: "세인이는 이번 주 수학 수업에서 분수 통분 문제를 스스로 풀어보려는 시도가 눈에 띄었습니다."
+   - 추상적 칭찬 금지 ("잘했습니다", "열심히 했습니다" 등)
+   - 반드시 교사 기록에서 확인된 구체적 행동만 언급
+
+2. **정량 데이터 반영:**
+   - 제공된 숙제 완료율 데이터를 closingNote 또는 과목 서술에 자연스럽게 녹여서 표현
+   - 예: "이번 주 숙제 완료율은 80%로, 꾸준한 학습 습관이 유지되고 있습니다."
+   - 숫자를 기계적으로 나열하지 말고 의미를 해석하여 서술
+
+3. **신뢰 어조:**
+   - 학부모가 "선생님이 우리 아이를 잘 보고 있구나"라고 느낄 수 있도록, 구체적 관찰 장면 위주로 서술
+   - closingNote에 다음 주 구체적 수업 방향을 포함 (교사 기록 기반)
 
 **정보 출처 (Source of Truth):**
 반드시 아래 필드에서 직접 확인된 내용만 서술:
@@ -153,8 +171,8 @@ const JSON_PARENT_PROMPT = `당신은 학원 담당 선생님입니다. 학부�
       "homeworkSummary": "숙제 상태 (기록된 경우만)"
     }
   ],
-  "openingNote": "아이 이름으로 시작하는 수업 참여 모습 (관찰 기반)",
-  "closingNote": "교사가 기록한 다음 수업 방향 요약",
+  "openingNote": "아이 이름 + 이번 주 가장 눈에 띈 구체적 긍정 관찰 한 가지",
+  "closingNote": "교사가 기록한 다음 수업 방향 요약 + 숙제 완료율 데이터 해석",
   "adminTag": "GREEN|YELLOW|RED"
 }
 
@@ -195,10 +213,10 @@ const RETRY_SYSTEM_PROMPT = `당신은 학원 담당 선생님입니다.
 
 반드시 유효한 JSON만 출력하세요.`;
 
-// STUDENT_REPORT_TONE_V2_TEACHER_VOICE: Teacher-voice prompt for student messages
+// STUDENT_REPORT_TONE_V2_TEACHER_VOICE + REPORT_TRUST_UPGRADE_V1: Teacher-voice prompt for student messages
 const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니다. 학생에게 직접 말하듯 짧은 주간 메시지를 작성합니다.
 
-[STUDENT_REPORT_TONE_V2_TEACHER_VOICE 핵심 규칙]
+[STUDENT_REPORT_TONE_V2_TEACHER_VOICE + TRUST_UPGRADE 핵심 규칙]
 
 **A) 학생 이름 호칭**
 - 메시지 첫 문장에서 학생 이름을 다정하게 불러주세요.
@@ -237,13 +255,20 @@ const NARRATIVE_LOCK_STUDENT_PROMPT = `당신은 학원 담당 선생님입니�
 - "조금 더 시간이 필요한 부분이야."
 단, 어조는 차분하고 존중하는 톤 유지.
 
+**F) [REPORT_TRUST_UPGRADE_V1] 다음 수업 예고 (Next Lesson Preview)**
+- 메시지 마지막에 다음 시간에 할 내용을 1문장으로 짧게 예고
+- 교사가 기록한 next_lesson_goal 기반으로만 작성
+- 예: "다음 시간에는 분수 나눗셈 '뒤집어 곱하기' 원리를 다시 같이 볼 거야."
+- next_lesson_goal이 없으면 "다음 시간에 이어서 같이 볼 거야."로 마무리
+
 [형식]
 - 과목별 2-4문장
 - 이모지 1개만 (끝에)
 - 글머리 기호(·, -, •) 사용 금지
+- 마지막에 다음 수업 예고 1문장 필수
 
 [예시]
-"민준아, 이번 수업에서 분수 통분할 때 공배수 찾는 부분에서 잠시 멈칫하는 모습이 보였어. 두세 번 다시 시도하면서 감을 잡아가더라. 다음 시간에 분수 나눗셈에서 '뒤집어 곱하기' 원리 다시 같이 볼 거야. 📝"
+"민준아, 이번 수업에서 분수 통분할 때 공배수 찾는 부분에서 잠시 멈칫하는 모습이 보였어. 두세 번 다시 시도하면서 감을 잡아가더라. 다음 시간에는 분수 나눗셈에서 '뒤집어 곱하기' 원리를 다시 같이 볼 거야. 📝"
 
 반드시 한국어로 작성하세요.`;
 
@@ -1672,7 +1697,7 @@ async function generateIsolatedSubjectsReport(
   };
 }
 
-// REPORT_SUBJECT_ISOLATION_V1: Generate opening and closing notes separately
+// REPORT_SUBJECT_ISOLATION_V1 + REPORT_TRUST_UPGRADE_V1: Generate opening and closing notes with trust data
 async function generateOpeningClosingNotes(
   apiKey: string,
   studentName: string,
@@ -1686,13 +1711,33 @@ async function generateOpeningClosingNotes(
   
   // REPORT_TEACHER_GROUNDED_NARRATIVE_V1: Collect teacher-written next_lesson_goals
   const teacherGoals: string[] = [];
-  for (const data of Object.values(subjectData)) {
+  // REPORT_TRUST_UPGRADE_V1: Collect best observation for weekly highlight
+  const positiveObservations: string[] = [];
+  
+  for (const [subj, data] of Object.entries(subjectData)) {
     for (const lesson of data.lessons) {
       if (lesson.next_lesson_goal && lesson.next_lesson_goal.trim().length > 5) {
-        teacherGoals.push(lesson.next_lesson_goal.trim());
+        teacherGoals.push(`[${subj}] ${lesson.next_lesson_goal.trim()}`);
+      }
+      if (lesson.learning_issues_note && lesson.learning_issues_note.trim().length > 10) {
+        positiveObservations.push(`[${subj} ${lesson.lesson_date}] ${lesson.learning_issues_note.trim()}`);
       }
     }
   }
+
+  // REPORT_TRUST_UPGRADE_V1: Calculate homework completion stats
+  let hwCompleted = 0, hwPartial = 0, hwNotDone = 0, hwTotal = 0;
+  for (const data of Object.values(subjectData)) {
+    for (const lesson of data.lessons) {
+      if (lesson.homework_status && lesson.homework_status !== 'none_assigned' && lesson.homework_status !== 'none') {
+        hwTotal++;
+        if (lesson.homework_status === 'completed') hwCompleted++;
+        else if (lesson.homework_status === 'partial') hwPartial++;
+        else if (lesson.homework_status === 'not_done') hwNotDone++;
+      }
+    }
+  }
+  const hwRate = hwTotal > 0 ? Math.round((hwCompleted / hwTotal) * 100) : null;
   
   // REPORT_TEMPLATE_DB_V1: Use custom prompt for opening/closing if available
   const systemPrompt = customParentPrompt
@@ -1706,20 +1751,30 @@ async function generateOpeningClosingNotes(
 - 도입부(openingNote)에서 반드시 아이 이름을 다정하게 불러주세요.
 - 한국어 호칭: 이름 뒤에 "이" 사용 (예: "세인이는", "민준이는")
 
+**[REPORT_TRUST_UPGRADE_V1] 주간 하이라이트 & 정량 데이터:**
+- openingNote: 아이 이름 + 이번 주 가장 눈에 띈 구체적 관찰 장면 1개
+- closingNote: 다음 주 수업 방향 + 숙제 완료율 데이터를 자연스럽게 녹여서 서술
+
 반드시 유효한 JSON만 출력하세요.`
     : `당신은 학원 담당 선생님입니다. 주간 리포트의 도입부와 마무리를 JSON 형식으로 작성합니다.
 
-[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 규칙]
+[REPORT_TEACHER_GROUNDED_NARRATIVE_V1 + TRUST_UPGRADE 규칙]
 
 **핵심:** 교사가 기록한 내용만 다시 표현. 추측/창작 금지.
 
 **아이 이름 호칭:**
 - 도입부(openingNote)에서 반드시 아이 이름을 다정하게 불러주세요.
 - 한국어 호칭: 이름 뒤에 "이" 사용 (예: "세인이는", "민준이는", "도연이는")
-- 예: "세인이는 이번 주에도 꾸준히 수업에 참여했습니다."
 
-- 도입부: 아이 이름으로 시작하는 수업 참여 모습 (관찰 기반)
-- 마무리: 교사가 기록한 next_lesson_goal 내용 요약 (없으면 일반 문구)
+**[REPORT_TRUST_UPGRADE_V1] 도입부 - Weekly Highlight:**
+- 아이 이름으로 시작하고, 이번 주 관찰 기록 중 가장 구체적인 긍정 장면 하나를 언급
+- "전반적으로 안정", "잘 따라옴" 같은 추상적 표현 금지
+- 예: "세인이는 이번 주 수학 수업에서 분수 통분 문제를 직접 풀어보려는 시도가 있었습니다."
+
+**[REPORT_TRUST_UPGRADE_V1] 마무리 - 정량 데이터 + 다음 방향:**
+- 교사가 기록한 next_lesson_goal 내용 요약
+- 숙제 완료율 정보를 한 문장으로 자연스럽게 포함
+- 예: "이번 주 숙제 완료율은 75%였으며, 다음 주에는 ~을 중심으로 수업을 이어갈 예정입니다."
 
 **금지:** 
 - "전반적으로", "안정적"
@@ -1733,11 +1788,13 @@ async function generateOpeningClosingNotes(
 기간: ${weekStart} ~ ${weekEnd}
 과목: ${subjects.join(', ')}
 총 수업: ${totalLessons}회
-${teacherGoals.length > 0 ? `\n[교사가 기록한 다음 수업 방향]:\n${teacherGoals.slice(0, 3).map(g => `- ${g}`).join('\n')}` : '\n[교사가 기록한 다음 수업 방향]: 없음'}
+${hwRate !== null ? `\n[이번 주 숙제 완료율]: ${hwRate}% (완료 ${hwCompleted}회 / 일부완료 ${hwPartial}회 / 미완료 ${hwNotDone}회, 총 ${hwTotal}회)` : '\n[이번 주 숙제]: 배정 없음'}
+${positiveObservations.length > 0 ? `\n[이번 주 교사 관찰 기록 (하이라이트 소스)]:\n${positiveObservations.slice(0, 3).join('\n')}` : ''}
+${teacherGoals.length > 0 ? `\n[교사가 기록한 다음 수업 방향]:\n${teacherGoals.slice(0, 3).join('\n')}` : '\n[교사가 기록한 다음 수업 방향]: 없음'}
 
 {
-  "openingNote": "학생의 수업 참여 모습 (전반적으로/안정적 금지)",
-  "closingNote": "${teacherGoals.length > 0 ? '교사가 기록한 다음 방향 요약' : '다음 주도 학습을 이어가겠습니다'}"
+  "openingNote": "아이 이름 + 이번 주 가장 눈에 띈 구체적 관찰 1개 (전반적으로/안정적 금지)",
+  "closingNote": "${teacherGoals.length > 0 ? '다음 수업 방향 요약 + 숙제 완료율 자연스럽게 포함' : '다음 주도 학습을 이어가겠습니다'}"
 }
 
 JSON만 출력하세요.`;
@@ -1846,7 +1903,12 @@ ${isRetry ? `\n⚠️ 재생성 요청: 이전 메시지에서 다음 위반 감
 **필수 구조 (과목별 2-4문장):**
 1. 수업에서 교사가 본 구체적 행동
 2. 학생의 반응 (태도, 어려움, 시도)
-3. (선택) 다음 시간에 볼 내용
+3. (필수) 다음 시간에 볼 내용 - 교사가 기록한 next_lesson_goal 기반
+
+**[REPORT_TRUST_UPGRADE_V1] 다음 수업 예고 (필수):**
+- 마지막 과목 뒤에 "다음 시간에는 ~을/를 같이 볼 거야." 형태로 예고 1문장 필수
+- 교사가 기록한 다음 수업 방향을 사용
+- 기록이 없으면 "다음 시간에 이어서 같이 볼 거야."
 
 **권장 표현:**
 - "${studentName}아, 이번 수업에서는 ~하는 모습이 보였어."
@@ -1857,7 +1919,7 @@ ${isRetry ? `\n⚠️ 재생성 요청: 이전 메시지에서 다음 위반 감
 이번 주 관찰 데이터:
 ${observationData}
 
-위 관찰 기록을 바탕으로 교사가 학생에게 직접 말하듯 차분하게 작성하세요.`;
+위 관찰 기록을 바탕으로 교사가 학생에게 직접 말하듯 차분하게 작성하세요. 마지막에 반드시 다음 수업 예고 1문장을 포함하세요.`;
 
     try {
       console.log(`[generate-ai-report] Student message attempt ${attempts}/${maxRetries}${isRetry ? ` (violations: ${lastViolations.join(',')})` : ''}`);
