@@ -32,7 +32,8 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
 
     if (!loading && user && role) {
       // Check if user has required role
-      const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role);
+      const emailAllowed = allowedEmails?.includes(user.email || '');
+      const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role) || emailAllowed;
       
       if (!hasAccess) {
         // Users without access get redirected to dashboard (accessible by all roles)
