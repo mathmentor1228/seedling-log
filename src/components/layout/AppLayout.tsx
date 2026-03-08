@@ -29,6 +29,7 @@ import {
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
+import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
 
 interface AppLayoutProps {
   children: ReactNode;
