@@ -53,6 +53,15 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
     }
   };
 
+  const typeBadge = (t: string) => {
+    switch (t) {
+      case 'fill_blank': return <Badge variant="outline" className="text-xs">빈칸 채우기</Badge>;
+      case 'true_false': return <Badge variant="outline" className="text-xs border-blue-400 text-blue-600">참/거짓</Badge>;
+      case 'short_answer': return <Badge variant="outline" className="text-xs border-green-500 text-green-600">단답형</Badge>;
+      default: return <Badge variant="outline" className="text-xs">{t}</Badge>;
+    }
+  };
+
   const updateQuestion = (idx: number, field: keyof QuizQuestion, value: string) => {
     setEditedQuestions(prev => prev.map((q, i) =>
       i === idx ? { ...q, [field]: value } : q
