@@ -92,7 +92,7 @@ export function TextbookOrderTab() {
     else {
       toast.success('교재 신청이 등록되었습니다');
       setShowDialog(false);
-      setName(''); setQty('1'); setPrice(''); setNotes('');
+      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes('');
       fetchOrders();
     }
     setCreating(false);
