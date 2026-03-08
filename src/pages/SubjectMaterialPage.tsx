@@ -376,6 +376,12 @@ export default function SubjectMaterialPage() {
             </div>
           </div>
 
+          {/* Upload size notice */}
+          <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>직접 업로드는 <strong className="text-foreground">10MB 이하</strong>만 가능합니다. 그 이상의 파일은 <strong className="text-foreground">OneDrive / Google Drive 링크</strong>로 등록해주세요.</span>
+          </div>
+
           {/* Breadcrumb */}
           <nav className="flex items-center gap-1 text-sm flex-wrap">
             <Button
