@@ -37,7 +37,7 @@ interface Student {
   name: string;
 }
 
-const ACCOUNT_INFO = '국민은행 123-456-789012 더멘토학원';
+const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
 
 export function TextbookDistributionTab() {
   const { user, role } = useAuth();
