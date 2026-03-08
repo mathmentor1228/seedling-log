@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Loader2, CalendarIcon, Copy, CheckCircle2, UserPlus } from 'lucide-react';
 import { format, isAfter, startOfDay } from 'date-fns';
@@ -23,9 +24,19 @@ interface NewStudentRegistrationProps {
   onCreated: () => void;
 }
 
-const SUBJECTS = ['수학', '영어', '국어', '수학+영어', '수학+국어', '영어+국어', '수학+영어+국어'];
+const SUBJECTS = ['수학', '영어', '국어'];
 const SCHOOL_LEVELS = ['초', '중', '고'];
 const GRADE_YEARS = [1, 2, 3, 4, 5, 6];
+
+const TEACHERS = [
+  { name: '최윤기', room: '4층 2강의실' },
+  { name: '조준희', room: '4층 4강의실' },
+  { name: '서미정', room: '4층 5강의실' },
+  { name: '이나연', room: '3층 6강의실' },
+  { name: '정선호', room: '3층 7강의실' },
+  { name: '김민희', room: '3층 8강의실' },
+  { name: '황은지(원장)', room: '3층 9강의실' },
+];
 
 export function NewStudentRegistration({ open, onOpenChange, userName, onCreated }: NewStudentRegistrationProps) {
   const { user } = useAuth();
@@ -38,8 +49,8 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
   const [schoolLevel, setSchoolLevel] = useState('중');
   const [gradeYear, setGradeYear] = useState<number>(1);
   const [school, setSchool] = useState('');
-  const [subjects, setSubjects] = useState('');
-  const [assignee, setAssignee] = useState('');
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [tuitionFee, setTuitionFee] = useState('');
   const [classTime, setClassTime] = useState('');
@@ -52,8 +63,8 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     setSchoolLevel('중');
     setGradeYear(1);
     setSchool('');
-    setSubjects('');
-    setAssignee('');
+    setSelectedSubjects([]);
+    setSelectedAssignees([]);
     setStartDate(undefined);
     setTuitionFee('');
     setClassTime('');
@@ -62,6 +73,23 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     setNotes('');
     setCreated(false);
     setCopied(false);
+  };
+
+  const toggleItem = (list: string[], item: string, setter: (v: string[]) => void) => {
+    setter(list.includes(item) ? list.filter(i => i !== item) : [...list, item]);
+  };
+
+  const subjectsText = selectedSubjects.join(', ') || '-';
+  const assigneeText = selectedAssignees.join(', ') || '-';
+
+  // Build classroom info for the message based on selected assignees
+  const getClassroomInfo = () => {
+    return selectedAssignees
+      .map(name => {
+        const t = TEACHERS.find(t => t.name === name);
+        return t ? `• ${t.name} 선생님: ${t.room}` : null;
+      })
+      .filter(Boolean);
   };
 
   const handleCreate = async () => {
@@ -74,7 +102,6 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     const start = startOfDay(startDate);
     const enrollmentStatus = isAfter(start, today) ? '재원예정' : '재원';
 
-    // 1) Create student record
     const { data: studentData, error: studentError } = await supabase
       .from('students')
       .insert({
@@ -87,7 +114,8 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
         student_phone: studentPhone.trim() || null,
         enrollment_status: enrollmentStatus,
         notes: [
-          subjects ? `수강과목: ${subjects}` : '',
+          selectedSubjects.length ? `수강과목: ${subjectsText}` : '',
+          selectedAssignees.length ? `담당: ${assigneeText}` : '',
           tuitionFee ? `수강료: ${tuitionFee}` : '',
           classTime ? `수업시간: ${classTime}` : '',
           notes ? notes : '',
@@ -103,12 +131,12 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       return;
     }
 
-    // 2) Create admin office task
     const description = [
       `학생: ${studentName.trim()}`,
       `학년: ${schoolLevel}${gradeYear}`,
       school ? `학교: ${school}` : '',
-      `수강과목: ${subjects}`,
+      `수강과목: ${subjectsText}`,
+      `담당자: ${assigneeText}`,
       `수업시작일: ${format(startDate, 'yyyy-MM-dd')}`,
       tuitionFee ? `수강료: ${tuitionFee}` : '',
       classTime ? `수업시간: ${classTime}` : '',
@@ -124,7 +152,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       description,
       created_by: user!.id,
       created_by_name: userName,
-      assignee_name: assignee.trim() || null,
+      assignee_name: assigneeText !== '-' ? assigneeText : null,
     } as any);
 
     toast.success(
@@ -139,16 +167,22 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
   };
 
   const generateMessage = () => {
+    const classroomLines = getClassroomInfo();
+    const classroomSection = classroomLines.length > 0
+      ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n`
+      : '';
+
     return `안녕하세요, 학부모님.
 
 ${studentName} 학생의 등록이 완료되었습니다.
 
 📋 수업 안내
-• 수강 과목: ${subjects || '-'}
+• 수강 과목: ${subjectsText}
+• 담당 선생님: ${assigneeText}
 • 수업 시작일: ${startDate ? format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko }) : '-'}
 • 수업 시간: ${classTime || '-'}
 • 수강료: ${tuitionFee || '-'}
-
+${classroomSection}
 준비물 및 기타 안내사항은 첫 수업 시 안내드리겠습니다.
 감사합니다.`;
   };
@@ -212,21 +246,50 @@ ${studentName} 학생의 등록이 완료되었습니다.
               <Input value={school} onChange={e => setSchool(e.target.value)} placeholder="OO중학교" />
             </div>
 
-            {/* 수강과목 */}
+            {/* 수강과목 - 복수선택 */}
             <div>
-              <label className="text-sm font-medium text-foreground">수강 과목</label>
-              <Select value={subjects} onValueChange={setSubjects}>
-                <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
-                <SelectContent>
-                  {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium text-foreground mb-2 block">수강 과목 (복수선택)</label>
+              <div className="flex flex-wrap gap-2">
+                {SUBJECTS.map(s => (
+                  <label key={s} className="flex items-center gap-1.5 cursor-pointer">
+                    <Checkbox
+                      checked={selectedSubjects.includes(s)}
+                      onCheckedChange={() => toggleItem(selectedSubjects, s, setSelectedSubjects)}
+                    />
+                    <span className="text-sm">{s}</span>
+                  </label>
+                ))}
+              </div>
+              {selectedSubjects.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {selectedSubjects.map(s => <Badge key={s} variant="secondary">{s}</Badge>)}
+                </div>
+              )}
             </div>
 
-            {/* 담당자 */}
+            {/* 담당자 - 복수선택 */}
             <div>
-              <label className="text-sm font-medium text-foreground">담당자</label>
-              <Input value={assignee} onChange={e => setAssignee(e.target.value)} placeholder="담당자 이름" />
+              <label className="text-sm font-medium text-foreground mb-2 block">담당자 (복수선택)</label>
+              <div className="flex flex-wrap gap-x-3 gap-y-2">
+                {TEACHERS.map(t => (
+                  <label key={t.name} className="flex items-center gap-1.5 cursor-pointer">
+                    <Checkbox
+                      checked={selectedAssignees.includes(t.name)}
+                      onCheckedChange={() => toggleItem(selectedAssignees, t.name, setSelectedAssignees)}
+                    />
+                    <span className="text-sm">{t.name}</span>
+                    <span className="text-xs text-muted-foreground">({t.room})</span>
+                  </label>
+                ))}
+              </div>
+              {selectedAssignees.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {selectedAssignees.map(n => {
+                    const t = TEACHERS.find(t => t.name === n);
+                    return <Badge key={n} variant="outline">{n} · {t?.room}</Badge>;
+                  })}
+                </div>
+              )}
             </div>
 
             {/* 수업시작일 */}
@@ -287,7 +350,6 @@ ${studentName} 학생의 등록이 완료되었습니다.
           </div>
         ) : (
           <div className="space-y-4 mt-2">
-            {/* Success */}
             <Card className="p-4 bg-primary/5 border-primary/20">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -295,14 +357,14 @@ ${studentName} 학생의 등록이 완료되었습니다.
               </div>
               <div className="text-sm text-muted-foreground space-y-0.5">
                 <p>{studentName} ({schoolLevel}{gradeYear}) — {school || '학교 미입력'}</p>
-                <p>수강과목: {subjects || '-'} / 시작일: {startDate ? format(startDate, 'yyyy-MM-dd') : '-'}</p>
+                <p>수강과목: {subjectsText} / 담당: {assigneeText}</p>
+                <p>시작일: {startDate ? format(startDate, 'yyyy-MM-dd') : '-'}</p>
                 <p>등록상태: <Badge variant={isAfter(startOfDay(startDate!), startOfDay(new Date())) ? 'secondary' : 'default'} className="ml-1">
                   {isAfter(startOfDay(startDate!), startOfDay(new Date())) ? '재원예정' : '재원'}
                 </Badge></p>
               </div>
             </Card>
 
-            {/* Registration message */}
             <div>
               <label className="text-sm font-medium text-foreground mb-2 block">📩 등록 안내 문자</label>
               <Card className="p-3 bg-muted/30">
