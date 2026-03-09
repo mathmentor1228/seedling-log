@@ -42,6 +42,7 @@ export function TextbookPaymentTab() {
   // Depositor name popup state
   const [paymentTarget, setPaymentTarget] = useState<Distribution | null>(null);
   const [depositorName, setDepositorName] = useState('');
+  const [parentNameInput, setParentNameInput] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -140,8 +141,8 @@ export function TextbookPaymentTab() {
   // Open depositor name popup instead of directly confirming
   const openPaymentConfirm = (dist: Distribution) => {
     setPaymentTarget(dist);
-    // Pre-fill with parent_name or student_name
     setDepositorName(dist.parent_name || dist.student_name);
+    setParentNameInput(dist.parent_name || '');
   };
 
   const handleConfirmPayment = async () => {
@@ -152,10 +153,19 @@ export function TextbookPaymentTab() {
       confirmed_by: userName,
       depositor_name: depositorName.trim() || null,
     } as any).eq('id', paymentTarget.id);
-    if (error) toast.error('수납 처리 실패');
-    else { toast.success(`${paymentTarget.student_name} 수납 완료 처리되었습니다`); fetchData(); }
+    if (error) { toast.error('수납 처리 실패'); return; }
+
+    // Sync parent_name to students table if provided
+    const trimmedParent = parentNameInput.trim();
+    if (trimmedParent) {
+      await supabase.from('students').update({ parent_name: trimmedParent } as any).eq('id', paymentTarget.student_id);
+    }
+
+    toast.success(`${paymentTarget.student_name} 수납 완료 처리되었습니다`);
     setPaymentTarget(null);
     setDepositorName('');
+    setParentNameInput('');
+    fetchData();
   };
 
   const handleRevertPayment = async (dist: Distribution) => {
@@ -385,6 +395,18 @@ export function TextbookPaymentTab() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 mt-2">
+            <div>
+              <label className="text-sm font-medium text-foreground">학부모 성함</label>
+              <Input
+                value={parentNameInput}
+                onChange={(e) => setParentNameInput(e.target.value)}
+                placeholder="학부모 이름 (학생정보에 저장됩니다)"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                입력하면 학생 정보에도 자동 반영됩니다
+              </p>
+            </div>
             <div>
               <label className="text-sm font-medium text-foreground">실제 입금자 성함</label>
               <Input
