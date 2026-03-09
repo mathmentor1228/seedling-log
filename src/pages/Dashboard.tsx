@@ -880,7 +880,7 @@ export default function Dashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('lesson_date', today);
       
-      console.log(`[Dashboard] ADMIN-ROSTER-DEBUG-V1: today=${today}, dayOfWeek=${dayOfWeek}, scheduledSlots=${scheduledSlotsCount}, rosterStudents=${rosterRows.length}, todayLessonRecords=${todayLessonRecordsCount}`);
+      
       
       setAdminRosterData({
         teachers,
