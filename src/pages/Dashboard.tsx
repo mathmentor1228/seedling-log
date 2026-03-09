@@ -3278,7 +3278,7 @@ export default function Dashboard() {
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                {photoViewHw.student_name} - {photoViewHw.subject} 숙제 사진
+                {photoViewHw.student_name} - {photoViewHw.subject} 숙제 제출물
               </DialogTitle>
             </DialogHeader>
             <SubmissionImageCarousel
@@ -3286,6 +3286,16 @@ export default function Dashboard() {
               submittedAt={photoViewHw.submitted_at}
               note={photoViewHw.submission_text}
             />
+            {photoViewHw.submission_audio_url && (
+              <div className="rounded-lg border bg-background p-3 space-y-2">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Mic className="w-3 h-3" /> 음성 제출
+                </p>
+                <audio controls className="w-full" src={photoViewHw.submission_audio_url}>
+                  브라우저에서 오디오 재생을 지원하지 않습니다.
+                </audio>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       )}
