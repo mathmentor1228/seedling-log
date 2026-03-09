@@ -1575,7 +1575,8 @@ export default function Dashboard() {
               homeworkCheckNote: lr.homework_check_note || null,
               homeworkCheckLessonId: lr.homework_check_note ? lr.id : null,
               hasNextHomework: hwAssignmentSet.has(lr.id),
-              hasPhotoSubmission: !!pd,
+              hasPhotoSubmission: !!pd && pd.urls.length > 0,
+              hasAudioSubmission: !!pd?.audioUrl,
               photoData: pd || null,
               // HW-STATUS-SYNC-V1: Include homework_status from lesson_records
               homeworkStatus: lr.homework_status || null,
