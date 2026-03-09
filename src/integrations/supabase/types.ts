@@ -2440,6 +2440,8 @@ export type Database = {
           created_at: string
           distributed_by: string
           distributed_by_name: string
+          distributed_confirmed_at: string | null
+          distributed_confirmed_by: string | null
           id: string
           order_id: string
           paid_at: string | null
@@ -2455,6 +2457,8 @@ export type Database = {
           created_at?: string
           distributed_by: string
           distributed_by_name: string
+          distributed_confirmed_at?: string | null
+          distributed_confirmed_by?: string | null
           id?: string
           order_id: string
           paid_at?: string | null
@@ -2470,6 +2474,8 @@ export type Database = {
           created_at?: string
           distributed_by?: string
           distributed_by_name?: string
+          distributed_confirmed_at?: string | null
+          distributed_confirmed_by?: string | null
           id?: string
           order_id?: string
           paid_at?: string | null
