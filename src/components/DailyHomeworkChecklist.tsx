@@ -231,6 +231,7 @@ export default function DailyHomeworkChecklist() {
           checked_at: h.checked_at,
           submitted_at: h.submitted_at,
           submission_image_url: h.submission_image_url,
+          submission_audio_url: h.submission_audio_url || null,
           submission_count: (subMap[h.id] || []).length + (h.submission_image_url ? 1 : 0),
           teacher_id: teacherId,
           teacher_name: teacherId === 'unassigned' ? '미배정' : (tMap[teacherId] || '알 수 없음'),
