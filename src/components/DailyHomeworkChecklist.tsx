@@ -62,6 +62,7 @@ interface DailyHomeworkItem {
   checked_at: string | null;
   submitted_at: string | null;
   submission_image_url: string | null;
+  submission_audio_url: string | null;
   submission_count: number;
   teacher_id: string;
   teacher_name: string;
