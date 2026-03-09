@@ -3151,13 +3151,8 @@ export default function Dashboard() {
           <SectionHeader 
             icon={<Wrench className="w-4 h-4" />}
             title="도구 & 분석" 
-            description="숙제 관리, 요청, 학습 분석"
+            description="숙제 관리, 학습 분석"
           />
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <AssistantRequestsWidget />
-            <AcademyCalendar />
-          </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <DailyHomeworkManager />
