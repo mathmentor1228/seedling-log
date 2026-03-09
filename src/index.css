@@ -178,7 +178,7 @@
   }
 
   .stat-card {
-    @apply bg-card rounded-2xl border border-border p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/20;
+    @apply bg-card rounded-2xl border border-border p-5 shadow-card transition-all duration-200 hover:shadow-card-hover hover:border-primary/20;
   }
 
   .data-table {
