@@ -268,7 +268,7 @@ export default function AssistantDashboard() {
         end_time: string;
       }[];
 
-      console.log('[AssistantDashboard] RPC returned', rosterRowsRaw.length, 'roster rows');
+      
 
       // Extract unique teachers from roster rows
       const teacherMap = new Map<string, string>();
