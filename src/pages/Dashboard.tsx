@@ -3153,7 +3153,7 @@ export default function Dashboard() {
 
       {/* ━━━ 섹션 6: 학원 관리 (Admin only) ━━━ */}
       {isAdmin(role) && (
-        <div className="space-y-4 pt-2">
+        <div className="space-y-3 pt-1">
           <SectionHeader 
             icon={<Settings2 className="w-4 h-4" />}
             title="학원 관리" 
