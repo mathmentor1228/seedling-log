@@ -510,6 +510,15 @@ export default function Students() {
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="parent_name">학부모 성함</Label>
+                    <Input
+                      id="parent_name"
+                      value={formData.parent_name}
+                      onChange={(e) => setFormData({ ...formData, parent_name: e.target.value })}
+                      placeholder="학부모 이름"
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
                       id="email"
