@@ -2443,6 +2443,8 @@ export type Database = {
           distributed_confirmed_at: string | null
           distributed_confirmed_by: string | null
           id: string
+          message_resent_at: string | null
+          message_sent_at: string | null
           order_id: string
           paid_at: string | null
           payment_status: string
@@ -2460,6 +2462,8 @@ export type Database = {
           distributed_confirmed_at?: string | null
           distributed_confirmed_by?: string | null
           id?: string
+          message_resent_at?: string | null
+          message_sent_at?: string | null
           order_id: string
           paid_at?: string | null
           payment_status?: string
@@ -2477,6 +2481,8 @@ export type Database = {
           distributed_confirmed_at?: string | null
           distributed_confirmed_by?: string | null
           id?: string
+          message_resent_at?: string | null
+          message_sent_at?: string | null
           order_id?: string
           paid_at?: string | null
           payment_status?: string

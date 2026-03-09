@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Loader2, BookMarked, Copy, ShoppingCart, CheckCircle2 } from 'lucide-react';
+import { Plus, Loader2, BookMarked, Copy, ShoppingCart, CheckCircle2, Send } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TextbookOrder {
@@ -49,6 +49,9 @@ export function TextbookDistributionTab() {
   const [showDialog, setShowDialog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [userName, setUserName] = useState('');
+  // MESSAGE-RESEND-V1: Resend confirmation dialog
+  const [resendTarget, setResendTarget] = useState<Distribution | null>(null);
+  const [resendType, setResendType] = useState<'payment' | 'selfpurchase'>('payment');
 
   const [selectedOrder, setSelectedOrder] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
@@ -120,20 +123,44 @@ export function TextbookDistributionTab() {
     setCreating(false);
   };
 
-  const handleCopyMessage = (dist: Distribution) => {
+  const copyPaymentMessage = (dist: Distribution) => {
     const bookName = dist.textbook_orders?.textbook_name || '교재';
     const subject = dist.textbook_orders?.subject || '수학';
     const msg = `더멘토학원 교재안내\n\n#${dist.student_name} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : #${bookName}\n2. 교재가격 : #${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
     navigator.clipboard.writeText(msg);
-    toast.success('안내 문자가 복사되었습니다');
   };
 
-  const handleCopySelfPurchaseMessage = (dist: Distribution) => {
+  const copySelfPurchaseMessage = (dist: Distribution) => {
     const bookName = dist.textbook_orders?.textbook_name || '교재';
     const subject = dist.textbook_orders?.subject || '수학';
     const msg = `더멘토학원 교재안내\n\n#${dist.student_name} 학생 ${subject} 교재 개별 구매 안내\n\n1. 교재명 : #${bookName}\n\n해당 교재는 가정에서 직접 구매해주셔야 합니다.\n인터넷 서점(교보문고, 알라딘, YES24 등)에서 구매 가능합니다.\n\n수업 진행을 위해 빠른 준비 부탁드립니다.\n감사합니다.`;
     navigator.clipboard.writeText(msg);
-    toast.success('개별구매 안내 문자가 복사되었습니다');
+  };
+
+  const handleSendMessage = async (dist: Distribution, type: 'payment' | 'selfpurchase') => {
+    const alreadySent = !!(dist as any).message_sent_at;
+    if (alreadySent) {
+      // Show resend confirmation
+      setResendTarget(dist);
+      setResendType(type);
+      return;
+    }
+    // First time: copy + record
+    if (type === 'payment') copyPaymentMessage(dist);
+    else copySelfPurchaseMessage(dist);
+    await supabase.from('textbook_distributions').update({ message_sent_at: new Date().toISOString() } as any).eq('id', dist.id);
+    toast.success('메시지가 복사되었습니다. 발송완료 처리됨');
+    fetchData();
+  };
+
+  const handleConfirmResend = async () => {
+    if (!resendTarget) return;
+    if (resendType === 'payment') copyPaymentMessage(resendTarget);
+    else copySelfPurchaseMessage(resendTarget);
+    await supabase.from('textbook_distributions').update({ message_resent_at: new Date().toISOString() } as any).eq('id', resendTarget.id);
+    toast.success('메시지가 복사되었습니다. 재전송 처리됨');
+    setResendTarget(null);
+    fetchData();
   };
 
   const handleConfirmDistribution = async (dist: Distribution) => {
@@ -245,13 +272,21 @@ export function TextbookDistributionTab() {
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       배부: {dist.distributed_by_name} · {format(new Date(dist.created_at), 'MM/dd')}
+                      {(dist as any).message_sent_at && (
+                        <span className="ml-1.5 text-primary">
+                          · 발송완료 {format(new Date((dist as any).message_sent_at), 'MM/dd HH:mm')}
+                          {(dist as any).message_resent_at && (
+                            <> · 재전송 {format(new Date((dist as any).message_resent_at), 'MM/dd HH:mm')}</>
+                          )}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Button size="sm" variant="outline" className="gap-1" onClick={() => handleCopyMessage(dist)}>
-                      <Copy className="w-3.5 h-3.5" />안내문자
+                    <Button size="sm" variant={(dist as any).message_sent_at ? 'ghost' : 'outline'} className="gap-1" onClick={() => handleSendMessage(dist, 'payment')}>
+                      <Send className="w-3.5 h-3.5" />{(dist as any).message_sent_at ? '재전송' : '안내문자'}
                     </Button>
-                    <Button size="sm" variant="outline" className="gap-1 text-muted-foreground" onClick={() => handleCopySelfPurchaseMessage(dist)}>
+                    <Button size="sm" variant="outline" className="gap-1 text-muted-foreground" onClick={() => handleSendMessage(dist, 'selfpurchase')}>
                       <ShoppingCart className="w-3.5 h-3.5" />개별구매
                     </Button>
                   </div>
@@ -315,6 +350,21 @@ export function TextbookDistributionTab() {
       {distributions.length === 0 && (
         <p className="text-center text-sm text-muted-foreground py-12">배부 기록이 없습니다</p>
       )}
+      {/* MESSAGE-RESEND-V1: Resend confirmation dialog */}
+      <Dialog open={!!resendTarget} onOpenChange={(open) => !open && setResendTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>메시지 재전송</DialogTitle>
+            <DialogDescription>
+              {resendTarget?.student_name} 학생에게 {resendType === 'payment' ? '교재비 안내' : '개별구매 안내'} 메시지를 재전송하시겠습니까?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResendTarget(null)}>취소</Button>
+            <Button onClick={handleConfirmResend}>네, 재전송</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
