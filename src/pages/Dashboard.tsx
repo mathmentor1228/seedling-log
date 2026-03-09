@@ -2079,24 +2079,24 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <DashboardHeader role={role || ''} />
       
       {/* ━━━ 섹션 1: 주의사항 & 알림 ━━━ */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         <AttentionSummaryBar items={attentionItems} />
         <ExamDdayBanner />
       </div>
 
       {/* ━━━ 섹션 2: 핵심 지표 ━━━ */}
       {!isAssistant(role) && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <SectionHeader 
             icon={<BarChart3 className="w-4 h-4" />} 
             title="핵심 현황" 
             description="실시간 학원 운영 지표"
           />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {isAdmin(role) && (
               <>
                 <StatCard
@@ -2370,7 +2370,7 @@ export default function Dashboard() {
 
       {/* ━━━ 섹션 4: 오늘 수업 로스터 ━━━ */}
       {(isTeacher(role) || isAdmin(role) || isAssistant(role)) && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {allTodayHolidays.length > 0 && (
             <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
               <CardContent className="py-4">
@@ -3133,14 +3133,14 @@ export default function Dashboard() {
 
       {/* ━━━ 섹션 5: 도구 & 분석 ━━━ */}
       {(isAdmin(role) || isTeacher(role)) && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <SectionHeader 
             icon={<Wrench className="w-4 h-4" />}
             title="도구 & 분석" 
             description="숙제 관리, 요청, 학습 분석"
           />
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <AssistantRequestsWidget />
             <div className="flex items-end">
               <DailyHomeworkManager />
@@ -3153,7 +3153,7 @@ export default function Dashboard() {
 
       {/* ━━━ 섹션 6: 학원 관리 (Admin only) ━━━ */}
       {isAdmin(role) && (
-        <div className="space-y-4 pt-2">
+        <div className="space-y-3 pt-1">
           <SectionHeader 
             icon={<Settings2 className="w-4 h-4" />}
             title="학원 관리" 
