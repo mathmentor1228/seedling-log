@@ -302,7 +302,12 @@ export function TextbookOrderTab() {
                       <Badge variant="success" className="text-[10px]">입고완료</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {order.quantity}권 × {order.unit_price.toLocaleString()}원
+                      입고 {order.quantity}권 × {order.unit_price.toLocaleString()}원
+                      {' · '}배부 {(order as any).distributed_qty || 0}권
+                      {' · '}
+                      <span className={`font-medium ${(order.quantity - ((order as any).distributed_qty || 0)) <= 0 ? 'text-destructive' : 'text-foreground'}`}>
+                        남은 {order.quantity - ((order as any).distributed_qty || 0)}권
+                      </span>
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       신청: {order.requested_by_name} · 입고: {order.approved_by_name} ({order.approved_at && format(new Date(order.approved_at), 'MM/dd')})

@@ -16,6 +16,7 @@ interface TextbookOrder {
   textbook_name: string;
   unit_price: number;
   quantity: number;
+  distributed_qty: number;
   status: string;
 }
 
@@ -81,9 +82,16 @@ export function TextbookDistributionTab() {
     if (!order || !student) return;
 
     const qty = parseInt(distQty) || 1;
+    const remaining = order.quantity - (order.distributed_qty || 0);
+    if (qty > remaining) {
+      toast.error(`재고가 부족합니다. 남은 수량: ${remaining}권`);
+      return;
+    }
+
     const totalAmount = order.unit_price * qty;
 
     setCreating(true);
+    // 1. Insert distribution record
     const { error } = await supabase.from('textbook_distributions').insert({
       order_id: selectedOrder,
       student_id: selectedStudent,
@@ -93,9 +101,15 @@ export function TextbookDistributionTab() {
       distributed_by: user!.id,
       distributed_by_name: userName,
     } as any);
+
     if (error) { toast.error('배부 등록 실패'); console.error(error); }
     else {
-      toast.success(`${student.name} 학생에게 교재 배부가 등록되었습니다`);
+      // 2. Update distributed_qty on textbook_orders
+      await supabase.from('textbook_orders').update({
+        distributed_qty: (order.distributed_qty || 0) + qty,
+      } as any).eq('id', selectedOrder);
+
+      toast.success(`${student.name} 학생에게 교재 배부 완료 (재고 ${remaining - qty}권 남음)`);
       setShowDialog(false);
       setSelectedOrder(''); setSelectedStudent(''); setDistQty('1');
       fetchData();
@@ -106,7 +120,7 @@ export function TextbookDistributionTab() {
   const handleCopyMessage = (dist: Distribution) => {
     const bookName = dist.textbook_orders?.textbook_name || '교재';
     const subject = dist.textbook_orders?.subject || '수학';
-    const msg = `우리 아이의 가능성을 믿습니다.\n\n#${dist.student_name} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : #${bookName}\n2. 교재가격 : #${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
+    const msg = `더멘토학원 교재안내\n\n#${dist.student_name} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : #${bookName}\n2. 교재가격 : #${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
     navigator.clipboard.writeText(msg);
     toast.success('안내 문자가 복사되었습니다');
   };
@@ -114,7 +128,7 @@ export function TextbookDistributionTab() {
   const handleCopySelfPurchaseMessage = (dist: Distribution) => {
     const bookName = dist.textbook_orders?.textbook_name || '교재';
     const subject = dist.textbook_orders?.subject || '수학';
-    const msg = `우리 아이의 가능성을 믿습니다.\n\n#${dist.student_name} 학생 ${subject} 교재 개별 구매 안내\n\n1. 교재명 : #${bookName}\n\n해당 교재는 가정에서 직접 구매해주셔야 합니다.\n인터넷 서점(교보문고, 알라딘, YES24 등)에서 구매 가능합니다.\n\n수업 진행을 위해 빠른 준비 부탁드립니다.\n감사합니다.`;
+    const msg = `더멘토학원 교재안내\n\n#${dist.student_name} 학생 ${subject} 교재 개별 구매 안내\n\n1. 교재명 : #${bookName}\n\n해당 교재는 가정에서 직접 구매해주셔야 합니다.\n인터넷 서점(교보문고, 알라딘, YES24 등)에서 구매 가능합니다.\n\n수업 진행을 위해 빠른 준비 부탁드립니다.\n감사합니다.`;
     navigator.clipboard.writeText(msg);
     toast.success('개별구매 안내 문자가 복사되었습니다');
   };
@@ -123,6 +137,9 @@ export function TextbookDistributionTab() {
 
   const unpaid = distributions.filter(d => d.payment_status === '미납');
   const paid = distributions.filter(d => d.payment_status === '수납완료');
+
+  // Filter orders to only show those with remaining stock
+  const availableOrders = orders.filter(o => (o.quantity - (o.distributed_qty || 0)) > 0);
 
   return (
     <div className="space-y-6">
@@ -140,11 +157,14 @@ export function TextbookDistributionTab() {
                 <Select value={selectedOrder} onValueChange={setSelectedOrder}>
                   <SelectTrigger><SelectValue placeholder="입고된 교재 선택" /></SelectTrigger>
                   <SelectContent>
-                    {orders.map(o => (
-                      <SelectItem key={o.id} value={o.id}>
-                        {o.textbook_name} ({o.unit_price.toLocaleString()}원)
-                      </SelectItem>
-                    ))}
+                    {availableOrders.map(o => {
+                      const remaining = o.quantity - (o.distributed_qty || 0);
+                      return (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.textbook_name} ({o.unit_price.toLocaleString()}원) [남은 {remaining}권]
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -161,12 +181,20 @@ export function TextbookDistributionTab() {
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">권수</label>
-                <Input type="number" min="1" value={distQty} onChange={e => setDistQty(e.target.value)} />
+                <Input type="number" min="1" max={selectedOrder ? (orders.find(o => o.id === selectedOrder)?.quantity || 0) - ((orders.find(o => o.id === selectedOrder) as any)?.distributed_qty || 0) : 99} value={distQty} onChange={e => setDistQty(e.target.value)} />
               </div>
               {selectedOrder && (
-                <p className="text-sm text-muted-foreground">
-                  금액: {((orders.find(o => o.id === selectedOrder)?.unit_price || 0) * (parseInt(distQty) || 1)).toLocaleString()}원
-                </p>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">
+                    금액: {((orders.find(o => o.id === selectedOrder)?.unit_price || 0) * (parseInt(distQty) || 1)).toLocaleString()}원
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    남은 재고: {(() => {
+                      const o = orders.find(o => o.id === selectedOrder);
+                      return o ? o.quantity - (o.distributed_qty || 0) : 0;
+                    })()}권
+                  </p>
+                </div>
               )}
               <Button onClick={handleDistribute} disabled={creating} className="w-full">
                 {creating && <Loader2 className="w-4 h-4 animate-spin mr-2" />}배부 등록
