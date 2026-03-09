@@ -1287,7 +1287,7 @@ export default function Dashboard() {
         return (a.start_time || '').localeCompare(b.start_time || '');
       });
 
-      console.log('[Dashboard] fetchTodayAttendance complete - attendanceUpdated=true, records:', records.length);
+      
       setTodayAttendance(records);
     } catch (error) {
       console.error('Error fetching today attendance:', error);
