@@ -2283,59 +2283,7 @@ export default function Dashboard() {
         </Collapsible>
       )}
 
-      {isAdmin(role) && totalOverdueDrafts > 0 && (
-        <Collapsible open={adminOverdueOpen} onOpenChange={setAdminOverdueOpen}>
-          <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
-            <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-amber-500/5 transition-colors rounded-t-lg">
-                <CardTitle className="flex items-center justify-between text-amber-600">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5" />
-                    24시간 이상 미제출 수업기록 ({totalOverdueDrafts}건)
-                  </div>
-                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${adminOverdueOpen ? 'rotate-180' : ''}`} />
-                </CardTitle>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent>
-                <div className="space-y-4">
-                  {(overdueDrafts || []).map((group) => (
-                    <div key={group?.teacher_id || 'unknown'} className="border rounded-lg p-4 bg-background">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold text-foreground">{group?.teacher_name || '알 수 없음'}</h4>
-                        <span className="text-sm bg-amber-500/10 text-amber-600 px-2 py-1 rounded-full">
-                          {group?.count || 0}건 미제출
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        {(group?.drafts || []).map((draft) => (
-                          <div
-                            key={draft?.id || Math.random()}
-                            className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"
-                          >
-                            <div className="flex items-center gap-3">
-                              <FileEdit className="w-4 h-4 text-amber-500" />
-                              <span className="font-medium">{draft?.student_name || '알 수 없음'}</span>
-                              <span className="text-muted-foreground">{draft?.subject || '-'}</span>
-                              <span className="text-muted-foreground">
-                                {draft?.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
-                              </span>
-                            </div>
-                            <span className="text-amber-600 font-medium">
-                              {draft?.overdue_hours || 0}시간 경과
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-      )}
+      {/* Admin overdue drafts are now shown alongside homework chart above */}
 
       {/* Admin-only roster removed - consolidated into shared "오늘 수업" below */}
 
