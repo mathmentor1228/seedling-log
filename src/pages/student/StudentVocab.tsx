@@ -363,7 +363,7 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                {studyType === 'test' ? '테스트 시작' : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
+                {studyType === 'test' ? '테스트 시작' : studyType === 'listening' ? '듣기 테스트 시작' : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
               </Button>
             </div>
           </>
