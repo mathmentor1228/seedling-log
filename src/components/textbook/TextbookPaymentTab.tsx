@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle2, Ban, Copy, MessageCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, Ban, Copy, Clock } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
