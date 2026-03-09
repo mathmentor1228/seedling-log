@@ -186,7 +186,7 @@ ${questionRef}
       });
 
     // Update student total points
-    await supabase.rpc("", {}).catch(() => {}); // Skip if no RPC
+    // Points update handled below
     const { data: student } = await supabase
       .from("students")
       .select("total_points")
