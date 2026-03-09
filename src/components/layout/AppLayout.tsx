@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
+import { BrandFooter } from '@/components/layout/BrandFooter';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -314,18 +315,20 @@ export function AppLayout({ children }: AppLayoutProps) {
       )}
 
       {/* Main content */}
-      <main className="lg:ml-56 min-h-screen pt-14 lg:pt-0">
-        <div className="p-5 lg:p-8 max-w-7xl mx-auto">
-          {/* Shared dashboard components: Comment Board + Calendar */}
-          {isDashboard && (
-            <div className="space-y-5 mb-6">
-              <TeamNotesBoard />
-              <AcademyCalendar />
-            </div>
-          )}
-          {children}
-        </div>
-      </main>
+      <div className="lg:ml-56 min-h-screen pt-14 lg:pt-0 flex flex-col">
+        <main className="flex-1">
+          <div className="p-5 lg:p-8 max-w-7xl mx-auto">
+            {isDashboard && (
+              <div className="space-y-5 mb-6">
+                <TeamNotesBoard />
+                <AcademyCalendar />
+              </div>
+            )}
+            {children}
+          </div>
+        </main>
+        <BrandFooter />
+      </div>
     </div>
   );
 }

@@ -22,6 +22,7 @@
    DropdownMenuTrigger,
  } from '@/components/ui/dropdown-menu';
  import { cn } from '@/lib/utils';
+ import { BrandFooter } from '@/components/layout/BrandFooter';
  
  interface StudentLayoutProps {
    children: ReactNode;
@@ -102,10 +103,12 @@ const NAV_ITEMS = [
          </div>
        </header>
  
-       {/* Main Content */}
-       <main className="flex-1 px-4 py-5 overflow-auto">
-         {children}
-       </main>
+        {/* Main Content */}
+        <main className="flex-1 px-4 py-5 overflow-auto">
+          {children}
+        </main>
+
+        <BrandFooter />
  
        {/* Bottom Navigation */}
        <nav className="sticky bottom-0 bg-card/95 backdrop-blur-xl border-t border-border safe-area-inset-bottom">
