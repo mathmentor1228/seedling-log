@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target, PenLine } from 'lucide-react';
+import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target, PenLine, Headphones } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
@@ -47,7 +47,7 @@ export default function StudentVocab() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [mode, setMode] = useState<'eng_to_kor' | 'kor_to_eng'>('eng_to_kor');
-  const [studyType, setStudyType] = useState<'flashcard' | 'test'>('flashcard');
+  const [studyType, setStudyType] = useState<'flashcard' | 'test' | 'listening'>('flashcard');
   const [started, setStarted] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
@@ -100,7 +100,7 @@ export default function StudentVocab() {
 
     setCards(shuffled);
     
-    if (studyType === 'test') {
+    if (studyType === 'test' || studyType === 'listening') {
       setTestMode(true);
       setStarted(true);
       return;
@@ -311,29 +311,31 @@ export default function StudentVocab() {
             </Card>
 
             <div className="space-y-2">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">출제 방식</label>
-                <Select value={mode} onValueChange={v => setMode(v as any)}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="eng_to_kor">영어 → 한글 뜻</SelectItem>
-                    <SelectItem value="kor_to_eng">한글 뜻 → 영어</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {studyType !== 'listening' && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">출제 방식</label>
+                  <Select value={mode} onValueChange={v => setMode(v as any)}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="eng_to_kor">영어 → 한글 뜻</SelectItem>
+                      <SelectItem value="kor_to_eng">한글 뜻 → 영어</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">학습 방법</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <Button
                     variant={studyType === 'flashcard' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setStudyType('flashcard')}
                     className="w-full"
                   >
-                    <Eye className="w-3.5 h-3.5 mr-1" /> 플래시카드
+                    <Eye className="w-3.5 h-3.5 mr-1" /> 카드
                   </Button>
                   <Button
                     variant={studyType === 'test' ? 'default' : 'outline'}
@@ -341,7 +343,15 @@ export default function StudentVocab() {
                     onClick={() => setStudyType('test')}
                     className="w-full"
                   >
-                    <PenLine className="w-3.5 h-3.5 mr-1" /> 셀프 테스트
+                    <PenLine className="w-3.5 h-3.5 mr-1" /> 테스트
+                  </Button>
+                  <Button
+                    variant={studyType === 'listening' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStudyType('listening')}
+                    className="w-full"
+                  >
+                    <Headphones className="w-3.5 h-3.5 mr-1" /> 듣기
                   </Button>
                 </div>
               </div>
@@ -353,7 +363,7 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                {studyType === 'test' ? '테스트 시작' : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
+                {studyType === 'test' ? '테스트 시작' : studyType === 'listening' ? '듣기 테스트 시작' : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
               </Button>
             </div>
           </>
@@ -367,7 +377,7 @@ export default function StudentVocab() {
     return (
       <VocabSelfTest
         words={cards}
-        mode={mode}
+        mode={studyType === 'listening' ? 'listening' : mode}
         onFinish={async (correct, wrong, total) => {
           // Save completion
           const { error } = await studentApi.submitVocabCompletion(
