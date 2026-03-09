@@ -3133,7 +3133,7 @@ export default function Dashboard() {
 
       {/* ━━━ 섹션 5: 도구 & 분석 ━━━ */}
       {(isAdmin(role) || isTeacher(role)) && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <SectionHeader 
             icon={<Wrench className="w-4 h-4" />}
             title="도구 & 분석" 
