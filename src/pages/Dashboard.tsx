@@ -926,9 +926,8 @@ export default function Dashboard() {
           hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
         }
 
-        // PHOTO-STABLE-V2: Fetch photo submissions from homework_submissions (stable, not affected by check_status)
-        // Also fallback to homework_assignments.submission_image_url
-        let photoDataMap: Record<string, { urls: string[]; text: string | null; at: string | null }> = {};
+        // PHOTO-STABLE-V2: Fetch photo/audio submissions from homework_submissions + homework_assignments
+        let photoDataMap: Record<string, { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null }> = {};
         // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
         let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
@@ -948,7 +947,7 @@ export default function Dashboard() {
               if (!subject) return;
               const photoKey = `${sub.student_id}:${subject}`;
               if (!photoDataMap[photoKey]) {
-                photoDataMap[photoKey] = { urls: [], text: sub.submission_note || null, at: sub.submitted_at };
+                photoDataMap[photoKey] = { urls: [], audioUrl: null, text: sub.submission_note || null, at: sub.submitted_at };
               }
               // Collect all image URLs (support comma-separated)
               const imgUrls = sub.image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
@@ -956,17 +955,15 @@ export default function Dashboard() {
             }
           });
 
-          // Fallback: homework_assignments.submission_image_url
-          // PHOTO-MATCH-V3: Only show photo from the LATEST homework per student+subject.
-          // If the latest homework has no photo, do NOT fall back to older homework photos.
+          // Fallback: homework_assignments submission fields (latest assignment only)
+          // PHOTO-MATCH-V3: If latest homework has no submission, do NOT fall back to older homework submissions.
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text, check_status')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
           
-          // Track which student+subject we've already seen (latest first)
           const seenLatest = new Set<string>();
           (hwAll || []).forEach((hw: any) => {
             const photoKey = `${hw.student_id}:${hw.subject}`;
@@ -975,18 +972,26 @@ export default function Dashboard() {
               latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
             }
 
-            if (seenLatest.has(photoKey)) return; // skip older assignments
+            if (seenLatest.has(photoKey)) return;
             seenLatest.add(photoKey);
-            // Only populate photo if THIS (latest) assignment has a submission
-            if (hw.submitted_at && hw.submission_image_url && !photoDataMap[photoKey]) {
-              const imgUrls = hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
-              photoDataMap[photoKey] = { urls: imgUrls, text: hw.submission_text || null, at: hw.submitted_at };
+
+            const hasImage = !!hw.submission_image_url;
+            const hasAudio = !!hw.submission_audio_url;
+            if (hw.submitted_at && (hasImage || hasAudio) && !photoDataMap[photoKey]) {
+              const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+              photoDataMap[photoKey] = {
+                urls: imgUrls,
+                audioUrl: hw.submission_audio_url || null,
+                text: hw.submission_text || null,
+                at: hw.submitted_at,
+              };
             }
           });
         }
 
-        // Build photo set from map
-        const photoSubmissionSet = new Set(Object.keys(photoDataMap));
+        // Build submission sets from map
+        const photoSubmissionSet = new Set(Object.entries(photoDataMap).filter(([, v]) => v.urls.length > 0).map(([k]) => k));
+        const audioSubmissionSet = new Set(Object.entries(photoDataMap).filter(([, v]) => !!v.audioUrl).map(([k]) => k));
         
         // Build a student name lookup from roster rows
         const studentNameLookup: Record<string, string> = {};
