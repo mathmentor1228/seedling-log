@@ -136,6 +136,21 @@ export function TextbookDistributionTab() {
     toast.success('개별구매 안내 문자가 복사되었습니다');
   };
 
+  const handleConfirmDistribution = async (dist: Distribution) => {
+    const { error } = await supabase
+      .from('textbook_distributions')
+      .update({
+        distributed_confirmed_at: new Date().toISOString(),
+        distributed_confirmed_by: userName,
+      } as any)
+      .eq('id', dist.id);
+    if (error) { toast.error('배부 확인 실패'); console.error(error); }
+    else {
+      toast.success(`${dist.student_name} 학생에게 교재 배부 확인 완료`);
+      fetchData();
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   const unpaid = distributions.filter(d => d.payment_status === '미납');
