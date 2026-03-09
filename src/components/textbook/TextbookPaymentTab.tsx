@@ -153,10 +153,19 @@ export function TextbookPaymentTab() {
       confirmed_by: userName,
       depositor_name: depositorName.trim() || null,
     } as any).eq('id', paymentTarget.id);
-    if (error) toast.error('수납 처리 실패');
-    else { toast.success(`${paymentTarget.student_name} 수납 완료 처리되었습니다`); fetchData(); }
+    if (error) { toast.error('수납 처리 실패'); return; }
+
+    // Sync parent_name to students table if provided
+    const trimmedParent = parentNameInput.trim();
+    if (trimmedParent) {
+      await supabase.from('students').update({ parent_name: trimmedParent } as any).eq('id', paymentTarget.student_id);
+    }
+
+    toast.success(`${paymentTarget.student_name} 수납 완료 처리되었습니다`);
     setPaymentTarget(null);
     setDepositorName('');
+    setParentNameInput('');
+    fetchData();
   };
 
   const handleRevertPayment = async (dist: Distribution) => {
