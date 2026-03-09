@@ -1120,7 +1120,7 @@ export default function AssistantDashboard() {
         context={modalContext}
         mode="HOMEWORK_TEST"
         onSaved={() => {
-          console.log('[AssistantDashboard] Modal onSaved triggered - refetching roster data');
+          
           fetchAllData();
         }}
       />
