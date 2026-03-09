@@ -80,6 +80,7 @@ interface HomeworkAssignment {
   // STUDENT-SUBMISSION-V1: Fields for student submission
   submission_image_url?: string | null;
   submission_text?: string | null;
+  submission_audio_url?: string | null;
   submitted_at?: string | null;
 }
 
