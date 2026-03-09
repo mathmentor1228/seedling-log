@@ -648,6 +648,38 @@ export default function Dashboard() {
       }
     }
     fetchUnreadReplies();
+
+    // TEXTBOOK-ARRIVAL-ALERT-V1: Fetch arrived textbooks matching teacher's subject
+    async function fetchArrivedTextbooks() {
+      if (!user) return;
+      try {
+        if (isTeacher(role)) {
+          // Get teacher's assigned subject
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('assigned_subject')
+            .eq('id', user.id)
+            .single();
+          const subject = (profile as any)?.assigned_subject;
+          if (!subject) return;
+          const { count } = await supabase
+            .from('textbook_orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', '입고완료')
+            .eq('subject', subject);
+          setArrivedTextbookCount(count || 0);
+        } else if (isAdmin(role)) {
+          const { count } = await supabase
+            .from('textbook_orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', '입고완료');
+          setArrivedTextbookCount(count || 0);
+        }
+      } catch (err) {
+        console.error('Error fetching arrived textbooks:', err);
+      }
+    }
+    fetchArrivedTextbooks();
   }, [user, role]);
 
   // Refetch roster data when window regains focus (user returns from /lessons page)
