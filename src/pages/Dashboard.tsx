@@ -3109,6 +3109,7 @@ export default function Dashboard() {
                                               }}
                                             >
                                               {student.hasPhotoSubmission && `📷 ${student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}`}
+                                              {student.hasPhotoSubmission && student.hasAudioSubmission && <><span>·</span><Mic className="w-3 h-3" />음성</>}
                                               {!student.hasPhotoSubmission && student.hasAudioSubmission && <><Mic className="w-3 h-3" />음성</>}
                                             </button>
                                           </>
