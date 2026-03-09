@@ -2079,7 +2079,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <DashboardHeader role={role || ''} />
       
       {/* ━━━ 섹션 1: 주의사항 & 알림 ━━━ */}
