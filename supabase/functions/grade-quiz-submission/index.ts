@@ -125,7 +125,7 @@ ${questionRef}
                         question_number: { type: "number", description: "문제 번호" },
                         student_answer: { type: "string", description: "학생이 적은 답 (판독 결과)" },
                         is_correct: { type: "boolean", description: "정답 여부" },
-                        status: { type: "string", enum: ["correct", "incorrect", "unreadable", "not_found"], description: "채점 상태" },
+                        status: { type: "string", enum: ["correct", "incorrect", "unreadable", "not_found", "needs_resubmit"], description: "채점 상태. 모호하거나 판독 불가한 답은 needs_resubmit" },
                         note: { type: "string", description: "채점 참고 사항" }
                       },
                       required: ["question_number", "student_answer", "is_correct", "status"],
