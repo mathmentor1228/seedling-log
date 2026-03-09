@@ -1308,7 +1308,7 @@ export default function Dashboard() {
       const kstDate = new Date(now.getTime() + kstOffset);
       const dayOfWeek = kstDate.getUTCDay(); // Use UTC day since we added KST offset
       
-      console.log('fetchTodaySlots: user.id =', user.id, ', dayOfWeek (KST) =', dayOfWeek);
+      
 
       // CLASS-ACTIVE-TOGGLE-V1: Include inactive_until filter
       const todayKSTDate = getTodayKST();
