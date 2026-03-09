@@ -396,6 +396,18 @@ export function TextbookPaymentTab() {
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <div>
+              <label className="text-sm font-medium text-foreground">학부모 성함</label>
+              <Input
+                value={parentNameInput}
+                onChange={(e) => setParentNameInput(e.target.value)}
+                placeholder="학부모 이름 (학생정보에 저장됩니다)"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                입력하면 학생 정보에도 자동 반영됩니다
+              </p>
+            </div>
+            <div>
               <label className="text-sm font-medium text-foreground">실제 입금자 성함</label>
               <Input
                 value={depositorName}
