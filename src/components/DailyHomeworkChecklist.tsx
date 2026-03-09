@@ -238,6 +238,9 @@ export default function DailyHomeworkChecklist() {
         };
       });
 
+      // Debug: log audio urls
+      const audioItems = formatted.filter(f => f.submission_audio_url);
+      console.log('[DailyHW] Total items:', formatted.length, 'Items with audio:', audioItems.length, audioItems.map(a => ({ id: a.id, student: a.student_name, audio: a.submission_audio_url })));
       setItems(formatted);
     } catch (error) {
       console.error('Error fetching daily homework:', error);
