@@ -42,6 +42,7 @@ export function TextbookPaymentTab() {
   // Depositor name popup state
   const [paymentTarget, setPaymentTarget] = useState<Distribution | null>(null);
   const [depositorName, setDepositorName] = useState('');
+  const [parentNameInput, setParentNameInput] = useState('');
 
   useEffect(() => {
     if (user) {
