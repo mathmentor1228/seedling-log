@@ -141,7 +141,8 @@ export function TextbookPaymentTab() {
   // Open depositor name popup instead of directly confirming
   const openPaymentConfirm = (dist: Distribution) => {
     setPaymentTarget(dist);
-    setDepositorName(dist.parent_name || dist.student_name);
+    // 기본값: 학생이름으로 입금자명 설정, 학부모 이름이 다르면 별도 표시
+    setDepositorName(dist.student_name);
     setParentNameInput(dist.parent_name || '');
   };
 
