@@ -52,6 +52,7 @@ interface Student {
   notes: string | null;
   school: string | null;
   parent_phone: string | null;
+  parent_name: string | null;
   student_phone: string | null;
   student_code: string | null;
   created_at: string;
