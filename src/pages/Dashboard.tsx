@@ -2370,7 +2370,7 @@ export default function Dashboard() {
 
       {/* ━━━ 섹션 4: 오늘 수업 로스터 ━━━ */}
       {(isTeacher(role) || isAdmin(role) || isAssistant(role)) && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {allTodayHolidays.length > 0 && (
             <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
               <CardContent className="py-4">
