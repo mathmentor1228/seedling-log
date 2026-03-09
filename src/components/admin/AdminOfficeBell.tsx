@@ -147,10 +147,15 @@ export function AdminOfficeBell() {
     }
   };
 
-  const handleTaskClick = (taskId: string) => {
+  const handleTaskClick = (task: RecentTask) => {
     markAsRead();
     setOpen(false);
-    navigate('/admin/office');
+    // 수납 관련 카테고리면 교재 수납 탭으로 이동
+    if (task.category === '수납' || task.title.includes('수납') || task.title.includes('입금') || task.title.includes('교재비')) {
+      navigate('/textbook?tab=payment');
+    } else {
+      navigate('/admin/office');
+    }
   };
 
   if (!isAllowed) return null;
