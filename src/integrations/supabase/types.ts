@@ -2501,6 +2501,7 @@ export type Database = {
           approved_at: string | null
           approved_by_name: string | null
           created_at: string
+          distributed_qty: number
           id: string
           notes: string | null
           quantity: number
@@ -2516,6 +2517,7 @@ export type Database = {
           approved_at?: string | null
           approved_by_name?: string | null
           created_at?: string
+          distributed_qty?: number
           id?: string
           notes?: string | null
           quantity?: number
@@ -2531,6 +2533,7 @@ export type Database = {
           approved_at?: string | null
           approved_by_name?: string | null
           created_at?: string
+          distributed_qty?: number
           id?: string
           notes?: string | null
           quantity?: number
