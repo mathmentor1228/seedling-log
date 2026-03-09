@@ -141,8 +141,8 @@ export function TextbookPaymentTab() {
   // Open depositor name popup instead of directly confirming
   const openPaymentConfirm = (dist: Distribution) => {
     setPaymentTarget(dist);
-    // Pre-fill with parent_name or student_name
     setDepositorName(dist.parent_name || dist.student_name);
+    setParentNameInput(dist.parent_name || '');
   };
 
   const handleConfirmPayment = async () => {
