@@ -415,7 +415,7 @@ export default function Dashboard() {
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
   // NEXT-HW-BADGE-V1: Include hasNextHomework
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { urls: string[]; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; hasAudioSubmission: boolean; photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
