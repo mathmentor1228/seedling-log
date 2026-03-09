@@ -2096,7 +2096,7 @@ export default function Dashboard() {
             title="핵심 현황" 
             description="실시간 학원 운영 지표"
           />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
             {isAdmin(role) && (
               <>
                 <StatCard
