@@ -1906,6 +1906,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          parent_name: string | null
           parent_phone: string | null
           parent_token: string | null
           phone: string | null
@@ -1927,6 +1928,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          parent_name?: string | null
           parent_phone?: string | null
           parent_token?: string | null
           phone?: string | null
@@ -1948,6 +1950,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          parent_name?: string | null
           parent_phone?: string | null
           parent_token?: string | null
           phone?: string | null
@@ -2438,6 +2441,7 @@ export type Database = {
           billed_at: string | null
           confirmed_by: string | null
           created_at: string
+          depositor_name: string | null
           distributed_by: string
           distributed_by_name: string
           distributed_confirmed_at: string | null
@@ -2457,6 +2461,7 @@ export type Database = {
           billed_at?: string | null
           confirmed_by?: string | null
           created_at?: string
+          depositor_name?: string | null
           distributed_by: string
           distributed_by_name: string
           distributed_confirmed_at?: string | null
@@ -2476,6 +2481,7 @@ export type Database = {
           billed_at?: string | null
           confirmed_by?: string | null
           created_at?: string
+          depositor_name?: string | null
           distributed_by?: string
           distributed_by_name?: string
           distributed_confirmed_at?: string | null
