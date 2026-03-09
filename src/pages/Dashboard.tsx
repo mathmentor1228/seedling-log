@@ -141,7 +141,8 @@ interface TodaySlotStudent {
   lessonSubmitted?: boolean;
   hasNextHomework?: boolean;
   hasPhotoSubmission?: boolean;
-  photoData?: { urls: string[]; text: string | null; at: string | null } | null;
+  hasAudioSubmission?: boolean;
+  photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null } | null;
   // TEACHER-HW-ALERT-V2: Homework check note and previous goal
   homeworkCheckNote?: string | null;
   homeworkCheckLessonId?: string | null;
