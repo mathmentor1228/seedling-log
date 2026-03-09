@@ -2082,6 +2082,13 @@ export default function Dashboard() {
   return (
     <div className="space-y-4">
       <DashboardHeader role={role || ''} />
+
+      {(isAdmin(role) || isTeacher(role)) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <AssistantRequestsWidget />
+          <AcademyCalendar />
+        </div>
+      )}
       
       {/* ━━━ 섹션 1: 주의사항 & 시험일정 (2단 배열) ━━━ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
