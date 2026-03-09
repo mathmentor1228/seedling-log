@@ -893,6 +893,24 @@ export function LessonRecordForm({
         break; // Always use the first valid lesson
       }
 
+      // PREV-HW-FALLBACK-V1: If lesson-linked homework is missing, use latest previous assignment for same student+subject
+      if (!homeworkData) {
+        const { data: fallbackHw } = await supabase
+          .from('homework_assignments')
+          .select('*')
+          .eq('student_id', studentId)
+          .eq('subject', subject as SubjectType)
+          .lt('assigned_date', currentDate)
+          .not('content', 'eq', '')
+          .order('assigned_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (fallbackHw && fallbackHw.content && fallbackHw.content.trim() !== '') {
+          homeworkData = fallbackHw as HomeworkAssignment;
+        }
+      }
+
       const totalRows = lessonData?.length || 0;
       if (validLesson) {
         setPreviousLesson(validLesson);
