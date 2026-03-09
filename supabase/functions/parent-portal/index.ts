@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
     // D-day: no date cap — always show nearest upcoming exam
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url")
@@ -161,6 +161,13 @@ Deno.serve(async (req) => {
         .select("id, title, start_at, end_at")
         .eq("category", "exam")
         .order("start_at"),
+      // Textbook unpaid distributions
+      supabase
+        .from("textbook_distributions")
+        .select("id, student_name, total_amount, payment_status, created_at, textbook_orders(textbook_name, subject)")
+        .eq("student_id", studentId)
+        .eq("payment_status", "미납")
+        .order("created_at", { ascending: false }),
     ]);
 
     // Fetch class schedules for the student's classes
@@ -204,6 +211,15 @@ Deno.serve(async (req) => {
       next_lesson_goal: l.next_lesson_goal || null,
     }));
 
+    // Textbook unpaid items
+    const unpaidTextbooks = (textbookRes.data || []).map((t: any) => ({
+      id: t.id,
+      textbook_name: t.textbook_orders?.textbook_name || '교재',
+      subject: t.textbook_orders?.subject || '',
+      total_amount: t.total_amount,
+      created_at: t.created_at,
+    }));
+
     return new Response(
       JSON.stringify({
         student: {
@@ -225,9 +241,7 @@ Deno.serve(async (req) => {
         vocab_results: vocabResultRes.data || [],
         class_schedule: scheduleItems,
         upcoming_supplements: (supplRes.data || []).map((s: any) => {
-          // Extract time from notes: [보충 시간: HH:MM]
           const timeMatch = s.notes?.match(/\[보충 시간:\s*(\d{1,2}:\d{2})\]/);
-          // Extract teacher name from notes: [보충 선생님: name]
           const teacherMatch = s.notes?.match(/\[보충 선생님:\s*([^\]]+)\]/);
           return {
             id: s.id,
@@ -239,7 +253,6 @@ Deno.serve(async (req) => {
             teacher_name: teacherMatch ? teacherMatch[1].trim() : null,
           };
         }),
-        // EXAM-DDAY-V1: Filter exam events by student's school and not yet ended
         exam_events: (() => {
           const allExams = examEventsRes.data || [];
           const schoolName = student.school;
@@ -252,6 +265,8 @@ Deno.serve(async (req) => {
             })
             .map((e: any) => ({ id: e.id, title: e.title, start_at: e.start_at, end_at: e.end_at }));
         })(),
+        unpaid_textbooks: unpaidTextbooks,
+        account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

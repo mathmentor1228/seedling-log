@@ -16,7 +16,8 @@ interface VocabScheduleItem { id: string; test_date: string; day_number: number;
 interface VocabResultItem { id: string; test_date: string; day_number: number; book_name: string; score_percent: number | null; passed: boolean; total_words: number | null; correct_words: number | null; }
 interface ClassScheduleItem { class_name: string; subject: string; day_of_week: number; start_time: string; end_time: string; }
 interface UpcomingSupplement { id: string; date: string; subject: string; range: string; course: string | null; time: string | null; teacher_name: string | null; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; }
+interface UnpaidTextbook { id: string; textbook_name: string; subject: string; total_amount: number; created_at: string; }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -116,6 +117,41 @@ export default function ParentPortal() {
       </header>
 
       <main className="max-w-lg mx-auto p-4 space-y-5">
+        {/* Unpaid textbook fees - top priority notice */}
+        {(data.unpaid_textbooks && data.unpaid_textbooks.length > 0) && (
+          <Card className="border-yellow-300 bg-yellow-50/80 dark:bg-yellow-950/30 shadow-sm">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm font-bold text-yellow-800 dark:text-yellow-300 flex items-center gap-2">
+                <BookOpen className="w-4 h-4" />
+                미납 교재비 안내
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-2">
+              {data.unpaid_textbooks.map(tb => (
+                <div key={tb.id} className="flex items-center justify-between py-1.5 border-b border-yellow-200/60 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{tb.textbook_name}</p>
+                    <p className="text-xs text-muted-foreground">{tb.subject}</p>
+                  </div>
+                  <p className="text-sm font-bold text-yellow-800 dark:text-yellow-300">{tb.total_amount.toLocaleString()}원</p>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-2 border-t border-yellow-300/60">
+                <span className="text-xs font-medium text-muted-foreground">총 미납액</span>
+                <span className="text-base font-bold text-yellow-800 dark:text-yellow-300">
+                  {data.unpaid_textbooks.reduce((s, t) => s + t.total_amount, 0).toLocaleString()}원
+                </span>
+              </div>
+              {data.account_info && (
+                <div className="mt-2 p-2.5 rounded-lg bg-white/80 dark:bg-background/50 border border-yellow-200">
+                  <p className="text-xs text-muted-foreground mb-0.5">입금 계좌</p>
+                  <p className="text-sm font-bold text-foreground">{data.account_info}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* EXAM-DDAY-V1: Exam D-day countdown */}
         {data.exam_events && data.exam_events.length > 0 && (
           <ExamDdayBannerStatic exams={data.exam_events} />
