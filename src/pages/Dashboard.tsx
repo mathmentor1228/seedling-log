@@ -977,15 +977,25 @@ export default function Dashboard() {
 
             const hasImage = !!hw.submission_image_url;
             const hasAudio = !!hw.submission_audio_url;
-            if (hw.submitted_at && (hasImage || hasAudio) && !photoDataMap[photoKey]) {
-              const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+            if (!hw.submitted_at || (!hasImage && !hasAudio)) return;
+
+            const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+            const existing = photoDataMap[photoKey];
+
+            if (!existing) {
               photoDataMap[photoKey] = {
                 urls: imgUrls,
                 audioUrl: hw.submission_audio_url || null,
                 text: hw.submission_text || null,
                 at: hw.submitted_at,
               };
+              return;
             }
+
+            // Keep images from homework_submissions, but merge audio/text from latest assignment when missing
+            if (!existing.audioUrl && hasAudio) existing.audioUrl = hw.submission_audio_url || null;
+            if (!existing.text && hw.submission_text) existing.text = hw.submission_text;
+            if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
         }
 
