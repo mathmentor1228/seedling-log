@@ -60,5 +60,5 @@ export function MathRenderer({ text }: Props) {
     return result;
   }, [text]);
 
-  return <span dangerouslySetInnerHTML={{ __html: rendered }} />;
+  return <span className="math-renderer" style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }} dangerouslySetInnerHTML={{ __html: rendered }} />;
 }

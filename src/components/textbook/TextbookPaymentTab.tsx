@@ -396,28 +396,32 @@ export function TextbookPaymentTab() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 mt-2">
-            <div>
-              <label className="text-sm font-medium text-foreground">학부모 성함</label>
-              <Input
-                value={parentNameInput}
-                onChange={(e) => setParentNameInput(e.target.value)}
-                placeholder="학부모 이름 (학생정보에 저장됩니다)"
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                입력하면 학생 정보에도 자동 반영됩니다
-              </p>
+            <div className="p-3 rounded-lg bg-muted/50 text-sm">
+              <p className="text-muted-foreground">학생: <span className="font-medium text-foreground">{paymentTarget?.student_name}</span></p>
+              <p className="text-muted-foreground">금액: <span className="font-medium text-foreground">{paymentTarget?.total_amount?.toLocaleString()}원</span></p>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground">실제 입금자 성함</label>
+              <label className="text-sm font-medium text-foreground">입금자명</label>
               <Input
                 value={depositorName}
                 onChange={(e) => setDepositorName(e.target.value)}
-                placeholder="입금자 이름"
+                placeholder="입금자 이름 (기본: 학생이름)"
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                통장에 표시된 입금자명을 입력해주세요
+                학생이름과 다를 경우에만 수정해주세요
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground">학부모 성함 (선택)</label>
+              <Input
+                value={parentNameInput}
+                onChange={(e) => setParentNameInput(e.target.value)}
+                placeholder="학부모 이름 (학생정보에 자동 저장)"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                입력하면 학생 정보에 학부모 이름이 자동 연동됩니다
               </p>
             </div>
           </div>

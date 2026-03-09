@@ -188,9 +188,9 @@ export function AdminOfficeBell() {
             recentTasks.map(task => {
               const isUnread = lastReadAt ? new Date(task.created_at) > new Date(lastReadAt) : true;
               return (
-                <button
+                  <button
                   key={task.id}
-                  onClick={() => handleTaskClick(task.id)}
+                  onClick={() => handleTaskClick(task)}
                   className={cn(
                     "w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors",
                     isUnread && "bg-primary/5"

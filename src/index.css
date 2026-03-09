@@ -239,3 +239,21 @@
     @apply text-sm text-foreground/80 leading-relaxed;
   }
 }
+
+/* KaTeX responsive overflow fix */
+.math-renderer .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+.math-renderer .katex {
+  font-size: 1em;
+}
+
+@media (max-width: 640px) {
+  .math-renderer .katex {
+    font-size: 0.9em;
+  }
+}
