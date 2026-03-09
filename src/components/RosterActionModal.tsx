@@ -846,6 +846,19 @@ export function RosterActionModal({
                     {/* STUDENT-SUBMISSION-V1: Show homework content with submission indicator */}
                     <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
                       <div className="flex-1">{previousHomework.content}</div>
+                      {/* Show mic icon if student submitted audio */}
+                      {previousHomework.submission_audio_url && (
+                        <button
+                          type="button"
+                          onClick={() => setShowImageModal(true)}
+                          className="flex-shrink-0 relative group cursor-pointer"
+                          title="학생 음성 제출 듣기"
+                        >
+                          <div className="w-12 h-12 rounded-lg border-2 border-purple-400/50 overflow-hidden bg-purple-50 dark:bg-purple-950/30 hover:border-purple-500 transition-colors flex items-center justify-center">
+                            <Mic className="w-5 h-5 text-purple-500" />
+                          </div>
+                        </button>
+                      )}
                       {/* Show camera icon if student submitted image */}
                       {(studentSubmission?.image_url || previousHomework.submission_image_url) && (() => {
                         const rawUrl = studentSubmission?.image_url || previousHomework.submission_image_url || '';
