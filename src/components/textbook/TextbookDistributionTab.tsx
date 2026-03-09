@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Loader2, BookMarked, Copy, ShoppingCart } from 'lucide-react';
+import { Plus, Loader2, BookMarked, Copy, ShoppingCart, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TextbookOrder {
@@ -136,10 +136,28 @@ export function TextbookDistributionTab() {
     toast.success('개별구매 안내 문자가 복사되었습니다');
   };
 
+  const handleConfirmDistribution = async (dist: Distribution) => {
+    const { error } = await supabase
+      .from('textbook_distributions')
+      .update({
+        distributed_confirmed_at: new Date().toISOString(),
+        distributed_confirmed_by: userName,
+      } as any)
+      .eq('id', dist.id);
+    if (error) { toast.error('배부 확인 실패'); console.error(error); }
+    else {
+      toast.success(`${dist.student_name} 학생에게 교재 배부 확인 완료`);
+      fetchData();
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   const unpaid = distributions.filter(d => d.payment_status === '미납');
   const paid = distributions.filter(d => d.payment_status === '수납완료');
+  // TEXTBOOK-DISTRIBUTE-CONFIRM-V1: Paid but not yet physically distributed
+  const pendingDistribution = paid.filter(d => !(d as any).distributed_confirmed_at);
+  const confirmedDistribution = paid.filter(d => !!(d as any).distributed_confirmed_at);
 
   // Filter orders to only show those with remaining stock
   const availableOrders = orders.filter(o => (o.quantity - (o.distributed_qty || 0)) > 0);
@@ -244,16 +262,46 @@ export function TextbookDistributionTab() {
         </div>
       )}
 
-      {/* Paid distributions */}
-      {paid.length > 0 && (
+      {/* TEXTBOOK-DISTRIBUTE-CONFIRM-V1: Pending distribution (paid but not physically handed over) */}
+      {pendingDistribution.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-2">수납 완료 ({paid.length}건)</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+            <BookMarked className="w-4 h-4 text-primary" />배부 대기 ({pendingDistribution.length}건)
+          </h3>
+          <p className="text-xs text-muted-foreground mb-2">수납 완료된 교재입니다. 학생에게 교재를 전달한 후 배부 확인 버튼을 눌러주세요.</p>
           <div className="space-y-2">
-            {paid.map(dist => (
+            {pendingDistribution.map(dist => (
+              <Card key={dist.id} className="p-4 border-l-4 border-l-primary/60">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-foreground">{dist.student_name}</p>
+                      <Badge className="bg-primary/15 text-primary border-primary/30 text-[10px]">수납완료 · 배부대기</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {dist.textbook_orders?.textbook_name} · {dist.quantity}권 · {dist.total_amount.toLocaleString()}원
+                    </p>
+                  </div>
+                  <Button size="sm" className="gap-1.5" onClick={() => handleConfirmDistribution(dist)}>
+                    <CheckCircle2 className="w-3.5 h-3.5" />배부 확인
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmed distributions */}
+      {confirmedDistribution.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-foreground mb-2">배부 완료 ({confirmedDistribution.length}건)</h3>
+          <div className="space-y-2">
+            {confirmedDistribution.map(dist => (
               <Card key={dist.id} className="p-4 opacity-70">
                 <div className="flex items-center gap-2">
                   <p className="font-medium text-foreground">{dist.student_name}</p>
-                  <Badge variant="success" className="text-[10px]">수납완료</Badge>
+                  <Badge variant="success" className="text-[10px]">배부완료</Badge>
                   <span className="text-sm text-muted-foreground ml-auto">
                     {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
                   </span>

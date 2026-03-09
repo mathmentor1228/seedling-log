@@ -468,6 +468,9 @@ export default function Dashboard() {
   }
   const [supplementaryLessons, setSupplementaryLessons] = useState<SupplementaryLesson[]>([]);
 
+  // TEXTBOOK-ARRIVAL-ALERT-V1: Arrived textbook orders for teacher alert
+  const [arrivedTextbookCount, setArrivedTextbookCount] = useState(0);
+
   // SCHEDULE-OVERRIDE-V1: Override modal state
   const [overrideModalOpen, setOverrideModalOpen] = useState(false);
   const [overrideModalContext, setOverrideModalContext] = useState<{
@@ -645,6 +648,38 @@ export default function Dashboard() {
       }
     }
     fetchUnreadReplies();
+
+    // TEXTBOOK-ARRIVAL-ALERT-V1: Fetch arrived textbooks matching teacher's subject
+    async function fetchArrivedTextbooks() {
+      if (!user) return;
+      try {
+        if (isTeacher(role)) {
+          // Get teacher's assigned subject
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('assigned_subject')
+            .eq('id', user.id)
+            .single();
+          const subject = (profile as any)?.assigned_subject;
+          if (!subject) return;
+          const { count } = await supabase
+            .from('textbook_orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', '입고완료')
+            .eq('subject', subject);
+          setArrivedTextbookCount(count || 0);
+        } else if (isAdmin(role)) {
+          const { count } = await supabase
+            .from('textbook_orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', '입고완료');
+          setArrivedTextbookCount(count || 0);
+        }
+      } catch (err) {
+        console.error('Error fetching arrived textbooks:', err);
+      }
+    }
+    fetchArrivedTextbooks();
   }, [user, role]);
 
   // Refetch roster data when window regains focus (user returns from /lessons page)
@@ -2000,8 +2035,18 @@ export default function Dashboard() {
       onClick: () => setAdminOverdueOpen(prev => !prev),
     });
   }
-  
-  
+
+  // TEXTBOOK-ARRIVAL-ALERT-V1: Arrived textbook alert
+  if (arrivedTextbookCount > 0) {
+    attentionItems.push({
+      icon: <BookOpen className="w-4 h-4" />,
+      label: '교재 입고완료',
+      count: arrivedTextbookCount,
+      color: 'bg-blue-500/10 border-blue-500/20 text-blue-600',
+      onClick: () => navigate('/textbooks'),
+    });
+  }
+
   if (isAdmin(role) && todayAttendance.filter(r => {
     const s = r.attendance_status ?? [];
     return s.includes('무단결석') || s.includes('인정결석') || s.includes('보충불가') || s.includes('지각');
