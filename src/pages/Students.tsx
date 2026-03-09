@@ -192,6 +192,7 @@ export default function Students() {
         notes: formData.notes.trim() || null,
         school: formData.school.trim() || null,
         parent_phone: normalizedParentPhone || null,
+        parent_name: formData.parent_name.trim() || null,
         student_phone: normalizedStudentPhone || null,
       };
 
