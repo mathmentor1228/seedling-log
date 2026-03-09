@@ -18,7 +18,6 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Verify caller is admin
     const anonClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -37,7 +36,6 @@ serve(async (req) => {
     const { concept_id } = await req.json();
     if (!concept_id) throw new Error("concept_id required");
 
-    // Get concept
     const { data: concept, error: conceptError } = await supabase
       .from("math_concepts")
       .select("*")
@@ -46,14 +44,12 @@ serve(async (req) => {
 
     if (conceptError || !concept) throw new Error("Concept not found");
 
-    // Download PDF from storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("math-concepts")
       .download(concept.pdf_storage_path);
 
     if (downloadError || !fileData) throw new Error("Failed to download PDF");
 
-    // Convert PDF to base64 safely
     const pdfBytes = await fileData.arrayBuffer();
     const pdfBase64 = encodeBase64(new Uint8Array(pdfBytes));
 
@@ -75,31 +71,39 @@ serve(async (req) => {
 
 ⚠️ 가장 중요한 원칙: "문제 풀이"가 아니라 "개념을 정확히 알고 있는가"를 확인하는 데 초점을 맞추세요.
 
-출제 우선순위 (반드시 이 순서로 커버):
-1. **용어 정의 확인**: 단항식, 다항식, 항, 상수항, 계수, 차수 등 핵심 수학 용어의 정의를 정확히 아는지
-2. **개념 구분**: 비슷하지만 다른 개념들을 구별할 수 있는지 (예: 단항식 vs 다항식, 차수 vs 계수)
-3. **정리/법칙 암기 확인**: 교환법칙, 결합법칙, 분배법칙 등의 이름과 내용을 정확히 연결할 수 있는지
-4. **공식 암기 확인**: PDF에 나오는 모든 공식(특히 곱셈공식)을 하나하나 외우고 있는지 확인. 공식이 10개면 10개 전부 각각 출제하세요!
-5. **용어/개념 적용**: 오름차순/내림차순 정리, 동류항 정리 등 개념을 적용하는 간단한 확인
-6. **지수법칙**: 기본 지수법칙 각각을 정확히 알고 있는지
+## 출제 우선순위 (반드시 이 순서로 커버):
+1. **개념의 정의·성질·조건 확인**: "이차방정식이 되기 위한 $a$의 조건은?", "근의 공식에서 판별식이 음수이면?" 등 정의와 성립 조건을 정확히 이해했는지 묻는 문제
+2. **용어 정의 확인**: 단항식, 다항식, 항, 상수항, 계수, 차수 등 핵심 수학 용어의 정의
+3. **개념 구분**: 비슷하지만 다른 개념들을 구별 (예: 단항식 vs 다항식, 차수 vs 계수, 등식 vs 항등식)
+4. **정리/법칙 암기 확인**: 교환법칙, 결합법칙, 분배법칙 등의 이름과 내용을 정확히 연결
+5. **공식 암기 확인**: PDF에 나오는 모든 공식을 하나하나 외우고 있는지 확인. 공식이 10개면 10개 전부 각각 출제
+6. **개념 적용**: 오름차순/내림차순 정리, 동류항 정리 등 개념을 적용하는 간단한 확인
+7. **지수법칙**: 기본 지수법칙 각각을 정확히 알고 있는지
 
-문항 수 규칙:
+## 힌트 생성 규칙 (매우 중요!)
+각 문제에 반드시 hint 필드를 포함하세요:
+- 정답이 한글 단어인 경우: **초성**을 힌트로 제공 (예: "방정식" → "ㅂㅈㅅ", "판별식" → "ㅍㅂㅅ")
+- 정답이 수식인 경우: 해당 개념이 PDF에서 어떤 맥락에 등장하는지 **핵심 한 줄 요약**
+- 참/거짓 문제: 관련 개념의 정의를 간접적으로 떠올리게 하는 힌트
+- 힌트는 정답을 직접 알려주면 안 되고, 사고의 방향만 제시해야 합니다
+
+## 문항 수 규칙
 - PDF 내용의 분량에 비례하여 15~30문항 생성
-- 특히 **공식이 여러 개 나열된 부분**은 공식 하나당 최소 1문항씩 출제
+- 특히 공식이 여러 개 나열된 부분은 공식 하나당 최소 1문항씩 출제
 - 절대 5문항에 그치지 마세요
 
-세 가지 유형을 골고루 섞으세요:
-- "fill_blank": 빈칸 채우기 — 정의나 공식의 핵심 부분을 ___BLANK___로 (예: "다항식에서 차수가 가장 높은 항의 차수를 그 다항식의 ___BLANK___라 한다")
-- "true_false": 참/거짓 — 개념의 미묘한 차이를 묻는 진술문 (정답은 "참" 또는 "거짓", 해설에서 왜 참/거짓인지 설명)
-- "short_answer": 단답형 — 용어를 묻거나 간단한 공식 결과를 작성 (예: "$(a+b)^2$을 전개하면?")
+## 세 가지 유형을 골고루 섞으세요:
+- "fill_blank": 빈칸 채우기 — 정의나 공식의 핵심 부분을 ___BLANK___로
+- "true_false": 참/거짓 — 개념의 미묘한 차이를 묻는 진술문
+- "short_answer": 단답형 — 용어를 묻거나 간단한 공식 결과
 
-추가 규칙:
-- ⚠️ **문제 순서를 반드시 랜덤으로 섞으세요!** PDF 내용의 등장 순서대로 나열하지 마세요. 앞부분/중간/뒷부분 내용을 뒤섞어 출제하세요.
+## 추가 규칙:
+- ⚠️ 문제 순서를 반드시 랜덤으로 섞으세요!
 - 난이도: easy 30%, medium 50%, hard 20%
-- 수학 기호는 반드시 LaTeX (예: \\frac{1}{2}, \\sqrt{3}, x^2)
+- 수학 기호는 반드시 LaTeX
 - 빈칸은 ___BLANK___로 표시
 - 각 문제에 정답과 간단한 해설 포함
-- question_number는 1부터 순서대로 매기되, 내용의 순서와는 무관하게 섞으세요`
+- question_number는 1부터 순서대로`
           },
           {
             role: "user",
@@ -107,7 +111,9 @@ serve(async (req) => {
               {
                 type: "text",
                 text: `이 PDF의 수학 개념을 **전체** 분석하세요. 모든 정의, 용어, 법칙, 공식을 빠짐없이 퀴즈로 만드세요.
-특히 공식이 여러 개 나열된 부분(곱셈공식 등)은 각 공식마다 개별 문항으로 출제하세요.
+특히 **개념의 정의, 성질, 조건**을 정확히 이해했는지 묻는 문제를 우선 출제하세요.
+공식이 여러 개 나열된 부분은 각 공식마다 개별 문항으로 출제하세요.
+각 문항에 반드시 hint(초성 또는 개념 힌트)를 포함하세요.
 최소 15문항 이상, 내용이 많으면 25~30문항까지 생성하세요.
 과정: ${concept.course}, 제목: ${concept.title}`
               },
@@ -125,7 +131,7 @@ serve(async (req) => {
             type: "function",
             function: {
               name: "generate_quiz",
-              description: "Generate math quiz questions covering all concepts in the PDF",
+              description: "Generate math quiz questions with hints covering all concepts in the PDF",
               parameters: {
                 type: "object",
                 properties: {
@@ -135,13 +141,14 @@ serve(async (req) => {
                       type: "object",
                       properties: {
                         question_number: { type: "number" },
-                        question_type: { type: "string", enum: ["fill_blank", "true_false", "short_answer"], description: "문제 유형" },
+                        question_type: { type: "string", enum: ["fill_blank", "true_false", "short_answer"] },
                         question_text: { type: "string", description: "문제 텍스트 (빈칸은 ___BLANK___로 표시, 수식은 LaTeX)" },
-                        answer: { type: "string", description: "정답 (LaTeX 포함 가능, 참/거짓은 '참' 또는 '거짓')" },
+                        answer: { type: "string", description: "정답" },
                         explanation: { type: "string", description: "간단한 해설" },
-                        difficulty: { type: "string", enum: ["easy", "medium", "hard"] }
+                        difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+                        hint: { type: "string", description: "힌트: 한글 정답이면 초성(예: ㅂㅈㅅ), 수식이면 관련 개념 한 줄 요약. 정답을 직접 알려주면 안 됨" }
                       },
-                      required: ["question_number", "question_type", "question_text", "answer", "explanation", "difficulty"],
+                      required: ["question_number", "question_type", "question_text", "answer", "explanation", "difficulty", "hint"],
                       additionalProperties: false
                     }
                   }
@@ -174,7 +181,6 @@ serve(async (req) => {
 
     const aiData = await aiResponse.json();
     
-    // Extract questions from tool call
     let questions = [];
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     if (toolCall?.function?.arguments) {
@@ -186,12 +192,11 @@ serve(async (req) => {
       throw new Error("AI가 퀴즈를 생성하지 못했습니다.");
     }
 
-    // Shuffle questions (Fisher-Yates) to avoid PDF order
+    // Shuffle questions (Fisher-Yates)
     for (let i = questions.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [questions[i], questions[j]] = [questions[j], questions[i]];
     }
-    // Re-number after shuffle
     questions = questions.map((q: any, idx: number) => ({ ...q, question_number: idx + 1 }));
 
     // Upsert quiz
@@ -212,7 +217,6 @@ serve(async (req) => {
         .insert({ concept_id, questions, status: "draft" });
     }
 
-    // Update concept status
     await supabase
       .from("math_concepts")
       .update({ status: "quiz_generated", updated_at: new Date().toISOString() })
