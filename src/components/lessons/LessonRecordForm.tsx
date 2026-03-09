@@ -1667,7 +1667,8 @@ export function LessonRecordForm({
                     const allImages = hwImages.length > 0 ? hwImages : submissionImages;
                     const submittedAt = previousLessonHomework.submitted_at || studentSubmission?.submitted_at;
                     const submissionNote = previousLessonHomework.submission_text || studentSubmission?.submission_note;
-                    const hasSubmission = allImages.length > 0 || submissionNote;
+                    const audioUrl = previousLessonHomework.submission_audio_url || null;
+                    const hasSubmission = allImages.length > 0 || submissionNote || !!audioUrl;
 
                     if (!hasSubmission) return null;
 
@@ -1676,7 +1677,7 @@ export function LessonRecordForm({
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Camera className="w-4 h-4 text-primary" />
-                            <span className="text-sm font-medium text-primary">📷 인증 완료</span>
+                            <span className="text-sm font-medium text-primary">📷/🎤 인증 완료</span>
                             {submittedAt && (
                               <span className="text-xs text-muted-foreground">
                                 ({format(new Date(submittedAt), 'MM/dd HH:mm')})
@@ -1696,6 +1697,12 @@ export function LessonRecordForm({
                             </Button>
                           )}
                         </div>
+                        {audioUrl && (
+                          <div className="rounded-md border bg-background p-2">
+                            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Mic className="w-3 h-3" />음성 제출</p>
+                            <audio controls className="w-full" src={audioUrl} />
+                          </div>
+                        )}
                         {submissionNote && (
                           <div className="text-sm text-muted-foreground bg-secondary/30 p-2 rounded">
                             <span className="font-medium text-xs">학생 메모: </span>
