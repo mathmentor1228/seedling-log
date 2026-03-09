@@ -2736,6 +2736,7 @@ export default function Dashboard() {
                                                   }}
                                                 >
                                                   {ls.hasPhotoSubmission && `📷 ${ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}`}
+                                                  {ls.hasPhotoSubmission && ls.hasAudioSubmission && <><span>·</span><Mic className="w-3 h-3" />음성</>}
                                                   {!ls.hasPhotoSubmission && ls.hasAudioSubmission && <><Mic className="w-3 h-3" />음성</>}
                                                 </button>
                                               </>
