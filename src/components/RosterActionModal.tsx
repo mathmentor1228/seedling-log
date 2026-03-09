@@ -39,6 +39,7 @@ import {
   ExternalLink,
   AlertTriangle,
   Camera,
+  Mic,
   X
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
