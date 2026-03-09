@@ -2139,9 +2139,67 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ━━━ 숙제 이행률 차트 ━━━ */}
+      {/* ━━━ 숙제 이행률 + 미제출 수업기록 (2단 배열) ━━━ */}
       {!isAssistant(role) && (
-        <HomeworkCompletionChart />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <HomeworkCompletionChart />
+          {isAdmin(role) && totalOverdueDrafts > 0 ? (
+            <Card className="border-amber-500/50 bg-amber-500/5 animate-slide-up">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-amber-600 text-sm">
+                  <Clock className="w-4 h-4" />
+                  미제출 수업기록 ({totalOverdueDrafts}건)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {(overdueDrafts || []).map((group) => (
+                    <div key={group?.teacher_id || 'unknown'}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <h4 className="text-sm font-semibold text-foreground">{group?.teacher_name || '알 수 없음'}</h4>
+                        <span className="text-xs bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-full">
+                          {group?.count || 0}건
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {(group?.drafts || []).map((draft) => (
+                          <button
+                            key={draft?.id || Math.random()}
+                            className="flex items-center justify-between w-full p-2 bg-background hover:bg-accent/50 rounded-md text-sm transition-colors cursor-pointer text-left"
+                            onClick={() => {
+                              if (!draft) return;
+                              setAdminLessonModalContext({
+                                student_id: draft.student_id,
+                                class_id: draft.class_id || '',
+                                subject: draft.subject as any,
+                                lesson_date: draft.lesson_date,
+                              });
+                              setAdminLessonModalRecordId(draft.id);
+                              setAdminLessonModalForceNew(false);
+                              setAdminLessonModalOpen(true);
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <FileEdit className="w-3.5 h-3.5 text-amber-500" />
+                              <span className="font-medium">{draft?.student_name || '알 수 없음'}</span>
+                              <span className="text-muted-foreground">{draft?.subject || '-'}</span>
+                              <span className="text-muted-foreground">
+                                {draft?.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
+                              </span>
+                            </div>
+                            <span className="text-amber-600 font-medium text-xs">
+                              {draft?.overdue_hours || 0}시간 경과
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
       )}
 
       {/* ━━━ 섹션 3: 미제출/출결 이슈 ━━━ */}
