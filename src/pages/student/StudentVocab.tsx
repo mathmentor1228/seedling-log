@@ -47,7 +47,7 @@ export default function StudentVocab() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [mode, setMode] = useState<'eng_to_kor' | 'kor_to_eng'>('eng_to_kor');
-  const [studyType, setStudyType] = useState<'flashcard' | 'test'>('flashcard');
+  const [studyType, setStudyType] = useState<'flashcard' | 'test' | 'listening'>('flashcard');
   const [started, setStarted] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
