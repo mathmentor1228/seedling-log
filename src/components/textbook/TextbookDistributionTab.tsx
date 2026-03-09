@@ -36,6 +36,7 @@ interface Distribution {
 interface Student {
   id: string;
   name: string;
+  parent_name?: string | null;
 }
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
