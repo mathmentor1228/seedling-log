@@ -1112,7 +1112,7 @@ export default function Dashboard() {
         await fetchTodayLessonRecordsFallback();
       }
       
-      console.log('[Dashboard] fetchAdminRosterData complete - teachers:', teachers.length, 'rows:', rosterRows.length);
+      
     } catch (error) {
       console.error('Error fetching admin roster data:', error);
     }
