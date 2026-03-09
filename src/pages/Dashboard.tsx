@@ -2035,8 +2035,18 @@ export default function Dashboard() {
       onClick: () => setAdminOverdueOpen(prev => !prev),
     });
   }
-  
-  
+
+  // TEXTBOOK-ARRIVAL-ALERT-V1: Arrived textbook alert
+  if (arrivedTextbookCount > 0) {
+    attentionItems.push({
+      icon: <BookOpen className="w-4 h-4" />,
+      label: '교재 입고완료',
+      count: arrivedTextbookCount,
+      color: 'bg-blue-500/10 border-blue-500/20 text-blue-600',
+      onClick: () => navigate('/textbooks'),
+    });
+  }
+
   if (isAdmin(role) && todayAttendance.filter(r => {
     const s = r.attendance_status ?? [];
     return s.includes('무단결석') || s.includes('인정결석') || s.includes('보충불가') || s.includes('지각');
