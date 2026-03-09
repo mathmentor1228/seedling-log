@@ -377,7 +377,7 @@ export default function StudentVocab() {
     return (
       <VocabSelfTest
         words={cards}
-        mode={mode}
+        mode={studyType === 'listening' ? 'listening' : mode}
         onFinish={async (correct, wrong, total) => {
           // Save completion
           const { error } = await studentApi.submitVocabCompletion(
