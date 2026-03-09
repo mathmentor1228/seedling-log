@@ -1384,7 +1384,7 @@ export default function Dashboard() {
             variant: 'destructive',
           });
         } else {
-          console.log('fetchTodaySlots: classStudents returned =', classStudents?.length || 0, classStudents);
+          
           // Group students by class_id and collect pairs for batch lookup
           (classStudents || []).forEach((cs: any) => {
             if (!studentsMap[cs.class_id]) {
