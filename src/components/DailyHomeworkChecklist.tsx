@@ -876,7 +876,6 @@ function ImageViewContent({ item, submissionMap }: { item: DailyHomeworkItem; su
   // Collect images from homework_submissions
   subs.forEach(s => {
     if (s.image_url) {
-      // image_url may contain multiple URLs separated by commas
       s.image_url.split(',').forEach(url => {
         const trimmed = url.trim();
         if (trimmed) allImages.push(trimmed);
@@ -892,16 +891,35 @@ function ImageViewContent({ item, submissionMap }: { item: DailyHomeworkItem; su
     });
   }
 
-  if (allImages.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">표시할 사진이 없습니다.</p>;
+  const hasAudio = !!item.submission_audio_url;
+  const hasContent = allImages.length > 0 || hasAudio;
+
+  if (!hasContent) {
+    return <p className="text-sm text-muted-foreground text-center py-4">표시할 제출물이 없습니다.</p>;
   }
 
   const latestSub = subs.length > 0 ? subs[subs.length - 1] : null;
 
   return (
-    <SubmissionImageCarousel
-      images={allImages}
-      submittedAt={item.submitted_at || latestSub?.submitted_at}
-    />
+    <div className="space-y-4">
+      {/* Audio player */}
+      {hasAudio && (
+        <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800">
+          <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-2 flex items-center gap-1">
+            🎤 음성 제출
+          </p>
+          <audio controls className="w-full" src={item.submission_audio_url!}>
+            브라우저에서 오디오를 지원하지 않습니다.
+          </audio>
+        </div>
+      )}
+      {/* Images */}
+      {allImages.length > 0 && (
+        <SubmissionImageCarousel
+          images={allImages}
+          submittedAt={item.submitted_at || latestSub?.submitted_at}
+        />
+      )}
+    </div>
   );
 }
