@@ -468,6 +468,9 @@ export default function Dashboard() {
   }
   const [supplementaryLessons, setSupplementaryLessons] = useState<SupplementaryLesson[]>([]);
 
+  // TEXTBOOK-ARRIVAL-ALERT-V1: Arrived textbook orders for teacher alert
+  const [arrivedTextbookCount, setArrivedTextbookCount] = useState(0);
+
   // SCHEDULE-OVERRIDE-V1: Override modal state
   const [overrideModalOpen, setOverrideModalOpen] = useState(false);
   const [overrideModalContext, setOverrideModalContext] = useState<{
