@@ -1710,6 +1710,7 @@ export default function Dashboard() {
             lessonSubmitted: recordInfo?.submitted || false,
             hasNextHomework: recordInfo?.hasNextHomework || false,
             hasPhotoSubmission: recordInfo?.hasPhotoSubmission || false,
+            hasAudioSubmission: recordInfo?.hasAudioSubmission || false,
             photoData: recordInfo?.photoData || null,
             // TEACHER-HW-ALERT-V2: Add homework check note and previous goal
             homeworkCheckNote: recordInfo?.homeworkCheckNote || null,
