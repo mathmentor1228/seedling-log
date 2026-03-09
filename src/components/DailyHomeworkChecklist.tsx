@@ -540,6 +540,16 @@ export default function DailyHomeworkChecklist() {
             {totalImages}장
           </button>
         )}
+        {item.submission_audio_url && (
+          <button
+            type="button"
+            className="flex items-center gap-0.5 text-purple-600 hover:underline cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); setImageViewItem(item); }}
+          >
+            <Mic className="w-3 h-3" />
+            음성
+          </button>
+        )}
         {item.required_submissions > 1 && (
           <span className={`${item.submission_count >= item.required_submissions ? 'text-green-600' : 'text-amber-600'}`}>
             인증 {item.submission_count}/{item.required_submissions}
