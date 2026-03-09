@@ -262,16 +262,46 @@ export function TextbookDistributionTab() {
         </div>
       )}
 
-      {/* Paid distributions */}
-      {paid.length > 0 && (
+      {/* TEXTBOOK-DISTRIBUTE-CONFIRM-V1: Pending distribution (paid but not physically handed over) */}
+      {pendingDistribution.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-2">수납 완료 ({paid.length}건)</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+            <BookMarked className="w-4 h-4 text-primary" />배부 대기 ({pendingDistribution.length}건)
+          </h3>
+          <p className="text-xs text-muted-foreground mb-2">수납 완료된 교재입니다. 학생에게 교재를 전달한 후 배부 확인 버튼을 눌러주세요.</p>
           <div className="space-y-2">
-            {paid.map(dist => (
+            {pendingDistribution.map(dist => (
+              <Card key={dist.id} className="p-4 border-l-4 border-l-primary/60">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-foreground">{dist.student_name}</p>
+                      <Badge className="bg-primary/15 text-primary border-primary/30 text-[10px]">수납완료 · 배부대기</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {dist.textbook_orders?.textbook_name} · {dist.quantity}권 · {dist.total_amount.toLocaleString()}원
+                    </p>
+                  </div>
+                  <Button size="sm" className="gap-1.5" onClick={() => handleConfirmDistribution(dist)}>
+                    <CheckCircle2 className="w-3.5 h-3.5" />배부 확인
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmed distributions */}
+      {confirmedDistribution.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-foreground mb-2">배부 완료 ({confirmedDistribution.length}건)</h3>
+          <div className="space-y-2">
+            {confirmedDistribution.map(dist => (
               <Card key={dist.id} className="p-4 opacity-70">
                 <div className="flex items-center gap-2">
                   <p className="font-medium text-foreground">{dist.student_name}</p>
-                  <Badge variant="success" className="text-[10px]">수납완료</Badge>
+                  <Badge variant="success" className="text-[10px]">배부완료</Badge>
                   <span className="text-sm text-muted-foreground ml-auto">
                     {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
                   </span>
