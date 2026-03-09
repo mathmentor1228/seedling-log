@@ -36,6 +36,7 @@ interface Distribution {
 interface Student {
   id: string;
   name: string;
+  parent_name?: string | null;
 }
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
@@ -68,7 +69,7 @@ export function TextbookDistributionTab() {
     const [distRes, orderRes, studentRes] = await Promise.all([
       supabase.from('textbook_distributions').select('*, textbook_orders(textbook_name, unit_price, subject)').order('created_at', { ascending: false }),
       supabase.from('textbook_orders').select('*').eq('status', '입고완료').order('created_at', { ascending: false }),
-      supabase.from('students').select('id, name').eq('enrollment_status', '재원').order('name'),
+      supabase.from('students').select('id, name, parent_name').eq('enrollment_status', '재원').order('name'),
     ]);
     setDistributions((distRes.data as any[]) || []);
     setOrders((orderRes.data as any[]) || []);
@@ -126,7 +127,13 @@ export function TextbookDistributionTab() {
   const copyPaymentMessage = (dist: Distribution) => {
     const bookName = dist.textbook_orders?.textbook_name || '교재';
     const subject = dist.textbook_orders?.subject || '수학';
-    const msg = `더멘토학원 교재안내\n\n#${dist.student_name} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : #${bookName}\n2. 교재가격 : #${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
+    // Find parent name from students list
+    const student = students.find(s => s.id === dist.student_id);
+    const parentName = (student as any)?.parent_name;
+    const depositGuidance = parentName && parentName !== dist.student_name
+      ? `\n입금 시 "${dist.student_name}" 또는 "${parentName}"으로 입금 부탁드립니다.`
+      : `\n입금 시 "${dist.student_name}" 이름으로 입금 부탁드립니다.`;
+    const msg = `더멘토학원 교재안내\n\n#${dist.student_name} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : #${bookName}\n2. 교재가격 : #${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}${depositGuidance}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
     navigator.clipboard.writeText(msg);
   };
 

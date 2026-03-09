@@ -52,6 +52,7 @@ interface Student {
   notes: string | null;
   school: string | null;
   parent_phone: string | null;
+  parent_name: string | null;
   student_phone: string | null;
   student_code: string | null;
   created_at: string;
@@ -82,6 +83,7 @@ export default function Students() {
     notes: '',
     school: '',
     parent_phone: '',
+    parent_name: '',
     student_phone: '',
   });
   const { toast } = useToast();
@@ -190,6 +192,7 @@ export default function Students() {
         notes: formData.notes.trim() || null,
         school: formData.school.trim() || null,
         parent_phone: normalizedParentPhone || null,
+        parent_name: formData.parent_name.trim() || null,
         student_phone: normalizedStudentPhone || null,
       };
 
@@ -252,6 +255,7 @@ export default function Students() {
       notes: '',
       school: '',
       parent_phone: '',
+      parent_name: '',
       student_phone: '',
     });
   };
@@ -269,6 +273,7 @@ export default function Students() {
       notes: student.notes || '',
       school: student.school || '',
       parent_phone: student.parent_phone || '',
+      parent_name: (student as any).parent_name || '',
       student_phone: student.student_phone || '',
     });
     setIsAddDialogOpen(true);
@@ -502,6 +507,15 @@ export default function Students() {
                       value={formData.parent_phone}
                       onChange={(e) => setFormData({ ...formData, parent_phone: e.target.value })}
                       placeholder="010-1234-5678"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="parent_name">학부모 성함</Label>
+                    <Input
+                      id="parent_name"
+                      value={formData.parent_name}
+                      onChange={(e) => setFormData({ ...formData, parent_name: e.target.value })}
+                      placeholder="학부모 이름"
                     />
                   </div>
                   <div className="space-y-2">
