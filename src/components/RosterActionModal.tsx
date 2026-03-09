@@ -39,6 +39,7 @@ import {
   ExternalLink,
   AlertTriangle,
   Camera,
+  Mic,
   X
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -79,6 +80,7 @@ interface HomeworkAssignment {
   // STUDENT-SUBMISSION-V1: Fields for student submission
   submission_image_url?: string | null;
   submission_text?: string | null;
+  submission_audio_url?: string | null;
   submitted_at?: string | null;
 }
 
@@ -341,6 +343,7 @@ export function RosterActionModal({
           // STUDENT-SUBMISSION-V1: Include inline submission fields from homework_assignments
           submission_image_url: prevHw.submission_image_url,
           submission_text: prevHw.submission_text,
+          submission_audio_url: prevHw.submission_audio_url,
           submitted_at: prevHw.submitted_at,
         } as HomeworkAssignment);
         
@@ -843,6 +846,19 @@ export function RosterActionModal({
                     {/* STUDENT-SUBMISSION-V1: Show homework content with submission indicator */}
                     <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
                       <div className="flex-1">{previousHomework.content}</div>
+                      {/* Show mic icon if student submitted audio */}
+                      {previousHomework.submission_audio_url && (
+                        <button
+                          type="button"
+                          onClick={() => setShowImageModal(true)}
+                          className="flex-shrink-0 relative group cursor-pointer"
+                          title="학생 음성 제출 듣기"
+                        >
+                          <div className="w-12 h-12 rounded-lg border-2 border-purple-400/50 overflow-hidden bg-purple-50 dark:bg-purple-950/30 hover:border-purple-500 transition-colors flex items-center justify-center">
+                            <Mic className="w-5 h-5 text-purple-500" />
+                          </div>
+                        </button>
+                      )}
                       {/* Show camera icon if student submitted image */}
                       {(studentSubmission?.image_url || previousHomework.submission_image_url) && (() => {
                         const rawUrl = studentSubmission?.image_url || previousHomework.submission_image_url || '';
@@ -1144,21 +1160,33 @@ export function RosterActionModal({
       
     </Dialog>
 
-    {/* STUDENT-SUBMISSION-V1: Image Preview Modal - rendered OUTSIDE the main dialog to avoid nested dialog issues */}
+    {/* STUDENT-SUBMISSION-V1: Image/Audio Preview Modal */}
     <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-4">
         <DialogHeader>
-          <DialogTitle className="text-base">📷 학생 제출 사진</DialogTitle>
+          <DialogTitle className="text-base">📎 학생 제출물</DialogTitle>
         </DialogHeader>
         {(() => {
           const rawUrl = studentSubmission?.image_url || previousHomework?.submission_image_url || '';
           const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
+          const audioUrl = previousHomework?.submission_audio_url;
           return (
             <div className="space-y-3">
-              {imageUrls.length === 0 && (
-                <p className="text-muted-foreground text-sm text-center py-4">이미지를 불러올 수 없습니다.</p>
+              {/* Audio player */}
+              {audioUrl && (
+                <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-2 flex items-center gap-1">
+                    🎤 음성 제출
+                  </p>
+                  <audio controls className="w-full" src={audioUrl}>
+                    브라우저에서 오디오를 지원하지 않습니다.
+                  </audio>
+                </div>
               )}
-              {imageUrls.length <= 3 ? (
+              {imageUrls.length === 0 && !audioUrl && (
+                <p className="text-muted-foreground text-sm text-center py-4">제출물을 불러올 수 없습니다.</p>
+              )}
+              {imageUrls.length > 0 && imageUrls.length <= 3 ? (
                 <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto">
                   {imageUrls.map((url, idx) => (
                     <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
@@ -1178,7 +1206,7 @@ export function RosterActionModal({
                     </a>
                   ))}
                 </div>
-              ) : (
+              ) : imageUrls.length > 3 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto">
                   {imageUrls.map((url, idx) => (
                     <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all">
@@ -1198,7 +1226,7 @@ export function RosterActionModal({
                     </a>
                   ))}
                 </div>
-              )}
+              ) : null}
               {(studentSubmission || previousHomework?.submitted_at) && (
                 <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
                   <p className="font-medium">

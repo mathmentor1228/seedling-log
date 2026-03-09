@@ -38,7 +38,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
-import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users, MessageSquare, CheckCircle2, RotateCcw, Send, ArrowRight } from 'lucide-react';
+import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users, MessageSquare, CheckCircle2, RotateCcw, Send, ArrowRight, Mic } from 'lucide-react';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
@@ -62,6 +62,7 @@ interface DailyHomeworkItem {
   checked_at: string | null;
   submitted_at: string | null;
   submission_image_url: string | null;
+  submission_audio_url: string | null;
   submission_count: number;
   teacher_id: string;
   teacher_name: string;
@@ -125,7 +126,7 @@ export default function DailyHomeworkChecklist() {
         .from('homework_assignments')
         .select(`
           id, student_id, subject, content, assigned_date, end_date, required_submissions,
-          check_status, result, checked_at, submitted_at, submission_image_url,
+          check_status, result, checked_at, submitted_at, submission_image_url, submission_audio_url,
           created_by,
           students:student_id (name, grade)
         `)
@@ -230,6 +231,7 @@ export default function DailyHomeworkChecklist() {
           checked_at: h.checked_at,
           submitted_at: h.submitted_at,
           submission_image_url: h.submission_image_url,
+          submission_audio_url: h.submission_audio_url || null,
           submission_count: (subMap[h.id] || []).length + (h.submission_image_url ? 1 : 0),
           teacher_id: teacherId,
           teacher_name: teacherId === 'unassigned' ? '미배정' : (tMap[teacherId] || '알 수 없음'),
@@ -536,6 +538,16 @@ export default function DailyHomeworkChecklist() {
           >
             <Image className="w-3 h-3" />
             {totalImages}장
+          </button>
+        )}
+        {item.submission_audio_url && (
+          <button
+            type="button"
+            className="flex items-center gap-0.5 text-purple-600 hover:underline cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); setImageViewItem(item); }}
+          >
+            <Mic className="w-3 h-3" />
+            음성
           </button>
         )}
         {item.required_submissions > 1 && (
@@ -864,7 +876,6 @@ function ImageViewContent({ item, submissionMap }: { item: DailyHomeworkItem; su
   // Collect images from homework_submissions
   subs.forEach(s => {
     if (s.image_url) {
-      // image_url may contain multiple URLs separated by commas
       s.image_url.split(',').forEach(url => {
         const trimmed = url.trim();
         if (trimmed) allImages.push(trimmed);
@@ -880,16 +891,35 @@ function ImageViewContent({ item, submissionMap }: { item: DailyHomeworkItem; su
     });
   }
 
-  if (allImages.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">표시할 사진이 없습니다.</p>;
+  const hasAudio = !!item.submission_audio_url;
+  const hasContent = allImages.length > 0 || hasAudio;
+
+  if (!hasContent) {
+    return <p className="text-sm text-muted-foreground text-center py-4">표시할 제출물이 없습니다.</p>;
   }
 
   const latestSub = subs.length > 0 ? subs[subs.length - 1] : null;
 
   return (
-    <SubmissionImageCarousel
-      images={allImages}
-      submittedAt={item.submitted_at || latestSub?.submitted_at}
-    />
+    <div className="space-y-4">
+      {/* Audio player */}
+      {hasAudio && (
+        <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800">
+          <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-2 flex items-center gap-1">
+            🎤 음성 제출
+          </p>
+          <audio controls className="w-full" src={item.submission_audio_url!}>
+            브라우저에서 오디오를 지원하지 않습니다.
+          </audio>
+        </div>
+      )}
+      {/* Images */}
+      {allImages.length > 0 && (
+        <SubmissionImageCarousel
+          images={allImages}
+          submittedAt={item.submitted_at || latestSub?.submitted_at}
+        />
+      )}
+    </div>
   );
 }
