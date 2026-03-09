@@ -2,9 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, RotateCcw, Volume2, CheckCircle2, XCircle, ArrowRight } from 'lucide-react';
+import { ChevronLeft, RotateCcw, Volume2, CheckCircle2, XCircle, ArrowRight, HelpCircle, Triangle } from 'lucide-react';
 import { speakEnglish } from '@/lib/ttsUtils';
 
 interface VocabWord {
@@ -12,10 +11,12 @@ interface VocabWord {
   meaning: string;
 }
 
+type ResultStatus = 'correct' | 'partial' | 'wrong' | 'skipped';
+
 interface TestResult {
   word: VocabWord;
   userAnswer: string;
-  correct: boolean;
+  status: ResultStatus;
 }
 
 interface VocabSelfTestProps {
@@ -25,14 +26,81 @@ interface VocabSelfTestProps {
   onBack: () => void;
 }
 
+// 품사 약어 목록
+const POS_TAGS = ['n.', 'v.', 'adj.', 'adv.', 'prep.', 'conj.', 'pron.', 'int.', 'det.', 'a.', 'vt.', 'vi.', 'aux.'];
+const POS_KOREAN = ['명사', '동사', '형용사', '부사', '전치사', '접속사', '대명사', '감탄사', '한정사', '조동사', '타동사', '자동사'];
+
+function stripPosTag(s: string): string {
+  let stripped = s.trim();
+  // Remove English POS tags like "n.", "v.", "adj." at the start
+  for (const tag of POS_TAGS) {
+    if (stripped.toLowerCase().startsWith(tag)) {
+      stripped = stripped.slice(tag.length).trim();
+    }
+  }
+  // Remove Korean POS labels
+  for (const tag of POS_KOREAN) {
+    stripped = stripped.replace(new RegExp(`\\(?${tag}\\)?`, 'g'), '').trim();
+  }
+  return stripped;
+}
+
+function normalize(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[\s]+/g, ' ')
+    .replace(/[.,;:!?'"()[\]{}]/g, '');
+}
+
+function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultStatus {
+  const normalizedUser = normalize(userAnswer);
+  const normalizedAnswer = normalize(correctAnswer);
+
+  if (!normalizedUser) return 'skipped';
+
+  // Split possible answers by , or /
+  const possibleAnswers = normalizedAnswer
+    .split(/[,/]/)
+    .map(a => normalize(a))
+    .filter(a => a.length > 0);
+
+  // Exact match
+  if (possibleAnswers.some(a => a === normalizedUser) || normalizedAnswer === normalizedUser) {
+    return 'correct';
+  }
+
+  // Partial match: check if core meaning matches when stripping POS tags
+  const userCore = normalize(stripPosTag(userAnswer));
+  const answerCores = correctAnswer
+    .split(/[,/]/)
+    .map(a => normalize(stripPosTag(a)))
+    .filter(a => a.length > 0);
+
+  if (userCore && answerCores.some(a => a === userCore)) {
+    return 'partial'; // 품사만 틀린 경우
+  }
+
+  // Check if user answer is a substring of the correct answer or vice versa (meaningful overlap)
+  if (userCore.length >= 2) {
+    for (const ac of answerCores) {
+      if (ac.includes(userCore) || userCore.includes(ac)) {
+        return 'partial';
+      }
+    }
+  }
+
+  return 'wrong';
+}
+
 export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
   const [showResult, setShowResult] = useState(false);
-  const [currentCorrect, setCurrentCorrect] = useState<boolean | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<ResultStatus | null>(null);
   const [finished, setFinished] = useState(false);
-  const [reviewWrong, setReviewWrong] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'wrong' | 'partial'>('all');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const currentWord = words[currentIdx];
@@ -45,48 +113,33 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
     }
   }, [currentIdx, showResult, finished]);
 
-  const normalize = (s: string) => {
-    return s
-      .trim()
-      .toLowerCase()
-      .replace(/[\s]+/g, ' ')
-      .replace(/[.,;:!?'"()[\]{}]/g, '');
-  };
+  const doCheck = useCallback((answerText: string, isSkip: boolean) => {
+    if (!currentWord) return;
+    const status = isSkip ? 'skipped' as ResultStatus : checkAnswerResult(answerText, answer);
+    setCurrentStatus(status);
+    setShowResult(true);
+    setResults(prev => [...prev, { word: currentWord, userAnswer: isSkip ? '' : answerText.trim(), status }]);
+  }, [currentWord, answer]);
 
   const checkAnswer = useCallback(() => {
     if (!currentWord || userAnswer.trim() === '') return;
+    doCheck(userAnswer, false);
+  }, [currentWord, userAnswer, doCheck]);
 
-    const normalizedUser = normalize(userAnswer);
-    const normalizedAnswer = normalize(answer);
-
-    // Check against possible multiple meanings separated by , or /
-    const possibleAnswers = normalizedAnswer
-      .split(/[,/]/)
-      .map(a => normalize(a))
-      .filter(a => a.length > 0);
-
-    const isCorrect = possibleAnswers.some(a => a === normalizedUser) ||
-      normalizedAnswer === normalizedUser;
-
-    setCurrentCorrect(isCorrect);
-    setShowResult(true);
-    setResults(prev => [...prev, { word: currentWord, userAnswer: userAnswer.trim(), correct: isCorrect }]);
-  }, [currentWord, userAnswer, answer]);
+  const skipAnswer = useCallback(() => {
+    if (!currentWord) return;
+    doCheck('', true);
+  }, [currentWord, doCheck]);
 
   const goNext = () => {
     if (currentIdx < words.length - 1) {
       setCurrentIdx(prev => prev + 1);
       setUserAnswer('');
       setShowResult(false);
-      setCurrentCorrect(null);
+      setCurrentStatus(null);
     } else {
-      // Finished
-      const allResults = [...results];
-      if (showResult) {
-        // last result already pushed
-      }
-      const correct = allResults.filter(r => r.correct).length;
-      const wrong = allResults.filter(r => !r.correct).length;
+      const correct = results.filter(r => r.status === 'correct').length;
+      const wrong = results.filter(r => r.status !== 'correct').length;
       setFinished(true);
       onFinish(correct, wrong, words.length);
     }
@@ -102,11 +155,17 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
     }
   };
 
-  const correctCount = results.filter(r => r.correct).length;
-  const wrongCount = results.filter(r => !r.correct).length;
+  const correctCount = results.filter(r => r.status === 'correct').length;
+  const partialCount = results.filter(r => r.status === 'partial').length;
+  const wrongCount = results.filter(r => r.status === 'wrong' || r.status === 'skipped').length;
   const progressPercent = Math.round(((currentIdx + (showResult ? 1 : 0)) / words.length) * 100);
 
-  const wrongWords = results.filter(r => !r.correct);
+  const wrongAndPartialWords = results.filter(r => r.status !== 'correct');
+  const filteredReview = reviewFilter === 'all'
+    ? wrongAndPartialWords
+    : wrongAndPartialWords.filter(r =>
+        reviewFilter === 'partial' ? r.status === 'partial' : (r.status === 'wrong' || r.status === 'skipped')
+      );
 
   if (finished) {
     const score = Math.round((correctCount / words.length) * 100);
@@ -116,42 +175,97 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
           <CardContent className="text-center space-y-4 py-8">
             <div className="text-4xl">{score >= 80 ? '🎉' : score >= 50 ? '💪' : '📖'}</div>
             <h2 className="text-xl font-bold">테스트 완료!</h2>
-            <div className="text-3xl font-bold">
+            <div className="text-3xl font-bold flex items-center justify-center gap-2">
               <span className="text-green-600">{correctCount}</span>
+              {partialCount > 0 && (
+                <>
+                  <span className="text-muted-foreground text-lg">+</span>
+                  <span className="text-amber-500">△{partialCount}</span>
+                </>
+              )}
               <span className="text-muted-foreground mx-1">/</span>
               <span>{words.length}</span>
             </div>
             <p className="text-lg text-muted-foreground">정답률 {score}%</p>
             <Progress value={score} className="h-2" />
 
-            {wrongWords.length > 0 && (
-              <div className="mt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setReviewWrong(!reviewWrong)}
-                  className="mb-2"
-                >
-                  {reviewWrong ? '접기' : `❌ 틀린 단어 보기 (${wrongWords.length}개)`}
-                </Button>
-                {reviewWrong && (
-                  <div className="space-y-2 text-left mt-2">
-                    {wrongWords.map((r, i) => (
-                      <div key={i} className="flex items-start gap-2 p-2 rounded-md bg-red-50 border border-red-100 text-sm">
+            {wrongAndPartialWords.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {/* Filter buttons */}
+                <div className="flex gap-1 justify-center">
+                  <Button
+                    variant={reviewFilter === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setReviewFilter(prev => prev === 'all' ? 'all' : 'all')}
+                    className="text-xs"
+                  >
+                    전체 ({wrongAndPartialWords.length})
+                  </Button>
+                  {partialCount > 0 && (
+                    <Button
+                      variant={reviewFilter === 'partial' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setReviewFilter(prev => prev === 'partial' ? 'all' : 'partial')}
+                      className="text-xs"
+                    >
+                      △ 세모 ({partialCount})
+                    </Button>
+                  )}
+                  <Button
+                    variant={reviewFilter === 'wrong' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setReviewFilter(prev => prev === 'wrong' ? 'all' : 'wrong')}
+                    className="text-xs"
+                  >
+                    ✗ 오답 ({wrongCount})
+                  </Button>
+                </div>
+
+                <div className="space-y-2 text-left mt-2">
+                  {filteredReview.map((r, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-2 p-2 rounded-md text-sm border ${
+                        r.status === 'partial'
+                          ? 'bg-amber-50 border-amber-200'
+                          : r.status === 'skipped'
+                          ? 'bg-muted border-border'
+                          : 'bg-red-50 border-red-100'
+                      }`}
+                    >
+                      {r.status === 'partial' ? (
+                        <Triangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0 fill-amber-500" />
+                      ) : r.status === 'skipped' ? (
+                        <HelpCircle className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                      ) : (
                         <XCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium">{mode === 'eng_to_kor' ? r.word.english : r.word.meaning}</div>
-                          <div className="text-red-500 line-through text-xs">{r.userAnswer}</div>
-                          <div className="text-green-600 text-xs">→ {mode === 'eng_to_kor' ? r.word.meaning : r.word.english}</div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">
+                          {mode === 'eng_to_kor' ? r.word.english : r.word.meaning}
                         </div>
-                        {mode === 'kor_to_eng' && (
-                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => speakEnglish(r.word.english)}>
-                            <Volume2 className="w-3.5 h-3.5" />
-                          </Button>
+                        {r.status === 'skipped' ? (
+                          <div className="text-muted-foreground text-xs">모르겠다고 표시함</div>
+                        ) : (
+                          <div className={`line-through text-xs ${r.status === 'partial' ? 'text-amber-500' : 'text-red-500'}`}>
+                            {r.userAnswer}
+                          </div>
+                        )}
+                        <div className="text-green-600 text-xs">
+                          → {mode === 'eng_to_kor' ? r.word.meaning : r.word.english}
+                        </div>
+                        {r.status === 'partial' && (
+                          <div className="text-amber-600 text-[10px] mt-0.5">품사/표현이 약간 다름</div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {mode === 'kor_to_eng' && (
+                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => speakEnglish(r.word.english)}>
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -164,9 +278,9 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
                 setUserAnswer('');
                 setResults([]);
                 setShowResult(false);
-                setCurrentCorrect(null);
+                setCurrentStatus(null);
                 setFinished(false);
-                setReviewWrong(false);
+                setReviewFilter('all');
               }}>
                 <RotateCcw className="w-3.5 h-3.5 mr-1" /> 다시 풀기
               </Button>
@@ -189,6 +303,7 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
         </div>
         <div className="flex gap-2 text-sm">
           <span className="text-green-600 font-medium">✓{correctCount}</span>
+          {partialCount > 0 && <span className="text-amber-500 font-medium">△{partialCount}</span>}
           <span className="text-red-500 font-medium">✗{wrongCount}</span>
         </div>
       </div>
@@ -197,7 +312,7 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
       <Progress value={progressPercent} className="h-1.5" />
 
       {/* Question card */}
-      <Card className="min-h-[220px] flex items-center justify-center">
+      <Card className="min-h-[260px] flex items-center justify-center">
         <CardContent className="text-center py-8 space-y-4 w-full">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
             {mode === 'eng_to_kor' ? '뜻을 입력하세요' : '영어 단어를 입력하세요'}
@@ -224,16 +339,45 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
                 autoCapitalize="off"
                 spellCheck={false}
               />
-              <Button onClick={checkAnswer} disabled={userAnswer.trim() === ''} className="w-full">
-                확인
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={skipAnswer} variant="outline" className="flex-1 text-muted-foreground">
+                  <HelpCircle className="w-4 h-4 mr-1" /> 모르겠다
+                </Button>
+                <Button onClick={checkAnswer} disabled={userAnswer.trim() === ''} className="flex-1">
+                  확인
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="px-4 space-y-3">
-              {currentCorrect ? (
+              {currentStatus === 'correct' ? (
                 <div className="flex items-center justify-center gap-2 text-green-600">
                   <CheckCircle2 className="w-6 h-6" />
                   <span className="text-lg font-bold">정답!</span>
+                </div>
+              ) : currentStatus === 'partial' ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-amber-500">
+                    <Triangle className="w-6 h-6 fill-amber-500" />
+                    <span className="text-lg font-bold">세모 (부분 정답)</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    내 답: <span className="text-amber-500">{userAnswer}</span>
+                  </p>
+                  <p className="text-base font-medium text-green-600">
+                    정답: {answer}
+                  </p>
+                  <p className="text-xs text-amber-600">핵심 의미는 맞지만 품사/표현이 다릅니다</p>
+                </div>
+              ) : currentStatus === 'skipped' ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                    <HelpCircle className="w-6 h-6" />
+                    <span className="text-lg font-bold">모르겠다</span>
+                  </div>
+                  <p className="text-base font-medium text-green-600">
+                    정답: {answer}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
