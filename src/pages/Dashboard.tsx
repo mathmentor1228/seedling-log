@@ -2697,25 +2697,27 @@ export default function Dashboard() {
                                               <span className="text-[11px] text-muted-foreground">다음숙제: —</span>
                                             )}
 
-                                            {/* 사진보기 */}
-                                            {ls?.hasPhotoSubmission && ls.photoData && (
+                                            {/* 제출물 보기 */}
+                                            {ls?.photoData && (ls.hasPhotoSubmission || ls.hasAudioSubmission) && (
                                               <>
                                                 <span className="text-border">│</span>
                                                 <button
-                                                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                                                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:text-primary/80 hover:underline transition-colors"
                                                   onClick={(e) => {
                                                     e.stopPropagation();
                                                     setPhotoViewHw({
                                                       id: '', student_id: row.student_id, student_name: row.student_name,
                                                       subject: row.subject, content: '', assigned_date: '',
-                                                      has_photo_submission: true,
+                                                      has_photo_submission: ls.hasPhotoSubmission || false,
                                                       submission_image_url: ls.photoData!.urls.join(','),
+                                                      submission_audio_url: ls.photoData!.audioUrl || null,
                                                       submission_text: ls.photoData!.text,
                                                       submitted_at: ls.photoData!.at,
                                                     });
                                                   }}
                                                 >
-                                                  📷 {ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}
+                                                  {ls.hasPhotoSubmission && `📷 ${ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}`}
+                                                  {!ls.hasPhotoSubmission && ls.hasAudioSubmission && <><Mic className="w-3 h-3" />음성</>}
                                                 </button>
                                               </>
                                             )}
