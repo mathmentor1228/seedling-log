@@ -216,9 +216,14 @@ export function TextbookPaymentTab() {
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5 shrink-0">
-                      <Button size="sm" variant="outline" className="gap-1 text-xs px-2" onClick={() => handleCopyMessage(dist)} title="카톡 문구 복사">
-                        <Copy className="w-3 h-3" />문구 복사
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline" className="gap-1 text-xs px-2" onClick={() => handleCopyMessage(dist)} title="문구만 복사">
+                          <Copy className="w-3 h-3" />복사
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs px-2 text-yellow-700 border-yellow-300 hover:bg-yellow-50" onClick={() => handleCopyAndOpenKakao(dist)} title="복사 후 카카오톡 열기">
+                          <MessageCircle className="w-3 h-3" />카톡
+                        </Button>
+                      </div>
                       <Button size="sm" className="gap-1" onClick={() => handleConfirmPayment(dist)}>
                         <CheckCircle2 className="w-3.5 h-3.5" />수납 완료
                       </Button>
