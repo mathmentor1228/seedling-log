@@ -126,7 +126,7 @@ export default function DailyHomeworkChecklist() {
         .from('homework_assignments')
         .select(`
           id, student_id, subject, content, assigned_date, end_date, required_submissions,
-          check_status, result, checked_at, submitted_at, submission_image_url,
+          check_status, result, checked_at, submitted_at, submission_image_url, submission_audio_url,
           created_by,
           students:student_id (name, grade)
         `)
