@@ -81,6 +81,7 @@ interface HomeworkAssignment {
   notes: string | null;
   checker_name?: string;
   submission_image_url?: string | null;
+  submission_audio_url?: string | null;
   submission_text?: string | null;
   submitted_at?: string | null;
 }
