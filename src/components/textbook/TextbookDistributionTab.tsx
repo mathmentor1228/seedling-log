@@ -49,6 +49,9 @@ export function TextbookDistributionTab() {
   const [showDialog, setShowDialog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [userName, setUserName] = useState('');
+  // MESSAGE-RESEND-V1: Resend confirmation dialog
+  const [resendTarget, setResendTarget] = useState<Distribution | null>(null);
+  const [resendType, setResendType] = useState<'payment' | 'selfpurchase'>('payment');
 
   const [selectedOrder, setSelectedOrder] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
