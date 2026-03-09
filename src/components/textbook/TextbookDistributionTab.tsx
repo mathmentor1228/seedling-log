@@ -109,10 +109,13 @@ export function TextbookDistributionTab() {
         distributed_qty: (order.distributed_qty || 0) + qty,
       } as any).eq('id', selectedOrder);
 
-      toast.success(`${student.name} 학생에게 교재 배부 완료 (재고 ${remaining - qty}권 남음)`);
+      // Close dialog first, then show toast so it's not hidden behind the overlay
       setShowDialog(false);
       setSelectedOrder(''); setSelectedStudent(''); setDistQty('1');
       fetchData();
+      setTimeout(() => {
+        toast.success(`${student.name} 학생에게 교재 배부 완료 (재고 ${remaining - qty}권 남음)`);
+      }, 300);
     }
     setCreating(false);
   };
