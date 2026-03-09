@@ -51,7 +51,8 @@ import {
   Settings2,
   Wrench,
   MessageSquare,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Mic
 } from 'lucide-react';
 import { ScheduleOverrideModal } from '@/components/ScheduleOverrideModal';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
@@ -66,6 +67,7 @@ interface PendingHomework {
   assigned_date: string;
   has_photo_submission: boolean;
   submission_image_url: string | null;
+  submission_audio_url?: string | null;
   submission_text: string | null;
   submitted_at: string | null;
 }
