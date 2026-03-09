@@ -272,13 +272,21 @@ export function TextbookDistributionTab() {
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       배부: {dist.distributed_by_name} · {format(new Date(dist.created_at), 'MM/dd')}
+                      {(dist as any).message_sent_at && (
+                        <span className="ml-1.5 text-primary">
+                          · 발송완료 {format(new Date((dist as any).message_sent_at), 'MM/dd HH:mm')}
+                          {(dist as any).message_resent_at && (
+                            <> · 재전송 {format(new Date((dist as any).message_resent_at), 'MM/dd HH:mm')}</>
+                          )}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Button size="sm" variant="outline" className="gap-1" onClick={() => handleCopyMessage(dist)}>
-                      <Copy className="w-3.5 h-3.5" />안내문자
+                    <Button size="sm" variant={(dist as any).message_sent_at ? 'ghost' : 'outline'} className="gap-1" onClick={() => handleSendMessage(dist, 'payment')}>
+                      <Send className="w-3.5 h-3.5" />{(dist as any).message_sent_at ? '재전송' : '안내문자'}
                     </Button>
-                    <Button size="sm" variant="outline" className="gap-1 text-muted-foreground" onClick={() => handleCopySelfPurchaseMessage(dist)}>
+                    <Button size="sm" variant="outline" className="gap-1 text-muted-foreground" onClick={() => handleSendMessage(dist, 'selfpurchase')}>
                       <ShoppingCart className="w-3.5 h-3.5" />개별구매
                     </Button>
                   </div>
