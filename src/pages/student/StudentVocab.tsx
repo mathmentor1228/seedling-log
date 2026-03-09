@@ -311,29 +311,31 @@ export default function StudentVocab() {
             </Card>
 
             <div className="space-y-2">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">출제 방식</label>
-                <Select value={mode} onValueChange={v => setMode(v as any)}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="eng_to_kor">영어 → 한글 뜻</SelectItem>
-                    <SelectItem value="kor_to_eng">한글 뜻 → 영어</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {studyType !== 'listening' && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">출제 방식</label>
+                  <Select value={mode} onValueChange={v => setMode(v as any)}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="eng_to_kor">영어 → 한글 뜻</SelectItem>
+                      <SelectItem value="kor_to_eng">한글 뜻 → 영어</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">학습 방법</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <Button
                     variant={studyType === 'flashcard' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setStudyType('flashcard')}
                     className="w-full"
                   >
-                    <Eye className="w-3.5 h-3.5 mr-1" /> 플래시카드
+                    <Eye className="w-3.5 h-3.5 mr-1" /> 카드
                   </Button>
                   <Button
                     variant={studyType === 'test' ? 'default' : 'outline'}
@@ -341,7 +343,15 @@ export default function StudentVocab() {
                     onClick={() => setStudyType('test')}
                     className="w-full"
                   >
-                    <PenLine className="w-3.5 h-3.5 mr-1" /> 셀프 테스트
+                    <PenLine className="w-3.5 h-3.5 mr-1" /> 테스트
+                  </Button>
+                  <Button
+                    variant={studyType === 'listening' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStudyType('listening')}
+                    className="w-full"
+                  >
+                    <Headphones className="w-3.5 h-3.5 mr-1" /> 듣기
                   </Button>
                 </div>
               </div>
