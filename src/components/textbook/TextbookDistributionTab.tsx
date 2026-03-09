@@ -140,6 +140,9 @@ export function TextbookDistributionTab() {
 
   const unpaid = distributions.filter(d => d.payment_status === '미납');
   const paid = distributions.filter(d => d.payment_status === '수납완료');
+  // TEXTBOOK-DISTRIBUTE-CONFIRM-V1: Paid but not yet physically distributed
+  const pendingDistribution = paid.filter(d => !(d as any).distributed_confirmed_at);
+  const confirmedDistribution = paid.filter(d => !!(d as any).distributed_confirmed_at);
 
   // Filter orders to only show those with remaining stock
   const availableOrders = orders.filter(o => (o.quantity - (o.distributed_qty || 0)) > 0);
