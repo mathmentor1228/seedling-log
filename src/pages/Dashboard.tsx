@@ -1506,8 +1506,8 @@ export default function Dashboard() {
           hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
         }
 
-        // Fetch photo submissions for teacher's students
-        let teacherPhotoDataMap: Record<string, { urls: string[]; text: string | null; at: string | null }> = {};
+        // Fetch photo/audio submissions for teacher's students
+        let teacherPhotoDataMap: Record<string, { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null }> = {};
         // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
         let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
@@ -1526,17 +1526,16 @@ export default function Dashboard() {
               if (!subject) return;
               const photoKey = `${sub.student_id}:${subject}`;
               if (!teacherPhotoDataMap[photoKey]) {
-                teacherPhotoDataMap[photoKey] = { urls: [], text: sub.submission_note || null, at: sub.submitted_at };
+                teacherPhotoDataMap[photoKey] = { urls: [], audioUrl: null, text: sub.submission_note || null, at: sub.submitted_at };
               }
               const imgUrls = sub.image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
               teacherPhotoDataMap[photoKey].urls.push(...imgUrls);
             }
           });
 
-          // Fallback: homework_assignments.submission_image_url
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text, check_status')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
@@ -1551,9 +1550,11 @@ export default function Dashboard() {
 
             if (seenLatest.has(photoKey)) return;
             seenLatest.add(photoKey);
-            if (hw.submitted_at && hw.submission_image_url && !teacherPhotoDataMap[photoKey]) {
-              const imgUrls = hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
-              teacherPhotoDataMap[photoKey] = { urls: imgUrls, text: hw.submission_text || null, at: hw.submitted_at };
+            const hasImage = !!hw.submission_image_url;
+            const hasAudio = !!hw.submission_audio_url;
+            if (hw.submitted_at && (hasImage || hasAudio) && !teacherPhotoDataMap[photoKey]) {
+              const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+              teacherPhotoDataMap[photoKey] = { urls: imgUrls, audioUrl: hw.submission_audio_url || null, text: hw.submission_text || null, at: hw.submitted_at };
             }
           });
         }
