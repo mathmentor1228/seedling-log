@@ -3069,25 +3069,27 @@ export default function Dashboard() {
                                           <span className="text-[11px] text-muted-foreground">다음숙제: —</span>
                                         )}
 
-                                        {/* 사진보기 */}
-                                        {student.hasPhotoSubmission && student.photoData && (
+                                        {/* 제출물 보기 */}
+                                        {student.photoData && (student.hasPhotoSubmission || student.hasAudioSubmission) && (
                                           <>
                                             <span className="text-border">│</span>
                                             <button
-                                              className="inline-flex items-center gap-0.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                                              className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:text-primary/80 hover:underline transition-colors"
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 setPhotoViewHw({
                                                   id: '', student_id: student.id, student_name: student.name,
                                                   subject: slot.subject, content: '', assigned_date: '',
-                                                  has_photo_submission: true,
+                                                  has_photo_submission: student.hasPhotoSubmission || false,
                                                   submission_image_url: student.photoData!.urls.join(','),
+                                                  submission_audio_url: student.photoData!.audioUrl || null,
                                                   submission_text: student.photoData!.text,
                                                   submitted_at: student.photoData!.at,
                                                 });
                                               }}
                                             >
-                                              📷 {student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}
+                                              {student.hasPhotoSubmission && `📷 ${student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}`}
+                                              {!student.hasPhotoSubmission && student.hasAudioSubmission && <><Mic className="w-3 h-3" />음성</>}
                                             </button>
                                           </>
                                         )}
