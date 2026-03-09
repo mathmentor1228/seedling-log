@@ -51,7 +51,8 @@ import {
   Settings2,
   Wrench,
   MessageSquare,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Mic
 } from 'lucide-react';
 import { ScheduleOverrideModal } from '@/components/ScheduleOverrideModal';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
@@ -66,6 +67,7 @@ interface PendingHomework {
   assigned_date: string;
   has_photo_submission: boolean;
   submission_image_url: string | null;
+  submission_audio_url?: string | null;
   submission_text: string | null;
   submitted_at: string | null;
 }
@@ -139,7 +141,8 @@ interface TodaySlotStudent {
   lessonSubmitted?: boolean;
   hasNextHomework?: boolean;
   hasPhotoSubmission?: boolean;
-  photoData?: { urls: string[]; text: string | null; at: string | null } | null;
+  hasAudioSubmission?: boolean;
+  photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null } | null;
   // TEACHER-HW-ALERT-V2: Homework check note and previous goal
   homeworkCheckNote?: string | null;
   homeworkCheckLessonId?: string | null;
@@ -412,7 +415,7 @@ export default function Dashboard() {
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
   // NEXT-HW-BADGE-V1: Include hasNextHomework
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; photoData?: { urls: string[]; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; hasAudioSubmission?: boolean; photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
@@ -923,9 +926,8 @@ export default function Dashboard() {
           hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
         }
 
-        // PHOTO-STABLE-V2: Fetch photo submissions from homework_submissions (stable, not affected by check_status)
-        // Also fallback to homework_assignments.submission_image_url
-        let photoDataMap: Record<string, { urls: string[]; text: string | null; at: string | null }> = {};
+        // PHOTO-STABLE-V2: Fetch photo/audio submissions from homework_submissions + homework_assignments
+        let photoDataMap: Record<string, { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null }> = {};
         // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
         let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
@@ -945,7 +947,7 @@ export default function Dashboard() {
               if (!subject) return;
               const photoKey = `${sub.student_id}:${subject}`;
               if (!photoDataMap[photoKey]) {
-                photoDataMap[photoKey] = { urls: [], text: sub.submission_note || null, at: sub.submitted_at };
+                photoDataMap[photoKey] = { urls: [], audioUrl: null, text: sub.submission_note || null, at: sub.submitted_at };
               }
               // Collect all image URLs (support comma-separated)
               const imgUrls = sub.image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
@@ -953,17 +955,15 @@ export default function Dashboard() {
             }
           });
 
-          // Fallback: homework_assignments.submission_image_url
-          // PHOTO-MATCH-V3: Only show photo from the LATEST homework per student+subject.
-          // If the latest homework has no photo, do NOT fall back to older homework photos.
+          // Fallback: homework_assignments submission fields (latest assignment only)
+          // PHOTO-MATCH-V3: If latest homework has no submission, do NOT fall back to older homework submissions.
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text, check_status')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
           
-          // Track which student+subject we've already seen (latest first)
           const seenLatest = new Set<string>();
           (hwAll || []).forEach((hw: any) => {
             const photoKey = `${hw.student_id}:${hw.subject}`;
@@ -972,18 +972,26 @@ export default function Dashboard() {
               latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
             }
 
-            if (seenLatest.has(photoKey)) return; // skip older assignments
+            if (seenLatest.has(photoKey)) return;
             seenLatest.add(photoKey);
-            // Only populate photo if THIS (latest) assignment has a submission
-            if (hw.submitted_at && hw.submission_image_url && !photoDataMap[photoKey]) {
-              const imgUrls = hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
-              photoDataMap[photoKey] = { urls: imgUrls, text: hw.submission_text || null, at: hw.submitted_at };
+
+            const hasImage = !!hw.submission_image_url;
+            const hasAudio = !!hw.submission_audio_url;
+            if (hw.submitted_at && (hasImage || hasAudio) && !photoDataMap[photoKey]) {
+              const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+              photoDataMap[photoKey] = {
+                urls: imgUrls,
+                audioUrl: hw.submission_audio_url || null,
+                text: hw.submission_text || null,
+                at: hw.submitted_at,
+              };
             }
           });
         }
 
-        // Build photo set from map
-        const photoSubmissionSet = new Set(Object.keys(photoDataMap));
+        // Build submission sets from map
+        const photoSubmissionSet = new Set(Object.entries(photoDataMap).filter(([, v]) => v.urls.length > 0).map(([k]) => k));
+        const audioSubmissionSet = new Set(Object.entries(photoDataMap).filter(([, v]) => !!v.audioUrl).map(([k]) => k));
         
         // Build a student name lookup from roster rows
         const studentNameLookup: Record<string, string> = {};
@@ -1014,7 +1022,7 @@ export default function Dashboard() {
           }
         }
 
-        // PHOTO-STABLE-V2: Build status map with stable photo data
+        // PHOTO-STABLE-V2: Build status map with stable photo/audio data
         const statusMap: Record<string, typeof lessonStatusMap[string]> = {};
         (lessonRecords || []).forEach((lr: any) => {
           const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
@@ -1027,8 +1035,9 @@ export default function Dashboard() {
             recordId: lr.id,
             homeworkStatus: lr.homework_status || null,
             latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
-            hasNextHomework: hwAssignmentSet.has(lr.id), 
+            hasNextHomework: hwAssignmentSet.has(lr.id),
             hasPhotoSubmission: photoSubmissionSet.has(photoKey),
+            hasAudioSubmission: audioSubmissionSet.has(photoKey),
             prevNextLessonGoal: adminPrevGoalMap[goalKey] || null,
             todayTestData: hasTestData ? { test_content: lr.test_content || null, test_title: lr.test_title || null, test_result_text: lr.test_result_text || null, english_pass_fail: lr.english_pass_fail || null } : null,
             ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[lr.student_id] || '학생' } } : {})
@@ -1045,14 +1054,12 @@ export default function Dashboard() {
             .or('result_score.neq.,result_passed.not.is.null');
           
           if (testScheds && testScheds.length > 0) {
-            // Build a map by student_id:subject
             const testSchedMap: Record<string, typeof testScheds[0]> = {};
             testScheds.forEach((ts: any) => {
               const k = `${ts.student_id}:${ts.subject}`;
-              testSchedMap[k] = ts; // latest wins
+              testSchedMap[k] = ts;
             });
             
-            // Merge into statusMap where no lesson_records test data exists
             rosterRows.forEach((row: any) => {
               const key = `${row.student_id}:${row.class_id}:${row.subject}`;
               const tsKey = `${row.student_id}:${row.subject}`;
@@ -1075,6 +1082,7 @@ export default function Dashboard() {
                   latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[tsKey] || null,
                   hasNextHomework: false,
                   hasPhotoSubmission: photoSubmissionSet.has(tsKey),
+                  hasAudioSubmission: audioSubmissionSet.has(tsKey),
                   todayTestData: {
                     test_content: ts.content || null,
                     test_title: `${ts.test_type === 'guerrilla' ? '게릴라' : '시험'}`,
@@ -1087,11 +1095,13 @@ export default function Dashboard() {
           }
         }
 
-        // Also populate statusMap for students with photo submissions but no lesson record
+        // Also populate statusMap for students with submissions but no lesson record
         rosterRows.forEach((row: any) => {
           const key = `${row.student_id}:${row.class_id}:${row.subject}`;
           const photoKey = `${row.student_id}:${row.subject}`;
-          if (!statusMap[key] && photoSubmissionSet.has(photoKey)) {
+          const hasPhoto = photoSubmissionSet.has(photoKey);
+          const hasAudio = audioSubmissionSet.has(photoKey);
+          if (!statusMap[key] && (hasPhoto || hasAudio)) {
             const pd = photoDataMap[photoKey];
             statusMap[key] = {
               submitted: false,
@@ -1099,7 +1109,8 @@ export default function Dashboard() {
               homeworkStatus: null,
               latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
               hasNextHomework: false,
-              hasPhotoSubmission: true,
+              hasPhotoSubmission: hasPhoto,
+              hasAudioSubmission: hasAudio,
               ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[row.student_id] || '학생' } } : {})
             };
           }
@@ -1428,7 +1439,8 @@ export default function Dashboard() {
         homeworkCheckLessonId: string | null;
         hasNextHomework: boolean;
         hasPhotoSubmission: boolean;
-        photoData?: { urls: string[]; text: string | null; at: string | null } | null;
+        hasAudioSubmission?: boolean;
+        photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null } | null;
         // TEST-CONTENT-DISPLAY-V2
         subject?: string;
         // HW-STATUS-SYNC-V1: homework_status from lesson_records
@@ -1494,8 +1506,8 @@ export default function Dashboard() {
           hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
         }
 
-        // Fetch photo submissions for teacher's students
-        let teacherPhotoDataMap: Record<string, { urls: string[]; text: string | null; at: string | null }> = {};
+        // Fetch photo/audio submissions for teacher's students
+        let teacherPhotoDataMap: Record<string, { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null }> = {};
         // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
         let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
@@ -1514,17 +1526,16 @@ export default function Dashboard() {
               if (!subject) return;
               const photoKey = `${sub.student_id}:${subject}`;
               if (!teacherPhotoDataMap[photoKey]) {
-                teacherPhotoDataMap[photoKey] = { urls: [], text: sub.submission_note || null, at: sub.submitted_at };
+                teacherPhotoDataMap[photoKey] = { urls: [], audioUrl: null, text: sub.submission_note || null, at: sub.submitted_at };
               }
               const imgUrls = sub.image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
               teacherPhotoDataMap[photoKey].urls.push(...imgUrls);
             }
           });
 
-          // Fallback: homework_assignments.submission_image_url
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_text, check_status')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
@@ -1539,9 +1550,11 @@ export default function Dashboard() {
 
             if (seenLatest.has(photoKey)) return;
             seenLatest.add(photoKey);
-            if (hw.submitted_at && hw.submission_image_url && !teacherPhotoDataMap[photoKey]) {
-              const imgUrls = hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean);
-              teacherPhotoDataMap[photoKey] = { urls: imgUrls, text: hw.submission_text || null, at: hw.submitted_at };
+            const hasImage = !!hw.submission_image_url;
+            const hasAudio = !!hw.submission_audio_url;
+            if (hw.submitted_at && (hasImage || hasAudio) && !teacherPhotoDataMap[photoKey]) {
+              const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+              teacherPhotoDataMap[photoKey] = { urls: imgUrls, audioUrl: hw.submission_audio_url || null, text: hw.submission_text || null, at: hw.submitted_at };
             }
           });
         }
@@ -1562,7 +1575,8 @@ export default function Dashboard() {
               homeworkCheckNote: lr.homework_check_note || null,
               homeworkCheckLessonId: lr.homework_check_note ? lr.id : null,
               hasNextHomework: hwAssignmentSet.has(lr.id),
-              hasPhotoSubmission: !!pd,
+              hasPhotoSubmission: !!pd && pd.urls.length > 0,
+              hasAudioSubmission: !!pd?.audioUrl,
               photoData: pd || null,
               // HW-STATUS-SYNC-V1: Include homework_status from lesson_records
               homeworkStatus: lr.homework_status || null,
@@ -1618,6 +1632,7 @@ export default function Dashboard() {
                   homeworkCheckLessonId: null,
                   hasNextHomework: false,
                   hasPhotoSubmission: false,
+                  hasAudioSubmission: false,
                   photoData: null,
                   homeworkStatus: null,
                   latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[`${ts.student_id}:${ts.subject}`] || null,
@@ -1695,6 +1710,7 @@ export default function Dashboard() {
             lessonSubmitted: recordInfo?.submitted || false,
             hasNextHomework: recordInfo?.hasNextHomework || false,
             hasPhotoSubmission: recordInfo?.hasPhotoSubmission || false,
+            hasAudioSubmission: recordInfo?.hasAudioSubmission || false,
             photoData: recordInfo?.photoData || null,
             // TEACHER-HW-ALERT-V2: Add homework check note and previous goal
             homeworkCheckNote: recordInfo?.homeworkCheckNote || null,
@@ -2681,25 +2697,27 @@ export default function Dashboard() {
                                               <span className="text-[11px] text-muted-foreground">다음숙제: —</span>
                                             )}
 
-                                            {/* 사진보기 */}
-                                            {ls?.hasPhotoSubmission && ls.photoData && (
+                                            {/* 제출물 보기 */}
+                                            {ls?.photoData && (ls.hasPhotoSubmission || ls.hasAudioSubmission) && (
                                               <>
                                                 <span className="text-border">│</span>
                                                 <button
-                                                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                                                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:text-primary/80 hover:underline transition-colors"
                                                   onClick={(e) => {
                                                     e.stopPropagation();
                                                     setPhotoViewHw({
                                                       id: '', student_id: row.student_id, student_name: row.student_name,
                                                       subject: row.subject, content: '', assigned_date: '',
-                                                      has_photo_submission: true,
+                                                      has_photo_submission: ls.hasPhotoSubmission || false,
                                                       submission_image_url: ls.photoData!.urls.join(','),
+                                                      submission_audio_url: ls.photoData!.audioUrl || null,
                                                       submission_text: ls.photoData!.text,
                                                       submitted_at: ls.photoData!.at,
                                                     });
                                                   }}
                                                 >
-                                                  📷 {ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}
+                                                  {ls.hasPhotoSubmission && `📷 ${ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}`}
+                                                  {!ls.hasPhotoSubmission && ls.hasAudioSubmission && <><Mic className="w-3 h-3" />음성</>}
                                                 </button>
                                               </>
                                             )}
@@ -3051,25 +3069,27 @@ export default function Dashboard() {
                                           <span className="text-[11px] text-muted-foreground">다음숙제: —</span>
                                         )}
 
-                                        {/* 사진보기 */}
-                                        {student.hasPhotoSubmission && student.photoData && (
+                                        {/* 제출물 보기 */}
+                                        {student.photoData && (student.hasPhotoSubmission || student.hasAudioSubmission) && (
                                           <>
                                             <span className="text-border">│</span>
                                             <button
-                                              className="inline-flex items-center gap-0.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                                              className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:text-primary/80 hover:underline transition-colors"
                                               onClick={(e) => {
                                                 e.stopPropagation();
                                                 setPhotoViewHw({
                                                   id: '', student_id: student.id, student_name: student.name,
                                                   subject: slot.subject, content: '', assigned_date: '',
-                                                  has_photo_submission: true,
+                                                  has_photo_submission: student.hasPhotoSubmission || false,
                                                   submission_image_url: student.photoData!.urls.join(','),
+                                                  submission_audio_url: student.photoData!.audioUrl || null,
                                                   submission_text: student.photoData!.text,
                                                   submitted_at: student.photoData!.at,
                                                 });
                                               }}
                                             >
-                                              📷 {student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}
+                                              {student.hasPhotoSubmission && `📷 ${student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}`}
+                                              {!student.hasPhotoSubmission && student.hasAudioSubmission && <><Mic className="w-3 h-3" />음성</>}
                                             </button>
                                           </>
                                         )}
