@@ -1632,6 +1632,7 @@ export default function Dashboard() {
                   homeworkCheckLessonId: null,
                   hasNextHomework: false,
                   hasPhotoSubmission: false,
+                  hasAudioSubmission: false,
                   photoData: null,
                   homeworkStatus: null,
                   latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[`${ts.student_id}:${ts.subject}`] || null,
