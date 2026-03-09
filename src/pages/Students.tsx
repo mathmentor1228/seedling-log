@@ -254,6 +254,7 @@ export default function Students() {
       notes: '',
       school: '',
       parent_phone: '',
+      parent_name: '',
       student_phone: '',
     });
   };
