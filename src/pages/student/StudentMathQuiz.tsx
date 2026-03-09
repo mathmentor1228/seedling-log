@@ -1,4 +1,4 @@
-// STUDENT-MATH-QUIZ-V2: Student math concept quiz page with per-question resubmission
+// STUDENT-MATH-QUIZ-V3: Student math concept quiz with hints, speech-bubble feedback, enhanced UI
 import { useEffect, useState } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
 import { studentApi } from '@/lib/studentApi';
@@ -8,9 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   BookOpen, Camera, CheckCircle2, XCircle, HelpCircle, Star,
-  Loader2, ChevronLeft, PartyPopper, RefreshCw, WifiOff, AlertTriangle
+  Loader2, ChevronLeft, PartyPopper, RefreshCw, WifiOff, AlertTriangle,
+  Lightbulb, MessageCircle
 } from 'lucide-react';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
 import { MathRenderer } from '@/components/math/MathRenderer';
@@ -42,6 +44,7 @@ interface GradingResultItem {
   is_correct: boolean;
   status: string;
   note?: string;
+  concept_feedback?: string;
 }
 
 export default function StudentMathQuiz() {
@@ -60,6 +63,9 @@ export default function StudentMathQuiz() {
   const [gradingResult, setGradingResult] = useState<any>(null);
   const [pointsAwarded, setPointsAwarded] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
+
+  // Hint state
+  const [hintsUsed, setHintsUsed] = useState<Set<number>>(new Set());
 
   // Per-question resubmission state
   const [resubmitMode, setResubmitMode] = useState(false);
@@ -89,6 +95,10 @@ export default function StudentMathQuiz() {
     return result.results
       .filter((r: GradingResultItem) => r.status === 'needs_resubmit')
       .map((r: GradingResultItem) => r.question_number);
+  };
+
+  const handleUseHint = (questionNumber: number) => {
+    setHintsUsed(prev => new Set(prev).add(questionNumber));
   };
 
   const handleSubmit = async () => {
@@ -226,6 +236,7 @@ export default function StudentMathQuiz() {
     setResubmitMode(false);
     setResubmitQuestions([]);
     setResubmitImages([]);
+    setHintsUsed(new Set());
   };
 
   const statusIcon = (status: string) => {
@@ -235,6 +246,32 @@ export default function StudentMathQuiz() {
       case 'needs_resubmit': return <AlertTriangle className="w-5 h-5 text-orange-500" />;
       default: return <HelpCircle className="w-5 h-5 text-yellow-500" />;
     }
+  };
+
+  // Speech bubble feedback component
+  const FeedbackBubble = ({ feedback, status }: { feedback: string; status: string }) => {
+    const bgColor = status === 'correct'
+      ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'
+      : status === 'needs_resubmit'
+      ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800'
+      : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800';
+
+    const iconColor = status === 'correct'
+      ? 'text-green-500'
+      : status === 'needs_resubmit'
+      ? 'text-orange-500'
+      : 'text-red-500';
+
+    return (
+      <div className={`relative mt-2 p-3 rounded-xl border ${bgColor}`}>
+        {/* Speech bubble tail */}
+        <div className={`absolute -top-2 left-4 w-4 h-4 rotate-45 border-l border-t ${bgColor}`} />
+        <div className="flex items-start gap-2 relative">
+          <MessageCircle className={`w-4 h-4 mt-0.5 shrink-0 ${iconColor}`} />
+          <p className="text-xs leading-relaxed">{feedback}</p>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -263,7 +300,6 @@ export default function StudentMathQuiz() {
     const existingSub = getQuizSubmission(selectedQuiz.id);
     const concept = selectedQuiz.math_concepts;
 
-    // Determine which grading result to check for needs_resubmit
     const activeGradingResult = gradingResult || existingSub?.ai_grading_result;
     const activeNeedsResubmit = resubmitQuestions.length > 0
       ? resubmitQuestions
@@ -272,20 +308,33 @@ export default function StudentMathQuiz() {
     const renderGradingResults = (result: any, points: number, teacherFeedback?: string | null) => (
       <Card>
         <CardContent className="pt-6 space-y-4">
-          <div className="text-center p-4 rounded-lg bg-muted/50">
+          {/* Score summary */}
+          <div className="text-center p-4 rounded-xl bg-muted/50">
             <p className="text-3xl font-bold text-primary">
               {result.total_correct} / {result.total_graded}
             </p>
-            <p className="text-sm text-muted-foreground mt-1">{result.overall_feedback}</p>
-            <Badge className="mt-2 bg-yellow-500 text-white">
-              <Star className="w-3 h-3 mr-1" /> +{points} 포인트 획득
-            </Badge>
+            {/* Overall feedback as speech bubble */}
+            <div className="relative mt-3 mx-auto max-w-sm p-3 rounded-xl bg-primary/10 border border-primary/20">
+              <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 rotate-45 bg-primary/10 border-l border-t border-primary/20" />
+              <p className="text-sm text-foreground relative">{result.overall_feedback}</p>
+            </div>
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <Badge className="bg-yellow-500 text-white">
+                <Star className="w-3 h-3 mr-1" /> +{points} 포인트
+              </Badge>
+              {hintsUsed.size > 0 && (
+                <Badge variant="outline" className="text-xs border-yellow-300 text-yellow-600">
+                  <Lightbulb className="w-3 h-3 mr-1" /> 힌트 {hintsUsed.size}회 사용
+                </Badge>
+              )}
+            </div>
           </div>
 
           {teacherFeedback && (
-            <div className="p-3 rounded-lg border border-primary/20 bg-primary/5">
-              <p className="text-xs font-medium text-primary mb-1">💬 선생님 피드백</p>
-              <p className="text-sm">{teacherFeedback}</p>
+            <div className="relative p-3 rounded-xl border border-primary/20 bg-primary/5">
+              <div className="absolute -top-2 left-4 w-4 h-4 rotate-45 bg-primary/5 border-l border-t border-primary/20" />
+              <p className="text-xs font-medium text-primary mb-1 relative">💬 선생님 피드백</p>
+              <p className="text-sm relative">{teacherFeedback}</p>
             </div>
           )}
 
@@ -314,52 +363,62 @@ export default function StudentMathQuiz() {
             </div>
           )}
 
-          <div className="space-y-2">
+          {/* Per-question results with speech bubble feedback */}
+          <div className="space-y-3">
             {result.results?.map((r: GradingResultItem) => {
               const question = selectedQuiz.questions.find((q: any) => q.question_number === r.question_number);
               const isNeedsResubmit = r.status === 'needs_resubmit';
               return (
                 <div
                   key={r.question_number}
-                  className={`flex items-start gap-3 p-3 rounded-lg border ${
-                    isNeedsResubmit ? 'border-orange-300 bg-orange-50/50 dark:bg-orange-950/20' : ''
+                  className={`p-3 rounded-xl border ${
+                    isNeedsResubmit
+                      ? 'border-orange-300 bg-orange-50/50 dark:bg-orange-950/20'
+                      : r.is_correct
+                      ? 'border-green-200 bg-green-50/30 dark:bg-green-950/10'
+                      : 'border-red-200 bg-red-50/30 dark:bg-red-950/10'
                   }`}
                 >
-                  {statusIcon(r.status)}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">Q{r.question_number}</p>
-                      {isNeedsResubmit && (
-                        <Badge variant="outline" className="text-xs border-orange-300 text-orange-600">
-                          재제출 필요
-                        </Badge>
+                  <div className="flex items-start gap-3">
+                    {statusIcon(r.status)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">Q{r.question_number}</p>
+                        {isNeedsResubmit && (
+                          <Badge variant="outline" className="text-xs border-orange-300 text-orange-600">
+                            재제출 필요
+                          </Badge>
+                        )}
+                      </div>
+                      {question && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <MathRenderer text={question.question_text.length > 80 ? question.question_text.substring(0, 80) + '...' : question.question_text} />
+                        </p>
                       )}
+                      <p className="text-xs mt-1">
+                        내 답: <span className="font-medium">{r.student_answer || '-'}</span>
+                        {r.status === 'incorrect' && question && (
+                          <span className="text-destructive ml-2">
+                            (정답: <MathRenderer text={question.answer} />)
+                          </span>
+                        )}
+                      </p>
                     </div>
-                    {question && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        <MathRenderer text={question.question_text.substring(0, 60) + '...'} />
-                      </p>
-                    )}
-                    <p className="text-xs mt-1">
-                      내 답: <span className="font-medium">{r.student_answer || '-'}</span>
-                      {r.status === 'incorrect' && question && (
-                        <span className="text-destructive ml-2">
-                          (정답: <MathRenderer text={question.answer} />)
-                        </span>
-                      )}
-                    </p>
-                    {r.note && (
-                      <p className={`text-xs mt-0.5 ${isNeedsResubmit ? 'text-orange-600 dark:text-orange-400 font-medium' : 'text-muted-foreground'}`}>
-                        {isNeedsResubmit ? '⚠️ ' : ''}{r.note}
-                      </p>
-                    )}
                   </div>
+
+                  {/* Speech bubble feedback */}
+                  {r.concept_feedback && (
+                    <FeedbackBubble feedback={r.concept_feedback} status={r.status} />
+                  )}
+                  {!r.concept_feedback && r.note && (
+                    <FeedbackBubble feedback={r.note} status={r.status} />
+                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* Resubmit mode: show specific questions and uploader */}
+          {/* Resubmit mode */}
           {resubmitMode && (
             <div className="border-t pt-4 space-y-3">
               <p className="text-sm font-medium text-orange-700 dark:text-orange-300">
@@ -467,22 +526,65 @@ export default function StudentMathQuiz() {
             )}
           </>
         ) : (
-          /* Fresh submission */
+          /* Fresh submission - questions with hint buttons */
           <Card>
             <CardContent className="pt-6 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                퀴즈를 손으로 풀어 적은 노트를 촬영해서 올려주세요. AI가 자동으로 채점해줍니다! 🤖
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  퀴즈를 손으로 풀어 적은 노트를 촬영해서 올려주세요. AI가 자동으로 채점해줍니다! 🤖
+                </p>
+              </div>
 
-              {/* Show questions */}
+              {hintsUsed.size > 0 && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800">
+                  <Lightbulb className="w-4 h-4 text-yellow-500" />
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                    힌트 {hintsUsed.size}회 사용 — 포인트가 절반으로 줄어듭니다
+                  </p>
+                </div>
+              )}
+
+              {/* Show questions with hint buttons */}
               <div className="space-y-2">
                 <p className="text-sm font-medium">📝 문제 ({selectedQuiz.questions.length}개)</p>
                 {selectedQuiz.questions.map((q: any) => (
-                  <div key={q.question_number} className="p-3 rounded-lg border bg-muted/30">
-                    <p className="text-sm">
-                      <span className="font-bold text-primary mr-2">Q{q.question_number}</span>
-                      <MathRenderer text={q.question_text} />
-                    </p>
+                  <div key={q.question_number} className="p-3 rounded-xl border bg-muted/30">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1">
+                        <p className="text-sm">
+                          <span className="font-bold text-primary mr-2">Q{q.question_number}</span>
+                          <MathRenderer text={q.question_text} />
+                        </p>
+                      </div>
+                      {/* Hint button */}
+                      {q.hint && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`shrink-0 h-8 w-8 rounded-full ${
+                                hintsUsed.has(q.question_number)
+                                  ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-950/30'
+                                  : 'text-muted-foreground hover:text-yellow-500'
+                              }`}
+                              onClick={() => handleUseHint(q.question_number)}
+                            >
+                              <Lightbulb className="w-4 h-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent side="top" className="w-64 p-3">
+                            <div className="flex items-start gap-2">
+                              <Lightbulb className="w-4 h-4 text-yellow-500 mt-0.5 shrink-0" />
+                              <div>
+                                <p className="text-xs font-medium text-yellow-700 dark:text-yellow-300 mb-1">💡 힌트</p>
+                                <p className="text-sm">{q.hint}</p>
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -536,7 +638,7 @@ export default function StudentMathQuiz() {
               <Card
                 key={quiz.id}
                 className="cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => { setSelectedQuiz(quiz); setImages([]); setGradingResult(null); setResubmitQuestions([]); setResubmitMode(false); }}
+                onClick={() => { setSelectedQuiz(quiz); setImages([]); setGradingResult(null); setResubmitQuestions([]); setResubmitMode(false); setHintsUsed(new Set()); }}
               >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between">

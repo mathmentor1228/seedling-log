@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Eye, Save, RefreshCw, Edit2, Check } from 'lucide-react';
+import { Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import type { QuizQuestion } from './MathConceptManager';
 
@@ -139,6 +139,14 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
                       rows={2}
                     />
                   </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">힌트</label>
+                    <Input
+                      value={(editedQuestions[idx] as any).hint || ''}
+                      onChange={e => updateQuestion(idx, 'hint' as any, e.target.value)}
+                      placeholder="초성 또는 개념 힌트"
+                    />
+                  </div>
                 </div>
               ) : (
                 <>
@@ -155,6 +163,13 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
                       <MathRenderer text={q.explanation} />
                     </p>
                   </div>
+                  {/* Show hint */}
+                  {(q as any).hint && (
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800">
+                      <Lightbulb className="w-4 h-4 text-yellow-500 shrink-0" />
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300">{(q as any).hint}</p>
+                    </div>
+                  )}
                 </>
               )}
             </div>
