@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Loader2, BookMarked, Copy, ShoppingCart, CheckCircle2 } from 'lucide-react';
+import { Plus, Loader2, BookMarked, Copy, ShoppingCart, CheckCircle2, Send } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TextbookOrder {
