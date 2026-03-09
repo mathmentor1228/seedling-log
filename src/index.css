@@ -76,64 +76,64 @@
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 214 20% 96%;
+    --background: 222 47% 4%;
+    --foreground: 210 40% 96%;
 
-    --card: 224 50% 8%;
-    --card-foreground: 214 20% 96%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 96%;
 
-    --popover: 224 50% 8%;
-    --popover-foreground: 214 20% 96%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 96%;
 
-    --primary: 230 70% 62%;
-    --primary-foreground: 224 71% 4%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 4%;
 
-    --secondary: 224 40% 14%;
-    --secondary-foreground: 214 20% 96%;
+    --secondary: 222 40% 14%;
+    --secondary-foreground: 210 40% 96%;
 
-    --muted: 224 40% 14%;
+    --muted: 222 40% 14%;
     --muted-foreground: 215 16% 56%;
 
-    --accent: 224 40% 18%;
-    --accent-foreground: 214 20% 96%;
+    --accent: 222 40% 18%;
+    --accent-foreground: 210 40% 96%;
 
     --destructive: 0 63% 45%;
-    --destructive-foreground: 214 20% 96%;
+    --destructive-foreground: 210 40% 96%;
 
-    --success: 160 84% 39%;
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 224 40% 16%;
-    --input: 224 40% 16%;
-    --ring: 230 70% 62%;
+    --border: 222 40% 16%;
+    --input: 222 40% 16%;
+    --ring: 217 91% 60%;
 
-    --sidebar-background: 224 71% 3%;
-    --sidebar-foreground: 214 20% 96%;
-    --sidebar-primary: 214 20% 96%;
-    --sidebar-primary-foreground: 228 45% 16%;
-    --sidebar-accent: 224 40% 14%;
-    --sidebar-accent-foreground: 214 20% 96%;
-    --sidebar-border: 224 40% 14%;
-    --sidebar-ring: 214 20% 96%;
+    --sidebar-background: 222 47% 3%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 210 40% 96%;
+    --sidebar-primary-foreground: 222 47% 17%;
+    --sidebar-accent: 222 40% 14%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 222 40% 14%;
+    --sidebar-ring: 210 40% 96%;
 
-    --risk-low: 160 84% 39%;
+    --risk-low: 142 71% 45%;
     --risk-medium: 38 92% 50%;
     --risk-high: 0 84% 60%;
 
     --score-1: 0 84% 60%;
     --score-2: 38 92% 50%;
     --score-3: 38 70% 55%;
-    --score-4: 160 60% 45%;
-    --score-5: 160 84% 39%;
+    --score-4: 142 60% 45%;
+    --score-5: 142 71% 45%;
 
-    --chart-1: 230 70% 62%;
-    --chart-2: 160 84% 39%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 45%;
     --chart-3: 38 92% 50%;
     --chart-4: 0 63% 45%;
-    --chart-5: 270 60% 55%;
+    --chart-5: 262 60% 55%;
   }
 }
 
