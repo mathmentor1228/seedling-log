@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle2, Ban, Copy, MessageCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, Ban, Copy, Clock } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
@@ -91,25 +91,6 @@ export function TextbookPaymentTab() {
     markBilled(dist.id);
   };
 
-  const handleOpenKakao = (dist: Distribution) => {
-    const phone = dist.parent_phone;
-    if (!phone) {
-      toast.error('학부모 연락처가 등록되지 않았습니다');
-      return;
-    }
-    // Format phone for KakaoTalk deep link
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    // Try KakaoTalk deep link (works on mobile), fallback to tel: on desktop
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      window.location.href = `kakaoopen://chat?phone=${cleanPhone}`;
-    } else {
-      // PC: open KakaoTalk PC app chat
-      window.open(`https://open.kakao.com/`, '_blank');
-      toast.info('PC에서는 카카오톡 앱에서 직접 대화를 시작해주세요');
-    }
-    markBilled(dist.id);
-  };
 
   const handleConfirmPayment = async (dist: Distribution) => {
     const { error } = await supabase.from('textbook_distributions').update({
@@ -235,14 +216,9 @@ export function TextbookPaymentTab() {
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5 shrink-0">
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="outline" className="gap-1 text-xs px-2" onClick={() => handleCopyMessage(dist)} title="카톡 문구 복사">
-                          <Copy className="w-3 h-3" />복사
-                        </Button>
-                        <Button size="sm" variant="outline" className="gap-1 text-xs px-2 text-yellow-700 border-yellow-300 hover:bg-yellow-50" onClick={() => handleOpenKakao(dist)} title="카카오톡 열기">
-                          <MessageCircle className="w-3 h-3" />카톡
-                        </Button>
-                      </div>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs px-2" onClick={() => handleCopyMessage(dist)} title="카톡 문구 복사">
+                        <Copy className="w-3 h-3" />문구 복사
+                      </Button>
                       <Button size="sm" className="gap-1" onClick={() => handleConfirmPayment(dist)}>
                         <CheckCircle2 className="w-3.5 h-3.5" />수납 완료
                       </Button>
