@@ -1431,7 +1431,8 @@ export default function Dashboard() {
         homeworkCheckLessonId: string | null;
         hasNextHomework: boolean;
         hasPhotoSubmission: boolean;
-        photoData?: { urls: string[]; text: string | null; at: string | null } | null;
+        hasAudioSubmission: boolean;
+        photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null } | null;
         // TEST-CONTENT-DISPLAY-V2
         subject?: string;
         // HW-STATUS-SYNC-V1: homework_status from lesson_records
