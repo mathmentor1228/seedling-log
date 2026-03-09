@@ -79,7 +79,7 @@ export default function UserManagement() {
         };
       });
 
-
+      setUsers(usersWithRoles);
 
       // Initialize selected roles state
       const initialSelected: Record<string, AppRole | 'none'> = {};
