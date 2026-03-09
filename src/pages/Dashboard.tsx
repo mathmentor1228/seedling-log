@@ -16,6 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useToast } from '@/hooks/use-toast';
 import HolidayManagement from '@/components/HolidayManagement';
 import { AssistantRequestsWidget } from '@/components/AssistantRequestsWidget';
+import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
 import { RosterActionModal } from '@/components/RosterActionModal';
@@ -3148,9 +3149,11 @@ export default function Dashboard() {
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <AssistantRequestsWidget />
-            <div className="flex items-end">
-              <DailyHomeworkManager />
-            </div>
+            <AcademyCalendar />
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <DailyHomeworkManager />
           </div>
           
           <StudentProgressWidget />
