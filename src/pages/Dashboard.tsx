@@ -686,7 +686,7 @@ export default function Dashboard() {
   useEffect(() => {
     const handleFocus = () => {
       if (user && (isTeacher(role) || isAdmin(role))) {
-        console.log('[Dashboard] Window focused - refetching attendance data');
+        // refetch on focus
         fetchTodaySlots();
         if (isAdmin(role)) {
           fetchTodayAttendance();
@@ -880,7 +880,7 @@ export default function Dashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('lesson_date', today);
       
-      console.log(`[Dashboard] ADMIN-ROSTER-DEBUG-V1: today=${today}, dayOfWeek=${dayOfWeek}, scheduledSlots=${scheduledSlotsCount}, rosterStudents=${rosterRows.length}, todayLessonRecords=${todayLessonRecordsCount}`);
+      
       
       setAdminRosterData({
         teachers,
@@ -1112,7 +1112,7 @@ export default function Dashboard() {
         await fetchTodayLessonRecordsFallback();
       }
       
-      console.log('[Dashboard] fetchAdminRosterData complete - teachers:', teachers.length, 'rows:', rosterRows.length);
+      
     } catch (error) {
       console.error('Error fetching admin roster data:', error);
     }
@@ -1186,7 +1186,7 @@ export default function Dashboard() {
       });
       
       setTodayLessonRecordsFallback(Object.values(grouped));
-      console.log('[Dashboard] fetchTodayLessonRecordsFallback complete - groups:', Object.keys(grouped).length);
+      
     } catch (error) {
       console.error('Error fetching today lesson records fallback:', error);
     }
@@ -1287,7 +1287,7 @@ export default function Dashboard() {
         return (a.start_time || '').localeCompare(b.start_time || '');
       });
 
-      console.log('[Dashboard] fetchTodayAttendance complete - attendanceUpdated=true, records:', records.length);
+      
       setTodayAttendance(records);
     } catch (error) {
       console.error('Error fetching today attendance:', error);
@@ -1308,7 +1308,7 @@ export default function Dashboard() {
       const kstDate = new Date(now.getTime() + kstOffset);
       const dayOfWeek = kstDate.getUTCDay(); // Use UTC day since we added KST offset
       
-      console.log('fetchTodaySlots: user.id =', user.id, ', dayOfWeek (KST) =', dayOfWeek);
+      
 
       // CLASS-ACTIVE-TOGGLE-V1: Include inactive_until filter
       const todayKSTDate = getTodayKST();
@@ -1351,7 +1351,7 @@ export default function Dashboard() {
         return;
       }
 
-      console.log('fetchTodaySlots: schedules returned =', activeSchedules?.length || 0, 'active of', schedules?.length || 0, 'total');
+      
 
       // Get students for each class - also build a map of class_id -> subject for RPC
       const classIds = activeSchedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
@@ -1384,7 +1384,7 @@ export default function Dashboard() {
             variant: 'destructive',
           });
         } else {
-          console.log('fetchTodaySlots: classStudents returned =', classStudents?.length || 0, classStudents);
+          
           // Group students by class_id and collect pairs for batch lookup
           (classStudents || []).forEach((cs: any) => {
             if (!studentsMap[cs.class_id]) {
@@ -1790,7 +1790,7 @@ export default function Dashboard() {
 
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(lessonRecordMap).length;
-      console.log('[Dashboard] fetchTodaySlots complete - attendanceUpdated=true, rosterUpdated=true, attendanceRecords:', attendanceCount);
+      
 
       setTodaySlots(slots);
     } catch (error: any) {

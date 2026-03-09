@@ -230,7 +230,7 @@ export default function AssistantDashboard() {
       setLoading(true);
       setFetchError(null);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      console.log('[AssistantDashboard] fetchAllData started, date:', dateStr);
+      
       
       // ASSISTANT-ROSTER-RESTORE-V1: Call the RPC which returns flat array of roster rows
       const { data: rpcData, error: rpcError } = await supabase.rpc(
@@ -268,7 +268,7 @@ export default function AssistantDashboard() {
         end_time: string;
       }[];
 
-      console.log('[AssistantDashboard] RPC returned', rosterRowsRaw.length, 'roster rows');
+      
 
       // Extract unique teachers from roster rows
       const teacherMap = new Map<string, string>();
@@ -527,7 +527,7 @@ export default function AssistantDashboard() {
       
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(attendanceMap).length;
-      console.log('[AssistantDashboard] fetchAllData complete - attendanceUpdated=true, rosterUpdated=true, attendanceRecords:', attendanceCount, 'teachersFound:', teachersList.length);
+      
     } catch (error: any) {
       console.error('Error fetching data:', error);
       const errInfo = { page: 'Assistant', status: error?.code || 'ERR', message: error?.message || 'Unknown error' };
@@ -1120,7 +1120,7 @@ export default function AssistantDashboard() {
         context={modalContext}
         mode="HOMEWORK_TEST"
         onSaved={() => {
-          console.log('[AssistantDashboard] Modal onSaved triggered - refetching roster data');
+          
           fetchAllData();
         }}
       />
@@ -1130,7 +1130,7 @@ export default function AssistantDashboard() {
         open={testVisitModalOpen}
         onOpenChange={setTestVisitModalOpen}
         onSaved={() => {
-          console.log('[AssistantDashboard] TestVisit onSaved triggered - refetching data');
+          
           fetchAllData();
         }}
       />

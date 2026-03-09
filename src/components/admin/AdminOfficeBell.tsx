@@ -147,10 +147,15 @@ export function AdminOfficeBell() {
     }
   };
 
-  const handleTaskClick = (taskId: string) => {
+  const handleTaskClick = (task: RecentTask) => {
     markAsRead();
     setOpen(false);
-    navigate('/admin/office');
+    // 수납 관련 카테고리면 교재 수납 탭으로 이동
+    if (task.category === '수납' || task.title.includes('수납') || task.title.includes('입금') || task.title.includes('교재비')) {
+      navigate('/textbook?tab=payment');
+    } else {
+      navigate('/admin/office');
+    }
   };
 
   if (!isAllowed) return null;
@@ -183,9 +188,9 @@ export function AdminOfficeBell() {
             recentTasks.map(task => {
               const isUnread = lastReadAt ? new Date(task.created_at) > new Date(lastReadAt) : true;
               return (
-                <button
+                  <button
                   key={task.id}
-                  onClick={() => handleTaskClick(task.id)}
+                  onClick={() => handleTaskClick(task)}
                   className={cn(
                     "w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors",
                     isUnread && "bg-primary/5"
