@@ -272,6 +272,7 @@ export default function Students() {
       notes: student.notes || '',
       school: student.school || '',
       parent_phone: student.parent_phone || '',
+      parent_name: (student as any).parent_name || '',
       student_phone: student.student_phone || '',
     });
     setIsAddDialogOpen(true);
