@@ -1562,10 +1562,19 @@ export default function Dashboard() {
             seenLatest.add(photoKey);
             const hasImage = !!hw.submission_image_url;
             const hasAudio = !!hw.submission_audio_url;
-            if (hw.submitted_at && (hasImage || hasAudio) && !teacherPhotoDataMap[photoKey]) {
-              const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+            if (!hw.submitted_at || (!hasImage && !hasAudio)) return;
+
+            const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+            const existing = teacherPhotoDataMap[photoKey];
+
+            if (!existing) {
               teacherPhotoDataMap[photoKey] = { urls: imgUrls, audioUrl: hw.submission_audio_url || null, text: hw.submission_text || null, at: hw.submitted_at };
+              return;
             }
+
+            if (!existing.audioUrl && hasAudio) existing.audioUrl = hw.submission_audio_url || null;
+            if (!existing.text && hw.submission_text) existing.text = hw.submission_text;
+            if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
         }
 
