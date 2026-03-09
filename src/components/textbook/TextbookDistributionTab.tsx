@@ -350,6 +350,21 @@ export function TextbookDistributionTab() {
       {distributions.length === 0 && (
         <p className="text-center text-sm text-muted-foreground py-12">배부 기록이 없습니다</p>
       )}
+      {/* MESSAGE-RESEND-V1: Resend confirmation dialog */}
+      <Dialog open={!!resendTarget} onOpenChange={(open) => !open && setResendTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>메시지 재전송</DialogTitle>
+            <DialogDescription>
+              {resendTarget?.student_name} 학생에게 {resendType === 'payment' ? '교재비 안내' : '개별구매 안내'} 메시지를 재전송하시겠습니까?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResendTarget(null)}>취소</Button>
+            <Button onClick={handleConfirmResend}>네, 재전송</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
