@@ -1790,7 +1790,7 @@ export default function Dashboard() {
 
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(lessonRecordMap).length;
-      console.log('[Dashboard] fetchTodaySlots complete - attendanceUpdated=true, rosterUpdated=true, attendanceRecords:', attendanceCount);
+      
 
       setTodaySlots(slots);
     } catch (error: any) {
