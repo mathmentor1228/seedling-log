@@ -91,25 +91,6 @@ export function TextbookPaymentTab() {
     markBilled(dist.id);
   };
 
-  const handleOpenKakao = (dist: Distribution) => {
-    const phone = dist.parent_phone;
-    if (!phone) {
-      toast.error('학부모 연락처가 등록되지 않았습니다');
-      return;
-    }
-    // Format phone for KakaoTalk deep link
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    // Try KakaoTalk deep link (works on mobile), fallback to tel: on desktop
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      window.location.href = `kakaoopen://chat?phone=${cleanPhone}`;
-    } else {
-      // PC: open KakaoTalk PC app chat
-      window.open(`https://open.kakao.com/`, '_blank');
-      toast.info('PC에서는 카카오톡 앱에서 직접 대화를 시작해주세요');
-    }
-    markBilled(dist.id);
-  };
 
   const handleConfirmPayment = async (dist: Distribution) => {
     const { error } = await supabase.from('textbook_distributions').update({
