@@ -1186,7 +1186,7 @@ export default function Dashboard() {
       });
       
       setTodayLessonRecordsFallback(Object.values(grouped));
-      console.log('[Dashboard] fetchTodayLessonRecordsFallback complete - groups:', Object.keys(grouped).length);
+      
     } catch (error) {
       console.error('Error fetching today lesson records fallback:', error);
     }
