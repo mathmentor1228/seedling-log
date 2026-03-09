@@ -3140,7 +3140,7 @@ export default function Dashboard() {
             description="숙제 관리, 요청, 학습 분석"
           />
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <AssistantRequestsWidget />
             <div className="flex items-end">
               <DailyHomeworkManager />
