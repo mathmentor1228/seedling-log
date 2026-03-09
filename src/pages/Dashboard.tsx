@@ -2082,8 +2082,8 @@ export default function Dashboard() {
     <div className="space-y-4">
       <DashboardHeader role={role || ''} />
       
-      {/* ━━━ 섹션 1: 주의사항 & 알림 ━━━ */}
-      <div className="space-y-2">
+      {/* ━━━ 섹션 1: 주의사항 & 시험일정 (2단 배열) ━━━ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <AttentionSummaryBar items={attentionItems} />
         <ExamDdayBanner />
       </div>
