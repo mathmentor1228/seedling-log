@@ -2090,13 +2090,13 @@ export default function Dashboard() {
 
       {/* ━━━ 섹션 2: 핵심 지표 ━━━ */}
       {!isAssistant(role) && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <SectionHeader 
             icon={<BarChart3 className="w-4 h-4" />} 
             title="핵심 현황" 
             description="실시간 학원 운영 지표"
           />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {isAdmin(role) && (
               <>
                 <StatCard
