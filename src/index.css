@@ -1,64 +1,62 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Modern SaaS palette — cool slate + vibrant accent */
-    --background: 210 20% 98%;
-    --foreground: 224 71% 8%;
+    /* Professional Education — Deep Navy + Trust Blue */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 8%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 8%;
+    --popover-foreground: 222 47% 11%;
 
-    /* Primary: Deep indigo */
-    --primary: 230 65% 48%;
+    /* Primary: Trust Blue */
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 214 20% 95%;
-    --secondary-foreground: 224 71% 8%;
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 214 20% 94%;
+    --muted: 210 40% 94%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 214 20% 92%;
-    --accent-foreground: 224 71% 8%;
+    --accent: 210 40% 92%;
+    --accent-foreground: 222 47% 11%;
 
-    /* Destructive: Vibrant red */
+    /* Destructive */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Success: Emerald */
-    --success: 160 84% 39%;
+    /* Success */
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning: Amber */
+    /* Warning */
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 214 20% 91%;
-    --input: 214 20% 91%;
-    --ring: 230 65% 48%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
 
-    --radius: 0.625rem;
+    --radius: 0.75rem;
 
-    /* Sidebar: Deep navy */
-    --sidebar-background: 228 45% 16%;
-    --sidebar-foreground: 214 20% 96%;
+    /* Sidebar: Deep Navy */
+    --sidebar-background: 222 47% 17%;
+    --sidebar-foreground: 210 40% 96%;
     --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 228 45% 16%;
-    --sidebar-accent: 228 35% 24%;
-    --sidebar-accent-foreground: 214 20% 96%;
-    --sidebar-border: 228 35% 24%;
-    --sidebar-ring: 214 20% 96%;
+    --sidebar-primary-foreground: 222 47% 17%;
+    --sidebar-accent: 222 40% 24%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 222 40% 24%;
+    --sidebar-ring: 210 40% 96%;
 
     /* Risk colors */
-    --risk-low: 160 84% 39%;
+    --risk-low: 142 71% 45%;
     --risk-medium: 38 92% 50%;
     --risk-high: 0 84% 60%;
 
@@ -66,76 +64,76 @@
     --score-1: 0 84% 60%;
     --score-2: 38 92% 50%;
     --score-3: 38 70% 55%;
-    --score-4: 160 60% 45%;
-    --score-5: 160 84% 39%;
+    --score-4: 142 60% 45%;
+    --score-5: 142 71% 45%;
 
     /* Chart accent colors */
-    --chart-1: 230 65% 48%;
-    --chart-2: 160 84% 39%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 45%;
     --chart-3: 38 92% 50%;
     --chart-4: 0 84% 60%;
-    --chart-5: 270 60% 55%;
+    --chart-5: 262 60% 55%;
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 214 20% 96%;
+    --background: 222 47% 4%;
+    --foreground: 210 40% 96%;
 
-    --card: 224 50% 8%;
-    --card-foreground: 214 20% 96%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 96%;
 
-    --popover: 224 50% 8%;
-    --popover-foreground: 214 20% 96%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 96%;
 
-    --primary: 230 70% 62%;
-    --primary-foreground: 224 71% 4%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 4%;
 
-    --secondary: 224 40% 14%;
-    --secondary-foreground: 214 20% 96%;
+    --secondary: 222 40% 14%;
+    --secondary-foreground: 210 40% 96%;
 
-    --muted: 224 40% 14%;
+    --muted: 222 40% 14%;
     --muted-foreground: 215 16% 56%;
 
-    --accent: 224 40% 18%;
-    --accent-foreground: 214 20% 96%;
+    --accent: 222 40% 18%;
+    --accent-foreground: 210 40% 96%;
 
     --destructive: 0 63% 45%;
-    --destructive-foreground: 214 20% 96%;
+    --destructive-foreground: 210 40% 96%;
 
-    --success: 160 84% 39%;
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 224 40% 16%;
-    --input: 224 40% 16%;
-    --ring: 230 70% 62%;
+    --border: 222 40% 16%;
+    --input: 222 40% 16%;
+    --ring: 217 91% 60%;
 
-    --sidebar-background: 224 71% 3%;
-    --sidebar-foreground: 214 20% 96%;
-    --sidebar-primary: 214 20% 96%;
-    --sidebar-primary-foreground: 228 45% 16%;
-    --sidebar-accent: 224 40% 14%;
-    --sidebar-accent-foreground: 214 20% 96%;
-    --sidebar-border: 224 40% 14%;
-    --sidebar-ring: 214 20% 96%;
+    --sidebar-background: 222 47% 3%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 210 40% 96%;
+    --sidebar-primary-foreground: 222 47% 17%;
+    --sidebar-accent: 222 40% 14%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 222 40% 14%;
+    --sidebar-ring: 210 40% 96%;
 
-    --risk-low: 160 84% 39%;
+    --risk-low: 142 71% 45%;
     --risk-medium: 38 92% 50%;
     --risk-high: 0 84% 60%;
 
     --score-1: 0 84% 60%;
     --score-2: 38 92% 50%;
     --score-3: 38 70% 55%;
-    --score-4: 160 60% 45%;
-    --score-5: 160 84% 39%;
+    --score-4: 142 60% 45%;
+    --score-5: 142 71% 45%;
 
-    --chart-1: 230 70% 62%;
-    --chart-2: 160 84% 39%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 45%;
     --chart-3: 38 92% 50%;
     --chart-4: 0 63% 45%;
-    --chart-5: 270 60% 55%;
+    --chart-5: 262 60% 55%;
   }
 }
 
@@ -146,9 +144,8 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-    letter-spacing: -0.011em;
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
+    letter-spacing: -0.014em;
   }
 
   /* Typography system — generous, modern */
@@ -181,7 +178,7 @@
   }
 
   .stat-card {
-    @apply bg-card rounded-2xl border border-border p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/20;
+    @apply bg-card rounded-2xl border border-border p-5 shadow-card transition-all duration-200 hover:shadow-card-hover hover:border-primary/20;
   }
 
   .data-table {
