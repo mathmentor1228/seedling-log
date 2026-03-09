@@ -1,64 +1,62 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Modern SaaS palette — cool slate + vibrant accent */
-    --background: 210 20% 98%;
-    --foreground: 224 71% 8%;
+    /* Professional Education — Deep Navy + Trust Blue */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 8%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 8%;
+    --popover-foreground: 222 47% 11%;
 
-    /* Primary: Deep indigo */
-    --primary: 230 65% 48%;
+    /* Primary: Trust Blue */
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 214 20% 95%;
-    --secondary-foreground: 224 71% 8%;
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 214 20% 94%;
+    --muted: 210 40% 94%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 214 20% 92%;
-    --accent-foreground: 224 71% 8%;
+    --accent: 210 40% 92%;
+    --accent-foreground: 222 47% 11%;
 
-    /* Destructive: Vibrant red */
+    /* Destructive */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Success: Emerald */
-    --success: 160 84% 39%;
+    /* Success */
+    --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning: Amber */
+    /* Warning */
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 214 20% 91%;
-    --input: 214 20% 91%;
-    --ring: 230 65% 48%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
 
-    --radius: 0.625rem;
+    --radius: 0.75rem;
 
-    /* Sidebar: Deep navy */
-    --sidebar-background: 228 45% 16%;
-    --sidebar-foreground: 214 20% 96%;
+    /* Sidebar: Deep Navy */
+    --sidebar-background: 222 47% 17%;
+    --sidebar-foreground: 210 40% 96%;
     --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 228 45% 16%;
-    --sidebar-accent: 228 35% 24%;
-    --sidebar-accent-foreground: 214 20% 96%;
-    --sidebar-border: 228 35% 24%;
-    --sidebar-ring: 214 20% 96%;
+    --sidebar-primary-foreground: 222 47% 17%;
+    --sidebar-accent: 222 40% 24%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 222 40% 24%;
+    --sidebar-ring: 210 40% 96%;
 
     /* Risk colors */
-    --risk-low: 160 84% 39%;
+    --risk-low: 142 71% 45%;
     --risk-medium: 38 92% 50%;
     --risk-high: 0 84% 60%;
 
@@ -66,15 +64,15 @@
     --score-1: 0 84% 60%;
     --score-2: 38 92% 50%;
     --score-3: 38 70% 55%;
-    --score-4: 160 60% 45%;
-    --score-5: 160 84% 39%;
+    --score-4: 142 60% 45%;
+    --score-5: 142 71% 45%;
 
     /* Chart accent colors */
-    --chart-1: 230 65% 48%;
-    --chart-2: 160 84% 39%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 45%;
     --chart-3: 38 92% 50%;
     --chart-4: 0 84% 60%;
-    --chart-5: 270 60% 55%;
+    --chart-5: 262 60% 55%;
   }
 
   .dark {
