@@ -691,7 +691,7 @@ export default function Lessons() {
   }
 
   function handleOpenNewForm() {
-    console.log('[LESSONS_CREATE_CLICK] forceNewRecord=true');
+    
     // PREFILL-FIX-V5: For new record, set forceNewRecord=true to skip DB lookup
     openModal({
       student_id: '',

@@ -1130,7 +1130,7 @@ export default function AssistantDashboard() {
         open={testVisitModalOpen}
         onOpenChange={setTestVisitModalOpen}
         onSaved={() => {
-          console.log('[AssistantDashboard] TestVisit onSaved triggered - refetching data');
+          
           fetchAllData();
         }}
       />

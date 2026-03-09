@@ -88,7 +88,7 @@ export function LessonModal({
       setClasses(classesRes.data || []);
       setTeachers((profilesRes.data || []).map(p => ({ id: p.id, name: p.full_name })));
 
-      console.log('[LESSON_MODAL_FETCH] students:', studentsRes.data?.length || 0, 'classes:', classesRes.data?.length || 0, 'teachers:', profilesRes.data?.length || 0);
+      
 
       // Fetch original teacher_id if viewing existing record
       if (existingRecordId) {
