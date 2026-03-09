@@ -1022,7 +1022,7 @@ export default function Dashboard() {
           }
         }
 
-        // PHOTO-STABLE-V2: Build status map with stable photo data
+        // PHOTO-STABLE-V2: Build status map with stable photo/audio data
         const statusMap: Record<string, typeof lessonStatusMap[string]> = {};
         (lessonRecords || []).forEach((lr: any) => {
           const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
@@ -1035,8 +1035,9 @@ export default function Dashboard() {
             recordId: lr.id,
             homeworkStatus: lr.homework_status || null,
             latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
-            hasNextHomework: hwAssignmentSet.has(lr.id), 
+            hasNextHomework: hwAssignmentSet.has(lr.id),
             hasPhotoSubmission: photoSubmissionSet.has(photoKey),
+            hasAudioSubmission: audioSubmissionSet.has(photoKey),
             prevNextLessonGoal: adminPrevGoalMap[goalKey] || null,
             todayTestData: hasTestData ? { test_content: lr.test_content || null, test_title: lr.test_title || null, test_result_text: lr.test_result_text || null, english_pass_fail: lr.english_pass_fail || null } : null,
             ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[lr.student_id] || '학생' } } : {})
@@ -1053,14 +1054,12 @@ export default function Dashboard() {
             .or('result_score.neq.,result_passed.not.is.null');
           
           if (testScheds && testScheds.length > 0) {
-            // Build a map by student_id:subject
             const testSchedMap: Record<string, typeof testScheds[0]> = {};
             testScheds.forEach((ts: any) => {
               const k = `${ts.student_id}:${ts.subject}`;
-              testSchedMap[k] = ts; // latest wins
+              testSchedMap[k] = ts;
             });
             
-            // Merge into statusMap where no lesson_records test data exists
             rosterRows.forEach((row: any) => {
               const key = `${row.student_id}:${row.class_id}:${row.subject}`;
               const tsKey = `${row.student_id}:${row.subject}`;
@@ -1083,6 +1082,7 @@ export default function Dashboard() {
                   latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[tsKey] || null,
                   hasNextHomework: false,
                   hasPhotoSubmission: photoSubmissionSet.has(tsKey),
+                  hasAudioSubmission: audioSubmissionSet.has(tsKey),
                   todayTestData: {
                     test_content: ts.content || null,
                     test_title: `${ts.test_type === 'guerrilla' ? '게릴라' : '시험'}`,
@@ -1095,11 +1095,13 @@ export default function Dashboard() {
           }
         }
 
-        // Also populate statusMap for students with photo submissions but no lesson record
+        // Also populate statusMap for students with submissions but no lesson record
         rosterRows.forEach((row: any) => {
           const key = `${row.student_id}:${row.class_id}:${row.subject}`;
           const photoKey = `${row.student_id}:${row.subject}`;
-          if (!statusMap[key] && photoSubmissionSet.has(photoKey)) {
+          const hasPhoto = photoSubmissionSet.has(photoKey);
+          const hasAudio = audioSubmissionSet.has(photoKey);
+          if (!statusMap[key] && (hasPhoto || hasAudio)) {
             const pd = photoDataMap[photoKey];
             statusMap[key] = {
               submitted: false,
@@ -1107,7 +1109,8 @@ export default function Dashboard() {
               homeworkStatus: null,
               latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
               hasNextHomework: false,
-              hasPhotoSubmission: true,
+              hasPhotoSubmission: hasPhoto,
+              hasAudioSubmission: hasAudio,
               ...(pd ? { photoData: { ...pd, studentName: studentNameLookup[row.student_id] || '학생' } } : {})
             };
           }
