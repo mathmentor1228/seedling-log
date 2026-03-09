@@ -38,7 +38,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
-import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users, MessageSquare, CheckCircle2, RotateCcw, Send, ArrowRight } from 'lucide-react';
+import { ClipboardCheck, Trash2, Loader2, ChevronDown, Calendar, Image, Clock, Users, MessageSquare, CheckCircle2, RotateCcw, Send, ArrowRight, Mic } from 'lucide-react';
 import { format, startOfWeek, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
