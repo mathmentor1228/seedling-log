@@ -2435,6 +2435,7 @@ export type Database = {
       }
       textbook_distributions: {
         Row: {
+          billed_at: string | null
           confirmed_by: string | null
           created_at: string
           distributed_by: string
@@ -2449,6 +2450,7 @@ export type Database = {
           total_amount: number
         }
         Insert: {
+          billed_at?: string | null
           confirmed_by?: string | null
           created_at?: string
           distributed_by: string
@@ -2463,6 +2465,7 @@ export type Database = {
           total_amount?: number
         }
         Update: {
+          billed_at?: string | null
           confirmed_by?: string | null
           created_at?: string
           distributed_by?: string
