@@ -91,6 +91,18 @@ export function TextbookPaymentTab() {
     markBilled(dist.id);
   };
 
+  const handleCopyAndOpenKakao = async (dist: Distribution) => {
+    const msg = generateMessage(dist);
+    await navigator.clipboard.writeText(msg);
+    toast.success('문구가 복사되었습니다. 카카오톡에서 붙여넣기 해주세요!');
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = 'kakaotalk://launch';
+    } else {
+      window.open('https://accounts.kakao.com/login?continue=https://e.kakao.com/', '_blank');
+    }
+    markBilled(dist.id);
+  };
 
   const handleConfirmPayment = async (dist: Distribution) => {
     const { error } = await supabase.from('textbook_distributions').update({
