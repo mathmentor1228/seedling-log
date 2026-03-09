@@ -2083,7 +2083,7 @@ export default function Dashboard() {
       <DashboardHeader role={role || ''} />
       
       {/* ━━━ 섹션 1: 주의사항 & 알림 ━━━ */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         <AttentionSummaryBar items={attentionItems} />
         <ExamDdayBanner />
       </div>
