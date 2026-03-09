@@ -977,15 +977,25 @@ export default function Dashboard() {
 
             const hasImage = !!hw.submission_image_url;
             const hasAudio = !!hw.submission_audio_url;
-            if (hw.submitted_at && (hasImage || hasAudio) && !photoDataMap[photoKey]) {
-              const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+            if (!hw.submitted_at || (!hasImage && !hasAudio)) return;
+
+            const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+            const existing = photoDataMap[photoKey];
+
+            if (!existing) {
               photoDataMap[photoKey] = {
                 urls: imgUrls,
                 audioUrl: hw.submission_audio_url || null,
                 text: hw.submission_text || null,
                 at: hw.submitted_at,
               };
+              return;
             }
+
+            // Keep images from homework_submissions, but merge audio/text from latest assignment when missing
+            if (!existing.audioUrl && hasAudio) existing.audioUrl = hw.submission_audio_url || null;
+            if (!existing.text && hw.submission_text) existing.text = hw.submission_text;
+            if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
         }
 
@@ -1552,10 +1562,19 @@ export default function Dashboard() {
             seenLatest.add(photoKey);
             const hasImage = !!hw.submission_image_url;
             const hasAudio = !!hw.submission_audio_url;
-            if (hw.submitted_at && (hasImage || hasAudio) && !teacherPhotoDataMap[photoKey]) {
-              const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+            if (!hw.submitted_at || (!hasImage && !hasAudio)) return;
+
+            const imgUrls = hasImage ? hw.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean) : [];
+            const existing = teacherPhotoDataMap[photoKey];
+
+            if (!existing) {
               teacherPhotoDataMap[photoKey] = { urls: imgUrls, audioUrl: hw.submission_audio_url || null, text: hw.submission_text || null, at: hw.submitted_at };
+              return;
             }
+
+            if (!existing.audioUrl && hasAudio) existing.audioUrl = hw.submission_audio_url || null;
+            if (!existing.text && hw.submission_text) existing.text = hw.submission_text;
+            if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
         }
 
@@ -2717,6 +2736,7 @@ export default function Dashboard() {
                                                   }}
                                                 >
                                                   {ls.hasPhotoSubmission && `📷 ${ls.photoData.urls.length > 1 ? `${ls.photoData.urls.length}장` : '보기'}`}
+                                                  {ls.hasPhotoSubmission && ls.hasAudioSubmission && <><span>·</span><Mic className="w-3 h-3" />음성</>}
                                                   {!ls.hasPhotoSubmission && ls.hasAudioSubmission && <><Mic className="w-3 h-3" />음성</>}
                                                 </button>
                                               </>
@@ -3089,6 +3109,7 @@ export default function Dashboard() {
                                               }}
                                             >
                                               {student.hasPhotoSubmission && `📷 ${student.photoData.urls.length > 1 ? `${student.photoData.urls.length}장` : '보기'}`}
+                                              {student.hasPhotoSubmission && student.hasAudioSubmission && <><span>·</span><Mic className="w-3 h-3" />음성</>}
                                               {!student.hasPhotoSubmission && student.hasAudioSubmission && <><Mic className="w-3 h-3" />음성</>}
                                             </button>
                                           </>
@@ -3257,7 +3278,7 @@ export default function Dashboard() {
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
-                {photoViewHw.student_name} - {photoViewHw.subject} 숙제 사진
+                {photoViewHw.student_name} - {photoViewHw.subject} 숙제 제출물
               </DialogTitle>
             </DialogHeader>
             <SubmissionImageCarousel
@@ -3265,6 +3286,16 @@ export default function Dashboard() {
               submittedAt={photoViewHw.submitted_at}
               note={photoViewHw.submission_text}
             />
+            {photoViewHw.submission_audio_url && (
+              <div className="rounded-lg border bg-background p-3 space-y-2">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Mic className="w-3 h-3" /> 음성 제출
+                </p>
+                <audio controls className="w-full" src={photoViewHw.submission_audio_url}>
+                  브라우저에서 오디오 재생을 지원하지 않습니다.
+                </audio>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       )}
