@@ -1351,7 +1351,7 @@ export default function Dashboard() {
         return;
       }
 
-      console.log('fetchTodaySlots: schedules returned =', activeSchedules?.length || 0, 'active of', schedules?.length || 0, 'total');
+      
 
       // Get students for each class - also build a map of class_id -> subject for RPC
       const classIds = activeSchedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
