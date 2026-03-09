@@ -343,6 +343,7 @@ export function RosterActionModal({
           // STUDENT-SUBMISSION-V1: Include inline submission fields from homework_assignments
           submission_image_url: prevHw.submission_image_url,
           submission_text: prevHw.submission_text,
+          submission_audio_url: prevHw.submission_audio_url,
           submitted_at: prevHw.submitted_at,
         } as HomeworkAssignment);
         
