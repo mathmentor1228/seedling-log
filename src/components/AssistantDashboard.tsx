@@ -230,7 +230,7 @@ export default function AssistantDashboard() {
       setLoading(true);
       setFetchError(null);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      console.log('[AssistantDashboard] fetchAllData started, date:', dateStr);
+      
       
       // ASSISTANT-ROSTER-RESTORE-V1: Call the RPC which returns flat array of roster rows
       const { data: rpcData, error: rpcError } = await supabase.rpc(
