@@ -527,7 +527,7 @@ export default function AssistantDashboard() {
       
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(attendanceMap).length;
-      console.log('[AssistantDashboard] fetchAllData complete - attendanceUpdated=true, rosterUpdated=true, attendanceRecords:', attendanceCount, 'teachersFound:', teachersList.length);
+      
     } catch (error: any) {
       console.error('Error fetching data:', error);
       const errInfo = { page: 'Assistant', status: error?.code || 'ERR', message: error?.message || 'Unknown error' };
