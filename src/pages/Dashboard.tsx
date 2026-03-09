@@ -686,7 +686,7 @@ export default function Dashboard() {
   useEffect(() => {
     const handleFocus = () => {
       if (user && (isTeacher(role) || isAdmin(role))) {
-        console.log('[Dashboard] Window focused - refetching attendance data');
+        // refetch on focus
         fetchTodaySlots();
         if (isAdmin(role)) {
           fetchTodayAttendance();
