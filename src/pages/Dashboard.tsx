@@ -2798,7 +2798,9 @@ export default function Dashboard() {
                                   </div>
                                 </div>
                               ))}
+                              </CollapsibleContent>
                             </div>
+                            </Collapsible>
                           );
                         })}
                       </div>
