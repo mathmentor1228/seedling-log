@@ -2559,7 +2559,7 @@ export default function Dashboard() {
                               {/* Teacher header */}
                               <CollapsibleTrigger asChild>
                                 <div className="flex items-center gap-2 cursor-pointer hover:bg-muted/30 rounded-lg px-2 py-1.5 -mx-2 transition-colors">
-                                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform duration-200 group-data-[state=closed]:-rotate-90" />
+                                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform duration-200 [[data-state=closed]>&]:-rotate-90" />
                                   <h4 className="font-bold text-foreground text-base">{teacher.teacher_name}</h4>
                                   <Badge variant="secondary" className="text-xs">{teacherRows.length}명</Badge>
                                 </div>
