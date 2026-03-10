@@ -1,0 +1,2 @@
+ALTER TABLE public.assistant_tasks DROP CONSTRAINT assistant_tasks_assignee_check;
+ALTER TABLE public.assistant_tasks ADD CONSTRAINT assistant_tasks_assignee_check CHECK (assignee = ANY (ARRAY['유빈조교'::text, '은서조교'::text, '다인조교'::text, '미배정'::text]));
