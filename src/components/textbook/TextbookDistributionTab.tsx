@@ -92,7 +92,9 @@ export function TextbookDistributionTab() {
       return;
     }
 
-    const totalAmount = order.unit_price * qty;
+    // 학부모 청구가: 정가에서 10% 할인
+    const discountedPrice = Math.round(order.unit_price * 0.9);
+    const totalAmount = discountedPrice * qty;
 
     setCreating(true);
     // 1. Insert distribution record
