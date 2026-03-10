@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
-import { ExamDdayBanner } from '@/components/ExamDdayBanner';
+
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { 
   Users, 
@@ -2125,11 +2125,8 @@ export default function Dashboard() {
         </div>
       )}
       
-      {/* ━━━ 섹션 1: 주의사항 & 시험일정 (2단 배열) ━━━ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <AttentionSummaryBar items={attentionItems} />
-        <ExamDdayBanner />
-      </div>
+      {/* ━━━ 섹션 1: 주의사항 ━━━ */}
+      <AttentionSummaryBar items={attentionItems} />
 
       {/* ━━━ 섹션 2: 핵심 지표 ━━━ */}
       {!isAssistant(role) && (
@@ -2557,12 +2554,17 @@ export default function Dashboard() {
                           slotGroups.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
                           return (
-                            <div key={teacher.teacher_id} className="space-y-3">
+                            <Collapsible key={teacher.teacher_id} defaultOpen={true}>
+                            <div className="space-y-3">
                               {/* Teacher header */}
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-foreground text-base">{teacher.teacher_name}</h4>
-                                <Badge variant="secondary" className="text-xs">{teacherRows.length}명</Badge>
-                              </div>
+                              <CollapsibleTrigger asChild>
+                                <div className="flex items-center gap-2 cursor-pointer hover:bg-muted/30 rounded-lg px-2 py-1.5 -mx-2 transition-colors">
+                                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform duration-200 [[data-state=closed]>&]:-rotate-90" />
+                                  <h4 className="font-bold text-foreground text-base">{teacher.teacher_name}</h4>
+                                  <Badge variant="secondary" className="text-xs">{teacherRows.length}명</Badge>
+                                </div>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
 
                               {/* Time slot boxes */}
                               {slotGroups.map((slot) => (
@@ -2796,7 +2798,9 @@ export default function Dashboard() {
                                   </div>
                                 </div>
                               ))}
+                              </CollapsibleContent>
                             </div>
+                            </Collapsible>
                           );
                         })}
                       </div>
