@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
-import { ExamDdayBanner } from '@/components/ExamDdayBanner';
+
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { 
   Users, 
