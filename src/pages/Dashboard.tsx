@@ -2125,11 +2125,8 @@ export default function Dashboard() {
         </div>
       )}
       
-      {/* ━━━ 섹션 1: 주의사항 & 시험일정 (2단 배열) ━━━ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <AttentionSummaryBar items={attentionItems} />
-        <ExamDdayBanner />
-      </div>
+      {/* ━━━ 섹션 1: 주의사항 ━━━ */}
+      <AttentionSummaryBar items={attentionItems} />
 
       {/* ━━━ 섹션 2: 핵심 지표 ━━━ */}
       {!isAssistant(role) && (
