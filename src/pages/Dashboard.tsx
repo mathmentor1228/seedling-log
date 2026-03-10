@@ -2553,13 +2553,18 @@ export default function Dashboard() {
                           // Sort by start time
                           slotGroups.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
+                          const [isTeacherOpen, setIsTeacherOpen] = useState(true);
                           return (
-                            <div key={teacher.teacher_id} className="space-y-3">
+                            <Collapsible key={teacher.teacher_id} open={isTeacherOpen} onOpenChange={setIsTeacherOpen}>
+                            <div className="space-y-3">
                               {/* Teacher header */}
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-foreground text-base">{teacher.teacher_name}</h4>
-                                <Badge variant="secondary" className="text-xs">{teacherRows.length}명</Badge>
-                              </div>
+                              <CollapsibleTrigger asChild>
+                                <div className="flex items-center gap-2 cursor-pointer hover:bg-muted/30 rounded-lg px-2 py-1.5 -mx-2 transition-colors">
+                                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isTeacherOpen ? '' : '-rotate-90'}`} />
+                                  <h4 className="font-bold text-foreground text-base">{teacher.teacher_name}</h4>
+                                  <Badge variant="secondary" className="text-xs">{teacherRows.length}명</Badge>
+                                </div>
+                              </CollapsibleTrigger>
 
                               {/* Time slot boxes */}
                               {slotGroups.map((slot) => (
