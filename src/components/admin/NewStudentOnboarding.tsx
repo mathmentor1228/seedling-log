@@ -60,7 +60,7 @@ ${name}은 *월 *일 (*)부터
 function buildChannelGuideMsg(student: NewStudent): string {
   const parentLabel = student.parent_name ? `${student.parent_name}` : '**';
   const name = student.name || '***';
-  return `안녕하세요. ${parentLabel}어머님, 멘토입니다 ^^ 앞으로는 아이 학습에 대한 직접적인 소통 창구 안내드립니다.  아래 주소 클릭하시고 '${name} 학부모입니다' 라고, 메시지'를 보내주시면 감사하겠습니다.
+  return `안녕하세요. ${name} ${parentLabel}어머님, 멘토입니다 ^^ 앞으로는 아이 학습에 대한 직접적인 소통 창구 안내드립니다.  아래 주소 클릭하시고 '${name} 학부모입니다' 라고, 메시지'를 보내주시면 감사하겠습니다.
 
 http://pf.kakao.com/_ScZhb 채널추가하기.
 원활한 학습을 위해 바로 추가 부탁드립니다.`;
