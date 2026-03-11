@@ -671,8 +671,12 @@ export function VocabTestResultsPanel() {
     }
 
     const schedulesToShift = allSchedules || [];
+    // Save original state for undo
+    const originalSchedules = schedulesToShift.map(s => ({ id: s.id, test_date: s.test_date }));
+
     let errorOccurred = false;
     let shiftedCount = 0;
+    const newSchedules: { id: string; test_date: string }[] = [];
 
     // Assign new dates: first one gets the user-selected date (snapped to next test day),
     // subsequent ones get the next test day after the previous one
@@ -680,6 +684,7 @@ export function VocabTestResultsPanel() {
 
     for (const sched of schedulesToShift) {
       const newDateStr = format(cursor, 'yyyy-MM-dd');
+      newSchedules.push({ id: sched.id, test_date: newDateStr });
 
       const { error } = await supabase
         .from('vocab_schedules')
@@ -708,6 +713,20 @@ export function VocabTestResultsPanel() {
     }
 
     if (!errorOccurred) {
+      // Get performer name
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user?.id || '').single();
+      // Save postpone log
+      await supabase.from('vocab_schedule_logs').insert({
+        student_id: postponeTarget.student_id,
+        setting_id: postponeTarget.setting_id,
+        action_type: 'postpone',
+        performed_by: user?.id || null,
+        performed_by_name: profile?.full_name || user?.email || '알 수 없음',
+        original_schedules: originalSchedules,
+        new_schedules: newSchedules,
+        note: `${postponeTarget.book_name} Day${postponeTarget.day_number}부터 ${newDate}로 미루기 (${shiftedCount}건)`,
+      });
+
       toast.success(`${shiftedCount}건의 일정이 시험 요일에 맞춰 재배치되었습니다`);
       setPostponeTarget(null);
       fetchSchedulesAndResults();
