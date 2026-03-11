@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download } from 'lucide-react';
+import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download, Search, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface TextbookOrder {
@@ -33,6 +33,11 @@ export function TextbookOrderTab() {
   const [showDialog, setShowDialog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [userName, setUserName] = useState('');
+  
+  // Search & filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
 
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('수학');
@@ -203,8 +208,22 @@ export function TextbookOrderTab() {
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
-  const pending = orders.filter(o => o.status === '신청');
-  const completed = orders.filter(o => o.status === '입고완료');
+  // Filter orders based on search and filters
+  const filteredOrders = orders.filter(o => {
+    const matchesSearch = !searchQuery || 
+      o.textbook_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.requested_by_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (o.notes && o.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSubject = filterSubject === 'all' || o.subject === filterSubject;
+    const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
+    return matchesSearch && matchesSubject && matchesStatus;
+  });
+
+  const pending = filteredOrders.filter(o => o.status === '신청');
+  const completed = filteredOrders.filter(o => o.status === '입고완료');
+
+  const subjects = [...new Set(orders.map(o => o.subject))].sort();
+  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all';
 
   return (
     <div className="space-y-6">
@@ -262,6 +281,44 @@ export function TextbookOrderTab() {
           </DialogContent>
         </Dialog>
         </div>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="교재명, 신청자, 비고 검색..."
+            className="pl-8 pr-8"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <Select value={filterSubject} onValueChange={setFilterSubject}>
+          <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="과목" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 과목</SelectItem>
+            {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-full sm:w-[130px]"><SelectValue placeholder="상태" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 상태</SelectItem>
+            <SelectItem value="신청">입고 대기</SelectItem>
+            <SelectItem value="입고완료">입고 완료</SelectItem>
+          </SelectContent>
+        </Select>
+        {hasActiveFilters && (
+          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); }}>
+            <X className="w-3.5 h-3.5" />초기화
+          </Button>
+        )}
       </div>
 
       {/* Summary */}
@@ -350,8 +407,10 @@ export function TextbookOrderTab() {
         </div>
       )}
 
-      {orders.length === 0 && (
-        <p className="text-center text-sm text-muted-foreground py-12">등록된 교재 신청이 없습니다</p>
+      {filteredOrders.length === 0 && (
+        <p className="text-center text-sm text-muted-foreground py-12">
+          {hasActiveFilters ? '검색 결과가 없습니다' : '등록된 교재 신청이 없습니다'}
+        </p>
       )}
     </div>
   );
