@@ -15,6 +15,7 @@ interface NewStudent {
   name: string;
   parent_name: string | null;
   parent_phone: string | null;
+  parent_token: string | null;
   created_at: string;
   grade: string | null;
 }
