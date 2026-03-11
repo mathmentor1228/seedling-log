@@ -317,7 +317,8 @@ export function TextbookOrderTab() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-medium text-foreground">교재명 *</label>
-                    <Input value={name} onChange={e => setName(e.target.value)} placeholder="교재명 입력" />
+                    <Input value={name} onChange={e => setName(e.target.value)} placeholder="[개념]교재명_중1" />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">[개념/유형/심화/응용/내신/독해/문법/듣기/기타]교재명_학년/레벨명</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground">과목</label>
