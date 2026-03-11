@@ -2119,10 +2119,7 @@ export default function Dashboard() {
       <DashboardHeader role={role || ''} />
 
       {(isAdmin(role) || isTeacher(role)) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <AssistantRequestsWidget />
-          <AcademyCalendar />
-        </div>
+        <AssistantRequestsWidget />
       )}
       
       {/* ━━━ 섹션 1: 주의사항 ━━━ */}

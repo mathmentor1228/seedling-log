@@ -319,7 +319,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <main className="flex-1">
           <div className="p-5 lg:p-8 max-w-7xl mx-auto">
             {isDashboard && (
-              <div className="space-y-5 mb-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
                 <TeamNotesBoard />
                 <AcademyCalendar />
               </div>
