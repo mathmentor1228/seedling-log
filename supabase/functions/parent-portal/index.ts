@@ -87,6 +87,12 @@ Deno.serve(async (req) => {
 
     const studentId = student.id;
 
+    // Log parent portal visit (fire and forget)
+    supabase
+      .from("parent_portal_visits")
+      .insert({ student_id: studentId })
+      .then(() => {});
+
     // Date range: last 14 days
     const fourteenDaysAgo = new Date();
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
