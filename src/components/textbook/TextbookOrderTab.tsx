@@ -45,6 +45,8 @@ export function TextbookOrderTab() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSubject, setFilterSubject] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
 
   // Create form
   const [name, setName] = useState('');
