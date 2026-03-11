@@ -274,13 +274,15 @@ export function TextbookOrderTab() {
       (o.notes && o.notes.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesSubject = filterSubject === 'all' || o.subject === filterSubject;
     const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
-    return matchesSearch && matchesSubject && matchesStatus;
+    const matchesGrade = filterGrade === 'all' || o.grade === filterGrade;
+    const matchesCategory = filterCategory === 'all' || o.category === filterCategory;
+    return matchesSearch && matchesSubject && matchesStatus && matchesGrade && matchesCategory;
   });
 
   const pending = filteredOrders.filter(o => o.status === '신청');
   const completed = filteredOrders.filter(o => o.status === '입고완료');
   const subjects = [...new Set(orders.map(o => o.subject))].sort();
-  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all';
+  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all' || filterGrade !== 'all' || filterCategory !== 'all';
 
   const subjectColor = (s: string) => {
     switch (s) {
