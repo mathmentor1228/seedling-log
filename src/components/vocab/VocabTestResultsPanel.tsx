@@ -734,7 +734,48 @@ export function VocabTestResultsPanel() {
     setPostponeSaving(false);
   };
 
-  const handleScheduleRetest = async () => {
+  const handleUndoPostpone = async (logId: string) => {
+    setUndoingLogId(logId);
+    const log = postponeLogs.find(l => l.id === logId);
+    if (!log) { setUndoingLogId(null); return; }
+
+    const originals = log.original_schedules as { id: string; test_date: string }[];
+    let errorOccurred = false;
+
+    for (const orig of originals) {
+      const { error } = await supabase
+        .from('vocab_schedules')
+        .update({ test_date: orig.test_date })
+        .eq('id', orig.id);
+      if (error) {
+        errorOccurred = true;
+        toast.error(`복원 실패: ${error.message}`);
+        break;
+      }
+      // Also restore linked test results
+      await supabase
+        .from('vocab_test_results')
+        .update({ test_date: orig.test_date })
+        .eq('schedule_id', orig.id);
+    }
+
+    if (!errorOccurred) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user?.id || '').single();
+      await supabase
+        .from('vocab_schedule_logs')
+        .update({
+          undone_at: new Date().toISOString(),
+          undone_by: user?.id || null,
+          undone_by_name: profile?.full_name || user?.email || '알 수 없음',
+        })
+        .eq('id', logId);
+      toast.success(`${originals.length}건의 일정이 원래대로 복원되었습니다`);
+      fetchSchedulesAndResults();
+    }
+    setUndoingLogId(null);
+  };
+
+
     if (!retestResult || !retestDate || !retestTime) return;
     setSaving(true);
 
