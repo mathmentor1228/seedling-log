@@ -33,6 +33,11 @@ export function TextbookOrderTab() {
   const [showDialog, setShowDialog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [userName, setUserName] = useState('');
+  
+  // Search & filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
 
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('수학');
