@@ -2710,6 +2710,62 @@ export type Database = {
         }
         Relationships: []
       }
+      vocab_schedule_logs: {
+        Row: {
+          action_type: string
+          id: string
+          new_schedules: Json
+          note: string | null
+          original_schedules: Json
+          performed_at: string
+          performed_by: string | null
+          performed_by_name: string | null
+          setting_id: string
+          student_id: string
+          undone_at: string | null
+          undone_by: string | null
+          undone_by_name: string | null
+        }
+        Insert: {
+          action_type?: string
+          id?: string
+          new_schedules?: Json
+          note?: string | null
+          original_schedules?: Json
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+          setting_id: string
+          student_id: string
+          undone_at?: string | null
+          undone_by?: string | null
+          undone_by_name?: string | null
+        }
+        Update: {
+          action_type?: string
+          id?: string
+          new_schedules?: Json
+          note?: string | null
+          original_schedules?: Json
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+          setting_id?: string
+          student_id?: string
+          undone_at?: string | null
+          undone_by?: string | null
+          undone_by_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_schedule_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vocab_schedules: {
         Row: {
           absence_reason: string | null
