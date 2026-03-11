@@ -1766,6 +1766,47 @@ export type Database = {
           },
         ]
       }
+      student_onboarding_checks: {
+        Row: {
+          check_key: string
+          checked: boolean
+          checked_at: string | null
+          checked_by: string | null
+          checked_by_name: string | null
+          created_at: string
+          id: string
+          student_id: string
+        }
+        Insert: {
+          check_key: string
+          checked?: boolean
+          checked_at?: string | null
+          checked_by?: string | null
+          checked_by_name?: string | null
+          created_at?: string
+          id?: string
+          student_id: string
+        }
+        Update: {
+          check_key?: string
+          checked?: boolean
+          checked_at?: string | null
+          checked_by?: string | null
+          checked_by_name?: string | null
+          created_at?: string
+          id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_onboarding_checks_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_point_history: {
         Row: {
           created_at: string
