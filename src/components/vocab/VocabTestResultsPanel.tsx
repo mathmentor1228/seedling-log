@@ -543,8 +543,9 @@ export function VocabTestResultsPanel() {
     setRetestDate(today);
     setRetestTime('');
     setConflictWarning(null);
+    setConflictMode('overlap');
+    setConflictSchedules([]);
     setRetestDialogOpen(true);
-    // Check conflict for today
     checkRetestConflict(today);
   };
 
@@ -552,6 +553,8 @@ export function VocabTestResultsPanel() {
   const checkRetestConflict = async (date: Date) => {
     setRetestDate(date);
     setConflictWarning(null);
+    setConflictMode('overlap');
+    setConflictSchedules([]);
     if (!retestResult) return;
 
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -562,8 +565,13 @@ export function VocabTestResultsPanel() {
       .eq('test_date', dateStr);
 
     if (existing && existing.length > 0) {
-      const types = existing.map((e: any) => e.schedule_type === 'retest' ? '재시험' : '정규시험').join(', ');
-      setConflictWarning(`이 날짜에 이미 ${existing.length}건의 시험(${types})이 있습니다. 그래도 등록하시겠습니까?`);
+      const regularCount = existing.filter((e: any) => e.schedule_type !== 'retest').length;
+      const retestCount = existing.filter((e: any) => e.schedule_type === 'retest').length;
+      const parts = [];
+      if (regularCount > 0) parts.push(`정규시험 ${regularCount}건`);
+      if (retestCount > 0) parts.push(`재시험 ${retestCount}건`);
+      setConflictWarning(`이 날짜에 이미 ${parts.join(', ')}이 있습니다.`);
+      setConflictSchedules(existing);
     }
   };
 
