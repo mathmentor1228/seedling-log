@@ -54,6 +54,8 @@ export function TextbookOrderTab() {
   const [qty, setQty] = useState('1');
   const [price, setPrice] = useState('');
   const [notes, setNotes] = useState('');
+  const [grade, setGrade] = useState('');
+  const [category, setCategory] = useState('기타');
 
   // Edit state
   const [editOrder, setEditOrder] = useState<TextbookOrder | null>(null);
