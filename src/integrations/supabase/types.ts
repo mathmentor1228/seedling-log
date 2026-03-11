@@ -1432,6 +1432,35 @@ export type Database = {
         }
         Relationships: []
       }
+      parent_portal_visits: {
+        Row: {
+          id: string
+          ip_address: string | null
+          student_id: string
+          visited_at: string
+        }
+        Insert: {
+          id?: string
+          ip_address?: string | null
+          student_id: string
+          visited_at?: string
+        }
+        Update: {
+          id?: string
+          ip_address?: string | null
+          student_id?: string
+          visited_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_portal_visits_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           assigned_subject: string | null
