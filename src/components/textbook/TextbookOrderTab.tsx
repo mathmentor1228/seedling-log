@@ -143,6 +143,8 @@ export function TextbookOrderTab() {
     setEditQty(String(order.quantity));
     setEditPrice(String(order.unit_price));
     setEditNotes(order.notes || '');
+    setEditGrade(order.grade || '');
+    setEditCategory(order.category || '기타');
   };
 
   const handleEdit = async () => {
@@ -156,6 +158,8 @@ export function TextbookOrderTab() {
       quantity: parseInt(editQty) || 1,
       unit_price: parseInt(editPrice) || 0,
       notes: editNotes.trim() || null,
+      grade: editGrade || null,
+      category: editCategory || '기타',
       updated_at: new Date().toISOString(),
     } as any).eq('id', editOrder.id);
     if (error) { toast.error('수정 실패'); console.error(error); }
