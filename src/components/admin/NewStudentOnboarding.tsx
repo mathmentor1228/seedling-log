@@ -34,7 +34,6 @@ const CHECKLIST_ITEMS = [
 ];
 
 function buildRegistrationMsg(student: NewStudent): string {
-  const parentLabel = student.parent_name ? `${student.parent_name}` : '**';
   const name = student.name || '***';
   return `[더,멘토 등록안내]
 안녕하세요. 더멘토입니다.
@@ -52,13 +51,9 @@ ${name}은 *월 *일 (*)부터
 계좌
 신한 110-265-698329
 황은지결제는 앱카드 혹은 학원오셔서
-
 키오스크, 카드결제도 가능하십니다.
-
 귀한자녀 믿고 맡겨주신만큼
-
 신경 써 지도하겠습니다.
-
 감사합니다.`;
 }
 
