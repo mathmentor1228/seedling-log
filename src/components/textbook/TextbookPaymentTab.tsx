@@ -335,14 +335,36 @@ export function TextbookPaymentTab() {
                     </div>
 
                     <div className="flex flex-col gap-1.5 shrink-0">
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="outline" className="gap-1 text-xs px-2" onClick={() => handleCopyStudentMessage(group.studentName, group.dists)} title="문구 복사">
-                          <Copy className="w-3 h-3" />복사
-                        </Button>
-                        <Button size="sm" variant="outline" className="gap-1 text-xs px-2 text-yellow-700 border-yellow-300 hover:bg-yellow-50" onClick={() => handleCopyAndOpenKakao(group.studentName, group.dists)} title="복사 후 카카오톡 열기">
-                          <MessageCircle className="w-3 h-3" />카톡
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs px-2">
+                            <Copy className="w-3 h-3" />복사<ChevronDown className="w-3 h-3 ml-0.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => handleCopyStudentMessage(group.studentName, group.dists, 'before')} className="text-xs gap-2">
+                            <BookOpen className="w-3.5 h-3.5" />배포 전 (배부 예정)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleCopyStudentMessage(group.studentName, group.dists, 'after')} className="text-xs gap-2">
+                            <Send className="w-3.5 h-3.5" />배포 후 (배부 완료)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs px-2 text-yellow-700 border-yellow-300 hover:bg-yellow-50">
+                            <MessageCircle className="w-3 h-3" />카톡<ChevronDown className="w-3 h-3 ml-0.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => handleCopyAndOpenKakao(group.studentName, group.dists, 'before')} className="text-xs gap-2">
+                            <BookOpen className="w-3.5 h-3.5" />배포 전 (배부 예정)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleCopyAndOpenKakao(group.studentName, group.dists, 'after')} className="text-xs gap-2">
+                            <Send className="w-3.5 h-3.5" />배포 후 (배부 완료)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </Card>
