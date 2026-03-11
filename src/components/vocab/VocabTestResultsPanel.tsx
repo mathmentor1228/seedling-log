@@ -112,6 +112,8 @@ export function VocabTestResultsPanel() {
   const [retestDate, setRetestDate] = useState<Date | undefined>();
   const [retestTime, setRetestTime] = useState('');
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const [conflictMode, setConflictMode] = useState<'overlap' | 'postpone'>('overlap');
+  const [conflictSchedules, setConflictSchedules] = useState<any[]>([]);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
@@ -541,8 +543,9 @@ export function VocabTestResultsPanel() {
     setRetestDate(today);
     setRetestTime('');
     setConflictWarning(null);
+    setConflictMode('overlap');
+    setConflictSchedules([]);
     setRetestDialogOpen(true);
-    // Check conflict for today
     checkRetestConflict(today);
   };
 
@@ -550,6 +553,8 @@ export function VocabTestResultsPanel() {
   const checkRetestConflict = async (date: Date) => {
     setRetestDate(date);
     setConflictWarning(null);
+    setConflictMode('overlap');
+    setConflictSchedules([]);
     if (!retestResult) return;
 
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -560,8 +565,13 @@ export function VocabTestResultsPanel() {
       .eq('test_date', dateStr);
 
     if (existing && existing.length > 0) {
-      const types = existing.map((e: any) => e.schedule_type === 'retest' ? '재시험' : '정규시험').join(', ');
-      setConflictWarning(`이 날짜에 이미 ${existing.length}건의 시험(${types})이 있습니다. 그래도 등록하시겠습니까?`);
+      const regularCount = existing.filter((e: any) => e.schedule_type !== 'retest').length;
+      const retestCount = existing.filter((e: any) => e.schedule_type === 'retest').length;
+      const parts = [];
+      if (regularCount > 0) parts.push(`정규시험 ${regularCount}건`);
+      if (retestCount > 0) parts.push(`재시험 ${retestCount}건`);
+      setConflictWarning(`이 날짜에 이미 ${parts.join(', ')}이 있습니다.`);
+      setConflictSchedules(existing);
     }
   };
 
@@ -695,11 +705,89 @@ export function VocabTestResultsPanel() {
     if (!retestResult || !retestDate || !retestTime) return;
     setSaving(true);
 
+    const retestDateStr = format(retestDate, 'yyyy-MM-dd');
+
+    // If conflict exists and user chose 'postpone', shift conflicting regular schedules forward
+    if (conflictMode === 'postpone' && conflictSchedules.length > 0) {
+      // Only shift regular (non-retest) schedules on this date
+      const regularConflicts = conflictSchedules.filter((s: any) => s.schedule_type !== 'retest');
+      
+      if (regularConflicts.length > 0) {
+        // Fetch student's test_days setting
+        const settingId = regularConflicts[0].setting_id;
+        const { data: settingData } = await supabase
+          .from('vocab_settings')
+          .select('test_days')
+          .eq('id', settingId)
+          .single();
+
+        const DAY_CODE_TO_JS: Record<string, number> = {
+          sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+        };
+        const COMBO_MAP: Record<string, string[]> = {
+          mon_wed: ['mon', 'wed'], tue_thu: ['tue', 'thu'],
+          mon_wed_fri: ['mon', 'wed', 'fri'], tue_thu_fri: ['tue', 'thu', 'fri'],
+          mon_tue_wed_thu: ['mon', 'tue', 'wed', 'thu'],
+          mon_tue_wed_thu_fri: ['mon', 'tue', 'wed', 'thu', 'fri'],
+          mon: ['mon'], tue: ['tue'], wed: ['wed'], thu: ['thu'], fri: ['fri'], sat: ['sat'],
+        };
+        const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const rawTestDays = settingData?.test_days || ['mon', 'wed'];
+        const normalizedDays = rawTestDays.every((d: string) => ALL_DAYS.includes(d))
+          ? rawTestDays
+          : (COMBO_MAP[rawTestDays[0]] || ['mon', 'wed']);
+        const allowedJsDays = new Set(normalizedDays.map((d: string) => DAY_CODE_TO_JS[d]).filter((v: number | undefined) => v !== undefined));
+
+        const findNextTestDay = (from: Date): Date => {
+          const d = new Date(from);
+          d.setDate(d.getDate() + 1); // start from next day
+          for (let i = 0; i < 14; i++) {
+            if (allowedJsDays.has(d.getDay())) return d;
+            d.setDate(d.getDate() + 1);
+          }
+          return d;
+        };
+
+        // Fetch all schedules from this date onward for cascading shift
+        const { data: allSchedules } = await supabase
+          .from('vocab_schedules')
+          .select('id, test_date, schedule_type')
+          .eq('student_id', retestResult.student_id)
+          .eq('setting_id', settingId)
+          .neq('schedule_type', 'retest')
+          .gte('test_date', retestDateStr)
+          .order('test_date', { ascending: true });
+
+        if (allSchedules && allSchedules.length > 0) {
+          let cursor = findNextTestDay(new Date(retestDateStr + 'T00:00:00'));
+          let shiftedCount = 0;
+
+          for (const sched of allSchedules) {
+            const newDateStr = format(cursor, 'yyyy-MM-dd');
+            await supabase
+              .from('vocab_schedules')
+              .update({ test_date: newDateStr })
+              .eq('id', sched.id);
+
+            // Also shift linked test results
+            await supabase
+              .from('vocab_test_results')
+              .update({ test_date: newDateStr })
+              .eq('schedule_id', sched.id);
+
+            shiftedCount++;
+            cursor = findNextTestDay(cursor);
+          }
+          toast.info(`기존 ${shiftedCount}건의 일정이 뒤로 밀렸습니다`);
+        }
+      }
+    }
+
     const { error: updateErr } = await supabase
       .from('vocab_test_results')
       .update({
         retest_scheduled: true,
-        retest_date: format(retestDate, 'yyyy-MM-dd'),
+        retest_date: retestDateStr,
         retest_time: retestTime,
         retest_requested_at: new Date().toISOString(),
       })
@@ -714,7 +802,7 @@ export function VocabTestResultsPanel() {
     const { error: insertErr } = await supabase.from('vocab_schedules').insert({
       student_id: retestResult.student_id,
       setting_id: (await supabase.from('vocab_settings').select('id').eq('student_id', retestResult.student_id).single()).data?.id || '',
-      test_date: format(retestDate, 'yyyy-MM-dd'),
+      test_date: retestDateStr,
       test_time: retestTime,
       day_number: retestResult.day_number,
       book_name: retestResult.book_name,
@@ -1195,14 +1283,35 @@ export function VocabTestResultsPanel() {
               </div>
 
               {conflictWarning && (
-                <div className="bg-warning/10 border border-warning/30 rounded-md p-3 text-xs text-warning-foreground">
-                  ⚠️ {conflictWarning}
+                <div className="space-y-3">
+                  <div className="bg-warning/10 border border-warning/30 rounded-md p-3 text-xs text-warning-foreground">
+                    ⚠️ {conflictWarning}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-foreground">처리 방식 선택:</p>
+                    <label className="flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50" style={{ borderColor: conflictMode === 'overlap' ? 'hsl(var(--primary))' : undefined, backgroundColor: conflictMode === 'overlap' ? 'hsl(var(--primary) / 0.05)' : undefined }}>
+                      <input type="radio" name="conflictMode" checked={conflictMode === 'overlap'} onChange={() => setConflictMode('overlap')} className="mt-0.5" />
+                      <div>
+                        <span className="text-xs font-semibold text-foreground">중복 등록</span>
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">기존 시험 일정을 유지하고, 같은 날에 재시험을 추가합니다</span>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50" style={{ borderColor: conflictMode === 'postpone' ? 'hsl(var(--primary))' : undefined, backgroundColor: conflictMode === 'postpone' ? 'hsl(var(--primary) / 0.05)' : undefined }}>
+                      <input type="radio" name="conflictMode" checked={conflictMode === 'postpone'} onChange={() => setConflictMode('postpone')} className="mt-0.5" />
+                      <div>
+                        <span className="text-xs font-semibold text-foreground">기존 일정 미루기</span>
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">기존 정규 시험을 다음 시험 요일로 밀고, 이후 일정도 순차적으로 밀립니다</span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               )}
 
               <Button onClick={handleScheduleRetest} disabled={saving || !retestDate || !retestTime} className="w-full">
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-                {conflictWarning ? '그래도 등록' : '재시험 등록'}
+                {conflictWarning
+                  ? conflictMode === 'postpone' ? '기존 일정 밀고 등록' : '중복 등록'
+                  : '재시험 등록'}
               </Button>
             </div>
           )}
