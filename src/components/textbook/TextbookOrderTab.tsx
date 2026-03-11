@@ -374,41 +374,57 @@ export function TextbookOrderTab() {
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="교재명, 신청자, 비고 검색..."
-            className="pl-8 pr-8"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="교재명, 신청자, 비고 검색..."
+              className="pl-8 pr-8"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <Select value={filterSubject} onValueChange={setFilterSubject}>
+            <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="과목" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 과목</SelectItem>
+              {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterGrade} onValueChange={setFilterGrade}>
+            <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="학년" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 학년</SelectItem>
+              {GRADES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="분류" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 분류</SelectItem>
+              {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="상태" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 상태</SelectItem>
+              <SelectItem value="신청">입고 대기</SelectItem>
+              <SelectItem value="입고완료">입고 완료</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); setFilterGrade('all'); setFilterCategory('all'); }}>
+              <X className="w-3.5 h-3.5" />초기화
+            </Button>
           )}
         </div>
-        <Select value={filterSubject} onValueChange={setFilterSubject}>
-          <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="과목" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 과목</SelectItem>
-            {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-full sm:w-[130px]"><SelectValue placeholder="상태" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="신청">입고 대기</SelectItem>
-            <SelectItem value="입고완료">입고 완료</SelectItem>
-          </SelectContent>
-        </Select>
-        {hasActiveFilters && (
-          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); }}>
-            <X className="w-3.5 h-3.5" />초기화
-          </Button>
-        )}
       </div>
 
       {/* Summary */}
