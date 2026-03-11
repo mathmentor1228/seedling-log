@@ -7,8 +7,9 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle2, Ban, Copy, Clock, MessageCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, Ban, Copy, Clock, MessageCircle, ChevronDown, BookOpen, Send } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
@@ -81,18 +82,23 @@ export function TextbookPaymentTab() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // Generate combined message for a student (all unpaid items)
-  const generateCombinedMessage = (studentName: string, studentDists: Distribution[]) => {
+  // mode: 'before' = 배포 전 (입금 후 배부 예정), 'after' = 배포 후 (이미 배부 완료)
+  const generateCombinedMessage = (studentName: string, studentDists: Distribution[], mode: 'before' | 'after' = 'before') => {
     // Get parent name for deposit guidance
     const parentName = studentDists[0]?.parent_name;
     const depositGuidance = parentName && parentName !== studentName
       ? `\n입금 시 "${studentName}" 또는 "${parentName}"으로 입금 부탁드립니다.`
       : `\n입금 시 "${studentName}" 이름으로 입금 부탁드립니다.`;
 
+    const closingBefore = `입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
+    const closingAfter = `교재는 이미 아이에게 배부 완료되었습니다.\n확인 후 아래 계좌로 입금 부탁드립니다.\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다.`;
+    const closing = mode === 'after' ? closingAfter : closingBefore;
+
     if (studentDists.length === 1) {
       const dist = studentDists[0];
       const bookName = dist.textbook_orders?.textbook_name || '교재';
       const subject = dist.textbook_orders?.subject || '수학';
-      return `더멘토학원 교재안내\n\n${studentName} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : ${bookName}\n2. 교재가격 : ${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}${depositGuidance}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
+      return `더멘토학원 교재안내\n\n${studentName} 학생 ${subject} 교재 구매 안내\n\n1. 교재명 : ${bookName}\n2. 교재가격 : ${dist.total_amount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}${depositGuidance}\n\n${closing}`;
     }
 
     // Multiple textbooks
@@ -103,7 +109,7 @@ export function TextbookPaymentTab() {
       return `${i + 1}. ${subject ? `[${subject}] ` : ''}${bookName} : ${d.total_amount.toLocaleString()}원`;
     }).join('\n');
 
-    return `더멘토학원 교재안내\n\n${studentName} 학생 교재 구매 안내\n\n${itemList}\n\n합계 : ${totalAmount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}${depositGuidance}\n\n입금 확인되는대로 아이에게 교재 배부 예정입니다.\n가정에서 개별 구매 원하실 경우 개별 구매 하신다고 답장해주시면 됩니다^^\n\n본래 교재는 개별적으로 가정에서 구매해주셔야 하나 편의상 원에서 제공하고 있습니다. 따라서 원비와 함께 결제가 어려운 점 양해 부탁드립니다. 안내된 계좌로 입금 부탁드립니다.`;
+    return `더멘토학원 교재안내\n\n${studentName} 학생 교재 구매 안내\n\n${itemList}\n\n합계 : ${totalAmount.toLocaleString()}원\n\n*계좌안내\n${ACCOUNT_INFO}${depositGuidance}\n\n${closing}`;
   };
 
   const markBilled = async (distIds: string[]) => {
@@ -118,15 +124,15 @@ export function TextbookPaymentTab() {
     ));
   };
 
-  const handleCopyStudentMessage = async (studentName: string, studentDists: Distribution[]) => {
-    const msg = generateCombinedMessage(studentName, studentDists);
+  const handleCopyStudentMessage = async (studentName: string, studentDists: Distribution[], mode: 'before' | 'after' = 'before') => {
+    const msg = generateCombinedMessage(studentName, studentDists, mode);
     await navigator.clipboard.writeText(msg);
-    toast.success(`${studentName} 카톡 문구가 복사되었습니다`);
+    toast.success(`${studentName} ${mode === 'after' ? '배포후' : '배포전'} 문구가 복사되었습니다`);
     markBilled(studentDists.map(d => d.id));
   };
 
-  const handleCopyAndOpenKakao = async (studentName: string, studentDists: Distribution[]) => {
-    const msg = generateCombinedMessage(studentName, studentDists);
+  const handleCopyAndOpenKakao = async (studentName: string, studentDists: Distribution[], mode: 'before' | 'after' = 'before') => {
+    const msg = generateCombinedMessage(studentName, studentDists, mode);
     await navigator.clipboard.writeText(msg);
     toast.success('문구가 복사되었습니다. 카카오톡에서 붙여넣기 해주세요!');
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -329,14 +335,36 @@ export function TextbookPaymentTab() {
                     </div>
 
                     <div className="flex flex-col gap-1.5 shrink-0">
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="outline" className="gap-1 text-xs px-2" onClick={() => handleCopyStudentMessage(group.studentName, group.dists)} title="문구 복사">
-                          <Copy className="w-3 h-3" />복사
-                        </Button>
-                        <Button size="sm" variant="outline" className="gap-1 text-xs px-2 text-yellow-700 border-yellow-300 hover:bg-yellow-50" onClick={() => handleCopyAndOpenKakao(group.studentName, group.dists)} title="복사 후 카카오톡 열기">
-                          <MessageCircle className="w-3 h-3" />카톡
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs px-2">
+                            <Copy className="w-3 h-3" />복사<ChevronDown className="w-3 h-3 ml-0.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => handleCopyStudentMessage(group.studentName, group.dists, 'before')} className="text-xs gap-2">
+                            <BookOpen className="w-3.5 h-3.5" />배포 전 (배부 예정)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleCopyStudentMessage(group.studentName, group.dists, 'after')} className="text-xs gap-2">
+                            <Send className="w-3.5 h-3.5" />배포 후 (배부 완료)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs px-2 text-yellow-700 border-yellow-300 hover:bg-yellow-50">
+                            <MessageCircle className="w-3 h-3" />카톡<ChevronDown className="w-3 h-3 ml-0.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => handleCopyAndOpenKakao(group.studentName, group.dists, 'before')} className="text-xs gap-2">
+                            <BookOpen className="w-3.5 h-3.5" />배포 전 (배부 예정)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleCopyAndOpenKakao(group.studentName, group.dists, 'after')} className="text-xs gap-2">
+                            <Send className="w-3.5 h-3.5" />배포 후 (배부 완료)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </Card>
