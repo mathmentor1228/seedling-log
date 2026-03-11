@@ -25,9 +25,13 @@ interface TextbookOrder {
   notes: string | null;
   created_at: string;
   distributed_qty?: number;
+  grade?: string | null;
+  category?: string | null;
 }
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'];
+const GRADES = ['초등', '중1', '중2', '중3', '고1', '고2', '고3'];
+const CATEGORIES = ['내신', '문법', '개념', '유형', '심화', '독해', '단어', '기타'];
 
 export function TextbookOrderTab() {
   const { user, role } = useAuth();
