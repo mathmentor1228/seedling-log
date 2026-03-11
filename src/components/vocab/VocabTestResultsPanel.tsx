@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2, FileText, ArrowRight } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2, FileText, ArrowRight, Undo2, History } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface Schedule {
@@ -123,6 +123,10 @@ export function VocabTestResultsPanel() {
   const [postponeDate, setPostponeDate] = useState<Date | undefined>();
   const [postponeSaving, setPostponeSaving] = useState(false);
 
+  // Postpone logs & undo
+  const [postponeLogs, setPostponeLogs] = useState<any[]>([]);
+  const [undoingLogId, setUndoingLogId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchSchedulesAndResults();
   }, [selectedDate, displayMonth]);
@@ -176,6 +180,16 @@ export function VocabTestResultsPanel() {
         .eq('retest_scheduled', true)
         .order('retest_date', { ascending: true }),
     ]);
+
+    // Fetch recent postpone logs (last 30 days, not undone)
+    const { data: logsData } = await supabase
+      .from('vocab_schedule_logs')
+      .select('*')
+      .is('undone_at', null)
+      .gte('performed_at', format(new Date(Date.now() - 30 * 86400000), 'yyyy-MM-dd'))
+      .order('performed_at', { ascending: false })
+      .limit(20);
+    setPostponeLogs(logsData || []);
 
     if (schedRes.data) setSchedules(schedRes.data as any);
     if (resRes.data) setResults(resRes.data as any);
@@ -657,8 +671,12 @@ export function VocabTestResultsPanel() {
     }
 
     const schedulesToShift = allSchedules || [];
+    // Save original state for undo
+    const originalSchedules = schedulesToShift.map(s => ({ id: s.id, test_date: s.test_date }));
+
     let errorOccurred = false;
     let shiftedCount = 0;
+    const newSchedules: { id: string; test_date: string }[] = [];
 
     // Assign new dates: first one gets the user-selected date (snapped to next test day),
     // subsequent ones get the next test day after the previous one
@@ -666,6 +684,7 @@ export function VocabTestResultsPanel() {
 
     for (const sched of schedulesToShift) {
       const newDateStr = format(cursor, 'yyyy-MM-dd');
+      newSchedules.push({ id: sched.id, test_date: newDateStr });
 
       const { error } = await supabase
         .from('vocab_schedules')
@@ -694,6 +713,20 @@ export function VocabTestResultsPanel() {
     }
 
     if (!errorOccurred) {
+      // Get performer name
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user?.id || '').single();
+      // Save postpone log
+      await supabase.from('vocab_schedule_logs').insert({
+        student_id: postponeTarget.student_id,
+        setting_id: postponeTarget.setting_id,
+        action_type: 'postpone',
+        performed_by: user?.id || null,
+        performed_by_name: profile?.full_name || user?.email || '알 수 없음',
+        original_schedules: originalSchedules,
+        new_schedules: newSchedules,
+        note: `${postponeTarget.book_name} Day${postponeTarget.day_number}부터 ${newDate}로 미루기 (${shiftedCount}건)`,
+      });
+
       toast.success(`${shiftedCount}건의 일정이 시험 요일에 맞춰 재배치되었습니다`);
       setPostponeTarget(null);
       fetchSchedulesAndResults();
@@ -701,6 +734,46 @@ export function VocabTestResultsPanel() {
     setPostponeSaving(false);
   };
 
+  const handleUndoPostpone = async (logId: string) => {
+    setUndoingLogId(logId);
+    const log = postponeLogs.find(l => l.id === logId);
+    if (!log) { setUndoingLogId(null); return; }
+
+    const originals = log.original_schedules as { id: string; test_date: string }[];
+    let errorOccurred = false;
+
+    for (const orig of originals) {
+      const { error } = await supabase
+        .from('vocab_schedules')
+        .update({ test_date: orig.test_date })
+        .eq('id', orig.id);
+      if (error) {
+        errorOccurred = true;
+        toast.error(`복원 실패: ${error.message}`);
+        break;
+      }
+      // Also restore linked test results
+      await supabase
+        .from('vocab_test_results')
+        .update({ test_date: orig.test_date })
+        .eq('schedule_id', orig.id);
+    }
+
+    if (!errorOccurred) {
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user?.id || '').single();
+      await supabase
+        .from('vocab_schedule_logs')
+        .update({
+          undone_at: new Date().toISOString(),
+          undone_by: user?.id || null,
+          undone_by_name: profile?.full_name || user?.email || '알 수 없음',
+        })
+        .eq('id', logId);
+      toast.success(`${originals.length}건의 일정이 원래대로 복원되었습니다`);
+      fetchSchedulesAndResults();
+    }
+    setUndoingLogId(null);
+  };
   const handleScheduleRetest = async () => {
     if (!retestResult || !retestDate || !retestTime) return;
     setSaving(true);
@@ -759,11 +832,14 @@ export function VocabTestResultsPanel() {
           .order('test_date', { ascending: true });
 
         if (allSchedules && allSchedules.length > 0) {
+          const originalSchedules = allSchedules.map(s => ({ id: s.id, test_date: s.test_date }));
+          const newSchedulesLog: { id: string; test_date: string }[] = [];
           let cursor = findNextTestDay(new Date(retestDateStr + 'T00:00:00'));
           let shiftedCount = 0;
 
           for (const sched of allSchedules) {
             const newDateStr = format(cursor, 'yyyy-MM-dd');
+            newSchedulesLog.push({ id: sched.id, test_date: newDateStr });
             await supabase
               .from('vocab_schedules')
               .update({ test_date: newDateStr })
@@ -778,6 +854,20 @@ export function VocabTestResultsPanel() {
             shiftedCount++;
             cursor = findNextTestDay(cursor);
           }
+
+          // Log the postpone from retest conflict
+          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user?.id || '').single();
+          await supabase.from('vocab_schedule_logs').insert({
+            student_id: retestResult.student_id,
+            setting_id: settingId,
+            action_type: 'retest_postpone',
+            performed_by: user?.id || null,
+            performed_by_name: profile?.full_name || user?.email || '알 수 없음',
+            original_schedules: originalSchedules,
+            new_schedules: newSchedulesLog,
+            note: `재시험 충돌로 인한 미루기 (${shiftedCount}건)`,
+          });
+
           toast.info(`기존 ${shiftedCount}건의 일정이 뒤로 밀렸습니다`);
         }
       }
@@ -1130,6 +1220,49 @@ export function VocabTestResultsPanel() {
                     })}
                   </TableBody>
                 </Table>
+              </Card>
+            </div>
+          )}
+
+          {/* Postpone history / undo */}
+          {postponeLogs.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium flex items-center gap-1.5 text-muted-foreground">
+                <History className="w-4 h-4" />
+                최근 일정 변경 이력
+              </h3>
+              <Card>
+                <div className="divide-y">
+                  {postponeLogs.map(log => {
+                    const origCount = (log.original_schedules as any[])?.length || 0;
+                    return (
+                      <div key={log.id} className="flex items-center justify-between px-3 py-2.5 gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium truncate">
+                            {log.note || (log.action_type === 'retest_postpone' ? '재시험 충돌 미루기' : '일정 미루기')}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {log.performed_by_name} · {format(new Date(log.performed_at), 'M/d HH:mm')} · {origCount}건
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs shrink-0 gap-1"
+                          disabled={undoingLogId === log.id}
+                          onClick={() => handleUndoPostpone(log.id)}
+                        >
+                          {undoingLogId === log.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Undo2 className="w-3 h-3" />
+                          )}
+                          되돌리기
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
               </Card>
             </div>
           )}
