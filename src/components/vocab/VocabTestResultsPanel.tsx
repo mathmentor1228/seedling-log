@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2, FileText, ArrowRight } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, CalendarDays, ClipboardList, Clock, Trash2, FileText, ArrowRight, Undo2, History } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 interface Schedule {
