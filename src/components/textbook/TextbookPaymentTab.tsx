@@ -123,15 +123,15 @@ export function TextbookPaymentTab() {
     ));
   };
 
-  const handleCopyStudentMessage = async (studentName: string, studentDists: Distribution[]) => {
-    const msg = generateCombinedMessage(studentName, studentDists);
+  const handleCopyStudentMessage = async (studentName: string, studentDists: Distribution[], mode: 'before' | 'after' = 'before') => {
+    const msg = generateCombinedMessage(studentName, studentDists, mode);
     await navigator.clipboard.writeText(msg);
-    toast.success(`${studentName} 카톡 문구가 복사되었습니다`);
+    toast.success(`${studentName} ${mode === 'after' ? '배포후' : '배포전'} 문구가 복사되었습니다`);
     markBilled(studentDists.map(d => d.id));
   };
 
-  const handleCopyAndOpenKakao = async (studentName: string, studentDists: Distribution[]) => {
-    const msg = generateCombinedMessage(studentName, studentDists);
+  const handleCopyAndOpenKakao = async (studentName: string, studentDists: Distribution[], mode: 'before' | 'after' = 'before') => {
+    const msg = generateCombinedMessage(studentName, studentDists, mode);
     await navigator.clipboard.writeText(msg);
     toast.success('문구가 복사되었습니다. 카카오톡에서 붙여넣기 해주세요!');
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
