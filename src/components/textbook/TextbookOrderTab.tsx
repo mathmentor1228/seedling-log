@@ -407,8 +407,10 @@ export function TextbookOrderTab() {
         </div>
       )}
 
-      {orders.length === 0 && (
-        <p className="text-center text-sm text-muted-foreground py-12">등록된 교재 신청이 없습니다</p>
+      {filteredOrders.length === 0 && (
+        <p className="text-center text-sm text-muted-foreground py-12">
+          {hasActiveFilters ? '검색 결과가 없습니다' : '등록된 교재 신청이 없습니다'}
+        </p>
       )}
     </div>
   );
