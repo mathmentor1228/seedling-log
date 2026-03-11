@@ -123,12 +123,14 @@ export function TextbookOrderTab() {
       requested_by: user!.id,
       requested_by_name: userName,
       notes: notes.trim() || null,
+      grade: grade || null,
+      category: category || '기타',
     } as any);
     if (error) { toast.error('신청 실패'); console.error(error); }
     else {
       toast.success('교재 신청이 등록되었습니다');
       setShowDialog(false);
-      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes('');
+      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes(''); setGrade(''); setCategory('기타');
       fetchOrders();
     }
     setCreating(false);
