@@ -705,11 +705,89 @@ export function VocabTestResultsPanel() {
     if (!retestResult || !retestDate || !retestTime) return;
     setSaving(true);
 
+    const retestDateStr = format(retestDate, 'yyyy-MM-dd');
+
+    // If conflict exists and user chose 'postpone', shift conflicting regular schedules forward
+    if (conflictMode === 'postpone' && conflictSchedules.length > 0) {
+      // Only shift regular (non-retest) schedules on this date
+      const regularConflicts = conflictSchedules.filter((s: any) => s.schedule_type !== 'retest');
+      
+      if (regularConflicts.length > 0) {
+        // Fetch student's test_days setting
+        const settingId = regularConflicts[0].setting_id;
+        const { data: settingData } = await supabase
+          .from('vocab_settings')
+          .select('test_days')
+          .eq('id', settingId)
+          .single();
+
+        const DAY_CODE_TO_JS: Record<string, number> = {
+          sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+        };
+        const COMBO_MAP: Record<string, string[]> = {
+          mon_wed: ['mon', 'wed'], tue_thu: ['tue', 'thu'],
+          mon_wed_fri: ['mon', 'wed', 'fri'], tue_thu_fri: ['tue', 'thu', 'fri'],
+          mon_tue_wed_thu: ['mon', 'tue', 'wed', 'thu'],
+          mon_tue_wed_thu_fri: ['mon', 'tue', 'wed', 'thu', 'fri'],
+          mon: ['mon'], tue: ['tue'], wed: ['wed'], thu: ['thu'], fri: ['fri'], sat: ['sat'],
+        };
+        const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const rawTestDays = settingData?.test_days || ['mon', 'wed'];
+        const normalizedDays = rawTestDays.every((d: string) => ALL_DAYS.includes(d))
+          ? rawTestDays
+          : (COMBO_MAP[rawTestDays[0]] || ['mon', 'wed']);
+        const allowedJsDays = new Set(normalizedDays.map((d: string) => DAY_CODE_TO_JS[d]).filter((v: number | undefined) => v !== undefined));
+
+        const findNextTestDay = (from: Date): Date => {
+          const d = new Date(from);
+          d.setDate(d.getDate() + 1); // start from next day
+          for (let i = 0; i < 14; i++) {
+            if (allowedJsDays.has(d.getDay())) return d;
+            d.setDate(d.getDate() + 1);
+          }
+          return d;
+        };
+
+        // Fetch all schedules from this date onward for cascading shift
+        const { data: allSchedules } = await supabase
+          .from('vocab_schedules')
+          .select('id, test_date, schedule_type')
+          .eq('student_id', retestResult.student_id)
+          .eq('setting_id', settingId)
+          .neq('schedule_type', 'retest')
+          .gte('test_date', retestDateStr)
+          .order('test_date', { ascending: true });
+
+        if (allSchedules && allSchedules.length > 0) {
+          let cursor = findNextTestDay(new Date(retestDateStr + 'T00:00:00'));
+          let shiftedCount = 0;
+
+          for (const sched of allSchedules) {
+            const newDateStr = format(cursor, 'yyyy-MM-dd');
+            await supabase
+              .from('vocab_schedules')
+              .update({ test_date: newDateStr })
+              .eq('id', sched.id);
+
+            // Also shift linked test results
+            await supabase
+              .from('vocab_test_results')
+              .update({ test_date: newDateStr })
+              .eq('schedule_id', sched.id);
+
+            shiftedCount++;
+            cursor = findNextTestDay(cursor);
+          }
+          toast.info(`기존 ${shiftedCount}건의 일정이 뒤로 밀렸습니다`);
+        }
+      }
+    }
+
     const { error: updateErr } = await supabase
       .from('vocab_test_results')
       .update({
         retest_scheduled: true,
-        retest_date: format(retestDate, 'yyyy-MM-dd'),
+        retest_date: retestDateStr,
         retest_time: retestTime,
         retest_requested_at: new Date().toISOString(),
       })
@@ -724,7 +802,7 @@ export function VocabTestResultsPanel() {
     const { error: insertErr } = await supabase.from('vocab_schedules').insert({
       student_id: retestResult.student_id,
       setting_id: (await supabase.from('vocab_settings').select('id').eq('student_id', retestResult.student_id).single()).data?.id || '',
-      test_date: format(retestDate, 'yyyy-MM-dd'),
+      test_date: retestDateStr,
       test_time: retestTime,
       day_number: retestResult.day_number,
       book_name: retestResult.book_name,
