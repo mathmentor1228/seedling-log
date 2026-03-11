@@ -563,7 +563,7 @@ export function TextbookOrderTab() {
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">단가 (원) *</label>
-                <Input type="number" min="0" value={editPrice} onChange={e => setEditPrice(e.target.value)} />
+                <Input type="number" min="0" value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="정가 입력" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
