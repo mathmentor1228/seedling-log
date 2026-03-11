@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { NewStudentOnboarding } from '@/components/admin/NewStudentOnboarding';
 import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentCsvImport from '@/components/StudentCsvImport';
@@ -372,6 +373,8 @@ export default function Students() {
 
   return (
     <div className="space-y-6">
+      {/* New Student Onboarding Checklist */}
+      <NewStudentOnboarding />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Students</h1>
