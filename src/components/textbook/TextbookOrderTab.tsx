@@ -25,9 +25,13 @@ interface TextbookOrder {
   notes: string | null;
   created_at: string;
   distributed_qty?: number;
+  grade?: string | null;
+  category?: string | null;
 }
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'];
+const GRADES = ['초등', '중1', '중2', '중3', '고1', '고2', '고3'];
+const CATEGORIES = ['내신', '문법', '개념', '유형', '심화', '독해', '단어', '기타'];
 
 export function TextbookOrderTab() {
   const { user, role } = useAuth();
@@ -41,6 +45,8 @@ export function TextbookOrderTab() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSubject, setFilterSubject] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
 
   // Create form
   const [name, setName] = useState('');
@@ -48,6 +54,8 @@ export function TextbookOrderTab() {
   const [qty, setQty] = useState('1');
   const [price, setPrice] = useState('');
   const [notes, setNotes] = useState('');
+  const [grade, setGrade] = useState('');
+  const [category, setCategory] = useState('기타');
 
   // Edit state
   const [editOrder, setEditOrder] = useState<TextbookOrder | null>(null);
@@ -56,6 +64,8 @@ export function TextbookOrderTab() {
   const [editQty, setEditQty] = useState('1');
   const [editPrice, setEditPrice] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editGrade, setEditGrade] = useState('');
+  const [editCategory, setEditCategory] = useState('기타');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -113,12 +123,14 @@ export function TextbookOrderTab() {
       requested_by: user!.id,
       requested_by_name: userName,
       notes: notes.trim() || null,
+      grade: grade || null,
+      category: category || '기타',
     } as any);
     if (error) { toast.error('신청 실패'); console.error(error); }
     else {
       toast.success('교재 신청이 등록되었습니다');
       setShowDialog(false);
-      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes('');
+      setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes(''); setGrade(''); setCategory('기타');
       fetchOrders();
     }
     setCreating(false);
@@ -131,6 +143,8 @@ export function TextbookOrderTab() {
     setEditQty(String(order.quantity));
     setEditPrice(String(order.unit_price));
     setEditNotes(order.notes || '');
+    setEditGrade(order.grade || '');
+    setEditCategory(order.category || '기타');
   };
 
   const handleEdit = async () => {
@@ -144,6 +158,8 @@ export function TextbookOrderTab() {
       quantity: parseInt(editQty) || 1,
       unit_price: parseInt(editPrice) || 0,
       notes: editNotes.trim() || null,
+      grade: editGrade || null,
+      category: editCategory || '기타',
       updated_at: new Date().toISOString(),
     } as any).eq('id', editOrder.id);
     if (error) { toast.error('수정 실패'); console.error(error); }
@@ -258,13 +274,15 @@ export function TextbookOrderTab() {
       (o.notes && o.notes.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesSubject = filterSubject === 'all' || o.subject === filterSubject;
     const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
-    return matchesSearch && matchesSubject && matchesStatus;
+    const matchesGrade = filterGrade === 'all' || o.grade === filterGrade;
+    const matchesCategory = filterCategory === 'all' || o.category === filterCategory;
+    return matchesSearch && matchesSubject && matchesStatus && matchesGrade && matchesCategory;
   });
 
   const pending = filteredOrders.filter(o => o.status === '신청');
   const completed = filteredOrders.filter(o => o.status === '입고완료');
   const subjects = [...new Set(orders.map(o => o.subject))].sort();
-  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all';
+  const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all' || filterGrade !== 'all' || filterCategory !== 'all';
 
   const subjectColor = (s: string) => {
     switch (s) {
@@ -321,6 +339,27 @@ export function TextbookOrderTab() {
                     <Input type="number" min="0" value={price} onChange={e => setPrice(e.target.value)} placeholder="15000" />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-foreground">학년</label>
+                    <Select value={grade || '__none__'} onValueChange={v => setGrade(v === '__none__' ? '' : v)}>
+                      <SelectTrigger><SelectValue placeholder="학년 선택" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">선택 안함</SelectItem>
+                        {GRADES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground">분류</label>
+                    <Select value={category} onValueChange={setCategory}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">비고</label>
                   <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="메모 (선택)" />
@@ -335,41 +374,57 @@ export function TextbookOrderTab() {
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="교재명, 신청자, 비고 검색..."
-            className="pl-8 pr-8"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="교재명, 신청자, 비고 검색..."
+              className="pl-8 pr-8"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <Select value={filterSubject} onValueChange={setFilterSubject}>
+            <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="과목" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 과목</SelectItem>
+              {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterGrade} onValueChange={setFilterGrade}>
+            <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="학년" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 학년</SelectItem>
+              {GRADES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="분류" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 분류</SelectItem>
+              {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="상태" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 상태</SelectItem>
+              <SelectItem value="신청">입고 대기</SelectItem>
+              <SelectItem value="입고완료">입고 완료</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); setFilterGrade('all'); setFilterCategory('all'); }}>
+              <X className="w-3.5 h-3.5" />초기화
+            </Button>
           )}
         </div>
-        <Select value={filterSubject} onValueChange={setFilterSubject}>
-          <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="과목" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 과목</SelectItem>
-            {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-full sm:w-[130px]"><SelectValue placeholder="상태" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="신청">입고 대기</SelectItem>
-            <SelectItem value="입고완료">입고 완료</SelectItem>
-          </SelectContent>
-        </Select>
-        {hasActiveFilters && (
-          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => { setSearchQuery(''); setFilterSubject('all'); setFilterStatus('all'); }}>
-            <X className="w-3.5 h-3.5" />초기화
-          </Button>
-        )}
       </div>
 
       {/* Summary */}
@@ -396,6 +451,8 @@ export function TextbookOrderTab() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-foreground">{order.textbook_name}</p>
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${subjectColor(order.subject)}`}>{order.subject}</span>
+                      {order.grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{order.grade}</Badge>}
+                      {order.category && order.category !== '기타' && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{order.category}</Badge>}
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
                       {order.quantity}권 × {order.unit_price.toLocaleString()}원 = <span className="font-medium text-foreground">{(order.quantity * order.unit_price).toLocaleString()}원</span>
@@ -439,6 +496,8 @@ export function TextbookOrderTab() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-foreground">{order.textbook_name}</p>
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${subjectColor(order.subject)}`}>{order.subject}</span>
+                      {order.grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{order.grade}</Badge>}
+                      {order.category && order.category !== '기타' && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{order.category}</Badge>}
                       <Badge variant="success" className="text-[10px]">입고완료</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
@@ -505,6 +564,27 @@ export function TextbookOrderTab() {
               <div>
                 <label className="text-sm font-medium text-foreground">단가 (원) *</label>
                 <Input type="number" min="0" value={editPrice} onChange={e => setEditPrice(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-foreground">학년</label>
+                <Select value={editGrade || '__none__'} onValueChange={v => setEditGrade(v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="학년 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">선택 안함</SelectItem>
+                    {GRADES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground">분류</label>
+                <Select value={editCategory} onValueChange={setEditCategory}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div>

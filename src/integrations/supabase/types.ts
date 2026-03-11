@@ -2518,8 +2518,10 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by_name: string | null
+          category: string | null
           created_at: string
           distributed_qty: number
+          grade: string | null
           id: string
           notes: string | null
           quantity: number
@@ -2534,8 +2536,10 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by_name?: string | null
+          category?: string | null
           created_at?: string
           distributed_qty?: number
+          grade?: string | null
           id?: string
           notes?: string | null
           quantity?: number
@@ -2550,8 +2554,10 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by_name?: string | null
+          category?: string | null
           created_at?: string
           distributed_qty?: number
+          grade?: string | null
           id?: string
           notes?: string | null
           quantity?: number
