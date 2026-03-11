@@ -792,11 +792,14 @@ export function VocabTestResultsPanel() {
           .order('test_date', { ascending: true });
 
         if (allSchedules && allSchedules.length > 0) {
+          const originalSchedules = allSchedules.map(s => ({ id: s.id, test_date: s.test_date }));
+          const newSchedulesLog: { id: string; test_date: string }[] = [];
           let cursor = findNextTestDay(new Date(retestDateStr + 'T00:00:00'));
           let shiftedCount = 0;
 
           for (const sched of allSchedules) {
             const newDateStr = format(cursor, 'yyyy-MM-dd');
+            newSchedulesLog.push({ id: sched.id, test_date: newDateStr });
             await supabase
               .from('vocab_schedules')
               .update({ test_date: newDateStr })
@@ -811,6 +814,20 @@ export function VocabTestResultsPanel() {
             shiftedCount++;
             cursor = findNextTestDay(cursor);
           }
+
+          // Log the postpone from retest conflict
+          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user?.id || '').single();
+          await supabase.from('vocab_schedule_logs').insert({
+            student_id: retestResult.student_id,
+            setting_id: settingId,
+            action_type: 'retest_postpone',
+            performed_by: user?.id || null,
+            performed_by_name: profile?.full_name || user?.email || '알 수 없음',
+            original_schedules: originalSchedules,
+            new_schedules: newSchedulesLog,
+            note: `재시험 충돌로 인한 미루기 (${shiftedCount}건)`,
+          });
+
           toast.info(`기존 ${shiftedCount}건의 일정이 뒤로 밀렸습니다`);
         }
       }
