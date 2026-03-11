@@ -181,6 +181,16 @@ export function VocabTestResultsPanel() {
         .order('retest_date', { ascending: true }),
     ]);
 
+    // Fetch recent postpone logs (last 30 days, not undone)
+    const { data: logsData } = await supabase
+      .from('vocab_schedule_logs')
+      .select('*')
+      .is('undone_at', null)
+      .gte('performed_at', format(new Date(Date.now() - 30 * 86400000), 'yyyy-MM-dd'))
+      .order('performed_at', { ascending: false })
+      .limit(20);
+    setPostponeLogs(logsData || []);
+
     if (schedRes.data) setSchedules(schedRes.data as any);
     if (resRes.data) setResults(resRes.data as any);
     if (generalRes.data) setGeneralSchedules(generalRes.data as any);
