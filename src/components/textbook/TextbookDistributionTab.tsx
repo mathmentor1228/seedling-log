@@ -219,30 +219,64 @@ export function TextbookDistributionTab() {
             <div className="space-y-4 mt-2">
               <div>
                 <label className="text-sm font-medium text-foreground">교재 선택 *</label>
-                <Select value={selectedOrder} onValueChange={setSelectedOrder}>
-                  <SelectTrigger><SelectValue placeholder="입고된 교재 선택" /></SelectTrigger>
-                  <SelectContent>
-                    {availableOrders.map(o => {
-                      const remaining = o.quantity - (o.distributed_qty || 0);
-                      return (
-                        <SelectItem key={o.id} value={o.id}>
-                          {o.textbook_name} ({o.unit_price.toLocaleString()}원) [남은 {remaining}권]
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <Popover open={orderPopoverOpen} onOpenChange={setOrderPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" aria-expanded={orderPopoverOpen} className="w-full justify-between font-normal">
+                      {selectedOrder
+                        ? (() => { const o = availableOrders.find(o => o.id === selectedOrder); return o ? `${o.textbook_name} [${o.quantity - (o.distributed_qty || 0)}권]` : '교재 선택'; })()
+                        : '입고된 교재 검색...'}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="교재명 검색..." />
+                      <CommandList>
+                        <CommandEmpty>결과 없음</CommandEmpty>
+                        <CommandGroup>
+                          {availableOrders.map(o => {
+                            const remaining = o.quantity - (o.distributed_qty || 0);
+                            return (
+                              <CommandItem key={o.id} value={o.textbook_name} onSelect={() => { setSelectedOrder(o.id); setOrderPopoverOpen(false); }}>
+                                <Check className={cn("mr-2 h-4 w-4", selectedOrder === o.id ? "opacity-100" : "opacity-0")} />
+                                {o.textbook_name} ({o.unit_price.toLocaleString()}원) [남은 {remaining}권]
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">학생 선택 *</label>
-                <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-                  <SelectTrigger><SelectValue placeholder="학생 선택" /></SelectTrigger>
-                  <SelectContent>
-                    {students.map(s => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={studentPopoverOpen} onOpenChange={setStudentPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" aria-expanded={studentPopoverOpen} className="w-full justify-between font-normal">
+                      {selectedStudent
+                        ? students.find(s => s.id === selectedStudent)?.name || '학생 선택'
+                        : '학생 이름 검색...'}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="학생 이름 검색..." />
+                      <CommandList>
+                        <CommandEmpty>결과 없음</CommandEmpty>
+                        <CommandGroup>
+                          {students.map(s => (
+                            <CommandItem key={s.id} value={s.name} onSelect={() => { setSelectedStudent(s.id); setStudentPopoverOpen(false); }}>
+                              <Check className={cn("mr-2 h-4 w-4", selectedStudent === s.id ? "opacity-100" : "opacity-0")} />
+                              {s.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground">권수</label>
