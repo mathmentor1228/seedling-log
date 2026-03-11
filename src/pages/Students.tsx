@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { NewStudentOnboarding } from '@/components/admin/NewStudentOnboarding';
+import { UnvisitedParentsList } from '@/components/admin/UnvisitedParentsList';
 import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentCsvImport from '@/components/StudentCsvImport';
