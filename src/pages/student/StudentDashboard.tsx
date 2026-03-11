@@ -405,6 +405,7 @@ export default function StudentDashboard() {
             classes={upcomingClasses}
             vocabSchedules={vocabSchedules}
             testSchedules={testSchedules}
+            supplementaryLessons={supplementaryLessons}
           />
         </CardContent>
       </Card>
