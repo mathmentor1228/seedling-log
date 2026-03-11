@@ -297,7 +297,7 @@ export function LessonRecordForm({
   
   // View mode: all inputs disabled, no auto-save, no mutations
   const isViewMode = mode === 'view';
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
