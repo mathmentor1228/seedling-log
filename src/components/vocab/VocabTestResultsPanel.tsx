@@ -774,8 +774,7 @@ export function VocabTestResultsPanel() {
     }
     setUndoingLogId(null);
   };
-
-
+  const handleScheduleRetest = async () => {
     if (!retestResult || !retestDate || !retestTime) return;
     setSaving(true);
 
