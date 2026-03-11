@@ -339,6 +339,27 @@ export function TextbookOrderTab() {
                     <Input type="number" min="0" value={price} onChange={e => setPrice(e.target.value)} placeholder="15000" />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-foreground">학년</label>
+                    <Select value={grade || '__none__'} onValueChange={v => setGrade(v === '__none__' ? '' : v)}>
+                      <SelectTrigger><SelectValue placeholder="학년 선택" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">선택 안함</SelectItem>
+                        {GRADES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground">분류</label>
+                    <Select value={category} onValueChange={setCategory}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">비고</label>
                   <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="메모 (선택)" />
