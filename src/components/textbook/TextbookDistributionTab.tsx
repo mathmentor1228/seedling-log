@@ -60,6 +60,8 @@ export function TextbookDistributionTab() {
   const [selectedOrder, setSelectedOrder] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
   const [distQty, setDistQty] = useState('1');
+  const [orderPopoverOpen, setOrderPopoverOpen] = useState(false);
+  const [studentPopoverOpen, setStudentPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
