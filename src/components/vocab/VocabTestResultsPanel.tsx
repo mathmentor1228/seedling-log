@@ -1283,14 +1283,35 @@ export function VocabTestResultsPanel() {
               </div>
 
               {conflictWarning && (
-                <div className="bg-warning/10 border border-warning/30 rounded-md p-3 text-xs text-warning-foreground">
-                  ⚠️ {conflictWarning}
+                <div className="space-y-3">
+                  <div className="bg-warning/10 border border-warning/30 rounded-md p-3 text-xs text-warning-foreground">
+                    ⚠️ {conflictWarning}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-foreground">처리 방식 선택:</p>
+                    <label className="flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50" style={{ borderColor: conflictMode === 'overlap' ? 'hsl(var(--primary))' : undefined, backgroundColor: conflictMode === 'overlap' ? 'hsl(var(--primary) / 0.05)' : undefined }}>
+                      <input type="radio" name="conflictMode" checked={conflictMode === 'overlap'} onChange={() => setConflictMode('overlap')} className="mt-0.5" />
+                      <div>
+                        <span className="text-xs font-semibold text-foreground">중복 등록</span>
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">기존 시험 일정을 유지하고, 같은 날에 재시험을 추가합니다</span>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors hover:bg-muted/50" style={{ borderColor: conflictMode === 'postpone' ? 'hsl(var(--primary))' : undefined, backgroundColor: conflictMode === 'postpone' ? 'hsl(var(--primary) / 0.05)' : undefined }}>
+                      <input type="radio" name="conflictMode" checked={conflictMode === 'postpone'} onChange={() => setConflictMode('postpone')} className="mt-0.5" />
+                      <div>
+                        <span className="text-xs font-semibold text-foreground">기존 일정 미루기</span>
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">기존 정규 시험을 다음 시험 요일로 밀고, 이후 일정도 순차적으로 밀립니다</span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               )}
 
               <Button onClick={handleScheduleRetest} disabled={saving || !retestDate || !retestTime} className="w-full">
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-                {conflictWarning ? '그래도 등록' : '재시험 등록'}
+                {conflictWarning
+                  ? conflictMode === 'postpone' ? '기존 일정 밀고 등록' : '중복 등록'
+                  : '재시험 등록'}
               </Button>
             </div>
           )}
