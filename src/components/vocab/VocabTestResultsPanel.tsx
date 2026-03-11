@@ -123,6 +123,10 @@ export function VocabTestResultsPanel() {
   const [postponeDate, setPostponeDate] = useState<Date | undefined>();
   const [postponeSaving, setPostponeSaving] = useState(false);
 
+  // Postpone logs & undo
+  const [postponeLogs, setPostponeLogs] = useState<any[]>([]);
+  const [undoingLogId, setUndoingLogId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchSchedulesAndResults();
   }, [selectedDate, displayMonth]);
