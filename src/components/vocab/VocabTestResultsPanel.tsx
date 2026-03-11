@@ -112,6 +112,8 @@ export function VocabTestResultsPanel() {
   const [retestDate, setRetestDate] = useState<Date | undefined>();
   const [retestTime, setRetestTime] = useState('');
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const [conflictMode, setConflictMode] = useState<'overlap' | 'postpone'>('overlap');
+  const [conflictSchedules, setConflictSchedules] = useState<any[]>([]);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
