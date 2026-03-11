@@ -385,9 +385,10 @@ export function TextbookDistributionTab() {
           <div className="space-y-2">
             {confirmedDistribution.map(dist => (
               <Card key={dist.id} className="p-4 opacity-70">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-medium text-foreground">{dist.student_name}</p>
                   <Badge variant="success" className="text-[10px]">배부완료</Badge>
+                  <span className="text-xs text-muted-foreground">배부: {dist.distributed_by_name}</span>
                   <span className="text-sm text-muted-foreground ml-auto">
                     {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
                   </span>
