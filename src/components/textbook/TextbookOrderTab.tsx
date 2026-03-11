@@ -496,6 +496,8 @@ export function TextbookOrderTab() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-foreground">{order.textbook_name}</p>
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${subjectColor(order.subject)}`}>{order.subject}</span>
+                      {order.grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{order.grade}</Badge>}
+                      {order.category && order.category !== '기타' && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{order.category}</Badge>}
                       <Badge variant="success" className="text-[10px]">입고완료</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
