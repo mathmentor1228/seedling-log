@@ -96,7 +96,7 @@ export function NewStudentOnboarding() {
     const [studentsRes, checksRes] = await Promise.all([
       supabase
         .from('students')
-        .select('id, name, parent_name, parent_phone, created_at, grade')
+        .select('id, name, parent_name, parent_phone, parent_token, created_at, grade')
         .eq('enrollment_status', '재원')
         .gte('created_at', thirtyDaysAgo)
         .order('created_at', { ascending: false }),
