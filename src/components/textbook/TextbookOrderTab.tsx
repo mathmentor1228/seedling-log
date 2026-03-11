@@ -147,14 +147,39 @@ export function TextbookOrderTab() {
       return;
     }
 
+    // CSV parser that handles quoted fields (Excel saves "15,000" with quotes)
+    const parseCsvLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+        } else if (ch === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    };
+
+    const parseNumber = (val: string): number => {
+      // Remove commas, quotes, whitespace from numbers like "15,000"
+      return parseInt(val.replace(/[,\s"]/g, '')) || 0;
+    };
+
     const rows = dataLines.map(line => {
-      const cols = line.split(',').map(c => c.trim());
+      const cols = parseCsvLine(line);
       return {
-        textbook_name: cols[0] || '',
-        subject: cols[1] || '수학',
-        quantity: parseInt(cols[2]) || 1,
-        unit_price: parseInt(cols[3]) || 0,
-        notes: cols[4] || null,
+        textbook_name: cols[0]?.replace(/^"|"$/g, '') || '',
+        subject: cols[1]?.replace(/^"|"$/g, '') || '수학',
+        quantity: parseNumber(cols[2] || '1') || 1,
+        unit_price: parseNumber(cols[3] || '0'),
+        notes: cols[4]?.replace(/^"|"$/g, '') || null,
         requested_by: user!.id,
         requested_by_name: userName,
         status: '입고완료',
