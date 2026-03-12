@@ -925,7 +925,7 @@ export function LessonRecordForm({
         .eq('student_id', studentId)
         .eq('subject', subject as SubjectType)
         .eq('check_status', 'unchecked')
-        .lte('assigned_date', currentDate)
+        .lt('assigned_date', currentDate)
         .not('content', 'eq', '')
         .order('assigned_date', { ascending: false });
 
