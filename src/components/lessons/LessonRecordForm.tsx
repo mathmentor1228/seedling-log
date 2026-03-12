@@ -1651,16 +1651,16 @@ export function LessonRecordForm({
 
         {/* Previous lesson summary (compact, inside sticky) */}
         {formData.student_id && formData.subject && !loadingPreviousLesson && previousLesson && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
-            <ClipboardList className="w-4 h-4 text-blue-600 shrink-0" />
-            <span className="font-medium text-blue-700">지난수업:</span>
-            <span>{format(new Date(previousLesson.lesson_date), 'MM/dd')}</span>
-            <span className="mx-0.5">|</span>
-            <span className="font-medium text-foreground truncate">{previousLesson.lesson_range}</span>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pb-0.5">
+            <span className="font-semibold text-primary">지난수업</span>
+            <span className="text-muted-foreground/60">·</span>
+            <span>{format(new Date(previousLesson.lesson_date), 'M/d')}</span>
+            <span className="text-muted-foreground/60">·</span>
+            <span className="font-medium text-foreground/80 truncate max-w-[280px]">{previousLesson.lesson_range}</span>
           </div>
         )}
       </div>
-      {/* END STICKY-HEADER-V1 */}
+      {/* END STICKY-HEADER-V2 */}
 
       {/* Previous lesson detail section */}
       {formData.student_id && formData.subject && (
