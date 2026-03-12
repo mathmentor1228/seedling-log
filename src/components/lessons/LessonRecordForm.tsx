@@ -368,10 +368,15 @@ export function LessonRecordForm({
   // Previous lesson state
   const [previousLesson, setPreviousLesson] = useState<LessonRecord | null>(null);
   const [previousLessonHomework, setPreviousLessonHomework] = useState<HomeworkAssignment | null>(null);
+  // MULTI-HW-V1: All unchecked previous homeworks (including carry-forwarded)
+  const [allPreviousHomeworks, setAllPreviousHomeworks] = useState<HomeworkAssignment[]>([]);
   const [loadingPreviousLesson, setLoadingPreviousLesson] = useState(false);
 
   // Homework states
   const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
+  // MULTI-HW-V1: Per-homework check state
+  const [homeworkCheckResults, setHomeworkCheckResults] = useState<Record<string, string>>({});
+  const [homeworkCheckNotesMap, setHomeworkCheckNotesMap] = useState<Record<string, string>>({});
   const [homeworkCheckResult, setHomeworkCheckResult] = useState<string>('');
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
   const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
@@ -913,6 +918,40 @@ export function LessonRecordForm({
         }
       }
 
+      // MULTI-HW-V1: Fetch ALL unchecked homeworks for this student+subject (includes carry-forwards)
+      const { data: allUncheckedHw } = await supabase
+        .from('homework_assignments')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('subject', subject as SubjectType)
+        .eq('check_status', 'unchecked')
+        .lte('assigned_date', currentDate)
+        .not('content', 'eq', '')
+        .order('assigned_date', { ascending: false });
+
+      const allUncheckedList = (allUncheckedHw || []) as HomeworkAssignment[];
+
+      // Also fetch checker names for any checked items in allPreviousHomeworks context
+      // Fetch all unchecked + the lesson-linked homework (which may already be checked)
+      let allHwItems: HomeworkAssignment[] = [...allUncheckedList];
+      
+      // Add the lesson-linked homework if it's checked (already handled above) and not in the unchecked list
+      if (homeworkData && homeworkData.check_status === 'checked') {
+        if (!allHwItems.find(h => h.id === homeworkData!.id)) {
+          allHwItems.push(homeworkData);
+        }
+      }
+
+      // Deduplicate
+      const seenIds = new Set<string>();
+      allHwItems = allHwItems.filter(h => {
+        if (seenIds.has(h.id)) return false;
+        seenIds.add(h.id);
+        return true;
+      });
+
+      setAllPreviousHomeworks(allHwItems);
+
       const totalRows = lessonData?.length || 0;
       if (validLesson) {
         setPreviousLesson(validLesson);
@@ -981,6 +1020,7 @@ export function LessonRecordForm({
       } else {
         setPreviousLesson(null);
         setPreviousLessonHomework(null);
+        setAllPreviousHomeworks(allUncheckedList); // Still show unchecked homeworks even without previous lesson
         setPrevHwDebugInfo({ rows: totalRows, found: false, srcDate: '-', srcTeacher: '-' });
       }
     } catch (error) {
@@ -1281,14 +1321,10 @@ export function LessonRecordForm({
     }
   };
 
-  const handleSaveHomeworkCheck = async () => {
-    // VIEW_MODE_WRITE_GUARD: Block all writes in view mode
-    if (isViewMode) {
-      console.log('[VIEW_MODE_WRITE_GUARD]', 'blocked handleSaveHomeworkCheck in view mode');
-      return;
-    }
-
-    if (!previousHomework || !homeworkCheckResult || !user) return;
+  // MULTI-HW-V1: Save homework check for a specific homework item
+  const handleSaveHomeworkCheckForItem = async (hwItem: HomeworkAssignment, checkResult: string, checkNotes: string) => {
+    if (isViewMode) return;
+    if (!hwItem || !checkResult || !user) return;
 
     setIsSavingHomeworkCheck(true);
     try {
@@ -1296,56 +1332,45 @@ export function LessonRecordForm({
         .from('homework_assignments')
         .update({
           check_status: 'checked',
-          result: homeworkCheckResult,
-          notes: homeworkCheckNotes.trim() || null,
+          result: checkResult,
+          notes: checkNotes.trim() || null,
           checked_by: user.id,
           checked_at: new Date().toISOString(),
         })
-        .eq('id', previousHomework.id);
+        .eq('id', hwItem.id);
 
       if (error) throw error;
 
-      // HOMEWORK-STATUS-PERSIST-V2: Also update lesson_records.homework_status so dashboard/lessons reflect correctly
-      const homeworkStatusToSave = mapHomeworkResultToStatus(homeworkCheckResult);
-      
-      // Update formData so the form payload includes the correct status on submit
+      const homeworkStatusToSave = mapHomeworkResultToStatus(checkResult);
       setFormData(prev => ({ ...prev, homework_status: homeworkStatusToSave }));
 
-      // If we have an existing record, persist to DB immediately
       if (editingLesson?.id || existingRecordId) {
         const recordId = editingLesson?.id || existingRecordId;
-        const { error: statusError } = await supabase
+        await supabase
           .from('lesson_records')
           .update({ homework_status: homeworkStatusToSave })
           .eq('id', recordId);
-        
-        if (statusError) {
-          console.error('[HOMEWORK-STATUS-PERSIST-V2] Error updating lesson_records:', statusError);
-        } else {
-          console.log('[HOMEWORK-STATUS-PERSIST-V2] lesson_records.homework_status updated:', homeworkStatusToSave);
-        }
       }
 
-      // POINT-AWARD-V3: Award/deduct points (same logic as RosterActionModal)
+      // POINT-AWARD-V3: Award/deduct points
       let pointsAwarded = false;
       let awardedPoints = 0;
       
-      // Check if points were already awarded for this homework
       let pointsAlreadyAwarded = false;
-      if (homeworkCheckResult === 'completed' || homeworkCheckResult === 'not_done' || homeworkCheckResult === 'lost' || homeworkCheckResult === 'low_effort') {
+      if (['completed', 'not_done', 'lost', 'low_effort'].includes(checkResult)) {
         const { data: existingPoints } = await supabase
           .from('student_point_history')
           .select('id')
-          .eq('related_homework_id', previousHomework.id)
+          .eq('related_homework_id', hwItem.id)
           .limit(1);
         pointsAlreadyAwarded = (existingPoints?.length || 0) > 0;
       }
 
       if (!pointsAlreadyAwarded) {
-        if (homeworkCheckResult === 'completed') {
-          const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
+        if (checkResult === 'completed') {
+          const hasPhotoSubmission = !!(hwItem.submission_image_url && hwItem.submitted_at);
           awardedPoints = hasPhotoSubmission ? 10 : 5;
-        } else if (homeworkCheckResult === 'not_done' || homeworkCheckResult === 'lost' || homeworkCheckResult === 'low_effort') {
+        } else if (['not_done', 'lost', 'low_effort'].includes(checkResult)) {
           awardedPoints = -5;
         }
       }
@@ -1356,41 +1381,30 @@ export function LessonRecordForm({
         else if (awardedPoints === 5) reason = '숙제 완료 보상 (현장 확인)';
         else if (awardedPoints === -5) reason = '숙제 미이행 감점';
 
-        const { error: pointHistoryError } = await supabase
-          .from('student_point_history')
-          .insert({
-            student_id: previousHomework.student_id,
-            points: awardedPoints,
-            reason,
-            related_homework_id: previousHomework.id,
-            created_by: user.id,
-          });
+        await supabase.from('student_point_history').insert({
+          student_id: hwItem.student_id,
+          points: awardedPoints,
+          reason,
+          related_homework_id: hwItem.id,
+          created_by: user.id,
+        });
 
-        if (pointHistoryError) {
-          console.error('[POINT-AWARD-V3] Error inserting point history:', pointHistoryError);
-        } else {
-          const { data: student } = await supabase
+        const { data: student } = await supabase
+          .from('students')
+          .select('total_points')
+          .eq('id', hwItem.student_id)
+          .single();
+
+        if (student) {
+          await supabase
             .from('students')
-            .select('total_points')
-            .eq('id', previousHomework.student_id)
-            .single();
-
-          const { error: updatePointsError } = await supabase
-            .from('students')
-            .update({ total_points: (student?.total_points || 0) + awardedPoints })
-            .eq('id', previousHomework.student_id);
-
-          if (updatePointsError) {
-            console.error('[POINT-AWARD-V3] Error updating student points:', updatePointsError);
-          } else {
-            pointsAwarded = true;
-          }
+            .update({ total_points: (student.total_points || 0) + awardedPoints })
+            .eq('id', hwItem.student_id);
+          pointsAwarded = true;
         }
       }
 
       const statusLabel = { completed: '완료', partial: '일부완료', not_done: '미이행', none_assigned: '없음' }[homeworkStatusToSave] || homeworkStatusToSave;
-      
-      // POINT-AWARD-V3: Include point message in toast
       if (pointsAwarded) {
         const pointLabel = awardedPoints > 0 ? `+${awardedPoints}점 지급` : `${awardedPoints}점 감점`;
         toast({ title: '숙제 확인 완료', description: `숙제상태: ${statusLabel} | ${pointLabel}` });
@@ -1398,7 +1412,6 @@ export function LessonRecordForm({
         toast({ title: '숙제 확인 완료', description: `숙제상태: ${statusLabel}` });
       }
       
-      // PREV-LESSON-FIX-V1: Pass subject instead of class_id
       if (formData.student_id && formData.subject) {
         await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
       }
@@ -1408,6 +1421,12 @@ export function LessonRecordForm({
     } finally {
       setIsSavingHomeworkCheck(false);
     }
+  };
+
+  // Legacy wrapper for backward compat
+  const handleSaveHomeworkCheck = async () => {
+    if (!previousHomework || !homeworkCheckResult) return;
+    await handleSaveHomeworkCheckForItem(previousHomework, homeworkCheckResult, homeworkCheckNotes);
   };
 
   const toggleIssue = (issue: string) => {
@@ -1436,44 +1455,28 @@ export function LessonRecordForm({
 
   return (
     <form onSubmit={handleSubmit} className={`space-y-4 ${isViewMode ? 'pointer-events-none' : ''}`}>
-      {/* LESSON-SHARED-FORM-V3: Unified form component used by both Dashboard and Lessons page */}
-      <div className="text-xs text-center py-1 rounded bg-green-500/20 text-green-700">
-        LESSON-SHARED-FORM-V3
-      </div>
-      
-      {/* LESSON-VIEW-MODE-V1 / LESSON-EDIT-MODE-V1 marker */}
-      <div className={`text-xs text-center py-1 rounded ${isViewMode ? 'bg-blue-500/20 text-blue-700' : 'bg-muted/30 text-muted-foreground'}`}>
-        {isViewMode ? 'LESSON-VIEW-MODE-V1' : 'LESSON-EDIT-MODE-V1'}
-      </div>
-      
-      {/* FORM_DEBUG marker for troubleshooting */}
-      <div className="text-xs text-center py-1 rounded bg-yellow-500/20 text-yellow-700 font-mono">
-        FORM_DEBUG: students={students.length}, classes={classes.length}, role={role}, isNewRecord={isNewRecord ? 1 : 0}, canSelect={canSelectStudentClass ? 1 : 0}
-      </div>
 
       {/* Error banner if no students/classes loaded */}
       {students.length === 0 && classes.length === 0 && (
         <div className="p-3 bg-destructive/20 text-destructive rounded-lg text-sm font-medium">
-          FORM_LOAD_ERROR: 학생 및 클래스 목록을 불러오지 못했습니다.
+          학생 및 클래스 목록을 불러오지 못했습니다.
         </div>
       )}
 
       {/* View mode: re-enable pointer events for edit button */}
       {isViewMode && isAdmin && onRequestEdit && (
         <div className="pointer-events-auto flex justify-end">
-          <Button
-            type="button"
-            variant="default"
-            onClick={onRequestEdit}
-          >
+          <Button type="button" variant="default" onClick={onRequestEdit}>
             <FileEdit className="w-4 h-4 mr-1" />
             편집하기
           </Button>
         </div>
       )}
 
-      {/* Context info header - FORM-SELECTABLE-V1: Use Select for new records */}
-      <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg flex-wrap">
+      {/* STICKY-HEADER-V1: Sticky context header — stays visible while scrolling */}
+      <div className="sticky top-0 z-10 bg-background pb-2 space-y-3">
+        {/* Context info header */}
+        <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg flex-wrap">
         {/* Student field - PREFILL-FIX-V4: Reset prefill keys on student change */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">학생:</span>
@@ -1646,7 +1649,20 @@ export function LessonRecordForm({
         )}
       </div>
 
-      {/* Previous lesson section - PREV_HW_CHAIN_V2: Now chains by student+subject only */}
+        {/* Previous lesson summary (compact, inside sticky) */}
+        {formData.student_id && formData.subject && !loadingPreviousLesson && previousLesson && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
+            <ClipboardList className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="font-medium text-blue-700">지난수업:</span>
+            <span>{format(new Date(previousLesson.lesson_date), 'MM/dd')}</span>
+            <span className="mx-0.5">|</span>
+            <span className="font-medium text-foreground truncate">{previousLesson.lesson_range}</span>
+          </div>
+        )}
+      </div>
+      {/* END STICKY-HEADER-V1 */}
+
+      {/* Previous lesson detail section */}
       {formData.student_id && formData.subject && (
         <div className="p-4 rounded-lg border-2 border-blue-500/30 bg-blue-500/5 space-y-4">
           <div className="flex items-center gap-2">
@@ -1666,224 +1682,152 @@ export function LessonRecordForm({
                 <span className="font-medium text-foreground">{previousLesson.lesson_range}</span>
               </div>
 
-              {previousLessonHomework && (
-                <div className="p-3 bg-background rounded-lg border space-y-3">
-                  {/* PREV_HW_LINK_V1 debug marker */}
-                  <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-                    PREV_HW_LINK_V1: subject={formData.subject} found={prevHwDebugInfo.found ? 1 : 0}
-                  </span>
-                  <Label className="text-sm font-medium">지난숙제(자동)</Label>
-                  <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
+              {/* MULTI-HW-V1: Render ALL previous homeworks (unchecked + lesson-linked) */}
+              {allPreviousHomeworks.length > 0 ? (
+                <div className="space-y-3">
+                  {allPreviousHomeworks.filter(h => h.check_status !== 'checked').length > 1 && (
+                    <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-700">
+                      확인할 숙제 {allPreviousHomeworks.filter(h => h.check_status !== 'checked').length}건
+                    </Badge>
+                  )}
+                  {allPreviousHomeworks.map((hwItem, hwIdx) => (
+                    <div key={hwItem.id} className="p-3 bg-background rounded-lg border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">
+                          {allPreviousHomeworks.length > 1 ? `숙제 ${hwIdx + 1}` : '지난숙제'}
+                          <span className="text-xs text-muted-foreground ml-2">({hwItem.assigned_date})</span>
+                        </Label>
+                        {hwItem.check_status === 'checked' && (
+                          <Badge variant="secondary" className="text-xs">확인됨</Badge>
+                        )}
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{hwItem.content}</p>
 
-                  {/* TEACHER-HW-SUBMISSION-VIEW-V2: Student submission display (supports multi-image from homework_assignments) */}
-                  {(() => {
-                    // Get images from homework_assignments.submission_image_url (comma-separated)
-                    const hwImages = previousLessonHomework.submission_image_url
-                      ? previousLessonHomework.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
-                      : [];
-                    // Also check homework_submissions table
-                    const submissionImages = studentSubmission?.image_url
-                      ? studentSubmission.image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
-                      : [];
-                    // Use whichever has more images (prefer direct assignment data)
-                    const allImages = hwImages.length > 0 ? hwImages : submissionImages;
-                    const submittedAt = previousLessonHomework.submitted_at || studentSubmission?.submitted_at;
-                    const submissionNote = previousLessonHomework.submission_text || studentSubmission?.submission_note;
-                    const audioUrl = previousLessonHomework.submission_audio_url || null;
-                    const hasSubmission = allImages.length > 0 || submissionNote || !!audioUrl;
-
-                    if (!hasSubmission) return null;
-
-                    return (
-                      <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Camera className="w-4 h-4 text-primary" />
-                            <span className="text-sm font-medium text-primary">📷/🎤 인증 완료</span>
-                            {submittedAt && (
-                              <span className="text-xs text-muted-foreground">
-                                ({format(new Date(submittedAt), 'MM/dd HH:mm')})
-                              </span>
+                      {/* Submission display */}
+                      {(() => {
+                        const hwImages = hwItem.submission_image_url
+                          ? hwItem.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
+                          : [];
+                        const submittedAt = hwItem.submitted_at;
+                        const submissionNote = hwItem.submission_text;
+                        const audioUrl = hwItem.submission_audio_url || null;
+                        const hasSubmission = hwImages.length > 0 || submissionNote || !!audioUrl;
+                        if (!hasSubmission) return null;
+                        return (
+                          <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Camera className="w-4 h-4 text-primary" />
+                              <span className="text-sm font-medium text-primary">📷/🎤 인증 완료</span>
+                              {submittedAt && (
+                                <span className="text-xs text-muted-foreground">({format(new Date(submittedAt), 'MM/dd HH:mm')})</span>
+                              )}
+                            </div>
+                            {audioUrl && (
+                              <div className="rounded-md border bg-background p-2">
+                                <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Mic className="w-3 h-3" />음성 제출</p>
+                                <audio controls className="w-full" src={audioUrl} />
+                              </div>
+                            )}
+                            {submissionNote && (
+                              <div className="text-sm text-muted-foreground bg-secondary/30 p-2 rounded">
+                                <span className="font-medium text-xs">학생 메모: </span>{submissionNote}
+                              </div>
+                            )}
+                            {hwImages.length > 0 && (
+                              <div className="flex gap-2 overflow-x-auto pb-1">
+                                {hwImages.slice(0, 4).map((url: string, idx: number) => (
+                                  <div key={idx} className="relative cursor-pointer rounded overflow-hidden border w-20 h-20 flex-shrink-0" onClick={() => setShowSubmissionImageModal(true)}>
+                                    <img src={url} alt={`숙제 인증 ${idx + 1}`} className="w-full h-full object-cover hover:opacity-80 transition-opacity" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
-                          {allImages.length > 0 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowSubmissionImageModal(true)}
-                              className="text-xs gap-1"
-                            >
-                              <Camera className="w-3 h-3" />
-                              사진 보기 ({allImages.length}장)
+                        );
+                      })()}
+
+                      {hwItem.check_status === 'checked' ? (
+                        <div className="text-sm text-muted-foreground flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          <span>확인됨 {hwItem.result && `(${hwItem.result})`}</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-sm">숙제상태 확인</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {HOMEWORK_RESULT_OPTIONS.map((opt) => {
+                              const Icon = opt.icon;
+                              return (
+                                <Button key={opt.value} type="button" variant={(homeworkCheckResults[hwItem.id] || '') === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setHomeworkCheckResults(prev => ({ ...prev, [hwItem.id]: opt.value }))} className="gap-1">
+                                  <Icon className="w-4 h-4" />
+                                  {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotesMap[hwItem.id] || ''} onChange={(e) => setHomeworkCheckNotesMap(prev => ({ ...prev, [hwItem.id]: e.target.value }))} rows={2} className="text-sm" />
+                          <div className="flex gap-2">
+                            <Button type="button" size="sm" onClick={() => handleSaveHomeworkCheckForItem(hwItem, homeworkCheckResults[hwItem.id] || '', homeworkCheckNotesMap[hwItem.id] || '')} disabled={!homeworkCheckResults[hwItem.id] || isSavingHomeworkCheck}>
+                              {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                              확인 저장
                             </Button>
-                          )}
-                        </div>
-                        {audioUrl && (
-                          <div className="rounded-md border bg-background p-2">
-                            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Mic className="w-3 h-3" />음성 제출</p>
-                            <audio controls className="w-full" src={audioUrl} />
-                          </div>
-                        )}
-                        {submissionNote && (
-                          <div className="text-sm text-muted-foreground bg-secondary/30 p-2 rounded">
-                            <span className="font-medium text-xs">학생 메모: </span>
-                            {submissionNote}
-                          </div>
-                        )}
-                        {allImages.length > 0 && (
-                          <div className="flex gap-2 overflow-x-auto pb-1">
-                            {allImages.slice(0, 4).map((url: string, idx: number) => (
-                              <div
-                                key={idx}
-                                className="relative cursor-pointer rounded overflow-hidden border w-20 h-20 flex-shrink-0"
-                                onClick={() => setShowSubmissionImageModal(true)}
-                              >
-                                <img 
-                                  src={url} 
-                                  alt={`숙제 인증 ${idx + 1}`} 
-                                  className="w-full h-full object-cover hover:opacity-80 transition-opacity"
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                                {idx === 3 && allImages.length > 4 && (
-                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-sm font-bold">
-                                    +{allImages.length - 4}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* TEACHER-HW-SUBMISSION-VIEW-V1: Point history display */}
-                  {pointHistory.length > 0 && (
-                    <div className="p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-1">
-                      <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
-                        <Star className="w-4 h-4" />
-                        포인트 지급 내역
-                      </div>
-                      {pointHistory.map((entry) => (
-                        <div key={entry.id} className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{entry.reason}</span>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              +{entry.points}점
-                            </Badge>
-                            <span className="text-[10px]">
-                              {format(new Date(entry.created_at), 'MM/dd')}
-                            </span>
+                            <Button type="button" size="sm" variant="outline" className="gap-1" disabled={carryForwardLoading} onClick={async () => {
+                              if (!user) return;
+                              setCarryForwardLoading(true);
+                              try {
+                                const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+                                const nextDate = format(tomorrow, 'yyyy-MM-dd');
+                                await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: hwItem.content, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
+                                await supabase.from('homework_assignments').update({ check_status: 'checked', checked_by: user.id, checked_at: new Date().toISOString(), result: '다음시간 검사예정으로 이월' }).eq('id', hwItem.id);
+                                toast({ title: '다음시간으로 이월됨', description: hwItem.content });
+                                if (formData.student_id && formData.subject) { await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date); }
+                              } catch (err: any) { toast({ title: '이월 실패', description: err.message, variant: 'destructive' }); } finally { setCarryForwardLoading(false); }
+                            }}>
+                              {carryForwardLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
+                              다음시간 검사예정
+                            </Button>
                           </div>
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-
+                  ))}
+                </div>
+              ) : previousLessonHomework ? (
+                <div className="p-3 bg-background rounded-lg border space-y-3">
+                  <Label className="text-sm font-medium">지난숙제</Label>
+                  <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
                   {previousLessonHomework.check_status === 'checked' ? (
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-green-600" />
                       <span>확인됨 {previousLessonHomework.checker_name && `(${previousLessonHomework.checker_name})`}</span>
                     </div>
                   ) : (
-                    // HOMEWORK-STATUS-SINGLE-SOURCE-V2: This is the ONLY homework status control in the shared form
                     <div className="space-y-2 pt-2 border-t">
                       <Label className="text-sm">숙제상태 확인</Label>
                       <div className="flex flex-wrap gap-2">
                         {HOMEWORK_RESULT_OPTIONS.map((opt) => {
                           const Icon = opt.icon;
                           return (
-                            <Button
-                              key={opt.value}
-                              type="button"
-                              variant={homeworkCheckResult === opt.value ? 'default' : 'outline'}
-                              size="sm"
-                              onClick={() => setHomeworkCheckResult(opt.value)}
-                              className="gap-1"
-                            >
+                            <Button key={opt.value} type="button" variant={homeworkCheckResult === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setHomeworkCheckResult(opt.value)} className="gap-1">
                               <Icon className="w-4 h-4" />
                               {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
                             </Button>
                           );
                         })}
                       </div>
-                      <Textarea
-                        placeholder="확인 메모 (선택)"
-                        value={homeworkCheckNotes}
-                        onChange={(e) => setHomeworkCheckNotes(e.target.value)}
-                        rows={2}
-                        className="text-sm"
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handleSaveHomeworkCheck}
-                          disabled={!homeworkCheckResult || isSavingHomeworkCheck}
-                        >
-                          {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                          <CheckCircle2 className="w-4 h-4 mr-1" />
-                          확인 저장
-                        </Button>
-                        {/* CARRY-FORWARD-FORM-V1: Carry forward button */}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="gap-1"
-                          disabled={carryForwardLoading}
-                          onClick={async () => {
-                            if (!previousLessonHomework || !user) return;
-                            setCarryForwardLoading(true);
-                            try {
-                              const tomorrow = new Date();
-                              tomorrow.setDate(tomorrow.getDate() + 1);
-                              const nextDate = format(tomorrow, 'yyyy-MM-dd');
-                              
-                              const { error } = await supabase
-                                .from('homework_assignments')
-                                .insert({
-                                  student_id: previousLessonHomework.student_id,
-                                  subject: previousLessonHomework.subject as any,
-                                  content: previousLessonHomework.content,
-                                  assigned_date: nextDate,
-                                  homework_type: 'regular',
-                                  created_by: user.id,
-                                });
-                              if (error) throw error;
-                              
-                              await supabase
-                                .from('homework_assignments')
-                                .update({
-                                  check_status: 'checked',
-                                  checked_by: user.id,
-                                  checked_at: new Date().toISOString(),
-                                  result: '다음시간 검사예정으로 이월',
-                                })
-                                .eq('id', previousLessonHomework.id);
-                              
-                              toast({ title: '다음시간으로 이월됨', description: `${previousLessonHomework.content}` });
-                              if (formData.student_id && formData.subject) {
-                                await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
-                              }
-                            } catch (err: any) {
-                              toast({ title: '이월 실패', description: err.message, variant: 'destructive' });
-                            } finally {
-                              setCarryForwardLoading(false);
-                            }
-                          }}
-                        >
-                          {carryForwardLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
-                          다음시간 검사예정
-                        </Button>
-                      </div>
+                      <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotes} onChange={(e) => setHomeworkCheckNotes(e.target.value)} rows={2} className="text-sm" />
+                      <Button type="button" size="sm" onClick={handleSaveHomeworkCheck} disabled={!homeworkCheckResult || isSavingHomeworkCheck}>
+                        {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                        확인 저장
+                      </Button>
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
-              {/* TEACHER-HW-SUBMISSION-VIEW-V2: Multi-image carousel modal */}
+              {/* Image carousel modal */}
               <Dialog open={showSubmissionImageModal} onOpenChange={setShowSubmissionImageModal}>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
@@ -1902,9 +1846,7 @@ export function LessonRecordForm({
                     const images = hwImages.length > 0 ? hwImages : subImages;
                     const submittedAt = previousLessonHomework?.submitted_at || studentSubmission?.submitted_at;
                     const note = previousLessonHomework?.submission_text || studentSubmission?.submission_note;
-
                     if (images.length === 0) return null;
-
                     return <SubmissionImageCarousel images={images} submittedAt={submittedAt} note={note} />;
                   })()}
                 </DialogContent>
