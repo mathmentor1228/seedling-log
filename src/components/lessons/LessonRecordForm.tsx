@@ -1779,7 +1779,7 @@ export function LessonRecordForm({
                                 const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
                                 const nextDate = format(tomorrow, 'yyyy-MM-dd');
                                 await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: hwItem.content, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
-                                await supabase.from('homework_assignments').update({ check_status: 'checked', checked_by: user.id, checked_at: new Date().toISOString(), result: '다음시간 검사예정으로 이월' }).eq('id', hwItem.id);
+                                await supabase.from('homework_assignments').update({ check_status: 'checked', checked_by: user.id, checked_at: new Date().toISOString(), result: 'unable_to_verify', notes: '다음시간 검사예정으로 이월' }).eq('id', hwItem.id);
                                 toast({ title: '다음시간으로 이월됨', description: hwItem.content });
                                 if (formData.student_id && formData.subject) { await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date); }
                               } catch (err: any) { toast({ title: '이월 실패', description: err.message, variant: 'destructive' }); } finally { setCarryForwardLoading(false); }
