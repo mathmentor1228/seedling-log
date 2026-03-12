@@ -801,24 +801,21 @@ export default function Lessons() {
       </div>
 
       <Tabs defaultValue="lessons" className="w-full">
-        <TabsList>
-          <TabsTrigger value="lessons">수업 기록</TabsTrigger>
-          {(isAdmin || isTeacher || isAssistant) && (
-            <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
-          )}
-        </TabsList>
-
-        <TabsContent value="lessons" className="space-y-6 mt-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between mb-4">
+          <TabsList>
+            <TabsTrigger value="lessons">수업 기록</TabsTrigger>
+            {(isAdmin || isTeacher || isAssistant) && (
+              <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
+            )}
+          </TabsList>
           {canManage && (
-            <Button 
-              onClick={handleOpenNewForm}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              + 수업기록 생성
+            <Button onClick={handleOpenNewForm} size="sm" className="gap-1.5">
+              <Plus className="w-4 h-4" />수업기록 생성
             </Button>
           )}
         </div>
+
+        <TabsContent value="lessons" className="space-y-6">
 
       {/* LessonModal - only render when open to prevent backdrop blocking clicks */}
       {isModalOpen && (
