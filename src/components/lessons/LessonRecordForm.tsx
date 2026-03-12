@@ -1436,20 +1436,13 @@ export function LessonRecordForm({
 
   return (
     <form onSubmit={handleSubmit} className={`space-y-4 ${isViewMode ? 'pointer-events-none' : ''}`}>
-      {/* LESSON-SHARED-FORM-V3: Unified form component used by both Dashboard and Lessons page */}
-      <div className="text-xs text-center py-1 rounded bg-green-500/20 text-green-700">
-        LESSON-SHARED-FORM-V3
-      </div>
-      
-      {/* LESSON-VIEW-MODE-V1 / LESSON-EDIT-MODE-V1 marker */}
-      <div className={`text-xs text-center py-1 rounded ${isViewMode ? 'bg-blue-500/20 text-blue-700' : 'bg-muted/30 text-muted-foreground'}`}>
-        {isViewMode ? 'LESSON-VIEW-MODE-V1' : 'LESSON-EDIT-MODE-V1'}
-      </div>
-      
-      {/* FORM_DEBUG marker for troubleshooting */}
-      <div className="text-xs text-center py-1 rounded bg-yellow-500/20 text-yellow-700 font-mono">
-        FORM_DEBUG: students={students.length}, classes={classes.length}, role={role}, isNewRecord={isNewRecord ? 1 : 0}, canSelect={canSelectStudentClass ? 1 : 0}
-      </div>
+
+      {/* Error banner if no students/classes loaded */}
+      {students.length === 0 && classes.length === 0 && (
+        <div className="p-3 bg-destructive/20 text-destructive rounded-lg text-sm font-medium">
+          학생 및 클래스 목록을 불러오지 못했습니다.
+        </div>
+      )}
 
       {/* Error banner if no students/classes loaded */}
       {students.length === 0 && classes.length === 0 && (
