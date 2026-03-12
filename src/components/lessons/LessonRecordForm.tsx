@@ -1473,10 +1473,10 @@ export function LessonRecordForm({
         </div>
       )}
 
-      {/* STICKY-HEADER-V1: Sticky context header — stays visible while scrolling */}
-      <div className="sticky top-0 z-10 bg-background pb-2 space-y-3">
+      {/* STICKY-HEADER-V2: Sticky context header — refined design */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm pb-3 -mx-5 px-5 pt-1 space-y-2 border-b border-border/40">
         {/* Context info header */}
-        <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg flex-wrap">
+        <div className="flex items-center gap-3 py-2.5 flex-wrap">
         {/* Student field - PREFILL-FIX-V4: Reset prefill keys on student change */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">학생:</span>
