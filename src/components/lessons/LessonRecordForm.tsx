@@ -1332,7 +1332,7 @@ export function LessonRecordForm({
       
       // Check if points were already awarded for this homework
       let pointsAlreadyAwarded = false;
-      if (homeworkCheckResult === 'completed' || homeworkCheckResult === 'not_done') {
+      if (homeworkCheckResult === 'completed' || homeworkCheckResult === 'not_done' || homeworkCheckResult === 'lost' || homeworkCheckResult === 'low_effort') {
         const { data: existingPoints } = await supabase
           .from('student_point_history')
           .select('id')
@@ -1345,7 +1345,7 @@ export function LessonRecordForm({
         if (homeworkCheckResult === 'completed') {
           const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
           awardedPoints = hasPhotoSubmission ? 10 : 5;
-        } else if (homeworkCheckResult === 'not_done') {
+        } else if (homeworkCheckResult === 'not_done' || homeworkCheckResult === 'lost' || homeworkCheckResult === 'low_effort') {
           awardedPoints = -5;
         }
       }
