@@ -2252,11 +2252,11 @@ export function LessonRecordForm({
       </div>
 
       {/* New homework section */}
-      <div className="p-4 rounded-lg border-2 border-green-500/30 bg-green-500/5 space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-green-500/8 border-b border-border/50">
           <div className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-green-600" />
-            <Label className="text-base font-semibold text-green-700">오늘 숙제</Label>
+            <Plus className="w-4 h-4 text-green-600" />
+            <span className="text-sm font-semibold text-green-700">오늘 숙제</span>
           </div>
           {newHomeworkContent.trim() && (
             <Button
