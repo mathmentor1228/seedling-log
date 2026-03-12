@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { Copy, ChevronDown, UserPlus, CheckCircle2, Sparkles } from 'lucide-react';
+import { Copy, ChevronDown, UserPlus, CheckCircle2 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 
 interface NewStudent {
