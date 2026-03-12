@@ -128,11 +128,13 @@ export function NewStudentOnboarding() {
 
   const handleToggle = async (studentId: string, key: string, current: boolean) => {
     const newVal = !current;
+    const now = new Date().toISOString();
+    const checkerName = userName || null;
     // Optimistic update
     setChecks(prev => {
       const existing = prev.find(c => c.student_id === studentId && c.check_key === key);
-      if (existing) return prev.map(c => c.student_id === studentId && c.check_key === key ? { ...c, checked: newVal } : c);
-      return [...prev, { student_id: studentId, check_key: key, checked: newVal }];
+      if (existing) return prev.map(c => c.student_id === studentId && c.check_key === key ? { ...c, checked: newVal, checked_at: newVal ? now : null, checked_by_name: newVal ? checkerName : null } : c);
+      return [...prev, { student_id: studentId, check_key: key, checked: newVal, checked_at: newVal ? now : null, checked_by_name: newVal ? checkerName : null }];
     });
 
     const { error } = await supabase
