@@ -664,6 +664,10 @@ function HwStatus({ status, result }: { status: string; result: string | null })
       return <StatusPill icon={<AlertTriangle className="w-3.5 h-3.5" />} label="미흡" color="text-amber-600 bg-amber-50" />;
     if (result === 'not_done')
       return <StatusPill icon={<XCircle className="w-3.5 h-3.5" />} label="미완료" color="text-red-600 bg-red-50" />;
+    if (result === 'lost')
+      return <StatusPill icon={<XCircle className="w-3.5 h-3.5" />} label="분실" color="text-orange-600 bg-orange-50" />;
+    if (result === 'low_effort')
+      return <StatusPill icon={<XCircle className="w-3.5 h-3.5" />} label="성의부족" color="text-rose-600 bg-rose-50" />;
     if (result === 'unable_to_verify')
       return <StatusPill icon={<Clock className="w-3.5 h-3.5" />} label="확인불가" color="text-gray-500 bg-gray-50" />;
     return <StatusPill icon={<CheckCircle2 className="w-3.5 h-3.5" />} label="확인" color="text-emerald-600 bg-emerald-50" />;
