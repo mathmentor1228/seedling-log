@@ -194,6 +194,8 @@ const HOMEWORK_RESULT_OPTIONS = [
   { value: 'completed', label: '완료', icon: CheckCircle2, color: 'text-green-600' },
   { value: 'partial', label: '부분', icon: Clock, color: 'text-amber-600' },
   { value: 'not_done', label: '미완', icon: XCircle, color: 'text-red-600' },
+  { value: 'lost', label: '분실', icon: PackageX, color: 'text-orange-600' },
+  { value: 'low_effort', label: '성의부족', icon: Frown, color: 'text-rose-600' },
   { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle, color: 'text-muted-foreground' },
 ];
 
