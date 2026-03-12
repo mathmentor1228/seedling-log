@@ -2283,11 +2283,12 @@ export function LessonRecordForm({
       </div>
 
       {/* Test section */}
-      <div className="p-4 rounded-lg border-2 border-purple-500/30 bg-purple-500/5 space-y-3">
-        <div className="flex items-center gap-2">
-          <ClipboardCheck className="w-5 h-5 text-purple-600" />
-          <Label className="text-base font-semibold text-purple-700">오늘 테스트</Label>
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 bg-purple-500/8 border-b border-border/50">
+          <ClipboardCheck className="w-4 h-4 text-purple-600" />
+          <span className="text-sm font-semibold text-purple-700">오늘 테스트</span>
         </div>
+        <div className="p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-sm">테스트 제목 <span className="text-destructive text-xs">(단원/범위 필수)</span></Label>
