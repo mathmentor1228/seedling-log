@@ -36,19 +36,19 @@ const CHECKLIST_ITEMS = [
 ];
 
 function buildRegistrationMsg(student: NewStudent): string {
-  const name = student.name || '***';
+  const name = student.name || '';
   return `[더,멘토 등록안내]
 안녕하세요. 더멘토입니다.
-${name}은 *월 *일 (*)부터
+${name} 학생은 *월 *일 (*)부터
 수업 예정입니다.
 
 📍수업시간안내
 
-**영어(*층, *강의실)
+영어(*층, *강의실)
 
-**수학(*층, *강의실)
+수학(*층, *강의실)
 
-월 **만원
+월 *만원
 
 계좌
 신한 110-265-698329
