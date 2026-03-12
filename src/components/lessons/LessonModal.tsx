@@ -152,14 +152,14 @@ export function LessonModal({
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
+        <DialogHeader className="px-6 pt-5 pb-3 border-b border-border/60 shrink-0 bg-secondary/30">
+          <DialogTitle className="text-base font-bold tracking-tight flex items-center gap-2">
             {getDialogTitle()}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 px-6 pb-6 pt-3">
+        <div className="overflow-y-auto flex-1 px-5 pb-5 pt-4">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
