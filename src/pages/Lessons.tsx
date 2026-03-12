@@ -789,11 +789,6 @@ export default function Lessons() {
 
   return (
     <div className="space-y-6">
-      {/* Visible marker for debugging - now uses shared form */}
-      <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        LESSONS-PAGE-V2 (uses LESSON-SHARED-FORM-V1) | LESSONS-CREATE-CLICKABLE-V1
-      </div>
-
       {loadError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
