@@ -24,6 +24,8 @@ interface OnboardingCheck {
   student_id: string;
   check_key: string;
   checked: boolean;
+  checked_at: string | null;
+  checked_by_name: string | null;
 }
 
 const CHECKLIST_ITEMS = [
@@ -104,7 +106,7 @@ export function NewStudentOnboarding() {
         .order('created_at', { ascending: false }),
       supabase
         .from('student_onboarding_checks')
-        .select('student_id, check_key, checked'),
+        .select('student_id, check_key, checked, checked_at, checked_by_name'),
     ]);
 
     if (studentsRes.data) setStudents(studentsRes.data);
@@ -124,13 +126,18 @@ export function NewStudentOnboarding() {
   const isChecked = (studentId: string, key: string) =>
     checks.some(c => c.student_id === studentId && c.check_key === key && c.checked);
 
+  const getCheckInfo = (studentId: string, key: string): OnboardingCheck | undefined =>
+    checks.find(c => c.student_id === studentId && c.check_key === key && c.checked);
+
   const handleToggle = async (studentId: string, key: string, current: boolean) => {
     const newVal = !current;
+    const now = new Date().toISOString();
+    const checkerName = userName || null;
     // Optimistic update
     setChecks(prev => {
       const existing = prev.find(c => c.student_id === studentId && c.check_key === key);
-      if (existing) return prev.map(c => c.student_id === studentId && c.check_key === key ? { ...c, checked: newVal } : c);
-      return [...prev, { student_id: studentId, check_key: key, checked: newVal }];
+      if (existing) return prev.map(c => c.student_id === studentId && c.check_key === key ? { ...c, checked: newVal, checked_at: newVal ? now : null, checked_by_name: newVal ? checkerName : null } : c);
+      return [...prev, { student_id: studentId, check_key: key, checked: newVal, checked_at: newVal ? now : null, checked_by_name: newVal ? checkerName : null }];
     });
 
     const { error } = await supabase
@@ -232,6 +239,7 @@ export function NewStudentOnboarding() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {CHECKLIST_ITEMS.map(item => {
                       const checked = isChecked(student.id, item.key);
+                      const checkInfo = getCheckInfo(student.id, item.key);
                       const hasTemplate = item.key !== 'channel_confirm';
                       return (
                         <div
@@ -246,6 +254,11 @@ export function NewStudentOnboarding() {
                           <span className={`flex-1 ${checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                             {item.icon} {item.label}
                           </span>
+                          {checked && checkInfo?.checked_at && (
+                            <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                              {checkInfo.checked_by_name || ''} {format(new Date(checkInfo.checked_at), 'M/d HH:mm')}
+                            </span>
+                          )}
                           {hasTemplate && (
                             <Button
                               variant="ghost"
