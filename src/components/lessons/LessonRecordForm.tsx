@@ -1673,14 +1673,14 @@ export function LessonRecordForm({
           <div className="p-4 space-y-4">
 
           {loadingPreviousLesson ? (
-            <div className="text-sm text-muted-foreground">불러오는 중...</div>
+            <div className="text-sm text-muted-foreground py-2">불러오는 중...</div>
           ) : previousLesson ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="w-4 h-4" />
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Calendar className="w-3.5 h-3.5" />
                 <span>{format(new Date(previousLesson.lesson_date), 'yyyy-MM-dd')}</span>
-                <span className="mx-1">|</span>
-                <span className="font-medium text-foreground">{previousLesson.lesson_range}</span>
+                <span className="text-muted-foreground/40">|</span>
+                <span className="font-medium text-foreground text-sm">{previousLesson.lesson_range}</span>
               </div>
 
               {/* MULTI-HW-V1: Render ALL previous homeworks (unchecked + lesson-linked) */}
