@@ -126,6 +126,9 @@ export function NewStudentOnboarding() {
   const isChecked = (studentId: string, key: string) =>
     checks.some(c => c.student_id === studentId && c.check_key === key && c.checked);
 
+  const getCheckInfo = (studentId: string, key: string): OnboardingCheck | undefined =>
+    checks.find(c => c.student_id === studentId && c.check_key === key && c.checked);
+
   const handleToggle = async (studentId: string, key: string, current: boolean) => {
     const newVal = !current;
     const now = new Date().toISOString();
