@@ -1082,31 +1082,34 @@ export default function Lessons() {
                         <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="sm"
+                            className="h-7 px-2 text-xs gap-1"
                             onClick={() => handleView(lesson)}
                             title="조회"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />보기
                           </Button>
-                          {isTeacher && lesson.teacher_id === user?.id && (
+                          {(isAdmin || (isTeacher && lesson.teacher_id === user?.id)) && (
                             <Button
                               variant="ghost"
-                              size="icon"
+                              size="sm"
+                              className="h-7 px-2 text-xs gap-1 text-primary"
                               onClick={() => handleEdit(lesson)}
                               title="수정"
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Edit2 className="w-3.5 h-3.5" />수정
                             </Button>
                           )}
                           {canManage && (
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-7 w-7"
                               onClick={() => handleDelete(lesson.id)}
-                              className="text-destructive hover:text-destructive"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
                               title="삭제"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           )}
                         </div>
