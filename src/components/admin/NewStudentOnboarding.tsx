@@ -68,12 +68,13 @@ http://pf.kakao.com/_ScZhb 채널추가하기.
 }
 
 function buildWebappGuideMsg(student: NewStudent): string {
-  const parentLabel = student.parent_name ? `${student.parent_name}` : '**';
+  const parentLabel = student.parent_name || '';
   const name = student.name || '***';
   const parentUrl = student.parent_token
     ? `https://seedling-log.lovable.app/parent?token=${student.parent_token}`
     : '(학부모 링크 미생성)';
-  return `안녕하세요 ${name} ${parentLabel}어머님, 
+  const greeting = parentLabel ? `${name} ${parentLabel}어머님` : `${name} 어머님`;
+  return `안녕하세요 ${greeting}, 
 ${name} 실시간 및 주간학습상황을 좀 더 직관적으로 받아보실 수 있도록원내 시스템을 안내드립니다.
 
 ${parentUrl}
