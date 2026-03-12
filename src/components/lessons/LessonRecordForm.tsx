@@ -1857,8 +1857,9 @@ export function LessonRecordForm({
               </Dialog>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">이전 수업 기록 없음</div>
+            <div className="text-sm text-muted-foreground py-2">이전 수업 기록 없음</div>
           )}
+          </div>
         </div>
       )}
 
