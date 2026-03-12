@@ -1770,12 +1770,12 @@ export function LessonRecordForm({
                           </div>
                           <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotesMap[hwItem.id] || ''} onChange={(e) => setHomeworkCheckNotesMap(prev => ({ ...prev, [hwItem.id]: e.target.value }))} rows={2} className="text-xs" />
                           <div className="flex gap-2">
-                            <Button type="button" size="sm" onClick={() => handleSaveHomeworkCheckForItem(hwItem, homeworkCheckResults[hwItem.id] || '', homeworkCheckNotesMap[hwItem.id] || '')} disabled={!homeworkCheckResults[hwItem.id] || isSavingHomeworkCheck}>
-                              {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                            <Button type="button" size="sm" className="h-7 text-xs" onClick={() => handleSaveHomeworkCheckForItem(hwItem, homeworkCheckResults[hwItem.id] || '', homeworkCheckNotesMap[hwItem.id] || '')} disabled={!homeworkCheckResults[hwItem.id] || isSavingHomeworkCheck}>
+                              {isSavingHomeworkCheck && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                               확인 저장
                             </Button>
-                            <Button type="button" size="sm" variant="outline" className="gap-1" disabled={carryForwardLoading} onClick={async () => {
+                            <Button type="button" size="sm" variant="outline" className="gap-1 h-7 text-xs" disabled={carryForwardLoading} onClick={async () => {
                               if (!user) return;
                               setCarryForwardLoading(true);
                               try {
