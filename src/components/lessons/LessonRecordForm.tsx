@@ -368,10 +368,15 @@ export function LessonRecordForm({
   // Previous lesson state
   const [previousLesson, setPreviousLesson] = useState<LessonRecord | null>(null);
   const [previousLessonHomework, setPreviousLessonHomework] = useState<HomeworkAssignment | null>(null);
+  // MULTI-HW-V1: All unchecked previous homeworks (including carry-forwarded)
+  const [allPreviousHomeworks, setAllPreviousHomeworks] = useState<HomeworkAssignment[]>([]);
   const [loadingPreviousLesson, setLoadingPreviousLesson] = useState(false);
 
   // Homework states
   const [previousHomework, setPreviousHomework] = useState<HomeworkAssignment | null>(null);
+  // MULTI-HW-V1: Per-homework check state
+  const [homeworkCheckResults, setHomeworkCheckResults] = useState<Record<string, string>>({});
+  const [homeworkCheckNotesMap, setHomeworkCheckNotesMap] = useState<Record<string, string>>({});
   const [homeworkCheckResult, setHomeworkCheckResult] = useState<string>('');
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
   const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
