@@ -1454,7 +1454,7 @@ export function LessonRecordForm({
   const canSelectStudentClass = isNewRecord && !isViewMode && (isAdmin || isTeacher || isAssistant);
 
   return (
-    <form onSubmit={handleSubmit} className={`space-y-4 ${isViewMode ? 'pointer-events-none' : ''}`}>
+    <form onSubmit={handleSubmit} className={`space-y-5 ${isViewMode ? 'pointer-events-none' : ''}`}>
 
       {/* Error banner if no students/classes loaded */}
       {students.length === 0 && classes.length === 0 && (
