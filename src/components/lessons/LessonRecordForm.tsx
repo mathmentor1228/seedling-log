@@ -1848,7 +1848,7 @@ export function LessonRecordForm({
                                   subject: previousLessonHomework.subject as any,
                                   content: previousLessonHomework.content,
                                   assigned_date: nextDate,
-                                  homework_type: 'daily',
+                                  homework_type: 'regular',
                                   created_by: user.id,
                                 });
                               if (error) throw error;
