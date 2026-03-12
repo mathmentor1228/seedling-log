@@ -925,7 +925,7 @@ export function LessonRecordForm({
         .eq('student_id', studentId)
         .eq('subject', subject as SubjectType)
         .eq('check_status', 'unchecked')
-        .lte('assigned_date', currentDate)
+        .lt('assigned_date', currentDate)
         .not('content', 'eq', '')
         .order('assigned_date', { ascending: false });
 
@@ -1454,7 +1454,7 @@ export function LessonRecordForm({
   const canSelectStudentClass = isNewRecord && !isViewMode && (isAdmin || isTeacher || isAssistant);
 
   return (
-    <form onSubmit={handleSubmit} className={`space-y-4 ${isViewMode ? 'pointer-events-none' : ''}`}>
+    <form onSubmit={handleSubmit} className={`space-y-5 ${isViewMode ? 'pointer-events-none' : ''}`}>
 
       {/* Error banner if no students/classes loaded */}
       {students.length === 0 && classes.length === 0 && (
@@ -1473,10 +1473,10 @@ export function LessonRecordForm({
         </div>
       )}
 
-      {/* STICKY-HEADER-V1: Sticky context header — stays visible while scrolling */}
-      <div className="sticky top-0 z-10 bg-background pb-2 space-y-3">
+      {/* STICKY-HEADER-V2: Sticky context header — refined design */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm pb-3 -mx-5 px-5 pt-1 space-y-2 border-b border-border/40">
         {/* Context info header */}
-        <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg flex-wrap">
+        <div className="flex items-center gap-3 py-2.5 flex-wrap">
         {/* Student field - PREFILL-FIX-V4: Reset prefill keys on student change */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">학생:</span>
@@ -1651,35 +1651,36 @@ export function LessonRecordForm({
 
         {/* Previous lesson summary (compact, inside sticky) */}
         {formData.student_id && formData.subject && !loadingPreviousLesson && previousLesson && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
-            <ClipboardList className="w-4 h-4 text-blue-600 shrink-0" />
-            <span className="font-medium text-blue-700">지난수업:</span>
-            <span>{format(new Date(previousLesson.lesson_date), 'MM/dd')}</span>
-            <span className="mx-0.5">|</span>
-            <span className="font-medium text-foreground truncate">{previousLesson.lesson_range}</span>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pb-0.5">
+            <span className="font-semibold text-primary">지난수업</span>
+            <span className="text-muted-foreground/60">·</span>
+            <span>{format(new Date(previousLesson.lesson_date), 'M/d')}</span>
+            <span className="text-muted-foreground/60">·</span>
+            <span className="font-medium text-foreground/80 truncate max-w-[280px]">{previousLesson.lesson_range}</span>
           </div>
         )}
       </div>
-      {/* END STICKY-HEADER-V1 */}
+      {/* END STICKY-HEADER-V2 */}
 
       {/* Previous lesson detail section */}
       {formData.student_id && formData.subject && (
-        <div className="p-4 rounded-lg border-2 border-blue-500/30 bg-blue-500/5 space-y-4">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-blue-600" />
-            <Label className="text-base font-semibold text-blue-700">지난 수업</Label>
-            {loadingPreviousLesson && <Loader2 className="w-4 h-4 animate-spin" />}
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 bg-primary/5 border-b border-border/50">
+            <ClipboardList className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-primary">지난 수업</span>
+            {loadingPreviousLesson && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
           </div>
+          <div className="p-4 space-y-4">
 
           {loadingPreviousLesson ? (
-            <div className="text-sm text-muted-foreground">불러오는 중...</div>
+            <div className="text-sm text-muted-foreground py-2">불러오는 중...</div>
           ) : previousLesson ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="w-4 h-4" />
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Calendar className="w-3.5 h-3.5" />
                 <span>{format(new Date(previousLesson.lesson_date), 'yyyy-MM-dd')}</span>
-                <span className="mx-1">|</span>
-                <span className="font-medium text-foreground">{previousLesson.lesson_range}</span>
+                <span className="text-muted-foreground/40">|</span>
+                <span className="font-medium text-foreground text-sm">{previousLesson.lesson_range}</span>
               </div>
 
               {/* MULTI-HW-V1: Render ALL previous homeworks (unchecked + lesson-linked) */}
@@ -1691,17 +1692,18 @@ export function LessonRecordForm({
                     </Badge>
                   )}
                   {allPreviousHomeworks.map((hwItem, hwIdx) => (
-                    <div key={hwItem.id} className="p-3 bg-background rounded-lg border space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">
+                    <div key={hwItem.id} className="rounded-lg border border-border/60 bg-secondary/20 overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-secondary/40">
+                        <span className="text-xs font-semibold text-foreground/80">
                           {allPreviousHomeworks.length > 1 ? `숙제 ${hwIdx + 1}` : '지난숙제'}
-                          <span className="text-xs text-muted-foreground ml-2">({hwItem.assigned_date})</span>
-                        </Label>
+                          <span className="text-muted-foreground font-normal ml-1.5">{hwItem.assigned_date}</span>
+                        </span>
                         {hwItem.check_status === 'checked' && (
-                          <Badge variant="secondary" className="text-xs">확인됨</Badge>
+                          <Badge variant="secondary" className="text-[10px] h-5">확인됨</Badge>
                         )}
                       </div>
-                      <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{hwItem.content}</p>
+                      <div className="p-3 space-y-3">
+                      <p className="text-sm whitespace-pre-wrap bg-background/80 p-2.5 rounded-md border border-border/30 leading-relaxed">{hwItem.content}</p>
 
                       {/* Submission display */}
                       {(() => {
@@ -1747,32 +1749,33 @@ export function LessonRecordForm({
                       })()}
 
                       {hwItem.check_status === 'checked' ? (
-                        <div className="text-sm text-muted-foreground flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
                           <span>확인됨 {hwItem.result && `(${hwItem.result})`}</span>
                         </div>
                       ) : (
-                        <div className="space-y-2 pt-2 border-t">
-                          <Label className="text-sm">숙제상태 확인</Label>
-                          <div className="flex flex-wrap gap-2">
+                        <div className="space-y-2.5 pt-2.5 border-t border-border/40">
+                          <span className="text-xs font-medium text-muted-foreground">숙제상태 확인</span>
+                          <div className="flex flex-wrap gap-1.5">
                             {HOMEWORK_RESULT_OPTIONS.map((opt) => {
                               const Icon = opt.icon;
+                              const isSelected = (homeworkCheckResults[hwItem.id] || '') === opt.value;
                               return (
-                                <Button key={opt.value} type="button" variant={(homeworkCheckResults[hwItem.id] || '') === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setHomeworkCheckResults(prev => ({ ...prev, [hwItem.id]: opt.value }))} className="gap-1">
-                                  <Icon className="w-4 h-4" />
+                                <Button key={opt.value} type="button" variant={isSelected ? 'default' : 'outline'} size="sm" onClick={() => setHomeworkCheckResults(prev => ({ ...prev, [hwItem.id]: opt.value }))} className={`gap-1 h-7 text-xs px-2.5 ${!isSelected ? 'border-border/60' : ''}`}>
+                                  <Icon className="w-3.5 h-3.5" />
                                   {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
                                 </Button>
                               );
                             })}
                           </div>
-                          <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotesMap[hwItem.id] || ''} onChange={(e) => setHomeworkCheckNotesMap(prev => ({ ...prev, [hwItem.id]: e.target.value }))} rows={2} className="text-sm" />
+                          <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotesMap[hwItem.id] || ''} onChange={(e) => setHomeworkCheckNotesMap(prev => ({ ...prev, [hwItem.id]: e.target.value }))} rows={2} className="text-xs" />
                           <div className="flex gap-2">
-                            <Button type="button" size="sm" onClick={() => handleSaveHomeworkCheckForItem(hwItem, homeworkCheckResults[hwItem.id] || '', homeworkCheckNotesMap[hwItem.id] || '')} disabled={!homeworkCheckResults[hwItem.id] || isSavingHomeworkCheck}>
-                              {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                            <Button type="button" size="sm" className="h-7 text-xs" onClick={() => handleSaveHomeworkCheckForItem(hwItem, homeworkCheckResults[hwItem.id] || '', homeworkCheckNotesMap[hwItem.id] || '')} disabled={!homeworkCheckResults[hwItem.id] || isSavingHomeworkCheck}>
+                              {isSavingHomeworkCheck && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                               확인 저장
                             </Button>
-                            <Button type="button" size="sm" variant="outline" className="gap-1" disabled={carryForwardLoading} onClick={async () => {
+                            <Button type="button" size="sm" variant="outline" className="gap-1 h-7 text-xs" disabled={carryForwardLoading} onClick={async () => {
                               if (!user) return;
                               setCarryForwardLoading(true);
                               try {
@@ -1790,6 +1793,7 @@ export function LessonRecordForm({
                           </div>
                         </div>
                       )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1853,8 +1857,9 @@ export function LessonRecordForm({
               </Dialog>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">이전 수업 기록 없음</div>
+            <div className="text-sm text-muted-foreground py-2">이전 수업 기록 없음</div>
           )}
+          </div>
         </div>
       )}
 
@@ -2247,11 +2252,11 @@ export function LessonRecordForm({
       </div>
 
       {/* New homework section */}
-      <div className="p-4 rounded-lg border-2 border-green-500/30 bg-green-500/5 space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-green-500/8 border-b border-border/50">
           <div className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-green-600" />
-            <Label className="text-base font-semibold text-green-700">오늘 숙제</Label>
+            <Plus className="w-4 h-4 text-green-600" />
+            <span className="text-sm font-semibold text-green-700">오늘 숙제</span>
           </div>
           {newHomeworkContent.trim() && (
             <Button
@@ -2266,20 +2271,24 @@ export function LessonRecordForm({
             </Button>
           )}
         </div>
-        <Textarea
-          placeholder="오늘 배정할 숙제 내용"
-          value={newHomeworkContent}
-          onChange={(e) => setNewHomeworkContent(e.target.value)}
-          rows={3}
-        />
+        <div className="p-4">
+          <Textarea
+            placeholder="오늘 배정할 숙제 내용"
+            value={newHomeworkContent}
+            onChange={(e) => setNewHomeworkContent(e.target.value)}
+            rows={3}
+            className="text-sm"
+          />
+        </div>
       </div>
 
       {/* Test section */}
-      <div className="p-4 rounded-lg border-2 border-purple-500/30 bg-purple-500/5 space-y-3">
-        <div className="flex items-center gap-2">
-          <ClipboardCheck className="w-5 h-5 text-purple-600" />
-          <Label className="text-base font-semibold text-purple-700">오늘 테스트</Label>
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 bg-purple-500/8 border-b border-border/50">
+          <ClipboardCheck className="w-4 h-4 text-purple-600" />
+          <span className="text-sm font-semibold text-purple-700">오늘 테스트</span>
         </div>
+        <div className="p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-sm">테스트 제목 <span className="text-destructive text-xs">(단원/범위 필수)</span></Label>
@@ -2356,35 +2365,37 @@ export function LessonRecordForm({
             onChange={(e) => setTestFormData({ ...testFormData, test_notes: e.target.value })}
             placeholder="테스트 관련 메모"
             rows={2}
+            className="text-sm"
           />
+        </div>
         </div>
       </div>
 
-      {/* Action buttons - view mode shows only close button */}
+      {/* Action buttons */}
       {isViewMode ? (
-        <div className="flex items-center justify-between pt-4 border-t pointer-events-auto">
-          <Button type="button" variant="outline" onClick={onCancel}>
+        <div className="flex items-center justify-between pt-5 border-t border-border/60 pointer-events-auto">
+          <Button type="button" variant="outline" onClick={onCancel} className="h-9">
             닫기
           </Button>
           {isAdmin && onRequestEdit && (
-            <Button type="button" onClick={onRequestEdit}>
+            <Button type="button" onClick={onRequestEdit} className="h-9">
               <FileEdit className="w-4 h-4 mr-1" />
               편집하기
             </Button>
           )}
         </div>
       ) : canManage && (
-        <div className="flex items-center justify-between pt-4 border-t">
-          <Button type="button" variant="outline" onClick={onCancel}>
+        <div className="flex items-center justify-between pt-5 border-t border-border/60">
+          <Button type="button" variant="ghost" onClick={onCancel} className="h-9 text-muted-foreground">
             취소
           </Button>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={handleSaveDraft} disabled={isSavingDraft}>
+            <Button type="button" variant="outline" onClick={handleSaveDraft} disabled={isSavingDraft} className="h-9">
               {isSavingDraft && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
               <Save className="w-4 h-4 mr-1" />
               임시저장
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="h-9">
               {isSubmitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
               <Send className="w-4 h-4 mr-1" />
               제출
