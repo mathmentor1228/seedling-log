@@ -2365,7 +2365,9 @@ export function LessonRecordForm({
             onChange={(e) => setTestFormData({ ...testFormData, test_notes: e.target.value })}
             placeholder="테스트 관련 메모"
             rows={2}
+            className="text-sm"
           />
+        </div>
         </div>
       </div>
 
