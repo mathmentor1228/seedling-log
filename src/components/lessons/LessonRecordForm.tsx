@@ -1749,12 +1749,12 @@ export function LessonRecordForm({
                       })()}
 
                       {hwItem.check_status === 'checked' ? (
-                        <div className="text-sm text-muted-foreground flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
                           <span>확인됨 {hwItem.result && `(${hwItem.result})`}</span>
                         </div>
                       ) : (
-                        <div className="space-y-2 pt-2 border-t">
+                        <div className="space-y-2.5 pt-2.5 border-t border-border/40">
                           <Label className="text-sm">숙제상태 확인</Label>
                           <div className="flex flex-wrap gap-2">
                             {HOMEWORK_RESULT_OPTIONS.map((opt) => {
