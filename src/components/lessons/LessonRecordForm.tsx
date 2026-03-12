@@ -2371,31 +2371,31 @@ export function LessonRecordForm({
         </div>
       </div>
 
-      {/* Action buttons - view mode shows only close button */}
+      {/* Action buttons */}
       {isViewMode ? (
-        <div className="flex items-center justify-between pt-4 border-t pointer-events-auto">
-          <Button type="button" variant="outline" onClick={onCancel}>
+        <div className="flex items-center justify-between pt-5 border-t border-border/60 pointer-events-auto">
+          <Button type="button" variant="outline" onClick={onCancel} className="h-9">
             닫기
           </Button>
           {isAdmin && onRequestEdit && (
-            <Button type="button" onClick={onRequestEdit}>
+            <Button type="button" onClick={onRequestEdit} className="h-9">
               <FileEdit className="w-4 h-4 mr-1" />
               편집하기
             </Button>
           )}
         </div>
       ) : canManage && (
-        <div className="flex items-center justify-between pt-4 border-t">
-          <Button type="button" variant="outline" onClick={onCancel}>
+        <div className="flex items-center justify-between pt-5 border-t border-border/60">
+          <Button type="button" variant="ghost" onClick={onCancel} className="h-9 text-muted-foreground">
             취소
           </Button>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={handleSaveDraft} disabled={isSavingDraft}>
+            <Button type="button" variant="outline" onClick={handleSaveDraft} disabled={isSavingDraft} className="h-9">
               {isSavingDraft && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
               <Save className="w-4 h-4 mr-1" />
               임시저장
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="h-9">
               {isSubmitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
               <Send className="w-4 h-4 mr-1" />
               제출
