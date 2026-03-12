@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download, Search, X, Pencil } from 'lucide-react';
+import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download, Search, X, Pencil, ShoppingCart, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface TextbookOrder {
   id: string;
@@ -29,9 +30,24 @@ interface TextbookOrder {
   category?: string | null;
 }
 
+// Grouped view of same textbook
+interface TextbookGroup {
+  textbook_name: string;
+  subject: string;
+  unit_price: number;
+  grade: string | null;
+  category: string | null;
+  orders: TextbookOrder[];
+  totalQty: number;
+  totalDistributed: number;
+  // dominant status for filtering
+  status: string;
+}
+
 const SUBJECTS = ['수학', '영어', '국어', '과학'];
 const GRADES = ['초등', '중1', '중2', '중3', '고1', '고2', '고3'];
 const CATEGORIES = ['내신', '문법', '개념', '유형', '심화', '독해', '단어', '기타'];
+const ORDER_STATUSES = ['교재신청', '주문중', '입고완료'] as const;
 
 export function TextbookOrderTab() {
   const { user, role } = useAuth();
@@ -68,6 +84,9 @@ export function TextbookOrderTab() {
   const [editCategory, setEditCategory] = useState('기타');
   const [saving, setSaving] = useState(false);
 
+  // Expanded groups
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (user) {
       supabase.from('profiles').select('full_name').eq('id', user.id).single()
@@ -93,7 +112,6 @@ export function TextbookOrderTab() {
       .channel('textbook-orders-realtime')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'textbook_orders' }, (payload) => {
         const updated = payload.new as any;
-        // Notify requesting teacher when their order is approved
         if (updated.status === '입고완료' && updated.requested_by === user?.id) {
           toast.success(`📦 "${updated.textbook_name}" 교재가 입고 완료되었습니다!`, { duration: 6000 });
         }
@@ -101,9 +119,8 @@ export function TextbookOrderTab() {
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'textbook_orders' }, (payload) => {
         const newOrder = payload.new as any;
-        // Notify admin when a new order is requested by someone else
-        if (role === 'admin' && newOrder.requested_by !== user?.id && newOrder.status === '신청') {
-          toast.info(`📋 ${newOrder.requested_by_name}님이 "${newOrder.textbook_name}" 교재를 입고 요청했습니다`, { duration: 8000 });
+        if (role === 'admin' && newOrder.requested_by !== user?.id) {
+          toast.info(`📋 ${newOrder.requested_by_name}님이 "${newOrder.textbook_name}" 교재를 신청했습니다`, { duration: 8000 });
         }
         fetchOrders();
       })
@@ -125,6 +142,7 @@ export function TextbookOrderTab() {
       notes: notes.trim() || null,
       grade: grade || null,
       category: category || '기타',
+      status: '교재신청',
     } as any);
     if (error) { toast.error('신청 실패'); console.error(error); }
     else {
@@ -171,16 +189,32 @@ export function TextbookOrderTab() {
     setSaving(false);
   };
 
-  const handleApprove = async (order: TextbookOrder) => {
-    if (!confirm(`"${order.textbook_name}" ${order.quantity}권을 입고 완료 처리하시겠습니까?`)) return;
-    const { error } = await supabase.from('textbook_orders').update({
-      status: '입고완료',
-      approved_at: new Date().toISOString(),
-      approved_by_name: userName,
+  const handleStatusChange = async (order: TextbookOrder, newStatus: string) => {
+    const updates: any = {
+      status: newStatus,
       updated_at: new Date().toISOString(),
-    } as any).eq('id', order.id);
-    if (error) toast.error('입고 처리 실패');
-    else { toast.success('입고 완료 처리되었습니다'); fetchOrders(); }
+    };
+    if (newStatus === '입고완료') {
+      updates.approved_at = new Date().toISOString();
+      updates.approved_by_name = userName;
+    }
+    const { error } = await supabase.from('textbook_orders').update(updates).eq('id', order.id);
+    if (error) toast.error('상태 변경 실패');
+    else { toast.success(`"${order.textbook_name}" → ${newStatus}`); fetchOrders(); }
+  };
+
+  const handleBulkStatusChange = async (orderIds: string[], newStatus: string) => {
+    const updates: any = {
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (newStatus === '입고완료') {
+      updates.approved_at = new Date().toISOString();
+      updates.approved_by_name = userName;
+    }
+    const { error } = await supabase.from('textbook_orders').update(updates).in('id', orderIds);
+    if (error) toast.error('상태 변경 실패');
+    else { toast.success(`${orderIds.length}건 → ${newStatus}`); fetchOrders(); }
   };
 
   const handleDelete = async (id: string) => {
@@ -264,25 +298,96 @@ export function TextbookOrderTab() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+  // Normalize old status values
+  const normalizeStatus = (s: string) => {
+    if (s === '신청') return '교재신청';
+    return s;
+  };
 
-  // Filter
-  const filteredOrders = orders.filter(o => {
-    const matchesSearch = !searchQuery ||
-      o.textbook_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.requested_by_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (o.notes && o.notes.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesSubject = filterSubject === 'all' || o.subject === filterSubject;
-    const matchesStatus = filterStatus === 'all' || o.status === filterStatus;
-    const matchesGrade = filterGrade === 'all' || o.grade === filterGrade;
-    const matchesCategory = filterCategory === 'all' || o.category === filterCategory;
-    return matchesSearch && matchesSubject && matchesStatus && matchesGrade && matchesCategory;
-  });
+  // Group orders by textbook_name + subject + unit_price
+  const groups = useMemo((): TextbookGroup[] => {
+    const map = new Map<string, TextbookGroup>();
+    orders.forEach(o => {
+      const key = `${o.textbook_name}||${o.subject}||${o.unit_price}`;
+      const status = normalizeStatus(o.status);
+      if (!map.has(key)) {
+        map.set(key, {
+          textbook_name: o.textbook_name,
+          subject: o.subject,
+          unit_price: o.unit_price,
+          grade: o.grade || null,
+          category: o.category || null,
+          orders: [],
+          totalQty: 0,
+          totalDistributed: 0,
+          status,
+        });
+      }
+      const g = map.get(key)!;
+      g.orders.push({ ...o, status });
+      g.totalQty += o.quantity;
+      g.totalDistributed += o.distributed_qty || 0;
+      // Update grade/category from latest
+      if (o.grade) g.grade = o.grade;
+      if (o.category && o.category !== '기타') g.category = o.category;
+      // Group status = most advanced status among orders
+      const statusOrder = ['교재신청', '주문중', '입고완료'];
+      if (statusOrder.indexOf(status) > statusOrder.indexOf(g.status)) {
+        g.status = status;
+      }
+      // If any order is not 입고완료, group is not 입고완료
+      if (status !== '입고완료' && g.status === '입고완료') {
+        g.status = status;
+      }
+    });
 
-  const pending = filteredOrders.filter(o => o.status === '신청');
-  const completed = filteredOrders.filter(o => o.status === '입고완료');
-  const subjects = [...new Set(orders.map(o => o.subject))].sort();
+    // Recalculate group status: use "lowest" status (most behind)
+    map.forEach(g => {
+      const statusOrder = ['교재신청', '주문중', '입고완료'];
+      let minIdx = 2;
+      g.orders.forEach(o => {
+        const idx = statusOrder.indexOf(normalizeStatus(o.status));
+        if (idx < minIdx) minIdx = idx;
+      });
+      g.status = statusOrder[minIdx];
+      // If all are same status, use that
+      const allSame = g.orders.every(o => normalizeStatus(o.status) === normalizeStatus(g.orders[0].status));
+      if (allSame) g.status = normalizeStatus(g.orders[0].status);
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      // Sort by status priority, then name
+      const statusOrder = ['교재신청', '주문중', '입고완료'];
+      const diff = statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
+      if (diff !== 0) return diff;
+      return a.textbook_name.localeCompare(b.textbook_name);
+    });
+  }, [orders]);
+
+  // Filter groups
+  const filteredGroups = useMemo(() => {
+    return groups.filter(g => {
+      const matchesSearch = !searchQuery ||
+        g.textbook_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        g.orders.some(o => o.requested_by_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        g.orders.some(o => o.notes && o.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesSubject = filterSubject === 'all' || g.subject === filterSubject;
+      const matchesStatus = filterStatus === 'all' || g.status === filterStatus || g.orders.some(o => normalizeStatus(o.status) === filterStatus);
+      const matchesGrade = filterGrade === 'all' || g.grade === filterGrade;
+      const matchesCategory = filterCategory === 'all' || g.category === filterCategory;
+      return matchesSearch && matchesSubject && matchesStatus && matchesGrade && matchesCategory;
+    });
+  }, [groups, searchQuery, filterSubject, filterStatus, filterGrade, filterCategory]);
+
   const hasActiveFilters = searchQuery || filterSubject !== 'all' || filterStatus !== 'all' || filterGrade !== 'all' || filterCategory !== 'all';
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
 
   const subjectColor = (s: string) => {
     switch (s) {
@@ -294,10 +399,40 @@ export function TextbookOrderTab() {
     }
   };
 
+  const statusColor = (s: string) => {
+    switch (s) {
+      case '교재신청': return 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300';
+      case '주문중': return 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300';
+      case '입고완료': return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  const statusBorderColor = (s: string) => {
+    switch (s) {
+      case '교재신청': return 'border-l-orange-400';
+      case '주문중': return 'border-l-sky-400';
+      case '입고완료': return 'border-l-emerald-400';
+      default: return '';
+    }
+  };
+
+  // Stats
+  const statCounts = useMemo(() => {
+    const counts = { '교재신청': 0, '주문중': 0, '입고완료': 0 };
+    orders.forEach(o => {
+      const s = normalizeStatus(o.status);
+      if (s in counts) counts[s as keyof typeof counts]++;
+    });
+    return counts;
+  }, [orders]);
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">교재를 신청하고 입고 상태를 관리합니다.</p>
+        <p className="text-sm text-muted-foreground">교재 신청 → 주문 중 → 입고 완료 순서로 관리합니다.</p>
         <div className="flex items-center gap-2">
           <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileImport} />
           <Button size="sm" variant="outline" className="gap-1.5" onClick={handleDownloadTemplate}>
@@ -395,7 +530,7 @@ export function TextbookOrderTab() {
             <SelectTrigger className="w-full sm:w-[110px]"><SelectValue placeholder="과목" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 과목</SelectItem>
-              {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterGrade} onValueChange={setFilterGrade}>
@@ -416,8 +551,7 @@ export function TextbookOrderTab() {
             <SelectTrigger className="w-full sm:w-[120px]"><SelectValue placeholder="상태" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 상태</SelectItem>
-              <SelectItem value="신청">입고 대기</SelectItem>
-              <SelectItem value="입고완료">입고 완료</SelectItem>
+              {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
           {hasActiveFilters && (
@@ -429,113 +563,165 @@ export function TextbookOrderTab() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4 text-center cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setFilterStatus(filterStatus === '신청' ? 'all' : '신청')}>
-          <p className="text-2xl font-bold text-foreground">{pending.length}</p>
-          <p className="text-xs text-muted-foreground mt-1">입고 대기</p>
-        </Card>
-        <Card className="p-4 text-center cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setFilterStatus(filterStatus === '입고완료' ? 'all' : '입고완료')}>
-          <p className="text-2xl font-bold text-foreground">{completed.length}</p>
-          <p className="text-xs text-muted-foreground mt-1">입고 완료</p>
-        </Card>
+      <div className="grid grid-cols-3 gap-3">
+        {ORDER_STATUSES.map(s => (
+          <Card
+            key={s}
+            className={cn(
+              "p-4 text-center cursor-pointer hover:bg-muted/50 transition-colors",
+              filterStatus === s && "ring-2 ring-primary"
+            )}
+            onClick={() => setFilterStatus(filterStatus === s ? 'all' : s)}
+          >
+            <p className="text-2xl font-bold text-foreground">{statCounts[s]}</p>
+            <p className="text-xs text-muted-foreground mt-1">{s}</p>
+          </Card>
+        ))}
       </div>
 
-      {/* Pending orders */}
-      {pending.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5"><Package className="w-4 h-4" />입고 대기</h3>
-          <div className="space-y-2">
-            {pending.map(order => (
-              <Card key={order.id} className="p-4 border-l-4 border-l-warning">
+      {/* Grouped order list */}
+      <div className="space-y-3">
+        {filteredGroups.length === 0 && (
+          <p className="text-center text-sm text-muted-foreground py-12">
+            {hasActiveFilters ? '검색 결과가 없습니다' : '등록된 교재 신청이 없습니다'}
+          </p>
+        )}
+        {filteredGroups.map(group => {
+          const groupKey = `${group.textbook_name}||${group.subject}||${group.unit_price}`;
+          const isExpanded = expandedGroups.has(groupKey);
+          const hasMultipleOrders = group.orders.length > 1;
+          const remaining = group.totalQty - group.totalDistributed;
+
+          return (
+            <Card
+              key={groupKey}
+              className={cn(
+                "border-l-4 transition-colors",
+                statusBorderColor(group.status)
+              )}
+            >
+              {/* Group header */}
+              <div
+                className={cn("p-4 cursor-pointer hover:bg-muted/30", hasMultipleOrders && "select-none")}
+                onClick={() => hasMultipleOrders && toggleGroup(groupKey)}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-foreground">{order.textbook_name}</p>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${subjectColor(order.subject)}`}>{order.subject}</span>
-                      {order.grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{order.grade}</Badge>}
-                      {order.category && order.category !== '기타' && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{order.category}</Badge>}
+                      {hasMultipleOrders && (
+                        isExpanded
+                          ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                          : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      )}
+                      <p className="font-medium text-foreground">{group.textbook_name}</p>
+                      <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium", subjectColor(group.subject))}>{group.subject}</span>
+                      {group.grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{group.grade}</Badge>}
+                      {group.category && group.category !== '기타' && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{group.category}</Badge>}
+                      <Badge className={cn("text-[10px]", statusColor(group.status))}>{group.status}</Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {order.quantity}권 × {order.unit_price.toLocaleString()}원 = <span className="font-medium text-foreground">{(order.quantity * order.unit_price).toLocaleString()}원</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      신청: {order.requested_by_name} · {format(new Date(order.created_at), 'MM/dd HH:mm')}
-                    </p>
-                    {order.notes && <p className="text-xs text-muted-foreground mt-0.5">📝 {order.notes}</p>}
+                    <div className="flex items-center gap-4 mt-1.5 text-sm text-muted-foreground">
+                      <span>
+                        총 <span className="font-semibold text-foreground">{group.totalQty}권</span>
+                        {' × '}{group.unit_price.toLocaleString()}원
+                        {' = '}<span className="font-medium text-foreground">{(group.totalQty * group.unit_price).toLocaleString()}원</span>
+                      </span>
+                      {hasMultipleOrders && (
+                        <span className="flex items-center gap-1 text-xs">
+                          <Users className="w-3 h-3" />{group.orders.length}명 신청
+                        </span>
+                      )}
+                      {group.status === '입고완료' && (
+                        <span className="text-xs">
+                          배부 {group.totalDistributed}권 · <span className={cn("font-medium", remaining <= 0 ? 'text-destructive' : 'text-foreground')}>남은 {remaining}권</span>
+                        </span>
+                      )}
+                    </div>
+                    {/* Show teacher breakdown summary when collapsed and multi-order */}
+                    {hasMultipleOrders && !isExpanded && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+                        {group.orders.map(o => (
+                          <span key={o.id}>{o.requested_by_name} {o.quantity}권</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(order)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    {role === 'admin' && (
+                    {/* Status change buttons - admin only */}
+                    {role === 'admin' && group.status !== '입고완료' && (
                       <>
-                        <Button size="sm" variant="default" className="gap-1" onClick={() => handleApprove(order)}>
-                          <PackageCheck className="w-3.5 h-3.5" />입고
+                        {group.status === '교재신청' && (
+                          <Button size="sm" variant="outline" className="gap-1 text-sky-600 border-sky-200 hover:bg-sky-50 text-xs" onClick={(e) => { e.stopPropagation(); handleBulkStatusChange(group.orders.map(o => o.id), '주문중'); }}>
+                            <ShoppingCart className="w-3.5 h-3.5" />주문중
+                          </Button>
+                        )}
+                        {(group.status === '교재신청' || group.status === '주문중') && (
+                          <Button size="sm" variant="default" className="gap-1 text-xs" onClick={(e) => { e.stopPropagation(); handleBulkStatusChange(group.orders.map(o => o.id), '입고완료'); }}>
+                            <PackageCheck className="w-3.5 h-3.5" />입고완료
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {!hasMultipleOrders && (
+                      <>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); openEdit(group.orders[0]); }}>
+                          <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDelete(order.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {role === 'admin' && (
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(group.orders[0].id); }}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </>
                     )}
                   </div>
                 </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+              </div>
 
-      {/* Completed orders */}
-      {completed.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5"><PackageCheck className="w-4 h-4" />입고 완료</h3>
-          <div className="space-y-2">
-            {completed.map(order => (
-              <Card key={order.id} className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-foreground">{order.textbook_name}</p>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${subjectColor(order.subject)}`}>{order.subject}</span>
-                      {order.grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{order.grade}</Badge>}
-                      {order.category && order.category !== '기타' && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{order.category}</Badge>}
-                      <Badge variant="success" className="text-[10px]">입고완료</Badge>
+              {/* Expanded: per-teacher breakdown */}
+              {isExpanded && hasMultipleOrders && (
+                <div className="border-t border-border px-4 pb-4 pt-2 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">선생님별 신청 내역</p>
+                  {group.orders.map(order => (
+                    <div key={order.id} className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/30 hover:bg-muted/50">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">{order.requested_by_name}</span>
+                          <span className="text-sm text-muted-foreground">{order.quantity}권</span>
+                          <Badge className={cn("text-[9px]", statusColor(normalizeStatus(order.status)))}>{normalizeStatus(order.status)}</Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {format(new Date(order.created_at), 'MM/dd HH:mm')}
+                          {order.notes && <span className="ml-2">📝 {order.notes}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {role === 'admin' && normalizeStatus(order.status) === '교재신청' && (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-sky-600" onClick={() => handleStatusChange(order, '주문중')}>
+                            주문중
+                          </Button>
+                        )}
+                        {role === 'admin' && normalizeStatus(order.status) !== '입고완료' && (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-emerald-600" onClick={() => handleStatusChange(order, '입고완료')}>
+                            입고
+                          </Button>
+                        )}
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(order)}>
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        {role === 'admin' && (
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleDelete(order.id)}>
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      입고 {order.quantity}권 × {order.unit_price.toLocaleString()}원
-                      {' · '}배부 {order.distributed_qty || 0}권
-                      {' · '}
-                      <span className={`font-medium ${(order.quantity - (order.distributed_qty || 0)) <= 0 ? 'text-destructive' : 'text-foreground'}`}>
-                        남은 {order.quantity - (order.distributed_qty || 0)}권
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      신청: {order.requested_by_name} · 입고: {order.approved_by_name} ({order.approved_at && format(new Date(order.approved_at), 'MM/dd')})
-                    </p>
-                    {order.notes && <p className="text-xs text-muted-foreground mt-0.5">📝 {order.notes}</p>}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(order)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    {role === 'admin' && (
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDelete(order.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {filteredOrders.length === 0 && (
-        <p className="text-center text-sm text-muted-foreground py-12">
-          {hasActiveFilters ? '검색 결과가 없습니다' : '등록된 교재 신청이 없습니다'}
-        </p>
-      )}
+              )}
+            </Card>
+          );
+        })}
+      </div>
 
       {/* Edit Dialog */}
       <Dialog open={!!editOrder} onOpenChange={open => { if (!open) setEditOrder(null); }}>

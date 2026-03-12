@@ -711,14 +711,12 @@ export default function Lessons() {
   }
 
   function handleEdit(lesson: LessonRecord) {
-    const canEditDirectly = isTeacher && lesson.teacher_id === user?.id;
-    const mode = canEditDirectly || isAdmin ? 'edit' : 'view';
     openModal({
       student_id: lesson.student_id,
       class_id: lesson.class_id || '',
       subject: lesson.subject,
       lesson_date: lesson.lesson_date,
-    }, lesson.id, mode);
+    }, lesson.id, 'edit');
   }
 
   async function handleDelete(id: string) {
@@ -789,11 +787,6 @@ export default function Lessons() {
 
   return (
     <div className="space-y-6">
-      {/* Visible marker for debugging - now uses shared form */}
-      <div className="text-xs text-muted-foreground text-center bg-muted/30 py-1 rounded">
-        LESSONS-PAGE-V2 (uses LESSON-SHARED-FORM-V1) | LESSONS-CREATE-CLICKABLE-V1
-      </div>
-
       {loadError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -801,31 +794,26 @@ export default function Lessons() {
         </Alert>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">수업 관리</h1>
-        </div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-foreground">수업 관리</h1>
       </div>
 
       <Tabs defaultValue="lessons" className="w-full">
-        <TabsList>
-          <TabsTrigger value="lessons">수업 기록</TabsTrigger>
-          {(isAdmin || isTeacher || isAssistant) && (
-            <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
-          )}
-        </TabsList>
-
-        <TabsContent value="lessons" className="space-y-6 mt-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between mb-4">
+          <TabsList>
+            <TabsTrigger value="lessons">수업 기록</TabsTrigger>
+            {(isAdmin || isTeacher || isAssistant) && (
+              <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
+            )}
+          </TabsList>
           {canManage && (
-            <Button 
-              onClick={handleOpenNewForm}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              + 수업기록 생성
+            <Button onClick={handleOpenNewForm} size="sm" className="gap-1.5">
+              <Plus className="w-4 h-4" />수업기록 생성
             </Button>
           )}
         </div>
+
+        <TabsContent value="lessons" className="space-y-6">
 
       {/* LessonModal - only render when open to prevent backdrop blocking clicks */}
       {isModalOpen && (
@@ -925,7 +913,6 @@ export default function Lessons() {
           <div className="flex items-center gap-2 mb-3">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">필터</span>
-            <div className="text-xs text-muted-foreground">LESSONS-FILTER-V1</div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1093,20 +1080,22 @@ export default function Lessons() {
                         <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="sm"
+                            className="h-7 px-2 text-xs gap-1"
                             onClick={() => handleView(lesson)}
                             title="조회"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />보기
                           </Button>
-                          {isTeacher && lesson.teacher_id === user?.id && (
+                          {(isAdmin || (isTeacher && lesson.teacher_id === user?.id)) && (
                             <Button
                               variant="ghost"
-                              size="icon"
+                              size="sm"
+                              className="h-7 px-2 text-xs gap-1 text-primary"
                               onClick={() => handleEdit(lesson)}
                               title="수정"
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Edit2 className="w-3.5 h-3.5" />수정
                             </Button>
                           )}
                           {canManage && (
@@ -1114,10 +1103,10 @@ export default function Lessons() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDelete(lesson.id)}
-                              className="text-destructive hover:text-destructive"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
                               title="삭제"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           )}
                         </div>
