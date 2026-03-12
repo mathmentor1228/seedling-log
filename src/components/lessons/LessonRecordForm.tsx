@@ -918,6 +918,40 @@ export function LessonRecordForm({
         }
       }
 
+      // MULTI-HW-V1: Fetch ALL unchecked homeworks for this student+subject (includes carry-forwards)
+      const { data: allUncheckedHw } = await supabase
+        .from('homework_assignments')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('subject', subject as SubjectType)
+        .eq('check_status', 'unchecked')
+        .lte('assigned_date', currentDate)
+        .not('content', 'eq', '')
+        .order('assigned_date', { ascending: false });
+
+      const allUncheckedList = (allUncheckedHw || []) as HomeworkAssignment[];
+
+      // Also fetch checker names for any checked items in allPreviousHomeworks context
+      // Fetch all unchecked + the lesson-linked homework (which may already be checked)
+      let allHwItems: HomeworkAssignment[] = [...allUncheckedList];
+      
+      // Add the lesson-linked homework if it's checked (already handled above) and not in the unchecked list
+      if (homeworkData && homeworkData.check_status === 'checked') {
+        if (!allHwItems.find(h => h.id === homeworkData!.id)) {
+          allHwItems.push(homeworkData);
+        }
+      }
+
+      // Deduplicate
+      const seenIds = new Set<string>();
+      allHwItems = allHwItems.filter(h => {
+        if (seenIds.has(h.id)) return false;
+        seenIds.add(h.id);
+        return true;
+      });
+
+      setAllPreviousHomeworks(allHwItems);
+
       const totalRows = lessonData?.length || 0;
       if (validLesson) {
         setPreviousLesson(validLesson);
@@ -986,6 +1020,7 @@ export function LessonRecordForm({
       } else {
         setPreviousLesson(null);
         setPreviousLessonHomework(null);
+        setAllPreviousHomeworks(allUncheckedList); // Still show unchecked homeworks even without previous lesson
         setPrevHwDebugInfo({ rows: totalRows, found: false, srcDate: '-', srcTeacher: '-' });
       }
     } catch (error) {
