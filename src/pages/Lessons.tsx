@@ -915,7 +915,6 @@ export default function Lessons() {
           <div className="flex items-center gap-2 mb-3">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">필터</span>
-            <div className="text-xs text-muted-foreground">LESSONS-FILTER-V1</div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
