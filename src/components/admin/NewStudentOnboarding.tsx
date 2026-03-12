@@ -58,21 +58,23 @@ ${name}은 *월 *일 (*)부터
 }
 
 function buildChannelGuideMsg(student: NewStudent): string {
-  const parentLabel = student.parent_name ? `${student.parent_name}` : '**';
+  const parentLabel = student.parent_name || '';
   const name = student.name || '***';
-  return `안녕하세요. ${name} ${parentLabel}어머님, 멘토입니다 ^^ 앞으로는 아이 학습에 대한 직접적인 소통 창구 안내드립니다.  아래 주소 클릭하시고 '${name} 학부모입니다' 라고, 메시지'를 보내주시면 감사하겠습니다.
+  const greeting = parentLabel ? `${name} ${parentLabel}어머님` : `${name} 어머님`;
+  return `안녕하세요. ${greeting}, 멘토입니다 ^^ 앞으로는 아이 학습에 대한 직접적인 소통 창구 안내드립니다.  아래 주소 클릭하시고 '${name} 학부모입니다' 라고, 메시지'를 보내주시면 감사하겠습니다.
 
 http://pf.kakao.com/_ScZhb 채널추가하기.
 원활한 학습을 위해 바로 추가 부탁드립니다.`;
 }
 
 function buildWebappGuideMsg(student: NewStudent): string {
-  const parentLabel = student.parent_name ? `${student.parent_name}` : '**';
+  const parentLabel = student.parent_name || '';
   const name = student.name || '***';
   const parentUrl = student.parent_token
     ? `https://seedling-log.lovable.app/parent?token=${student.parent_token}`
     : '(학부모 링크 미생성)';
-  return `안녕하세요 ${name} ${parentLabel}어머님, 
+  const greeting = parentLabel ? `${name} ${parentLabel}어머님` : `${name} 어머님`;
+  return `안녕하세요 ${greeting}, 
 ${name} 실시간 및 주간학습상황을 좀 더 직관적으로 받아보실 수 있도록원내 시스템을 안내드립니다.
 
 ${parentUrl}
@@ -143,7 +145,8 @@ export function NewStudentOnboarding() {
       } as any, { onConflict: 'student_id,check_key' });
 
     if (error) {
-      toast.error('저장 실패');
+      console.error('Onboarding check error:', error);
+      toast.error('저장 실패: ' + error.message);
       fetchData();
     }
   };
@@ -238,7 +241,7 @@ export function NewStudentOnboarding() {
                           <Checkbox
                             checked={checked}
                             onCheckedChange={() => handleToggle(student.id, item.key, checked)}
-                            className="h-3.5 w-3.5"
+                            className="h-4 w-4 cursor-pointer"
                           />
                           <span className={`flex-1 ${checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                             {item.icon} {item.label}
