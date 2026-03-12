@@ -239,8 +239,8 @@ export function NewStudentOnboarding() {
                         >
                           <Checkbox
                             checked={checked}
-                            onCheckedChange={() => handleToggle(student.id, item.key, checked)}
-                            className="h-3.5 w-3.5"
+                            onCheckedChange={(e) => { e && typeof e === 'boolean' ? handleToggle(student.id, item.key, checked) : handleToggle(student.id, item.key, checked); }}
+                            className="h-4 w-4 cursor-pointer"
                           />
                           <span className={`flex-1 ${checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                             {item.icon} {item.label}
