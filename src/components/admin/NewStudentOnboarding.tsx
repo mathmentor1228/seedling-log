@@ -180,63 +180,74 @@ export function NewStudentOnboarding() {
   ).length;
 
   return (
-    <Card className="border-primary/20 bg-primary/[0.02]">
+    <Card className="border-primary/15 shadow-sm">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors py-3 px-4">
+          <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors py-3.5 px-5">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-primary" />
-                신규 등록 안내 체크리스트
-                <Badge variant="secondary" className="text-xs">
-                  최근 1개월 · {students.length}명
-                </Badge>
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10">
+                  <UserPlus className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-semibold">신규 등록 안내</CardTitle>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">최근 1개월 · {students.length}명</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
                 {completedCount === students.length && students.length > 0 && (
-                  <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> 전원 완료
+                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] gap-1 font-medium">
+                    <CheckCircle2 className="w-3 h-3" /> 완료
                   </Badge>
                 )}
-              </CardTitle>
-              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+                {completedCount < students.length && (
+                  <Badge variant="secondary" className="text-[10px] font-medium">
+                    {completedCount}/{students.length}
+                  </Badge>
+                )}
+                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+              </div>
             </div>
           </CardHeader>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className="px-4 pb-4 pt-0 space-y-3">
+          <CardContent className="px-5 pb-5 pt-0 space-y-2.5">
             {students.map(student => {
               const allDone = CHECKLIST_ITEMS.every(item => isChecked(student.id, item.key));
               const doneCount = CHECKLIST_ITEMS.filter(item => isChecked(student.id, item.key)).length;
+              const progress = (doneCount / CHECKLIST_ITEMS.length) * 100;
               return (
                 <div
                   key={student.id}
-                  className={`rounded-lg border p-3 space-y-2 transition-colors ${allDone ? 'bg-green-500/5 border-green-500/20' : 'bg-card border-border'}`}
+                  className={`rounded-xl border p-3.5 space-y-2.5 transition-all ${allDone ? 'bg-emerald-500/[0.03] border-emerald-500/15' : 'bg-card border-border/60'}`}
                 >
                   {/* Student header */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm">{student.name}</span>
+                      <div className={`w-1.5 h-1.5 rounded-full ${allDone ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                      <span className="font-semibold text-sm text-foreground">{student.name}</span>
                       {student.grade && (
-                        <Badge variant="outline" className="text-[10px]">{student.grade}</Badge>
+                        <Badge variant="outline" className="text-[10px] font-normal border-border/50">{student.grade}</Badge>
                       )}
                       {student.parent_name && (
-                        <span className="text-xs text-muted-foreground">({student.parent_name})</span>
+                        <span className="text-[11px] text-muted-foreground">({student.parent_name})</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground">
-                        등록 {format(new Date(student.created_at), 'M/d')}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] ${allDone ? 'bg-green-500/15 text-green-600 border-green-500/30' : 'text-muted-foreground'}`}
-                      >
-                        {doneCount}/{CHECKLIST_ITEMS.length}
-                      </Badge>
-                    </div>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      {format(new Date(student.created_at), 'M/d')} 등록
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${allDone ? 'bg-emerald-500' : 'bg-primary/60'}`}
+                      style={{ width: `${progress}%` }}
+                    />
                   </div>
 
                   {/* Checklist items */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                     {CHECKLIST_ITEMS.map(item => {
                       const checked = isChecked(student.id, item.key);
                       const checkInfo = getCheckInfo(student.id, item.key);
@@ -244,18 +255,22 @@ export function NewStudentOnboarding() {
                       return (
                         <div
                           key={item.key}
-                          className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors ${checked ? 'bg-green-500/10' : 'bg-muted/30'}`}
+                          className={`group flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs transition-all ${
+                            checked
+                              ? 'bg-emerald-500/[0.06]'
+                              : 'bg-muted/20 hover:bg-muted/40'
+                          }`}
                         >
                           <Checkbox
                             checked={checked}
                             onCheckedChange={() => handleToggle(student.id, item.key, checked)}
-                            className="h-4 w-4 cursor-pointer"
+                            className="h-4 w-4 cursor-pointer shrink-0"
                           />
-                          <span className={`flex-1 ${checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                          <span className={`flex-1 min-w-0 truncate ${checked ? 'line-through text-muted-foreground/70' : 'text-foreground'}`}>
                             {item.icon} {item.label}
                           </span>
                           {checked && checkInfo?.checked_at && (
-                            <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                            <span className="text-[9px] text-muted-foreground/60 whitespace-nowrap shrink-0">
                               {checkInfo.checked_by_name || ''} {format(new Date(checkInfo.checked_at), 'M/d HH:mm')}
                             </span>
                           )}
@@ -263,11 +278,10 @@ export function NewStudentOnboarding() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-5 px-1.5 text-[10px] gap-0.5 text-primary hover:text-primary"
+                              className="h-5 px-1.5 text-[10px] gap-0.5 text-primary/70 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                               onClick={() => handleCopy(getMessageForKey(item.key, student), item.label)}
                             >
                               <Copy className="w-3 h-3" />
-                              복사
                             </Button>
                           )}
                         </div>
