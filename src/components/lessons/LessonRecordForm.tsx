@@ -2271,12 +2271,15 @@ export function LessonRecordForm({
             </Button>
           )}
         </div>
-        <Textarea
-          placeholder="오늘 배정할 숙제 내용"
-          value={newHomeworkContent}
-          onChange={(e) => setNewHomeworkContent(e.target.value)}
-          rows={3}
-        />
+        <div className="p-4">
+          <Textarea
+            placeholder="오늘 배정할 숙제 내용"
+            value={newHomeworkContent}
+            onChange={(e) => setNewHomeworkContent(e.target.value)}
+            rows={3}
+            className="text-sm"
+          />
+        </div>
       </div>
 
       {/* Test section */}
