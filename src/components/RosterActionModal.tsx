@@ -40,7 +40,9 @@ import {
   AlertTriangle,
   Camera,
   Mic,
-  X
+  X,
+  PackageX,
+  Frown,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
