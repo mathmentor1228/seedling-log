@@ -1755,19 +1755,20 @@ export function LessonRecordForm({
                         </div>
                       ) : (
                         <div className="space-y-2.5 pt-2.5 border-t border-border/40">
-                          <Label className="text-sm">숙제상태 확인</Label>
-                          <div className="flex flex-wrap gap-2">
+                          <span className="text-xs font-medium text-muted-foreground">숙제상태 확인</span>
+                          <div className="flex flex-wrap gap-1.5">
                             {HOMEWORK_RESULT_OPTIONS.map((opt) => {
                               const Icon = opt.icon;
+                              const isSelected = (homeworkCheckResults[hwItem.id] || '') === opt.value;
                               return (
-                                <Button key={opt.value} type="button" variant={(homeworkCheckResults[hwItem.id] || '') === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setHomeworkCheckResults(prev => ({ ...prev, [hwItem.id]: opt.value }))} className="gap-1">
-                                  <Icon className="w-4 h-4" />
+                                <Button key={opt.value} type="button" variant={isSelected ? 'default' : 'outline'} size="sm" onClick={() => setHomeworkCheckResults(prev => ({ ...prev, [hwItem.id]: opt.value }))} className={`gap-1 h-7 text-xs px-2.5 ${!isSelected ? 'border-border/60' : ''}`}>
+                                  <Icon className="w-3.5 h-3.5" />
                                   {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
                                 </Button>
                               );
                             })}
                           </div>
-                          <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotesMap[hwItem.id] || ''} onChange={(e) => setHomeworkCheckNotesMap(prev => ({ ...prev, [hwItem.id]: e.target.value }))} rows={2} className="text-sm" />
+                          <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotesMap[hwItem.id] || ''} onChange={(e) => setHomeworkCheckNotesMap(prev => ({ ...prev, [hwItem.id]: e.target.value }))} rows={2} className="text-xs" />
                           <div className="flex gap-2">
                             <Button type="button" size="sm" onClick={() => handleSaveHomeworkCheckForItem(hwItem, homeworkCheckResults[hwItem.id] || '', homeworkCheckNotesMap[hwItem.id] || '')} disabled={!homeworkCheckResults[hwItem.id] || isSavingHomeworkCheck}>
                               {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
