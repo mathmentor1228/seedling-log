@@ -1664,12 +1664,13 @@ export function LessonRecordForm({
 
       {/* Previous lesson detail section */}
       {formData.student_id && formData.subject && (
-        <div className="p-4 rounded-lg border-2 border-blue-500/30 bg-blue-500/5 space-y-4">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-blue-600" />
-            <Label className="text-base font-semibold text-blue-700">지난 수업</Label>
-            {loadingPreviousLesson && <Loader2 className="w-4 h-4 animate-spin" />}
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 bg-primary/5 border-b border-border/50">
+            <ClipboardList className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-primary">지난 수업</span>
+            {loadingPreviousLesson && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
           </div>
+          <div className="p-4 space-y-4">
 
           {loadingPreviousLesson ? (
             <div className="text-sm text-muted-foreground">불러오는 중...</div>
