@@ -106,7 +106,7 @@ export function NewStudentOnboarding() {
         .order('created_at', { ascending: false }),
       supabase
         .from('student_onboarding_checks')
-        .select('student_id, check_key, checked'),
+        .select('student_id, check_key, checked, checked_at, checked_by_name'),
     ]);
 
     if (studentsRes.data) setStudents(studentsRes.data);
