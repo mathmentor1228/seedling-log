@@ -24,6 +24,8 @@ interface OnboardingCheck {
   student_id: string;
   check_key: string;
   checked: boolean;
+  checked_at: string | null;
+  checked_by_name: string | null;
 }
 
 const CHECKLIST_ITEMS = [
