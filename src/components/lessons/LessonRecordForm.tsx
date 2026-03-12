@@ -1630,7 +1630,20 @@ export function LessonRecordForm({
         )}
       </div>
 
-      {/* Previous lesson section - PREV_HW_CHAIN_V2: Now chains by student+subject only */}
+        {/* Previous lesson summary (compact, inside sticky) */}
+        {formData.student_id && formData.subject && !loadingPreviousLesson && previousLesson && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
+            <ClipboardList className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="font-medium text-blue-700">지난수업:</span>
+            <span>{format(new Date(previousLesson.lesson_date), 'MM/dd')}</span>
+            <span className="mx-0.5">|</span>
+            <span className="font-medium text-foreground truncate">{previousLesson.lesson_range}</span>
+          </div>
+        )}
+      </div>
+      {/* END STICKY-HEADER-V1 */}
+
+      {/* Previous lesson detail section */}
       {formData.student_id && formData.subject && (
         <div className="p-4 rounded-lg border-2 border-blue-500/30 bg-blue-500/5 space-y-4">
           <div className="flex items-center gap-2">
