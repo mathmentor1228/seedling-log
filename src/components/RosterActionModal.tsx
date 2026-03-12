@@ -393,7 +393,9 @@ export function RosterActionModal({
       case 'completed': return 'completed';
       case 'partial': return 'partial';
       case 'not_done': return 'not_done';
-      case 'unable_to_verify': return 'none_assigned'; // Fallback - unable to verify means we can't determine
+      case 'lost': return 'not_done';
+      case 'low_effort': return 'not_done';
+      case 'unable_to_verify': return 'none_assigned';
       default: return 'none_assigned';
     }
   };
