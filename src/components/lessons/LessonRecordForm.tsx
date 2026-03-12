@@ -1692,17 +1692,18 @@ export function LessonRecordForm({
                     </Badge>
                   )}
                   {allPreviousHomeworks.map((hwItem, hwIdx) => (
-                    <div key={hwItem.id} className="p-3 bg-background rounded-lg border space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">
+                    <div key={hwItem.id} className="rounded-lg border border-border/60 bg-secondary/20 overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-secondary/40">
+                        <span className="text-xs font-semibold text-foreground/80">
                           {allPreviousHomeworks.length > 1 ? `숙제 ${hwIdx + 1}` : '지난숙제'}
-                          <span className="text-xs text-muted-foreground ml-2">({hwItem.assigned_date})</span>
-                        </Label>
+                          <span className="text-muted-foreground font-normal ml-1.5">{hwItem.assigned_date}</span>
+                        </span>
                         {hwItem.check_status === 'checked' && (
-                          <Badge variant="secondary" className="text-xs">확인됨</Badge>
+                          <Badge variant="secondary" className="text-[10px] h-5">확인됨</Badge>
                         )}
                       </div>
-                      <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{hwItem.content}</p>
+                      <div className="p-3 space-y-3">
+                      <p className="text-sm whitespace-pre-wrap bg-background/80 p-2.5 rounded-md border border-border/30 leading-relaxed">{hwItem.content}</p>
 
                       {/* Submission display */}
                       {(() => {
