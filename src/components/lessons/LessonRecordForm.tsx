@@ -1793,6 +1793,7 @@ export function LessonRecordForm({
                           </div>
                         </div>
                       )}
+                      </div>
                     </div>
                   ))}
                 </div>
