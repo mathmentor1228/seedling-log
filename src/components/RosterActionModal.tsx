@@ -511,7 +511,7 @@ export function RosterActionModal({
         if (homeworkCheckResult === 'completed') {
           const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
           awardedPoints = hasPhotoSubmission ? 10 : 5;
-        } else if (homeworkCheckResult === 'not_done') {
+        } else if (homeworkCheckResult === 'not_done' || homeworkCheckResult === 'lost' || homeworkCheckResult === 'low_effort') {
           awardedPoints = -5;
         }
       }
