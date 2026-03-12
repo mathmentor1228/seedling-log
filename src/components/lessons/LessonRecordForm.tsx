@@ -1682,224 +1682,152 @@ export function LessonRecordForm({
                 <span className="font-medium text-foreground">{previousLesson.lesson_range}</span>
               </div>
 
-              {previousLessonHomework && (
-                <div className="p-3 bg-background rounded-lg border space-y-3">
-                  {/* PREV_HW_LINK_V1 debug marker */}
-                  <span className="text-[10px] text-muted-foreground bg-muted px-1 rounded font-mono">
-                    PREV_HW_LINK_V1: subject={formData.subject} found={prevHwDebugInfo.found ? 1 : 0}
-                  </span>
-                  <Label className="text-sm font-medium">지난숙제(자동)</Label>
-                  <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
+              {/* MULTI-HW-V1: Render ALL previous homeworks (unchecked + lesson-linked) */}
+              {allPreviousHomeworks.length > 0 ? (
+                <div className="space-y-3">
+                  {allPreviousHomeworks.filter(h => h.check_status !== 'checked').length > 1 && (
+                    <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-700">
+                      확인할 숙제 {allPreviousHomeworks.filter(h => h.check_status !== 'checked').length}건
+                    </Badge>
+                  )}
+                  {allPreviousHomeworks.map((hwItem, hwIdx) => (
+                    <div key={hwItem.id} className="p-3 bg-background rounded-lg border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">
+                          {allPreviousHomeworks.length > 1 ? `숙제 ${hwIdx + 1}` : '지난숙제'}
+                          <span className="text-xs text-muted-foreground ml-2">({hwItem.assigned_date})</span>
+                        </Label>
+                        {hwItem.check_status === 'checked' && (
+                          <Badge variant="secondary" className="text-xs">확인됨</Badge>
+                        )}
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{hwItem.content}</p>
 
-                  {/* TEACHER-HW-SUBMISSION-VIEW-V2: Student submission display (supports multi-image from homework_assignments) */}
-                  {(() => {
-                    // Get images from homework_assignments.submission_image_url (comma-separated)
-                    const hwImages = previousLessonHomework.submission_image_url
-                      ? previousLessonHomework.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
-                      : [];
-                    // Also check homework_submissions table
-                    const submissionImages = studentSubmission?.image_url
-                      ? studentSubmission.image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
-                      : [];
-                    // Use whichever has more images (prefer direct assignment data)
-                    const allImages = hwImages.length > 0 ? hwImages : submissionImages;
-                    const submittedAt = previousLessonHomework.submitted_at || studentSubmission?.submitted_at;
-                    const submissionNote = previousLessonHomework.submission_text || studentSubmission?.submission_note;
-                    const audioUrl = previousLessonHomework.submission_audio_url || null;
-                    const hasSubmission = allImages.length > 0 || submissionNote || !!audioUrl;
-
-                    if (!hasSubmission) return null;
-
-                    return (
-                      <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Camera className="w-4 h-4 text-primary" />
-                            <span className="text-sm font-medium text-primary">📷/🎤 인증 완료</span>
-                            {submittedAt && (
-                              <span className="text-xs text-muted-foreground">
-                                ({format(new Date(submittedAt), 'MM/dd HH:mm')})
-                              </span>
+                      {/* Submission display */}
+                      {(() => {
+                        const hwImages = hwItem.submission_image_url
+                          ? hwItem.submission_image_url.split(',').map((u: string) => u.trim()).filter(Boolean)
+                          : [];
+                        const submittedAt = hwItem.submitted_at;
+                        const submissionNote = hwItem.submission_text;
+                        const audioUrl = hwItem.submission_audio_url || null;
+                        const hasSubmission = hwImages.length > 0 || submissionNote || !!audioUrl;
+                        if (!hasSubmission) return null;
+                        return (
+                          <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Camera className="w-4 h-4 text-primary" />
+                              <span className="text-sm font-medium text-primary">📷/🎤 인증 완료</span>
+                              {submittedAt && (
+                                <span className="text-xs text-muted-foreground">({format(new Date(submittedAt), 'MM/dd HH:mm')})</span>
+                              )}
+                            </div>
+                            {audioUrl && (
+                              <div className="rounded-md border bg-background p-2">
+                                <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Mic className="w-3 h-3" />음성 제출</p>
+                                <audio controls className="w-full" src={audioUrl} />
+                              </div>
+                            )}
+                            {submissionNote && (
+                              <div className="text-sm text-muted-foreground bg-secondary/30 p-2 rounded">
+                                <span className="font-medium text-xs">학생 메모: </span>{submissionNote}
+                              </div>
+                            )}
+                            {hwImages.length > 0 && (
+                              <div className="flex gap-2 overflow-x-auto pb-1">
+                                {hwImages.slice(0, 4).map((url: string, idx: number) => (
+                                  <div key={idx} className="relative cursor-pointer rounded overflow-hidden border w-20 h-20 flex-shrink-0" onClick={() => setShowSubmissionImageModal(true)}>
+                                    <img src={url} alt={`숙제 인증 ${idx + 1}`} className="w-full h-full object-cover hover:opacity-80 transition-opacity" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
-                          {allImages.length > 0 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowSubmissionImageModal(true)}
-                              className="text-xs gap-1"
-                            >
-                              <Camera className="w-3 h-3" />
-                              사진 보기 ({allImages.length}장)
+                        );
+                      })()}
+
+                      {hwItem.check_status === 'checked' ? (
+                        <div className="text-sm text-muted-foreground flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          <span>확인됨 {hwItem.result && `(${hwItem.result})`}</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Label className="text-sm">숙제상태 확인</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {HOMEWORK_RESULT_OPTIONS.map((opt) => {
+                              const Icon = opt.icon;
+                              return (
+                                <Button key={opt.value} type="button" variant={(homeworkCheckResults[hwItem.id] || '') === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setHomeworkCheckResults(prev => ({ ...prev, [hwItem.id]: opt.value }))} className="gap-1">
+                                  <Icon className="w-4 h-4" />
+                                  {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotesMap[hwItem.id] || ''} onChange={(e) => setHomeworkCheckNotesMap(prev => ({ ...prev, [hwItem.id]: e.target.value }))} rows={2} className="text-sm" />
+                          <div className="flex gap-2">
+                            <Button type="button" size="sm" onClick={() => handleSaveHomeworkCheckForItem(hwItem, homeworkCheckResults[hwItem.id] || '', homeworkCheckNotesMap[hwItem.id] || '')} disabled={!homeworkCheckResults[hwItem.id] || isSavingHomeworkCheck}>
+                              {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                              확인 저장
                             </Button>
-                          )}
-                        </div>
-                        {audioUrl && (
-                          <div className="rounded-md border bg-background p-2">
-                            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Mic className="w-3 h-3" />음성 제출</p>
-                            <audio controls className="w-full" src={audioUrl} />
-                          </div>
-                        )}
-                        {submissionNote && (
-                          <div className="text-sm text-muted-foreground bg-secondary/30 p-2 rounded">
-                            <span className="font-medium text-xs">학생 메모: </span>
-                            {submissionNote}
-                          </div>
-                        )}
-                        {allImages.length > 0 && (
-                          <div className="flex gap-2 overflow-x-auto pb-1">
-                            {allImages.slice(0, 4).map((url: string, idx: number) => (
-                              <div
-                                key={idx}
-                                className="relative cursor-pointer rounded overflow-hidden border w-20 h-20 flex-shrink-0"
-                                onClick={() => setShowSubmissionImageModal(true)}
-                              >
-                                <img 
-                                  src={url} 
-                                  alt={`숙제 인증 ${idx + 1}`} 
-                                  className="w-full h-full object-cover hover:opacity-80 transition-opacity"
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                                {idx === 3 && allImages.length > 4 && (
-                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-sm font-bold">
-                                    +{allImages.length - 4}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* TEACHER-HW-SUBMISSION-VIEW-V1: Point history display */}
-                  {pointHistory.length > 0 && (
-                    <div className="p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-1">
-                      <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
-                        <Star className="w-4 h-4" />
-                        포인트 지급 내역
-                      </div>
-                      {pointHistory.map((entry) => (
-                        <div key={entry.id} className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{entry.reason}</span>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              +{entry.points}점
-                            </Badge>
-                            <span className="text-[10px]">
-                              {format(new Date(entry.created_at), 'MM/dd')}
-                            </span>
+                            <Button type="button" size="sm" variant="outline" className="gap-1" disabled={carryForwardLoading} onClick={async () => {
+                              if (!user) return;
+                              setCarryForwardLoading(true);
+                              try {
+                                const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+                                const nextDate = format(tomorrow, 'yyyy-MM-dd');
+                                await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: hwItem.content, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
+                                await supabase.from('homework_assignments').update({ check_status: 'checked', checked_by: user.id, checked_at: new Date().toISOString(), result: '다음시간 검사예정으로 이월' }).eq('id', hwItem.id);
+                                toast({ title: '다음시간으로 이월됨', description: hwItem.content });
+                                if (formData.student_id && formData.subject) { await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date); }
+                              } catch (err: any) { toast({ title: '이월 실패', description: err.message, variant: 'destructive' }); } finally { setCarryForwardLoading(false); }
+                            }}>
+                              {carryForwardLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
+                              다음시간 검사예정
+                            </Button>
                           </div>
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-
+                  ))}
+                </div>
+              ) : previousLessonHomework ? (
+                <div className="p-3 bg-background rounded-lg border space-y-3">
+                  <Label className="text-sm font-medium">지난숙제</Label>
+                  <p className="text-sm whitespace-pre-wrap bg-secondary/30 p-2 rounded">{previousLessonHomework.content}</p>
                   {previousLessonHomework.check_status === 'checked' ? (
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-green-600" />
                       <span>확인됨 {previousLessonHomework.checker_name && `(${previousLessonHomework.checker_name})`}</span>
                     </div>
                   ) : (
-                    // HOMEWORK-STATUS-SINGLE-SOURCE-V2: This is the ONLY homework status control in the shared form
                     <div className="space-y-2 pt-2 border-t">
                       <Label className="text-sm">숙제상태 확인</Label>
                       <div className="flex flex-wrap gap-2">
                         {HOMEWORK_RESULT_OPTIONS.map((opt) => {
                           const Icon = opt.icon;
                           return (
-                            <Button
-                              key={opt.value}
-                              type="button"
-                              variant={homeworkCheckResult === opt.value ? 'default' : 'outline'}
-                              size="sm"
-                              onClick={() => setHomeworkCheckResult(opt.value)}
-                              className="gap-1"
-                            >
+                            <Button key={opt.value} type="button" variant={homeworkCheckResult === opt.value ? 'default' : 'outline'} size="sm" onClick={() => setHomeworkCheckResult(opt.value)} className="gap-1">
                               <Icon className="w-4 h-4" />
                               {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
                             </Button>
                           );
                         })}
                       </div>
-                      <Textarea
-                        placeholder="확인 메모 (선택)"
-                        value={homeworkCheckNotes}
-                        onChange={(e) => setHomeworkCheckNotes(e.target.value)}
-                        rows={2}
-                        className="text-sm"
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handleSaveHomeworkCheck}
-                          disabled={!homeworkCheckResult || isSavingHomeworkCheck}
-                        >
-                          {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
-                          <CheckCircle2 className="w-4 h-4 mr-1" />
-                          확인 저장
-                        </Button>
-                        {/* CARRY-FORWARD-FORM-V1: Carry forward button */}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="gap-1"
-                          disabled={carryForwardLoading}
-                          onClick={async () => {
-                            if (!previousLessonHomework || !user) return;
-                            setCarryForwardLoading(true);
-                            try {
-                              const tomorrow = new Date();
-                              tomorrow.setDate(tomorrow.getDate() + 1);
-                              const nextDate = format(tomorrow, 'yyyy-MM-dd');
-                              
-                              const { error } = await supabase
-                                .from('homework_assignments')
-                                .insert({
-                                  student_id: previousLessonHomework.student_id,
-                                  subject: previousLessonHomework.subject as any,
-                                  content: previousLessonHomework.content,
-                                  assigned_date: nextDate,
-                                  homework_type: 'regular',
-                                  created_by: user.id,
-                                });
-                              if (error) throw error;
-                              
-                              await supabase
-                                .from('homework_assignments')
-                                .update({
-                                  check_status: 'checked',
-                                  checked_by: user.id,
-                                  checked_at: new Date().toISOString(),
-                                  result: '다음시간 검사예정으로 이월',
-                                })
-                                .eq('id', previousLessonHomework.id);
-                              
-                              toast({ title: '다음시간으로 이월됨', description: `${previousLessonHomework.content}` });
-                              if (formData.student_id && formData.subject) {
-                                await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
-                              }
-                            } catch (err: any) {
-                              toast({ title: '이월 실패', description: err.message, variant: 'destructive' });
-                            } finally {
-                              setCarryForwardLoading(false);
-                            }
-                          }}
-                        >
-                          {carryForwardLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
-                          다음시간 검사예정
-                        </Button>
-                      </div>
+                      <Textarea placeholder="확인 메모 (선택)" value={homeworkCheckNotes} onChange={(e) => setHomeworkCheckNotes(e.target.value)} rows={2} className="text-sm" />
+                      <Button type="button" size="sm" onClick={handleSaveHomeworkCheck} disabled={!homeworkCheckResult || isSavingHomeworkCheck}>
+                        {isSavingHomeworkCheck && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                        확인 저장
+                      </Button>
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
-              {/* TEACHER-HW-SUBMISSION-VIEW-V2: Multi-image carousel modal */}
+              {/* Image carousel modal */}
               <Dialog open={showSubmissionImageModal} onOpenChange={setShowSubmissionImageModal}>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
@@ -1918,9 +1846,7 @@ export function LessonRecordForm({
                     const images = hwImages.length > 0 ? hwImages : subImages;
                     const submittedAt = previousLessonHomework?.submitted_at || studentSubmission?.submitted_at;
                     const note = previousLessonHomework?.submission_text || studentSubmission?.submission_note;
-
                     if (images.length === 0) return null;
-
                     return <SubmissionImageCarousel images={images} submittedAt={submittedAt} note={note} />;
                   })()}
                 </DialogContent>
