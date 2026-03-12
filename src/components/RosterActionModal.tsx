@@ -40,7 +40,9 @@ import {
   AlertTriangle,
   Camera,
   Mic,
-  X
+  X,
+  PackageX,
+  Frown,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
@@ -74,7 +76,7 @@ interface HomeworkAssignment {
   content: string;
   assigned_date: string;
   check_status: 'unchecked' | 'checked';
-  result: 'completed' | 'partial' | 'not_done' | 'unable_to_verify' | null;
+  result: 'completed' | 'partial' | 'not_done' | 'lost' | 'low_effort' | 'unable_to_verify' | null;
   notes: string | null;
   checker_name?: string;
   // STUDENT-SUBMISSION-V1: Fields for student submission
@@ -122,6 +124,8 @@ const HOMEWORK_RESULT_OPTIONS = [
   { value: 'completed', label: '완료', icon: CheckCircle2, color: 'text-green-600' },
   { value: 'partial', label: '부분', icon: Clock, color: 'text-amber-600' },
   { value: 'not_done', label: '미완', icon: XCircle, color: 'text-red-600' },
+  { value: 'lost', label: '분실', icon: PackageX, color: 'text-orange-600' },
+  { value: 'low_effort', label: '성의부족', icon: Frown, color: 'text-rose-600' },
   { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle, color: 'text-muted-foreground' },
 ];
 
@@ -389,7 +393,9 @@ export function RosterActionModal({
       case 'completed': return 'completed';
       case 'partial': return 'partial';
       case 'not_done': return 'not_done';
-      case 'unable_to_verify': return 'none_assigned'; // Fallback - unable to verify means we can't determine
+      case 'lost': return 'not_done';
+      case 'low_effort': return 'not_done';
+      case 'unable_to_verify': return 'none_assigned';
       default: return 'none_assigned';
     }
   };
@@ -505,7 +511,7 @@ export function RosterActionModal({
         if (homeworkCheckResult === 'completed') {
           const hasPhotoSubmission = !!(previousHomework.submission_image_url && previousHomework.submitted_at);
           awardedPoints = hasPhotoSubmission ? 10 : 5;
-        } else if (homeworkCheckResult === 'not_done') {
+        } else if (homeworkCheckResult === 'not_done' || homeworkCheckResult === 'lost' || homeworkCheckResult === 'low_effort') {
           awardedPoints = -5;
         }
       }
