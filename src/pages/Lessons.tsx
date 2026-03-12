@@ -711,14 +711,12 @@ export default function Lessons() {
   }
 
   function handleEdit(lesson: LessonRecord) {
-    const canEditDirectly = isTeacher && lesson.teacher_id === user?.id;
-    const mode = canEditDirectly || isAdmin ? 'edit' : 'view';
     openModal({
       student_id: lesson.student_id,
       class_id: lesson.class_id || '',
       subject: lesson.subject,
       lesson_date: lesson.lesson_date,
-    }, lesson.id, mode);
+    }, lesson.id, 'edit');
   }
 
   async function handleDelete(id: string) {
