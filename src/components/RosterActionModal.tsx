@@ -76,7 +76,7 @@ interface HomeworkAssignment {
   content: string;
   assigned_date: string;
   check_status: 'unchecked' | 'checked';
-  result: 'completed' | 'partial' | 'not_done' | 'unable_to_verify' | null;
+  result: 'completed' | 'partial' | 'not_done' | 'lost' | 'low_effort' | 'unable_to_verify' | null;
   notes: string | null;
   checker_name?: string;
   // STUDENT-SUBMISSION-V1: Fields for student submission

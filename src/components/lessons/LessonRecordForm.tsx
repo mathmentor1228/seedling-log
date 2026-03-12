@@ -75,7 +75,7 @@ interface HomeworkAssignment {
   assigned_date: string;
   content: string;
   check_status: 'unchecked' | 'checked';
-  result: 'completed' | 'partial' | 'not_done' | 'unable_to_verify' | null;
+  result: 'completed' | 'partial' | 'not_done' | 'lost' | 'low_effort' | 'unable_to_verify' | null;
   checked_by: string | null;
   checked_at: string | null;
   notes: string | null;
