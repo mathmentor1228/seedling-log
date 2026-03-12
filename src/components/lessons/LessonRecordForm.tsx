@@ -1274,6 +1274,8 @@ export function LessonRecordForm({
       case 'completed': return 'completed';
       case 'partial': return 'partial';
       case 'not_done': return 'not_done';
+      case 'lost': return 'not_done';
+      case 'low_effort': return 'not_done';
       case 'unable_to_verify': return 'none_assigned';
       default: return 'none_assigned';
     }
