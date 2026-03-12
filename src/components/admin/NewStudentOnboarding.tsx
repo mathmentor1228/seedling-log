@@ -239,6 +239,7 @@ export function NewStudentOnboarding() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {CHECKLIST_ITEMS.map(item => {
                       const checked = isChecked(student.id, item.key);
+                      const checkInfo = getCheckInfo(student.id, item.key);
                       const hasTemplate = item.key !== 'channel_confirm';
                       return (
                         <div
@@ -253,6 +254,11 @@ export function NewStudentOnboarding() {
                           <span className={`flex-1 ${checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                             {item.icon} {item.label}
                           </span>
+                          {checked && checkInfo?.checked_at && (
+                            <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                              {checkInfo.checked_by_name || ''} {format(new Date(checkInfo.checked_at), 'M/d HH:mm')}
+                            </span>
+                          )}
                           {hasTemplate && (
                             <Button
                               variant="ghost"
