@@ -1444,29 +1444,20 @@ export function LessonRecordForm({
         </div>
       )}
 
-      {/* Error banner if no students/classes loaded */}
-      {students.length === 0 && classes.length === 0 && (
-        <div className="p-3 bg-destructive/20 text-destructive rounded-lg text-sm font-medium">
-          FORM_LOAD_ERROR: 학생 및 클래스 목록을 불러오지 못했습니다.
-        </div>
-      )}
-
       {/* View mode: re-enable pointer events for edit button */}
       {isViewMode && isAdmin && onRequestEdit && (
         <div className="pointer-events-auto flex justify-end">
-          <Button
-            type="button"
-            variant="default"
-            onClick={onRequestEdit}
-          >
+          <Button type="button" variant="default" onClick={onRequestEdit}>
             <FileEdit className="w-4 h-4 mr-1" />
             편집하기
           </Button>
         </div>
       )}
 
-      {/* Context info header - FORM-SELECTABLE-V1: Use Select for new records */}
-      <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg flex-wrap">
+      {/* STICKY-HEADER-V1: Sticky context header — stays visible while scrolling */}
+      <div className="sticky top-0 z-10 bg-background pb-2 space-y-3">
+        {/* Context info header */}
+        <div className="flex items-center gap-4 p-3 bg-secondary/50 rounded-lg flex-wrap">
         {/* Student field - PREFILL-FIX-V4: Reset prefill keys on student change */}
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">학생:</span>
