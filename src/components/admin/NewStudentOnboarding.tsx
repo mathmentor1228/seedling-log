@@ -145,7 +145,8 @@ export function NewStudentOnboarding() {
       } as any, { onConflict: 'student_id,check_key' });
 
     if (error) {
-      toast.error('저장 실패');
+      console.error('Onboarding check error:', error);
+      toast.error('저장 실패: ' + error.message);
       fetchData();
     }
   };
