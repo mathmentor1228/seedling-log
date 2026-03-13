@@ -114,6 +114,7 @@ export function ExamPrepScheduleManager() {
 
   const [slotAssignments, setSlotAssignments] = useState<Record<string, string[]>>({});
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
+  const [copiedSessionIdx, setCopiedSessionIdx] = useState<number | null>(null);
 
   const studentMap = useMemo(() => students.reduce<Record<string, Student>>((acc, s) => { acc[s.id] = s; return acc; }, {}), [students]);
   const teacherMap = useMemo(() => teachers.reduce<Record<string, string>>((acc, t) => { acc[t.id] = t.full_name; return acc; }, {}), [teachers]);
