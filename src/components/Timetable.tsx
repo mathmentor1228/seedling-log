@@ -584,6 +584,9 @@ export function Timetable() {
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-wrap">
+          {isExamPrep && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">내신특강</span>
+          )}
           <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', SUBJECT_COLORS[row.subject] || 'bg-muted text-muted-foreground')}>
             {row.subject}
           </span>
