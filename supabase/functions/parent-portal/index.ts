@@ -282,6 +282,15 @@ Deno.serve(async (req) => {
         })(),
         unpaid_textbooks: unpaidTextbooks,
         account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,
+        exam_prep_schedules: (examPrepRes.data || []).map((s: any) => ({
+          id: s.id,
+          subject: s.subject,
+          schedule_date: s.schedule_date,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          description: s.description,
+          status: s.status,
+        })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
