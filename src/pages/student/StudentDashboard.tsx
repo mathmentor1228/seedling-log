@@ -29,6 +29,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import StudentWeeklyCalendar from '@/components/student/StudentWeeklyCalendar';
 import { ExamDdayBanner } from '@/components/ExamDdayBanner';
+import { StudentExamPrepSchedule } from '@/components/student/StudentExamPrepSchedule';
 import {
   Collapsible,
   CollapsibleContent,
@@ -367,6 +368,9 @@ export default function StudentDashboard() {
 
       {/* EXAM-DDAY-V1: Exam D-day countdown (filtered by student's school) */}
       <ExamDdayBanner schoolFilter={student?.school || null} />
+
+      {/* Exam Prep Schedule Confirmation */}
+      <StudentExamPrepSchedule />
 
       {/* Points Card */}
       <Card className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0">

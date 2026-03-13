@@ -28,6 +28,7 @@ import VocabTestPage from "./pages/VocabTestPage";
 import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
 import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
 import MathConceptPage from "./pages/MathConceptPage";
+import ExamPrepPage from "./pages/ExamPrepPage";
 import NotFound from "./pages/NotFound";
 import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
@@ -118,6 +119,7 @@ const App = () => (
                 <Route path="/vocab-generator" element={<VocabTestGeneratorPage />} />
                 <Route path="/materials/:subject" element={<SubjectMaterialPage />} />
                 <Route path="/math-concepts" element={<MathConceptPage />} />
+                <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>

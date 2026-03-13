@@ -955,6 +955,77 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'exam_prep_schedules': {
+        const todayStr = getNowKST().toISOString().split('T')[0];
+        const { data: schedData } = await supabase
+          .from('exam_prep_schedules')
+          .select('id, subject, schedule_date, start_time, end_time, description, deadline_date, status, teacher_id')
+          .eq('student_id', student_id)
+          .gte('schedule_date', todayStr)
+          .order('schedule_date')
+          .order('start_time');
+
+        // Fetch teacher names
+        const teacherIds = [...new Set((schedData || []).map((s: any) => s.teacher_id).filter(Boolean))];
+        let teacherMap: Record<string, string> = {};
+        if (teacherIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', teacherIds);
+          if (profiles) {
+            teacherMap = profiles.reduce((acc: Record<string, string>, p: any) => {
+              acc[p.id] = p.full_name;
+              return acc;
+            }, {});
+          }
+        }
+
+        // Auto-confirm overdue pending schedules
+        const nowDate = todayStr;
+        const overdueIds = (schedData || [])
+          .filter((s: any) => s.status === 'pending' && s.deadline_date < nowDate)
+          .map((s: any) => s.id);
+
+        if (overdueIds.length > 0) {
+          await supabase
+            .from('exam_prep_schedules')
+            .update({ status: 'auto_confirmed', confirmed_at: new Date().toISOString() })
+            .in('id', overdueIds);
+        }
+
+        result = (schedData || []).map((s: any) => ({
+          ...s,
+          teacher_name: teacherMap[s.teacher_id] || '미배정',
+          status: (s.status === 'pending' && s.deadline_date < nowDate) ? 'auto_confirmed' : s.status,
+        }));
+        break;
+      }
+
+      case 'confirm_exam_prep': {
+        const { schedule_id } = params;
+        if (!schedule_id) {
+          return new Response(
+            JSON.stringify({ error: 'schedule_id required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateErr } = await supabase
+          .from('exam_prep_schedules')
+          .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+          .eq('id', schedule_id)
+          .eq('student_id', student_id)
+          .eq('status', 'pending');
+
+        if (updateErr) {
+          result = { success: false, error: updateErr.message };
+        } else {
+          result = { success: true };
+        }
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),

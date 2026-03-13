@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     // D-day: no date cap — always show nearest upcoming exam
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url")
@@ -174,6 +174,15 @@ Deno.serve(async (req) => {
         .eq("student_id", studentId)
         .eq("payment_status", "미납")
         .order("created_at", { ascending: false }),
+      // Exam prep confirmed schedules
+      supabase
+        .from("exam_prep_schedules")
+        .select("id, subject, schedule_date, start_time, end_time, description, status")
+        .eq("student_id", studentId)
+        .in("status", ["confirmed", "auto_confirmed"])
+        .gte("schedule_date", todayStr)
+        .order("schedule_date")
+        .order("start_time"),
     ]);
 
     // Fetch class schedules for the student's classes
@@ -273,6 +282,15 @@ Deno.serve(async (req) => {
         })(),
         unpaid_textbooks: unpaidTextbooks,
         account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,
+        exam_prep_schedules: (examPrepRes.data || []).map((s: any) => ({
+          id: s.id,
+          subject: s.subject,
+          schedule_date: s.schedule_date,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          description: s.description,
+          status: s.status,
+        })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
