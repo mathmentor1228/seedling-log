@@ -119,6 +119,7 @@ const App = () => (
                 <Route path="/vocab-generator" element={<VocabTestGeneratorPage />} />
                 <Route path="/materials/:subject" element={<SubjectMaterialPage />} />
                 <Route path="/math-concepts" element={<MathConceptPage />} />
+                <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
