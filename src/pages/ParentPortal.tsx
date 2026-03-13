@@ -909,3 +909,37 @@ function ReportsSection({ reports }: { reports: WeeklyReport[] }) {
     </>
   );
 }
+
+/* ═══════ Exam Prep Parent Section ═══════ */
+function ExamPrepParentSection({ schedules }: { schedules: ExamPrepScheduleItem[] }) {
+  return (
+    <Card className="border-primary/20">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-primary" /> 내신 특강 일정
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <p className="text-xs text-amber-800 leading-relaxed">
+            📌 내신 대비 특강은 원내에서 추가 운영되는 특강으로, 해당 수업 결석 시 별도의 보강은 제공되지 않습니다. 학생이 가급적 참여할 수 있도록 독려 부탁드립니다.
+          </p>
+        </div>
+        {schedules.map(sch => (
+          <div key={sch.id} className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">{sch.subject}</Badge>
+              <span className="text-sm">{fmt(sch.schedule_date)}</span>
+              <span className="text-xs text-muted-foreground font-mono">
+                {sch.start_time.slice(0, 5)}-{sch.end_time.slice(0, 5)}
+              </span>
+            </div>
+            <Badge variant={sch.status === 'confirmed' ? 'default' : 'secondary'} className="text-[10px]">
+              {sch.status === 'confirmed' ? '확인완료' : '확정'}
+            </Badge>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
