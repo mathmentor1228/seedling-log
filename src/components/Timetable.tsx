@@ -569,15 +569,18 @@ export function Timetable() {
   }, [studentScheduleRows]);
 
   // ── Render helpers ──
+  const isExamPrepRow = (row: ScheduleRow) => row.scheduleId.startsWith('exam-');
 
-  const SlotCard = ({ row, showTeacher = false, editable = false }: { row: ScheduleRow; showTeacher?: boolean; editable?: boolean }) => (
+  const SlotCard = ({ row, showTeacher = false, editable = false }: { row: ScheduleRow; showTeacher?: boolean; editable?: boolean }) => {
+    const isExamPrep = isExamPrepRow(row);
+    return (
     <div
       className={cn(
         'border-l-4 rounded-lg bg-card p-3 shadow-sm hover:shadow-md transition-shadow',
-        DAY_ACCENT[row.dayOfWeek],
-        editable && 'cursor-pointer ring-transparent hover:ring-1 hover:ring-primary/30'
+        isExamPrep ? 'border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20' : DAY_ACCENT[row.dayOfWeek],
+        editable && !isExamPrep && 'cursor-pointer ring-transparent hover:ring-1 hover:ring-primary/30'
       )}
-      onClick={editable ? () => { setEditClassId(row.classId); setEditClassName(row.className); } : undefined}
+      onClick={editable && !isExamPrep ? () => { setEditClassId(row.classId); setEditClassName(row.className); } : undefined}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-wrap">
