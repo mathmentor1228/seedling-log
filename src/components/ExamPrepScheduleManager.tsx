@@ -693,6 +693,17 @@ export function ExamPrepScheduleManager() {
                           className="h-7 text-xs w-[160px] bg-background" />
                         {sess.date && <span className="text-[10px] text-muted-foreground">{fmtDate(sess.date)}</span>}
                         <div className="ml-auto flex items-center gap-1">
+                          {/* Copy/Paste buttons */}
+                          <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1" onClick={() => copySessionSlots(si)}
+                            title="이 회차의 시간표 복사">
+                            <Copy className="w-3 h-3" /> 복사
+                          </Button>
+                          {copiedSessionIdx !== null && copiedSessionIdx !== si && (
+                            <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 text-primary" onClick={() => pasteSessionSlots(si)}
+                              title={`${sessions[copiedSessionIdx]?.label}에서 붙여넣기`}>
+                              <ClipboardPaste className="w-3 h-3" /> 붙여넣기
+                            </Button>
+                          )}
                           <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => addSlotToSession(si)}>
                             <Plus className="w-3 h-3 mr-1" /> 시간대
                           </Button>
