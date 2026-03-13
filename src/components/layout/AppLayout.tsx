@@ -45,6 +45,7 @@ interface NavItem {
   adminOnly?: boolean;
   allowedRoles?: ('admin' | 'teacher' | 'assistant')[];
   allowedEmails?: string[];
+  allowedSubjects?: string[];
 }
 
 interface NavGroup {
