@@ -197,7 +197,7 @@ export function RosterActionModal({
       setHomeworkCheckResult('');
       setHomeworkCheckNotes('');
       setHomeworkCheckNote(''); // ASSISTANT-HW-NO-CARRYOVER-V1: Reset assistant note
-      setNewHomeworkContent('');
+      setNewHomeworkItems([{ content: '' }]);
       setTestFormData({
         test_name: '',
         test_result_text: '',
