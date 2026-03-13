@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -15,16 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, AlertTriangle, CalendarCheck, Clock, Users, X, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  Plus, Trash2, AlertTriangle, CalendarCheck, Clock, Users, X,
+  ChevronDown, ChevronUp, ArrowLeft, UserPlus, UserMinus, GripVertical,
+} from 'lucide-react';
 
+// ── Types ──────────────────────────────────────────────
 interface Student {
   id: string;
   name: string;
@@ -33,57 +29,12 @@ interface Student {
   school_level: string | null;
   grade_year: number | null;
 }
+interface Teacher { id: string; full_name: string; }
+interface ClassInfo { class_id: string; student_id: string; subject: string; teacher_id: string | null; }
 
-interface Teacher {
-  id: string;
-  full_name: string;
-}
+interface TimeSlotEntry { id: string; startTime: string; endTime: string; }
+interface SessionEntry { label: string; date: string; slots: TimeSlotEntry[]; }
 
-interface ClassInfo {
-  class_id: string;
-  student_id: string;
-  subject: string;
-  teacher_id: string | null;
-}
-
-interface SessionEntry {
-  label: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-}
-
-interface ExamPrepCourse {
-  id: string;
-  subject: string;
-  teacher_id: string;
-  title: string | null;
-  description: string | null;
-  deadline_date: string;
-  created_at: string;
-  sessions: ExamPrepSession[];
-  enrollments: ExamPrepEnrollment[];
-}
-
-interface ExamPrepSession {
-  id: string;
-  course_id: string;
-  session_number: number;
-  session_label: string;
-  schedule_date: string;
-  start_time: string;
-  end_time: string;
-}
-
-interface ExamPrepEnrollment {
-  id: string;
-  course_id: string;
-  student_id: string;
-  status: string;
-  confirmed_at: string | null;
-}
-
-// Existing class_schedules for conflict detection
 interface ExistingSchedule {
   student_id: string;
   day_of_week: number;
@@ -92,44 +43,70 @@ interface ExistingSchedule {
   class_name: string;
 }
 
-const SUBJECTS = ['수학', '영어', '국어', '과학'];
-const DEFAULT_SESSIONS: SessionEntry[] = [
-  { label: '1회차', date: '', startTime: '', endTime: '' },
-  { label: '2회차', date: '', startTime: '', endTime: '' },
-  { label: '3회차', date: '', startTime: '', endTime: '' },
-  { label: '4회차', date: '', startTime: '', endTime: '' },
-  { label: '직전특강', date: '', startTime: '', endTime: '' },
-];
+// DB types
+interface DbCourse {
+  id: string; subject: string; teacher_id: string; title: string | null;
+  description: string | null; deadline_date: string; created_at: string;
+}
+interface DbSession { id: string; course_id: string; session_number: number; session_label: string; schedule_date: string; start_time: string; end_time: string; }
+interface DbTimeSlot { id: string; session_id: string; start_time: string; end_time: string; slot_order: number; }
+interface DbSlotStudent { id: string; slot_id: string; student_id: string; }
+interface DbEnrollment { id: string; course_id: string; student_id: string; status: string; confirmed_at: string | null; }
 
+interface CourseView extends DbCourse {
+  sessions: (DbSession & { time_slots: (DbTimeSlot & { students: DbSlotStudent[] })[] })[];
+  enrollments: DbEnrollment[];
+}
+
+const SUBJECTS = ['수학', '영어', '국어', '과학'];
+const SCHOOL_LEVEL_ORDER: Record<string, number> = { '초': 1, '중': 2, '고': 3 };
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pending: { label: '미확인', variant: 'destructive' },
   confirmed: { label: '확인완료', variant: 'default' },
   auto_confirmed: { label: '시스템 확정', variant: 'secondary' },
 };
 
-const SCHOOL_LEVEL_ORDER: Record<string, number> = { '초': 1, '중': 2, '고': 3 };
+let _tempId = 0;
+function tempId() { return `temp_${++_tempId}`; }
 
 export function ExamPrepScheduleManager() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [courses, setCourses] = useState<ExamPrepCourse[]>([]);
+
+  // Data
+  const [courses, setCourses] = useState<CourseView[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [classInfos, setClassInfos] = useState<ClassInfo[]>([]);
   const [existingSchedules, setExistingSchedules] = useState<ExistingSchedule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
 
-  // Form state
+  // UI mode
+  const [mode, setMode] = useState<'list' | 'create'>('list');
+  const [step, setStep] = useState(1); // 1: basic info, 2: timetable + assign
+  const [saving, setSaving] = useState(false);
+  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
+
+  // Form - step 1
   const [formSubject, setFormSubject] = useState('수학');
   const [formTeacherId, setFormTeacherId] = useState('');
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formDeadline, setFormDeadline] = useState('');
-  const [sessions, setSessions] = useState<SessionEntry[]>(DEFAULT_SESSIONS.map(s => ({ ...s })));
-  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
+
+  // Form - step 2: sessions with multiple time slots
+  const [sessions, setSessions] = useState<SessionEntry[]>([
+    { label: '1회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+    { label: '2회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+    { label: '3회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+    { label: '4회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+    { label: '직전특강', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+  ]);
+
+  // Slot → student assignments (slotTempId → studentId[])
+  const [slotAssignments, setSlotAssignments] = useState<Record<string, string[]>>({});
+  // Currently "active" student for click-to-assign
+  const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
 
   const studentMap = useMemo(() => students.reduce<Record<string, Student>>((acc, s) => { acc[s.id] = s; return acc; }, {}), [students]);
   const teacherMap = useMemo(() => teachers.reduce<Record<string, string>>((acc, t) => { acc[t.id] = t.full_name; return acc; }, {}), [teachers]);
@@ -142,86 +119,80 @@ export function ExamPrepScheduleManager() {
       supabase.from('students').select('id, name, grade, school, school_level, grade_year').neq('enrollment_status', '퇴원').order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
       supabase.from('class_students').select('class_id, student_id, classes(subject, teacher_id)'),
-      supabase.from('class_schedules').select('class_id, day_of_week, start_time, end_time, is_active, classes(name, subject, teacher_id), class_students(student_id)').eq('is_active', true),
+      supabase.from('class_schedules').select('class_id, day_of_week, start_time, end_time, is_active, classes(name), class_students(student_id)').eq('is_active', true),
     ]);
-
     setStudents(studRes.data || []);
     setTeachers(teachRes.data || []);
-    
-    // Build class info mapping
     const infos: ClassInfo[] = (classStudRes.data || []).map((cs: any) => ({
-      class_id: cs.class_id,
-      student_id: cs.student_id,
-      subject: cs.classes?.subject || '',
-      teacher_id: cs.classes?.teacher_id || null,
+      class_id: cs.class_id, student_id: cs.student_id,
+      subject: cs.classes?.subject || '', teacher_id: cs.classes?.teacher_id || null,
     }));
     setClassInfos(infos);
 
-    // Build existing schedules for conflict detection
     const existingSch: ExistingSchedule[] = [];
     for (const s of (schedRes.data || []) as any[]) {
-      const studentIds = (s.class_students || []).map((cs: any) => cs.student_id);
-      for (const sid of studentIds) {
+      for (const cs of (s.class_students || [])) {
         existingSch.push({
-          student_id: sid,
-          day_of_week: s.day_of_week,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          class_name: s.classes?.name || '수업',
+          student_id: cs.student_id, day_of_week: s.day_of_week,
+          start_time: s.start_time, end_time: s.end_time, class_name: s.classes?.name || '수업',
         });
       }
     }
     setExistingSchedules(existingSch);
-
-    // Fetch courses with sessions and enrollments
     await fetchCourses();
     setLoading(false);
   }
 
   async function fetchCourses() {
-    const { data: coursesData } = await supabase
-      .from('exam_prep_courses')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!coursesData) { setCourses([]); return; }
-
+    const { data: coursesData } = await supabase.from('exam_prep_courses').select('*').order('created_at', { ascending: false });
+    if (!coursesData || coursesData.length === 0) { setCourses([]); return; }
     const courseIds = coursesData.map((c: any) => c.id);
-    if (courseIds.length === 0) { setCourses([]); return; }
 
     const [sessRes, enrRes] = await Promise.all([
       supabase.from('exam_prep_sessions').select('*').in('course_id', courseIds).order('session_number'),
       supabase.from('exam_prep_enrollments').select('*').in('course_id', courseIds),
     ]);
 
-    const sessionsByCourse: Record<string, ExamPrepSession[]> = {};
-    for (const s of (sessRes.data || []) as any[]) {
-      if (!sessionsByCourse[s.course_id]) sessionsByCourse[s.course_id] = [];
-      sessionsByCourse[s.course_id].push(s);
+    const sessionsData = (sessRes.data || []) as any[];
+    const sessionIds = sessionsData.map((s: any) => s.id);
+
+    let slotsData: any[] = [];
+    let slotStudentsData: any[] = [];
+    if (sessionIds.length > 0) {
+      const [slotRes, slotStudRes] = await Promise.all([
+        supabase.from('exam_prep_time_slots').select('*').in('session_id', sessionIds).order('slot_order'),
+        supabase.from('exam_prep_slot_students').select('*'),
+      ]);
+      slotsData = slotRes.data || [];
+      // Filter slot students to only relevant slots
+      const slotIdSet = new Set(slotsData.map((s: any) => s.id));
+      slotStudentsData = (slotStudRes.data || []).filter((ss: any) => slotIdSet.has(ss.slot_id));
     }
 
-    const enrollByCourse: Record<string, ExamPrepEnrollment[]> = {};
-    for (const e of (enrRes.data || []) as any[]) {
-      if (!enrollByCourse[e.course_id]) enrollByCourse[e.course_id] = [];
-      enrollByCourse[e.course_id].push(e);
-    }
-
-    setCourses(coursesData.map((c: any) => ({
-      ...c,
-      sessions: sessionsByCourse[c.id] || [],
-      enrollments: enrollByCourse[c.id] || [],
-    })));
+    setCourses(coursesData.map((c: any) => {
+      const courseSessions = sessionsData.filter((s: any) => s.course_id === c.id);
+      return {
+        ...c,
+        sessions: courseSessions.map((s: any) => {
+          const sessionSlots = slotsData.filter((sl: any) => sl.session_id === s.id);
+          return {
+            ...s,
+            time_slots: sessionSlots.map((sl: any) => ({
+              ...sl,
+              students: slotStudentsData.filter((ss: any) => ss.slot_id === sl.id),
+            })),
+          };
+        }),
+        enrollments: (enrRes.data || []).filter((e: any) => e.course_id === c.id),
+      };
+    }));
   }
 
-  // Filter students by selected subject + teacher
+  // Filtered students by subject + teacher
   const filteredStudents = useMemo(() => {
     if (!formSubject || !formTeacherId) return [];
-    const studentIds = new Set(
-      classInfos
-        .filter(ci => ci.subject === formSubject && ci.teacher_id === formTeacherId)
-        .map(ci => ci.student_id)
-    );
-    return students.filter(s => studentIds.has(s.id));
+    const sids = new Set(classInfos.filter(ci => ci.subject === formSubject && ci.teacher_id === formTeacherId).map(ci => ci.student_id));
+    return students.filter(s => sids.has(s.id));
   }, [formSubject, formTeacherId, classInfos, students]);
 
   // Group by school_level + grade_year
@@ -234,99 +205,131 @@ export function ExamPrepScheduleManager() {
       if (!groups[key]) groups[key] = [];
       groups[key].push(s);
     }
-    // Sort keys
-    const sorted = Object.entries(groups).sort(([a], [b]) => {
-      const aLevel = SCHOOL_LEVEL_ORDER[a[0]] || 99;
-      const bLevel = SCHOOL_LEVEL_ORDER[b[0]] || 99;
-      if (aLevel !== bLevel) return aLevel - bLevel;
-      const aYear = parseInt(a.slice(1)) || 0;
-      const bYear = parseInt(b.slice(1)) || 0;
-      return aYear - bYear;
+    return Object.entries(groups).sort(([a], [b]) => {
+      const aL = SCHOOL_LEVEL_ORDER[a[0]] || 99;
+      const bL = SCHOOL_LEVEL_ORDER[b[0]] || 99;
+      if (aL !== bL) return aL - bL;
+      return (parseInt(a.slice(1)) || 0) - (parseInt(b.slice(1)) || 0);
     });
-    return sorted;
   }, [filteredStudents]);
 
-  // Detect conflicts for selected students across sessions
-  const conflicts = useMemo(() => {
-    const result: Array<{ studentId: string; sessionLabel: string; conflictWith: string }> = [];
-    for (const sid of selectedStudents) {
-      for (const sess of sessions) {
-        if (!sess.date || !sess.startTime || !sess.endTime) continue;
-        const d = new Date(sess.date + 'T00:00:00');
-        const dow = d.getDay();
-        const studentScheds = existingSchedules.filter(es => es.student_id === sid && es.day_of_week === dow);
-        for (const es of studentScheds) {
-          if (sess.startTime < es.end_time && sess.endTime > es.start_time) {
-            const studentName = studentMap[sid]?.name || sid;
-            result.push({
-              studentId: sid,
-              sessionLabel: sess.label,
-              conflictWith: `${es.class_name} ${es.start_time.slice(0, 5)}-${es.end_time.slice(0, 5)}`,
-            });
-          }
-        }
-        // Also check against other exam_prep_courses sessions for enrolled students
-        for (const course of courses) {
-          const enrolled = course.enrollments.some(e => e.student_id === sid);
-          if (!enrolled) continue;
-          for (const cs of course.sessions) {
-            if (cs.schedule_date === sess.date && sess.startTime < cs.end_time && sess.endTime > cs.start_time) {
-              result.push({
-                studentId: sid,
-                sessionLabel: sess.label,
-                conflictWith: `${course.title || course.subject + ' 특강'} ${cs.session_label} ${cs.start_time.slice(0, 5)}-${cs.end_time.slice(0, 5)}`,
-              });
-            }
+  // All assigned student IDs across all slots
+  const assignedStudentIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const ids of Object.values(slotAssignments)) ids.forEach(id => set.add(id));
+    return set;
+  }, [slotAssignments]);
+
+  // Conflict detection for a student + slot
+  const getConflictsForSlot = useCallback((studentId: string, sessionDate: string, slotStartTime: string, slotEndTime: string) => {
+    if (!sessionDate || !slotStartTime || !slotEndTime) return [];
+    const d = new Date(sessionDate + 'T00:00:00');
+    const dow = d.getDay();
+    const conflicts: string[] = [];
+    // Regular class conflicts
+    for (const es of existingSchedules) {
+      if (es.student_id === studentId && es.day_of_week === dow && slotStartTime < es.end_time && slotEndTime > es.start_time) {
+        conflicts.push(`${es.class_name} ${es.start_time.slice(0, 5)}-${es.end_time.slice(0, 5)}`);
+      }
+    }
+    return conflicts;
+  }, [existingSchedules]);
+
+  // ── Session / Slot Editors ──────────────────────────────
+  function updateSessionField(si: number, field: 'label' | 'date', value: string) {
+    setSessions(prev => prev.map((s, i) => i === si ? { ...s, [field]: value } : s));
+  }
+  function addSession() {
+    setSessions(prev => [...prev, { label: `${prev.length + 1}회차`, date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] }]);
+  }
+  function removeSession(si: number) {
+    setSessions(prev => {
+      const removed = prev[si];
+      // Clean up slot assignments
+      const newAssignments = { ...slotAssignments };
+      removed.slots.forEach(sl => delete newAssignments[sl.id]);
+      setSlotAssignments(newAssignments);
+      return prev.filter((_, i) => i !== si);
+    });
+  }
+  function addSlotToSession(si: number) {
+    setSessions(prev => prev.map((s, i) => i === si ? { ...s, slots: [...s.slots, { id: tempId(), startTime: '', endTime: '' }] } : s));
+  }
+  function removeSlotFromSession(si: number, slotIdx: number) {
+    setSessions(prev => prev.map((s, i) => {
+      if (i !== si) return s;
+      const removedSlot = s.slots[slotIdx];
+      const newAssignments = { ...slotAssignments };
+      delete newAssignments[removedSlot.id];
+      setSlotAssignments(newAssignments);
+      return { ...s, slots: s.slots.filter((_, j) => j !== slotIdx) };
+    }));
+  }
+  function updateSlotTime(si: number, slotIdx: number, field: 'startTime' | 'endTime', value: string) {
+    setSessions(prev => prev.map((s, i) => i === si ? {
+      ...s,
+      slots: s.slots.map((sl, j) => j === slotIdx ? { ...sl, [field]: value } : sl),
+    } : s));
+  }
+
+  // ── Click-to-assign ──────────────────────────────
+  function handleSlotClick(slotId: string) {
+    if (!activeStudentId) return;
+    const current = slotAssignments[slotId] || [];
+    if (current.includes(activeStudentId)) return; // Already assigned
+    setSlotAssignments(prev => ({ ...prev, [slotId]: [...(prev[slotId] || []), activeStudentId] }));
+  }
+
+  function removeStudentFromSlot(slotId: string, studentId: string) {
+    setSlotAssignments(prev => ({
+      ...prev,
+      [slotId]: (prev[slotId] || []).filter(id => id !== studentId),
+    }));
+  }
+
+  function assignStudentToAllSlots(studentId: string) {
+    const newAssignments = { ...slotAssignments };
+    for (const sess of sessions) {
+      for (const slot of sess.slots) {
+        if (slot.startTime && slot.endTime) {
+          const current = newAssignments[slot.id] || [];
+          if (!current.includes(studentId)) {
+            newAssignments[slot.id] = [...current, studentId];
           }
         }
       }
     }
-    return result;
-  }, [selectedStudents, sessions, existingSchedules, courses, studentMap]);
+    setSlotAssignments(newAssignments);
+  }
 
-  // Conflict map: studentId -> set of session labels with conflicts
-  const conflictsByStudent = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    for (const c of conflicts) {
-      if (!map[c.studentId]) map[c.studentId] = [];
-      map[c.studentId].push(`${c.sessionLabel}: ${c.conflictWith}`);
+  function removeStudentFromAllSlots(studentId: string) {
+    const newAssignments: Record<string, string[]> = {};
+    for (const [slotId, ids] of Object.entries(slotAssignments)) {
+      const filtered = ids.filter(id => id !== studentId);
+      if (filtered.length > 0) newAssignments[slotId] = filtered;
     }
-    return map;
-  }, [conflicts]);
-
-  function updateSession(index: number, field: keyof SessionEntry, value: string) {
-    setSessions(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
+    setSlotAssignments(newAssignments);
   }
 
-  function addSession() {
-    setSessions(prev => [...prev, { label: `${prev.length + 1}회차`, date: '', startTime: '', endTime: '' }]);
-  }
-
-  function removeSession(index: number) {
-    setSessions(prev => prev.filter((_, i) => i !== index));
-  }
-
+  // ── Save ──────────────────────────────
   async function handleSave() {
-    const filledSessions = sessions.filter(s => s.date && s.startTime && s.endTime);
-    if (!formDeadline || !formTeacherId || selectedStudents.length === 0 || filledSessions.length === 0) {
-      toast({ title: '필수 항목을 모두 입력해주세요', variant: 'destructive' });
+    const filledSessions = sessions.filter(s => s.date && s.slots.some(sl => sl.startTime && sl.endTime));
+    const allAssignedIds = new Set<string>();
+    for (const ids of Object.values(slotAssignments)) ids.forEach(id => allAssignedIds.add(id));
+
+    if (!formDeadline || !formTeacherId || allAssignedIds.size === 0 || filledSessions.length === 0) {
+      toast({ title: '필수 항목을 모두 입력해주세요', description: '마지노선, 선생님, 시간표, 학생 배치를 확인하세요.', variant: 'destructive' });
       return;
     }
     setSaving(true);
 
     // 1. Create course
-    const { data: course, error: courseErr } = await supabase
-      .from('exam_prep_courses')
-      .insert({
-        subject: formSubject,
-        teacher_id: formTeacherId,
-        title: formTitle || `${formSubject} 내신 특강`,
-        description: formDescription || null,
-        deadline_date: formDeadline,
-        created_by: user?.id || null,
-      })
-      .select('id')
-      .single();
+    const { data: course, error: courseErr } = await supabase.from('exam_prep_courses').insert({
+      subject: formSubject, teacher_id: formTeacherId,
+      title: formTitle || `${formSubject} 내신 특강`,
+      description: formDescription || null, deadline_date: formDeadline,
+      created_by: user?.id || null,
+    }).select('id').single();
 
     if (courseErr || !course) {
       toast({ title: '저장 실패', description: courseErr?.message, variant: 'destructive' });
@@ -334,41 +337,76 @@ export function ExamPrepScheduleManager() {
       return;
     }
 
-    // 2. Create sessions
-    const sessionRows = filledSessions.map((s, i) => ({
-      course_id: course.id,
-      session_number: i + 1,
-      session_label: s.label,
-      schedule_date: s.date,
-      start_time: s.startTime,
-      end_time: s.endTime,
-    }));
+    // 2. Create sessions (one per 회차, use first slot times as representative)
+    const sessionRows = filledSessions.map((s, i) => {
+      const firstSlot = s.slots.find(sl => sl.startTime && sl.endTime);
+      return {
+        course_id: course.id, session_number: i + 1, session_label: s.label,
+        schedule_date: s.date,
+        start_time: firstSlot?.startTime || '00:00',
+        end_time: firstSlot?.endTime || '00:00',
+      };
+    });
 
-    const { error: sessErr } = await supabase.from('exam_prep_sessions').insert(sessionRows);
-    if (sessErr) {
-      toast({ title: '세션 저장 실패', description: sessErr.message, variant: 'destructive' });
-      // Cleanup course
+    const { data: dbSessions, error: sessErr } = await supabase.from('exam_prep_sessions').insert(sessionRows).select('id, session_number');
+    if (sessErr || !dbSessions) {
+      toast({ title: '세션 저장 실패', variant: 'destructive' });
       await supabase.from('exam_prep_courses').delete().eq('id', course.id);
       setSaving(false);
       return;
     }
 
-    // 3. Create enrollments
-    const enrollRows = selectedStudents.map(sid => ({
-      course_id: course.id,
-      student_id: sid,
-    }));
+    // 3. Create time slots
+    const timeSlotRows: Array<{ session_id: string; start_time: string; end_time: string; slot_order: number }> = [];
+    const slotIdMapping: Record<string, { sessionIdx: number; slotOrder: number }> = {}; // temp_id → location
 
-    const { error: enrErr } = await supabase.from('exam_prep_enrollments').insert(enrollRows);
-    if (enrErr) {
-      toast({ title: '학생 등록 실패', description: enrErr.message, variant: 'destructive' });
+    filledSessions.forEach((sess, si) => {
+      const dbSession = dbSessions.find((ds: any) => ds.session_number === si + 1);
+      if (!dbSession) return;
+      sess.slots.forEach((slot, sli) => {
+        if (!slot.startTime || !slot.endTime) return;
+        timeSlotRows.push({
+          session_id: dbSession.id,
+          start_time: slot.startTime, end_time: slot.endTime,
+          slot_order: sli + 1,
+        });
+        slotIdMapping[slot.id] = { sessionIdx: si, slotOrder: sli + 1 };
+      });
+    });
+
+    const { data: dbSlots, error: slotErr } = await supabase.from('exam_prep_time_slots').insert(timeSlotRows).select('id, session_id, slot_order');
+    if (slotErr || !dbSlots) {
+      toast({ title: '시간표 저장 실패', variant: 'destructive' });
       setSaving(false);
       return;
     }
 
-    toast({ title: `${selectedStudents.length}명의 특강이 등록되었습니다 (${filledSessions.length}회차)` });
-    setDialogOpen(false);
-    resetForm();
+    // 4. Create slot-student assignments
+    const slotStudentRows: Array<{ slot_id: string; student_id: string }> = [];
+    for (const [tempSlotId, studentIds] of Object.entries(slotAssignments)) {
+      const mapping = slotIdMapping[tempSlotId];
+      if (!mapping) continue;
+      const filledSess = filledSessions[mapping.sessionIdx];
+      if (!filledSess) continue;
+      const dbSession = dbSessions.find((ds: any) => ds.session_number === mapping.sessionIdx + 1);
+      if (!dbSession) continue;
+      const dbSlot = dbSlots.find((ds: any) => ds.session_id === dbSession.id && ds.slot_order === mapping.slotOrder);
+      if (!dbSlot) continue;
+      for (const sid of studentIds) {
+        slotStudentRows.push({ slot_id: dbSlot.id, student_id: sid });
+      }
+    }
+
+    if (slotStudentRows.length > 0) {
+      await supabase.from('exam_prep_slot_students').insert(slotStudentRows);
+    }
+
+    // 5. Create enrollments for all assigned students
+    const enrollRows = [...allAssignedIds].map(sid => ({ course_id: course.id, student_id: sid }));
+    await supabase.from('exam_prep_enrollments').insert(enrollRows);
+
+    toast({ title: `${allAssignedIds.size}명 · ${filledSessions.length}회차 특강 등록 완료` });
+    resetAndGoBack();
     await fetchCourses();
     setSaving(false);
   }
@@ -381,34 +419,23 @@ export function ExamPrepScheduleManager() {
     }
   }
 
-  function resetForm() {
-    setSelectedStudents([]);
+  function resetAndGoBack() {
+    setMode('list');
+    setStep(1);
     setFormSubject('수학');
     setFormTeacherId('');
     setFormTitle('');
     setFormDescription('');
     setFormDeadline('');
-    setSessions(DEFAULT_SESSIONS.map(s => ({ ...s })));
-  }
-
-  function toggleStudent(sid: string) {
-    setSelectedStudents(prev =>
-      prev.includes(sid) ? prev.filter(id => id !== sid) : [...prev, sid]
-    );
-  }
-
-  function selectAllFiltered() {
-    const allIds = filteredStudents.map(s => s.id);
-    setSelectedStudents(prev => {
-      const newSet = new Set(prev);
-      allIds.forEach(id => newSet.add(id));
-      return [...newSet];
-    });
-  }
-
-  function deselectAllFiltered() {
-    const filterIds = new Set(filteredStudents.map(s => s.id));
-    setSelectedStudents(prev => prev.filter(id => !filterIds.has(id)));
+    setSessions([
+      { label: '1회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+      { label: '2회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+      { label: '3회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+      { label: '4회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+      { label: '직전특강', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
+    ]);
+    setSlotAssignments({});
+    setActiveStudentId(null);
   }
 
   // Stats
@@ -417,6 +444,289 @@ export function ExamPrepScheduleManager() {
   const confirmedCount = allEnrollments.filter(e => e.status === 'confirmed').length;
   const autoCount = allEnrollments.filter(e => e.status === 'auto_confirmed').length;
 
+  // ═══════════════ RENDER ═══════════════
+  if (mode === 'create') {
+    return (
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetAndGoBack}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h2 className="text-lg font-bold">내신 특강 등록</h2>
+          <div className="ml-auto flex items-center gap-2">
+            <Badge variant={step === 1 ? 'default' : 'outline'} className="text-xs cursor-pointer" onClick={() => setStep(1)}>
+              1. 기본 정보
+            </Badge>
+            <Badge variant={step === 2 ? 'default' : 'outline'} className="text-xs cursor-pointer" onClick={() => step === 1 && formTeacherId ? setStep(2) : null}>
+              2. 시간표 & 배치
+            </Badge>
+          </div>
+        </div>
+
+        {step === 1 && (
+          <Card>
+            <CardContent className="p-5 space-y-5">
+              {/* Subject + Teacher */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">과목</Label>
+                  <Select value={formSubject} onValueChange={v => { setFormSubject(v); }}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>{SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">담당 선생님</Label>
+                  <Select value={formTeacherId} onValueChange={v => { setFormTeacherId(v); }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="선택" /></SelectTrigger>
+                    <SelectContent>{teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">특강 제목 (선택)</Label>
+                  <Input value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder={`${formSubject} 내신 특강`} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">확인 마지노선</Label>
+                  <Input type="date" value={formDeadline} onChange={e => setFormDeadline(e.target.value)} className="h-9" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">설명 (선택)</Label>
+                <Textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} placeholder="특강 내용, 준비물 등" rows={2} />
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => setStep(2)}
+                  disabled={!formTeacherId || !formDeadline}
+                >
+                  다음: 시간표 & 학생 배치 →
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 2 && (
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
+            {/* LEFT: Timetable */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" /> 회차별 시간표
+                </h3>
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addSession}>
+                  <Plus className="w-3 h-3 mr-1" /> 회차 추가
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {sessions.map((sess, si) => (
+                  <Card key={si} className="overflow-hidden border-border/60">
+                    {/* Session header */}
+                    <div className="flex items-center gap-3 px-4 py-2.5 bg-muted/40 border-b">
+                      <Input
+                        value={sess.label}
+                        onChange={e => updateSessionField(si, 'label', e.target.value)}
+                        className="w-[90px] h-7 text-xs font-bold bg-background"
+                      />
+                      <Input
+                        type="date"
+                        value={sess.date}
+                        onChange={e => updateSessionField(si, 'date', e.target.value)}
+                        className="h-7 text-xs w-[160px] bg-background"
+                      />
+                      <div className="ml-auto flex items-center gap-1">
+                        <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => addSlotToSession(si)}>
+                          <Plus className="w-3 h-3 mr-1" /> 시간대
+                        </Button>
+                        {sessions.length > 1 && (
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive/60 hover:text-destructive" onClick={() => removeSession(si)}>
+                            <X className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Time slots */}
+                    <div className="divide-y">
+                      {sess.slots.map((slot, sli) => {
+                        const assigned = slotAssignments[slot.id] || [];
+                        const isTargetable = !!activeStudentId && !assigned.includes(activeStudentId) && slot.startTime && slot.endTime;
+                        return (
+                          <div
+                            key={slot.id}
+                            className={`px-4 py-3 transition-all ${
+                              isTargetable
+                                ? 'bg-primary/5 ring-2 ring-inset ring-primary/30 cursor-pointer hover:bg-primary/10'
+                                : ''
+                            }`}
+                            onClick={() => isTargetable && handleSlotClick(slot.id)}
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <GripVertical className="w-3 h-3 text-muted-foreground/40" />
+                              <span className="text-[10px] text-muted-foreground font-medium w-[30px]">
+                                #{sli + 1}
+                              </span>
+                              <Input
+                                type="time"
+                                value={slot.startTime}
+                                onChange={e => updateSlotTime(si, sli, 'startTime', e.target.value)}
+                                className="h-7 text-xs w-[110px]"
+                                onClick={e => e.stopPropagation()}
+                              />
+                              <span className="text-xs text-muted-foreground">~</span>
+                              <Input
+                                type="time"
+                                value={slot.endTime}
+                                onChange={e => updateSlotTime(si, sli, 'endTime', e.target.value)}
+                                className="h-7 text-xs w-[110px]"
+                                onClick={e => e.stopPropagation()}
+                              />
+                              {sess.slots.length > 1 && (
+                                <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto" onClick={e => { e.stopPropagation(); removeSlotFromSession(si, sli); }}>
+                                  <Trash2 className="w-3 h-3 text-muted-foreground" />
+                                </Button>
+                              )}
+                            </div>
+                            {/* Assigned students */}
+                            {assigned.length > 0 && (
+                              <div className="flex flex-wrap gap-1 ml-[42px]">
+                                {assigned.map(sid => {
+                                  const st = studentMap[sid];
+                                  const conflicts = getConflictsForSlot(sid, sess.date, slot.startTime, slot.endTime);
+                                  const hasConflict = conflicts.length > 0;
+                                  return (
+                                    <Badge
+                                      key={sid}
+                                      variant={hasConflict ? 'destructive' : 'secondary'}
+                                      className="text-[10px] pl-1.5 pr-0.5 py-0.5 gap-1 cursor-default group"
+                                      title={hasConflict ? `충돌: ${conflicts.join(', ')}` : st?.name || ''}
+                                    >
+                                      {hasConflict && <AlertTriangle className="w-2.5 h-2.5" />}
+                                      {st?.name || sid.slice(0, 6)}
+                                      <button
+                                        className="ml-0.5 rounded-full p-0.5 hover:bg-background/50 transition-colors"
+                                        onClick={e => { e.stopPropagation(); removeStudentFromSlot(slot.id, sid); }}
+                                      >
+                                        <X className="w-2.5 h-2.5" />
+                                      </button>
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {assigned.length === 0 && slot.startTime && slot.endTime && (
+                              <p className="text-[10px] text-muted-foreground/50 ml-[42px] italic">
+                                {activeStudentId ? '클릭하여 학생 배치' : '학생을 선택 후 클릭'}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Save */}
+              <div className="flex items-center justify-between pt-2">
+                <Button variant="outline" onClick={() => setStep(1)}>← 이전</Button>
+                <Button onClick={handleSave} disabled={saving || assignedStudentIds.size === 0} size="lg">
+                  {saving ? '저장 중...' : `${assignedStudentIds.size}명 · ${sessions.filter(s => s.date).length}회차 등록`}
+                </Button>
+              </div>
+            </div>
+
+            {/* RIGHT: Student List */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" /> 학생 명단
+                <Badge variant="outline" className="text-[10px] ml-auto">{assignedStudentIds.size}/{filteredStudents.length}</Badge>
+              </h3>
+
+              {filteredStudents.length === 0 ? (
+                <Card><CardContent className="p-6 text-center text-xs text-muted-foreground">해당 과목/선생님의 학생이 없습니다</CardContent></Card>
+              ) : (
+                <Card className="overflow-hidden">
+                  <div className="max-h-[calc(100vh-280px)] overflow-y-auto">
+                    {groupedStudents.map(([groupKey, groupStudents]) => {
+                      const levelChar = groupKey[0];
+                      const yearNum = groupKey.slice(1);
+                      const levelLabel = levelChar === '초' ? '초등' : levelChar === '중' ? '중학' : levelChar === '고' ? '고등' : groupKey;
+                      const groupLabel = yearNum && yearNum !== '0' ? `${levelLabel} ${yearNum}학년` : levelLabel;
+
+                      return (
+                        <div key={groupKey}>
+                          <div className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm px-3 py-1.5 border-b border-border/50">
+                            <span className="text-[11px] font-bold text-muted-foreground">{groupLabel} ({groupStudents.length})</span>
+                          </div>
+                          {groupStudents.map(s => {
+                            const isActive = activeStudentId === s.id;
+                            const isAssigned = assignedStudentIds.has(s.id);
+                            return (
+                              <div
+                                key={s.id}
+                                className={`flex items-center gap-2 px-3 py-2 border-b border-border/30 cursor-pointer transition-all text-sm select-none ${
+                                  isActive
+                                    ? 'bg-primary/15 ring-1 ring-inset ring-primary/40'
+                                    : isAssigned
+                                    ? 'bg-primary/5'
+                                    : 'hover:bg-accent/40'
+                                }`}
+                                onClick={() => setActiveStudentId(isActive ? null : s.id)}
+                              >
+                                <div className={`w-2 h-2 rounded-full shrink-0 ${isAssigned ? 'bg-primary' : 'bg-muted-foreground/20'}`} />
+                                <span className={`font-medium ${isActive ? 'text-primary' : ''}`}>{s.name}</span>
+                                {s.school && <span className="text-[10px] text-muted-foreground ml-auto">{s.school}</span>}
+                                {isAssigned && !isActive && (
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto">배치됨</Badge>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+
+              {/* Quick actions for active student */}
+              {activeStudentId && (
+                <Card className="border-primary/30 bg-primary/5">
+                  <CardContent className="p-3 space-y-2">
+                    <p className="text-xs font-bold text-primary">
+                      {studentMap[activeStudentId]?.name} 선택됨
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      왼쪽 시간표를 클릭하면 해당 시간에 배치됩니다.
+                    </p>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" className="h-7 text-[10px] flex-1" onClick={() => assignStudentToAllSlots(activeStudentId)}>
+                        <UserPlus className="w-3 h-3 mr-1" /> 전체 배치
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 text-[10px] flex-1 text-destructive border-destructive/30 hover:bg-destructive/5" onClick={() => removeStudentFromAllSlots(activeStudentId)}>
+                        <UserMinus className="w-3 h-3 mr-1" /> 전체 해제
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ═══════════════ LIST VIEW ═══════════════
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -441,14 +751,12 @@ export function ExamPrepScheduleManager() {
         </Card>
       </div>
 
-      {/* Add Button */}
       <div className="flex justify-end">
-        <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+        <Button onClick={() => { resetAndGoBack(); setMode('create'); }}>
           <Plus className="w-4 h-4 mr-1" /> 내신 특강 등록
         </Button>
       </div>
 
-      {/* Course List */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
@@ -473,7 +781,7 @@ export function ExamPrepScheduleManager() {
                     <Badge variant="outline">{course.subject}</Badge>
                     <span className="font-medium text-sm">{course.title || `${course.subject} 특강`}</span>
                     <span className="text-xs text-muted-foreground">{teacherMap[course.teacher_id] || '—'}</span>
-                    <span className="text-xs text-muted-foreground">|</span>
+                    <span className="text-xs text-muted-foreground">·</span>
                     <span className="text-xs text-muted-foreground">{course.sessions.length}회차</span>
                     <span className="text-xs text-muted-foreground">·</span>
                     <span className="text-xs text-muted-foreground">{course.enrollments.length}명</span>
@@ -490,36 +798,55 @@ export function ExamPrepScheduleManager() {
 
                 {expanded && (
                   <CardContent className="pt-0 pb-4 border-t space-y-4">
-                    {/* Sessions */}
+                    {/* Sessions with time slots */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">일정</p>
-                      <div className="grid gap-1.5">
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">일정 & 시간표</p>
+                      <div className="space-y-2">
                         {course.sessions.map(sess => (
-                          <div key={sess.id} className="flex items-center gap-3 px-3 py-1.5 bg-muted/30 rounded text-sm">
-                            <Badge variant="outline" className="text-[10px] min-w-[50px] justify-center">{sess.session_label}</Badge>
-                            <span className="font-mono text-xs">{sess.schedule_date}</span>
-                            <span className="font-mono text-xs">{sess.start_time.slice(0, 5)}-{sess.end_time.slice(0, 5)}</span>
+                          <div key={sess.id} className="border rounded-lg overflow-hidden">
+                            <div className="flex items-center gap-3 px-3 py-2 bg-muted/30">
+                              <Badge variant="outline" className="text-[10px] min-w-[50px] justify-center">{sess.session_label}</Badge>
+                              <span className="font-mono text-xs">{sess.schedule_date}</span>
+                            </div>
+                            {sess.time_slots.length > 0 ? (
+                              <div className="divide-y">
+                                {sess.time_slots.map(slot => (
+                                  <div key={slot.id} className="px-3 py-2 flex items-start gap-2">
+                                    <span className="font-mono text-xs text-muted-foreground mt-0.5">
+                                      {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)}
+                                    </span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {slot.students.map(ss => (
+                                        <Badge key={ss.id} variant="secondary" className="text-[10px]">
+                                          {studentMap[ss.student_id]?.name || '—'}
+                                        </Badge>
+                                      ))}
+                                      {slot.students.length === 0 && (
+                                        <span className="text-[10px] text-muted-foreground italic">배치된 학생 없음</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="px-3 py-1.5 text-xs text-muted-foreground">
+                                {sess.start_time.slice(0, 5)}-{sess.end_time.slice(0, 5)}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* Enrollments */}
+                    {/* Enrollment Status */}
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">학생 ({course.enrollments.length}명)</p>
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">확약 현황 ({course.enrollments.length}명)</p>
                       <div className="flex flex-wrap gap-1.5">
-                        {course.enrollments.map(enr => {
-                          const s = studentMap[enr.student_id];
-                          return (
-                            <Badge
-                              key={enr.id}
-                              variant={STATUS_MAP[enr.status]?.variant || 'outline'}
-                              className="text-xs"
-                            >
-                              {s?.name || '—'} · {STATUS_MAP[enr.status]?.label || enr.status}
-                            </Badge>
-                          );
-                        })}
+                        {course.enrollments.map(enr => (
+                          <Badge key={enr.id} variant={STATUS_MAP[enr.status]?.variant || 'outline'} className="text-xs">
+                            {studentMap[enr.student_id]?.name || '—'} · {STATUS_MAP[enr.status]?.label || enr.status}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
 
@@ -536,197 +863,6 @@ export function ExamPrepScheduleManager() {
           })}
         </div>
       )}
-
-      {/* Create Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarCheck className="w-5 h-5" /> 내신 특강 등록
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            {/* Subject + Teacher */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">과목</Label>
-                <Select value={formSubject} onValueChange={v => { setFormSubject(v); setSelectedStudents([]); }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">담당 선생님</Label>
-                <Select value={formTeacherId} onValueChange={v => { setFormTeacherId(v); setSelectedStudents([]); }}>
-                  <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
-                  <SelectContent>
-                    {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Title */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">특강 제목 (선택)</Label>
-              <Input
-                value={formTitle}
-                onChange={e => setFormTitle(e.target.value)}
-                placeholder={`${formSubject} 내신 특강`}
-              />
-            </div>
-
-            {/* Sessions - multi-row */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> 회차별 일정
-                </Label>
-                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={addSession}>
-                  <Plus className="w-3 h-3 mr-1" /> 회차 추가
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {sessions.map((sess, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-muted/30 rounded-lg px-3 py-2">
-                    <Input
-                      value={sess.label}
-                      onChange={e => updateSession(i, 'label', e.target.value)}
-                      className="w-[80px] h-7 text-xs font-medium"
-                    />
-                    <Input type="date" value={sess.date} onChange={e => updateSession(i, 'date', e.target.value)} className="h-7 text-xs flex-1" />
-                    <Input type="time" value={sess.startTime} onChange={e => updateSession(i, 'startTime', e.target.value)} className="h-7 text-xs w-[100px]" />
-                    <span className="text-xs text-muted-foreground">~</span>
-                    <Input type="time" value={sess.endTime} onChange={e => updateSession(i, 'endTime', e.target.value)} className="h-7 text-xs w-[100px]" />
-                    {sessions.length > 1 && (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeSession(i)}>
-                        <X className="w-3 h-3 text-muted-foreground" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Deadline */}
-            <div className="space-y-1.5">
-              <Label className="text-xs flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" /> 확인 마지노선 날짜
-              </Label>
-              <Input type="date" value={formDeadline} onChange={e => setFormDeadline(e.target.value)} />
-              <p className="text-[11px] text-muted-foreground">이 날짜가 지나면 미확인 학생의 일정이 자동 확정됩니다.</p>
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">설명 (선택)</Label>
-              <Textarea
-                value={formDescription}
-                onChange={e => setFormDescription(e.target.value)}
-                placeholder="특강 내용, 준비물 등"
-                rows={2}
-              />
-            </div>
-
-            {/* Student Picker - auto filtered */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5" /> 학생 배치 ({selectedStudents.length}명 선택)
-                </Label>
-                {filteredStudents.length > 0 && (
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={selectAllFiltered}>전체 선택</Button>
-                    <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={deselectAllFiltered}>전체 해제</Button>
-                  </div>
-                )}
-              </div>
-
-              {!formTeacherId ? (
-                <p className="text-xs text-muted-foreground py-4 text-center bg-muted/30 rounded-lg">
-                  과목과 선생님을 먼저 선택하면 해당 수업의 학생 목록이 자동으로 표시됩니다.
-                </p>
-              ) : filteredStudents.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-4 text-center bg-muted/30 rounded-lg">
-                  해당 과목/선생님 수업에 등록된 학생이 없습니다.
-                </p>
-              ) : (
-                <div className="border rounded-lg max-h-[280px] overflow-y-auto">
-                  {groupedStudents.map(([groupKey, groupStudents]) => {
-                    const levelChar = groupKey[0];
-                    const yearNum = groupKey.slice(1);
-                    const levelLabel = levelChar === '초' ? '초등' : levelChar === '중' ? '중학' : levelChar === '고' ? '고등' : groupKey;
-                    const groupLabel = yearNum && yearNum !== '0' ? `${levelLabel} ${yearNum}학년` : levelLabel;
-
-                    return (
-                      <div key={groupKey}>
-                        <div className="sticky top-0 bg-muted/70 backdrop-blur-sm px-3 py-1.5 border-b">
-                          <span className="text-[11px] font-semibold text-muted-foreground">{groupLabel} ({groupStudents.length}명)</span>
-                        </div>
-                        {groupStudents.map(s => {
-                          const hasConflict = !!conflictsByStudent[s.id];
-                          const isSelected = selectedStudents.includes(s.id);
-                          return (
-                            <label
-                              key={s.id}
-                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer text-sm border-b last:border-0 transition-colors ${
-                                isSelected
-                                  ? hasConflict
-                                    ? 'bg-destructive/10'
-                                    : 'bg-primary/5'
-                                  : 'hover:bg-accent/50'
-                              }`}
-                            >
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleStudent(s.id)}
-                              />
-                              <span className={hasConflict && isSelected ? 'text-destructive font-medium' : ''}>{s.name}</span>
-                              {s.school && <span className="text-[10px] text-muted-foreground">{s.school}</span>}
-                              {hasConflict && isSelected && (
-                                <div className="ml-auto flex items-center gap-1">
-                                  <AlertTriangle className="w-3 h-3 text-destructive" />
-                                  <span className="text-[10px] text-destructive">충돌</span>
-                                </div>
-                              )}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Conflict Details */}
-            {conflicts.length > 0 && (
-              <div className="border border-destructive/30 bg-destructive/5 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-destructive text-sm font-medium mb-1.5">
-                  <AlertTriangle className="w-4 h-4" /> 시간 충돌 감지 ({conflicts.length}건)
-                </div>
-                <ul className="text-xs text-destructive/80 space-y-0.5 pl-6 list-disc">
-                  {conflicts.map((c, i) => (
-                    <li key={i}>
-                      <span className="font-medium">{studentMap[c.studentId]?.name}</span> {c.sessionLabel} ↔ {c.conflictWith}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
-            <Button onClick={handleSave} disabled={saving || selectedStudents.length === 0}>
-              {saving ? '저장 중...' : `${selectedStudents.length}명 · ${sessions.filter(s => s.date).length}회차 등록`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

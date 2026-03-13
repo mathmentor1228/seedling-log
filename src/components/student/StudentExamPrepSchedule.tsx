@@ -6,32 +6,23 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CalendarCheck, CheckCircle2, Clock } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 
+interface TimeSlotInfo { start_time: string; end_time: string; }
+interface SessionInfo {
+  session_label: string; schedule_date: string;
+  start_time: string; end_time: string;
+  time_slots?: TimeSlotInfo[];
+}
 interface ExamPrepCourseItem {
-  course_id: string;
-  subject: string;
-  title: string;
-  description: string | null;
-  deadline_date: string;
-  status: string;
-  teacher_name: string;
-  sessions: Array<{
-    session_label: string;
-    schedule_date: string;
-    start_time: string;
-    end_time: string;
-  }>;
+  course_id: string; subject: string; title: string;
+  description: string | null; deadline_date: string;
+  status: string; teacher_name: string;
+  sessions: SessionInfo[];
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
-
 function fmt(dateStr: string) {
   const d = new Date(dateStr + 'T00:00:00');
   return `${d.getMonth() + 1}/${d.getDate()} (${WEEKDAYS[d.getDay()]})`;
@@ -44,16 +35,12 @@ export function StudentExamPrepSchedule() {
   const [confirmDialog, setConfirmDialog] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  useEffect(() => {
-    if (student) fetchSchedules();
-  }, [student]);
+  useEffect(() => { if (student) fetchSchedules(); }, [student]);
 
   async function fetchSchedules() {
     setLoading(true);
     const { data, error } = await studentApi.getExamPrepSchedules();
-    if (!error && data) {
-      setCourses(data);
-    }
+    if (!error && data) setCourses(data);
     setLoading(false);
   }
 
@@ -61,9 +48,7 @@ export function StudentExamPrepSchedule() {
     setConfirming(true);
     const { error } = await studentApi.confirmExamPrepSchedule(courseId);
     if (!error) {
-      setCourses(prev =>
-        prev.map(c => c.course_id === courseId ? { ...c, status: 'confirmed' } : c)
-      );
+      setCourses(prev => prev.map(c => c.course_id === courseId ? { ...c, status: 'confirmed' } : c));
       setConfirmDialog(null);
     }
     setConfirming(false);
@@ -72,15 +57,33 @@ export function StudentExamPrepSchedule() {
   const pendingCourses = courses.filter(c => c.status === 'pending');
   const confirmedCourses = courses.filter(c => c.status !== 'pending');
 
-  if (loading) {
+  if (loading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>;
+  if (courses.length === 0) return null;
+
+  function renderSessionSlots(sess: SessionInfo) {
+    const slots = sess.time_slots && sess.time_slots.length > 0 ? sess.time_slots : null;
     return (
-      <div className="flex justify-center py-8">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+      <div key={sess.session_label} className="flex items-start gap-2 text-xs">
+        <Badge variant="secondary" className="text-[10px] min-w-[45px] justify-center mt-0.5">{sess.session_label}</Badge>
+        <div>
+          <span>{fmt(sess.schedule_date)}</span>
+          {slots ? (
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {slots.map((sl, i) => (
+                <Badge key={i} variant="outline" className="text-[9px] font-mono">
+                  {sl.start_time.slice(0, 5)}-{sl.end_time.slice(0, 5)}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <span className="text-muted-foreground font-mono ml-2">
+              {sess.start_time.slice(0, 5)}-{sess.end_time.slice(0, 5)}
+            </span>
+          )}
+        </div>
       </div>
     );
   }
-
-  if (courses.length === 0) return null;
 
   return (
     <div className="space-y-4">
@@ -105,21 +108,8 @@ export function StudentExamPrepSchedule() {
                   </div>
                   <span className="text-xs text-muted-foreground">{course.teacher_name}</span>
                 </div>
-                {/* Sessions list */}
-                <div className="space-y-1">
-                  {course.sessions.map((sess, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
-                      <Badge variant="secondary" className="text-[10px] min-w-[45px] justify-center">{sess.session_label}</Badge>
-                      <span>{fmt(sess.schedule_date)}</span>
-                      <span className="text-muted-foreground font-mono">
-                        {sess.start_time.slice(0, 5)}-{sess.end_time.slice(0, 5)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {course.description && (
-                  <p className="text-xs text-muted-foreground">{course.description}</p>
-                )}
+                <div className="space-y-1.5">{course.sessions.map(renderSessionSlots)}</div>
+                {course.description && <p className="text-xs text-muted-foreground">{course.description}</p>}
                 <div className="pt-1">
                   <div className="bg-destructive/10 border border-destructive/20 rounded-md p-2.5 mb-2">
                     <p className="text-xs text-destructive font-medium flex items-start gap-1.5">
@@ -127,17 +117,11 @@ export function StudentExamPrepSchedule() {
                       일정 확정 시 추후 변경 및 보강은 불가능합니다. 신중히 확인 후 동의해주세요.
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setConfirmDialog(course.course_id)}
-                  >
+                  <Button size="sm" className="w-full" onClick={() => setConfirmDialog(course.course_id)}>
                     <CheckCircle2 className="w-4 h-4 mr-1" /> 일정 확인 및 동의
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground text-right">
-                  마지노선: {fmt(course.deadline_date)}까지
-                </p>
+                <p className="text-[10px] text-muted-foreground text-right">마지노선: {fmt(course.deadline_date)}까지</p>
               </div>
             ))}
           </CardContent>
@@ -163,31 +147,18 @@ export function StudentExamPrepSchedule() {
                     {course.status === 'confirmed' ? '확인완료' : '시스템 확정'}
                   </Badge>
                 </div>
-                <div className="space-y-1">
-                  {course.sessions.map((sess, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
-                      <Badge variant="outline" className="text-[10px] min-w-[45px] justify-center">{sess.session_label}</Badge>
-                      <span>{fmt(sess.schedule_date)}</span>
-                      <span className="text-muted-foreground font-mono">
-                        {sess.start_time.slice(0, 5)}-{sess.end_time.slice(0, 5)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <div className="space-y-1.5">{course.sessions.map(renderSessionSlots)}</div>
               </div>
             ))}
           </CardContent>
         </Card>
       )}
 
-      {/* Confirm Dialog */}
       <Dialog open={!!confirmDialog} onOpenChange={() => setConfirmDialog(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>일정 확인 및 동의</DialogTitle>
-            <DialogDescription>
-              아래 특강 전체 일정에 동의하시겠습니까?
-            </DialogDescription>
+            <DialogDescription>아래 특강 전체 일정에 동의하시겠습니까?</DialogDescription>
           </DialogHeader>
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
             <p className="text-sm text-destructive font-medium flex items-start gap-2">

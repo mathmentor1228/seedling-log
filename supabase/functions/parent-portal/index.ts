@@ -285,19 +285,37 @@ Deno.serve(async (req) => {
           const courseIds = confirmedEnrollments.map((e: any) => e.course_id);
           const [coursesR, sessionsR] = await Promise.all([
             supabase.from("exam_prep_courses").select("id, subject, title, description").in("id", courseIds),
-            supabase.from("exam_prep_sessions").select("course_id, session_label, schedule_date, start_time, end_time").in("course_id", courseIds).order("session_number"),
+            supabase.from("exam_prep_sessions").select("course_id, session_label, schedule_date, start_time, end_time, id").in("course_id", courseIds).order("session_number"),
           ]);
+          // Fetch time slots for this student
+          const allSessionIds = (sessionsR.data || []).map((s: any) => s.id);
+          let studentSlotIds = new Set<string>();
+          let allSlots: any[] = [];
+          if (allSessionIds.length > 0) {
+            const [slotsRes, ssRes] = await Promise.all([
+              supabase.from("exam_prep_time_slots").select("*").in("session_id", allSessionIds).order("slot_order"),
+              supabase.from("exam_prep_slot_students").select("slot_id").eq("student_id", studentId),
+            ]);
+            allSlots = slotsRes.data || [];
+            studentSlotIds = new Set((ssRes.data || []).map((s: any) => s.slot_id));
+          }
           return (coursesR.data || []).map((c: any) => ({
             course_id: c.id,
             subject: c.subject,
             title: c.title || `${c.subject} 내신 특강`,
             description: c.description,
             status: confirmedEnrollments.find((e: any) => e.course_id === c.id)?.status || 'confirmed',
-            sessions: (sessionsR.data || []).filter((s: any) => s.course_id === c.id && s.schedule_date >= todayStr).map((s: any) => ({
-              session_label: s.session_label,
-              schedule_date: s.schedule_date,
-              start_time: s.start_time,
-              end_time: s.end_time,
+            sessions: (sessionsR.data || []).filter((s: any) => s.course_id === c.id && s.schedule_date >= todayStr).map((s: any) => {
+              const sessionSlots = allSlots.filter((sl: any) => sl.session_id === s.id);
+              const mySlots = sessionSlots.filter((sl: any) => studentSlotIds.has(sl.id));
+              return {
+                session_label: s.session_label,
+                schedule_date: s.schedule_date,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                time_slots: mySlots.map((sl: any) => ({ start_time: sl.start_time, end_time: sl.end_time })),
+              };
+            }),
             })),
           })).filter((c: any) => c.sessions.length > 0);
         })(),
