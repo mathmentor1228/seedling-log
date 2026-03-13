@@ -576,6 +576,65 @@ export type Database = {
           },
         ]
       }
+      exam_prep_schedules: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          deadline_date: string
+          description: string | null
+          end_time: string
+          id: string
+          schedule_date: string
+          start_time: string
+          status: string
+          student_id: string
+          subject: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          deadline_date: string
+          description?: string | null
+          end_time: string
+          id?: string
+          schedule_date: string
+          start_time: string
+          status?: string
+          student_id: string
+          subject: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          deadline_date?: string
+          description?: string | null
+          end_time?: string
+          id?: string
+          schedule_date?: string
+          start_time?: string
+          status?: string
+          student_id?: string
+          subject?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_prep_schedules_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_subject_details: {
         Row: {
           created_at: string
