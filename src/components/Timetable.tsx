@@ -521,12 +521,15 @@ export function Timetable() {
 
   // ── Derived data ──
 
+  // Combine regular + exam prep rows
+  const allRows = useMemo(() => [...scheduleRows, ...examPrepRows], [scheduleRows, examPrepRows]);
+
   const filteredRows = useMemo(() => {
-    let rows = scheduleRows;
+    let rows = allRows;
     if (selectedTeacherId !== 'all') rows = rows.filter((r) => r.teacherId === selectedTeacherId);
     if (selectedDayFilter !== 'all') rows = rows.filter((r) => r.dayOfWeek === parseInt(selectedDayFilter));
     return rows;
-  }, [scheduleRows, selectedTeacherId, selectedDayFilter]);
+  }, [allRows, selectedTeacherId, selectedDayFilter]);
 
   const byDay = useMemo(() => {
     const map: Record<number, ScheduleRow[]> = {};
@@ -534,7 +537,6 @@ export function Timetable() {
       if (!map[r.dayOfWeek]) map[r.dayOfWeek] = [];
       map[r.dayOfWeek].push(r);
     });
-    // Sort within each day based on sortMode
     Object.values(map).forEach(rows => {
       rows.sort((a, b) => {
         if (sortMode === 'teacher_time') {
