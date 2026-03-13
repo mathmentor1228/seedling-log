@@ -248,31 +248,44 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed top-0 left-0 h-full w-56 bg-sidebar z-40 transition-transform duration-200 lg:translate-x-0",
+          "fixed top-0 left-0 h-full bg-sidebar z-40 transition-all duration-200 lg:translate-x-0",
+          sidebarCollapsed ? "w-14" : "w-56",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="h-14 px-4 flex items-center gap-2.5 border-b border-sidebar-border">
+          <div className="h-14 px-3 flex items-center gap-2.5 border-b border-sidebar-border">
             {/* Logo Mark: Square with "M" */}
             <div className="w-8 h-8 bg-sidebar-foreground rounded flex items-center justify-center flex-shrink-0">
               <span className="text-sidebar-background font-bold text-base">M</span>
             </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-semibold text-sidebar-foreground text-sm tracking-tight">MENTOR LOG</h1>
-              <p className="text-[10px] text-sidebar-foreground/60 truncate">더멘토학원 학습·운영 관리</p>
-            </div>
-            <div className="hidden lg:block">
-              <AdminOfficeBell />
-            </div>
+            {!sidebarCollapsed && (
+              <div className="min-w-0 flex-1">
+                <h1 className="font-semibold text-sidebar-foreground text-sm tracking-tight">MENTOR LOG</h1>
+                <p className="text-[10px] text-sidebar-foreground/60 truncate">더멘토학원 학습·운영 관리</p>
+              </div>
+            )}
+            {!sidebarCollapsed && (
+              <div className="hidden lg:block">
+                <AdminOfficeBell />
+              </div>
+            )}
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
             {filteredEntries.map((entry) => {
               if (isGroup(entry)) {
                 const open = isGroupOpen(entry);
+                if (sidebarCollapsed) {
+                  // In collapsed mode, show first item's icon as group representative
+                  return (
+                    <div key={entry.label} className="space-y-0.5">
+                      {entry.items.map(item => renderNavItem(item))}
+                    </div>
+                  );
+                }
                 return (
                   <div key={entry.label}>
                     <button
@@ -294,28 +307,51 @@ export function AppLayout({ children }: AppLayoutProps) {
             })}
           </nav>
 
-          {/* User section */}
-          <div className="p-3 border-t border-sidebar-border">
-            <div className="flex items-center gap-2.5 mb-3 px-1">
-              <div className="w-8 h-8 bg-sidebar-accent rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-medium text-sidebar-foreground">
-                  {user?.email?.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.email}</p>
-                <p className="text-[10px] text-sidebar-foreground/60 capitalize">{role || 'No role'}</p>
-              </div>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent h-8 text-xs" 
-              onClick={handleSignOut}
+          {/* Collapse toggle (desktop only) */}
+          <div className="hidden lg:flex justify-center py-2 border-t border-sidebar-border">
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              title={sidebarCollapsed ? '메뉴 펼치기' : '메뉴 접기'}
             >
-              <LogOut className="w-3.5 h-3.5" />
-              로그아웃
-            </Button>
+              {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* User section */}
+          <div className="p-2 border-t border-sidebar-border">
+            {!sidebarCollapsed ? (
+              <>
+                <div className="flex items-center gap-2.5 mb-3 px-1">
+                  <div className="w-8 h-8 bg-sidebar-accent rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-medium text-sidebar-foreground">
+                      {user?.email?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.email}</p>
+                    <p className="text-[10px] text-sidebar-foreground/60 capitalize">{role || 'No role'}</p>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent h-8 text-xs" 
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  로그아웃
+                </Button>
+              </>
+            ) : (
+              <button
+                onClick={handleSignOut}
+                title="로그아웃"
+                className="w-full flex justify-center p-2 rounded-md text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </aside>
