@@ -1020,17 +1020,31 @@ export function RosterActionModal({
                           </span>
                         </div>
                         
-                        <Button
-                          onClick={handleSaveHomeworkCheck}
-                          disabled={!homeworkCheckResult || isSavingHomework}
-                        >
-                          {isSavingHomework ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4 mr-2" />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleSaveHomeworkCheck}
+                            disabled={!homeworkCheckResult || isSavingHomework}
+                          >
+                            {isSavingHomework ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <Save className="w-4 h-4 mr-2" />
+                            )}
+                            확인 저장
+                          </Button>
+                          {/* CARRY-FORWARD-REASON-V1: Show carry-forward button for non-completion results */}
+                          {homeworkCheckResult && homeworkCheckResult !== 'completed' && (
+                            <Button
+                              variant="outline"
+                              onClick={handleCarryForward}
+                              disabled={isCarryingForward}
+                              className="gap-1"
+                            >
+                              {isCarryingForward ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                              다음시간 검사예정
+                            </Button>
                           )}
-                          확인 저장
-                        </Button>
+                        </div>
                       </>
                     )}
                   </CardContent>
