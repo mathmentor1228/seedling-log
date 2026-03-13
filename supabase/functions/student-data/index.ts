@@ -971,7 +971,7 @@ Deno.serve(async (req) => {
 
         const courseIds = enrollments.map((e: any) => e.course_id);
         
-        // Get courses and sessions
+        // Get courses, sessions, time slots, and slot assignments for this student
         const [coursesRes, sessionsRes] = await Promise.all([
           supabase.from('exam_prep_courses').select('id, subject, title, description, deadline_date, teacher_id').in('id', courseIds),
           supabase.from('exam_prep_sessions').select('*').in('course_id', courseIds).order('session_number'),
@@ -979,6 +979,19 @@ Deno.serve(async (req) => {
 
         const coursesData = coursesRes.data || [];
         const sessionsData = sessionsRes.data || [];
+
+        // Fetch time slots for all sessions
+        const sessionIds = sessionsData.map((s: any) => s.id);
+        let timeSlotsData: any[] = [];
+        let slotStudentsData: any[] = [];
+        if (sessionIds.length > 0) {
+          const [slotsRes, slotStudRes] = await Promise.all([
+            supabase.from('exam_prep_time_slots').select('*').in('session_id', sessionIds).order('slot_order'),
+            supabase.from('exam_prep_slot_students').select('*').eq('student_id', student_id),
+          ]);
+          timeSlotsData = slotsRes.data || [];
+          slotStudentsData = slotStudRes.data || [];
+        }
 
         // Get teacher names
         const teacherIds = [...new Set(coursesData.map((c: any) => c.teacher_id).filter(Boolean))];
@@ -1006,10 +1019,12 @@ Deno.serve(async (req) => {
             .in('id', overdueEnrollmentIds);
         }
 
+        // Set of slot IDs this student is assigned to
+        const studentSlotIds = new Set(slotStudentsData.map((ss: any) => ss.slot_id));
+
         // Build response grouped by course
         result = coursesData
           .filter((c: any) => {
-            // Only show courses with future sessions
             const courseSessions = sessionsData.filter((s: any) => s.course_id === c.id);
             return courseSessions.some((s: any) => s.schedule_date >= todayStr);
           })
@@ -1026,12 +1041,21 @@ Deno.serve(async (req) => {
               teacher_name: teacherMap[c.teacher_id] || '미배정',
               sessions: sessionsData
                 .filter((s: any) => s.course_id === c.id)
-                .map((s: any) => ({
-                  session_label: s.session_label,
-                  schedule_date: s.schedule_date,
-                  start_time: s.start_time,
-                  end_time: s.end_time,
-                })),
+                .map((s: any) => {
+                  const sessionSlots = timeSlotsData.filter((ts: any) => ts.session_id === s.id);
+                  // Filter to only slots this student is assigned to
+                  const mySlots = sessionSlots.filter((ts: any) => studentSlotIds.has(ts.id));
+                  return {
+                    session_label: s.session_label,
+                    schedule_date: s.schedule_date,
+                    start_time: s.start_time,
+                    end_time: s.end_time,
+                    time_slots: mySlots.map((ts: any) => ({
+                      start_time: ts.start_time,
+                      end_time: ts.end_time,
+                    })),
+                  };
+                }),
             };
           });
         break;
