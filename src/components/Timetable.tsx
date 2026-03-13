@@ -597,7 +597,7 @@ export function Timetable() {
             <Clock className="w-3 h-3" />
             {fmt(row.startTime)}–{fmt(row.endTime)}
           </div>
-          {editable && (
+          {editable && !isExamPrep && (
             <button
               onClick={(e) => { e.stopPropagation(); openEditSlot(row); }}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
