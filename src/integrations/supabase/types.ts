@@ -583,6 +583,7 @@ export type Database = {
           deadline_date: string
           description: string | null
           id: string
+          school_name: string | null
           subject: string
           teacher_id: string
           title: string | null
@@ -594,6 +595,7 @@ export type Database = {
           deadline_date: string
           description?: string | null
           id?: string
+          school_name?: string | null
           subject: string
           teacher_id: string
           title?: string | null
@@ -605,6 +607,7 @@ export type Database = {
           deadline_date?: string
           description?: string | null
           id?: string
+          school_name?: string | null
           subject?: string
           teacher_id?: string
           title?: string | null
