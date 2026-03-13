@@ -207,16 +207,18 @@ export function AppLayout({ children }: AppLayoutProps) {
         key={item.href}
         to={item.href}
         onClick={() => setSidebarOpen(false)}
+        title={sidebarCollapsed ? item.label : undefined}
         className={cn(
           "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
-          indent && "pl-8",
+          indent && !sidebarCollapsed && "pl-8",
+          sidebarCollapsed && "justify-center px-2",
           isActive
             ? "bg-sidebar-accent text-sidebar-foreground font-medium"
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
         )}
       >
         {item.icon}
-        <span>{item.label}</span>
+        {!sidebarCollapsed && <span>{item.label}</span>}
       </Link>
     );
   };
