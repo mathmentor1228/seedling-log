@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, FileUp, Trash2, Download, FileText, Image, File, Pencil, School, ChevronDown, ChevronRight, Paperclip, CalendarDays, Users, BarChart3, ClipboardCheck, Upload, X } from 'lucide-react';
+import { Plus, FileUp, Trash2, Download, FileText, Image, File, Pencil, School, ChevronDown, ChevronRight, Paperclip, CalendarDays, Users, BarChart3, ClipboardCheck, Upload, X, LayoutGrid, List } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -111,6 +111,9 @@ function getDdayText(examDateStart: string | null): string | null {
 
 export function SchoolExamArchive() {
   const { user } = useAuth();
+
+  // View mode: 'school' (학교별) or 'exam' (시험별)
+  const [viewMode, setViewMode] = useState<'school' | 'exam'>('school');
 
   // Filters
   const [filterYear, setFilterYear] = useState<string>(String(currentYear));
@@ -966,6 +969,141 @@ export function SchoolExamArchive() {
     );
   }
 
+  // === EXAM-TYPE VIEW: Group by semester+examType across all schools ===
+  interface ExamTypeGroup {
+    key: string; // e.g. "1학기 중간고사"
+    semester: string;
+    examType: string;
+    schools: Record<string, Archive[]>; // schoolKey -> archives
+    earliestDate: string | null;
+    latestDate: string | null;
+  }
+
+  function buildExamTypeGroups(allArchives: Archive[]): ExamTypeGroup[] {
+    const map = new Map<string, ExamTypeGroup>();
+    for (const a of allArchives) {
+      const key = `${a.semester} ${a.exam_type}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          semester: a.semester,
+          examType: a.exam_type,
+          schools: {},
+          earliestDate: null,
+          latestDate: null,
+        });
+      }
+      const group = map.get(key)!;
+      const schoolKey = `${a.school_name} (${a.school_level})`;
+      if (!group.schools[schoolKey]) group.schools[schoolKey] = [];
+      group.schools[schoolKey].push(a);
+      if (a.exam_date_start && (!group.earliestDate || a.exam_date_start < group.earliestDate)) {
+        group.earliestDate = a.exam_date_start;
+      }
+      if (a.exam_date_end && (!group.latestDate || a.exam_date_end > group.latestDate)) {
+        group.latestDate = a.exam_date_end;
+      }
+    }
+
+    const ORDER = ['1학기', '2학기'];
+    const TYPE_ORDER = ['중간고사', '기말고사', '기타'];
+    return Array.from(map.values()).sort((a, b) => {
+      const semA = ORDER.indexOf(a.semester), semB = ORDER.indexOf(b.semester);
+      if (semA !== semB) return semA - semB;
+      const tA = TYPE_ORDER.indexOf(a.examType), tB = TYPE_ORDER.indexOf(b.examType);
+      return tA - tB;
+    });
+  }
+
+  const renderExamTypeView = () => {
+    const groups = buildExamTypeGroups(archives);
+    if (groups.length === 0) return null;
+
+    return (
+      <div className="space-y-5">
+        {groups.map(group => {
+          const dday = getDdayText(group.earliestDate);
+          const dateRange = group.earliestDate
+            ? `${format(parseISO(group.earliestDate), 'M/d(EEE)', { locale: ko })}${group.latestDate && group.latestDate !== group.earliestDate ? ` ~ ${format(parseISO(group.latestDate), 'M/d(EEE)', { locale: ko })}` : ''}`
+            : '';
+          const schoolEntries = Object.entries(group.schools).sort(([a], [b]) => a.localeCompare(b));
+          const totalCount = schoolEntries.reduce((sum, [, arr]) => sum + arr.length, 0);
+
+          return (
+            <div key={group.key} className="space-y-3">
+              {/* Exam Type Header */}
+              <div className="flex items-center gap-2.5 bg-primary/5 border border-primary/10 rounded-lg px-4 py-3">
+                <CalendarDays className="w-5 h-5 text-primary" />
+                <h3 className="text-base font-bold">{group.key}</h3>
+                {dateRange && (
+                  <span className="text-xs text-muted-foreground">{dateRange}</span>
+                )}
+                {dday && <Badge variant="destructive" className="text-[10px] animate-pulse">{dday}</Badge>}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <Badge variant="secondary" className="text-[10px]">{schoolEntries.length}개교</Badge>
+                  <Badge variant="outline" className="text-[10px]">{totalCount}건</Badge>
+                </div>
+              </div>
+
+              {/* Schools under this exam type */}
+              {schoolEntries.map(([schoolKey, schoolArchives]) => {
+                const gradeMap: Record<number, Archive[]> = {};
+                for (const a of schoolArchives) {
+                  if (!gradeMap[a.grade_year]) gradeMap[a.grade_year] = [];
+                  gradeMap[a.grade_year].push(a);
+                }
+                const grades = Object.keys(gradeMap).map(Number).sort();
+                const firstArchive = schoolArchives[0];
+                const schoolDateStart = schoolArchives.reduce<string | null>((acc, a) => {
+                  if (a.exam_date_start && (!acc || a.exam_date_start < acc)) return a.exam_date_start;
+                  return acc;
+                }, null);
+                const schoolDateEnd = schoolArchives.reduce<string | null>((acc, a) => {
+                  if (a.exam_date_end && (!acc || a.exam_date_end > acc)) return a.exam_date_end;
+                  return acc;
+                }, null);
+                const schoolDday = getDdayText(schoolDateStart);
+                const schoolDateLabel = schoolDateStart
+                  ? `${format(parseISO(schoolDateStart), 'M/d(EEE)', { locale: ko })}${schoolDateEnd && schoolDateEnd !== schoolDateStart ? ` ~ ${format(parseISO(schoolDateEnd), 'M/d(EEE)', { locale: ko })}` : ''}`
+                  : '';
+
+                return (
+                  <Card key={schoolKey} className="overflow-hidden ml-2">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-muted/30 border-b">
+                      <School className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-semibold">{schoolKey}</span>
+                      {schoolDateLabel && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <CalendarDays className="w-3 h-3" />{schoolDateLabel}
+                        </span>
+                      )}
+                      {schoolDday && <Badge variant="destructive" className="text-[10px] animate-pulse ml-auto">{schoolDday}</Badge>}
+                      {grades.map(g => (
+                        <Badge key={g} variant="outline" className="text-[10px]">{g}학년</Badge>
+                      ))}
+                    </div>
+                    <div className="p-3 space-y-3">
+                      {grades.map(g => (
+                        <div key={g}>
+                          {grades.length > 1 && (
+                            <p className="text-[10px] font-semibold text-muted-foreground mb-1.5">{g}학년</p>
+                          )}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                            {gradeMap[g].sort((a, b) => a.subject.localeCompare(b.subject)).map(renderSubjectCard)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -977,9 +1115,27 @@ export function SchoolExamArchive() {
           </h2>
           <p className="text-sm text-muted-foreground">학교별·학년별·과목별 시험/수행평가 자료 및 분석을 통합 관리합니다</p>
         </div>
-        <Button onClick={openCreateDialog} size="sm">
-          <Plus className="w-4 h-4 mr-1" /> 자료 추가
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border rounded-lg overflow-hidden h-8">
+            <button
+              className={`flex items-center gap-1 px-3 h-full text-xs font-medium transition-colors ${viewMode === 'school' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              onClick={() => setViewMode('school')}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              학교별
+            </button>
+            <button
+              className={`flex items-center gap-1 px-3 h-full text-xs font-medium transition-colors ${viewMode === 'exam' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              onClick={() => setViewMode('exam')}
+            >
+              <List className="w-3.5 h-3.5" />
+              시험별
+            </button>
+          </div>
+          <Button onClick={openCreateDialog} size="sm">
+            <Plus className="w-4 h-4 mr-1" /> 자료 추가
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -1041,6 +1197,8 @@ export function SchoolExamArchive() {
             <Plus className="w-4 h-4 mr-1" /> 첫 자료 추가하기
           </Button>
         </div>
+      ) : viewMode === 'exam' ? (
+        renderExamTypeView()
       ) : (
         Object.entries(schoolGroups).map(([schoolKey, items]) => {
           const schoolName = items[0]?.school_name || '';
