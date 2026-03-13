@@ -178,6 +178,7 @@ export function RosterActionModal({
   const [isSavingHomework, setIsSavingHomework] = useState(false);
   const [isSavingTest, setIsSavingTest] = useState(false);
   const [isSavingNewHomework, setIsSavingNewHomework] = useState(false);
+  const [isCarryingForward, setIsCarryingForward] = useState(false);
 
   // Fetch data when modal opens
   useEffect(() => {
