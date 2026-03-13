@@ -369,6 +369,9 @@ export default function StudentDashboard() {
       {/* EXAM-DDAY-V1: Exam D-day countdown (filtered by student's school) */}
       <ExamDdayBanner schoolFilter={student?.school || null} />
 
+      {/* Exam Prep Schedule Confirmation */}
+      <StudentExamPrepSchedule />
+
       {/* Points Card */}
       <Card className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0">
         <CardContent className="p-4">
