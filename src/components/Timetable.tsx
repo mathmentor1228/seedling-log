@@ -639,7 +639,8 @@ export function Timetable() {
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   const StudentSlotCard = ({ row }: { row: StudentScheduleRow }) => (
     <div className={cn(
