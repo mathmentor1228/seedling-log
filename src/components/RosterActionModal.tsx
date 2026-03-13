@@ -736,17 +736,16 @@ export function RosterActionModal({
     }
   }
 
-  // Save new homework content (assistants can now insert/update)
+  // MULTI-HW-ASSIGN-V1: Save multiple homework items
   async function handleSaveNewHomework() {
-    if (!newHomeworkContent.trim() || !user || !context) return;
+    const validItems = newHomeworkItems.filter(i => i.content.trim());
+    if (validItems.length === 0 || !user || !context) return;
     
     setIsSavingNewHomework(true);
     try {
       let recordId = lessonRecord?.id;
       
-      // If no lesson record exists, create one (assistants can now insert for today)
       if (!recordId) {
-        // Check again in case created by another process
         const { data: existing } = await supabase
           .from('lesson_records')
           .select('id')
@@ -759,7 +758,6 @@ export function RosterActionModal({
         if (existing) {
           recordId = existing.id;
         } else {
-          // Create a draft record (all roles can insert now)
           const { data: newRecord, error: createError } = await supabase
             .from('lesson_records')
             .insert({
@@ -783,33 +781,21 @@ export function RosterActionModal({
         }
       }
       
-      // Check if homework already exists for this record
-      const { data: existingHw } = await supabase
-        .from('homework_assignments')
-        .select('id')
-        .eq('lesson_record_id', recordId)
-        .maybeSingle();
-      
-      if (existingHw) {
-        await supabase
-          .from('homework_assignments')
-          .update({ content: newHomeworkContent.trim() })
-          .eq('id', existingHw.id);
-      } else {
-        await supabase
-          .from('homework_assignments')
-          .insert({
-            student_id: context.student_id,
-            subject: context.subject as SubjectType,
-            lesson_record_id: recordId,
-            assigned_date: context.date,
-            content: newHomeworkContent.trim(),
-          });
+      // Delete existing then insert all
+      await supabase.from('homework_assignments').delete().eq('lesson_record_id', recordId);
+      for (const item of validItems) {
+        await supabase.from('homework_assignments').insert({
+          student_id: context.student_id,
+          subject: context.subject as SubjectType,
+          lesson_record_id: recordId,
+          assigned_date: context.date,
+          content: item.content.trim(),
+        });
       }
       
       toast({
         title: '저장 완료',
-        description: '오늘 숙제가 저장되었습니다',
+        description: `숙제 ${validItems.length}개가 저장되었습니다`,
       });
       
       onSaved?.();
