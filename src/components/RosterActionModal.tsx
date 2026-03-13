@@ -44,6 +44,7 @@ import {
   PackageX,
   Frown,
   ArrowRight,
+  Plus,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
@@ -163,7 +164,9 @@ export function RosterActionModal({
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState('');
   // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records
   const [homeworkCheckNote, setHomeworkCheckNote] = useState('');
-  const [newHomeworkContent, setNewHomeworkContent] = useState('');
+  // MULTI-HW-ASSIGN-V1: Multiple homework items
+  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
+  const newHomeworkContent = newHomeworkItems[0]?.content || '';
   const [testFormData, setTestFormData] = useState({
     test_name: '', // Unified: saves to test_name, test_content, test_title
     test_result_text: '',
@@ -195,7 +198,7 @@ export function RosterActionModal({
       setHomeworkCheckResult('');
       setHomeworkCheckNotes('');
       setHomeworkCheckNote(''); // ASSISTANT-HW-NO-CARRYOVER-V1: Reset assistant note
-      setNewHomeworkContent('');
+      setNewHomeworkItems([{ content: '' }]);
       setTestFormData({
         test_name: '',
         test_result_text: '',
@@ -300,15 +303,14 @@ export function RosterActionModal({
           const { data: homework, error: hwError } = await supabase
             .from('homework_assignments')
             .select('*')
-            .eq('lesson_record_id', record.id)
-            .maybeSingle();
+            .eq('lesson_record_id', record.id);
           
           if (hwError) {
             console.error('[fetchData] homework_assignments SELECT failed:', hwError.code, hwError.message);
           }
           
-          if (homework) {
-            setNewHomeworkContent(homework.content || '');
+          if (homework && homework.length > 0) {
+            setNewHomeworkItems(homework.map(hw => ({ content: hw.content || '' })));
           }
         }
       }
@@ -735,17 +737,16 @@ export function RosterActionModal({
     }
   }
 
-  // Save new homework content (assistants can now insert/update)
+  // MULTI-HW-ASSIGN-V1: Save multiple homework items
   async function handleSaveNewHomework() {
-    if (!newHomeworkContent.trim() || !user || !context) return;
+    const validItems = newHomeworkItems.filter(i => i.content.trim());
+    if (validItems.length === 0 || !user || !context) return;
     
     setIsSavingNewHomework(true);
     try {
       let recordId = lessonRecord?.id;
       
-      // If no lesson record exists, create one (assistants can now insert for today)
       if (!recordId) {
-        // Check again in case created by another process
         const { data: existing } = await supabase
           .from('lesson_records')
           .select('id')
@@ -758,7 +759,6 @@ export function RosterActionModal({
         if (existing) {
           recordId = existing.id;
         } else {
-          // Create a draft record (all roles can insert now)
           const { data: newRecord, error: createError } = await supabase
             .from('lesson_records')
             .insert({
@@ -782,33 +782,21 @@ export function RosterActionModal({
         }
       }
       
-      // Check if homework already exists for this record
-      const { data: existingHw } = await supabase
-        .from('homework_assignments')
-        .select('id')
-        .eq('lesson_record_id', recordId)
-        .maybeSingle();
-      
-      if (existingHw) {
-        await supabase
-          .from('homework_assignments')
-          .update({ content: newHomeworkContent.trim() })
-          .eq('id', existingHw.id);
-      } else {
-        await supabase
-          .from('homework_assignments')
-          .insert({
-            student_id: context.student_id,
-            subject: context.subject as SubjectType,
-            lesson_record_id: recordId,
-            assigned_date: context.date,
-            content: newHomeworkContent.trim(),
-          });
+      // Delete existing then insert all
+      await supabase.from('homework_assignments').delete().eq('lesson_record_id', recordId);
+      for (const item of validItems) {
+        await supabase.from('homework_assignments').insert({
+          student_id: context.student_id,
+          subject: context.subject as SubjectType,
+          lesson_record_id: recordId,
+          assigned_date: context.date,
+          content: item.content.trim(),
+        });
       }
       
       toast({
         title: '저장 완료',
-        description: '오늘 숙제가 저장되었습니다',
+        description: `숙제 ${validItems.length}개가 저장되었습니다`,
       });
       
       onSaved?.();
@@ -1201,25 +1189,52 @@ export function RosterActionModal({
                 </CardContent>
               </Card>
               
-              {/* New Homework */}
+              {/* MULTI-HW-ASSIGN-V1: Multiple homework */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">오늘 숙제</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">오늘 숙제 ({newHomeworkItems.filter(i => i.content.trim()).length}개)</CardTitle>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewHomeworkItems(prev => [...prev, { content: '' }])}
+                      className="text-xs gap-1 h-7"
+                    >
+                      <Plus className="w-3 h-3" />
+                      숙제 추가
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>숙제 내용</Label>
-                    <Textarea
-                      value={newHomeworkContent}
-                      onChange={(e) => setNewHomeworkContent(e.target.value)}
-                      placeholder="오늘 숙제를 입력하세요..."
-                      rows={3}
-                    />
-                  </div>
+                  {newHomeworkItems.map((item, idx) => (
+                    <div key={idx} className="space-y-1">
+                      {newHomeworkItems.length > 1 && (
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">숙제 {idx + 1}</Label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setNewHomeworkItems(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-xs text-muted-foreground hover:text-destructive h-6 px-2 gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
+                      <Textarea
+                        value={item.content}
+                        onChange={(e) => setNewHomeworkItems(prev => prev.map((it, i) => i === idx ? { ...it, content: e.target.value } : it))}
+                        placeholder={idx === 0 ? "오늘 숙제를 입력하세요..." : "추가 숙제 내용..."}
+                        rows={2}
+                      />
+                    </div>
+                  ))}
                   
                   <Button 
                     onClick={handleSaveNewHomework}
-                    disabled={!newHomeworkContent.trim() || isSavingNewHomework}
+                    disabled={!newHomeworkItems.some(i => i.content.trim()) || isSavingNewHomework}
                   >
                     {isSavingNewHomework ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />

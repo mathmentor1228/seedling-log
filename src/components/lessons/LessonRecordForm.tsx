@@ -380,7 +380,10 @@ export function LessonRecordForm({
   const [homeworkCheckResult, setHomeworkCheckResult] = useState<string>('');
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
   const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
-  const [newHomeworkContent, setNewHomeworkContent] = useState('');
+  // MULTI-HW-ASSIGN-V1: Multiple homework items support
+  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
+  // Legacy alias for compatibility
+  const newHomeworkContent = newHomeworkItems[0]?.content || '';
   
   // TEACHER-HW-SUBMISSION-VIEW-V1: Student submission and point history states
   const [studentSubmission, setStudentSubmission] = useState<HomeworkSubmission | null>(null);
@@ -742,13 +745,13 @@ export function LessonRecordForm({
           }
 
           // Load homework content
-          const { data: existingHw } = await supabase
+          // MULTI-HW-ASSIGN-V1: Load all existing homework for this record
+          const { data: existingHwList } = await supabase
             .from('homework_assignments')
             .select('content')
-            .eq('lesson_record_id', record.id)
-            .maybeSingle();
-          if (existingHw?.content) {
-            setNewHomeworkContent(existingHw.content);
+            .eq('lesson_record_id', record.id);
+          if (existingHwList && existingHwList.length > 0) {
+            setNewHomeworkItems(existingHwList.map(hw => ({ content: hw.content || '' })));
           }
         }
       } else if (initialContext && canManage) {
@@ -1207,23 +1210,18 @@ export function LessonRecordForm({
         }
       }
 
-      // Save homework
-      if (newHomeworkContent.trim() && finalDraftId) {
-        const { data: existingHw } = await supabase
-          .from('homework_assignments')
-          .select('id')
-          .eq('lesson_record_id', finalDraftId)
-          .maybeSingle();
-
-        if (existingHw) {
-          await supabase.from('homework_assignments').update({ content: newHomeworkContent.trim() }).eq('id', existingHw.id);
-        } else {
+      // MULTI-HW-ASSIGN-V1: Save multiple homework items
+      const validItems = newHomeworkItems.filter(item => item.content.trim());
+      if (validItems.length > 0 && finalDraftId) {
+        // Delete existing homework for this record, then re-insert all
+        await supabase.from('homework_assignments').delete().eq('lesson_record_id', finalDraftId);
+        for (const item of validItems) {
           await supabase.from('homework_assignments').insert({
             student_id: formData.student_id,
             subject: formData.subject as SubjectType,
             lesson_record_id: finalDraftId,
             assigned_date: formData.lesson_date,
-            content: newHomeworkContent.trim(),
+            content: item.content.trim(),
             created_by: user?.id || null,
           });
         }
@@ -1276,23 +1274,18 @@ export function LessonRecordForm({
         finalRecordId = data.id;
       }
 
-      // Save homework
-      if (newHomeworkContent.trim() && finalRecordId) {
-        const { data: existingHw } = await supabase
-          .from('homework_assignments')
-          .select('id')
-          .eq('lesson_record_id', finalRecordId)
-          .maybeSingle();
-
-        if (existingHw) {
-          await supabase.from('homework_assignments').update({ content: newHomeworkContent.trim() }).eq('id', existingHw.id);
-        } else {
+      // MULTI-HW-ASSIGN-V1: Save multiple homework items
+      const validItems = newHomeworkItems.filter(item => item.content.trim());
+      if (validItems.length > 0 && finalRecordId) {
+        // Delete existing homework for this record, then re-insert all
+        await supabase.from('homework_assignments').delete().eq('lesson_record_id', finalRecordId);
+        for (const item of validItems) {
           await supabase.from('homework_assignments').insert({
             student_id: formData.student_id,
             subject: formData.subject as SubjectType,
             lesson_record_id: finalRecordId,
             assigned_date: formData.lesson_date,
-            content: newHomeworkContent.trim(),
+            content: item.content.trim(),
             created_by: user?.id || null,
           });
         }
@@ -2283,34 +2276,51 @@ export function LessonRecordForm({
         </div>
       </div>
 
-      {/* New homework section */}
+      {/* MULTI-HW-ASSIGN-V1: Multiple homework section */}
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 bg-green-500/8 border-b border-border/50">
           <div className="flex items-center gap-2">
             <Plus className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-semibold text-green-700">오늘 숙제</span>
+            <span className="text-sm font-semibold text-green-700">오늘 숙제 ({newHomeworkItems.filter(i => i.content.trim()).length}개)</span>
           </div>
-          {newHomeworkContent.trim() && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setNewHomeworkContent('')}
-              className="text-xs text-muted-foreground hover:text-destructive gap-1"
-            >
-              <X className="w-3.5 h-3.5" />
-              숙제 취소
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setNewHomeworkItems(prev => [...prev, { content: '' }])}
+            className="text-xs gap-1 h-7"
+          >
+            <Plus className="w-3 h-3" />
+            숙제 추가
+          </Button>
         </div>
-        <div className="p-4">
-          <Textarea
-            placeholder="오늘 배정할 숙제 내용"
-            value={newHomeworkContent}
-            onChange={(e) => setNewHomeworkContent(e.target.value)}
-            rows={3}
-            className="text-sm"
-          />
+        <div className="p-4 space-y-3">
+          {newHomeworkItems.map((item, idx) => (
+            <div key={idx} className="relative">
+              {newHomeworkItems.length > 1 && (
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-muted-foreground">숙제 {idx + 1}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setNewHomeworkItems(prev => prev.filter((_, i) => i !== idx))}
+                    className="text-xs text-muted-foreground hover:text-destructive gap-1 h-6 px-2"
+                  >
+                    <X className="w-3 h-3" />
+                    삭제
+                  </Button>
+                </div>
+              )}
+              <Textarea
+                placeholder={idx === 0 ? "오늘 배정할 숙제 내용" : "추가 숙제 내용"}
+                value={item.content}
+                onChange={(e) => setNewHomeworkItems(prev => prev.map((it, i) => i === idx ? { ...it, content: e.target.value } : it))}
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+          ))}
         </div>
       </div>
 
