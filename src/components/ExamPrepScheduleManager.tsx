@@ -725,6 +725,29 @@ export function ExamPrepScheduleManager() {
                         </div>
                       )}
 
+                      {/* Grade bulk assign buttons */}
+                      {groupedStudents.length > 0 && sess.slots.some(sl => sl.startTime && sl.endTime) && (
+                        <div className="px-4 py-1.5 border-b flex items-center gap-1.5 flex-wrap bg-muted/20">
+                          <span className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                            <UsersRound className="w-3 h-3" /> 학년 일괄 배치:
+                          </span>
+                          {groupedStudents.map(([groupKey, groupStudents]) => {
+                            const [school, levelGrade] = groupKey.split('|');
+                            const levelChar = levelGrade?.[0] || '';
+                            const yearNum = levelGrade?.slice(1) || '';
+                            const shortLabel = `${levelChar}${yearNum}`;
+                            return (
+                              <Button key={groupKey} variant="outline" size="sm"
+                                className="h-5 text-[9px] px-1.5 gap-0.5"
+                                onClick={() => assignGradeToSession(si, groupKey)}
+                                title={`${school} ${shortLabel} ${groupStudents.length}명 전체 배치`}>
+                                {shortLabel} ({groupStudents.length})
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       <div className="divide-y">
                         {sess.slots.map((slot, sli) => {
                           const assigned = slotAssignments[slot.id] || [];
