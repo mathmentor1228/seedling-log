@@ -29,6 +29,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import StudentWeeklyCalendar from '@/components/student/StudentWeeklyCalendar';
 import { ExamDdayBanner } from '@/components/ExamDdayBanner';
+import { StudentExamPrepSchedule } from '@/components/student/StudentExamPrepSchedule';
 import {
   Collapsible,
   CollapsibleContent,
