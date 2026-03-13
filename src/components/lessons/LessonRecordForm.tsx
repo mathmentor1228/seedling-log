@@ -1764,9 +1764,19 @@ export function LessonRecordForm({
                       })()}
 
                       {hwItem.check_status === 'checked' ? (
-                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
                           <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                          <span>확인됨 {hwItem.result && `(${hwItem.result})`}</span>
+                          <span>확인됨</span>
+                          {hwItem.result && (
+                            <Badge variant="outline" className="text-[10px] h-4">
+                              {HOMEWORK_RESULT_OPTIONS.find(o => o.value === hwItem.result)?.label || hwItem.result}
+                            </Badge>
+                          )}
+                          {hwItem.notes?.includes('이월사유') && (
+                            <Badge variant="outline" className="text-[10px] h-4 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                              ↗ 다음시간 이월
+                            </Badge>
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-2.5 pt-2.5 border-t border-border/40">
