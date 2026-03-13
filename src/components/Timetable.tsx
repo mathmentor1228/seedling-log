@@ -689,7 +689,7 @@ export function Timetable() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {scheduleRows.length === 0 ? (
+          {allRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">등록된 시간표가 없습니다</p>
           ) : (
             <div className="space-y-6">
