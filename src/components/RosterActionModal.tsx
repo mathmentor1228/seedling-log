@@ -44,6 +44,7 @@ import {
   PackageX,
   Frown,
   ArrowRight,
+  Plus,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
