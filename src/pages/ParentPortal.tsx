@@ -158,6 +158,11 @@ export default function ParentPortal() {
           <ExamDdayBannerStatic exams={data.exam_events} />
         )}
 
+        {/* Exam Prep Schedules for Parent */}
+        {data.exam_prep_schedules && data.exam_prep_schedules.length > 0 && (
+          <ExamPrepParentSection schedules={data.exam_prep_schedules} />
+        )}
+
         {/* Summary Stats */}
         <SummaryCards lessons={lessons} homework={homework} />
 
