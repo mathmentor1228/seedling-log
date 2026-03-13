@@ -163,7 +163,9 @@ export function RosterActionModal({
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState('');
   // TEACHER-HW-ALERT-V2: homework_check_note for lesson_records
   const [homeworkCheckNote, setHomeworkCheckNote] = useState('');
-  const [newHomeworkContent, setNewHomeworkContent] = useState('');
+  // MULTI-HW-ASSIGN-V1: Multiple homework items
+  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
+  const newHomeworkContent = newHomeworkItems[0]?.content || '';
   const [testFormData, setTestFormData] = useState({
     test_name: '', // Unified: saves to test_name, test_content, test_title
     test_result_text: '',
