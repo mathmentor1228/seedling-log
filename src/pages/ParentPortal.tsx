@@ -17,7 +17,8 @@ interface VocabResultItem { id: string; test_date: string; day_number: number; b
 interface ClassScheduleItem { class_name: string; subject: string; day_of_week: number; start_time: string; end_time: string; }
 interface UpcomingSupplement { id: string; date: string; subject: string; range: string; course: string | null; time: string | null; teacher_name: string | null; }
 interface UnpaidTextbook { id: string; textbook_name: string; subject: string; total_amount: number; created_at: string; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; }
+interface ExamPrepScheduleItem { id: string; subject: string; schedule_date: string; start_time: string; end_time: string; description: string | null; status: string; }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
