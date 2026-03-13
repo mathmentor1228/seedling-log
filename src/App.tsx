@@ -28,6 +28,7 @@ import VocabTestPage from "./pages/VocabTestPage";
 import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
 import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
 import MathConceptPage from "./pages/MathConceptPage";
+import ExamPrepPage from "./pages/ExamPrepPage";
 import NotFound from "./pages/NotFound";
 import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
