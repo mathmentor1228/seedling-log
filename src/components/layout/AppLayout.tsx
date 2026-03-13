@@ -160,7 +160,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     const email = (user?.email || '').trim().toLowerCase();
     // If allowedEmails is set, grant access if email matches (regardless of role)
     if (item.allowedEmails?.some((allowedEmail) => allowedEmail.trim().toLowerCase() === email)) return true;
-    if (item.allowedRoles) return !!(role && item.allowedRoles.includes(role));
+    if (item.allowedRoles) {
+      const roleMatch = !!(role && item.allowedRoles.includes(role));
+      // If allowedSubjects is set, teachers must also match subject
+      if (item.allowedSubjects && role === 'teacher') {
+        return roleMatch && !!(assignedSubject && item.allowedSubjects.includes(assignedSubject));
+      }
+      return roleMatch;
+    }
     return !item.adminOnly || role === 'admin';
   };
 
