@@ -1210,23 +1210,18 @@ export function LessonRecordForm({
         }
       }
 
-      // Save homework
-      if (newHomeworkContent.trim() && finalDraftId) {
-        const { data: existingHw } = await supabase
-          .from('homework_assignments')
-          .select('id')
-          .eq('lesson_record_id', finalDraftId)
-          .maybeSingle();
-
-        if (existingHw) {
-          await supabase.from('homework_assignments').update({ content: newHomeworkContent.trim() }).eq('id', existingHw.id);
-        } else {
+      // MULTI-HW-ASSIGN-V1: Save multiple homework items
+      const validItems = newHomeworkItems.filter(item => item.content.trim());
+      if (validItems.length > 0 && finalDraftId) {
+        // Delete existing homework for this record, then re-insert all
+        await supabase.from('homework_assignments').delete().eq('lesson_record_id', finalDraftId);
+        for (const item of validItems) {
           await supabase.from('homework_assignments').insert({
             student_id: formData.student_id,
             subject: formData.subject as SubjectType,
             lesson_record_id: finalDraftId,
             assigned_date: formData.lesson_date,
-            content: newHomeworkContent.trim(),
+            content: item.content.trim(),
             created_by: user?.id || null,
           });
         }
