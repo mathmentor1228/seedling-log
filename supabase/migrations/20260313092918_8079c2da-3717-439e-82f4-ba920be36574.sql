@@ -1,0 +1,2 @@
+ALTER TABLE public.homework_assignments DROP CONSTRAINT homework_assignments_result_check;
+ALTER TABLE public.homework_assignments ADD CONSTRAINT homework_assignments_result_check CHECK (result = ANY (ARRAY['completed'::text, 'partial'::text, 'not_done'::text, 'unable_to_verify'::text, 'lost'::text, 'low_effort'::text]));

@@ -12,6 +12,8 @@ import {
   LogOut,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
   UserCog,
   Calendar,
   ClipboardCheck,
@@ -45,6 +47,7 @@ interface NavItem {
   adminOnly?: boolean;
   allowedRoles?: ('admin' | 'teacher' | 'assistant')[];
   allowedEmails?: string[];
+  allowedSubjects?: string[];
 }
 
 interface NavGroup {
@@ -133,7 +136,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       ],
     },
     { label: '사용자 관리', href: '/admin/users', icon: <UserCog className="w-4 h-4" />, allowedRoles: ['admin'] },
-    { label: '수학 개념 관리', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin'] },
+    { label: '수학 개념 관리', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'], allowedSubjects: ['수학'] },
     { label: '행정 업무', href: '/admin/office', icon: <Briefcase className="w-4 h-4" />, allowedRoles: ['admin'], allowedEmails: ['bfkor8810@naver.com'] },
   ];
 };
@@ -143,6 +146,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
@@ -159,7 +163,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     const email = (user?.email || '').trim().toLowerCase();
     // If allowedEmails is set, grant access if email matches (regardless of role)
     if (item.allowedEmails?.some((allowedEmail) => allowedEmail.trim().toLowerCase() === email)) return true;
-    if (item.allowedRoles) return !!(role && item.allowedRoles.includes(role));
+    if (item.allowedRoles) {
+      const roleMatch = !!(role && item.allowedRoles.includes(role));
+      // If allowedSubjects is set, teachers must also match subject
+      if (item.allowedSubjects && role === 'teacher') {
+        return roleMatch && !!(assignedSubject && item.allowedSubjects.includes(assignedSubject));
+      }
+      return roleMatch;
+    }
     return !item.adminOnly || role === 'admin';
   };
 
@@ -196,16 +207,18 @@ export function AppLayout({ children }: AppLayoutProps) {
         key={item.href}
         to={item.href}
         onClick={() => setSidebarOpen(false)}
+        title={sidebarCollapsed ? item.label : undefined}
         className={cn(
           "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
-          indent && "pl-8",
+          indent && !sidebarCollapsed && "pl-8",
+          sidebarCollapsed && "justify-center px-2",
           isActive
             ? "bg-sidebar-accent text-sidebar-foreground font-medium"
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
         )}
       >
         {item.icon}
-        <span>{item.label}</span>
+        {!sidebarCollapsed && <span>{item.label}</span>}
       </Link>
     );
   };
@@ -235,31 +248,44 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed top-0 left-0 h-full w-56 bg-sidebar z-40 transition-transform duration-200 lg:translate-x-0",
+          "fixed top-0 left-0 h-full bg-sidebar z-40 transition-all duration-200 lg:translate-x-0",
+          sidebarCollapsed ? "w-14" : "w-56",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="h-14 px-4 flex items-center gap-2.5 border-b border-sidebar-border">
+          <div className="h-14 px-3 flex items-center gap-2.5 border-b border-sidebar-border">
             {/* Logo Mark: Square with "M" */}
             <div className="w-8 h-8 bg-sidebar-foreground rounded flex items-center justify-center flex-shrink-0">
               <span className="text-sidebar-background font-bold text-base">M</span>
             </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-semibold text-sidebar-foreground text-sm tracking-tight">MENTOR LOG</h1>
-              <p className="text-[10px] text-sidebar-foreground/60 truncate">더멘토학원 학습·운영 관리</p>
-            </div>
-            <div className="hidden lg:block">
-              <AdminOfficeBell />
-            </div>
+            {!sidebarCollapsed && (
+              <div className="min-w-0 flex-1">
+                <h1 className="font-semibold text-sidebar-foreground text-sm tracking-tight">MENTOR LOG</h1>
+                <p className="text-[10px] text-sidebar-foreground/60 truncate">더멘토학원 학습·운영 관리</p>
+              </div>
+            )}
+            {!sidebarCollapsed && (
+              <div className="hidden lg:block">
+                <AdminOfficeBell />
+              </div>
+            )}
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
             {filteredEntries.map((entry) => {
               if (isGroup(entry)) {
                 const open = isGroupOpen(entry);
+                if (sidebarCollapsed) {
+                  // In collapsed mode, show first item's icon as group representative
+                  return (
+                    <div key={entry.label} className="space-y-0.5">
+                      {entry.items.map(item => renderNavItem(item))}
+                    </div>
+                  );
+                }
                 return (
                   <div key={entry.label}>
                     <button
@@ -281,28 +307,51 @@ export function AppLayout({ children }: AppLayoutProps) {
             })}
           </nav>
 
-          {/* User section */}
-          <div className="p-3 border-t border-sidebar-border">
-            <div className="flex items-center gap-2.5 mb-3 px-1">
-              <div className="w-8 h-8 bg-sidebar-accent rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-medium text-sidebar-foreground">
-                  {user?.email?.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.email}</p>
-                <p className="text-[10px] text-sidebar-foreground/60 capitalize">{role || 'No role'}</p>
-              </div>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent h-8 text-xs" 
-              onClick={handleSignOut}
+          {/* Collapse toggle (desktop only) */}
+          <div className="hidden lg:flex justify-center py-2 border-t border-sidebar-border">
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1.5 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              title={sidebarCollapsed ? '메뉴 펼치기' : '메뉴 접기'}
             >
-              <LogOut className="w-3.5 h-3.5" />
-              로그아웃
-            </Button>
+              {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* User section */}
+          <div className="p-2 border-t border-sidebar-border">
+            {!sidebarCollapsed ? (
+              <>
+                <div className="flex items-center gap-2.5 mb-3 px-1">
+                  <div className="w-8 h-8 bg-sidebar-accent rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-medium text-sidebar-foreground">
+                      {user?.email?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.email}</p>
+                    <p className="text-[10px] text-sidebar-foreground/60 capitalize">{role || 'No role'}</p>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent h-8 text-xs" 
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  로그아웃
+                </Button>
+              </>
+            ) : (
+              <button
+                onClick={handleSignOut}
+                title="로그아웃"
+                className="w-full flex justify-center p-2 rounded-md text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </aside>
@@ -316,7 +365,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       )}
 
       {/* Main content */}
-      <div className="lg:ml-56 min-h-screen pt-14 lg:pt-0 flex flex-col">
+      <div className={cn("min-h-screen pt-14 lg:pt-0 flex flex-col transition-all duration-200", sidebarCollapsed ? "lg:ml-14" : "lg:ml-56")}>
         <main className="flex-1">
           <div className="p-5 lg:p-8 max-w-7xl mx-auto">
             {isDashboard && (

@@ -128,6 +128,7 @@ const HOMEWORK_RESULT_OPTIONS = [
   { value: 'not_done', label: '미완', icon: XCircle, color: 'text-red-600' },
   { value: 'lost', label: '분실', icon: PackageX, color: 'text-orange-600' },
   { value: 'low_effort', label: '성의부족', icon: Frown, color: 'text-rose-600' },
+  { value: 'low_effort_completed', label: '성의부족+완료', icon: CheckCircle2, color: 'text-amber-600' },
   { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle, color: 'text-muted-foreground' },
 ];
 
@@ -399,6 +400,7 @@ export function RosterActionModal({
       case 'not_done': return 'not_done';
       case 'lost': return 'not_done';
       case 'low_effort': return 'not_done';
+      case 'low_effort_completed': return 'completed';
       case 'unable_to_verify': return 'none_assigned';
       default: return 'none_assigned';
     }
