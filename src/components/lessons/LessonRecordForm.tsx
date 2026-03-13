@@ -1703,7 +1703,22 @@ export function LessonRecordForm({
                         )}
                       </div>
                       <div className="p-3 space-y-3">
-                      <p className="text-sm whitespace-pre-wrap bg-background/80 p-2.5 rounded-md border border-border/30 leading-relaxed">{hwItem.content}</p>
+                      {/* CARRY-FORWARD-REASON-V1: Show reason badge for carried-forward homework */}
+                      {(() => {
+                        const reasonMatch = hwItem.content.match(/^\[(분실|미완|부분|성의부족|확인불가)\]\s*/);
+                        if (reasonMatch) {
+                          const reason = reasonMatch[1];
+                          const cleanContent = hwItem.content.replace(reasonMatch[0], '');
+                          const reasonColors: Record<string, string> = { '분실': 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300', '미완': 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300', '부분': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', '성의부족': 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', '확인불가': 'bg-muted text-muted-foreground' };
+                          return (
+                            <div className="space-y-1.5">
+                              <Badge variant="outline" className={`text-[10px] ${reasonColors[reason] || 'bg-muted'}`}>⚠️ 이월사유: {reason}</Badge>
+                              <p className="text-sm whitespace-pre-wrap bg-background/80 p-2.5 rounded-md border border-border/30 leading-relaxed">{cleanContent}</p>
+                            </div>
+                          );
+                        }
+                        return <p className="text-sm whitespace-pre-wrap bg-background/80 p-2.5 rounded-md border border-border/30 leading-relaxed">{hwItem.content}</p>;
+                      })()}
 
                       {/* Submission display */}
                       {(() => {
@@ -1749,9 +1764,19 @@ export function LessonRecordForm({
                       })()}
 
                       {hwItem.check_status === 'checked' ? (
-                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
                           <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                          <span>확인됨 {hwItem.result && `(${hwItem.result})`}</span>
+                          <span>확인됨</span>
+                          {hwItem.result && (
+                            <Badge variant="outline" className="text-[10px] h-4">
+                              {HOMEWORK_RESULT_OPTIONS.find(o => o.value === hwItem.result)?.label || hwItem.result}
+                            </Badge>
+                          )}
+                          {hwItem.notes?.includes('이월사유') && (
+                            <Badge variant="outline" className="text-[10px] h-4 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                              ↗ 다음시간 이월
+                            </Badge>
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-2.5 pt-2.5 border-t border-border/40">
@@ -1775,21 +1800,28 @@ export function LessonRecordForm({
                               <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
                               확인 저장
                             </Button>
+                            {/* CARRY-FORWARD-REASON-V1: Show carry-forward only for non-completion results */}
+                            {homeworkCheckResults[hwItem.id] && homeworkCheckResults[hwItem.id] !== 'completed' && (
                             <Button type="button" size="sm" variant="outline" className="gap-1 h-7 text-xs" disabled={carryForwardLoading} onClick={async () => {
                               if (!user) return;
                               setCarryForwardLoading(true);
                               try {
+                                const selectedResult = homeworkCheckResults[hwItem.id] || 'not_done';
+                                const reasonLabel = HOMEWORK_RESULT_OPTIONS.find(o => o.value === selectedResult)?.label || selectedResult;
+                                const contentWithReason = `[${reasonLabel}] ${hwItem.content}`;
+                                const carryNote = `[이월사유: ${reasonLabel}] 다음시간 검사예정으로 이월`;
                                 const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
                                 const nextDate = format(tomorrow, 'yyyy-MM-dd');
-                                await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: hwItem.content, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
-                                await supabase.from('homework_assignments').update({ check_status: 'checked', checked_by: user.id, checked_at: new Date().toISOString(), result: 'unable_to_verify', notes: '다음시간 검사예정으로 이월' }).eq('id', hwItem.id);
-                                toast({ title: '다음시간으로 이월됨', description: hwItem.content });
+                                await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: contentWithReason, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
+                                await supabase.from('homework_assignments').update({ check_status: 'checked', checked_by: user.id, checked_at: new Date().toISOString(), result: selectedResult, notes: carryNote }).eq('id', hwItem.id);
+                                toast({ title: '다음시간으로 이월됨', description: `사유: ${reasonLabel} / ${hwItem.content}` });
                                 if (formData.student_id && formData.subject) { await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date); }
                               } catch (err: any) { toast({ title: '이월 실패', description: err.message, variant: 'destructive' }); } finally { setCarryForwardLoading(false); }
                             }}>
                               {carryForwardLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
                               다음시간 검사예정
                             </Button>
+                            )}
                           </div>
                         </div>
                       )}

@@ -43,6 +43,7 @@ import {
   X,
   PackageX,
   Frown,
+  ArrowRight,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
@@ -177,6 +178,7 @@ export function RosterActionModal({
   const [isSavingHomework, setIsSavingHomework] = useState(false);
   const [isSavingTest, setIsSavingTest] = useState(false);
   const [isSavingNewHomework, setIsSavingNewHomework] = useState(false);
+  const [isCarryingForward, setIsCarryingForward] = useState(false);
 
   // Fetch data when modal opens
   useEffect(() => {
@@ -610,6 +612,62 @@ export function RosterActionModal({
     }
   }
 
+  // CARRY-FORWARD-REASON-V1: Carry forward homework to next session with reason
+  async function handleCarryForward() {
+    if (!previousHomework || !homeworkCheckResult || !user || !context) return;
+    
+    setIsCarryingForward(true);
+    try {
+      const reasonLabel = HOMEWORK_RESULT_OPTIONS.find(o => o.value === homeworkCheckResult)?.label || homeworkCheckResult;
+      const carryNote = `[이월사유: ${reasonLabel}] 다음시간 검사예정으로 이월`;
+      const contentWithReason = `[${reasonLabel}] ${previousHomework.content}`;
+      
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const nextDate = format(tomorrow, 'yyyy-MM-dd');
+      
+      // Create new homework for next session with reason tag
+      await supabase.from('homework_assignments').insert({
+        student_id: context.student_id,
+        subject: context.subject as SubjectType,
+        content: contentWithReason,
+        assigned_date: nextDate,
+        homework_type: 'regular',
+        created_by: user.id,
+      });
+      
+      // Mark current as checked with carry-forward note
+      if (isAssistant) {
+        await supabase.rpc('update_homework_check', {
+          _homework_id: previousHomework.id,
+          _check_status: 'checked',
+          _result: homeworkCheckResult,
+          _notes: carryNote,
+        });
+      } else {
+        await supabase.from('homework_assignments').update({
+          check_status: 'checked',
+          result: homeworkCheckResult,
+          notes: carryNote,
+          checked_by: user.id,
+          checked_at: new Date().toISOString(),
+        }).eq('id', previousHomework.id);
+      }
+      
+      toast({
+        title: '다음시간으로 이월됨',
+        description: `사유: ${reasonLabel} / ${previousHomework.content}`,
+      });
+      
+      await fetchData();
+      onSaved?.();
+    } catch (err: any) {
+      toast({ title: '이월 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsCarryingForward(false);
+    }
+  }
+
   // Save test fields - WRITE-PERSIST-FIX-V1: Include test_content and add debug
   async function handleSaveTestFields() {
     if (!lessonRecord?.id || !user || !context) return;
@@ -849,9 +907,25 @@ export function RosterActionModal({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* STUDENT-SUBMISSION-V1: Show homework content with submission indicator */}
+                    {/* CARRY-FORWARD-REASON-V1: Show reason badge + content */}
                     <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
-                      <div className="flex-1">{previousHomework.content}</div>
+                      <div className="flex-1">
+                        {(() => {
+                          const reasonMatch = previousHomework.content.match(/^\[(분실|미완|부분|성의부족|확인불가)\]\s*/);
+                          if (reasonMatch) {
+                            const reason = reasonMatch[1];
+                            const cleanContent = previousHomework.content.replace(reasonMatch[0], '');
+                            const reasonColors: Record<string, string> = { '분실': 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300', '미완': 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300', '부분': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', '성의부족': 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', '확인불가': 'bg-muted text-muted-foreground' };
+                            return (
+                              <div className="space-y-1">
+                                <Badge variant="outline" className={`text-[10px] ${reasonColors[reason] || 'bg-muted'}`}>⚠️ 이월사유: {reason}</Badge>
+                                <p>{cleanContent}</p>
+                              </div>
+                            );
+                          }
+                          return <span>{previousHomework.content}</span>;
+                        })()}
+                      </div>
                       {/* Show mic icon if student submitted audio */}
                       {previousHomework.submission_audio_url && (
                         <button
@@ -962,17 +1036,31 @@ export function RosterActionModal({
                           </span>
                         </div>
                         
-                        <Button
-                          onClick={handleSaveHomeworkCheck}
-                          disabled={!homeworkCheckResult || isSavingHomework}
-                        >
-                          {isSavingHomework ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4 mr-2" />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleSaveHomeworkCheck}
+                            disabled={!homeworkCheckResult || isSavingHomework}
+                          >
+                            {isSavingHomework ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <Save className="w-4 h-4 mr-2" />
+                            )}
+                            확인 저장
+                          </Button>
+                          {/* CARRY-FORWARD-REASON-V1: Show carry-forward button for non-completion results */}
+                          {homeworkCheckResult && homeworkCheckResult !== 'completed' && (
+                            <Button
+                              variant="outline"
+                              onClick={handleCarryForward}
+                              disabled={isCarryingForward}
+                              className="gap-1"
+                            >
+                              {isCarryingForward ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                              다음시간 검사예정
+                            </Button>
                           )}
-                          확인 저장
-                        </Button>
+                        </div>
                       </>
                     )}
                   </CardContent>
