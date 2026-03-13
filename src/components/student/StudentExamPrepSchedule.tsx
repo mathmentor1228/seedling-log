@@ -14,16 +14,20 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-interface ExamPrepItem {
-  id: string;
+interface ExamPrepCourseItem {
+  course_id: string;
   subject: string;
-  schedule_date: string;
-  start_time: string;
-  end_time: string;
+  title: string;
   description: string | null;
   deadline_date: string;
   status: string;
   teacher_name: string;
+  sessions: Array<{
+    session_label: string;
+    schedule_date: string;
+    start_time: string;
+    end_time: string;
+  }>;
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -35,7 +39,7 @@ function fmt(dateStr: string) {
 
 export function StudentExamPrepSchedule() {
   const { student } = useStudentAuth();
-  const [schedules, setSchedules] = useState<ExamPrepItem[]>([]);
+  const [courses, setCourses] = useState<ExamPrepCourseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmDialog, setConfirmDialog] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -48,25 +52,25 @@ export function StudentExamPrepSchedule() {
     setLoading(true);
     const { data, error } = await studentApi.getExamPrepSchedules();
     if (!error && data) {
-      setSchedules(data);
+      setCourses(data);
     }
     setLoading(false);
   }
 
-  async function handleConfirm(scheduleId: string) {
+  async function handleConfirm(courseId: string) {
     setConfirming(true);
-    const { error } = await studentApi.confirmExamPrepSchedule(scheduleId);
+    const { error } = await studentApi.confirmExamPrepSchedule(courseId);
     if (!error) {
-      setSchedules(prev =>
-        prev.map(s => s.id === scheduleId ? { ...s, status: 'confirmed' } : s)
+      setCourses(prev =>
+        prev.map(c => c.course_id === courseId ? { ...c, status: 'confirmed' } : c)
       );
       setConfirmDialog(null);
     }
     setConfirming(false);
   }
 
-  const pendingSchedules = schedules.filter(s => s.status === 'pending');
-  const confirmedSchedules = schedules.filter(s => s.status !== 'pending');
+  const pendingCourses = courses.filter(c => c.status === 'pending');
+  const confirmedCourses = courses.filter(c => c.status !== 'pending');
 
   if (loading) {
     return (
@@ -76,7 +80,7 @@ export function StudentExamPrepSchedule() {
     );
   }
 
-  if (schedules.length === 0) return null;
+  if (courses.length === 0) return null;
 
   return (
     <div className="space-y-4">
@@ -84,28 +88,37 @@ export function StudentExamPrepSchedule() {
         <CalendarCheck className="w-5 h-5 text-primary" /> 내신 특강 일정
       </h2>
 
-      {pendingSchedules.length > 0 && (
+      {pendingCourses.length > 0 && (
         <Card className="border-amber-300 bg-amber-50/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-amber-800 flex items-center gap-2">
-              <Clock className="w-4 h-4" /> 확인이 필요한 일정
+              <Clock className="w-4 h-4" /> 확인이 필요한 특강
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {pendingSchedules.map(sch => (
-              <div key={sch.id} className="bg-white rounded-lg border border-amber-200 p-3 space-y-2">
+            {pendingCourses.map(course => (
+              <div key={course.course_id} className="bg-white rounded-lg border border-amber-200 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{sch.subject}</Badge>
-                    <span className="text-sm font-medium">{fmt(sch.schedule_date)}</span>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {sch.start_time.slice(0, 5)}-{sch.end_time.slice(0, 5)}
-                    </span>
+                    <Badge variant="outline">{course.subject}</Badge>
+                    <span className="text-sm font-medium">{course.title}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{sch.teacher_name}</span>
+                  <span className="text-xs text-muted-foreground">{course.teacher_name}</span>
                 </div>
-                {sch.description && (
-                  <p className="text-xs text-muted-foreground">{sch.description}</p>
+                {/* Sessions list */}
+                <div className="space-y-1">
+                  {course.sessions.map((sess, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <Badge variant="secondary" className="text-[10px] min-w-[45px] justify-center">{sess.session_label}</Badge>
+                      <span>{fmt(sess.schedule_date)}</span>
+                      <span className="text-muted-foreground font-mono">
+                        {sess.start_time.slice(0, 5)}-{sess.end_time.slice(0, 5)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {course.description && (
+                  <p className="text-xs text-muted-foreground">{course.description}</p>
                 )}
                 <div className="pt-1">
                   <div className="bg-destructive/10 border border-destructive/20 rounded-md p-2.5 mb-2">
@@ -117,13 +130,13 @@ export function StudentExamPrepSchedule() {
                   <Button
                     size="sm"
                     className="w-full"
-                    onClick={() => setConfirmDialog(sch.id)}
+                    onClick={() => setConfirmDialog(course.course_id)}
                   >
                     <CheckCircle2 className="w-4 h-4 mr-1" /> 일정 확인 및 동의
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground text-right">
-                  마지노선: {fmt(sch.deadline_date)}까지
+                  마지노선: {fmt(course.deadline_date)}까지
                 </p>
               </div>
             ))}
@@ -131,26 +144,36 @@ export function StudentExamPrepSchedule() {
         </Card>
       )}
 
-      {confirmedSchedules.length > 0 && (
+      {confirmedCourses.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-primary" /> 확정된 일정
+              <CheckCircle2 className="w-4 h-4 text-primary" /> 확정된 특강
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {confirmedSchedules.map(sch => (
-              <div key={sch.id} className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">{sch.subject}</Badge>
-                  <span className="text-sm">{fmt(sch.schedule_date)}</span>
-                  <span className="text-xs text-muted-foreground font-mono">
-                    {sch.start_time.slice(0, 5)}-{sch.end_time.slice(0, 5)}
-                  </span>
+          <CardContent className="space-y-3">
+            {confirmedCourses.map(course => (
+              <div key={course.course_id} className="bg-muted/30 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">{course.subject}</Badge>
+                    <span className="text-sm font-medium">{course.title}</span>
+                  </div>
+                  <Badge variant={course.status === 'confirmed' ? 'default' : 'secondary'} className="text-[10px]">
+                    {course.status === 'confirmed' ? '확인완료' : '시스템 확정'}
+                  </Badge>
                 </div>
-                <Badge variant={sch.status === 'confirmed' ? 'default' : 'secondary'} className="text-[10px]">
-                  {sch.status === 'confirmed' ? '확인완료' : '시스템 확정'}
-                </Badge>
+                <div className="space-y-1">
+                  {course.sessions.map((sess, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <Badge variant="outline" className="text-[10px] min-w-[45px] justify-center">{sess.session_label}</Badge>
+                      <span>{fmt(sess.schedule_date)}</span>
+                      <span className="text-muted-foreground font-mono">
+                        {sess.start_time.slice(0, 5)}-{sess.end_time.slice(0, 5)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </CardContent>
@@ -163,7 +186,7 @@ export function StudentExamPrepSchedule() {
           <DialogHeader>
             <DialogTitle>일정 확인 및 동의</DialogTitle>
             <DialogDescription>
-              아래 일정에 동의하시겠습니까?
+              아래 특강 전체 일정에 동의하시겠습니까?
             </DialogDescription>
           </DialogHeader>
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">

@@ -576,6 +576,84 @@ export type Database = {
           },
         ]
       }
+      exam_prep_courses: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deadline_date: string
+          description: string | null
+          id: string
+          subject: string
+          teacher_id: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deadline_date: string
+          description?: string | null
+          id?: string
+          subject: string
+          teacher_id: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deadline_date?: string
+          description?: string | null
+          id?: string
+          subject?: string
+          teacher_id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      exam_prep_enrollments: {
+        Row: {
+          confirmed_at: string | null
+          course_id: string
+          created_at: string
+          id: string
+          status: string
+          student_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          course_id: string
+          created_at?: string
+          id?: string
+          status?: string
+          student_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          course_id?: string
+          created_at?: string
+          id?: string
+          status?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_prep_enrollments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "exam_prep_courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_prep_enrollments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_prep_schedules: {
         Row: {
           confirmed_at: string | null
@@ -631,6 +709,47 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_prep_sessions: {
+        Row: {
+          course_id: string
+          created_at: string
+          end_time: string
+          id: string
+          schedule_date: string
+          session_label: string
+          session_number: number
+          start_time: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          end_time: string
+          id?: string
+          schedule_date: string
+          session_label: string
+          session_number: number
+          start_time: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          end_time?: string
+          id?: string
+          schedule_date?: string
+          session_label?: string
+          session_number?: number
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_prep_sessions_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "exam_prep_courses"
             referencedColumns: ["id"]
           },
         ]
