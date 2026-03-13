@@ -1703,7 +1703,22 @@ export function LessonRecordForm({
                         )}
                       </div>
                       <div className="p-3 space-y-3">
-                      <p className="text-sm whitespace-pre-wrap bg-background/80 p-2.5 rounded-md border border-border/30 leading-relaxed">{hwItem.content}</p>
+                      {/* CARRY-FORWARD-REASON-V1: Show reason badge for carried-forward homework */}
+                      {(() => {
+                        const reasonMatch = hwItem.content.match(/^\[(분실|미완|부분|성의부족|확인불가)\]\s*/);
+                        if (reasonMatch) {
+                          const reason = reasonMatch[1];
+                          const cleanContent = hwItem.content.replace(reasonMatch[0], '');
+                          const reasonColors: Record<string, string> = { '분실': 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300', '미완': 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300', '부분': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', '성의부족': 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', '확인불가': 'bg-muted text-muted-foreground' };
+                          return (
+                            <div className="space-y-1.5">
+                              <Badge variant="outline" className={`text-[10px] ${reasonColors[reason] || 'bg-muted'}`}>⚠️ 이월사유: {reason}</Badge>
+                              <p className="text-sm whitespace-pre-wrap bg-background/80 p-2.5 rounded-md border border-border/30 leading-relaxed">{cleanContent}</p>
+                            </div>
+                          );
+                        }
+                        return <p className="text-sm whitespace-pre-wrap bg-background/80 p-2.5 rounded-md border border-border/30 leading-relaxed">{hwItem.content}</p>;
+                      })()}
 
                       {/* Submission display */}
                       {(() => {
