@@ -365,7 +365,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       )}
 
       {/* Main content */}
-      <div className="lg:ml-56 min-h-screen pt-14 lg:pt-0 flex flex-col">
+      <div className={cn("min-h-screen pt-14 lg:pt-0 flex flex-col transition-all duration-200", sidebarCollapsed ? "lg:ml-14" : "lg:ml-56")}>
         <main className="flex-1">
           <div className="p-5 lg:p-8 max-w-7xl mx-auto">
             {isDashboard && (
