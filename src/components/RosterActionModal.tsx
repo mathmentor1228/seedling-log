@@ -400,6 +400,7 @@ export function RosterActionModal({
       case 'not_done': return 'not_done';
       case 'lost': return 'not_done';
       case 'low_effort': return 'not_done';
+      case 'low_effort_completed': return 'completed';
       case 'unable_to_verify': return 'none_assigned';
       default: return 'none_assigned';
     }
