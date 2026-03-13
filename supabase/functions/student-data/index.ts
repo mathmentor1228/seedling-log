@@ -957,64 +957,99 @@ Deno.serve(async (req) => {
 
       case 'exam_prep_schedules': {
         const todayStr = getNowKST().toISOString().split('T')[0];
-        const { data: schedData } = await supabase
-          .from('exam_prep_schedules')
-          .select('id, subject, schedule_date, start_time, end_time, description, deadline_date, status, teacher_id')
-          .eq('student_id', student_id)
-          .gte('schedule_date', todayStr)
-          .order('schedule_date')
-          .order('start_time');
+        
+        // Get enrollments for this student
+        const { data: enrollments } = await supabase
+          .from('exam_prep_enrollments')
+          .select('id, course_id, status, confirmed_at')
+          .eq('student_id', student_id);
 
-        // Fetch teacher names
-        const teacherIds = [...new Set((schedData || []).map((s: any) => s.teacher_id).filter(Boolean))];
+        if (!enrollments || enrollments.length === 0) {
+          result = [];
+          break;
+        }
+
+        const courseIds = enrollments.map((e: any) => e.course_id);
+        
+        // Get courses and sessions
+        const [coursesRes, sessionsRes] = await Promise.all([
+          supabase.from('exam_prep_courses').select('id, subject, title, description, deadline_date, teacher_id').in('id', courseIds),
+          supabase.from('exam_prep_sessions').select('*').in('course_id', courseIds).order('session_number'),
+        ]);
+
+        const coursesData = coursesRes.data || [];
+        const sessionsData = sessionsRes.data || [];
+
+        // Get teacher names
+        const teacherIds = [...new Set(coursesData.map((c: any) => c.teacher_id).filter(Boolean))];
         let teacherMap: Record<string, string> = {};
         if (teacherIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', teacherIds);
+          const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', teacherIds);
           if (profiles) {
-            teacherMap = profiles.reduce((acc: Record<string, string>, p: any) => {
-              acc[p.id] = p.full_name;
-              return acc;
-            }, {});
+            teacherMap = profiles.reduce((acc: Record<string, string>, p: any) => { acc[p.id] = p.full_name; return acc; }, {});
           }
         }
 
-        // Auto-confirm overdue pending schedules
-        const nowDate = todayStr;
-        const overdueIds = (schedData || [])
-          .filter((s: any) => s.status === 'pending' && s.deadline_date < nowDate)
-          .map((s: any) => s.id);
+        // Auto-confirm overdue pending enrollments
+        const overdueEnrollmentIds = enrollments
+          .filter((e: any) => {
+            if (e.status !== 'pending') return false;
+            const course = coursesData.find((c: any) => c.id === e.course_id);
+            return course && course.deadline_date < todayStr;
+          })
+          .map((e: any) => e.id);
 
-        if (overdueIds.length > 0) {
+        if (overdueEnrollmentIds.length > 0) {
           await supabase
-            .from('exam_prep_schedules')
+            .from('exam_prep_enrollments')
             .update({ status: 'auto_confirmed', confirmed_at: new Date().toISOString() })
-            .in('id', overdueIds);
+            .in('id', overdueEnrollmentIds);
         }
 
-        result = (schedData || []).map((s: any) => ({
-          ...s,
-          teacher_name: teacherMap[s.teacher_id] || '미배정',
-          status: (s.status === 'pending' && s.deadline_date < nowDate) ? 'auto_confirmed' : s.status,
-        }));
+        // Build response grouped by course
+        result = coursesData
+          .filter((c: any) => {
+            // Only show courses with future sessions
+            const courseSessions = sessionsData.filter((s: any) => s.course_id === c.id);
+            return courseSessions.some((s: any) => s.schedule_date >= todayStr);
+          })
+          .map((c: any) => {
+            const enrollment = enrollments.find((e: any) => e.course_id === c.id);
+            const isOverdue = enrollment?.status === 'pending' && c.deadline_date < todayStr;
+            return {
+              course_id: c.id,
+              subject: c.subject,
+              title: c.title || `${c.subject} 내신 특강`,
+              description: c.description,
+              deadline_date: c.deadline_date,
+              status: isOverdue ? 'auto_confirmed' : (enrollment?.status || 'pending'),
+              teacher_name: teacherMap[c.teacher_id] || '미배정',
+              sessions: sessionsData
+                .filter((s: any) => s.course_id === c.id)
+                .map((s: any) => ({
+                  session_label: s.session_label,
+                  schedule_date: s.schedule_date,
+                  start_time: s.start_time,
+                  end_time: s.end_time,
+                })),
+            };
+          });
         break;
       }
 
       case 'confirm_exam_prep': {
-        const { schedule_id } = params;
-        if (!schedule_id) {
+        const { schedule_id: course_id } = params;
+        if (!course_id) {
           return new Response(
-            JSON.stringify({ error: 'schedule_id required' }),
+            JSON.stringify({ error: 'course_id required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
         const { error: updateErr } = await supabase
-          .from('exam_prep_schedules')
+          .from('exam_prep_enrollments')
           .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
-          .eq('id', schedule_id)
+          .eq('course_id', course_id)
           .eq('student_id', student_id)
           .eq('status', 'pending');
 

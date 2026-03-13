@@ -174,15 +174,12 @@ Deno.serve(async (req) => {
         .eq("student_id", studentId)
         .eq("payment_status", "미납")
         .order("created_at", { ascending: false }),
-      // Exam prep confirmed schedules
+      // Exam prep confirmed enrollments
       supabase
-        .from("exam_prep_schedules")
-        .select("id, subject, schedule_date, start_time, end_time, description, status")
+        .from("exam_prep_enrollments")
+        .select("course_id, status")
         .eq("student_id", studentId)
-        .in("status", ["confirmed", "auto_confirmed"])
-        .gte("schedule_date", todayStr)
-        .order("schedule_date")
-        .order("start_time"),
+        .in("status", ["confirmed", "auto_confirmed"]),
     ]);
 
     // Fetch class schedules for the student's classes
