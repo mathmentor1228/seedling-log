@@ -612,6 +612,62 @@ export function RosterActionModal({
     }
   }
 
+  // CARRY-FORWARD-REASON-V1: Carry forward homework to next session with reason
+  async function handleCarryForward() {
+    if (!previousHomework || !homeworkCheckResult || !user || !context) return;
+    
+    setIsCarryingForward(true);
+    try {
+      const reasonLabel = HOMEWORK_RESULT_OPTIONS.find(o => o.value === homeworkCheckResult)?.label || homeworkCheckResult;
+      const carryNote = `[이월사유: ${reasonLabel}] 다음시간 검사예정으로 이월`;
+      const contentWithReason = `[${reasonLabel}] ${previousHomework.content}`;
+      
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const nextDate = format(tomorrow, 'yyyy-MM-dd');
+      
+      // Create new homework for next session with reason tag
+      await supabase.from('homework_assignments').insert({
+        student_id: context.student_id,
+        subject: context.subject as SubjectType,
+        content: contentWithReason,
+        assigned_date: nextDate,
+        homework_type: 'regular',
+        created_by: user.id,
+      });
+      
+      // Mark current as checked with carry-forward note
+      if (isAssistant) {
+        await supabase.rpc('update_homework_check', {
+          _homework_id: previousHomework.id,
+          _check_status: 'checked',
+          _result: homeworkCheckResult,
+          _notes: carryNote,
+        });
+      } else {
+        await supabase.from('homework_assignments').update({
+          check_status: 'checked',
+          result: homeworkCheckResult,
+          notes: carryNote,
+          checked_by: user.id,
+          checked_at: new Date().toISOString(),
+        }).eq('id', previousHomework.id);
+      }
+      
+      toast({
+        title: '다음시간으로 이월됨',
+        description: `사유: ${reasonLabel} / ${previousHomework.content}`,
+      });
+      
+      await fetchData();
+      onSaved?.();
+    } catch (err: any) {
+      toast({ title: '이월 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsCarryingForward(false);
+    }
+  }
+
   // Save test fields - WRITE-PERSIST-FIX-V1: Include test_content and add debug
   async function handleSaveTestFields() {
     if (!lessonRecord?.id || !user || !context) return;
