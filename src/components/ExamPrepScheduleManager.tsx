@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Plus, Trash2, AlertTriangle, CalendarCheck, Clock, Users, X,
   ChevronDown, ChevronUp, ArrowLeft, UserPlus, UserMinus, GripVertical,
-  School, CalendarDays, Search, Eye,
+  School, CalendarDays, Search, Eye, Copy, ClipboardPaste, UsersRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, differenceInDays, parseISO } from 'date-fns';
@@ -114,6 +114,7 @@ export function ExamPrepScheduleManager() {
 
   const [slotAssignments, setSlotAssignments] = useState<Record<string, string[]>>({});
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
+  const [copiedSessionIdx, setCopiedSessionIdx] = useState<number | null>(null);
 
   const studentMap = useMemo(() => students.reduce<Record<string, Student>>((acc, s) => { acc[s.id] = s; return acc; }, {}), [students]);
   const teacherMap = useMemo(() => teachers.reduce<Record<string, string>>((acc, t) => { acc[t.id] = t.full_name; return acc; }, {}), [teachers]);
@@ -359,6 +360,60 @@ export function ExamPrepScheduleManager() {
     for (const [slotId, ids] of Object.entries(slotAssignments)) {
       const filtered = ids.filter(id => id !== studentId);
       if (filtered.length > 0) newAssignments[slotId] = filtered;
+    }
+    setSlotAssignments(newAssignments);
+  }
+
+
+  function copySessionSlots(sourceIdx: number) {
+    setCopiedSessionIdx(sourceIdx);
+  }
+
+  function pasteSessionSlots(targetIdx: number) {
+    if (copiedSessionIdx === null || copiedSessionIdx === targetIdx) return;
+    const source = sessions[copiedSessionIdx];
+    if (!source) return;
+
+    setSessions(prev => prev.map((s, i) => {
+      if (i !== targetIdx) return s;
+      // Copy slot structure (times) from source, generate new IDs
+      const newSlots = source.slots.map(sl => ({
+        id: tempId(),
+        startTime: sl.startTime,
+        endTime: sl.endTime,
+      }));
+      // Also copy student assignments
+      const newAssignments = { ...slotAssignments };
+      // Remove old slot assignments for target
+      s.slots.forEach(sl => delete newAssignments[sl.id]);
+      // Copy assignments from source slots to new slots
+      source.slots.forEach((srcSlot, idx) => {
+        if (idx < newSlots.length) {
+          const srcAssigned = slotAssignments[srcSlot.id] || [];
+          if (srcAssigned.length > 0) {
+            newAssignments[newSlots[idx].id] = [...srcAssigned];
+          }
+        }
+      });
+      setSlotAssignments(newAssignments);
+      return { ...s, slots: newSlots };
+    }));
+  }
+
+  // ── Assign all students of a grade group to all slots in a session ──
+  function assignGradeToSession(sessionIdx: number, groupKey: string) {
+    const groupStudents = groupedStudents.find(([key]) => key === groupKey)?.[1] || [];
+    if (groupStudents.length === 0) return;
+
+    const sess = sessions[sessionIdx];
+    if (!sess) return;
+
+    const newAssignments = { ...slotAssignments };
+    for (const slot of sess.slots) {
+      if (!slot.startTime || !slot.endTime) continue;
+      const current = newAssignments[slot.id] || [];
+      const toAdd = groupStudents.filter(s => !current.includes(s.id)).map(s => s.id);
+      newAssignments[slot.id] = [...current, ...toAdd];
     }
     setSlotAssignments(newAssignments);
   }
@@ -638,6 +693,17 @@ export function ExamPrepScheduleManager() {
                           className="h-7 text-xs w-[160px] bg-background" />
                         {sess.date && <span className="text-[10px] text-muted-foreground">{fmtDate(sess.date)}</span>}
                         <div className="ml-auto flex items-center gap-1">
+                          {/* Copy/Paste buttons */}
+                          <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1" onClick={() => copySessionSlots(si)}
+                            title="이 회차의 시간표 복사">
+                            <Copy className="w-3 h-3" /> 복사
+                          </Button>
+                          {copiedSessionIdx !== null && copiedSessionIdx !== si && (
+                            <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 text-primary" onClick={() => pasteSessionSlots(si)}
+                              title={`${sessions[copiedSessionIdx]?.label}에서 붙여넣기`}>
+                              <ClipboardPaste className="w-3 h-3" /> 붙여넣기
+                            </Button>
+                          )}
                           <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => addSlotToSession(si)}>
                             <Plus className="w-3 h-3 mr-1" /> 시간대
                           </Button>
@@ -656,6 +722,29 @@ export function ExamPrepScheduleManager() {
                             <Eye className="w-3 h-3" />
                             타 학교 배정: {uniqueCrossSchool.map(c => `${studentMap[c.studentId]?.name || '—'}(${c.school})`).join(', ')}
                           </p>
+                        </div>
+                      )}
+
+                      {/* Grade bulk assign buttons */}
+                      {groupedStudents.length > 0 && sess.slots.some(sl => sl.startTime && sl.endTime) && (
+                        <div className="px-4 py-1.5 border-b flex items-center gap-1.5 flex-wrap bg-muted/20">
+                          <span className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                            <UsersRound className="w-3 h-3" /> 학년 일괄 배치:
+                          </span>
+                          {groupedStudents.map(([groupKey, groupStudents]) => {
+                            const [school, levelGrade] = groupKey.split('|');
+                            const levelChar = levelGrade?.[0] || '';
+                            const yearNum = levelGrade?.slice(1) || '';
+                            const shortLabel = `${levelChar}${yearNum}`;
+                            return (
+                              <Button key={groupKey} variant="outline" size="sm"
+                                className="h-5 text-[9px] px-1.5 gap-0.5"
+                                onClick={() => assignGradeToSession(si, groupKey)}
+                                title={`${school} ${shortLabel} ${groupStudents.length}명 전체 배치`}>
+                                {shortLabel} ({groupStudents.length})
+                              </Button>
+                            );
+                          })}
                         </div>
                       )}
 
