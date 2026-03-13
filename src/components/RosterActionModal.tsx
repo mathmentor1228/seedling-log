@@ -907,9 +907,25 @@ export function RosterActionModal({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* STUDENT-SUBMISSION-V1: Show homework content with submission indicator */}
+                    {/* CARRY-FORWARD-REASON-V1: Show reason badge + content */}
                     <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
-                      <div className="flex-1">{previousHomework.content}</div>
+                      <div className="flex-1">
+                        {(() => {
+                          const reasonMatch = previousHomework.content.match(/^\[(분실|미완|부분|성의부족|확인불가)\]\s*/);
+                          if (reasonMatch) {
+                            const reason = reasonMatch[1];
+                            const cleanContent = previousHomework.content.replace(reasonMatch[0], '');
+                            const reasonColors: Record<string, string> = { '분실': 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300', '미완': 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300', '부분': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', '성의부족': 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', '확인불가': 'bg-muted text-muted-foreground' };
+                            return (
+                              <div className="space-y-1">
+                                <Badge variant="outline" className={`text-[10px] ${reasonColors[reason] || 'bg-muted'}`}>⚠️ 이월사유: {reason}</Badge>
+                                <p>{cleanContent}</p>
+                              </div>
+                            );
+                          }
+                          return <span>{previousHomework.content}</span>;
+                        })()}
+                      </div>
                       {/* Show mic icon if student submitted audio */}
                       {previousHomework.submission_audio_url && (
                         <button
