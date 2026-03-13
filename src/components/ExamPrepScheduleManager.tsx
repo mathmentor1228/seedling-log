@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Plus, Trash2, AlertTriangle, CalendarCheck, Clock, Users, X,
   ChevronDown, ChevronUp, ArrowLeft, UserPlus, UserMinus, GripVertical,
-  School, CalendarDays, Search, Eye,
+  School, CalendarDays, Search, Eye, Copy, ClipboardPaste, UsersRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, differenceInDays, parseISO } from 'date-fns';
