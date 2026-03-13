@@ -1188,25 +1188,52 @@ export function RosterActionModal({
                 </CardContent>
               </Card>
               
-              {/* New Homework */}
+              {/* MULTI-HW-ASSIGN-V1: Multiple homework */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">오늘 숙제</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">오늘 숙제 ({newHomeworkItems.filter(i => i.content.trim()).length}개)</CardTitle>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewHomeworkItems(prev => [...prev, { content: '' }])}
+                      className="text-xs gap-1 h-7"
+                    >
+                      <Plus className="w-3 h-3" />
+                      숙제 추가
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>숙제 내용</Label>
-                    <Textarea
-                      value={newHomeworkContent}
-                      onChange={(e) => setNewHomeworkContent(e.target.value)}
-                      placeholder="오늘 숙제를 입력하세요..."
-                      rows={3}
-                    />
-                  </div>
+                  {newHomeworkItems.map((item, idx) => (
+                    <div key={idx} className="space-y-1">
+                      {newHomeworkItems.length > 1 && (
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">숙제 {idx + 1}</Label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setNewHomeworkItems(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-xs text-muted-foreground hover:text-destructive h-6 px-2 gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
+                      <Textarea
+                        value={item.content}
+                        onChange={(e) => setNewHomeworkItems(prev => prev.map((it, i) => i === idx ? { ...it, content: e.target.value } : it))}
+                        placeholder={idx === 0 ? "오늘 숙제를 입력하세요..." : "추가 숙제 내용..."}
+                        rows={2}
+                      />
+                    </div>
+                  ))}
                   
                   <Button 
                     onClick={handleSaveNewHomework}
-                    disabled={!newHomeworkContent.trim() || isSavingNewHomework}
+                    disabled={!newHomeworkItems.some(i => i.content.trim()) || isSavingNewHomework}
                   >
                     {isSavingNewHomework ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
