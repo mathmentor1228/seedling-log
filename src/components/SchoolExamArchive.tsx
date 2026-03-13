@@ -1115,9 +1115,27 @@ export function SchoolExamArchive() {
           </h2>
           <p className="text-sm text-muted-foreground">학교별·학년별·과목별 시험/수행평가 자료 및 분석을 통합 관리합니다</p>
         </div>
-        <Button onClick={openCreateDialog} size="sm">
-          <Plus className="w-4 h-4 mr-1" /> 자료 추가
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border rounded-lg overflow-hidden h-8">
+            <button
+              className={`flex items-center gap-1 px-3 h-full text-xs font-medium transition-colors ${viewMode === 'school' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              onClick={() => setViewMode('school')}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              학교별
+            </button>
+            <button
+              className={`flex items-center gap-1 px-3 h-full text-xs font-medium transition-colors ${viewMode === 'exam' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              onClick={() => setViewMode('exam')}
+            >
+              <List className="w-3.5 h-3.5" />
+              시험별
+            </button>
+          </div>
+          <Button onClick={openCreateDialog} size="sm">
+            <Plus className="w-4 h-4 mr-1" /> 자료 추가
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
