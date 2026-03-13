@@ -754,6 +754,77 @@ export type Database = {
           },
         ]
       }
+      exam_prep_slot_students: {
+        Row: {
+          created_at: string
+          id: string
+          slot_id: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          slot_id: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          slot_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_prep_slot_students_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "exam_prep_time_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_prep_slot_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_prep_time_slots: {
+        Row: {
+          created_at: string
+          end_time: string
+          id: string
+          session_id: string
+          slot_order: number
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          end_time: string
+          id?: string
+          session_id: string
+          slot_order?: number
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string
+          id?: string
+          session_id?: string
+          slot_order?: number
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_prep_time_slots_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "exam_prep_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_subject_details: {
         Row: {
           created_at: string
