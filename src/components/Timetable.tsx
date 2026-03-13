@@ -89,6 +89,7 @@ export function Timetable() {
   const canViewAllStudents = isAdminUser || isAssistantUser;
 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]);
+  const [examPrepRows, setExamPrepRows] = useState<ScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
@@ -200,7 +201,6 @@ export function Timetable() {
           (studentsData || []).forEach((s) => { studentMap[s.id] = s.name; });
 
           classStudents.forEach((cs) => {
-            // Skip withdrawn students (not found in filtered studentMap)
             if (!studentMap[cs.student_id]) return;
             if (!studentsByClass[cs.class_id]) studentsByClass[cs.class_id] = [];
             studentsByClass[cs.class_id].push({
@@ -252,11 +252,86 @@ export function Timetable() {
             .sort((a, b) => a.name.localeCompare(b.name))
         );
       }
+
+      // ── Fetch confirmed exam prep slots for teacher timetable ──
+      await fetchExamPrepForTimetable(teacherMap);
     } catch (error) {
       console.error('Error fetching schedule:', error);
       toast({ title: '오류', description: '시간표를 불러오지 못했습니다', variant: 'destructive' });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchExamPrepForTimetable(teacherMap: Record<string, string>) {
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      // Fetch courses with confirmed/auto_confirmed enrollments that have future sessions
+      let courseQuery = supabase.from('exam_prep_courses').select('id, subject, teacher_id, title, school_name');
+      if (!isAdminUser && !isAssistantUser && user) {
+        courseQuery = courseQuery.eq('teacher_id', user.id);
+      }
+      const { data: courses } = await courseQuery;
+      if (!courses || courses.length === 0) { setExamPrepRows([]); return; }
+
+      const courseIds = courses.map((c: any) => c.id);
+      const { data: sessionsData } = await supabase.from('exam_prep_sessions')
+        .select('id, course_id, session_label, schedule_date, start_time, end_time')
+        .in('course_id', courseIds)
+        .gte('schedule_date', todayStr)
+        .order('schedule_date');
+      if (!sessionsData || sessionsData.length === 0) { setExamPrepRows([]); return; }
+
+      const sessionIds = sessionsData.map((s: any) => s.id);
+      const [slotsRes, slotStudentsRes] = await Promise.all([
+        supabase.from('exam_prep_time_slots').select('id, session_id, start_time, end_time').in('session_id', sessionIds).order('slot_order'),
+        supabase.from('exam_prep_slot_students').select('slot_id, student_id'),
+      ]);
+      const slots = slotsRes.data || [];
+      const slotStudents = slotStudentsRes.data || [];
+      const slotIdSet = new Set(slots.map((s: any) => s.id));
+      const relevantSlotStudents = slotStudents.filter((ss: any) => slotIdSet.has(ss.slot_id));
+
+      // Get student names
+      const allStudentIds = [...new Set(relevantSlotStudents.map((ss: any) => ss.student_id))];
+      let studentNameMap: Record<string, string> = {};
+      if (allStudentIds.length > 0) {
+        const { data: studData } = await supabase.from('students').select('id, name').in('id', allStudentIds);
+        (studData || []).forEach((s: any) => { studentNameMap[s.id] = s.name; });
+      }
+
+      // Build exam prep schedule rows grouped by date
+      const examRows: ScheduleRow[] = [];
+      for (const sess of sessionsData as any[]) {
+        const course = courses.find((c: any) => c.id === sess.course_id);
+        if (!course) continue;
+        const sessionSlots = slots.filter((sl: any) => sl.session_id === sess.id);
+        const d = new Date(sess.schedule_date + 'T00:00:00');
+        const dow = d.getDay();
+
+        for (const slot of sessionSlots as any[]) {
+          const slotStuds = relevantSlotStudents.filter((ss: any) => ss.slot_id === slot.id);
+          examRows.push({
+            scheduleId: `exam-${slot.id}`,
+            classId: `exam-${course.id}-${sess.id}`,
+            className: `내신특강 ${course.school_name ? `(${course.school_name})` : ''} ${sess.session_label}`.trim(),
+            subject: course.subject,
+            dayOfWeek: dow,
+            startTime: slot.start_time,
+            endTime: slot.end_time,
+            teacherId: course.teacher_id,
+            teacherName: teacherMap[course.teacher_id] || '미배정',
+            students: slotStuds.map((ss: any) => ({
+              id: ss.student_id,
+              name: studentNameMap[ss.student_id] || '—',
+            })),
+          });
+        }
+      }
+      setExamPrepRows(examRows);
+    } catch (e) {
+      console.error('Error fetching exam prep for timetable:', e);
+      setExamPrepRows([]);
     }
   }
 
@@ -446,12 +521,15 @@ export function Timetable() {
 
   // ── Derived data ──
 
+  // Combine regular + exam prep rows
+  const allRows = useMemo(() => [...scheduleRows, ...examPrepRows], [scheduleRows, examPrepRows]);
+
   const filteredRows = useMemo(() => {
-    let rows = scheduleRows;
+    let rows = allRows;
     if (selectedTeacherId !== 'all') rows = rows.filter((r) => r.teacherId === selectedTeacherId);
     if (selectedDayFilter !== 'all') rows = rows.filter((r) => r.dayOfWeek === parseInt(selectedDayFilter));
     return rows;
-  }, [scheduleRows, selectedTeacherId, selectedDayFilter]);
+  }, [allRows, selectedTeacherId, selectedDayFilter]);
 
   const byDay = useMemo(() => {
     const map: Record<number, ScheduleRow[]> = {};
@@ -459,7 +537,6 @@ export function Timetable() {
       if (!map[r.dayOfWeek]) map[r.dayOfWeek] = [];
       map[r.dayOfWeek].push(r);
     });
-    // Sort within each day based on sortMode
     Object.values(map).forEach(rows => {
       rows.sort((a, b) => {
         if (sortMode === 'teacher_time') {
@@ -474,13 +551,13 @@ export function Timetable() {
 
   const byTeacher = useMemo(() => {
     const map: Record<string, { name: string; rows: ScheduleRow[] }> = {};
-    scheduleRows.forEach((r) => {
+    allRows.forEach((r) => {
       const key = r.teacherId || 'unassigned';
       if (!map[key]) map[key] = { name: r.teacherName, rows: [] };
       map[key].rows.push(r);
     });
     return map;
-  }, [scheduleRows]);
+  }, [allRows]);
 
   const studentByDay = useMemo(() => {
     const map: Record<number, StudentScheduleRow[]> = {};
@@ -492,18 +569,24 @@ export function Timetable() {
   }, [studentScheduleRows]);
 
   // ── Render helpers ──
+  const isExamPrepRow = (row: ScheduleRow) => row.scheduleId.startsWith('exam-');
 
-  const SlotCard = ({ row, showTeacher = false, editable = false }: { row: ScheduleRow; showTeacher?: boolean; editable?: boolean }) => (
+  const SlotCard = ({ row, showTeacher = false, editable = false }: { row: ScheduleRow; showTeacher?: boolean; editable?: boolean }) => {
+    const isExamPrep = isExamPrepRow(row);
+    return (
     <div
       className={cn(
         'border-l-4 rounded-lg bg-card p-3 shadow-sm hover:shadow-md transition-shadow',
-        DAY_ACCENT[row.dayOfWeek],
-        editable && 'cursor-pointer ring-transparent hover:ring-1 hover:ring-primary/30'
+        isExamPrep ? 'border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20' : DAY_ACCENT[row.dayOfWeek],
+        editable && !isExamPrep && 'cursor-pointer ring-transparent hover:ring-1 hover:ring-primary/30'
       )}
-      onClick={editable ? () => { setEditClassId(row.classId); setEditClassName(row.className); } : undefined}
+      onClick={editable && !isExamPrep ? () => { setEditClassId(row.classId); setEditClassName(row.className); } : undefined}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-wrap">
+          {isExamPrep && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">내신특강</span>
+          )}
           <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', SUBJECT_COLORS[row.subject] || 'bg-muted text-muted-foreground')}>
             {row.subject}
           </span>
@@ -514,7 +597,7 @@ export function Timetable() {
             <Clock className="w-3 h-3" />
             {fmt(row.startTime)}–{fmt(row.endTime)}
           </div>
-          {editable && (
+          {editable && !isExamPrep && (
             <button
               onClick={(e) => { e.stopPropagation(); openEditSlot(row); }}
               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -559,7 +642,8 @@ export function Timetable() {
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   const StudentSlotCard = ({ row }: { row: StudentScheduleRow }) => (
     <div className={cn(
@@ -605,7 +689,7 @@ export function Timetable() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {scheduleRows.length === 0 ? (
+          {allRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">등록된 시간표가 없습니다</p>
           ) : (
             <div className="space-y-6">

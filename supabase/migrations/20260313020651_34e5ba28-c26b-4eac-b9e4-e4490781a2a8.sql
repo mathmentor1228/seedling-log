@@ -1,0 +1,1 @@
+ALTER TABLE public.exam_prep_courses ADD COLUMN IF NOT EXISTS school_name text;
