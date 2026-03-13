@@ -745,13 +745,13 @@ export function LessonRecordForm({
           }
 
           // Load homework content
-          const { data: existingHw } = await supabase
+          // MULTI-HW-ASSIGN-V1: Load all existing homework for this record
+          const { data: existingHwList } = await supabase
             .from('homework_assignments')
             .select('content')
-            .eq('lesson_record_id', record.id)
-            .maybeSingle();
-          if (existingHw?.content) {
-            setNewHomeworkContent(existingHw.content);
+            .eq('lesson_record_id', record.id);
+          if (existingHwList && existingHwList.length > 0) {
+            setNewHomeworkItems(existingHwList.map(hw => ({ content: hw.content || '' })));
           }
         }
       } else if (initialContext && canManage) {
