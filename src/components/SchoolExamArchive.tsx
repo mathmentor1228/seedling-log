@@ -112,6 +112,9 @@ function getDdayText(examDateStart: string | null): string | null {
 export function SchoolExamArchive() {
   const { user } = useAuth();
 
+  // View mode: 'school' (학교별) or 'exam' (시험별)
+  const [viewMode, setViewMode] = useState<'school' | 'exam'>('school');
+
   // Filters
   const [filterYear, setFilterYear] = useState<string>(String(currentYear));
   const [filterSchool, setFilterSchool] = useState<string>('all');
