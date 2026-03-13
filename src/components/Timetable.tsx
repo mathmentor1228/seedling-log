@@ -551,13 +551,13 @@ export function Timetable() {
 
   const byTeacher = useMemo(() => {
     const map: Record<string, { name: string; rows: ScheduleRow[] }> = {};
-    scheduleRows.forEach((r) => {
+    allRows.forEach((r) => {
       const key = r.teacherId || 'unassigned';
       if (!map[key]) map[key] = { name: r.teacherName, rows: [] };
       map[key].rows.push(r);
     });
     return map;
-  }, [scheduleRows]);
+  }, [allRows]);
 
   const studentByDay = useMemo(() => {
     const map: Record<number, StudentScheduleRow[]> = {};
