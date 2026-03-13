@@ -364,8 +364,6 @@ export function ExamPrepScheduleManager() {
     setSlotAssignments(newAssignments);
   }
 
-  // ── Copy session slots to another session ──
-  const [copiedSessionIdx, setCopiedSessionIdx] = useState<number | null>(null);
 
   function copySessionSlots(sourceIdx: number) {
     setCopiedSessionIdx(sourceIdx);
