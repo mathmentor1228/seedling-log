@@ -12,6 +12,8 @@ import {
   LogOut,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
   UserCog,
   Calendar,
   ClipboardCheck,
