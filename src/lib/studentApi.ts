@@ -123,4 +123,9 @@ export const studentApi = {
       concept_id: conceptId,
       image_urls: imageUrls,
     }),
+
+  getExamPrepSchedules: () => studentApiCall<any[]>('exam_prep_schedules'),
+
+  confirmExamPrepSchedule: (scheduleId: string) =>
+    studentApiCall<{ success: boolean }>('confirm_exam_prep', { schedule_id: scheduleId }),
 };
