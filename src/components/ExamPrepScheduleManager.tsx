@@ -363,6 +363,62 @@ export function ExamPrepScheduleManager() {
     setSlotAssignments(newAssignments);
   }
 
+  // ── Copy session slots to another session ──
+  const [copiedSessionIdx, setCopiedSessionIdx] = useState<number | null>(null);
+
+  function copySessionSlots(sourceIdx: number) {
+    setCopiedSessionIdx(sourceIdx);
+  }
+
+  function pasteSessionSlots(targetIdx: number) {
+    if (copiedSessionIdx === null || copiedSessionIdx === targetIdx) return;
+    const source = sessions[copiedSessionIdx];
+    if (!source) return;
+
+    setSessions(prev => prev.map((s, i) => {
+      if (i !== targetIdx) return s;
+      // Copy slot structure (times) from source, generate new IDs
+      const newSlots = source.slots.map(sl => ({
+        id: tempId(),
+        startTime: sl.startTime,
+        endTime: sl.endTime,
+      }));
+      // Also copy student assignments
+      const newAssignments = { ...slotAssignments };
+      // Remove old slot assignments for target
+      s.slots.forEach(sl => delete newAssignments[sl.id]);
+      // Copy assignments from source slots to new slots
+      source.slots.forEach((srcSlot, idx) => {
+        if (idx < newSlots.length) {
+          const srcAssigned = slotAssignments[srcSlot.id] || [];
+          if (srcAssigned.length > 0) {
+            newAssignments[newSlots[idx].id] = [...srcAssigned];
+          }
+        }
+      });
+      setSlotAssignments(newAssignments);
+      return { ...s, slots: newSlots };
+    }));
+  }
+
+  // ── Assign all students of a grade group to all slots in a session ──
+  function assignGradeToSession(sessionIdx: number, groupKey: string) {
+    const groupStudents = groupedStudents.find(([key]) => key === groupKey)?.[1] || [];
+    if (groupStudents.length === 0) return;
+
+    const sess = sessions[sessionIdx];
+    if (!sess) return;
+
+    const newAssignments = { ...slotAssignments };
+    for (const slot of sess.slots) {
+      if (!slot.startTime || !slot.endTime) continue;
+      const current = newAssignments[slot.id] || [];
+      const toAdd = groupStudents.filter(s => !current.includes(s.id)).map(s => s.id);
+      newAssignments[slot.id] = [...current, ...toAdd];
+    }
+    setSlotAssignments(newAssignments);
+  }
+
   async function handleSave() {
     const filledSessions = sessions.filter(s => s.date && s.slots.some(sl => sl.startTime && sl.endTime));
     const allAssignedIds = new Set<string>();
