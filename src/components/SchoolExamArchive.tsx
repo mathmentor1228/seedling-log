@@ -1197,6 +1197,8 @@ export function SchoolExamArchive() {
             <Plus className="w-4 h-4 mr-1" /> 첫 자료 추가하기
           </Button>
         </div>
+      ) : viewMode === 'exam' ? (
+        renderExamTypeView()
       ) : (
         Object.entries(schoolGroups).map(([schoolKey, items]) => {
           const schoolName = items[0]?.school_name || '';
