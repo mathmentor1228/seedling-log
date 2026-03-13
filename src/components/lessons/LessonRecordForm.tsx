@@ -380,7 +380,10 @@ export function LessonRecordForm({
   const [homeworkCheckResult, setHomeworkCheckResult] = useState<string>('');
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
   const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
-  const [newHomeworkContent, setNewHomeworkContent] = useState('');
+  // MULTI-HW-ASSIGN-V1: Multiple homework items support
+  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
+  // Legacy alias for compatibility
+  const newHomeworkContent = newHomeworkItems[0]?.content || '';
   
   // TEACHER-HW-SUBMISSION-VIEW-V1: Student submission and point history states
   const [studentSubmission, setStudentSubmission] = useState<HomeworkSubmission | null>(null);
