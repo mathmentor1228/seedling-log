@@ -36,6 +36,22 @@ function stripHtml(str: string): string {
     .trim();
 }
 
+/** Words that should never appear as blank-test keywords */
+const KEYWORD_BLACKLIST = new Set([
+  '참', '거짓', 'O', 'X', 'o', 'x', 'O/X', '단답', '빈칸',
+  '맞다', '틀리다', '예', '아니오', '네', '아니요',
+  'true', 'false', 'TRUE', 'FALSE', 'True', 'False',
+]);
+
+/** Check if a keyword is meaningful (not a trivial answer or too short) */
+function isValidKeyword(kw: string): boolean {
+  if (!kw || kw.length < 2) return false;
+  if (KEYWORD_BLACKLIST.has(kw)) return false;
+  // Filter out pure punctuation or single characters
+  if (/^[.,;:!?~\-=+*\/\\]+$/.test(kw)) return false;
+  return true;
+}
+
 const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subtitle: string; footer: string }> = {
   study: {
     label: '셀프 개념 학습지',
