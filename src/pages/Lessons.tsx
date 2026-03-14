@@ -26,10 +26,11 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit2, Trash2, FileEdit, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, FileEdit, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight, Eye, Users } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 import { LessonModal } from '@/components/lessons/LessonModal';
+import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 
@@ -211,6 +212,8 @@ export default function Lessons() {
   const [modalMode, setModalMode] = useState<'view' | 'edit'>('edit');
   // PREFILL-FIX-V5: Track if opening for new record creation
   const [modalForceNewRecord, setModalForceNewRecord] = useState(false);
+  // BATCH-LESSON-V1: Batch lesson entry modal
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
@@ -807,9 +810,14 @@ export default function Lessons() {
             )}
           </TabsList>
           {canManage && (
-            <Button onClick={handleOpenNewForm} size="sm" className="gap-1.5">
-              <Plus className="w-4 h-4" />수업기록 생성
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setIsBatchModalOpen(true)} size="sm" variant="outline" className="gap-1.5">
+                <Users className="w-4 h-4" />일괄 작성
+              </Button>
+              <Button onClick={handleOpenNewForm} size="sm" className="gap-1.5">
+                <Plus className="w-4 h-4" />수업기록 생성
+              </Button>
+            </div>
           )}
         </div>
 
@@ -825,6 +833,15 @@ export default function Lessons() {
           onSaved={handleModalSaved}
           initialMode={modalMode}
           forceNewRecord={modalForceNewRecord}
+        />
+      )}
+
+      {/* BATCH-LESSON-V1: Batch lesson entry modal */}
+      {isBatchModalOpen && (
+        <BatchLessonModal
+          open={isBatchModalOpen}
+          onOpenChange={setIsBatchModalOpen}
+          onSaved={handleModalSaved}
         />
       )}
 
