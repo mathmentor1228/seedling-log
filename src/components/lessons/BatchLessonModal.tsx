@@ -432,12 +432,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                         <button
                           key={score}
                           onClick={() => setUnderstandingScore(score)}
-                          className="transition-transform hover:scale-110"
+                          className={`transition-transform hover:scale-110 ${understandingScore === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
                         >
-                          <ScoreBadge
-                            score={score}
-                            className={understandingScore === score ? 'ring-2 ring-primary ring-offset-1' : 'opacity-40'}
-                          />
+                          <ScoreBadge score={score} />
                         </button>
                       ))}
                     </div>
