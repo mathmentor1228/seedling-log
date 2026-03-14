@@ -187,8 +187,8 @@ export default function QuizSubmitPage() {
 
           {step === 'done' && (
             <div className="text-center py-8 space-y-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-2">
-                <CheckCircle2 className="w-8 h-8 text-green-600" />
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
+                <CheckCircle2 className="w-8 h-8 text-primary" />
               </div>
               <h3 className="text-lg font-bold">제출 완료! 🎉</h3>
               <p className="text-sm text-muted-foreground">

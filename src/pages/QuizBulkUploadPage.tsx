@@ -193,7 +193,7 @@ function BulkUploadContent() {
               {results.map((r, i) => (
                 <div key={i} className="flex items-center gap-2 p-2 rounded-lg border text-sm">
                   {r.status === 'submitted' ? (
-                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
                   ) : (
                     <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
                   )}
