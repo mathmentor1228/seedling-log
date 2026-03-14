@@ -212,6 +212,8 @@ export default function Lessons() {
   const [modalMode, setModalMode] = useState<'view' | 'edit'>('edit');
   // PREFILL-FIX-V5: Track if opening for new record creation
   const [modalForceNewRecord, setModalForceNewRecord] = useState(false);
+  // BATCH-LESSON-V1: Batch lesson entry modal
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
