@@ -8,6 +8,8 @@ import { Loader2, Camera, CheckCircle2, XCircle, HelpCircle, Star, PartyPopper }
 import { MathRenderer } from './MathRenderer';
 import type { QuizQuestion } from './MathConceptManager';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
+import { compressImage } from '@/lib/imageCompression';
+import { preprocessImageForOCR } from '@/lib/imagePreprocess';
 
 interface Props {
   quiz: { id: string; concept_id: string; questions: QuizQuestion[] };
