@@ -58,7 +58,7 @@ export function QuizSubmissionUpload({ quiz, studentId, onSubmitted }: Props) {
         const path = `${studentId}/${quiz.id}/${Date.now()}_${safeName}`;
         const { error: uploadErr } = await supabase.storage
           .from('quiz-submissions')
-          .upload(path, img.file);
+          .upload(path, compressed);
         if (uploadErr) throw uploadErr;
 
         const { data: urlData } = supabase.storage
