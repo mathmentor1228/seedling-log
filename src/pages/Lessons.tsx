@@ -836,6 +836,15 @@ export default function Lessons() {
         />
       )}
 
+      {/* BATCH-LESSON-V1: Batch lesson entry modal */}
+      {isBatchModalOpen && (
+        <BatchLessonModal
+          open={isBatchModalOpen}
+          onOpenChange={setIsBatchModalOpen}
+          onSaved={handleModalSaved}
+        />
+      )}
+
       {/* 오늘 수업 Section */}
       {(isTeacher || isAdmin || isAssistant) && (
         <Card className="border-primary/30 bg-primary/5">
