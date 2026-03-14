@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb } from 'lucide-react';
+import { Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb, Printer } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import type { QuizQuestion } from './MathConceptManager';
 
