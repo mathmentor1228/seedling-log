@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -20,24 +20,26 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth, isAdmin as checkIsAdmin } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayKST } from '@/lib/utils';
-import { Users, Plus, Save, Send, Loader2, Trash2, Search, CheckSquare } from 'lucide-react';
+import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight } from 'lucide-react';
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
-interface StudentItem {
+interface DraftRecord {
   id: string;
-  name: string;
-  grade?: string | null;
-}
-
-interface ClassItem {
-  id: string;
-  name: string;
+  student_id: string;
+  student_name: string;
+  student_grade: string | null;
   subject: string;
-  students?: StudentItem[];
+  lesson_range: string;
+  understanding_score: number | null;
+  homework_status: string;
+  notes: string | null;
+  next_lesson_goal: string | null;
+  class_id: string | null;
+  submitted: boolean;
 }
 
 interface HomeworkItem {
@@ -52,8 +54,6 @@ interface BatchLessonModalProps {
   onSaved?: () => void;
 }
 
-const SUBJECTS: SubjectType[] = ['수학', '영어', '국어', '과학'];
-
 const HOMEWORK_STATUS_OPTIONS = [
   { value: 'completed', label: '완료' },
   { value: 'partial', label: '일부완료' },
@@ -61,219 +61,209 @@ const HOMEWORK_STATUS_OPTIONS = [
   { value: 'none_assigned', label: '없음' },
 ];
 
+type EditableField = 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items';
+
+const FIELD_LABELS: Record<EditableField, string> = {
+  lesson_range: '수업 내용',
+  understanding_score: '이해도',
+  homework_status: '숙제 상태',
+  notes: '비고 / 메모',
+  next_lesson_goal: '다음 수업 목표',
+  homework_items: '숙제 배정',
+};
+
 export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonModalProps) {
-  const { user, role } = useAuth();
-  const isAdmin = checkIsAdmin(role);
+  const { user } = useAuth();
   const { toast } = useToast();
 
-  // Selection state
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
-  const [classStudents, setClassStudents] = useState<StudentItem[]>([]);
-  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
-  const [studentSearch, setStudentSearch] = useState('');
-  const [allStudents, setAllStudents] = useState<StudentItem[]>([]);
-  const [manualMode, setManualMode] = useState(false);
+  // Step state
+  const [step, setStep] = useState<'search' | 'edit'>('search');
 
-  // Lesson data
-  const [subject, setSubject] = useState<SubjectType>('수학');
-  const [lessonDate, setLessonDate] = useState(getTodayKST());
+  // Search state
+  const [searchDate, setSearchDate] = useState(getTodayKST());
+  const [drafts, setDrafts] = useState<DraftRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Edit state - which fields to apply
+  const [activeFields, setActiveFields] = useState<Set<EditableField>>(new Set());
   const [lessonRange, setLessonRange] = useState('');
   const [understandingScore, setUnderstandingScore] = useState<number>(3);
   const [homeworkStatus, setHomeworkStatus] = useState('none_assigned');
   const [notes, setNotes] = useState('');
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
-
-  // UI state
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitAfter, setSubmitAfter] = useState(false);
 
   useEffect(() => {
     if (open) {
-      fetchData();
-      resetForm();
+      setStep('search');
+      setSearchDate(getTodayKST());
+      setDrafts([]);
+      setSelectedIds(new Set());
+      resetEditState();
     }
   }, [open]);
 
-  useEffect(() => {
-    if (selectedClassId) {
-      fetchClassStudents(selectedClassId);
-      // Auto-set subject from class
-      const cls = classes.find(c => c.id === selectedClassId);
-      if (cls) setSubject(cls.subject as SubjectType);
-    } else {
-      setClassStudents([]);
-    }
-  }, [selectedClassId]);
-
-  function resetForm() {
-    setSelectedClassId('');
-    setSelectedStudentIds(new Set());
-    setStudentSearch('');
-    setManualMode(false);
-    setSubject('수학');
-    setLessonDate(getTodayKST());
+  function resetEditState() {
+    setActiveFields(new Set());
     setLessonRange('');
     setUnderstandingScore(3);
     setHomeworkStatus('none_assigned');
     setNotes('');
     setNextLessonGoal('');
     setHomeworkItems([]);
+    setSubmitAfter(false);
   }
 
-  async function fetchData() {
+  async function searchDrafts() {
     setLoading(true);
     try {
-      const [classesRes, studentsRes] = await Promise.all([
-        supabase.from('classes').select('id, name, subject').order('name'),
-        supabase.from('students').select('id, name, grade').neq('enrollment_status', '퇴원').order('name'),
-      ]);
-      setClasses(classesRes.data || []);
-      setAllStudents(studentsRes.data || []);
-    } catch (err) {
-      console.error('BatchLessonModal fetchData error:', err);
+      const { data, error } = await supabase
+        .from('lesson_records')
+        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, students!inner(name, grade)')
+        .eq('lesson_date', searchDate)
+        .eq('teacher_id', user!.id)
+        .order('submitted', { ascending: true });
+
+      if (error) throw error;
+
+      const records: DraftRecord[] = (data || []).map((r: any) => ({
+        id: r.id,
+        student_id: r.student_id,
+        student_name: r.students.name,
+        student_grade: r.students.grade,
+        subject: r.subject,
+        lesson_range: r.lesson_range,
+        understanding_score: r.understanding_score,
+        homework_status: r.homework_status,
+        notes: r.notes,
+        next_lesson_goal: r.next_lesson_goal,
+        class_id: r.class_id,
+        submitted: r.submitted,
+      }));
+      setDrafts(records);
+      setSelectedIds(new Set());
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '검색 실패', description: err.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   }
 
-  async function fetchClassStudents(classId: string) {
-    const { data } = await supabase
-      .from('class_students')
-      .select('student_id, students:student_id!inner(id, name, grade)')
-      .eq('class_id', classId)
-      .neq('students.enrollment_status', '퇴원');
-
-    const students: StudentItem[] = (data || []).map((cs: any) => ({
-      id: cs.students.id,
-      name: cs.students.name,
-      grade: cs.students.grade,
-    }));
-    setClassStudents(students);
-    // Auto-select all students
-    setSelectedStudentIds(new Set(students.map(s => s.id)));
-  }
-
-  function toggleStudent(id: string) {
-    setSelectedStudentIds(prev => {
+  function toggleDraft(id: string) {
+    setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   }
 
-  function selectAll(students: StudentItem[]) {
-    setSelectedStudentIds(new Set(students.map(s => s.id)));
-  }
-
-  function deselectAll() {
-    setSelectedStudentIds(new Set());
+  function toggleField(field: EditableField) {
+    setActiveFields(prev => {
+      const next = new Set(prev);
+      next.has(field) ? next.delete(field) : next.add(field);
+      return next;
+    });
   }
 
   function addHomework() {
     setHomeworkItems(prev => [...prev, { tempId: crypto.randomUUID(), content: '', homework_type: 'daily' }]);
   }
-
   function removeHomework(tempId: string) {
     setHomeworkItems(prev => prev.filter(h => h.tempId !== tempId));
   }
-
   function updateHomework(tempId: string, field: keyof HomeworkItem, value: string) {
     setHomeworkItems(prev => prev.map(h => h.tempId === tempId ? { ...h, [field]: value } : h));
   }
 
-  const displayStudents = manualMode
-    ? allStudents.filter(s => {
-        if (!studentSearch) return false;
-        return s.name.toLowerCase().includes(studentSearch.toLowerCase());
-      })
-    : classStudents;
+  const draftOnly = useMemo(() => drafts.filter(d => !d.submitted), [drafts]);
+  const submittedOnly = useMemo(() => drafts.filter(d => d.submitted), [drafts]);
 
-  async function handleSave(submit: boolean) {
-    if (selectedStudentIds.size === 0) {
-      toast({ title: '학생을 선택해주세요', variant: 'destructive' });
+  function goToEdit() {
+    if (selectedIds.size === 0) {
+      toast({ title: '수정할 일지를 선택해주세요', variant: 'destructive' });
       return;
     }
-    if (!lessonRange.trim()) {
-      toast({ title: '수업 내용을 입력해주세요', variant: 'destructive' });
+    resetEditState();
+    // Pre-fill from the first selected record for convenience
+    const first = drafts.find(d => selectedIds.has(d.id));
+    if (first) {
+      setLessonRange(first.lesson_range || '');
+      setUnderstandingScore(first.understanding_score ?? 3);
+      setHomeworkStatus(first.homework_status || 'none_assigned');
+      setNotes(first.notes || '');
+      setNextLessonGoal(first.next_lesson_goal || '');
+    }
+    setStep('edit');
+  }
+
+  async function handleApply() {
+    if (activeFields.size === 0) {
+      toast({ title: '변경할 항목을 1개 이상 선택해주세요', variant: 'destructive' });
       return;
     }
-
-    submit ? setSubmitting(true) : setSaving(true);
-
+    setSaving(true);
     try {
-      const studentIds = Array.from(selectedStudentIds);
+      const ids = Array.from(selectedIds);
       const now = new Date().toISOString();
 
-      // Create lesson records for each student
-      const records = studentIds.map(studentId => ({
-        student_id: studentId,
-        class_id: selectedClassId || null,
-        subject: subject as SubjectType,
-        lesson_date: lessonDate,
-        lesson_range: lessonRange.trim(),
-        understanding_score: understandingScore,
-        homework_status: homeworkStatus,
-        notes: notes.trim() || null,
-        next_lesson_goal: nextLessonGoal.trim() || null,
-        teacher_id: user!.id,
-        submitted: submit,
-        submitted_at: submit ? now : null,
-        draft_created_at: now,
-      }));
+      // Build update payload with only active fields
+      const updatePayload: Record<string, any> = { updated_at: now };
+      if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
+      if (activeFields.has('understanding_score')) updatePayload.understanding_score = understandingScore;
+      if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
+      if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
+      if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
+      if (submitAfter) {
+        updatePayload.submitted = true;
+        updatePayload.submitted_at = now;
+      }
 
-      const { data: insertedRecords, error: insertError } = await supabase
+      const { error: updateError } = await supabase
         .from('lesson_records')
-        .insert(records)
-        .select('id, student_id');
+        .update(updatePayload)
+        .in('id', ids);
+      if (updateError) throw updateError;
 
-      if (insertError) throw insertError;
-
-      // Create homework assignments if any
-      if (homeworkItems.length > 0 && insertedRecords) {
-        const hwAssignments = insertedRecords.flatMap(record =>
+      // Handle homework assignment if toggled
+      if (activeFields.has('homework_items') && homeworkItems.filter(h => h.content.trim()).length > 0) {
+        const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
+        const hwAssignments = selectedRecords.flatMap(record =>
           homeworkItems
             .filter(hw => hw.content.trim())
             .map(hw => ({
               student_id: record.student_id,
-              subject: subject as SubjectType,
+              subject: record.subject as SubjectType,
               lesson_record_id: record.id,
-              assigned_date: lessonDate,
+              assigned_date: searchDate,
               content: hw.content.trim(),
               homework_type: hw.homework_type,
               check_status: 'unchecked' as const,
               created_by: user!.id,
             }))
         );
-
         if (hwAssignments.length > 0) {
-          const { error: hwError } = await supabase
-            .from('homework_assignments')
-            .insert(hwAssignments);
+          const { error: hwError } = await supabase.from('homework_assignments').insert(hwAssignments);
           if (hwError) throw hwError;
         }
       }
 
+      const fieldNames = Array.from(activeFields).map(f => FIELD_LABELS[f]).join(', ');
       toast({
-        title: submit ? '일괄 제출 완료' : '일괄 저장 완료',
-        description: `${studentIds.length}명의 수업일지가 ${submit ? '제출' : '저장'}되었습니다.`,
+        title: submitAfter ? '일괄 수정 & 제출 완료' : '일괄 수정 완료',
+        description: `${ids.length}명 → [${fieldNames}] 통일 적용`,
       });
 
       onSaved?.();
-      if (submit) onOpenChange(false);
+      onOpenChange(false);
     } catch (err: any) {
-      console.error('BatchLessonModal save error:', err);
-      toast({
-        title: '저장 실패',
-        description: err.message || '수업일지 저장 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
+      console.error(err);
+      toast({ title: '저장 실패', description: err.message, variant: 'destructive' });
     } finally {
       setSaving(false);
-      setSubmitting(false);
     }
   }
 
@@ -283,299 +273,304 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         <DialogHeader className="px-6 pt-5 pb-3 border-b border-border/60 shrink-0 bg-primary/5">
           <DialogTitle className="text-base font-bold tracking-tight flex items-center gap-2">
             <Users className="w-5 h-5 text-primary" />
-            일괄 수업일지 작성
+            {step === 'search' ? '일괄 수정 — 일지 검색' : '일괄 수정 — 항목 선택'}
           </DialogTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            여러 학생을 선택하여 동일한 수업 내용과 숙제를 한번에 입력합니다.
+            {step === 'search'
+              ? '날짜를 선택하고 수정할 학생 일지를 골라주세요.'
+              : '통일할 항목만 체크하고 값을 입력하세요. 체크하지 않은 항목은 기존 값이 유지됩니다.'}
           </p>
         </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 px-5 pb-5 pt-4 space-y-5">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-          ) : (
+        <div className="overflow-y-auto flex-1 px-5 pb-5 pt-4 space-y-4">
+          {step === 'search' ? (
             <>
-              {/* Step 1: Student Selection */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">1</span>
-                    학생 선택
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={!manualMode ? 'default' : 'outline'}
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => { setManualMode(false); setSelectedStudentIds(new Set()); }}
-                    >
-                      반 선택
-                    </Button>
-                    <Button
-                      variant={manualMode ? 'default' : 'outline'}
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => { setManualMode(true); setSelectedClassId(''); setSelectedStudentIds(new Set()); }}
-                    >
-                      직접 선택
-                    </Button>
-                  </div>
+              {/* Date search */}
+              <div className="flex items-end gap-2">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs text-muted-foreground">수업일 검색</Label>
+                  <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9" />
                 </div>
-
-                {!manualMode ? (
-                  <div className="space-y-2">
-                    <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="반을 선택하세요" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {classes.map(c => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name} ({c.subject})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      value={studentSearch}
-                      onChange={e => setStudentSearch(e.target.value)}
-                      placeholder="학생 이름 검색..."
-                      className="pl-9 h-9"
-                    />
-                  </div>
-                )}
-
-                {displayStudents.length > 0 && (
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {selectedStudentIds.size}명 선택됨
-                      </span>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => selectAll(displayStudents)}>
-                          <CheckSquare className="w-3 h-3 mr-1" />전체선택
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={deselectAll}>
-                          해제
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="max-h-40 overflow-y-auto divide-y divide-border">
-                      {displayStudents.map(student => (
-                        <label
-                          key={student.id}
-                          className="flex items-center gap-3 px-3 py-2 hover:bg-accent/50 cursor-pointer transition-colors"
-                        >
-                          <Checkbox
-                            checked={selectedStudentIds.has(student.id)}
-                            onCheckedChange={() => toggleStudent(student.id)}
-                          />
-                          <span className="text-sm font-medium">{student.name}</span>
-                          {student.grade && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">{student.grade}</Badge>
-                          )}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <Button size="sm" onClick={searchDrafts} disabled={loading} className="h-9 gap-1.5">
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  검색
+                </Button>
               </div>
 
-              {/* Step 2: Lesson Info */}
-              <div className="space-y-3 pt-2 border-t">
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">2</span>
-                  수업 정보
-                </h3>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">과목</Label>
-                    <Select value={subject} onValueChange={v => setSubject(v as SubjectType)}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SUBJECTS.map(s => (
-                          <SelectItem key={s} value={s}>{s}</SelectItem>
+              {/* Results */}
+              {drafts.length > 0 && (
+                <div className="space-y-3">
+                  {/* Draft records */}
+                  {draftOnly.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground">📝 임시저장 ({draftOnly.length})</span>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost" size="sm" className="h-6 text-xs px-2"
+                            onClick={() => setSelectedIds(new Set(draftOnly.map(d => d.id)))}
+                          >
+                            <CheckSquare className="w-3 h-3 mr-1" />전체선택
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedIds(new Set())}>
+                            해제
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="border rounded-lg overflow-hidden divide-y divide-border">
+                        {draftOnly.map(d => (
+                          <label key={d.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 cursor-pointer transition-colors">
+                            <Checkbox checked={selectedIds.has(d.id)} onCheckedChange={() => toggleDraft(d.id)} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium truncate">{d.student_name}</span>
+                                {d.student_grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{d.student_grade}</Badge>}
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">{d.lesson_range || '(내용 없음)'}</p>
+                            </div>
+                            {d.understanding_score && <ScoreBadge score={d.understanding_score} />}
+                          </label>
                         ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">수업일</Label>
-                    <Input type="date" value={lessonDate} onChange={e => setLessonDate(e.target.value)} className="h-9" />
-                  </div>
-                </div>
+                      </div>
+                    </div>
+                  )}
 
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">수업 내용 <span className="text-destructive">*</span></Label>
+                  {/* Submitted records */}
+                  {submittedOnly.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold text-muted-foreground">✅ 제출완료 ({submittedOnly.length})</span>
+                      <div className="border rounded-lg overflow-hidden divide-y divide-border opacity-60">
+                        {submittedOnly.map(d => (
+                          <div key={d.id} className="flex items-center gap-3 px-3 py-2.5">
+                            <Checkbox disabled checked={false} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium truncate">{d.student_name}</span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">{d.lesson_range || '(내용 없음)'}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">제출 완료된 일지는 일괄 수정 대상에서 제외됩니다.</p>
+                    </div>
+                  )}
+
+                  {draftOnly.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">해당 날짜에 임시저장된 일지가 없습니다.</p>
+                  )}
+                </div>
+              )}
+
+              {!loading && drafts.length === 0 && searchDate && (
+                <p className="text-sm text-muted-foreground text-center py-8">검색 버튼을 눌러 해당 날짜의 일지를 불러오세요.</p>
+              )}
+            </>
+          ) : (
+            /* Step 2: Edit */
+            <>
+              <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 mb-2">
+                <p className="text-sm font-medium">
+                  📋 선택된 학생 <strong>{selectedIds.size}명</strong>의 일지를 수정합니다.
+                </p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                    <Badge key={d.id} variant="secondary" className="text-xs">{d.student_name} ({d.subject})</Badge>
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-xs font-semibold text-muted-foreground">통일할 항목을 선택하세요 (체크한 항목만 변경됩니다)</p>
+
+              <div className="space-y-3">
+                {/* Lesson Range */}
+                <FieldToggleBlock
+                  field="lesson_range"
+                  active={activeFields.has('lesson_range')}
+                  onToggle={() => toggleField('lesson_range')}
+                >
                   <Textarea
                     value={lessonRange}
                     onChange={e => setLessonRange(e.target.value)}
                     placeholder="예: 미적분 - 도함수의 활용 (증가·감소, 극값)"
                     className="min-h-[60px] resize-none"
                   />
-                </div>
+                </FieldToggleBlock>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">이해도</Label>
-                    <div className="flex items-center gap-1 pt-1">
-                      {[1, 2, 3, 4, 5].map(score => (
-                        <button
-                          key={score}
-                          onClick={() => setUnderstandingScore(score)}
-                          className={`transition-transform hover:scale-110 ${understandingScore === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
-                        >
-                          <ScoreBadge score={score} />
-                        </button>
+                {/* Understanding Score */}
+                <FieldToggleBlock
+                  field="understanding_score"
+                  active={activeFields.has('understanding_score')}
+                  onToggle={() => toggleField('understanding_score')}
+                >
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map(score => (
+                      <button
+                        key={score}
+                        onClick={() => setUnderstandingScore(score)}
+                        className={`transition-transform hover:scale-110 ${understandingScore === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
+                      >
+                        <ScoreBadge score={score} />
+                      </button>
+                    ))}
+                  </div>
+                </FieldToggleBlock>
+
+                {/* Homework Status */}
+                <FieldToggleBlock
+                  field="homework_status"
+                  active={activeFields.has('homework_status')}
+                  onToggle={() => toggleField('homework_status')}
+                >
+                  <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HOMEWORK_STATUS_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                       ))}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">숙제 상태</Label>
-                    <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {HOMEWORK_STATUS_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                    </SelectContent>
+                  </Select>
+                </FieldToggleBlock>
 
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">비고 / 메모</Label>
+                {/* Notes */}
+                <FieldToggleBlock
+                  field="notes"
+                  active={activeFields.has('notes')}
+                  onToggle={() => toggleField('notes')}
+                >
                   <Textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     placeholder="수업 중 특이사항..."
                     className="min-h-[50px] resize-none"
                   />
-                </div>
+                </FieldToggleBlock>
 
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">다음 수업 목표</Label>
+                {/* Next Lesson Goal */}
+                <FieldToggleBlock
+                  field="next_lesson_goal"
+                  active={activeFields.has('next_lesson_goal')}
+                  onToggle={() => toggleField('next_lesson_goal')}
+                >
                   <Input
                     value={nextLessonGoal}
                     onChange={e => setNextLessonGoal(e.target.value)}
                     placeholder="다음 시간 진도 계획..."
                     className="h-9"
                   />
-                </div>
-              </div>
+                </FieldToggleBlock>
 
-              {/* Step 3: Homework */}
-              <div className="space-y-3 pt-2 border-t">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">3</span>
-                    숙제 배정
-                  </h3>
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addHomework}>
-                    <Plus className="w-3 h-3" /> 숙제 추가
-                  </Button>
-                </div>
-
-                {homeworkItems.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2">배정할 숙제가 없습니다. 필요 시 '숙제 추가' 버튼을 누르세요.</p>
-                ) : (
+                {/* Homework Items */}
+                <FieldToggleBlock
+                  field="homework_items"
+                  active={activeFields.has('homework_items')}
+                  onToggle={() => toggleField('homework_items')}
+                >
                   <div className="space-y-2">
-                    {homeworkItems.map((hw, idx) => (
-                      <div key={hw.tempId} className="flex items-start gap-2 p-3 rounded-lg border bg-muted/30">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
-                            <Select
-                              value={hw.homework_type}
-                              onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}
-                            >
-                              <SelectTrigger className="h-7 w-24 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="daily">일일</SelectItem>
-                                <SelectItem value="weekly">주간</SelectItem>
-                                <SelectItem value="long_term">장기</SelectItem>
-                              </SelectContent>
-                            </Select>
+                    {homeworkItems.length === 0 ? (
+                      <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addHomework}>
+                        <Plus className="w-3 h-3" /> 숙제 추가
+                      </Button>
+                    ) : (
+                      <>
+                        {homeworkItems.map((hw, idx) => (
+                          <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
+                            <div className="flex-1 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
+                                <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
+                                  <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="daily">일일</SelectItem>
+                                    <SelectItem value="weekly">주간</SelectItem>
+                                    <SelectItem value="long_term">장기</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Input
+                                value={hw.content}
+                                onChange={e => updateHomework(hw.tempId, 'content', e.target.value)}
+                                placeholder="숙제 내용을 입력하세요"
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           </div>
-                          <Input
-                            value={hw.content}
-                            onChange={e => updateHomework(hw.tempId, 'content', e.target.value)}
-                            placeholder="숙제 내용을 입력하세요"
-                            className="h-8 text-sm"
-                          />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive shrink-0 mt-1"
-                          onClick={() => removeHomework(hw.tempId)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
+                        ))}
+                        <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addHomework}>
+                          <Plus className="w-3 h-3" /> 숙제 추가
                         </Button>
-                      </div>
-                    ))}
+                      </>
+                    )}
                   </div>
-                )}
+                </FieldToggleBlock>
               </div>
 
-              {/* Summary */}
-              {selectedStudentIds.size > 0 && (
-                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3">
-                  <p className="text-sm font-medium text-foreground">
-                    📋 <strong>{selectedStudentIds.size}명</strong>의 학생에게 동일한 수업일지가 생성됩니다.
-                  </p>
-                  {homeworkItems.filter(h => h.content.trim()).length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      + 숙제 {homeworkItems.filter(h => h.content.trim()).length}건이 각 학생에게 배정됩니다.
-                    </p>
-                  )}
-                </div>
-              )}
+              {/* Submit toggle */}
+              <label className="flex items-center gap-2 mt-2 p-3 rounded-lg border border-dashed cursor-pointer hover:bg-accent/30 transition-colors">
+                <Checkbox checked={submitAfter} onCheckedChange={v => setSubmitAfter(v === true)} />
+                <span className="text-sm font-medium">수정 후 바로 제출하기</span>
+              </label>
             </>
           )}
         </div>
 
         {/* Footer */}
         <div className="px-5 py-3 border-t bg-muted/30 flex items-center justify-between gap-2 shrink-0">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            취소
-          </Button>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleSave(false)}
-              disabled={saving || submitting || selectedStudentIds.size === 0}
-              className="gap-1.5"
-            >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              임시저장
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => handleSave(true)}
-              disabled={saving || submitting || selectedStudentIds.size === 0}
-              className="gap-1.5"
-            >
-              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              일괄 제출 ({selectedStudentIds.size}명)
-            </Button>
-          </div>
+          {step === 'search' ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>취소</Button>
+              <Button size="sm" onClick={goToEdit} disabled={selectedIds.size === 0} className="gap-1.5">
+                <ArrowRight className="w-3.5 h-3.5" />
+                다음: 항목 선택 ({selectedIds.size}명)
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setStep('search')}>← 돌아가기</Button>
+              <Button
+                size="sm"
+                onClick={handleApply}
+                disabled={saving || activeFields.size === 0}
+                className="gap-1.5"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                일괄 적용 ({selectedIds.size}명, {activeFields.size}개 항목)
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ── Sub-component: toggle-able field block ── */
+function FieldToggleBlock({
+  field,
+  active,
+  onToggle,
+  children,
+}: {
+  field: EditableField;
+  active: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`rounded-lg border p-3 transition-colors ${active ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20 opacity-60'}`}>
+      <label className="flex items-center gap-2 cursor-pointer mb-2">
+        <Checkbox checked={active} onCheckedChange={onToggle} />
+        <span className="text-sm font-semibold">{FIELD_LABELS[field]}</span>
+        {active && <Badge className="text-[10px] ml-auto bg-primary/10 text-primary border-0">적용됨</Badge>}
+      </label>
+      {active && <div className="mt-1">{children}</div>}
+    </div>
   );
 }
