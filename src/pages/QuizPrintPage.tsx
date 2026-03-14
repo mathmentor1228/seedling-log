@@ -240,19 +240,19 @@ export default function QuizPrintPage() {
 
   // ─── Blank mode ───
   const BlankMode = () => (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <p className="text-sm font-medium">아래 핵심 키워드의 <strong>정의, 성질, 조건</strong>을 직접 서술하세요.</p>
       {keywords.map((kw, idx) => (
         <div key={idx} className="break-inside-avoid">
           <div className="flex items-center gap-3">
             <span className="font-bold text-sm shrink-0 w-6 text-right">{idx + 1}.</span>
-            <span className="text-sm font-semibold border border-foreground/40 rounded px-2.5 py-1 bg-muted/30">
+            <span className="text-sm font-semibold border border-foreground/40 rounded px-3 py-1.5 bg-muted/30 inline-block min-w-[100px] text-center">
               <MathRenderer text={kw} />
             </span>
           </div>
-          <div className="ml-9 mt-2 space-y-0.5">
-            {Array.from({ length: 4 }).map((_, li) => (
-              <div key={li} className="border-b border-foreground/20 h-9" />
+          <div className="ml-9 mt-3 space-y-1">
+            {Array.from({ length: 5 }).map((_, li) => (
+              <div key={li} className="border-b border-foreground/20 h-10" />
             ))}
           </div>
         </div>
