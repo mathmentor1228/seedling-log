@@ -108,14 +108,16 @@ export default function QuizPrintPage() {
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
   const qrPayload = data ? `${window.location.origin}/quiz-submit?quiz_id=${data.quizId}${studentId ? `&student_id=${studentId}` : ''}` : '';
 
-  // Extract clean keywords from answers for blank mode
+  // Extract clean keywords from answers for blank mode — filter out trivial answers
   const keywords = useMemo(() => {
     if (!data) return [] as string[];
     const seen = new Set<string>();
     const result: string[] = [];
     data.questions.forEach(q => {
+      // Skip true/false questions entirely — their answers are never good keywords
+      if (q.question_type === 'true_false') return;
       const clean = stripHtml(q.answer);
-      if (clean && !seen.has(clean)) {
+      if (isValidKeyword(clean) && !seen.has(clean)) {
         seen.add(clean);
         result.push(clean);
       }
