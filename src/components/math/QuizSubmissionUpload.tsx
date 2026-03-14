@@ -8,6 +8,8 @@ import { Loader2, Camera, CheckCircle2, XCircle, HelpCircle, Star, PartyPopper }
 import { MathRenderer } from './MathRenderer';
 import type { QuizQuestion } from './MathConceptManager';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
+import { compressImage } from '@/lib/imageCompression';
+import { preprocessImageForOCR } from '@/lib/imagePreprocess';
 
 interface Props {
   quiz: { id: string; concept_id: string; questions: QuizQuestion[] };
@@ -50,11 +52,13 @@ export function QuizSubmissionUpload({ quiz, studentId, onSubmitted }: Props) {
       // Upload images to storage
       const uploadedUrls: string[] = [];
       for (const img of images) {
-        const safeName = img.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const preprocessed = await preprocessImageForOCR(img.file);
+        const compressed = await compressImage(preprocessed);
+        const safeName = compressed.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const path = `${studentId}/${quiz.id}/${Date.now()}_${safeName}`;
         const { error: uploadErr } = await supabase.storage
           .from('quiz-submissions')
-          .upload(path, img.file);
+          .upload(path, compressed);
         if (uploadErr) throw uploadErr;
 
         const { data: urlData } = supabase.storage

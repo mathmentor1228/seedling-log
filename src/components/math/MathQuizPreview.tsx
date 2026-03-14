@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb } from 'lucide-react';
+import { Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb, Printer } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import type { QuizQuestion } from './MathConceptManager';
 
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerating }: Props) {
+  const navigate = useNavigate();
   const [editMode, setEditMode] = useState(false);
   const [editedQuestions, setEditedQuestions] = useState<QuizQuestion[]>([]);
 
@@ -95,6 +97,9 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
                 <Edit2 className="w-4 h-4 mr-1" /> 수정
               </Button>
             )}
+            <Button size="sm" variant="outline" onClick={() => navigate(`/quiz-print?quiz_id=${quiz.id}`)}>
+              <Printer className="w-4 h-4 mr-1" /> 학습지 인쇄
+            </Button>
           </div>
         </div>
       </CardHeader>

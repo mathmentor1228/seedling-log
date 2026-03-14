@@ -29,6 +29,9 @@ import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
 import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
 import MathConceptPage from "./pages/MathConceptPage";
 import ExamPrepPage from "./pages/ExamPrepPage";
+import QuizPrintPage from "./pages/QuizPrintPage";
+import QuizSubmitPage from "./pages/QuizSubmitPage";
+import QuizBulkUploadPage from "./pages/QuizBulkUploadPage";
 import NotFound from "./pages/NotFound";
 import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
@@ -59,6 +62,8 @@ const App = () => (
           <Route path="/parent" element={<ParentPortal />} />
           <Route path="/trial" element={<TrialSignup />} />
           <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
+          <Route path="/quiz-print" element={<QuizPrintPage />} />
+          <Route path="/quiz-submit" element={<QuizSubmitPage />} />
 
           {/* All authenticated routes */}
           <Route path="/*" element={
@@ -119,6 +124,7 @@ const App = () => (
                 <Route path="/vocab-generator" element={<VocabTestGeneratorPage />} />
                 <Route path="/materials/:subject" element={<SubjectMaterialPage />} />
                 <Route path="/math-concepts" element={<MathConceptPage />} />
+                <Route path="/quiz-bulk-upload" element={<QuizBulkUploadPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
