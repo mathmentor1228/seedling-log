@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/table';
 import { ScoreBadge } from '@/components/ui/score-badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit2, Trash2, FileEdit, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, FileEdit, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight, Eye, Users } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 import { LessonModal } from '@/components/lessons/LessonModal';
