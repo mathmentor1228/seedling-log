@@ -810,9 +810,14 @@ export default function Lessons() {
             )}
           </TabsList>
           {canManage && (
-            <Button onClick={handleOpenNewForm} size="sm" className="gap-1.5">
-              <Plus className="w-4 h-4" />수업기록 생성
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setIsBatchModalOpen(true)} size="sm" variant="outline" className="gap-1.5">
+                <Users className="w-4 h-4" />일괄 작성
+              </Button>
+              <Button onClick={handleOpenNewForm} size="sm" className="gap-1.5">
+                <Plus className="w-4 h-4" />수업기록 생성
+              </Button>
+            </div>
           )}
         </div>
 
