@@ -62,6 +62,8 @@ const App = () => (
           <Route path="/parent" element={<ParentPortal />} />
           <Route path="/trial" element={<TrialSignup />} />
           <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
+          <Route path="/quiz-print" element={<QuizPrintPage />} />
+          <Route path="/quiz-submit" element={<QuizSubmitPage />} />
 
           {/* All authenticated routes */}
           <Route path="/*" element={
