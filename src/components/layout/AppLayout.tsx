@@ -99,7 +99,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       items: [
         { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
         { label: '시험', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
-        { label: '수학 개념퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'], allowedSubjects: ['수학'] },
+        { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
         { label: '내신 특강', href: '/exam-prep', icon: <CalendarDays className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
       ],

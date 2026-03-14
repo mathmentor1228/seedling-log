@@ -614,7 +614,7 @@ export default function StudentMathQuiz() {
     <div className="p-4 space-y-4">
       <h1 className="text-xl font-bold flex items-center gap-2">
         <BookOpen className="w-5 h-5 text-primary" />
-        수학 개념 퀴즈
+        개념 퀴즈
       </h1>
 
       {quizzes.length === 0 ? (

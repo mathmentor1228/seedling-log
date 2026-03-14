@@ -3,7 +3,7 @@ import { MathConceptManager } from '@/components/math/MathConceptManager';
 
 export default function MathConceptPage() {
   return (
-    <ProtectedRoute allowedRoles={['admin', 'teacher']}>
+    <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
       <MathConceptManager />
     </ProtectedRoute>
   );
