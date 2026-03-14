@@ -36,7 +36,7 @@ interface Quiz {
   id: string;
   concept_id: string;
   status: string;
-  math_concepts: { title: string; course: string; grade: string } | null;
+  math_concepts: { title: string; course: string; grade: string; subject: string } | null;
 }
 
 interface Assignment {
