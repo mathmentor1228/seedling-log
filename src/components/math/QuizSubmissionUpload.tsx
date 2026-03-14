@@ -52,7 +52,9 @@ export function QuizSubmissionUpload({ quiz, studentId, onSubmitted }: Props) {
       // Upload images to storage
       const uploadedUrls: string[] = [];
       for (const img of images) {
-        const safeName = img.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const preprocessed = await preprocessImageForOCR(img.file);
+        const compressed = await compressImage(preprocessed);
+        const safeName = compressed.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const path = `${studentId}/${quiz.id}/${Date.now()}_${safeName}`;
         const { error: uploadErr } = await supabase.storage
           .from('quiz-submissions')
