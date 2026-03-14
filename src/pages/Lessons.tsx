@@ -30,6 +30,7 @@ import { Plus, Edit2, Trash2, FileEdit, GraduationCap, Calendar, AlertTriangle, 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 import { LessonModal } from '@/components/lessons/LessonModal';
+import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 
