@@ -36,6 +36,22 @@ function stripHtml(str: string): string {
     .trim();
 }
 
+/** Words that should never appear as blank-test keywords */
+const KEYWORD_BLACKLIST = new Set([
+  '참', '거짓', 'O', 'X', 'o', 'x', 'O/X', '단답', '빈칸',
+  '맞다', '틀리다', '예', '아니오', '네', '아니요',
+  'true', 'false', 'TRUE', 'FALSE', 'True', 'False',
+]);
+
+/** Check if a keyword is meaningful (not a trivial answer or too short) */
+function isValidKeyword(kw: string): boolean {
+  if (!kw || kw.length < 2) return false;
+  if (KEYWORD_BLACKLIST.has(kw)) return false;
+  // Filter out pure punctuation or single characters
+  if (/^[.,;:!?~\-=+*\/\\]+$/.test(kw)) return false;
+  return true;
+}
+
 const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subtitle: string; footer: string }> = {
   study: {
     label: '셀프 개념 학습지',
@@ -92,14 +108,16 @@ export default function QuizPrintPage() {
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
   const qrPayload = data ? `${window.location.origin}/quiz-submit?quiz_id=${data.quizId}${studentId ? `&student_id=${studentId}` : ''}` : '';
 
-  // Extract clean keywords from answers for blank mode
+  // Extract clean keywords from answers for blank mode — filter out trivial answers
   const keywords = useMemo(() => {
     if (!data) return [] as string[];
     const seen = new Set<string>();
     const result: string[] = [];
     data.questions.forEach(q => {
+      // Skip true/false questions entirely — their answers are never good keywords
+      if (q.question_type === 'true_false') return;
       const clean = stripHtml(q.answer);
-      if (clean && !seen.has(clean)) {
+      if (isValidKeyword(clean) && !seen.has(clean)) {
         seen.add(clean);
         result.push(clean);
       }
@@ -222,19 +240,19 @@ export default function QuizPrintPage() {
 
   // ─── Blank mode ───
   const BlankMode = () => (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <p className="text-sm font-medium">아래 핵심 키워드의 <strong>정의, 성질, 조건</strong>을 직접 서술하세요.</p>
       {keywords.map((kw, idx) => (
         <div key={idx} className="break-inside-avoid">
           <div className="flex items-center gap-3">
             <span className="font-bold text-sm shrink-0 w-6 text-right">{idx + 1}.</span>
-            <span className="text-sm font-semibold border border-foreground/40 rounded px-2.5 py-1 bg-muted/30">
+            <span className="text-sm font-semibold border border-foreground/40 rounded px-3 py-1.5 bg-muted/30 inline-block min-w-[100px] text-center">
               <MathRenderer text={kw} />
             </span>
           </div>
-          <div className="ml-9 mt-2 space-y-0.5">
-            {Array.from({ length: 4 }).map((_, li) => (
-              <div key={li} className="border-b border-foreground/20 h-9" />
+          <div className="ml-9 mt-3 space-y-1">
+            {Array.from({ length: 5 }).map((_, li) => (
+              <div key={li} className="border-b border-foreground/20 h-10" />
             ))}
           </div>
         </div>
