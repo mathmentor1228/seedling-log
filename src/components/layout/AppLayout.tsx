@@ -76,8 +76,8 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     { label: '과학', href: '/materials/science', icon: <FolderOpen className="w-4 h-4" /> },
   ];
 
-  // Admin sees all subjects; teacher sees only assigned subject
-  const visibleSubjects = role === 'admin'
+  // Admin sees all subjects; teacher sees only assigned subject; assistant sees all
+  const visibleSubjects = (role === 'admin' || role === 'assistant')
     ? allSubjects
     : allSubjects.filter(s => {
         if (!assignedSubject) return false;
