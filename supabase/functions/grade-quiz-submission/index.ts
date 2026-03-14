@@ -217,7 +217,7 @@ ${questionRef}
       .insert({
         student_id: submission.student_id,
         points: pointsAwarded,
-        reason: `수학 개념 퀴즈 인증 (${gradingResult.total_correct}/${gradingResult.total_graded}점)${hintsUsed?.length ? ' [힌트 사용]' : ''}`,
+        reason: `개념 퀴즈 인증 (${gradingResult.total_correct}/${gradingResult.total_graded}점)${hintsUsed?.length ? ' [힌트 사용]' : ''}`,
       });
 
     const { data: student } = await supabase
