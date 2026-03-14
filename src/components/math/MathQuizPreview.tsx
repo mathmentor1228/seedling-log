@@ -18,6 +18,7 @@ interface Props {
 }
 
 export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerating }: Props) {
+  const navigate = useNavigate();
   const [editMode, setEditMode] = useState(false);
   const [editedQuestions, setEditedQuestions] = useState<QuizQuestion[]>([]);
 
