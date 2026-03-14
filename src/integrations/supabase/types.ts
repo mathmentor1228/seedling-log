@@ -1436,7 +1436,9 @@ export type Database = {
           pdf_file_size: number | null
           pdf_original_name: string
           pdf_storage_path: string
+          quiz_generation_prompt: string | null
           status: string
+          subject: string
           title: string
           updated_at: string
         }
@@ -1450,7 +1452,9 @@ export type Database = {
           pdf_file_size?: number | null
           pdf_original_name: string
           pdf_storage_path: string
+          quiz_generation_prompt?: string | null
           status?: string
+          subject?: string
           title: string
           updated_at?: string
         }
@@ -1464,7 +1468,9 @@ export type Database = {
           pdf_file_size?: number | null
           pdf_original_name?: string
           pdf_storage_path?: string
+          quiz_generation_prompt?: string | null
           status?: string
+          subject?: string
           title?: string
           updated_at?: string
         }
