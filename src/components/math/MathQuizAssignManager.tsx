@@ -104,8 +104,27 @@ export function MathQuizAssignManager({ quizzes }: Props) {
   const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
   const [assignSelection, setAssignSelection] = useState<Set<string>>(new Set());
   const [assigning, setAssigning] = useState(false);
+  const [quizSubjectFilter, setQuizSubjectFilter] = useState('all');
 
-  const availableQuizzes = quizzes.filter(q => q.status === 'draft' || q.status === 'published');
+  const availableQuizzes = quizzes.filter((quiz) => quiz.status === 'draft' || quiz.status === 'published');
+
+  const quizSubjectOptions = useMemo(() => {
+    const subjects = Array.from(
+      new Set(availableQuizzes.map((quiz) => quiz.math_concepts?.subject || '기타')),
+    ).sort((a, b) => a.localeCompare(b, 'ko'));
+    return ['all', ...subjects];
+  }, [availableQuizzes]);
+
+  const filteredQuizzes = useMemo(() => {
+    const sorted = [...availableQuizzes].sort((a, b) => {
+      const keyA = `${a.math_concepts?.subject || ''}-${a.math_concepts?.course || ''}-${a.math_concepts?.title || ''}`;
+      const keyB = `${b.math_concepts?.subject || ''}-${b.math_concepts?.course || ''}-${b.math_concepts?.title || ''}`;
+      return keyA.localeCompare(keyB, 'ko');
+    });
+
+    if (quizSubjectFilter === 'all') return sorted;
+    return sorted.filter((quiz) => (quiz.math_concepts?.subject || '기타') === quizSubjectFilter);
+  }, [availableQuizzes, quizSubjectFilter]);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -126,6 +145,13 @@ export function MathQuizAssignManager({ quizzes }: Props) {
   };
 
   useEffect(() => { fetchAll(); }, []);
+
+  useEffect(() => {
+    if (selectedQuizId && !filteredQuizzes.some((quiz) => quiz.id === selectedQuizId)) {
+      setSelectedQuizId(null);
+      setAssignSelection(new Set());
+    }
+  }, [filteredQuizzes, selectedQuizId]);
 
   const filteredStudents = useMemo(() => {
     if (!searchQuery.trim()) return students;
