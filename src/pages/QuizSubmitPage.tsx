@@ -62,8 +62,8 @@ export default function QuizSubmitPage() {
     if (!studentCode.trim()) { setError('학생 코드를 입력해주세요.'); return; }
     setLoading(true);
     setError('');
-    const { data, error: err } = await supabase
-      .from('student_accounts')
+    const { data, error: err } = await (supabase
+      .from('student_accounts') as any)
       .select('student_id, students(name)')
       .eq('student_code', studentCode.trim().toUpperCase())
       .single();
