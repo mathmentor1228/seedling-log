@@ -279,28 +279,58 @@ export function MathQuizAssignManager({ quizzes }: Props) {
               <>
                 {/* Quiz selector */}
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">1. 퀴즈 선택</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {availableQuizzes.map(q => {
-                      const assigned = getAssignedStudents(q.id);
-                      return (
-                        <div
-                          key={q.id}
-                          className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                            selectedQuizId === q.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                          }`}
-                          onClick={() => {
-                            setSelectedQuizId(q.id);
-                            setAssignSelection(new Set());
-                          }}
-                        >
-                          <p className="font-medium text-sm">{q.math_concepts?.title || '퀴즈'}</p>
-                          <p className="text-xs text-muted-foreground">{q.math_concepts?.course}</p>
-                          <Badge variant="outline" className="mt-1 text-xs">{assigned.size}명 배정됨</Badge>
-                        </div>
-                      );
-                    })}
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-sm font-medium">1. 퀴즈 선택</p>
+                    <div className="w-40">
+                      <Select value={quizSubjectFilter} onValueChange={setQuizSubjectFilter}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="과목 필터" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {quizSubjectOptions.map((subject) => (
+                            <SelectItem key={subject} value={subject}>
+                              {subject === 'all' ? '전체 과목' : subject}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+
+                  {filteredQuizzes.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-4">선택한 과목에 배정 가능한 퀴즈가 없습니다.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {filteredQuizzes.map((q) => {
+                        const assigned = getAssignedStudents(q.id);
+                        return (
+                          <div
+                            key={q.id}
+                            className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                              selectedQuizId === q.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                            }`}
+                            onClick={() => {
+                              setSelectedQuizId(q.id);
+                              setAssignSelection(new Set());
+                            }}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Badge variant="secondary" className="text-[10px]">
+                                {q.math_concepts?.subject || '기타'}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                {q.math_concepts?.course || '과정 미지정'}
+                              </Badge>
+                            </div>
+                            <p className="font-medium text-sm">{q.math_concepts?.title || '퀴즈'}</p>
+                            <Badge variant="outline" className="mt-1 text-xs">
+                              {assigned.size}명 배정됨
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {selectedQuizId && (
