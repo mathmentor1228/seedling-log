@@ -97,6 +97,9 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
                 <Edit2 className="w-4 h-4 mr-1" /> 수정
               </Button>
             )}
+            <Button size="sm" variant="outline" onClick={() => navigate(`/quiz-print?quiz_id=${quiz.id}`)}>
+              <Printer className="w-4 h-4 mr-1" /> 학습지 인쇄
+            </Button>
           </div>
         </div>
       </CardHeader>
