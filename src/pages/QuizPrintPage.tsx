@@ -315,16 +315,14 @@ export default function QuizPrintPage() {
     );
   };
 
-  const Footer = () => (
+  const Footer = ({ pageNum, totalPages }: { pageNum: number; totalPages: number }) => (
     <div className="qp-footer">
       <span className="qp-footer-brand">더 멘토 학원 | 대표 황은지</span>
       <span className="qp-footer-divider">·</span>
       <span className="qp-footer-text">{cfg.footer}</span>
+      <span className="qp-footer-divider">·</span>
+      <span className="qp-footer-page">{pageNum} / {totalPages}</span>
     </div>
-  );
-
-  const PageNumber = ({ n, total }: { n: number; total: number }) => (
-    <div className="qp-page-number">{n} / {total}</div>
   );
 
   const paginateQuestions = (questions: QuizQuestion[]) => {
