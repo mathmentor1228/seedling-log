@@ -98,6 +98,15 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: '선생님/관리자만 사용할 수 있습니다.' }, 403);
     }
 
+    const requestBytes = Number(req.headers.get('content-length') || 0);
+    if (Number.isFinite(requestBytes) && requestBytes > MAX_REQUEST_BYTES) {
+      return jsonResponse({
+        success: false,
+        error: `요청 크기가 너무 큽니다 (${(requestBytes / 1024 / 1024).toFixed(1)}MB). PDF는 8MB 이하로 나누어 업로드해 주세요.`,
+        detail: { reason: 'request_too_large', requestBytes, limitBytes: MAX_REQUEST_BYTES },
+      }, 413);
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const textbookId = (formData.get('textbook_id') as string | null)?.trim();
