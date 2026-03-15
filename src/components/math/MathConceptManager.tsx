@@ -22,11 +22,13 @@ import {
   ChevronRight,
   Search,
   SlidersHorizontal,
+  Library,
 } from 'lucide-react';
 import { MathQuizPreview } from './MathQuizPreview';
 import { QuizSubmissionReview } from './QuizSubmissionReview';
 import { MathQuizAssignManager } from './MathQuizAssignManager';
 import { QuizVersionTracker } from './QuizVersionTracker';
+import { TextbookLibrary } from './TextbookLibrary';
 
 interface ConceptCreator {
   full_name: string | null;
@@ -462,22 +464,31 @@ export function MathConceptManager() {
       </div>
 
       <Tabs defaultValue="concepts" className="space-y-4">
-        <TabsList className="w-full grid grid-cols-4 h-11">
+        <TabsList className="w-full grid grid-cols-5 h-11">
           <TabsTrigger value="concepts" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <BookOpen className="w-4 h-4" />
-            개념 & 퀴즈
+            <span className="hidden sm:inline">개념 & 퀴즈</span>
+            <span className="sm:hidden">개념</span>
+          </TabsTrigger>
+          <TabsTrigger value="textbook-lib" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <Library className="w-4 h-4" />
+            <span className="hidden sm:inline">교재 라이브러리</span>
+            <span className="sm:hidden">교재</span>
           </TabsTrigger>
           <TabsTrigger value="assign" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <Send className="w-4 h-4" />
-            퀴즈 배정
+            <span className="hidden sm:inline">퀴즈 배정</span>
+            <span className="sm:hidden">배정</span>
           </TabsTrigger>
           <TabsTrigger value="review" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <ClipboardCheck className="w-4 h-4" />
-            제출 채점
+            <span className="hidden sm:inline">제출 채점</span>
+            <span className="sm:hidden">채점</span>
           </TabsTrigger>
           <TabsTrigger value="tracking" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <ChevronRight className="w-4 h-4" />
-            추적 대시보드
+            <span className="hidden sm:inline">추적 대시보드</span>
+            <span className="sm:hidden">추적</span>
           </TabsTrigger>
         </TabsList>
 
@@ -707,6 +718,10 @@ export function MathConceptManager() {
               onSelectVersion={(quizId) => loadQuiz(selectedConceptId, quizId)}
             />
           )}
+        </TabsContent>
+
+        <TabsContent value="textbook-lib">
+          <TextbookLibrary />
         </TabsContent>
 
         <TabsContent value="assign">
