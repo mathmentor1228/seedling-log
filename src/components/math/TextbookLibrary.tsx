@@ -38,6 +38,7 @@ interface TextbookExample {
   answer: string | null;
   explanation: string | null;
   difficulty: string | null;
+  category: string | null;
   graph_data: any;
   sort_order: number;
 }
