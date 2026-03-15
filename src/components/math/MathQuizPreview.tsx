@@ -201,6 +201,26 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
             </Button>
           </div>
         </div>
+        {/* Version selector */}
+        {allVersions && allVersions.length > 1 && onSelectVersion && (
+          <div className="flex items-center gap-2 mt-2">
+            <History className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">이전 버전:</span>
+            <div className="flex gap-1 flex-wrap">
+              {allVersions.map(v => (
+                <Button
+                  key={v.id}
+                  size="sm"
+                  variant={v.id === quiz.id ? 'default' : 'outline'}
+                  className="h-6 text-xs px-2"
+                  onClick={() => onSelectVersion(v.id)}
+                >
+                  V{v.version_number}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
