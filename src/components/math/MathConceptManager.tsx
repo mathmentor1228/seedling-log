@@ -720,6 +720,10 @@ export function MathConceptManager() {
           )}
         </TabsContent>
 
+        <TabsContent value="textbook-lib">
+          <TextbookLibrary />
+        </TabsContent>
+
         <TabsContent value="assign">
           <MathQuizAssignManager quizzes={allQuizzes} />
         </TabsContent>
