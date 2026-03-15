@@ -166,7 +166,7 @@ export function MathConceptManager() {
       supabase.from('math_concepts').select('*').order('created_at', { ascending: false }),
       supabase
         .from('math_concept_quizzes')
-        .select('id, concept_id, status, math_concepts(title, course, grade, subject)') as any,
+        .select('id, concept_id, status, created_at, questions, version_number, version_label, answer_code, math_concepts(title, course, grade, subject, created_by)') as any,
     ]);
 
     if (conceptsRes.error) {
