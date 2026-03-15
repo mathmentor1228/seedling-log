@@ -21,6 +21,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { QuizQuestion } from './MathConceptManager';
 
+const GRAPH_KEYWORDS = /함수|그래프|일차|이차|지수|로그|y\s*=|f\s*\(/i;
+
+function extractExpression(text: string): string | null {
+  // Try to find y = ... or f(x) = ... patterns
+  const match = text.match(/(?:y|f\s*\(\s*x\s*\))\s*=\s*([^,.\s가-힣]{3,})/);
+  return match ? `y = ${match[1]}` : null;
+}
+
 interface Props {
   quiz: { id: string; questions: QuizQuestion[]; status: string } | null;
   loading: boolean;
