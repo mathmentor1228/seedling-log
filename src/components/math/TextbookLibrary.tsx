@@ -390,7 +390,20 @@ export function TextbookLibrary() {
                         type="file"
                         accept=".pdf,image/*"
                         className="text-xs h-8 col-span-1 sm:col-span-1"
-                        onChange={(e) => setExtractFile(e.target.files?.[0] || null)}
+                        onChange={(e) => {
+                          const selected = e.target.files?.[0] || null;
+                          if (selected && selected.size > MAX_EXTRACT_FILE_BYTES) {
+                            toast({
+                              title: '파일 용량 초과',
+                              description: '20MB 이하의 단일 페이지 파일을 업로드해 주세요.',
+                              variant: 'destructive',
+                            });
+                            e.currentTarget.value = '';
+                            setExtractFile(null);
+                            return;
+                          }
+                          setExtractFile(selected);
+                        }}
                       />
                       <Input
                         value={extractChapter}
