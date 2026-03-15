@@ -105,12 +105,20 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
   },
 };
 
-/* ── Minimum lined-note rows (flex-grow will expand them to fill page) ── */
-function computeMinLines(isFirst: boolean, itemsOnPage: number): number {
-  if (isFirst) {
-    return itemsOnPage <= 2 ? 8 : itemsOnPage <= 3 ? 6 : 5;
-  }
-  return itemsOnPage <= 4 ? 5 : 4;
+/* ── Line height is FIXED at ~8.5mm. We compute how many lines fit. ── */
+const LINE_HEIGHT_MM = 8.5;
+const PAGE_HEIGHT_MM = 297;
+const PAGE_MARGIN_MM = 15 * 2; // top+bottom @page margin
+const HEADER_HEIGHT_MM = 38;   // first-page header block
+const FOOTER_HEIGHT_MM = 12;   // footer bar
+const QUESTION_OVERHEAD_MM = 22; // question text + number + gaps per item
+
+function computeLineCount(isFirst: boolean, itemsPerCol: number): number {
+  const usable = PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM - (isFirst ? HEADER_HEIGHT_MM : 0);
+  const totalOverhead = QUESTION_OVERHEAD_MM * itemsPerCol;
+  const spaceForLines = usable - totalOverhead;
+  const linesPerItem = Math.max(4, Math.floor(spaceForLines / itemsPerCol / LINE_HEIGHT_MM));
+  return linesPerItem;
 }
 
 export default function QuizPrintPage() {
@@ -274,7 +282,7 @@ export default function QuizPrintPage() {
     </div>
   );
 
-  /* ── Workspace: lined note area with auto-height ── */
+  /* ── Workspace: lined note area with FIXED line height, variable count ── */
   const WorkspaceArea = ({ q, showAnswer, lines }: { q: QuizQuestion; showAnswer: boolean; lines: number }) => (
     <div className="qp-workspace">
       <div className="qp-lined-area">
@@ -341,7 +349,8 @@ export default function QuizPrintPage() {
     const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const lines = computeMinLines(page.isFirst, page.questions.length);
+      const itemsPerCol = mid; // max items in a single column
+      const lines = computeLineCount(page.isFirst, itemsPerCol);
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -372,7 +381,8 @@ export default function QuizPrintPage() {
     const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const lines = computeMinLines(page.isFirst, page.questions.length);
+      const itemsPerCol = mid;
+      const lines = computeLineCount(page.isFirst, itemsPerCol);
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -411,7 +421,8 @@ export default function QuizPrintPage() {
     const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const blankLines = computeMinLines(page.isFirst, page.questions.length) + 1;
+      const mid2 = Math.ceil(page.questions.length / 2);
+      const blankLines = computeLineCount(page.isFirst, mid2);
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -697,27 +708,21 @@ export default function QuizPrintPage() {
         }
         .qp-choice-text { font-size: 11.5px; color: #1e293b; line-height: 1.55; }
 
-        /* ── Workspace — GROWS to fill remaining space, answer box sticks to bottom-right ── */
+        /* ── Workspace — FIXED line height, answer box bottom-right ── */
         .qp-workspace {
           margin-left: 34px;
           margin-top: 3px;
           position: relative;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
         }
         .qp-lined-area {
           padding: 2px 6px 1px;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
         }
         .qp-line {
           border-bottom: 1px solid #e2e8f0;
-          flex: 1;
-          min-height: 20px;
+          height: 8.5mm;
+          box-sizing: border-box;
         }
-        .qp-line-tall { min-height: 26px; }
+        .qp-line-tall { height: 10mm; }
         .qp-answer-box {
           position: absolute;
           right: 0; bottom: 0;
@@ -787,8 +792,8 @@ export default function QuizPrintPage() {
         .qp-footer-text { margin: 0; flex: 1; }
         .qp-footer-page {
           font-weight: 700;
-          font-size: 11px;
-          letter-spacing: 1px;
+          font-size: 13px;
+          letter-spacing: 1.5px;
           white-space: nowrap;
         }
 
@@ -837,7 +842,7 @@ export default function QuizPrintPage() {
           .qp-question-text { font-size: 11.5px; }
           .qp-choice-text { font-size: 11px; }
           .qp-num { font-size: 18px; }
-          .qp-line { min-height: 18px; }
+          .qp-line { height: 8.5mm; }
         }
 
         /* ══ Screen preview ══ */
