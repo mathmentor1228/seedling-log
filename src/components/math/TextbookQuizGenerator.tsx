@@ -324,6 +324,25 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
             </div>
           </div>
 
+          {/* Category filter */}
+          {categories.length > 1 && (
+            <div>
+              <Label className="text-xs font-medium mb-2 block">문항 유형 필터 (비워두면 전체)</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {categories.map(cat => (
+                  <Badge
+                    key={cat}
+                    variant={selectedCategories.includes(cat) ? 'default' : 'outline'}
+                    className="cursor-pointer text-xs"
+                    onClick={() => toggleCategory(cat)}
+                  >
+                    {cat}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Page range */}
           <div className="grid grid-cols-2 gap-3">
             <div>
