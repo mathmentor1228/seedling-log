@@ -295,6 +295,9 @@ export function TextbookLibrary() {
     if (selectedTextbook) fetchExamples(selectedTextbook.id);
     setExtracting(false);
   };
+
+  // Group examples by chapter
+  const chapterGroups = examples.reduce<Record<string, TextbookExample[]>>((acc, ex) => {
     const ch = ex.chapter || '기타';
     if (!acc[ch]) acc[ch] = [];
     acc[ch].push(ex);
