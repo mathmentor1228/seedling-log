@@ -91,12 +91,16 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
     }
   }, [open]);
 
-  // Filter examples based on range
+  // Filter examples based on range + category
   const filteredExamples = useMemo(() => {
     let filtered = [...examples];
 
     if (selectedChapters.length > 0) {
       filtered = filtered.filter(e => selectedChapters.includes(e.chapter));
+    }
+
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(e => selectedCategories.includes(e.category || '일반문항'));
     }
 
     const pFrom = pageFrom ? parseInt(pageFrom) : null;
@@ -113,7 +117,7 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
     }
 
     return filtered;
-  }, [examples, selectedChapters, pageFrom, pageTo, includeKiller]);
+  }, [examples, selectedChapters, selectedCategories, pageFrom, pageTo, includeKiller]);
 
   // Difficulty counts
   const diffCounts = useMemo(() => {
