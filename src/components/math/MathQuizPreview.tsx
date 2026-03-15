@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb, Printer,
-  Trash2, Wand2, ChevronDown,
+  Trash2, Wand2, ChevronDown, BarChart3,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MathRenderer } from './MathRenderer';
+import { MathGraph } from './MathGraph';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { QuizQuestion } from './MathConceptManager';
