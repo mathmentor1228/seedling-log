@@ -2867,6 +2867,7 @@ export type Database = {
       textbook_examples: {
         Row: {
           answer: string | null
+          category: string
           chapter: string
           created_at: string
           created_by: string | null
@@ -2883,6 +2884,7 @@ export type Database = {
         }
         Insert: {
           answer?: string | null
+          category?: string
           chapter: string
           created_at?: string
           created_by?: string | null
@@ -2899,6 +2901,7 @@ export type Database = {
         }
         Update: {
           answer?: string | null
+          category?: string
           chapter?: string
           created_at?: string
           created_by?: string | null

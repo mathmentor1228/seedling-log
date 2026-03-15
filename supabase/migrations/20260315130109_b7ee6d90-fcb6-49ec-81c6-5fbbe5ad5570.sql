@@ -1,0 +1,1 @@
+ALTER TABLE public.textbook_examples ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT '일반문항';

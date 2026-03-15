@@ -34,6 +34,7 @@ interface TextbookExample {
   answer: string | null;
   explanation: string | null;
   difficulty: string | null;
+  category: string | null;
   graph_data: any;
   sort_order: number;
 }
@@ -64,11 +65,19 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
   // Killer toggle
   const [includeKiller, setIncludeKiller] = useState(true);
 
+  // Category filter
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
   // Order
   const [randomOrder, setRandomOrder] = useState(true);
 
   const chapters = useMemo(() => {
     const set = new Set(examples.map(e => e.chapter));
+    return Array.from(set).sort();
+  }, [examples]);
+
+  const categories = useMemo(() => {
+    const set = new Set(examples.map(e => e.category || '일반문항'));
     return Array.from(set).sort();
   }, [examples]);
 
@@ -80,12 +89,16 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
     }
   }, [open]);
 
-  // Filter examples based on range
+  // Filter examples based on range + category
   const filteredExamples = useMemo(() => {
     let filtered = [...examples];
 
     if (selectedChapters.length > 0) {
       filtered = filtered.filter(e => selectedChapters.includes(e.chapter));
+    }
+
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(e => selectedCategories.includes(e.category || '일반문항'));
     }
 
     const pFrom = pageFrom ? parseInt(pageFrom) : null;
@@ -102,7 +115,7 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
     }
 
     return filtered;
-  }, [examples, selectedChapters, pageFrom, pageTo, includeKiller]);
+  }, [examples, selectedChapters, selectedCategories, pageFrom, pageTo, includeKiller]);
 
   // Difficulty counts
   const diffCounts = useMemo(() => {
@@ -137,6 +150,12 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
   const toggleChapter = (ch: string) => {
     setSelectedChapters(prev =>
       prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch]
+    );
+  };
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories(prev =>
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
     );
   };
 
@@ -304,6 +323,25 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
               ))}
             </div>
           </div>
+
+          {/* Category filter */}
+          {categories.length > 1 && (
+            <div>
+              <Label className="text-xs font-medium mb-2 block">문항 유형 필터 (비워두면 전체)</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {categories.map(cat => (
+                  <Badge
+                    key={cat}
+                    variant={selectedCategories.includes(cat) ? 'default' : 'outline'}
+                    className="cursor-pointer text-xs"
+                    onClick={() => toggleCategory(cat)}
+                  >
+                    {cat}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Page range */}
           <div className="grid grid-cols-2 gap-3">

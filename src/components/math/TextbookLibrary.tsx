@@ -38,6 +38,7 @@ interface TextbookExample {
   answer: string | null;
   explanation: string | null;
   difficulty: string | null;
+  category: string | null;
   graph_data: any;
   sort_order: number;
 }
@@ -242,7 +243,11 @@ export function TextbookLibrary() {
         throw new Error(data?.error || 'AI 추출 실패');
       }
 
-      toast({ title: `${data.count}개 문제가 추출되었습니다` });
+      const catSummary = data.categorySummary;
+      const catDesc = catSummary
+        ? Object.entries(catSummary).map(([k, v]) => `${k} ${v}개`).join(', ')
+        : '';
+      toast({ title: `${data.count}개 학습 요소 추출 완료`, description: catDesc || undefined });
       setExtractFile(null);
       setExtractChapter('');
       fetchExamples(selectedTextbook.id);
@@ -266,6 +271,16 @@ export function TextbookLibrary() {
     easy: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     hard: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  };
+  const categoryLabel: Record<string, string> = {
+    '일반문항': '일반', '예제': '예제', '활동형': '활동', '사고력': '사고력', '마무리': '마무리',
+  };
+  const categoryColor: Record<string, string> = {
+    '일반문항': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    '예제': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    '활동형': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    '사고력': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    '마무리': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   };
 
   return (
@@ -529,13 +544,18 @@ export function TextbookLibrary() {
                         <AccordionContent className="space-y-2 pb-3">
                           {items.map((ex, idx) => (
                             <div key={ex.id} className="p-3 rounded-md border bg-muted/30 space-y-1.5">
-                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <Badge variant="outline" className="text-xs">
                                     {ex.problem_number || `#${idx + 1}`}
                                   </Badge>
                                   {ex.page_number && (
                                     <span className="text-xs text-muted-foreground">p.{ex.page_number}</span>
+                                  )}
+                                  {ex.category && ex.category !== '일반문항' && (
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${categoryColor[ex.category] || ''}`}>
+                                      {categoryLabel[ex.category] || ex.category}
+                                    </span>
                                   )}
                                   {ex.difficulty && (
                                     <span className={`text-xs px-1.5 py-0.5 rounded ${difficultyColor[ex.difficulty] || ''}`}>
