@@ -10,7 +10,6 @@ import { MathRenderer } from '@/components/math/MathRenderer';
 import logoImg from '@/assets/logo-thementor.png';
 
 type PrintMode = 'study' | 'quiz' | 'blank' | 'example';
-type LayoutDensity = '4' | '6';
 
 interface QuizQuestion {
   question_number: number;
@@ -57,6 +56,29 @@ function isValidKeyword(kw: string): boolean {
   return true;
 }
 
+const CIRCLED = ['①', '②', '③', '④', '⑤'];
+
+/** Parse ①~⑤ choices from question text */
+function parseChoices(text: string): { body: string; choices: string[] } | null {
+  // Match patterns like ① ... ② ... etc
+  const regex = /([①②③④⑤])\s*/g;
+  const indices: { idx: number; marker: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    indices.push({ idx: m.index, marker: m[1] });
+  }
+  if (indices.length < 2) return null;
+
+  const body = text.slice(0, indices[0].idx).trim();
+  const choices: string[] = [];
+  for (let i = 0; i < indices.length; i++) {
+    const start = indices[i].idx + indices[i].marker.length;
+    const end = i + 1 < indices.length ? indices[i + 1].idx : text.length;
+    choices.push(text.slice(start, end).trim());
+  }
+  return { body, choices };
+}
+
 const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subtitle: string; footer: string }> = {
   study: {
     label: '셀프 개념 학습지',
@@ -93,7 +115,6 @@ export default function QuizPrintPage() {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<PrintMode>('quiz');
   const [showAnswerKey, setShowAnswerKey] = useState(false);
-  const [layoutDensity, setLayoutDensity] = useState<LayoutDensity>('6');
 
   useEffect(() => {
     if (!quizId) { setLoading(false); return; }
@@ -145,17 +166,10 @@ export default function QuizPrintPage() {
     );
   }, [data]);
 
-  const hasTextbookSource = useMemo(() => {
-    if (!data) return false;
-    return data.questions.some(q => (q as any).source_textbook);
-  }, [data]);
-
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">로딩 중...</div>;
   if (!data) return <div className="flex items-center justify-center min-h-screen text-destructive">퀴즈를 찾을 수 없습니다.</div>;
 
   const cfg = MODE_META[mode];
-  const questionsPerPage = parseInt(layoutDensity);
-  const is4 = questionsPerPage === 4;
 
   const toStudyText = (q: QuizQuestion): string => {
     const ans = stripHtml(q.answer);
@@ -168,37 +182,71 @@ export default function QuizPrintPage() {
     return plainText + ' ___BLANK___';
   };
 
-  // Source info
+  // Source info — only visible on answer key
   const SourceInfo = ({ q }: { q: QuizQuestion }) => {
+    if (!showAnswerKey) return null;
     const src = q as any;
     if (!src.source_textbook) return null;
     return (
       <span className="qp-source">
-        ({src.source_textbook}{src.source_page ? ` p.${src.source_page}` : ''}{src.source_problem ? ` ${src.source_problem}` : ''})
+        [{src.source_textbook}{src.source_page ? ` p.${src.source_page}` : ''}{src.source_problem ? ` ${src.source_problem}` : ''}]
       </span>
     );
   };
 
-  // ── Header ──
-  const Header = () => (
+  // ── Smart choice renderer ──
+  const ChoicesRenderer = ({ choices }: { choices: string[] }) => {
+    const maxLen = Math.max(...choices.map(c => stripHtml(c).length));
+    const isLong = maxLen > 20;
+
+    if (isLong) {
+      // One choice per line
+      return (
+        <div className="qp-choices qp-choices-vertical">
+          {choices.map((c, i) => (
+            <div key={i} className="qp-choice-row">
+              <span className="qp-choice-marker">{CIRCLED[i]}</span>
+              <span className="qp-choice-text"><MathRenderer text={c} /></span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    // 2 per row
+    const rows: string[][] = [];
+    for (let i = 0; i < choices.length; i += 2) {
+      rows.push(choices.slice(i, i + 2));
+    }
+    return (
+      <div className="qp-choices qp-choices-grid">
+        {rows.map((row, ri) => (
+          <div key={ri} className="qp-choice-grid-row">
+            {row.map((c, ci) => (
+              <div key={ci} className="qp-choice-cell">
+                <span className="qp-choice-marker">{CIRCLED[ri * 2 + ci]}</span>
+                <span className="qp-choice-text"><MathRenderer text={c} /></span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // ── Full Header (first page only) ──
+  const FullHeader = () => (
     <div className="qp-header">
-      {/* Date ribbon */}
       <div className="qp-date-ribbon">{today.replace(/\./g, '.')}</div>
       <div className="qp-header-content">
         <div className="qp-header-left">
           <p className="qp-subject-label">{data.subject}</p>
-          <p className="qp-textbook-info">
-            {data.course} · {data.grade}
-            {hasTextbookSource && data.questions[0]?.source_textbook && (
-              <> · {(data.questions[0] as any).source_textbook}</>
-            )}
-          </p>
+          <p className="qp-textbook-info">{data.course} · {data.grade}</p>
           <p className="qp-concept-title">{data.conceptTitle}</p>
         </div>
         <div className="qp-header-right">
           <img src={logoImg} alt="더멘토" className="qp-logo print-logo" />
           <div className="qp-header-meta">
-            <span>{data.questions.length}문제 / 멘토</span>
+            <span>{data.questions.length}문제</span>
             <Badge variant="secondary" className="qp-version-badge">V{data.versionNumber}</Badge>
           </div>
           <div className="qp-name-field">
@@ -207,18 +255,16 @@ export default function QuizPrintPage() {
         </div>
       </div>
       <div className="qp-qr-float">
-        <QRCodeSVG value={qrPayload} size={52} level="M" />
+        <QRCodeSVG value={qrPayload} size={48} level="M" />
       </div>
     </div>
   );
 
-  // ── Lined workspace + answer box ──
-  const lineCount = is4 ? 8 : 5;
-
-  const WorkspaceArea = ({ q, showAnswer }: { q: QuizQuestion; showAnswer: boolean }) => (
+  // ── Lined workspace + answer box (no outer border) ──
+  const WorkspaceArea = ({ q, showAnswer, lines }: { q: QuizQuestion; showAnswer: boolean; lines: number }) => (
     <div className="qp-workspace">
       <div className="qp-lined-area">
-        {Array.from({ length: lineCount }).map((_, i) => (
+        {Array.from({ length: lines }).map((_, i) => (
           <div key={i} className="qp-line" />
         ))}
       </div>
@@ -234,78 +280,74 @@ export default function QuizPrintPage() {
   );
 
   // ── Question Item ──
-  const QuestionItem = ({ q, textOverride }: { q: QuizQuestion; textOverride?: string }) => {
+  const QuestionItem = ({ q, textOverride, lines }: { q: QuizQuestion; textOverride?: string; lines: number }) => {
     const num = String(q.question_number).padStart(2, '0');
+    const raw = textOverride ?? q.question_text;
+    const parsed = parseChoices(raw);
+
     return (
       <div className="qp-item">
         <div className="qp-item-header">
           <span className="qp-num">{num}</span>
           <div className="qp-question-body">
             <span className="qp-question-text">
-              <MathRenderer text={textOverride ?? q.question_text} />
+              <MathRenderer text={parsed ? parsed.body : raw} />
             </span>
-            {hasTextbookSource && <SourceInfo q={q} />}
+            <SourceInfo q={q} />
+            {parsed && <ChoicesRenderer choices={parsed.choices} />}
           </div>
         </div>
-        <WorkspaceArea q={q} showAnswer={showAnswerKey} />
+        <WorkspaceArea q={q} showAnswer={showAnswerKey} lines={lines} />
       </div>
     );
   };
 
-  // ── Example Item (larger workspace) ──
-  const ExampleItem = ({ q, num }: { q: QuizQuestion; num: number }) => {
-    const label = String(num).padStart(2, '0');
-    return (
-      <div className="qp-item">
-        <div className="qp-item-header">
-          <span className="qp-num">{label}</span>
-          <div className="qp-question-body">
-            <span className="qp-question-text">
-              <MathRenderer text={q.question_text} />
-            </span>
-            {hasTextbookSource && <SourceInfo q={q} />}
-          </div>
-        </div>
-        <WorkspaceArea q={q} showAnswer={showAnswerKey} />
-      </div>
-    );
-  };
-
-  // ── Footer ──
+  // ── Footer (all pages) ──
   const Footer = () => (
     <div className="qp-footer">
-      <p className="qp-footer-text">{cfg.footer}</p>
+      <span className="qp-footer-brand">더 멘토 학원 | 대표 황은지</span>
+      <span className="qp-footer-divider">·</span>
+      <span className="qp-footer-text">{cfg.footer}</span>
     </div>
   );
 
-  // ── Page number ──
   const PageNumber = ({ n }: { n: number }) => (
     <div className="qp-page-number">{n}</div>
   );
 
+  // ── Paginate: first page 4 items (with header), rest 6 items (no header) ──
+  const paginateQuestions = (questions: QuizQuestion[]) => {
+    const pages: { questions: QuizQuestion[]; isFirst: boolean }[] = [];
+    if (questions.length === 0) return pages;
+    const firstCount = Math.min(4, questions.length);
+    pages.push({ questions: questions.slice(0, firstCount), isFirst: true });
+    for (let i = firstCount; i < questions.length; i += 6) {
+      pages.push({ questions: questions.slice(i, i + 6), isFirst: false });
+    }
+    return pages;
+  };
+
   // ── Mode renderers ──
   const renderQuestions = (questions: QuizQuestion[], textFn?: (q: QuizQuestion) => string) => {
-    const pages: QuizQuestion[][] = [];
-    for (let i = 0; i < questions.length; i += questionsPerPage) {
-      pages.push(questions.slice(i, i + questionsPerPage));
-    }
-    return pages.map((pageQs, pi) => {
-      const mid = Math.ceil(pageQs.length / 2);
+    const pages = paginateQuestions(questions);
+    return pages.map((page, pi) => {
+      const mid = Math.ceil(page.questions.length / 2);
+      const lines = page.isFirst ? 8 : 5;
       return (
         <div key={pi} className="qp-page">
-          <Header />
+          {page.isFirst && <FullHeader />}
           {showAnswerKey && (
             <div className="qp-answer-banner">※ 답지 (정답 포함)</div>
           )}
           <div className="qp-two-col">
             <div className="qp-col">
-              {pageQs.slice(0, mid).map(q => (
-                <QuestionItem key={q.question_number} q={q} textOverride={textFn?.(q)} />
+              {page.questions.slice(0, mid).map(q => (
+                <QuestionItem key={q.question_number} q={q} textOverride={textFn?.(q)} lines={lines} />
               ))}
             </div>
             <div className="qp-col">
-              {pageQs.slice(mid).map(q => (
-                <QuestionItem key={q.question_number} q={q} textOverride={textFn?.(q)} />
+              {page.questions.slice(mid).map(q => (
+                <QuestionItem key={q.question_number} q={q} textOverride={textFn?.(q)} lines={lines} />
               ))}
             </div>
           </div>
@@ -318,26 +360,25 @@ export default function QuizPrintPage() {
 
   const renderExamples = () => {
     const qs = exampleQuestions;
-    const pages: QuizQuestion[][] = [];
-    for (let i = 0; i < qs.length; i += questionsPerPage) {
-      pages.push(qs.slice(i, i + questionsPerPage));
-    }
-    return pages.map((pageQs, pi) => {
-      const mid = Math.ceil(pageQs.length / 2);
-      const offset = pi * questionsPerPage;
+    const pages = paginateQuestions(qs);
+    return pages.map((page, pi) => {
+      const mid = Math.ceil(page.questions.length / 2);
+      const lines = page.isFirst ? 8 : 5;
       return (
         <div key={pi} className="qp-page">
-          <Header />
-          <p className="qp-example-intro">아래 문제의 풀이 과정을 자세히 작성하세요.</p>
+          {page.isFirst && <FullHeader />}
+          {!page.isFirst && (
+            <p className="qp-example-intro">아래 문제의 풀이 과정을 자세히 작성하세요.</p>
+          )}
           <div className="qp-two-col">
             <div className="qp-col">
-              {pageQs.slice(0, mid).map((q, i) => (
-                <ExampleItem key={i} q={q} num={offset + i + 1} />
+              {page.questions.slice(0, mid).map((q, i) => (
+                <QuestionItem key={i} q={q} lines={lines} />
               ))}
             </div>
             <div className="qp-col">
-              {pageQs.slice(mid).map((q, i) => (
-                <ExampleItem key={i} q={q} num={offset + mid + i + 1} />
+              {page.questions.slice(mid).map((q, i) => (
+                <QuestionItem key={i} q={q} lines={lines} />
               ))}
             </div>
           </div>
@@ -349,25 +390,32 @@ export default function QuizPrintPage() {
   };
 
   const renderBlank = () => {
-    const blankLines = is4 ? 9 : 6;
-    const pages: string[][] = [];
-    for (let i = 0; i < keywords.length; i += questionsPerPage) {
-      pages.push(keywords.slice(i, i + questionsPerPage));
-    }
-    return pages.map((pageKws, pi) => {
-      const mid = Math.ceil(pageKws.length / 2);
-      const offset = pi * questionsPerPage;
+    const pages = paginateQuestions(
+      keywords.map((kw, i) => ({
+        question_number: i + 1,
+        question_type: 'short_answer' as const,
+        question_text: kw,
+        answer: '',
+        explanation: '',
+        difficulty: 'medium' as const,
+      }))
+    );
+    return pages.map((page, pi) => {
+      const mid = Math.ceil(page.questions.length / 2);
+      const blankLines = page.isFirst ? 9 : 6;
       return (
         <div key={pi} className="qp-page">
-          <Header />
-          <p className="qp-example-intro">아래 핵심 키워드의 <strong>정의, 성질, 조건</strong>을 직접 서술하세요.</p>
+          {page.isFirst && <FullHeader />}
+          {page.isFirst && (
+            <p className="qp-example-intro">아래 핵심 키워드의 <strong>정의, 성질, 조건</strong>을 직접 서술하세요.</p>
+          )}
           <div className="qp-two-col">
             <div className="qp-col">
-              {pageKws.slice(0, mid).map((kw, i) => (
-                <div key={i} className="qp-item">
+              {page.questions.slice(0, mid).map(q => (
+                <div key={q.question_number} className="qp-item">
                   <div className="qp-item-header">
-                    <span className="qp-num">{String(offset + i + 1).padStart(2, '0')}</span>
-                    <span className="qp-keyword-chip"><MathRenderer text={kw} /></span>
+                    <span className="qp-num">{String(q.question_number).padStart(2, '0')}</span>
+                    <span className="qp-keyword-chip"><MathRenderer text={q.question_text} /></span>
                   </div>
                   <div className="qp-workspace">
                     <div className="qp-lined-area">
@@ -380,11 +428,11 @@ export default function QuizPrintPage() {
               ))}
             </div>
             <div className="qp-col">
-              {pageKws.slice(mid).map((kw, i) => (
-                <div key={i} className="qp-item">
+              {page.questions.slice(mid).map(q => (
+                <div key={q.question_number} className="qp-item">
                   <div className="qp-item-header">
-                    <span className="qp-num">{String(offset + mid + i + 1).padStart(2, '0')}</span>
-                    <span className="qp-keyword-chip"><MathRenderer text={kw} /></span>
+                    <span className="qp-num">{String(q.question_number).padStart(2, '0')}</span>
+                    <span className="qp-keyword-chip"><MathRenderer text={q.question_text} /></span>
                   </div>
                   <div className="qp-workspace">
                     <div className="qp-lined-area">
@@ -406,18 +454,16 @@ export default function QuizPrintPage() {
 
   const renderStudy = () => {
     const pages = renderQuestions(data.questions, toStudyText);
-    // Append a memo page at the end
     return (
       <>
         {pages}
         <div className="qp-page">
-          <Header />
           <div className="qp-memo-section">
             <p className="qp-memo-title">📝 개념 정리 메모</p>
             <p className="qp-memo-subtitle">이 단원의 핵심 개념을 내 말로 정리해 보세요.</p>
             <div className="qp-lined-area qp-memo-lines">
               {Array.from({ length: 20 }).map((_, i) => (
-                <div key={i} className="qp-line" />
+                <div key={i} className="qp-line qp-line-tall" />
               ))}
             </div>
           </div>
@@ -450,16 +496,6 @@ export default function QuizPrintPage() {
           );
         })}
         <div className="h-5 w-px bg-border mx-1" />
-        <Select value={layoutDensity} onValueChange={(v) => setLayoutDensity(v as LayoutDensity)}>
-          <SelectTrigger className="h-8 w-32 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="4">4문항/페이지</SelectItem>
-            <SelectItem value="6">6문항/페이지</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="h-5 w-px bg-border mx-1" />
         {mode !== 'blank' && (
           <Button
             variant="outline"
@@ -485,7 +521,8 @@ export default function QuizPrintPage() {
 
       <style>{`
         /* ══════════════════════════════════════════════════
-           Quiz Print Stylesheet — Reference-matched design
+           Quiz Print Stylesheet v3 — Variable pagination
+           First page: header + 4q; rest: no header + 6q
            ══════════════════════════════════════════════════ */
         .quiz-print-wrapper { font-family: 'Pretendard', sans-serif; }
         .quiz-print-area { max-width: 210mm; margin: 0 auto; }
@@ -493,19 +530,19 @@ export default function QuizPrintPage() {
         /* ── Page ── */
         .qp-page {
           position: relative;
-          padding: 28px 32px 48px;
+          padding: 28px 32px 52px;
           page-break-after: always;
           min-height: 297mm;
           box-sizing: border-box;
         }
 
-        /* ── Header ── */
+        /* ── Header (first page only) ── */
         .qp-header {
           position: relative;
           border: 2px solid #1e293b;
           border-radius: 6px;
           padding: 16px 20px 14px 48px;
-          margin-bottom: 24px;
+          margin-bottom: 22px;
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
@@ -513,70 +550,31 @@ export default function QuizPrintPage() {
         }
         .qp-date-ribbon {
           position: absolute;
-          left: -2px;
-          top: 8px;
+          left: -2px; top: 8px;
           writing-mode: vertical-rl;
           text-orientation: mixed;
           background: #1e293b;
           color: #fff;
-          font-size: 11px;
-          font-weight: 600;
+          font-size: 11px; font-weight: 600;
           padding: 8px 5px;
           border-radius: 0 4px 4px 0;
           letter-spacing: 1px;
         }
         .qp-header-left { flex: 1; min-width: 0; }
-        .qp-subject-label {
-          font-size: 15px;
-          font-weight: 700;
-          color: #1e293b;
-          margin-bottom: 2px;
-        }
-        .qp-textbook-info {
-          font-size: 13px;
-          font-weight: 600;
-          color: #1e293b;
-          margin-bottom: 2px;
-        }
-        .qp-concept-title {
-          font-size: 12px;
-          color: #64748b;
-        }
-        .qp-header-right {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 4px;
-          shrink: 0;
-        }
+        .qp-header-content { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; width: 100%; }
+        .qp-subject-label { font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
+        .qp-textbook-info { font-size: 13px; font-weight: 600; color: #1e293b; margin-bottom: 2px; }
+        .qp-concept-title { font-size: 12px; color: #64748b; }
+        .qp-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
         .qp-logo { height: 36px; width: auto; object-fit: contain; }
-        .qp-header-meta {
-          font-size: 11px;
-          color: #64748b;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
+        .qp-header-meta { font-size: 11px; color: #64748b; display: flex; align-items: center; gap: 6px; }
         .qp-version-badge { font-size: 9px !important; }
-        .qp-name-field {
-          font-size: 12px;
-          color: #334155;
-          margin-top: 2px;
-        }
-        .qp-name-underline {
-          display: inline-block;
-          border-bottom: 1.5px solid #1e293b;
-          min-width: 90px;
-          margin-left: 4px;
-        }
+        .qp-name-field { font-size: 12px; color: #334155; margin-top: 2px; }
+        .qp-name-underline { display: inline-block; border-bottom: 1.5px solid #1e293b; min-width: 90px; margin-left: 4px; }
         .qp-qr-float {
-          position: absolute;
-          right: 20px;
-          bottom: -28px;
-          background: #fff;
-          padding: 3px;
-          border: 1px solid #e2e8f0;
-          border-radius: 4px;
+          position: absolute; right: 20px; bottom: -26px;
+          background: #fff; padding: 3px;
+          border: 1px solid #e2e8f0; border-radius: 4px;
         }
 
         /* ── Two-column grid ── */
@@ -590,13 +588,13 @@ export default function QuizPrintPage() {
         /* ── Question item ── */
         .qp-item {
           break-inside: avoid;
-          margin-bottom: ${is4 ? '20px' : '14px'};
+          margin-bottom: 16px;
         }
         .qp-item-header {
           display: flex;
           align-items: flex-start;
           gap: 10px;
-          margin-bottom: 6px;
+          margin-bottom: 4px;
         }
         .qp-num {
           font-size: 22px;
@@ -612,13 +610,25 @@ export default function QuizPrintPage() {
           line-height: 1.7;
           color: #1e293b;
         }
+        /* Source: only on answer key */
         .qp-source {
           font-size: 9px;
           color: #94a3b8;
-          margin-left: 4px;
+          margin-left: 6px;
+          font-style: italic;
         }
 
-        /* ── Workspace (lined + answer box) ── */
+        /* ── Smart choices ── */
+        .qp-choices { margin-top: 6px; }
+        .qp-choices-vertical { display: flex; flex-direction: column; gap: 2px; }
+        .qp-choice-row { display: flex; align-items: baseline; gap: 6px; padding-left: 2px; }
+        .qp-choices-grid { display: flex; flex-direction: column; gap: 2px; }
+        .qp-choice-grid-row { display: flex; gap: 16px; }
+        .qp-choice-cell { display: flex; align-items: baseline; gap: 5px; min-width: 0; flex: 1; }
+        .qp-choice-marker { font-size: 13px; font-weight: 600; color: #334155; flex-shrink: 0; }
+        .qp-choice-text { font-size: 12.5px; color: #1e293b; line-height: 1.6; }
+
+        /* ── Workspace (lined, no outer border) ── */
         .qp-workspace {
           margin-left: 42px;
           margin-top: 6px;
@@ -626,57 +636,40 @@ export default function QuizPrintPage() {
         }
         .qp-lined-area {
           background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 4px;
-          padding: 6px 10px 2px;
+          padding: 4px 8px 2px;
+          border-radius: 3px;
         }
         .qp-line {
           border-bottom: 1px solid #e2e8f0;
-          height: ${is4 ? '26px' : '22px'};
+          height: 24px;
         }
+        .qp-line-tall { height: 28px; }
         .qp-answer-box {
           position: absolute;
-          right: 0;
-          bottom: 0;
+          right: 0; bottom: 0;
           border: 2px solid #1e293b;
           border-radius: 4px;
-          min-width: 80px;
-          min-height: 32px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
+          min-width: 80px; min-height: 32px;
+          display: flex; align-items: center; gap: 6px;
           padding: 4px 10px;
           background: #fff;
         }
-        .qp-answer-label {
-          font-size: 10px;
-          font-weight: 700;
-          color: #1e293b;
-          white-space: nowrap;
-        }
-        .qp-answer-value {
-          font-size: 13px;
-          font-weight: 700;
-          color: #1d4ed8;
-        }
+        .qp-answer-label { font-size: 10px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+        .qp-answer-value { font-size: 13px; font-weight: 700; color: #1d4ed8; }
 
         /* ── Keyword chip (blank mode) ── */
         .qp-keyword-chip {
           display: inline-block;
-          font-size: 13px;
-          font-weight: 600;
-          border: 1px solid #cbd5e1;
-          border-radius: 4px;
+          font-size: 13px; font-weight: 600;
+          border: 1px solid #cbd5e1; border-radius: 4px;
           padding: 3px 14px;
-          background: #f1f5f9;
-          color: #1e293b;
+          background: #f1f5f9; color: #1e293b;
         }
 
         /* ── Answer banner ── */
         .qp-answer-banner {
           text-align: center;
-          font-size: 11px;
-          font-weight: 700;
+          font-size: 11px; font-weight: 700;
           color: #1d4ed8;
           border: 1px solid #bfdbfe;
           background: #eff6ff;
@@ -687,50 +680,47 @@ export default function QuizPrintPage() {
 
         /* ── Example intro ── */
         .qp-example-intro {
-          font-size: 13px;
-          font-weight: 500;
-          color: #334155;
-          margin-bottom: 14px;
+          font-size: 13px; font-weight: 500;
+          color: #334155; margin-bottom: 14px;
         }
 
-        /* ── Memo section (study mode) ── */
+        /* ── Memo section ── */
         .qp-memo-section {
-          border: 2px solid #e2e8f0;
-          border-radius: 8px;
-          padding: 20px;
-          margin-top: 8px;
+          border: 2px solid #e2e8f0; border-radius: 8px;
+          padding: 20px; margin-top: 8px;
         }
         .qp-memo-title { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
         .qp-memo-subtitle { font-size: 11px; color: #64748b; margin-bottom: 12px; }
         .qp-memo-lines { border: none; padding: 0; background: transparent; }
 
-        /* ── Footer ── */
+        /* ── Footer (all pages) ── */
         .qp-footer {
           position: absolute;
-          bottom: 14px;
-          left: 0;
-          right: 0;
+          bottom: 14px; left: 0; right: 0;
           background: #1e293b;
           color: #fff;
           text-align: center;
-          padding: 8px 20px;
-          font-size: 11px;
-          font-weight: 500;
-          border-radius: 0;
+          padding: 7px 20px;
+          font-size: 11px; font-weight: 500;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
         }
+        .qp-footer-brand { font-weight: 700; white-space: nowrap; }
+        .qp-footer-divider { opacity: 0.5; }
         .qp-footer-text { margin: 0; }
 
         /* ── Page number ── */
         .qp-page-number {
-          position: absolute;
-          bottom: 0;
-          left: 50%;
+          position: absolute; bottom: 0; left: 50%;
           transform: translateX(-50%);
-          font-size: 10px;
-          font-weight: 600;
-          color: #1e293b;
-          background: #fff;
-          padding: 0 8px;
+          font-size: 10px; font-weight: 600;
+          color: #1e293b; background: #fff; padding: 0 8px;
+        }
+
+        /* ── KaTeX: Computer Modern style, slightly larger ── */
+        .qp-question-text .katex,
+        .qp-choice-text .katex,
+        .qp-answer-value .katex {
+          font-size: 1.08em;
         }
 
         /* ══ Print overrides ══ */
