@@ -92,7 +92,7 @@ export default function QuizPrintPage() {
     (async () => {
       const { data: quiz, error } = await supabase
         .from('math_concept_quizzes')
-        .select('id, questions, math_concepts(title, course, grade, subject)')
+        .select('id, questions, version_number, version_label, math_concepts(title, course, grade, subject)')
         .eq('id', quizId)
         .single();
       if (error || !quiz) { setLoading(false); return; }
@@ -104,6 +104,8 @@ export default function QuizPrintPage() {
         grade: concept?.grade || '',
         subject: concept?.subject || '수학',
         questions: (quiz.questions as any) as QuizQuestion[],
+        versionNumber: (quiz as any).version_number || 1,
+        versionLabel: (quiz as any).version_label || null,
       });
       setLoading(false);
     })();
