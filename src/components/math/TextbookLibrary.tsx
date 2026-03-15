@@ -81,10 +81,19 @@ export function TextbookLibrary() {
   const [exDifficulty, setExDifficulty] = useState('medium');
   const [savingExample, setSavingExample] = useState(false);
 
-  // AI extraction
+  // AI extraction — batch mode
   const [extracting, setExtracting] = useState(false);
-  const [extractFile, setExtractFile] = useState<File | null>(null);
+  const [extractFiles, setExtractFiles] = useState<File[]>([]);
   const [extractChapter, setExtractChapter] = useState('');
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; results: BatchResult[] } | null>(null);
+
+  interface BatchResult {
+    fileName: string;
+    status: 'success' | 'error';
+    count?: number;
+    message: string;
+    reason?: string;
+  }
 
   // Quiz generator
   const [showQuizGen, setShowQuizGen] = useState(false);
