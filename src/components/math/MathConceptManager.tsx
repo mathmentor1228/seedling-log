@@ -27,6 +27,8 @@ import { MathQuizPreview } from './MathQuizPreview';
 import { QuizSubmissionReview } from './QuizSubmissionReview';
 import { MathQuizAssignManager } from './MathQuizAssignManager';
 import { QuizVersionTracker } from './QuizVersionTracker';
+import { TextbookLibrary } from './TextbookLibrary';
+import { Library } from 'lucide-react';
 
 interface ConceptCreator {
   full_name: string | null;
