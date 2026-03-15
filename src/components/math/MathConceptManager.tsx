@@ -64,6 +64,15 @@ interface QuizData {
   concept_id: string;
   questions: QuizQuestion[];
   status: string;
+  version_number?: number;
+  version_label?: string | null;
+}
+
+interface QuizVersionSummary {
+  id: string;
+  version_number: number;
+  version_label: string | null;
+  created_at: string;
 }
 
 export interface QuizQuestion {
