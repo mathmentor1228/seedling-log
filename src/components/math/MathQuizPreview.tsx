@@ -31,7 +31,7 @@ function extractExpression(text: string): string | null {
 }
 
 interface Props {
-  quiz: { id: string; questions: QuizQuestion[]; status: string; version_number?: number; version_label?: string | null } | null;
+  quiz: { id: string; questions: QuizQuestion[]; status: string; version_number?: number; version_label?: string | null; answer_code?: string | null } | null;
   loading: boolean;
   onSave: (questions: QuizQuestion[]) => void;
   onRegenerate: () => void;
@@ -173,6 +173,9 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
             </CardTitle>
             {quiz.version_number && (
               <Badge variant="secondary" className="text-xs">V{quiz.version_number}</Badge>
+            )}
+            {quiz.answer_code && (
+              <Badge variant="outline" className="text-xs font-mono">{quiz.answer_code}</Badge>
             )}
             {quiz.version_label && (
               <span className="text-xs text-muted-foreground">{quiz.version_label}</span>

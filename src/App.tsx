@@ -32,6 +32,7 @@ import ExamPrepPage from "./pages/ExamPrepPage";
 import QuizPrintPage from "./pages/QuizPrintPage";
 import QuizSubmitPage from "./pages/QuizSubmitPage";
 import QuizBulkUploadPage from "./pages/QuizBulkUploadPage";
+import QuizLookupPage from "./pages/QuizLookupPage";
 import NotFound from "./pages/NotFound";
 import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
@@ -125,6 +126,7 @@ const App = () => (
                 <Route path="/materials/:subject" element={<SubjectMaterialPage />} />
                 <Route path="/math-concepts" element={<MathConceptPage />} />
                 <Route path="/quiz-bulk-upload" element={<QuizBulkUploadPage />} />
+                <Route path="/quiz-lookup" element={<QuizLookupPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
