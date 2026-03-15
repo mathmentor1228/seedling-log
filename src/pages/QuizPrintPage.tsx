@@ -187,8 +187,14 @@ export default function QuizPrintPage() {
   );
 
   const Footer = () => (
-    <div className="mt-8 pt-3 border-t border-dashed border-foreground/30 text-center text-sm text-muted-foreground">
-      {cfg.footer}
+    <div className="mt-10 pt-4 border-t-2 border-foreground/20 break-inside-avoid">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img src={logoImg} alt="더멘토" className="h-7 w-auto object-contain print-logo opacity-70" />
+          <span className="text-xs text-muted-foreground">대표 황은지</span>
+        </div>
+        <p className="text-sm text-muted-foreground italic">{cfg.footer}</p>
+      </div>
     </div>
   );
 
