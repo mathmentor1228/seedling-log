@@ -203,9 +203,22 @@ export function TextbookLibrary() {
 
     try {
       let uploadFile = extractFile;
+      const pdfUpload = isPdfUpload(uploadFile);
+      const imageUpload = uploadFile.type.startsWith('image/');
 
-      if (uploadFile.type.startsWith('image/') && uploadFile.size > IMAGE_COMPRESS_TARGET_BYTES) {
-        uploadFile = await compressImage(uploadFile, 1800, 1800, 0.8);
+      if (!pdfUpload && !imageUpload) {
+        throw new Error('PDF 또는 이미지 파일만 업로드할 수 있습니다.');
+      }
+
+      if (imageUpload) {
+        const shouldNormalizeImage = uploadFile.size > IMAGE_COMPRESS_TARGET_BYTES || !SUPPORTED_AI_IMAGE_TYPES.has(uploadFile.type);
+        if (shouldNormalizeImage) {
+          uploadFile = await compressImage(uploadFile, 1800, 1800, 0.82);
+        }
+
+        if (!uploadFile.type.startsWith('image/') || !SUPPORTED_AI_IMAGE_TYPES.has(uploadFile.type)) {
+          throw new Error('이미지는 PNG/JPEG/WEBP/GIF 형식만 지원됩니다. 다른 형식은 JPG로 변환 후 업로드해 주세요.');
+        }
       }
 
       if (uploadFile.size > MAX_EXTRACT_FILE_BYTES) {
