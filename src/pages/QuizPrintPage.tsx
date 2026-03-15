@@ -109,14 +109,20 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
 const LINE_HEIGHT_MM = 8.5;
 const PAGE_HEIGHT_MM = 297;
 const PAGE_MARGIN_MM = 15 * 2; // top+bottom @page margin
-const HEADER_HEIGHT_MM = 38;   // first-page header block
+const HEADER_HEIGHT_MM = 42;   // first-page header block (increased top margin)
 const FOOTER_HEIGHT_MM = 12;   // footer bar
 const QUESTION_OVERHEAD_MM = 22; // question text + number + gaps per item
 
-function computeLineCount(isFirst: boolean, itemsPerCol: number): number {
+/** Count (1), (2)… sub-question markers in text */
+function countSubQuestions(text: string): number {
+  const matches = text.match(/\(([0-9]{1,2})\)|⑴|⑵|⑶|⑷|⑸|⑹|⑺|⑻|⑼|⑽/g);
+  return matches ? matches.length : 0;
+}
+
+function computeLineCount(isFirst: boolean, itemsPerCol: number, extraSubLines = 0): number {
   const usable = PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM - (isFirst ? HEADER_HEIGHT_MM : 0);
   const totalOverhead = QUESTION_OVERHEAD_MM * itemsPerCol;
-  const spaceForLines = usable - totalOverhead;
+  const spaceForLines = usable - totalOverhead - (extraSubLines * LINE_HEIGHT_MM);
   const linesPerItem = Math.max(4, Math.floor(spaceForLines / itemsPerCol / LINE_HEIGHT_MM));
   return linesPerItem;
 }
