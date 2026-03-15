@@ -22,6 +22,12 @@ const jsonResponse = (payload: Record<string, unknown>, status = 200) =>
 
 const sanitizeFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
 
+const isPdfFile = (file: File) => {
+  const lowerType = (file.type || '').toLowerCase();
+  const lowerName = file.name.toLowerCase();
+  return lowerType === 'application/pdf' || lowerName.endsWith('.pdf');
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
