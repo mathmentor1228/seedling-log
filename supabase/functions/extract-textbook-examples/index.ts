@@ -111,10 +111,16 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: '교재 정보를 찾을 수 없습니다.' });
     }
 
-    const mimeType = file.type || 'application/pdf';
+    const pdfUpload = isPdfFile(file);
+    const mimeType = pdfUpload ? 'application/pdf' : (file.type || 'application/octet-stream');
     let fileUrl: string;
 
-    if (file.size <= INLINE_BASE64_LIMIT_BYTES) {
+    // Gemini provider requires PDF as data URL (signed URL with .pdf is rejected).
+    if (pdfUpload) {
+      const fileBytes = await file.arrayBuffer();
+      const fileBase64 = encodeBase64(new Uint8Array(fileBytes));
+      fileUrl = `data:application/pdf;base64,${fileBase64}`;
+    } else if (file.size <= INLINE_BASE64_LIMIT_BYTES) {
       const fileBytes = await file.arrayBuffer();
       const fileBase64 = encodeBase64(new Uint8Array(fileBytes));
       fileUrl = `data:${mimeType};base64,${fileBase64}`;
