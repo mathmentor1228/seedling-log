@@ -169,6 +169,8 @@ export function MathConceptManager() {
         .select('id, concept_id, status, created_at, questions, version_number, version_label, answer_code, math_concepts(title, course, grade, subject, created_by)') as any,
     ]);
 
+    const creatorMap: Record<string, string> = {};
+
     if (conceptsRes.error) {
       console.error(conceptsRes.error);
       toast({ title: '오류', description: '개념 목록을 불러오지 못했습니다.', variant: 'destructive' });
@@ -182,17 +184,15 @@ export function MathConceptManager() {
         new Set(conceptRows.map((concept) => concept.created_by).filter(Boolean) as string[]),
       );
 
-      const creatorMap: Record<string, string> = {};
       if (creatorIds.length > 0) {
         const { data: profileRows } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('id', creatorIds as any);
 
-        creatorMap = (profileRows || []).reduce<Record<string, string>>((acc, profile: any) => {
-          acc[profile.id] = profile.full_name || '이름 없음';
-          return acc;
-        }, {});
+        (profileRows || []).forEach((p: any) => {
+          creatorMap[p.id] = p.full_name || '이름 없음';
+        });
       }
 
       setConcepts(
@@ -209,11 +209,9 @@ export function MathConceptManager() {
       console.error(quizzesRes.error);
     } else {
       const quizRows = (quizzesRes.data || []) as any[];
-      // Resolve creator names for quizzes using the same creatorMap
       const quizCreatorIds = Array.from(
         new Set(quizRows.map((q: any) => q.math_concepts?.created_by).filter(Boolean) as string[]),
       );
-      // Fetch any missing creators not already in creatorMap
       const missingIds = quizCreatorIds.filter(id => !creatorMap[id]);
       if (missingIds.length > 0) {
         const { data: extraProfiles } = await supabase
