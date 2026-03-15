@@ -48,7 +48,7 @@ const REWRITE_LABELS: Record<RewriteMode, { label: string; desc: string; icon?: 
   example: { label: '예제 추가', desc: '기초 수치 예제 문제를 아래 생성' },
 };
 
-export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerating }: Props) {
+export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerating, allVersions, onSelectVersion }: Props) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [editMode, setEditMode] = useState(false);
