@@ -31,7 +31,7 @@ function extractExpression(text: string): string | null {
 }
 
 interface Props {
-  quiz: { id: string; questions: QuizQuestion[]; status: string; version_number?: number; version_label?: string | null } | null;
+  quiz: { id: string; questions: QuizQuestion[]; status: string; version_number?: number; version_label?: string | null; answer_code?: string | null } | null;
   loading: boolean;
   onSave: (questions: QuizQuestion[]) => void;
   onRegenerate: () => void;
