@@ -211,20 +211,32 @@ serve(async (req) => {
       question_number: index + 1,
     }));
 
-    const { data: existingQuiz } = await supabase
+    // Determine next version number for this concept
+    const { data: latestQuiz } = await supabase
       .from('math_concept_quizzes')
-      .select('id')
+      .select('version_number')
       .eq('concept_id', concept_id)
+      .order('version_number', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (existingQuiz) {
-      await supabase
-        .from('math_concept_quizzes')
-        .update({ questions, status: 'draft', updated_at: new Date().toISOString() })
-        .eq('id', existingQuiz.id);
-    } else {
-      await supabase.from('math_concept_quizzes').insert({ concept_id, questions, status: 'draft' });
-    }
+    const nextVersion = (latestQuiz?.version_number ?? 0) + 1;
+    const today = new Date().toISOString().slice(0, 10);
+    const versionLabel = `${today}_${concept.title}_V${nextVersion}`;
+
+    const { data: newQuiz, error: insertError } = await supabase
+      .from('math_concept_quizzes')
+      .insert({
+        concept_id,
+        questions,
+        status: 'draft',
+        version_number: nextVersion,
+        version_label: versionLabel,
+      })
+      .select('id')
+      .single();
+
+    if (insertError) throw insertError;
 
     await supabase
       .from('math_concepts')

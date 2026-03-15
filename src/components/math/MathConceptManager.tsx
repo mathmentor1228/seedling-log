@@ -313,10 +313,13 @@ export function MathConceptManager() {
 
   const loadQuiz = async (conceptId: string) => {
     setLoadingQuiz(true);
+    // Load the latest version quiz for this concept
     const { data, error } = await supabase
       .from('math_concept_quizzes')
       .select('*')
       .eq('concept_id', conceptId)
+      .order('version_number', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (!error && data) {
