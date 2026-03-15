@@ -243,7 +243,11 @@ export function TextbookLibrary() {
         throw new Error(data?.error || 'AI 추출 실패');
       }
 
-      toast({ title: `${data.count}개 문제가 추출되었습니다` });
+      const catSummary = data.categorySummary;
+      const catDesc = catSummary
+        ? Object.entries(catSummary).map(([k, v]) => `${k} ${v}개`).join(', ')
+        : '';
+      toast({ title: `${data.count}개 학습 요소 추출 완료`, description: catDesc || undefined });
       setExtractFile(null);
       setExtractChapter('');
       fetchExamples(selectedTextbook.id);
