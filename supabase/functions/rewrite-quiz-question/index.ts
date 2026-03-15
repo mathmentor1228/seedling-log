@@ -48,6 +48,12 @@ serve(async (req) => {
 
     let instruction = '';
     switch (rewrite_mode) {
+      case 'fix_code':
+        instruction = `이 문제의 텍스트에서 HTML 태그(<span>, <div>, class=, style= 등), 영어 코드 문자열, math-renderer 같은 기술적 문자열을 모두 제거하세요.
+순수하게 한국어 문제 내용과 올바른 LaTeX 수식($...$)만 남기세요.
+문제의 의미, 정답, 해설 내용은 절대 바꾸지 마세요. 오직 코드/태그 정제만 수행하세요.
+문제 유형(${question.question_type})과 난이도(${question.difficulty})를 그대로 유지하세요.`;
+        break;
       case 'easier':
         instruction = `이 문제를 더 쉽게 다시 작성하세요. 초보자도 이해할 수 있는 수준으로 풀어서 출제하되, 같은 개념을 다뤄야 합니다. 문제 유형(${question.question_type})은 유지하세요.`;
         break;

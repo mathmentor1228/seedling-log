@@ -28,9 +28,10 @@ interface Props {
   regenerating: boolean;
 }
 
-type RewriteMode = 'easier' | 'deeper' | 'example';
+type RewriteMode = 'easier' | 'deeper' | 'example' | 'fix_code';
 
-const REWRITE_LABELS: Record<RewriteMode, { label: string; desc: string }> = {
+const REWRITE_LABELS: Record<RewriteMode, { label: string; desc: string; icon?: string }> = {
+  fix_code: { label: '⚠️ 코드 오류 수정', desc: 'HTML 태그/코드를 제거하고 순수 수식만 남김', icon: '⚠️' },
   easier: { label: '더 쉽게', desc: '초보자 수준으로 풀어서 다시 출제' },
   deeper: { label: '더 깊게 (심화)', desc: '심화 원리/증명 문제로 변경' },
   example: { label: '예제 추가', desc: '기초 수치 예제 문제를 아래 생성' },
