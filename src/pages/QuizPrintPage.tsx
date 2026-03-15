@@ -708,27 +708,21 @@ export default function QuizPrintPage() {
         }
         .qp-choice-text { font-size: 11.5px; color: #1e293b; line-height: 1.55; }
 
-        /* ── Workspace — GROWS to fill remaining space, answer box sticks to bottom-right ── */
+        /* ── Workspace — FIXED line height, answer box bottom-right ── */
         .qp-workspace {
           margin-left: 34px;
           margin-top: 3px;
           position: relative;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
         }
         .qp-lined-area {
           padding: 2px 6px 1px;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
         }
         .qp-line {
           border-bottom: 1px solid #e2e8f0;
-          flex: 1;
-          min-height: 20px;
+          height: 8.5mm;
+          box-sizing: border-box;
         }
-        .qp-line-tall { min-height: 26px; }
+        .qp-line-tall { height: 10mm; }
         .qp-answer-box {
           position: absolute;
           right: 0; bottom: 0;
