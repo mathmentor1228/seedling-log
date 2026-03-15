@@ -356,6 +356,13 @@ export function TextbookLibrary() {
                     </CardDescription>
                   </div>
                   <div className="flex gap-1.5">
+                    <Button
+                      size="sm" className="gap-1 text-xs h-8"
+                      onClick={() => setShowQuizGen(true)}
+                      disabled={examples.length === 0}
+                    >
+                      <Zap className="w-3.5 h-3.5" /> 퀴즈 생성
+                    </Button>
                     <Button size="sm" variant="outline" className="gap-1 text-xs h-8" onClick={() => setShowAddExample(true)}>
                       <Plus className="w-3.5 h-3.5" /> 수동 추가
                     </Button>
