@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Printer, ArrowLeft, BookOpen, ClipboardCheck, FileText, Calculator } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { MathRenderer } from '@/components/math/MathRenderer';
 import logoImg from '@/assets/logo-thementor.png';
 
