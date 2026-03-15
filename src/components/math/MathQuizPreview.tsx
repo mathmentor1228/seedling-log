@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb, Printer,
-  Trash2, Wand2, ChevronDown, BarChart3,
+  Trash2, Wand2, ChevronDown, BarChart3, History,
 } from 'lucide-react';
 import {
   DropdownMenu,

@@ -171,12 +171,13 @@ export default function QuizPrintPage() {
           <h1 className="text-lg font-bold leading-tight">{cfg.label}</h1>
           <p className="text-[11px] text-muted-foreground">{cfg.subtitle}</p>
           <p className="text-sm mt-1">{data.subject} · {data.grade} · {data.course}</p>
-          <p className="text-sm font-semibold mt-0.5">{data.conceptTitle}</p>
+           <p className="text-sm font-semibold mt-0.5">{data.conceptTitle}</p>
         </div>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <QRCodeSVG value={qrPayload} size={68} level="M" />
         <span className="text-[9px] text-muted-foreground">QR로 제출하기</span>
+        <Badge variant="secondary" className="text-[9px] mt-0.5">V{data.versionNumber}</Badge>
       </div>
     </div>
   );
