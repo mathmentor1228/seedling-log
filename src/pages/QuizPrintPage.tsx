@@ -282,7 +282,7 @@ export default function QuizPrintPage() {
     </div>
   );
 
-  /* ── Workspace: lined note area with auto-height ── */
+  /* ── Workspace: lined note area with FIXED line height, variable count ── */
   const WorkspaceArea = ({ q, showAnswer, lines }: { q: QuizQuestion; showAnswer: boolean; lines: number }) => (
     <div className="qp-workspace">
       <div className="qp-lined-area">
