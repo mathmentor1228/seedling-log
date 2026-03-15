@@ -251,11 +251,23 @@ export default function QuizPrintPage() {
   /* ── Full Header — borderless, QR+code left, name/date right ── */
   const FullHeader = () => (
     <div className="qp-header">
-      <div className="qp-header-qr">
-        <QRCodeSVG value={qrPayload} size={50} level="M" />
-        {data.answerCode && (
-          <span className="qp-answer-code-label">{data.answerCode}</span>
-        )}
+      <div className="qp-header-left">
+        <div className="qp-header-qr">
+          <QRCodeSVG value={qrPayload} size={50} level="M" />
+          {data.answerCode && (
+            <span className="qp-answer-code-label">{data.answerCode}</span>
+          )}
+        </div>
+        <div className="qp-name-date-fields">
+          <div className="qp-field-row">
+            <span className="qp-field-label">이름</span>
+            <span className="qp-field-underline">{studentName || '\u00A0'}</span>
+          </div>
+          <div className="qp-field-row">
+            <span className="qp-field-label">날짜</span>
+            <span className="qp-field-underline">{today.replace(/\./g, '. ')}</span>
+          </div>
+        </div>
       </div>
       <div className="qp-header-center">
         <p className="qp-subject-label">{cfg.label}</p>
@@ -268,16 +280,6 @@ export default function QuizPrintPage() {
       </div>
       <div className="qp-header-right">
         <img src={logoImg} alt="더멘토" className="qp-logo print-logo" />
-        <div className="qp-name-date-fields">
-          <div className="qp-field-row">
-            <span className="qp-field-label">이름</span>
-            <span className="qp-field-underline">{studentName || '\u00A0'}</span>
-          </div>
-          <div className="qp-field-row">
-            <span className="qp-field-label">날짜</span>
-            <span className="qp-field-underline">{today.replace(/\./g, '. ')}</span>
-          </div>
-        </div>
       </div>
     </div>
   );
