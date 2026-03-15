@@ -105,18 +105,12 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
   },
 };
 
-/* ── Determine how many lined-note rows to use.
-   On first page (4 items) we have more vertical space → more lines.
-   On subsequent pages (6 items) we use fewer lines.
-   When total items on the page is small (≤3 per col), auto-expand lines. */
-function computeLines(isFirst: boolean, itemsOnPage: number): number {
+/* ── Minimum lined-note rows (flex-grow will expand them to fill page) ── */
+function computeMinLines(isFirst: boolean, itemsOnPage: number): number {
   if (isFirst) {
-    // 4 items on first page → generous space
-    return itemsOnPage <= 3 ? 12 : 10;
+    return itemsOnPage <= 2 ? 8 : itemsOnPage <= 3 ? 6 : 5;
   }
-  // subsequent pages: 6 items
-  if (itemsOnPage <= 4) return 8;
-  return 6;
+  return itemsOnPage <= 4 ? 5 : 4;
 }
 
 export default function QuizPrintPage() {
@@ -321,16 +315,14 @@ export default function QuizPrintPage() {
     );
   };
 
-  const Footer = () => (
+  const Footer = ({ pageNum, totalPages }: { pageNum: number; totalPages: number }) => (
     <div className="qp-footer">
       <span className="qp-footer-brand">더 멘토 학원 | 대표 황은지</span>
       <span className="qp-footer-divider">·</span>
       <span className="qp-footer-text">{cfg.footer}</span>
+      <span className="qp-footer-divider">·</span>
+      <span className="qp-footer-page">{pageNum} / {totalPages}</span>
     </div>
-  );
-
-  const PageNumber = ({ n, total }: { n: number; total: number }) => (
-    <div className="qp-page-number">{n} / {total}</div>
   );
 
   const paginateQuestions = (questions: QuizQuestion[]) => {
@@ -349,7 +341,7 @@ export default function QuizPrintPage() {
     const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const lines = computeLines(page.isFirst, page.questions.length);
+      const lines = computeMinLines(page.isFirst, page.questions.length);
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -368,8 +360,7 @@ export default function QuizPrintPage() {
               ))}
             </div>
           </div>
-          <Footer />
-          <PageNumber n={pi + 1} total={totalPages} />
+          <Footer pageNum={pi + 1} totalPages={totalPages} />
         </div>
       );
     });
@@ -381,7 +372,7 @@ export default function QuizPrintPage() {
     const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const lines = computeLines(page.isFirst, page.questions.length);
+      const lines = computeMinLines(page.isFirst, page.questions.length);
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -400,8 +391,7 @@ export default function QuizPrintPage() {
               ))}
             </div>
           </div>
-          <Footer />
-          <PageNumber n={pi + 1} total={totalPages} />
+          <Footer pageNum={pi + 1} totalPages={totalPages} />
         </div>
       );
     });
@@ -421,7 +411,7 @@ export default function QuizPrintPage() {
     const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const blankLines = computeLines(page.isFirst, page.questions.length) + 1;
+      const blankLines = computeMinLines(page.isFirst, page.questions.length) + 1;
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -464,8 +454,7 @@ export default function QuizPrintPage() {
               ))}
             </div>
           </div>
-          <Footer />
-          <PageNumber n={pi + 1} total={totalPages} />
+          <Footer pageNum={pi + 1} totalPages={totalPages} />
         </div>
       );
     });
@@ -486,7 +475,7 @@ export default function QuizPrintPage() {
               ))}
             </div>
           </div>
-          <Footer />
+          <Footer pageNum={1} totalPages={1} />
         </div>
       </>
     );
@@ -552,27 +541,30 @@ export default function QuizPrintPage() {
 
       <style>{`
         /* ══════════════════════════════════════════════════
-           Quiz Print Stylesheet v5 — Perfect A4 fitting
+           Quiz Print Stylesheet v6 — Full A4 space utilization
            ══════════════════════════════════════════════════ */
-        .quiz-print-wrapper { font-family: 'Pretendard', sans-serif; }
+        .quiz-print-wrapper { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; }
         .quiz-print-area { max-width: 210mm; margin: 0 auto; }
 
-        /* ── Page container ── */
+        /* ── Page container — flex column to fill A4 height ── */
         .qp-page {
-          position: relative;
-          padding: 14px 20px 48px;
+          display: flex;
+          flex-direction: column;
+          padding: 16px 22px 12px;
           page-break-after: always;
           box-sizing: border-box;
+          min-height: 297mm;
         }
 
-        /* ── Header — NO outer border, clean layout ── */
+        /* ── Header — clean borderless, bottom divider only ── */
         .qp-header {
-          padding: 10px 0 12px;
-          margin-bottom: 10px;
+          padding: 8px 0 10px;
+          margin-bottom: 8px;
           display: flex;
           align-items: center;
           gap: 14px;
           border-bottom: 2px solid #1e293b;
+          flex-shrink: 0;
         }
         .qp-header-qr {
           display: flex;
@@ -628,26 +620,34 @@ export default function QuizPrintPage() {
           padding-bottom: 2px;
         }
 
-        /* ── Two-column grid ── */
+        /* ── Two-column grid — FLEX GROW to fill page ── */
         .qp-two-col {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 0 20px;
+          flex: 1;
         }
-        .qp-col { display: flex; flex-direction: column; }
+        .qp-col {
+          display: flex;
+          flex-direction: column;
+        }
 
-        /* ── Question item — CRITICAL: break-inside avoid ── */
+        /* ── Question item — flex item, workspace grows ── */
         .qp-item {
           break-inside: avoid;
           page-break-inside: avoid;
           -webkit-column-break-inside: avoid;
-          margin-bottom: 8px;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          margin-bottom: 4px;
         }
         .qp-item-header {
           display: flex;
           align-items: flex-start;
           gap: 6px;
           margin-bottom: 2px;
+          flex-shrink: 0;
         }
         .qp-num {
           font-size: 20px;
@@ -671,7 +671,7 @@ export default function QuizPrintPage() {
         }
 
         /* ── Smart choices ── */
-        .qp-choices { margin-top: 6px; padding-left: 2px; }
+        .qp-choices { margin-top: 5px; padding-left: 2px; }
         .qp-choices-vertical { display: flex; flex-direction: column; gap: 2px; }
         .qp-choice-row {
           display: flex;
@@ -697,20 +697,27 @@ export default function QuizPrintPage() {
         }
         .qp-choice-text { font-size: 11.5px; color: #1e293b; line-height: 1.55; }
 
-        /* ── Workspace — light gray lines only, no outer border ── */
+        /* ── Workspace — GROWS to fill remaining space, answer box sticks to bottom-right ── */
         .qp-workspace {
           margin-left: 34px;
-          margin-top: 4px;
+          margin-top: 3px;
           position: relative;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
         }
         .qp-lined-area {
           padding: 2px 6px 1px;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
         }
         .qp-line {
           border-bottom: 1px solid #e2e8f0;
-          height: 24px;
+          flex: 1;
+          min-height: 20px;
         }
-        .qp-line-tall { height: 26px; }
+        .qp-line-tall { min-height: 26px; }
         .qp-answer-box {
           position: absolute;
           right: 0; bottom: 0;
@@ -720,6 +727,7 @@ export default function QuizPrintPage() {
           display: flex; align-items: center; gap: 5px;
           padding: 3px 8px;
           background: #fff;
+          z-index: 1;
         }
         .qp-answer-label { font-size: 9px; font-weight: 700; color: #1e293b; white-space: nowrap; }
         .qp-answer-value { font-size: 12px; font-weight: 700; color: #3b82f6; }
@@ -742,47 +750,46 @@ export default function QuizPrintPage() {
           background: #eff6ff;
           border-radius: 4px;
           padding: 3px 0;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
+          flex-shrink: 0;
         }
 
         /* ── Example intro ── */
         .qp-example-intro {
           font-size: 12px; font-weight: 500;
-          color: #334155; margin-bottom: 8px;
+          color: #334155; margin-bottom: 6px;
+          flex-shrink: 0;
         }
 
         /* ── Memo section ── */
         .qp-memo-section {
           border: 1.5px solid #e2e8f0; border-radius: 6px;
-          padding: 16px; margin-top: 8px;
+          padding: 16px; margin-top: 8px; flex: 1;
         }
         .qp-memo-title { font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
         .qp-memo-subtitle { font-size: 10px; color: #64748b; margin-bottom: 10px; }
         .qp-memo-lines { border: none; padding: 0; background: transparent; }
 
-        /* ── Footer — navy bar, inside safe zone ── */
+        /* ── Footer — navy bar with page number integrated ── */
         .qp-footer {
-          position: absolute;
-          bottom: 18px; left: 20px; right: 20px;
           background: #1e293b;
           color: #fff;
           text-align: center;
-          padding: 5px 14px;
-          font-size: 9px; font-weight: 500;
+          padding: 6px 16px;
+          font-size: 9.5px; font-weight: 500;
           border-radius: 3px;
-          display: flex; align-items: center; justify-content: center; gap: 6px;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          flex-shrink: 0;
+          margin-top: 8px;
         }
         .qp-footer-brand { font-weight: 700; white-space: nowrap; }
-        .qp-footer-divider { opacity: 0.5; }
-        .qp-footer-text { margin: 0; }
-
-        /* ── Page number — above footer, inside safe zone ── */
-        .qp-page-number {
-          position: absolute;
-          bottom: 6px; left: 50%;
-          transform: translateX(-50%);
-          font-size: 8px; font-weight: 600;
-          color: #94a3b8;
+        .qp-footer-divider { opacity: 0.4; }
+        .qp-footer-text { margin: 0; flex: 1; }
+        .qp-footer-page {
+          font-weight: 700;
+          font-size: 11px;
+          letter-spacing: 1px;
+          white-space: nowrap;
         }
 
         /* ── KaTeX: Computer Modern, slightly enlarged ── */
@@ -793,12 +800,12 @@ export default function QuizPrintPage() {
         }
 
         /* ══════════════════════════════════════════════════
-           PRINT OVERRIDES — Perfect A4
+           PRINT OVERRIDES — Perfect A4 with safe margins
            ══════════════════════════════════════════════════ */
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm 10mm 10mm 10mm;
+            margin: 15mm 10mm;
           }
           html, body {
             -webkit-print-color-adjust: exact;
@@ -816,44 +823,21 @@ export default function QuizPrintPage() {
 
           .qp-page {
             min-height: auto;
-            padding: 0 0 36px;
+            height: 100%;
+            padding: 0;
             page-break-after: always;
-            page-break-inside: avoid;
           }
 
-          /* Ensure items never split across pages */
           .qp-item {
             break-inside: avoid;
             page-break-inside: avoid;
           }
-          .qp-two-col {
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
 
-          /* Footer repositioned for print safe zone */
-          .qp-footer {
-            position: relative;
-            bottom: auto;
-            margin-top: 6px;
-          }
-          .qp-page-number {
-            position: relative;
-            bottom: auto;
-            margin-top: 2px;
-            text-align: center;
-            transform: none;
-            left: auto;
-          }
-
-          /* Auto-scale: if content overflows, shrink slightly */
-          .qp-page {
-            font-size: 11.5px;
-          }
+          /* Slight font shrink for dense pages (high school) */
           .qp-question-text { font-size: 11.5px; }
           .qp-choice-text { font-size: 11px; }
           .qp-num { font-size: 18px; }
-          .qp-line { height: 22px; }
+          .qp-line { min-height: 18px; }
         }
 
         /* ══ Screen preview ══ */
