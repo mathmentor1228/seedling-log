@@ -322,16 +322,31 @@ export function MathConceptManager() {
     }
   };
 
-  const loadQuiz = async (conceptId: string) => {
+  const loadQuiz = async (conceptId: string, specificQuizId?: string) => {
     setLoadingQuiz(true);
-    // Load the latest version quiz for this concept
-    const { data, error } = await supabase
+
+    // Load all versions for this concept
+    const { data: allVers } = await supabase
+      .from('math_concept_quizzes')
+      .select('id, version_number, version_label, created_at')
+      .eq('concept_id', conceptId)
+      .order('version_number', { ascending: false }) as any;
+
+    setConceptVersions((allVers || []) as QuizVersionSummary[]);
+
+    // Load specific version or latest
+    let query = supabase
       .from('math_concept_quizzes')
       .select('*')
-      .eq('concept_id', conceptId)
-      .order('version_number', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq('concept_id', conceptId);
+
+    if (specificQuizId) {
+      query = query.eq('id', specificQuizId);
+    } else {
+      query = query.order('version_number', { ascending: false }).limit(1);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (!error && data) {
       setQuizData(data as any);
