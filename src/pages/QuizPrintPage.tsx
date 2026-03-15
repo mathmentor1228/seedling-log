@@ -105,18 +105,12 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
   },
 };
 
-/* ── Determine how many lined-note rows to use.
-   On first page (4 items) we have more vertical space → more lines.
-   On subsequent pages (6 items) we use fewer lines.
-   When total items on the page is small (≤3 per col), auto-expand lines. */
-function computeLines(isFirst: boolean, itemsOnPage: number): number {
+/* ── Minimum lined-note rows (flex-grow will expand them to fill page) ── */
+function computeMinLines(isFirst: boolean, itemsOnPage: number): number {
   if (isFirst) {
-    // 4 items on first page → generous space
-    return itemsOnPage <= 3 ? 12 : 10;
+    return itemsOnPage <= 2 ? 8 : itemsOnPage <= 3 ? 6 : 5;
   }
-  // subsequent pages: 6 items
-  if (itemsOnPage <= 4) return 8;
-  return 6;
+  return itemsOnPage <= 4 ? 5 : 4;
 }
 
 export default function QuizPrintPage() {
