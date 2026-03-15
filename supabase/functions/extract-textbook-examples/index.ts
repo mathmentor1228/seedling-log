@@ -22,6 +22,12 @@ const jsonResponse = (payload: Record<string, unknown>, status = 200) =>
 
 const sanitizeFileName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
 
+const isPdfFile = (file: File) => {
+  const lowerType = (file.type || '').toLowerCase();
+  const lowerName = file.name.toLowerCase();
+  return lowerType === 'application/pdf' || lowerName.endsWith('.pdf');
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -105,10 +111,16 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: '교재 정보를 찾을 수 없습니다.' });
     }
 
-    const mimeType = file.type || 'application/pdf';
+    const pdfUpload = isPdfFile(file);
+    const mimeType = pdfUpload ? 'application/pdf' : (file.type || 'application/octet-stream');
     let fileUrl: string;
 
-    if (file.size <= INLINE_BASE64_LIMIT_BYTES) {
+    // Gemini provider requires PDF as data URL (signed URL with .pdf is rejected).
+    if (pdfUpload) {
+      const fileBytes = await file.arrayBuffer();
+      const fileBase64 = encodeBase64(new Uint8Array(fileBytes));
+      fileUrl = `data:application/pdf;base64,${fileBase64}`;
+    } else if (file.size <= INLINE_BASE64_LIMIT_BYTES) {
       const fileBytes = await file.arrayBuffer();
       const fileBase64 = encodeBase64(new Uint8Array(fileBytes));
       fileUrl = `data:${mimeType};base64,${fileBase64}`;
@@ -230,13 +242,21 @@ serve(async (req) => {
     });
 
     if (!aiResponse.ok) {
+      const errText = await aiResponse.text();
+
       if (aiResponse.status === 429) {
         return jsonResponse({ success: false, error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' });
       }
       if (aiResponse.status === 402) {
         return jsonResponse({ success: false, error: 'AI 크레딧이 부족합니다.' });
       }
-      const errText = await aiResponse.text();
+      if (aiResponse.status === 400 && errText.includes('Unsupported image format')) {
+        return jsonResponse({
+          success: false,
+          error: '지원 형식은 PNG/JPEG/WEBP/GIF 이미지 또는 PDF입니다. HEIC 파일은 JPG로 변환 후 업로드해 주세요.',
+        });
+      }
+
       console.error('AI error:', aiResponse.status, errText);
       return jsonResponse({ success: false, error: 'AI 추출에 실패했습니다. 파일을 페이지 단위로 다시 시도해주세요.' });
     }

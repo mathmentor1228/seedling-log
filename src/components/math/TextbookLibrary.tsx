@@ -45,6 +45,12 @@ interface TextbookExample {
 const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '기타'];
 const MAX_EXTRACT_FILE_BYTES = 20 * 1024 * 1024;
 const IMAGE_COMPRESS_TARGET_BYTES = 2 * 1024 * 1024;
+const SUPPORTED_AI_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+const isPdfUpload = (file: File) => {
+  const type = (file.type || '').toLowerCase();
+  return type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+};
 
 export function TextbookLibrary() {
   const { toast } = useToast();
@@ -197,9 +203,22 @@ export function TextbookLibrary() {
 
     try {
       let uploadFile = extractFile;
+      const pdfUpload = isPdfUpload(uploadFile);
+      const imageUpload = uploadFile.type.startsWith('image/');
 
-      if (uploadFile.type.startsWith('image/') && uploadFile.size > IMAGE_COMPRESS_TARGET_BYTES) {
-        uploadFile = await compressImage(uploadFile, 1800, 1800, 0.8);
+      if (!pdfUpload && !imageUpload) {
+        throw new Error('PDF 또는 이미지 파일만 업로드할 수 있습니다.');
+      }
+
+      if (imageUpload) {
+        const shouldNormalizeImage = uploadFile.size > IMAGE_COMPRESS_TARGET_BYTES || !SUPPORTED_AI_IMAGE_TYPES.has(uploadFile.type);
+        if (shouldNormalizeImage) {
+          uploadFile = await compressImage(uploadFile, 1800, 1800, 0.82);
+        }
+
+        if (!uploadFile.type.startsWith('image/') || !SUPPORTED_AI_IMAGE_TYPES.has(uploadFile.type)) {
+          throw new Error('이미지는 PNG/JPEG/WEBP/GIF 형식만 지원됩니다. 다른 형식은 JPG로 변환 후 업로드해 주세요.');
+        }
       }
 
       if (uploadFile.size > MAX_EXTRACT_FILE_BYTES) {
@@ -392,6 +411,7 @@ export function TextbookLibrary() {
                         className="text-xs h-8 col-span-1 sm:col-span-1"
                         onChange={(e) => {
                           const selected = e.target.files?.[0] || null;
+
                           if (selected && selected.size > MAX_EXTRACT_FILE_BYTES) {
                             toast({
                               title: '파일 용량 초과',
@@ -402,6 +422,18 @@ export function TextbookLibrary() {
                             setExtractFile(null);
                             return;
                           }
+
+                          if (selected && !isPdfUpload(selected) && !selected.type.startsWith('image/')) {
+                            toast({
+                              title: '지원하지 않는 형식',
+                              description: 'PDF 또는 이미지 파일만 업로드할 수 있습니다.',
+                              variant: 'destructive',
+                            });
+                            e.currentTarget.value = '';
+                            setExtractFile(null);
+                            return;
+                          }
+
                           setExtractFile(selected);
                         }}
                       />
@@ -421,7 +453,7 @@ export function TextbookLibrary() {
                       </Button>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      문제가 보이는 단일 페이지 파일(PDF/이미지)을 권장합니다.
+                      문제가 보이는 단일 페이지 파일을 권장합니다. (이미지: PNG/JPEG/WEBP/GIF, PDF: 페이지 단위)
                     </p>
                   </CardContent>
                 </Card>
