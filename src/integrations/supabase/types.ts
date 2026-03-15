@@ -1392,31 +1392,37 @@ export type Database = {
       }
       math_concept_quizzes: {
         Row: {
+          answer_code: string | null
           concept_id: string
           created_at: string
           id: string
           questions: Json
           status: string
+          title: string | null
           updated_at: string
           version_label: string | null
           version_number: number
         }
         Insert: {
+          answer_code?: string | null
           concept_id: string
           created_at?: string
           id?: string
           questions?: Json
           status?: string
+          title?: string | null
           updated_at?: string
           version_label?: string | null
           version_number?: number
         }
         Update: {
+          answer_code?: string | null
           concept_id?: string
           created_at?: string
           id?: string
           questions?: Json
           status?: string
+          title?: string | null
           updated_at?: string
           version_label?: string | null
           version_number?: number
