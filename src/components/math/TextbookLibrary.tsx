@@ -504,8 +504,14 @@ export function TextbookLibrary() {
                           const files = Array.from(e.target.files || []);
                           const valid: File[] = [];
                           for (const f of files) {
-                            if (f.size > MAX_EXTRACT_FILE_BYTES) {
-                              toast({ title: '용량 초과', description: `${f.name}: 20MB 초과`, variant: 'destructive' });
+                            const maxBytes = getUploadLimitBytes(f);
+                            if (f.size > maxBytes) {
+                              const limitMb = Math.floor(maxBytes / 1024 / 1024);
+                              toast({
+                                title: '용량 초과',
+                                description: `${f.name}: ${isPdfUpload(f) ? `PDF는 ${limitMb}MB` : `${limitMb}MB`} 초과`,
+                                variant: 'destructive',
+                              });
                               continue;
                             }
                             if (!isPdfUpload(f) && !f.type.startsWith('image/')) {
