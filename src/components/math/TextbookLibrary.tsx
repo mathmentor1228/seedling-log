@@ -43,6 +43,8 @@ interface TextbookExample {
 }
 
 const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '기타'];
+const MAX_EXTRACT_FILE_BYTES = 20 * 1024 * 1024;
+const IMAGE_COMPRESS_TARGET_BYTES = 2 * 1024 * 1024;
 
 export function TextbookLibrary() {
   const { toast } = useToast();
