@@ -453,7 +453,7 @@ export function TextbookLibrary() {
                       </Button>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      문제가 보이는 단일 페이지 파일(PDF/이미지)을 권장합니다.
+                      문제가 보이는 단일 페이지 파일을 권장합니다. (이미지: PNG/JPEG/WEBP/GIF, PDF: 페이지 단위)
                     </p>
                   </CardContent>
                 </Card>
