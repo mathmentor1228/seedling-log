@@ -454,8 +454,7 @@ export default function QuizPrintPage() {
               ))}
             </div>
           </div>
-          <Footer />
-          <PageNumber n={pi + 1} total={totalPages} />
+          <Footer pageNum={pi + 1} totalPages={totalPages} />
         </div>
       );
     });
