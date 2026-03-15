@@ -182,7 +182,7 @@ export function MathConceptManager() {
         new Set(conceptRows.map((concept) => concept.created_by).filter(Boolean) as string[]),
       );
 
-      let creatorMap: Record<string, string> = {};
+      const creatorMap: Record<string, string> = {};
       if (creatorIds.length > 0) {
         const { data: profileRows } = await supabase
           .from('profiles')
