@@ -81,10 +81,19 @@ export function TextbookLibrary() {
   const [exDifficulty, setExDifficulty] = useState('medium');
   const [savingExample, setSavingExample] = useState(false);
 
-  // AI extraction
+  // AI extraction — batch mode
   const [extracting, setExtracting] = useState(false);
-  const [extractFile, setExtractFile] = useState<File | null>(null);
+  const [extractFiles, setExtractFiles] = useState<File[]>([]);
   const [extractChapter, setExtractChapter] = useState('');
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; results: BatchResult[] } | null>(null);
+
+  interface BatchResult {
+    fileName: string;
+    status: 'success' | 'error';
+    count?: number;
+    message: string;
+    reason?: string;
+  }
 
   // Quiz generator
   const [showQuizGen, setShowQuizGen] = useState(false);
@@ -199,63 +208,92 @@ export function TextbookLibrary() {
   };
 
   const handleAIExtract = async () => {
-    if (!selectedTextbook || !extractFile) return;
+    if (!selectedTextbook || extractFiles.length === 0) return;
     setExtracting(true);
+    const results: BatchResult[] = [];
+    setBatchProgress({ current: 0, total: extractFiles.length, results: [] });
 
-    try {
-      let uploadFile = extractFile;
-      const pdfUpload = isPdfUpload(uploadFile);
-      const imageUpload = uploadFile.type.startsWith('image/');
+    for (let i = 0; i < extractFiles.length; i++) {
+      const rawFile = extractFiles[i];
+      setBatchProgress({ current: i + 1, total: extractFiles.length, results: [...results] });
 
-      if (!pdfUpload && !imageUpload) {
-        throw new Error('PDF 또는 이미지 파일만 업로드할 수 있습니다.');
-      }
+      try {
+        let uploadFile = rawFile;
+        const pdfUpload = isPdfUpload(uploadFile);
+        const imageUpload = uploadFile.type.startsWith('image/');
 
-      if (imageUpload) {
-        const shouldNormalizeImage = uploadFile.size > IMAGE_COMPRESS_TARGET_BYTES || !SUPPORTED_AI_IMAGE_TYPES.has(uploadFile.type);
-        if (shouldNormalizeImage) {
-          uploadFile = await compressImage(uploadFile, 1800, 1800, 0.82);
+        if (!pdfUpload && !imageUpload) {
+          results.push({ fileName: rawFile.name, status: 'error', message: 'PDF 또는 이미지 파일만 지원됩니다.' });
+          continue;
         }
 
-        if (!uploadFile.type.startsWith('image/') || !SUPPORTED_AI_IMAGE_TYPES.has(uploadFile.type)) {
-          throw new Error('이미지는 PNG/JPEG/WEBP/GIF 형식만 지원됩니다. 다른 형식은 JPG로 변환 후 업로드해 주세요.');
+        // Compress images: convert to WebP/JPEG and reduce resolution
+        if (imageUpload) {
+          const shouldNormalize = uploadFile.size > IMAGE_COMPRESS_TARGET_BYTES || !SUPPORTED_AI_IMAGE_TYPES.has(uploadFile.type);
+          if (shouldNormalize) {
+            uploadFile = await compressImage(uploadFile, 1800, 1800, 0.78);
+          }
+          if (!SUPPORTED_AI_IMAGE_TYPES.has(uploadFile.type)) {
+            results.push({ fileName: rawFile.name, status: 'error', message: 'PNG/JPEG/WEBP/GIF 형식만 지원됩니다.' });
+            continue;
+          }
         }
+
+        if (uploadFile.size > MAX_EXTRACT_FILE_BYTES) {
+          results.push({ fileName: rawFile.name, status: 'error', message: `파일이 너무 큽니다 (${(uploadFile.size / 1024 / 1024).toFixed(1)}MB). 20MB 이하로 줄여 주세요.` });
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append('file', uploadFile);
+        formData.append('textbook_id', selectedTextbook.id);
+        formData.append('chapter', extractChapter.trim() || '전체');
+        formData.append('batch_label', `${i + 1}/${extractFiles.length}`);
+
+        const { data, error } = await supabase.functions.invoke('extract-textbook-examples', {
+          body: formData,
+        });
+
+        if (error) {
+          results.push({ fileName: rawFile.name, status: 'error', message: error.message || 'AI 추출 호출 실패' });
+          continue;
+        }
+
+        if (!data?.success) {
+          const detail = data?.detail;
+          const reason = detail?.reason || '';
+          let msg = data?.error || 'AI 추출 실패';
+          if (reason === 'pdf_too_large') {
+            msg = `PDF가 너무 큽니다. 페이지를 나누어 이미지로 업로드해 주세요.`;
+          }
+          results.push({ fileName: rawFile.name, status: 'error', message: msg, reason });
+          continue;
+        }
+
+        const catSummary = data.categorySummary;
+        const catDesc = catSummary
+          ? Object.entries(catSummary).map(([k, v]) => `${k} ${v}개`).join(', ')
+          : '';
+        results.push({ fileName: rawFile.name, status: 'success', count: data.count, message: `${data.count}개 추출 (${catDesc})` });
+      } catch (err: any) {
+        results.push({ fileName: rawFile.name, status: 'error', message: err.message || '알 수 없는 오류' });
       }
-
-      if (uploadFile.size > MAX_EXTRACT_FILE_BYTES) {
-        throw new Error('파일이 너무 큽니다. 20MB 이하의 단일 페이지 파일을 업로드해 주세요.');
-      }
-
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('textbook_id', selectedTextbook.id);
-      formData.append('chapter', extractChapter.trim() || '전체');
-
-      const { data, error } = await supabase.functions.invoke('extract-textbook-examples', {
-        body: formData,
-      });
-
-      if (error) {
-        throw new Error(error.message || 'AI 추출 호출에 실패했습니다.');
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.error || 'AI 추출 실패');
-      }
-
-      const catSummary = data.categorySummary;
-      const catDesc = catSummary
-        ? Object.entries(catSummary).map(([k, v]) => `${k} ${v}개`).join(', ')
-        : '';
-      toast({ title: `${data.count}개 학습 요소 추출 완료`, description: catDesc || undefined });
-      setExtractFile(null);
-      setExtractChapter('');
-      fetchExamples(selectedTextbook.id);
-    } catch (err: any) {
-      toast({ title: '추출 실패', description: err.message, variant: 'destructive' });
-    } finally {
-      setExtracting(false);
     }
+
+    setBatchProgress({ current: extractFiles.length, total: extractFiles.length, results });
+
+    const successCount = results.filter(r => r.status === 'success').length;
+    const totalExtracted = results.reduce((sum, r) => sum + (r.count || 0), 0);
+    toast({
+      title: `${successCount}/${extractFiles.length}개 파일 처리 완료`,
+      description: totalExtracted > 0 ? `총 ${totalExtracted}개 문항 추출` : '추출된 문항이 없습니다.',
+      variant: successCount === 0 ? 'destructive' : undefined,
+    });
+
+    setExtractFiles([]);
+    setExtractChapter('');
+    if (selectedTextbook) fetchExamples(selectedTextbook.id);
+    setExtracting(false);
   };
 
   // Group examples by chapter
@@ -417,39 +455,29 @@ export function TextbookLibrary() {
                   <CardContent className="p-3 space-y-2">
                     <p className="text-xs font-medium flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-primary" />
-                      AI 자동 추출 (PDF/이미지)
+                      AI 자동 추출 (PDF/이미지) — 여러 파일 동시 업로드 가능
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <Input
                         type="file"
                         accept=".pdf,image/*"
+                        multiple
                         className="text-xs h-8 col-span-1 sm:col-span-1"
                         onChange={(e) => {
-                          const selected = e.target.files?.[0] || null;
-
-                          if (selected && selected.size > MAX_EXTRACT_FILE_BYTES) {
-                            toast({
-                              title: '파일 용량 초과',
-                              description: '20MB 이하의 단일 페이지 파일을 업로드해 주세요.',
-                              variant: 'destructive',
-                            });
-                            e.currentTarget.value = '';
-                            setExtractFile(null);
-                            return;
+                          const files = Array.from(e.target.files || []);
+                          const valid: File[] = [];
+                          for (const f of files) {
+                            if (f.size > MAX_EXTRACT_FILE_BYTES) {
+                              toast({ title: '용량 초과', description: `${f.name}: 20MB 초과`, variant: 'destructive' });
+                              continue;
+                            }
+                            if (!isPdfUpload(f) && !f.type.startsWith('image/')) {
+                              toast({ title: '지원하지 않는 형식', description: `${f.name}: PDF 또는 이미지만 가능`, variant: 'destructive' });
+                              continue;
+                            }
+                            valid.push(f);
                           }
-
-                          if (selected && !isPdfUpload(selected) && !selected.type.startsWith('image/')) {
-                            toast({
-                              title: '지원하지 않는 형식',
-                              description: 'PDF 또는 이미지 파일만 업로드할 수 있습니다.',
-                              variant: 'destructive',
-                            });
-                            e.currentTarget.value = '';
-                            setExtractFile(null);
-                            return;
-                          }
-
-                          setExtractFile(selected);
+                          setExtractFiles(valid);
                         }}
                       />
                       <Input
@@ -460,15 +488,51 @@ export function TextbookLibrary() {
                       />
                       <Button
                         size="sm" className="h-8 text-xs gap-1"
-                        disabled={!extractFile || extracting}
+                        disabled={extractFiles.length === 0 || extracting}
                         onClick={handleAIExtract}
                       >
                         {extracting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                        추출하기
+                        {extractFiles.length > 1 ? `${extractFiles.length}개 추출` : '추출하기'}
                       </Button>
                     </div>
+                    {extractFiles.length > 0 && !extracting && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {extractFiles.map(f => f.name).join(', ')}
+                      </p>
+                    )}
+                    {/* Batch progress */}
+                    {batchProgress && extracting && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>처리 중: {batchProgress.current}/{batchProgress.total}</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-1.5">
+                          <div
+                            className="bg-primary h-1.5 rounded-full transition-all"
+                            style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {/* Batch results */}
+                    {batchProgress && !extracting && batchProgress.results.length > 0 && (
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {batchProgress.results.map((r, i) => (
+                          <div key={i} className={`flex items-center gap-2 text-xs p-1.5 rounded ${r.status === 'success' ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                            {r.status === 'success' ? (
+                              <Badge variant="secondary" className="text-[10px] shrink-0">✓ {r.count}개</Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-[10px] shrink-0">✗</Badge>
+                            )}
+                            <span className="truncate font-medium">{r.fileName}</span>
+                            <span className="text-muted-foreground ml-auto shrink-0 text-[10px]">{r.status === 'error' ? r.message : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[11px] text-muted-foreground">
-                      문제가 보이는 단일 페이지 파일을 권장합니다. (이미지: PNG/JPEG/WEBP/GIF, PDF: 페이지 단위)
+                      💡 페이지별 이미지로 나누어 업로드하면 더 정확하게 추출됩니다. PDF는 8MB 이하만 처리 가능합니다.
                     </p>
                   </CardContent>
                 </Card>

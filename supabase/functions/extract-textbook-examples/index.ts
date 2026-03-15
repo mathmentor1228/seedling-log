@@ -103,6 +103,7 @@ serve(async (req) => {
     const file = formData.get('file') as File | null;
     const textbookId = (formData.get('textbook_id') as string | null)?.trim();
     const chapter = (formData.get('chapter') as string | null)?.trim() || '전체';
+    const batchLabel = (formData.get('batch_label') as string | null)?.trim() || '';
 
     if (!file || !textbookId) {
       return jsonResponse({ success: false, error: 'file과 textbook_id가 필요합니다.' });
@@ -115,7 +116,8 @@ serve(async (req) => {
     if (file.size > MAX_UPLOAD_BYTES) {
       return jsonResponse({
         success: false,
-        error: '파일이 너무 큽니다. 20MB 이하의 단일 페이지 파일로 업로드해 주세요.',
+        error: `파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). 20MB 이하로 업로드해 주세요.`,
+        detail: { fileName: file.name, fileSize: file.size, batchLabel },
       });
     }
 
@@ -126,15 +128,24 @@ serve(async (req) => {
       .single();
 
     if (textbookError) {
-      return jsonResponse({ success: false, error: '교재 정보를 찾을 수 없습니다.' });
+      return jsonResponse({ success: false, error: '교재 정보를 찾을 수 없습니다.', detail: { batchLabel } });
     }
 
     const pdfUpload = isPdfFile(file);
     const mimeType = pdfUpload ? 'application/pdf' : (file.type || 'application/octet-stream');
     let fileUrl: string;
 
-    // Gemini provider requires PDF as data URL (signed URL with .pdf is rejected).
+    // Memory-optimized file handling
     if (pdfUpload) {
+      // For PDFs: always use base64 data URL (Gemini requirement)
+      // But cap at a reasonable size to avoid OOM
+      if (file.size > 8 * 1024 * 1024) {
+        return jsonResponse({
+          success: false,
+          error: `PDF가 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). 메모리 제한으로 8MB 이하의 PDF만 처리 가능합니다. 페이지를 나누어 이미지로 업로드해 주세요.`,
+          detail: { fileName: file.name, fileSize: file.size, batchLabel, reason: 'pdf_too_large' },
+        });
+      }
       const fileBytes = await file.arrayBuffer();
       const fileBase64 = encodeBase64(new Uint8Array(fileBytes));
       fileUrl = `data:application/pdf;base64,${fileBase64}`;
@@ -143,6 +154,7 @@ serve(async (req) => {
       const fileBase64 = encodeBase64(new Uint8Array(fileBytes));
       fileUrl = `data:${mimeType};base64,${fileBase64}`;
     } else {
+      // Large images: upload to storage and use signed URL
       uploadedTempPath = `extract-textbook-examples/${user.id}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
 
       const { error: uploadError } = await adminClient.storage
@@ -154,7 +166,11 @@ serve(async (req) => {
 
       if (uploadError) {
         console.error('Temp upload failed:', uploadError);
-        return jsonResponse({ success: false, error: '파일 업로드 중 오류가 발생했습니다.' });
+        return jsonResponse({
+          success: false,
+          error: '파일 업로드 중 오류가 발생했습니다.',
+          detail: { fileName: file.name, batchLabel, reason: 'storage_upload_failed' },
+        });
       }
 
       const { data: signedData, error: signedError } = await adminClient.storage
@@ -163,7 +179,11 @@ serve(async (req) => {
 
       if (signedError || !signedData?.signedUrl) {
         console.error('Signed URL failed:', signedError);
-        return jsonResponse({ success: false, error: '파일 접근 링크 생성에 실패했습니다.' });
+        return jsonResponse({
+          success: false,
+          error: '파일 접근 링크 생성에 실패했습니다.',
+          detail: { fileName: file.name, batchLabel, reason: 'signed_url_failed' },
+        });
       }
 
       fileUrl = signedData.signedUrl;
@@ -213,6 +233,8 @@ serve(async (req) => {
       '출력은 function call(extract_examples) 스키마를 정확히 따르세요.',
     ].join('\n');
 
+    console.log(`[extract] Processing file: ${file.name} (${(file.size / 1024).toFixed(0)}KB), batch: ${batchLabel || 'single'}`);
+
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -248,7 +270,7 @@ serve(async (req) => {
                     items: {
                       type: 'object',
                       properties: {
-                        problem_number: { type: 'string', description: '문제 번호 또는 키워드 (예: "01", "예제 3", "함께 풀기 1", "생각 키우기")' },
+                        problem_number: { type: 'string', description: '문제 번호 또는 키워드' },
                         page_number: { type: 'number' },
                         question_text: { type: 'string' },
                         answer: { type: 'string' },
@@ -257,16 +279,12 @@ serve(async (req) => {
                         category: {
                           type: 'string',
                           enum: ['일반문항', '예제', '활동형', '사고력', '마무리'],
-                          description: '문항 유형 분류',
                         },
-                        has_illustration: { type: 'boolean', description: '삽화/그림/실생활 이미지 포함 여부' },
+                        has_illustration: { type: 'boolean' },
                         graph_data: {
                           type: 'object',
                           properties: {
-                            functions: {
-                              type: 'array',
-                              items: { type: 'string' },
-                            },
+                            functions: { type: 'array', items: { type: 'string' } },
                             x_range: { type: 'array', items: { type: 'number' } },
                             y_range: { type: 'array', items: { type: 'number' } },
                           },
@@ -289,29 +307,51 @@ serve(async (req) => {
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
+      const status = aiResponse.status;
 
-      if (aiResponse.status === 429) {
-        return jsonResponse({ success: false, error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' });
-      }
-      if (aiResponse.status === 402) {
-        return jsonResponse({ success: false, error: 'AI 크레딧이 부족합니다.' });
-      }
-      if (aiResponse.status === 400 && errText.includes('Unsupported image format')) {
-        return jsonResponse({
-          success: false,
-          error: '지원 형식은 PNG/JPEG/WEBP/GIF 이미지 또는 PDF입니다. HEIC 파일은 JPG로 변환 후 업로드해 주세요.',
-        });
+      console.error(`[extract] AI error (${status}): ${errText.slice(0, 500)}`);
+
+      let errorMessage = 'AI 추출에 실패했습니다.';
+      let reason = 'ai_error';
+
+      if (status === 429) {
+        errorMessage = '요청이 많습니다. 30초 후 다시 시도해주세요.';
+        reason = 'rate_limit';
+      } else if (status === 402) {
+        errorMessage = 'AI 크레딧이 부족합니다.';
+        reason = 'credit_exhausted';
+      } else if (status === 400) {
+        if (errText.includes('Unsupported image format')) {
+          errorMessage = '지원 형식은 PNG/JPEG/WEBP/GIF 이미지 또는 PDF입니다.';
+          reason = 'unsupported_format';
+        } else if (errText.includes('too large') || errText.includes('size')) {
+          errorMessage = '파일이 AI 처리 한도를 초과했습니다. 더 작은 파일로 나누어 업로드해 주세요.';
+          reason = 'file_too_large_for_ai';
+        } else {
+          errorMessage = `AI 요청 오류: ${errText.slice(0, 200)}`;
+          reason = 'bad_request';
+        }
+      } else if (status === 504 || status === 408) {
+        errorMessage = 'AI 처리 시간이 초과되었습니다. 더 작은 파일로 나누어 시도해 주세요.';
+        reason = 'timeout';
       }
 
-      console.error('AI error:', aiResponse.status, errText);
-      return jsonResponse({ success: false, error: 'AI 추출에 실패했습니다. 파일을 페이지 단위로 다시 시도해주세요.' });
+      return jsonResponse({
+        success: false,
+        error: errorMessage,
+        detail: { fileName: file.name, batchLabel, reason, httpStatus: status },
+      });
     }
 
     const aiData = await aiResponse.json();
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
 
     if (!toolCall?.function?.arguments) {
-      return jsonResponse({ success: false, error: 'AI 응답 형식이 올바르지 않습니다.' });
+      return jsonResponse({
+        success: false,
+        error: 'AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.',
+        detail: { fileName: file.name, batchLabel, reason: 'invalid_ai_response' },
+      });
     }
 
     let examples: any[] = [];
@@ -319,12 +359,20 @@ serve(async (req) => {
       const parsed = JSON.parse(toolCall.function.arguments);
       examples = Array.isArray(parsed.examples) ? parsed.examples : [];
     } catch (parseError) {
-      console.error('AI parse error:', parseError);
-      return jsonResponse({ success: false, error: 'AI 응답 파싱에 실패했습니다. 다시 시도해주세요.' });
+      console.error('[extract] AI parse error:', parseError);
+      return jsonResponse({
+        success: false,
+        error: 'AI 응답 파싱에 실패했습니다. 다시 시도해주세요.',
+        detail: { fileName: file.name, batchLabel, reason: 'parse_error' },
+      });
     }
 
     if (examples.length === 0) {
-      return jsonResponse({ success: false, error: '페이지에서 문제를 찾지 못했습니다. 문제가 보이는 단일 페이지로 다시 시도해주세요.' });
+      return jsonResponse({
+        success: false,
+        error: '이 페이지에서 문제를 찾지 못했습니다. 문제가 포함된 페이지인지 확인해 주세요.',
+        detail: { fileName: file.name, batchLabel, reason: 'no_examples_found' },
+      });
     }
 
     const rows = examples.slice(0, 120).map((ex: any, idx: number) => ({
@@ -344,8 +392,12 @@ serve(async (req) => {
 
     const { error: insertError } = await adminClient.from('textbook_examples').insert(rows);
     if (insertError) {
-      console.error('Insert error:', insertError);
-      return jsonResponse({ success: false, error: '문항 저장 중 오류가 발생했습니다.' });
+      console.error('[extract] Insert error:', insertError);
+      return jsonResponse({
+        success: false,
+        error: '문항 저장 중 오류가 발생했습니다.',
+        detail: { fileName: file.name, batchLabel, reason: 'db_insert_error', dbError: insertError.message },
+      });
     }
 
     // Summarize by category
@@ -354,12 +406,21 @@ serve(async (req) => {
       catSummary[r.category] = (catSummary[r.category] || 0) + 1;
     }
 
-    return jsonResponse({ success: true, count: rows.length, examples: rows, categorySummary: catSummary });
+    console.log(`[extract] Success: ${rows.length} examples from ${file.name}`);
+
+    return jsonResponse({
+      success: true,
+      count: rows.length,
+      examples: rows,
+      categorySummary: catSummary,
+      batchLabel,
+    });
   } catch (error) {
-    console.error('extract-textbook-examples error:', error);
+    console.error('[extract] Unhandled error:', error);
     return jsonResponse({
       success: false,
       error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
+      detail: { reason: 'unhandled_error' },
     });
   } finally {
     if (adminClient && uploadedTempPath) {
@@ -368,7 +429,7 @@ serve(async (req) => {
         .remove([uploadedTempPath]);
 
       if (cleanupError) {
-        console.error('Temp file cleanup failed:', cleanupError);
+        console.error('[extract] Temp file cleanup failed:', cleanupError);
       }
     }
   }
