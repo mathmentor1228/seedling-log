@@ -3,12 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Printer, ArrowLeft, BookOpen, ClipboardCheck, FileText, Calculator } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { MathRenderer } from '@/components/math/MathRenderer';
 import logoImg from '@/assets/logo-thementor.png';
 
 type PrintMode = 'study' | 'quiz' | 'blank' | 'example';
+type LayoutDensity = '4' | '6';
 
 interface QuizQuestion {
   question_number: number;
@@ -17,6 +19,10 @@ interface QuizQuestion {
   answer: string;
   explanation: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  source_textbook?: string;
+  source_page?: number | null;
+  source_chapter?: string;
+  source_problem?: string;
 }
 
 interface PrintData {
@@ -87,6 +93,7 @@ export default function QuizPrintPage() {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<PrintMode>('quiz');
   const [showAnswerKey, setShowAnswerKey] = useState(false);
+  const [layoutDensity, setLayoutDensity] = useState<LayoutDensity>('6');
 
   useEffect(() => {
     if (!quizId) { setLoading(false); return; }
@@ -130,7 +137,6 @@ export default function QuizPrintPage() {
     return result;
   }, [data]);
 
-  // Example mode: filter to short_answer/fill_blank questions that look like computation
   const exampleQuestions = useMemo(() => {
     if (!data) return [];
     return data.questions.filter(q =>
@@ -139,10 +145,17 @@ export default function QuizPrintPage() {
     );
   }, [data]);
 
+  // Check if any question has textbook source info
+  const hasTextbookSource = useMemo(() => {
+    if (!data) return false;
+    return data.questions.some(q => (q as any).source_textbook);
+  }, [data]);
+
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">로딩 중...</div>;
   if (!data) return <div className="flex items-center justify-center min-h-screen text-destructive">퀴즈를 찾을 수 없습니다.</div>;
 
   const cfg = MODE_META[mode];
+  const questionsPerPage = parseInt(layoutDensity);
 
   const typeLabel = (t: string) => {
     switch (t) {
@@ -172,7 +185,7 @@ export default function QuizPrintPage() {
           <h1 className="text-lg font-bold leading-tight">{cfg.label}</h1>
           <p className="text-[11px] text-muted-foreground">{cfg.subtitle}</p>
           <p className="text-sm mt-1">{data.subject} · {data.grade} · {data.course}</p>
-           <p className="text-sm font-semibold mt-0.5">{data.conceptTitle}</p>
+          <p className="text-sm font-semibold mt-0.5">{data.conceptTitle}</p>
         </div>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
@@ -204,8 +217,25 @@ export default function QuizPrintPage() {
     </div>
   );
 
+  // Source info line for textbook-based questions
+  const SourceInfo = ({ q }: { q: QuizQuestion }) => {
+    const src = q as any;
+    if (!src.source_textbook) return null;
+    return (
+      <span className="text-[9px] text-muted-foreground ml-1">
+        ({src.source_textbook}{src.source_page ? ` p.${src.source_page}` : ''}{src.source_problem ? ` ${src.source_problem}` : ''})
+      </span>
+    );
+  };
+
+  // Workspace height based on density
+  const answerBoxHeight = questionsPerPage <= 4 ? 'h-16' : 'h-11';
+  const exampleWorkspaceHeight = questionsPerPage <= 4 ? 'min-h-[140px]' : 'min-h-[100px]';
+  const itemSpacing = questionsPerPage <= 4 ? 'mb-10' : 'mb-6';
+  const blankLineCount = questionsPerPage <= 4 ? 7 : 5;
+
   const QuestionItem = ({ q, textOverride }: { q: QuizQuestion; textOverride?: string }) => (
-    <div className="qp-item mb-6 break-inside-avoid">
+    <div className={`qp-item ${itemSpacing} break-inside-avoid`}>
       <div className="flex items-start gap-2">
         <span className="font-bold text-sm shrink-0 w-6 text-right">{q.question_number}.</span>
         <div className="flex-1 min-w-0">
@@ -213,9 +243,10 @@ export default function QuizPrintPage() {
           <span className="text-sm leading-relaxed">
             <MathRenderer text={textOverride ?? q.question_text} />
           </span>
+          {hasTextbookSource && <SourceInfo q={q} />}
         </div>
       </div>
-      <div className="mt-2.5 ml-8 border-2 border-foreground/40 rounded-md h-11 flex items-center px-3">
+      <div className={`mt-2.5 ml-8 border-2 border-foreground/40 rounded-md ${answerBoxHeight} flex items-center px-3`}>
         {showAnswerKey && (
           <span className="text-sm font-semibold" style={{ color: 'hsl(217,91%,60%)' }}>
             <MathRenderer text={q.answer} />
@@ -225,19 +256,18 @@ export default function QuizPrintPage() {
     </div>
   );
 
-  // Example mode question with larger workspace
   const ExampleQuestionItem = ({ q, num }: { q: QuizQuestion; num: number }) => (
-    <div className="qp-item mb-8 break-inside-avoid">
+    <div className={`qp-item ${itemSpacing} break-inside-avoid`}>
       <div className="flex items-start gap-2">
         <span className="font-bold text-sm shrink-0 w-6 text-right">{num}.</span>
         <div className="flex-1 min-w-0">
           <span className="text-sm leading-relaxed">
             <MathRenderer text={q.question_text} />
           </span>
+          {hasTextbookSource && <SourceInfo q={q} />}
         </div>
       </div>
-      {/* Larger workspace for computation */}
-      <div className="mt-3 ml-8 border-2 border-foreground/30 rounded-md p-3 min-h-[100px]">
+      <div className={`mt-3 ml-8 border-2 border-foreground/30 rounded-md p-3 ${exampleWorkspaceHeight}`}>
         {showAnswerKey ? (
           <span className="text-sm font-semibold" style={{ color: 'hsl(217,91%,60%)' }}>
             <MathRenderer text={q.answer} />
@@ -290,7 +320,7 @@ export default function QuizPrintPage() {
             </span>
           </div>
           <div className="ml-9 mt-3 space-y-1">
-            {Array.from({ length: 5 }).map((_, li) => (
+            {Array.from({ length: blankLineCount }).map((_, li) => (
               <div key={li} className="border-b border-foreground/20 h-10" />
             ))}
           </div>
@@ -336,6 +366,17 @@ export default function QuizPrintPage() {
           );
         })}
         <div className="h-5 w-px bg-border mx-1" />
+        {/* Layout density selector */}
+        <Select value={layoutDensity} onValueChange={(v) => setLayoutDensity(v as LayoutDensity)}>
+          <SelectTrigger className="h-8 w-32 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="4">4문항/페이지</SelectItem>
+            <SelectItem value="6">6문항/페이지</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="h-5 w-px bg-border mx-1" />
         {mode !== 'blank' && (
           <Button
             variant="outline"
@@ -375,7 +416,7 @@ export default function QuizPrintPage() {
           .quiz-print-area, .quiz-print-area * { visibility: visible; }
           .quiz-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; }
           .print\\:hidden { display: none !important; }
-          .qp-item { break-inside: avoid; margin-bottom: 1.5rem; }
+          .qp-item { break-inside: avoid; }
           .break-inside-avoid { break-inside: avoid; }
           .math-graph-svg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }

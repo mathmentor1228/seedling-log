@@ -11,9 +11,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
-  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles,
+  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
+import { TextbookQuizGenerator } from './TextbookQuizGenerator';
 
 interface Textbook {
   id: string;
@@ -74,6 +75,9 @@ export function TextbookLibrary() {
   const [extracting, setExtracting] = useState(false);
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [extractChapter, setExtractChapter] = useState('');
+
+  // Quiz generator
+  const [showQuizGen, setShowQuizGen] = useState(false);
 
   const fetchTextbooks = useCallback(async () => {
     setLoading(true);
@@ -352,6 +356,13 @@ export function TextbookLibrary() {
                     </CardDescription>
                   </div>
                   <div className="flex gap-1.5">
+                    <Button
+                      size="sm" className="gap-1 text-xs h-8"
+                      onClick={() => setShowQuizGen(true)}
+                      disabled={examples.length === 0}
+                    >
+                      <Zap className="w-3.5 h-3.5" /> 퀴즈 생성
+                    </Button>
                     <Button size="sm" variant="outline" className="gap-1 text-xs h-8" onClick={() => setShowAddExample(true)}>
                       <Plus className="w-3.5 h-3.5" /> 수동 추가
                     </Button>
@@ -515,6 +526,13 @@ export function TextbookLibrary() {
           )}
         </Card>
       </div>
+      {/* Quiz Generator Dialog */}
+      <TextbookQuizGenerator
+        open={showQuizGen}
+        onOpenChange={setShowQuizGen}
+        textbook={selectedTextbook}
+        examples={examples}
+      />
     </div>
   );
 }
