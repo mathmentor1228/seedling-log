@@ -164,11 +164,19 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="w-5 h-5" />
-            퀴즈 미리보기 ({displayQuestions.length}문항)
-          </CardTitle>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              퀴즈 미리보기 ({displayQuestions.length}문항)
+            </CardTitle>
+            {quiz.version_number && (
+              <Badge variant="secondary" className="text-xs">V{quiz.version_number}</Badge>
+            )}
+            {quiz.version_label && (
+              <span className="text-xs text-muted-foreground">{quiz.version_label}</span>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={onRegenerate} disabled={regenerating}>
               {regenerating ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
