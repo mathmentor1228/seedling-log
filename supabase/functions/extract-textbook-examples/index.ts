@@ -135,59 +135,43 @@ serve(async (req) => {
     const mimeType = pdfUpload ? 'application/pdf' : (file.type || 'application/octet-stream');
     let fileUrl: string;
 
-    // Memory-optimized file handling
-    if (pdfUpload) {
-      // For PDFs: always use base64 data URL (Gemini requirement)
-      // But cap at a reasonable size to avoid OOM
-      if (file.size > 8 * 1024 * 1024) {
-        return jsonResponse({
-          success: false,
-          error: `PDF가 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). 메모리 제한으로 8MB 이하의 PDF만 처리 가능합니다. 페이지를 나누어 이미지로 업로드해 주세요.`,
-          detail: { fileName: file.name, fileSize: file.size, batchLabel, reason: 'pdf_too_large' },
-        });
-      }
-      const fileBytes = await file.arrayBuffer();
-      const fileBase64 = encodeBase64(new Uint8Array(fileBytes));
-      fileUrl = `data:application/pdf;base64,${fileBase64}`;
-    } else if (file.size <= INLINE_BASE64_LIMIT_BYTES) {
-      const fileBytes = await file.arrayBuffer();
-      const fileBase64 = encodeBase64(new Uint8Array(fileBytes));
-      fileUrl = `data:${mimeType};base64,${fileBase64}`;
-    } else {
-      // Large images: upload to storage and use signed URL
-      uploadedTempPath = `extract-textbook-examples/${user.id}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
+    // MEMORY-FIX-V2: Always use Storage + Signed URL to avoid OOM in edge function
+    // Base64 encoding doubles memory usage and causes "Memory limit exceeded" for files > ~2MB
+    uploadedTempPath = `extract-textbook-examples/${user.id}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
 
-      const { error: uploadError } = await adminClient.storage
-        .from(TEMP_UPLOAD_BUCKET)
-        .upload(uploadedTempPath, file, {
-          contentType: mimeType,
-          upsert: false,
-        });
+    console.log(`[extract] Uploading to storage: ${uploadedTempPath} (${(file.size / 1024).toFixed(0)}KB, ${mimeType})`);
 
-      if (uploadError) {
-        console.error('Temp upload failed:', uploadError);
-        return jsonResponse({
-          success: false,
-          error: '파일 업로드 중 오류가 발생했습니다.',
-          detail: { fileName: file.name, batchLabel, reason: 'storage_upload_failed' },
-        });
-      }
+    const { error: uploadError } = await adminClient.storage
+      .from(TEMP_UPLOAD_BUCKET)
+      .upload(uploadedTempPath, file, {
+        contentType: mimeType,
+        upsert: false,
+      });
 
-      const { data: signedData, error: signedError } = await adminClient.storage
-        .from(TEMP_UPLOAD_BUCKET)
-        .createSignedUrl(uploadedTempPath, TEMP_UPLOAD_TTL_SECONDS);
-
-      if (signedError || !signedData?.signedUrl) {
-        console.error('Signed URL failed:', signedError);
-        return jsonResponse({
-          success: false,
-          error: '파일 접근 링크 생성에 실패했습니다.',
-          detail: { fileName: file.name, batchLabel, reason: 'signed_url_failed' },
-        });
-      }
-
-      fileUrl = signedData.signedUrl;
+    if (uploadError) {
+      console.error('[extract] Temp upload failed:', uploadError);
+      return jsonResponse({
+        success: false,
+        error: '파일 업로드 중 오류가 발생했습니다.',
+        detail: { fileName: file.name, batchLabel, reason: 'storage_upload_failed', dbError: uploadError.message },
+      });
     }
+
+    const { data: signedData, error: signedError } = await adminClient.storage
+      .from(TEMP_UPLOAD_BUCKET)
+      .createSignedUrl(uploadedTempPath, TEMP_UPLOAD_TTL_SECONDS);
+
+    if (signedError || !signedData?.signedUrl) {
+      console.error('[extract] Signed URL failed:', signedError);
+      return jsonResponse({
+        success: false,
+        error: '파일 접근 링크 생성에 실패했습니다.',
+        detail: { fileName: file.name, batchLabel, reason: 'signed_url_failed' },
+      });
+    }
+
+    fileUrl = signedData.signedUrl;
+    console.log(`[extract] Signed URL created, proceeding to AI analysis`);
 
     const systemPrompt = `당신은 한국 수학/과학 교과서 전문 문항 추출기입니다.
 주어진 교과서 페이지에서 **모든 학습 요소**를 빠짐없이 추출하세요.
