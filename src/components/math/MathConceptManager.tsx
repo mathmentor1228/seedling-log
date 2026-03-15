@@ -115,6 +115,7 @@ export function MathConceptManager() {
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
+  const [conceptVersions, setConceptVersions] = useState<QuizVersionSummary[]>([]);
 
   // Concept tuning
   const [conceptSubjectDraft, setConceptSubjectDraft] = useState(SUBJECTS[0]);
