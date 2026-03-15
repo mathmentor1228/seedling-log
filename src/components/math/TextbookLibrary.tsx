@@ -1,0 +1,520 @@
+import { useEffect, useState, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import {
+  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles,
+} from 'lucide-react';
+import { MathRenderer } from './MathRenderer';
+
+interface Textbook {
+  id: string;
+  title: string;
+  publisher: string | null;
+  subject: string;
+  grade: string | null;
+  course: string | null;
+  description: string | null;
+  created_at: string;
+}
+
+interface TextbookExample {
+  id: string;
+  textbook_id: string;
+  chapter: string;
+  page_number: number | null;
+  problem_number: string | null;
+  question_text: string;
+  answer: string | null;
+  explanation: string | null;
+  difficulty: string | null;
+  graph_data: any;
+  sort_order: number;
+}
+
+const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '기타'];
+
+export function TextbookLibrary() {
+  const { toast } = useToast();
+  const [textbooks, setTextbooks] = useState<Textbook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTextbook, setSelectedTextbook] = useState<Textbook | null>(null);
+  const [examples, setExamples] = useState<TextbookExample[]>([]);
+  const [loadingExamples, setLoadingExamples] = useState(false);
+
+  // Add textbook form
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newPublisher, setNewPublisher] = useState('');
+  const [newSubject, setNewSubject] = useState('수학');
+  const [newGrade, setNewGrade] = useState('');
+  const [newCourse, setNewCourse] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Add example form
+  const [showAddExample, setShowAddExample] = useState(false);
+  const [exChapter, setExChapter] = useState('');
+  const [exPage, setExPage] = useState('');
+  const [exNumber, setExNumber] = useState('');
+  const [exQuestion, setExQuestion] = useState('');
+  const [exAnswer, setExAnswer] = useState('');
+  const [exExplanation, setExExplanation] = useState('');
+  const [exDifficulty, setExDifficulty] = useState('medium');
+  const [savingExample, setSavingExample] = useState(false);
+
+  // AI extraction
+  const [extracting, setExtracting] = useState(false);
+  const [extractFile, setExtractFile] = useState<File | null>(null);
+  const [extractChapter, setExtractChapter] = useState('');
+
+  const fetchTextbooks = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('textbooks')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast({ title: '오류', description: '교재 목록을 불러오지 못했습니다.', variant: 'destructive' });
+    } else {
+      setTextbooks((data as any[]) || []);
+    }
+    setLoading(false);
+  }, [toast]);
+
+  const fetchExamples = useCallback(async (textbookId: string) => {
+    setLoadingExamples(true);
+    const { data, error } = await supabase
+      .from('textbook_examples')
+      .select('*')
+      .eq('textbook_id', textbookId)
+      .order('sort_order', { ascending: true });
+
+    if (!error) {
+      setExamples((data as any[]) || []);
+    }
+    setLoadingExamples(false);
+  }, []);
+
+  useEffect(() => { fetchTextbooks(); }, [fetchTextbooks]);
+
+  useEffect(() => {
+    if (selectedTextbook) {
+      fetchExamples(selectedTextbook.id);
+    } else {
+      setExamples([]);
+    }
+  }, [selectedTextbook, fetchExamples]);
+
+  const handleAddTextbook = async () => {
+    if (!newTitle.trim()) {
+      toast({ title: '교재명을 입력하세요', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.from('textbooks').insert({
+      title: newTitle.trim(),
+      publisher: newPublisher.trim() || null,
+      subject: newSubject,
+      grade: newGrade.trim() || null,
+      course: newCourse.trim() || null,
+    } as any);
+
+    if (error) {
+      toast({ title: '저장 실패', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: '교재가 등록되었습니다' });
+      setNewTitle(''); setNewPublisher(''); setNewGrade(''); setNewCourse('');
+      setShowAddDialog(false);
+      fetchTextbooks();
+    }
+    setSaving(false);
+  };
+
+  const handleDeleteTextbook = async (id: string) => {
+    if (!confirm('이 교재와 모든 예제를 삭제하시겠습니까?')) return;
+    const { error } = await supabase.from('textbooks').delete().eq('id', id);
+    if (error) {
+      toast({ title: '삭제 실패', variant: 'destructive' });
+    } else {
+      if (selectedTextbook?.id === id) setSelectedTextbook(null);
+      fetchTextbooks();
+    }
+  };
+
+  const handleAddExample = async () => {
+    if (!selectedTextbook || !exQuestion.trim()) return;
+    setSavingExample(true);
+    const { error } = await supabase.from('textbook_examples').insert({
+      textbook_id: selectedTextbook.id,
+      chapter: exChapter.trim() || '기타',
+      page_number: exPage ? parseInt(exPage) : null,
+      problem_number: exNumber.trim() || null,
+      question_text: exQuestion.trim(),
+      answer: exAnswer.trim() || null,
+      explanation: exExplanation.trim() || null,
+      difficulty: exDifficulty,
+      sort_order: examples.length,
+    } as any);
+
+    if (error) {
+      toast({ title: '저장 실패', variant: 'destructive' });
+    } else {
+      toast({ title: '예제가 등록되었습니다' });
+      setExChapter(''); setExPage(''); setExNumber(''); setExQuestion('');
+      setExAnswer(''); setExExplanation('');
+      setShowAddExample(false);
+      fetchExamples(selectedTextbook.id);
+    }
+    setSavingExample(false);
+  };
+
+  const handleDeleteExample = async (id: string) => {
+    const { error } = await supabase.from('textbook_examples').delete().eq('id', id);
+    if (!error && selectedTextbook) {
+      fetchExamples(selectedTextbook.id);
+    }
+  };
+
+  const handleAIExtract = async () => {
+    if (!selectedTextbook || !extractFile) return;
+    setExtracting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', extractFile);
+      formData.append('textbook_id', selectedTextbook.id);
+      formData.append('chapter', extractChapter.trim() || '전체');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-textbook-examples`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: formData,
+        },
+      );
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || 'AI 추출 실패');
+      }
+
+      const result = await resp.json();
+      toast({ title: `${result.count}개 문제가 추출되었습니다` });
+      setExtractFile(null);
+      setExtractChapter('');
+      fetchExamples(selectedTextbook.id);
+    } catch (err: any) {
+      toast({ title: '추출 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  // Group examples by chapter
+  const chapterGroups = examples.reduce<Record<string, TextbookExample[]>>((acc, ex) => {
+    const ch = ex.chapter || '기타';
+    if (!acc[ch]) acc[ch] = [];
+    acc[ch].push(ex);
+    return acc;
+  }, {});
+
+  const difficultyLabel: Record<string, string> = { easy: '쉬움', medium: '보통', hard: '어려움' };
+  const difficultyColor: Record<string, string> = {
+    easy: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+    medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+    hard: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">교재 라이브러리</h2>
+          <p className="text-xs text-muted-foreground">교재별 대표 예제를 등록하고 관리합니다</p>
+        </div>
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="gap-1.5">
+              <Plus className="w-4 h-4" /> 교재 추가
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>새 교재 등록</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">교재명 *</Label>
+                <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="개념원리 수학(상)" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">출판사</Label>
+                  <Input value={newPublisher} onChange={(e) => setNewPublisher(e.target.value)} placeholder="개념원리" />
+                </div>
+                <div>
+                  <Label className="text-xs">과목</Label>
+                  <Select value={newSubject} onValueChange={setNewSubject}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">학년</Label>
+                  <Input value={newGrade} onChange={(e) => setNewGrade(e.target.value)} placeholder="고1" />
+                </div>
+                <div>
+                  <Label className="text-xs">과정</Label>
+                  <Input value={newCourse} onChange={(e) => setNewCourse(e.target.value)} placeholder="공통수학1" />
+                </div>
+              </div>
+              <Button onClick={handleAddTextbook} disabled={saving} className="w-full">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                등록
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Left: Textbook list */}
+        <Card className="lg:col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <BookOpen className="w-4 h-4" /> 교재 목록
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 max-h-[60vh] overflow-y-auto">
+            {loading ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            ) : textbooks.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">등록된 교재가 없습니다</p>
+            ) : (
+              textbooks.map((tb) => (
+                <div
+                  key={tb.id}
+                  onClick={() => setSelectedTextbook(tb)}
+                  className={`p-3 rounded-lg cursor-pointer border transition-colors ${
+                    selectedTextbook?.id === tb.id
+                      ? 'border-primary bg-primary/5'
+                      : 'border-transparent hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{tb.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {[tb.publisher, tb.subject, tb.grade].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteTextbook(tb.id); }}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Right: Examples */}
+        <Card className="lg:col-span-2">
+          {selectedTextbook ? (
+            <>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm">{selectedTextbook.title}</CardTitle>
+                    <CardDescription className="text-xs">
+                      {[selectedTextbook.publisher, selectedTextbook.grade, selectedTextbook.course].filter(Boolean).join(' · ')}
+                      {' · '}{examples.length}개 예제
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="outline" className="gap-1 text-xs h-8" onClick={() => setShowAddExample(true)}>
+                      <Plus className="w-3.5 h-3.5" /> 수동 추가
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* AI Extraction */}
+                <Card className="border-dashed">
+                  <CardContent className="p-3 space-y-2">
+                    <p className="text-xs font-medium flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      AI 자동 추출 (PDF/이미지)
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <Input
+                        type="file"
+                        accept=".pdf,image/*"
+                        className="text-xs h-8 col-span-1 sm:col-span-1"
+                        onChange={(e) => setExtractFile(e.target.files?.[0] || null)}
+                      />
+                      <Input
+                        value={extractChapter}
+                        onChange={(e) => setExtractChapter(e.target.value)}
+                        placeholder="단원명 (선택)"
+                        className="text-xs h-8"
+                      />
+                      <Button
+                        size="sm" className="h-8 text-xs gap-1"
+                        disabled={!extractFile || extracting}
+                        onClick={handleAIExtract}
+                      >
+                        {extracting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        추출하기
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Manual add dialog */}
+                <Dialog open={showAddExample} onOpenChange={setShowAddExample}>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>예제 수동 등록</DialogTitle></DialogHeader>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <Label className="text-xs">단원</Label>
+                          <Input value={exChapter} onChange={(e) => setExChapter(e.target.value)} placeholder="I. 지수함수" className="h-8 text-sm" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">페이지</Label>
+                          <Input value={exPage} onChange={(e) => setExPage(e.target.value)} placeholder="42" type="number" className="h-8 text-sm" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">문제번호</Label>
+                          <Input value={exNumber} onChange={(e) => setExNumber(e.target.value)} placeholder="예제 3" className="h-8 text-sm" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs">문제 *</Label>
+                        <Textarea value={exQuestion} onChange={(e) => setExQuestion(e.target.value)} placeholder="$x^2 + 2x + 1 = 0$의 근을 구하시오." rows={3} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">정답</Label>
+                        <Input value={exAnswer} onChange={(e) => setExAnswer(e.target.value)} placeholder="$x = -1$ (중근)" className="h-8 text-sm" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">해설</Label>
+                        <Textarea value={exExplanation} onChange={(e) => setExExplanation(e.target.value)} rows={2} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">난이도</Label>
+                        <Select value={exDifficulty} onValueChange={setExDifficulty}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="easy">쉬움</SelectItem>
+                            <SelectItem value="medium">보통</SelectItem>
+                            <SelectItem value="hard">어려움</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button onClick={handleAddExample} disabled={savingExample || !exQuestion.trim()} className="w-full">
+                        {savingExample ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                        등록
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Examples list by chapter */}
+                {loadingExamples ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                ) : examples.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    등록된 예제가 없습니다. PDF를 업로드하여 AI로 추출하거나 수동으로 추가하세요.
+                  </p>
+                ) : (
+                  <Accordion type="multiple" defaultValue={Object.keys(chapterGroups)} className="space-y-2">
+                    {Object.entries(chapterGroups).map(([chapter, items]) => (
+                      <AccordionItem key={chapter} value={chapter} className="border rounded-lg px-3">
+                        <AccordionTrigger className="py-2 text-sm hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-muted-foreground" />
+                            <span className="font-medium">{chapter}</span>
+                            <Badge variant="secondary" className="text-xs">{items.length}문항</Badge>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="space-y-2 pb-3">
+                          {items.map((ex, idx) => (
+                            <div key={ex.id} className="p-3 rounded-md border bg-muted/30 space-y-1.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant="outline" className="text-xs">
+                                    {ex.problem_number || `#${idx + 1}`}
+                                  </Badge>
+                                  {ex.page_number && (
+                                    <span className="text-xs text-muted-foreground">p.{ex.page_number}</span>
+                                  )}
+                                  {ex.difficulty && (
+                                    <span className={`text-xs px-1.5 py-0.5 rounded ${difficultyColor[ex.difficulty] || ''}`}>
+                                      {difficultyLabel[ex.difficulty] || ex.difficulty}
+                                    </span>
+                                  )}
+                                </div>
+                                <Button
+                                  size="sm" variant="ghost" className="h-6 w-6 p-0"
+                                  onClick={() => handleDeleteExample(ex.id)}
+                                >
+                                  <Trash2 className="w-3 h-3 text-destructive" />
+                                </Button>
+                              </div>
+                              <div className="text-sm">
+                                <MathRenderer text={ex.question_text} />
+                              </div>
+                              {ex.answer && (
+                                <div className="text-xs text-muted-foreground">
+                                  <span className="font-medium">정답: </span>
+                                  <MathRenderer text={ex.answer} />
+                                </div>
+                              )}
+                              {ex.explanation && (
+                                <div className="text-xs text-muted-foreground">
+                                  <span className="font-medium">해설: </span>
+                                  <MathRenderer text={ex.explanation} />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                )}
+              </CardContent>
+            </>
+          ) : (
+            <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <BookOpen className="w-10 h-10 mb-3 opacity-50" />
+              <p className="text-sm">왼쪽에서 교재를 선택하세요</p>
+            </CardContent>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
