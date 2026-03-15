@@ -702,6 +702,34 @@ export default function QuizPrintPage() {
           font-style: italic;
         }
 
+        /* ── Sub-question auto line-break styling ── */
+        .mr-sub-break {
+          display: block;
+          height: 6px;
+        }
+        .mr-sub-marker {
+          font-weight: 700;
+          color: #334155;
+          margin-right: 4px;
+        }
+        /* Answer blank after each sub-question */
+        .mr-sub-marker::after {
+          content: '';
+          display: inline-block;
+          border-bottom: 1.5px solid #94a3b8;
+          min-width: 60px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
+
+        /* ── Formula visual separation — display math gets extra spacing & weight ── */
+        .qp-question-text .katex-display {
+          margin: 6px 0 4px !important;
+        }
+        .qp-question-text .katex {
+          font-weight: 500;
+        }
+
         /* ── Smart choices ── */
         .qp-choices { margin-top: 5px; padding-left: 2px; }
         .qp-choices-vertical { display: flex; flex-direction: column; gap: 2px; }
