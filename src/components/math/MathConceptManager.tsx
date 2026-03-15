@@ -703,6 +703,8 @@ export function MathConceptManager() {
               onSave={handleSaveQuiz}
               onRegenerate={() => handleGenerateQuiz(selectedConceptId)}
               regenerating={generating === selectedConceptId}
+              allVersions={conceptVersions}
+              onSelectVersion={(quizId) => loadQuiz(selectedConceptId, quizId)}
             />
           )}
         </TabsContent>
