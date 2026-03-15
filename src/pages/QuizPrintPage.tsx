@@ -291,28 +291,34 @@ export default function QuizPrintPage() {
   );
 
   /* ── Workspace: lined note area with FIXED line height, variable count ── */
-  const WorkspaceArea = ({ q, showAnswer, lines }: { q: QuizQuestion; showAnswer: boolean; lines: number }) => (
-    <div className="qp-workspace">
-      <div className="qp-lined-area">
-        {Array.from({ length: lines }).map((_, i) => (
-          <div key={i} className="qp-line" />
-        ))}
+  const WorkspaceArea = ({ q, showAnswer, lines, subCount }: { q: QuizQuestion; showAnswer: boolean; lines: number; subCount?: number }) => {
+    // Add extra lines proportional to sub-question count
+    const extraLines = subCount && subCount > 1 ? Math.min((subCount - 1) * 2, 8) : 0;
+    const totalLines = lines + extraLines;
+    return (
+      <div className="qp-workspace">
+        <div className="qp-lined-area">
+          {Array.from({ length: totalLines }).map((_, i) => (
+            <div key={i} className="qp-line" />
+          ))}
+        </div>
+        <div className="qp-answer-box">
+          <span className="qp-answer-label">정답</span>
+          {showAnswer && (
+            <span className="qp-answer-value">
+              <MathRenderer text={q.answer} />
+            </span>
+          )}
+        </div>
       </div>
-      <div className="qp-answer-box">
-        <span className="qp-answer-label">정답</span>
-        {showAnswer && (
-          <span className="qp-answer-value">
-            <MathRenderer text={q.answer} />
-          </span>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   const QuestionItem = ({ q, textOverride, lines }: { q: QuizQuestion; textOverride?: string; lines: number }) => {
     const num = String(q.question_number).padStart(2, '0');
     const raw = textOverride ?? q.question_text;
     const parsed = parseChoices(raw);
+    const subCount = countSubQuestions(raw);
 
     return (
       <div className="qp-item">
@@ -320,13 +326,13 @@ export default function QuizPrintPage() {
           <span className="qp-num">{num}</span>
           <div className="qp-question-body">
             <span className="qp-question-text">
-              <MathRenderer text={parsed ? parsed.body : raw} />
+              <MathRenderer text={parsed ? parsed.body : raw} autoSubBreak={true} />
             </span>
             <SourceInfo q={q} />
             {parsed && <ChoicesRenderer choices={parsed.choices} />}
           </div>
         </div>
-        <WorkspaceArea q={q} showAnswer={showAnswerKey} lines={lines} />
+        <WorkspaceArea q={q} showAnswer={showAnswerKey} lines={lines} subCount={subCount} />
       </div>
     );
   };
