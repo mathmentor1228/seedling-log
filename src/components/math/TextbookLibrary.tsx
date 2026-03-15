@@ -211,6 +211,23 @@ export function TextbookLibrary() {
     }
   };
 
+  const handleDeleteChapter = async (chapter: string) => {
+    if (!selectedTextbook) return;
+    const count = chapterGroups[chapter]?.length || 0;
+    if (!confirm(`"${chapter}" 단원의 ${count}개 문항을 모두 삭제하시겠습니까?`)) return;
+    const { error } = await supabase
+      .from('textbook_examples')
+      .delete()
+      .eq('textbook_id', selectedTextbook.id)
+      .eq('chapter', chapter);
+    if (error) {
+      toast({ title: '단원 삭제 실패', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: `"${chapter}" 단원 ${count}개 문항 삭제 완료` });
+      fetchExamples(selectedTextbook.id);
+    }
+  };
+
   const handleAIExtract = async () => {
     if (!selectedTextbook || extractFiles.length === 0) return;
     setExtracting(true);
@@ -642,10 +659,17 @@ export function TextbookLibrary() {
                     {Object.entries(chapterGroups).map(([chapter, items]) => (
                       <AccordionItem key={chapter} value={chapter} className="border rounded-lg px-3">
                         <AccordionTrigger className="py-2 text-sm hover:no-underline">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1">
                             <FileText className="w-4 h-4 text-muted-foreground" />
                             <span className="font-medium">{chapter}</span>
                             <Badge variant="secondary" className="text-xs">{items.length}문항</Badge>
+                            <Button
+                              size="sm" variant="ghost" className="h-6 px-1.5 ml-auto"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteChapter(chapter); }}
+                            >
+                              <Trash2 className="w-3 h-3 text-destructive" />
+                              <span className="text-[10px] text-destructive ml-0.5">단원 삭제</span>
+                            </Button>
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="space-y-2 pb-3">
