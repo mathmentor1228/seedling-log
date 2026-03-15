@@ -25,6 +25,8 @@ interface PrintData {
   grade: string;
   subject: string;
   questions: QuizQuestion[];
+  versionNumber: number;
+  versionLabel: string | null;
 }
 
 function stripHtml(str: string): string {
