@@ -155,6 +155,13 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
     );
   };
 
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories(prev =>
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    );
+  };
+  };
+
   const handleGenerate = async () => {
     if (!textbook) return;
     if (filteredExamples.length === 0) {
