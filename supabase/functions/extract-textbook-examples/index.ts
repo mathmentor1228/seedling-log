@@ -362,7 +362,7 @@ serve(async (req) => {
     if (examples.length === 0) {
       return jsonResponse({
         success: false,
-        error: '이 페이지에서 문제를 찾지 못했습니다. 문제가 포함된 페이지인지 확인해 주세요.',
+        error: '문항을 감지하지 못했습니다. 문제 영역만 보이도록 페이지별 이미지(또는 8MB 이하 PDF)로 다시 업로드해 주세요.',
         detail: { fileName: file.name, batchLabel, reason: 'no_examples_found' },
       });
     }
