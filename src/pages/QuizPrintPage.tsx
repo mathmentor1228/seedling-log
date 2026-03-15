@@ -842,7 +842,7 @@ export default function QuizPrintPage() {
           .qp-question-text { font-size: 11.5px; }
           .qp-choice-text { font-size: 11px; }
           .qp-num { font-size: 18px; }
-          .qp-line { min-height: 18px; }
+          .qp-line { height: 8.5mm; }
         }
 
         /* ══ Screen preview ══ */
