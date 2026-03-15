@@ -251,11 +251,23 @@ export default function QuizPrintPage() {
   /* ── Full Header — borderless, QR+code left, name/date right ── */
   const FullHeader = () => (
     <div className="qp-header">
-      <div className="qp-header-qr">
-        <QRCodeSVG value={qrPayload} size={50} level="M" />
-        {data.answerCode && (
-          <span className="qp-answer-code-label">{data.answerCode}</span>
-        )}
+      <div className="qp-header-left">
+        <div className="qp-header-qr">
+          <QRCodeSVG value={qrPayload} size={50} level="M" />
+          {data.answerCode && (
+            <span className="qp-answer-code-label">{data.answerCode}</span>
+          )}
+        </div>
+        <div className="qp-name-date-fields">
+          <div className="qp-field-row">
+            <span className="qp-field-label">이름</span>
+            <span className="qp-field-underline">{studentName || '\u00A0'}</span>
+          </div>
+          <div className="qp-field-row">
+            <span className="qp-field-label">날짜</span>
+            <span className="qp-field-underline">{today.replace(/\./g, '. ')}</span>
+          </div>
+        </div>
       </div>
       <div className="qp-header-center">
         <p className="qp-subject-label">{cfg.label}</p>
@@ -268,16 +280,6 @@ export default function QuizPrintPage() {
       </div>
       <div className="qp-header-right">
         <img src={logoImg} alt="더멘토" className="qp-logo print-logo" />
-        <div className="qp-name-date-fields">
-          <div className="qp-field-row">
-            <span className="qp-field-label">이름</span>
-            <span className="qp-field-underline">{studentName || '\u00A0'}</span>
-          </div>
-          <div className="qp-field-row">
-            <span className="qp-field-label">날짜</span>
-            <span className="qp-field-underline">{today.replace(/\./g, '. ')}</span>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -567,14 +569,20 @@ export default function QuizPrintPage() {
           min-height: 297mm;
         }
 
-        /* ── Header — clean borderless, bottom divider only ── */
+        /* ── Header — refined, bottom accent line ── */
         .qp-header {
-          padding: 8px 0 10px;
-          margin-bottom: 8px;
+          padding: 10px 0 10px;
+          margin-bottom: 10px;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          border-bottom: 2.5px solid #1e293b;
+          flex-shrink: 0;
+        }
+        .qp-header-left {
           display: flex;
           align-items: center;
           gap: 14px;
-          border-bottom: 2px solid #1e293b;
           flex-shrink: 0;
         }
         .qp-header-qr {
@@ -590,27 +598,10 @@ export default function QuizPrintPage() {
           color: #64748b;
           letter-spacing: 0.5px;
         }
-        .qp-header-center {
-          flex: 1;
-          min-width: 0;
-        }
-        .qp-subject-label { font-size: 15px; font-weight: 800; color: #1e293b; margin-bottom: 1px; }
-        .qp-textbook-info { font-size: 12px; font-weight: 600; color: #334155; margin-bottom: 1px; }
-        .qp-concept-title { font-size: 11px; color: #64748b; margin-bottom: 3px; }
-        .qp-header-meta { font-size: 10px; color: #64748b; display: flex; align-items: center; gap: 6px; }
-        .qp-version-badge { font-size: 9px !important; }
-        .qp-header-right {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 6px;
-          flex-shrink: 0;
-        }
-        .qp-logo { height: 28px; width: auto; object-fit: contain; }
         .qp-name-date-fields {
           display: flex;
           flex-direction: column;
-          gap: 5px;
+          gap: 6px;
         }
         .qp-field-row {
           display: flex;
@@ -626,10 +617,27 @@ export default function QuizPrintPage() {
         }
         .qp-field-underline {
           display: inline-block;
-          border-bottom: 1.5px solid #1e293b;
-          min-width: 130px;
+          border-bottom: 1.5px solid #94a3b8;
+          min-width: 100px;
           padding-bottom: 2px;
         }
+        .qp-header-center {
+          flex: 1;
+          min-width: 0;
+          text-align: center;
+        }
+        .qp-subject-label { font-size: 16px; font-weight: 800; color: #1e293b; margin-bottom: 2px; letter-spacing: -0.3px; }
+        .qp-textbook-info { font-size: 11.5px; font-weight: 600; color: #475569; margin-bottom: 1px; }
+        .qp-concept-title { font-size: 11px; color: #64748b; margin-bottom: 3px; }
+        .qp-header-meta { font-size: 10px; color: #64748b; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .qp-version-badge { font-size: 9px !important; }
+        .qp-header-right {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .qp-logo { height: 48px; width: auto; object-fit: contain; }
 
         /* ── Two-column grid — FLEX GROW to fill page ── */
         .qp-two-col {
