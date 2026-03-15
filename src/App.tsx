@@ -126,6 +126,7 @@ const App = () => (
                 <Route path="/materials/:subject" element={<SubjectMaterialPage />} />
                 <Route path="/math-concepts" element={<MathConceptPage />} />
                 <Route path="/quiz-bulk-upload" element={<QuizBulkUploadPage />} />
+                <Route path="/quiz-lookup" element={<QuizLookupPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
