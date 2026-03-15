@@ -363,14 +363,15 @@ export default function QuizPrintPage() {
 
       <style>{`
         @media print {
-          @page { margin: 12mm 10mm; size: A4; }
+          @page { margin: 14mm 12mm; size: A4; }
           html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body * { visibility: hidden; }
           .quiz-print-area, .quiz-print-area * { visibility: visible; }
           .quiz-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; }
           .print\\:hidden { display: none !important; }
-          .qp-item { break-inside: avoid; }
+          .qp-item { break-inside: avoid; margin-bottom: 1.5rem; }
           .break-inside-avoid { break-inside: avoid; }
+          .math-graph-svg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }
         .quiz-print-area { font-family: 'Pretendard', sans-serif; }
       `}</style>

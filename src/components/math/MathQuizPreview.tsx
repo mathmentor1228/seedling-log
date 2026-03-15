@@ -122,18 +122,14 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
       let updated: QuizQuestion[];
 
       if (mode === 'example') {
-        // Insert example question right after current
-        const exampleQ: QuizQuestion = {
-          ...newQ,
-          question_number: 0, // will be renumbered
-        };
+        const exampleQ: QuizQuestion = { ...newQ, question_number: 0 };
         updated = [
           ...editedQuestions.slice(0, idx + 1),
           exampleQ,
           ...editedQuestions.slice(idx + 1),
         ].map((q, i) => ({ ...q, question_number: i + 1 }));
       } else {
-        // Replace current question
+        // fix_code, easier, deeper all replace the current question
         updated = editedQuestions.map((q, i) =>
           i === idx ? { ...newQ, question_number: q.question_number } : q
         );
