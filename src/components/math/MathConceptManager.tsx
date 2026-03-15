@@ -437,7 +437,7 @@ export function MathConceptManager() {
       </div>
 
       <Tabs defaultValue="concepts" className="space-y-4">
-        <TabsList className="w-full grid grid-cols-3 h-11">
+        <TabsList className="w-full grid grid-cols-4 h-11">
           <TabsTrigger value="concepts" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <BookOpen className="w-4 h-4" />
             개념 & 퀴즈
@@ -449,6 +449,10 @@ export function MathConceptManager() {
           <TabsTrigger value="review" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <ClipboardCheck className="w-4 h-4" />
             제출 채점
+          </TabsTrigger>
+          <TabsTrigger value="tracking" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <ChevronRight className="w-4 h-4" />
+            추적 대시보드
           </TabsTrigger>
         </TabsList>
 
