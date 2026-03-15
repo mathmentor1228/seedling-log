@@ -124,9 +124,9 @@ serve(async (req) => {
     if (file.size > MAX_UPLOAD_BYTES) {
       return jsonResponse({
         success: false,
-        error: `파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). 20MB 이하로 업로드해 주세요.`,
-        detail: { fileName: file.name, fileSize: file.size, batchLabel },
-      });
+        error: `파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). PDF는 8MB 이하로 나누어 업로드해 주세요.`,
+        detail: { fileName: file.name, fileSize: file.size, batchLabel, reason: 'pdf_too_large' },
+      }, 413);
     }
 
     const { data: textbook, error: textbookError } = await adminClient
