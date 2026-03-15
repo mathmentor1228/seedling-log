@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,7 +45,8 @@ interface TextbookExample {
 }
 
 const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '기타'];
-const MAX_EXTRACT_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_PDF_EXTRACT_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_EXTRACT_FILE_BYTES = 20 * 1024 * 1024;
 const IMAGE_COMPRESS_TARGET_BYTES = 2 * 1024 * 1024;
 const SUPPORTED_AI_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
@@ -52,6 +54,8 @@ const isPdfUpload = (file: File) => {
   const type = (file.type || '').toLowerCase();
   return type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 };
+
+const getUploadLimitBytes = (file: File) => (isPdfUpload(file) ? MAX_PDF_EXTRACT_FILE_BYTES : MAX_IMAGE_EXTRACT_FILE_BYTES);
 
 export function TextbookLibrary() {
   const { toast } = useToast();
