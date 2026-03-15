@@ -411,6 +411,7 @@ export function TextbookLibrary() {
                         className="text-xs h-8 col-span-1 sm:col-span-1"
                         onChange={(e) => {
                           const selected = e.target.files?.[0] || null;
+
                           if (selected && selected.size > MAX_EXTRACT_FILE_BYTES) {
                             toast({
                               title: '파일 용량 초과',
@@ -421,6 +422,18 @@ export function TextbookLibrary() {
                             setExtractFile(null);
                             return;
                           }
+
+                          if (selected && !isPdfUpload(selected) && !selected.type.startsWith('image/')) {
+                            toast({
+                              title: '지원하지 않는 형식',
+                              description: 'PDF 또는 이미지 파일만 업로드할 수 있습니다.',
+                              variant: 'destructive',
+                            });
+                            e.currentTarget.value = '';
+                            setExtractFile(null);
+                            return;
+                          }
+
                           setExtractFile(selected);
                         }}
                       />
