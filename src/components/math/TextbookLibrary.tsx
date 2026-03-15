@@ -455,39 +455,29 @@ export function TextbookLibrary() {
                   <CardContent className="p-3 space-y-2">
                     <p className="text-xs font-medium flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-primary" />
-                      AI 자동 추출 (PDF/이미지)
+                      AI 자동 추출 (PDF/이미지) — 여러 파일 동시 업로드 가능
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <Input
                         type="file"
                         accept=".pdf,image/*"
+                        multiple
                         className="text-xs h-8 col-span-1 sm:col-span-1"
                         onChange={(e) => {
-                          const selected = e.target.files?.[0] || null;
-
-                          if (selected && selected.size > MAX_EXTRACT_FILE_BYTES) {
-                            toast({
-                              title: '파일 용량 초과',
-                              description: '20MB 이하의 단일 페이지 파일을 업로드해 주세요.',
-                              variant: 'destructive',
-                            });
-                            e.currentTarget.value = '';
-                            setExtractFile(null);
-                            return;
+                          const files = Array.from(e.target.files || []);
+                          const valid: File[] = [];
+                          for (const f of files) {
+                            if (f.size > MAX_EXTRACT_FILE_BYTES) {
+                              toast({ title: '용량 초과', description: `${f.name}: 20MB 초과`, variant: 'destructive' });
+                              continue;
+                            }
+                            if (!isPdfUpload(f) && !f.type.startsWith('image/')) {
+                              toast({ title: '지원하지 않는 형식', description: `${f.name}: PDF 또는 이미지만 가능`, variant: 'destructive' });
+                              continue;
+                            }
+                            valid.push(f);
                           }
-
-                          if (selected && !isPdfUpload(selected) && !selected.type.startsWith('image/')) {
-                            toast({
-                              title: '지원하지 않는 형식',
-                              description: 'PDF 또는 이미지 파일만 업로드할 수 있습니다.',
-                              variant: 'destructive',
-                            });
-                            e.currentTarget.value = '';
-                            setExtractFile(null);
-                            return;
-                          }
-
-                          setExtractFile(selected);
+                          setExtractFiles(valid);
                         }}
                       />
                       <Input
@@ -498,15 +488,51 @@ export function TextbookLibrary() {
                       />
                       <Button
                         size="sm" className="h-8 text-xs gap-1"
-                        disabled={!extractFile || extracting}
+                        disabled={extractFiles.length === 0 || extracting}
                         onClick={handleAIExtract}
                       >
                         {extracting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                        추출하기
+                        {extractFiles.length > 1 ? `${extractFiles.length}개 추출` : '추출하기'}
                       </Button>
                     </div>
+                    {extractFiles.length > 0 && !extracting && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {extractFiles.map(f => f.name).join(', ')}
+                      </p>
+                    )}
+                    {/* Batch progress */}
+                    {batchProgress && extracting && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>처리 중: {batchProgress.current}/{batchProgress.total}</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-1.5">
+                          <div
+                            className="bg-primary h-1.5 rounded-full transition-all"
+                            style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {/* Batch results */}
+                    {batchProgress && !extracting && batchProgress.results.length > 0 && (
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {batchProgress.results.map((r, i) => (
+                          <div key={i} className={`flex items-center gap-2 text-xs p-1.5 rounded ${r.status === 'success' ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                            {r.status === 'success' ? (
+                              <Badge variant="secondary" className="text-[10px] shrink-0">✓ {r.count}개</Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-[10px] shrink-0">✗</Badge>
+                            )}
+                            <span className="truncate font-medium">{r.fileName}</span>
+                            <span className="text-muted-foreground ml-auto shrink-0 text-[10px]">{r.status === 'error' ? r.message : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[11px] text-muted-foreground">
-                      문제가 보이는 단일 페이지 파일을 권장합니다. (이미지: PNG/JPEG/WEBP/GIF, PDF: 페이지 단위)
+                      💡 페이지별 이미지로 나누어 업로드하면 더 정확하게 추출됩니다. PDF는 8MB 이하만 처리 가능합니다.
                     </p>
                   </CardContent>
                 </Card>
