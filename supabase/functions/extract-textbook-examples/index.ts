@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { encode as encodeBase64 } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -9,8 +8,8 @@ const corsHeaders = {
 };
 
 const STAFF_ROLES = ['admin', 'teacher'];
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const INLINE_BASE64_LIMIT_BYTES = 3 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 9 * 1024 * 1024;
 const TEMP_UPLOAD_BUCKET = 'attachments';
 const TEMP_UPLOAD_TTL_SECONDS = 60 * 10;
 
