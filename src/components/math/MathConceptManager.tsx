@@ -53,6 +53,12 @@ interface QuizSummary {
   id: string;
   concept_id: string;
   status: string;
+  created_at?: string;
+  questions?: any;
+  version_number?: number;
+  version_label?: string | null;
+  answer_code?: string | null;
+  creator_name?: string;
   math_concepts: {
     title: string;
     course: string;
@@ -166,8 +172,10 @@ export function MathConceptManager() {
       supabase.from('math_concepts').select('*').order('created_at', { ascending: false }),
       supabase
         .from('math_concept_quizzes')
-        .select('id, concept_id, status, math_concepts(title, course, grade, subject)') as any,
+        .select('id, concept_id, status, created_at, questions, version_number, version_label, answer_code, math_concepts(title, course, grade, subject, created_by)') as any,
     ]);
+
+    const creatorMap: Record<string, string> = {};
 
     if (conceptsRes.error) {
       console.error(conceptsRes.error);
@@ -182,17 +190,15 @@ export function MathConceptManager() {
         new Set(conceptRows.map((concept) => concept.created_by).filter(Boolean) as string[]),
       );
 
-      let creatorMap: Record<string, string> = {};
       if (creatorIds.length > 0) {
         const { data: profileRows } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('id', creatorIds as any);
 
-        creatorMap = (profileRows || []).reduce<Record<string, string>>((acc, profile: any) => {
-          acc[profile.id] = profile.full_name || '이름 없음';
-          return acc;
-        }, {});
+        (profileRows || []).forEach((p: any) => {
+          creatorMap[p.id] = p.full_name || '이름 없음';
+        });
       }
 
       setConcepts(
@@ -208,7 +214,24 @@ export function MathConceptManager() {
     if (quizzesRes.error) {
       console.error(quizzesRes.error);
     } else {
-      setAllQuizzes((quizzesRes.data || []) as QuizSummary[]);
+      const quizRows = (quizzesRes.data || []) as any[];
+      const quizCreatorIds = Array.from(
+        new Set(quizRows.map((q: any) => q.math_concepts?.created_by).filter(Boolean) as string[]),
+      );
+      const missingIds = quizCreatorIds.filter(id => !creatorMap[id]);
+      if (missingIds.length > 0) {
+        const { data: extraProfiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', missingIds as any);
+        (extraProfiles || []).forEach((p: any) => {
+          creatorMap[p.id] = p.full_name || '이름 없음';
+        });
+      }
+      setAllQuizzes(quizRows.map((q: any) => ({
+        ...q,
+        creator_name: q.math_concepts?.created_by ? (creatorMap[q.math_concepts.created_by] || '미확인') : '미지정',
+      })));
     }
 
     setLoading(false);
@@ -728,7 +751,7 @@ export function MathConceptManager() {
         </TabsContent>
 
         <TabsContent value="assign">
-          <MathQuizAssignManager quizzes={allQuizzes} />
+          <MathQuizAssignManager quizzes={allQuizzes} onQuizDeleted={fetchConcepts} />
         </TabsContent>
 
         <TabsContent value="review">
