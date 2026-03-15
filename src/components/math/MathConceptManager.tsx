@@ -310,9 +310,12 @@ export function MathConceptManager() {
       });
 
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (!data?.success) throw new Error(data?.error || '퀴즈 생성에 실패했습니다.');
 
-      toast({ title: '퀴즈 생성 완료', description: '개념 퀴즈가 생성되었습니다.' });
+      toast({
+        title: '퀴즈 생성 완료',
+        description: data?.warning || '개념 퀴즈가 생성되었습니다.',
+      });
       await fetchConcepts();
       setSelectedConceptId(conceptId);
       await loadQuiz(conceptId);
