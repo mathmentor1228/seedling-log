@@ -187,8 +187,14 @@ export default function QuizPrintPage() {
   );
 
   const Footer = () => (
-    <div className="mt-8 pt-3 border-t border-dashed border-foreground/30 text-center text-sm text-muted-foreground">
-      {cfg.footer}
+    <div className="mt-10 pt-4 border-t-2 border-foreground/20 break-inside-avoid">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img src={logoImg} alt="더멘토" className="h-7 w-auto object-contain print-logo opacity-70" />
+          <span className="text-xs text-muted-foreground">대표 황은지</span>
+        </div>
+        <p className="text-sm text-muted-foreground italic">{cfg.footer}</p>
+      </div>
     </div>
   );
 
@@ -357,14 +363,15 @@ export default function QuizPrintPage() {
 
       <style>{`
         @media print {
-          @page { margin: 12mm 10mm; size: A4; }
+          @page { margin: 14mm 12mm; size: A4; }
           html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body * { visibility: hidden; }
           .quiz-print-area, .quiz-print-area * { visibility: visible; }
           .quiz-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; }
           .print\\:hidden { display: none !important; }
-          .qp-item { break-inside: avoid; }
+          .qp-item { break-inside: avoid; margin-bottom: 1.5rem; }
           .break-inside-avoid { break-inside: avoid; }
+          .math-graph-svg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }
         .quiz-print-area { font-family: 'Pretendard', sans-serif; }
       `}</style>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb, Printer,
-  Trash2, Wand2, ChevronDown,
+  Trash2, Wand2, ChevronDown, BarChart3,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -16,9 +16,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MathRenderer } from './MathRenderer';
+import { MathGraph } from './MathGraph';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { QuizQuestion } from './MathConceptManager';
+
+const GRAPH_KEYWORDS = /함수|그래프|일차|이차|지수|로그|y\s*=|f\s*\(/i;
+
+function extractExpression(text: string): string | null {
+  // Try to find y = ... or f(x) = ... patterns
+  const match = text.match(/(?:y|f\s*\(\s*x\s*\))\s*=\s*([^,.\s가-힣]{3,})/);
+  return match ? `y = ${match[1]}` : null;
+}
 
 interface Props {
   quiz: { id: string; questions: QuizQuestion[]; status: string } | null;
@@ -28,9 +37,10 @@ interface Props {
   regenerating: boolean;
 }
 
-type RewriteMode = 'easier' | 'deeper' | 'example';
+type RewriteMode = 'easier' | 'deeper' | 'example' | 'fix_code';
 
-const REWRITE_LABELS: Record<RewriteMode, { label: string; desc: string }> = {
+const REWRITE_LABELS: Record<RewriteMode, { label: string; desc: string; icon?: string }> = {
+  fix_code: { label: '⚠️ 코드 오류 수정', desc: 'HTML 태그/코드를 제거하고 순수 수식만 남김', icon: '⚠️' },
   easier: { label: '더 쉽게', desc: '초보자 수준으로 풀어서 다시 출제' },
   deeper: { label: '더 깊게 (심화)', desc: '심화 원리/증명 문제로 변경' },
   example: { label: '예제 추가', desc: '기초 수치 예제 문제를 아래 생성' },
@@ -121,18 +131,14 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
       let updated: QuizQuestion[];
 
       if (mode === 'example') {
-        // Insert example question right after current
-        const exampleQ: QuizQuestion = {
-          ...newQ,
-          question_number: 0, // will be renumbered
-        };
+        const exampleQ: QuizQuestion = { ...newQ, question_number: 0 };
         updated = [
           ...editedQuestions.slice(0, idx + 1),
           exampleQ,
           ...editedQuestions.slice(idx + 1),
         ].map((q, i) => ({ ...q, question_number: i + 1 }));
       } else {
-        // Replace current question
+        // fix_code, easier, deeper all replace the current question
         updated = editedQuestions.map((q, i) =>
           i === idx ? { ...newQ, question_number: q.question_number } : q
         );
@@ -281,8 +287,15 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
                 </div>
               ) : (
                 <>
-                  <div className="text-base leading-relaxed">
-                    <MathRenderer text={q.question_text} />
+                  <div className="flex gap-4">
+                    <div className="text-base leading-relaxed flex-1">
+                      <MathRenderer text={q.question_text} />
+                    </div>
+                    {GRAPH_KEYWORDS.test(q.question_text) && extractExpression(q.question_text) && (
+                      <div className="shrink-0">
+                        <MathGraph expression={extractExpression(q.question_text)!} width={180} height={180} />
+                      </div>
+                    )}
                   </div>
                   <div className="bg-muted/50 rounded-md p-3 space-y-1">
                     <div className="flex items-center gap-2">
