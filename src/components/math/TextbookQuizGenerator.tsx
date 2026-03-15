@@ -76,6 +76,13 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
     return Array.from(set).sort();
   }, [examples]);
 
+  const categories = useMemo(() => {
+    const set = new Set(examples.map(e => e.category || '일반문항'));
+    return Array.from(set).sort();
+  }, [examples]);
+    return Array.from(set).sort();
+  }, [examples]);
+
   useEffect(() => {
     if (open) {
       setSelectedChapters([]);
