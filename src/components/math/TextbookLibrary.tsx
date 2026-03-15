@@ -526,6 +526,13 @@ export function TextbookLibrary() {
           )}
         </Card>
       </div>
+      {/* Quiz Generator Dialog */}
+      <TextbookQuizGenerator
+        open={showQuizGen}
+        onOpenChange={setShowQuizGen}
+        textbook={selectedTextbook}
+        examples={examples}
+      />
     </div>
   );
 }
