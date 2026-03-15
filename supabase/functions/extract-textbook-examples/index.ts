@@ -28,6 +28,24 @@ const isPdfFile = (file: File) => {
   return lowerType === 'application/pdf' || lowerName.endsWith('.pdf');
 };
 
+// --- Category classification logic ---
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  '활동형': ['함께 풀기', '확인하기', '탐구 활동', '활동'],
+  '사고력': ['생각 키우기', '창의융합', '수학 역량 플러스', '창의', '융합', '역량'],
+  '마무리': ['스스로 점검하기', '스스로 점검', '중단원 마무리', '대단원 마무리', '단원 마무리'],
+  '예제': ['예제', '유제'],
+};
+
+function classifyCategory(problemNumber: string, questionText: string): string {
+  const combined = `${problemNumber} ${questionText}`.toLowerCase();
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (combined.includes(kw.toLowerCase())) return cat;
+    }
+  }
+  return '일반문항';
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -151,17 +169,37 @@ serve(async (req) => {
       fileUrl = signedData.signedUrl;
     }
 
-    const systemPrompt = `당신은 교재 문항 추출 전문가입니다.
-주어진 교재 페이지에서 "문제" 문항만 정확히 추출하세요.
+    const systemPrompt = `당신은 한국 수학/과학 교과서 전문 문항 추출기입니다.
+주어진 교과서 페이지에서 **모든 학습 요소**를 빠짐없이 추출하세요.
 
-[추출 원칙]
+[추출 대상 - 반드시 포함]
+1) 번호가 있는 문제 (01, 02, 1, 2, ...)
+2) '예제', '유제' — 개념 직후의 연습 문항
+3) '함께 풀기', '확인하기' — 기초/활동형 문항
+4) '생각 키우기', '창의융합', '탐구 활동', '수학 역량 플러스' — 사고력/심화 문항
+5) '스스로 점검하기', '중단원 마무리', '대단원 마무리' — 마무리 문항
+6) 빈칸(____) 채우기, 물음표(?)로 끝나는 질문형 텍스트 — 문항 후보로 간주
+
+[추출 제외]
+- 순수 개념 설명 본문 (정의, 정리 박스의 설명 자체)
+- 목차, 페이지 번호만 있는 장식 텍스트
+
+[category 분류 기준]
+- '일반문항': 숫자 번호가 있는 일반적인 문제
+- '예제': '예제', '유제' 키워드 포함
+- '활동형': '함께 풀기', '확인하기', '탐구 활동' 등 활동 문항
+- '사고력': '생각 키우기', '창의융합', '수학 역량 플러스' 등 심화/융합 문항
+- '마무리': '스스로 점검하기', '중단원 마무리', '대단원 마무리' 등
+
+[추출 규칙]
 1) 문제 번호, 문제 텍스트, 정답, 해설을 빠짐없이 추출
-2) "예제", 개념 설명, 본문 설명, 페이지 장식 문구는 제외
+2) 번호가 없는 '함께 풀기' 등은 problem_number에 해당 키워드를 기입 (예: "함께 풀기 1")
 3) 수식은 LaTeX 표기법 사용 (예: $x^2 + 2x + 1$)
-4) 그래프가 포함된 문제는 graph_data에 함수식 정보를 JSON으로 기록
-5) 난이도는 문제 복잡도에 따라 easy/medium/hard로 분류
-6) 페이지 번호가 보이면 기록, 아니면 null
-7) 문제 순서대로 정렬`;
+4) 그래프/도형이 포함된 문제는 graph_data에 함수식 정보를 JSON으로 기록
+5) 삽화/실생활 이미지가 있는 문제는 has_illustration을 true로 설정
+6) 난이도는 문제 복잡도에 따라 easy/medium/hard로 분류
+7) 페이지 번호가 보이면 기록, 아니면 null
+8) 문제 순서대로 정렬`;
 
     const userPrompt = [
       `교재: ${textbook?.title || '미확인'}`,
@@ -169,9 +207,11 @@ serve(async (req) => {
       `학년: ${textbook?.grade || '미지정'}`,
       `과정: ${textbook?.course || '미지정'}`,
       `단원: ${chapter}`,
-      '이 페이지에서 문제 문항만 추출하세요.',
+      '',
+      '이 페이지에서 위 추출 대상에 해당하는 모든 학습 요소를 빠짐없이 추출하세요.',
+      '번호가 없는 활동/예제도 반드시 포함하세요.',
       '출력은 function call(extract_examples) 스키마를 정확히 따르세요.',
-    ].join('\n\n');
+    ].join('\n');
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -199,7 +239,7 @@ serve(async (req) => {
             type: 'function',
             function: {
               name: 'extract_examples',
-              description: 'Extract textbook problems only',
+              description: 'Extract all learning elements from a textbook page',
               parameters: {
                 type: 'object',
                 properties: {
@@ -208,12 +248,18 @@ serve(async (req) => {
                     items: {
                       type: 'object',
                       properties: {
-                        problem_number: { type: 'string' },
+                        problem_number: { type: 'string', description: '문제 번호 또는 키워드 (예: "01", "예제 3", "함께 풀기 1", "생각 키우기")' },
                         page_number: { type: 'number' },
                         question_text: { type: 'string' },
                         answer: { type: 'string' },
                         explanation: { type: 'string' },
                         difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
+                        category: {
+                          type: 'string',
+                          enum: ['일반문항', '예제', '활동형', '사고력', '마무리'],
+                          description: '문항 유형 분류',
+                        },
+                        has_illustration: { type: 'boolean', description: '삽화/그림/실생활 이미지 포함 여부' },
                         graph_data: {
                           type: 'object',
                           properties: {
@@ -226,7 +272,7 @@ serve(async (req) => {
                           },
                         },
                       },
-                      required: ['problem_number', 'question_text', 'answer', 'difficulty'],
+                      required: ['problem_number', 'question_text', 'answer', 'difficulty', 'category'],
                       additionalProperties: false,
                     },
                   },
@@ -290,6 +336,7 @@ serve(async (req) => {
       answer: ex.answer || '',
       explanation: ex.explanation || '',
       difficulty: ex.difficulty || 'medium',
+      category: ex.category || classifyCategory(ex.problem_number || '', ex.question_text || ''),
       graph_data: ex.graph_data || null,
       sort_order: idx,
       created_by: user.id,
@@ -301,7 +348,13 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: '문항 저장 중 오류가 발생했습니다.' });
     }
 
-    return jsonResponse({ success: true, count: rows.length, examples: rows });
+    // Summarize by category
+    const catSummary: Record<string, number> = {};
+    for (const r of rows) {
+      catSummary[r.category] = (catSummary[r.category] || 0) + 1;
+    }
+
+    return jsonResponse({ success: true, count: rows.length, examples: rows, categorySummary: catSummary });
   } catch (error) {
     console.error('extract-textbook-examples error:', error);
     return jsonResponse({

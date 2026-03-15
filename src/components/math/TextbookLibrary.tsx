@@ -544,13 +544,18 @@ export function TextbookLibrary() {
                         <AccordionContent className="space-y-2 pb-3">
                           {items.map((ex, idx) => (
                             <div key={ex.id} className="p-3 rounded-md border bg-muted/30 space-y-1.5">
-                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <Badge variant="outline" className="text-xs">
                                     {ex.problem_number || `#${idx + 1}`}
                                   </Badge>
                                   {ex.page_number && (
                                     <span className="text-xs text-muted-foreground">p.{ex.page_number}</span>
+                                  )}
+                                  {ex.category && ex.category !== '일반문항' && (
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${categoryColor[ex.category] || ''}`}>
+                                      {categoryLabel[ex.category] || ex.category}
+                                    </span>
                                   )}
                                   {ex.difficulty && (
                                     <span className={`text-xs px-1.5 py-0.5 rounded ${difficultyColor[ex.difficulty] || ''}`}>
