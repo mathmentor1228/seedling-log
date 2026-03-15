@@ -263,7 +263,7 @@ serve(async (req) => {
               { type: 'text', text: userPrompt },
               {
                 type: 'image_url',
-                image_url: { url: fileUrl },
+                image_url: { url: aiFileUrl },
               },
             ],
           },
