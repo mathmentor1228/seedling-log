@@ -105,6 +105,20 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
   },
 };
 
+/* ── Determine how many lined-note rows to use.
+   On first page (4 items) we have more vertical space → more lines.
+   On subsequent pages (6 items) we use fewer lines.
+   When total items on the page is small (≤3 per col), auto-expand lines. */
+function computeLines(isFirst: boolean, itemsOnPage: number): number {
+  if (isFirst) {
+    // 4 items on first page → generous space
+    return itemsOnPage <= 3 ? 12 : 10;
+  }
+  // subsequent pages: 6 items
+  if (itemsOnPage <= 4) return 8;
+  return 6;
+}
+
 export default function QuizPrintPage() {
   const [searchParams] = useSearchParams();
   const quizId = searchParams.get('quiz_id');
@@ -183,6 +197,7 @@ export default function QuizPrintPage() {
     return plainText + ' ___BLANK___';
   };
 
+  /* Source info — only visible on answer key (teacher view) */
   const SourceInfo = ({ q }: { q: QuizQuestion }) => {
     if (!showAnswerKey) return null;
     const src = q as any;
@@ -194,7 +209,7 @@ export default function QuizPrintPage() {
     );
   };
 
-  // ── Strict choice renderer: if ANY choice > 15 chars, ALL go vertical ──
+  /* ── Strict choice renderer: if ANY choice > 15 chars → ALL vertical ── */
   const ChoicesRenderer = ({ choices }: { choices: string[] }) => {
     const maxLen = Math.max(...choices.map(c => stripHtml(c).length));
     const forceVertical = maxLen > 15;
@@ -231,18 +246,18 @@ export default function QuizPrintPage() {
     );
   };
 
-  // ── Full Header (first page only) — QR on LEFT, wider name field ──
+  /* ── Full Header — borderless, QR+code left, name/date right ── */
   const FullHeader = () => (
     <div className="qp-header">
       <div className="qp-header-qr">
-        <QRCodeSVG value={qrPayload} size={52} level="M" />
+        <QRCodeSVG value={qrPayload} size={50} level="M" />
         {data.answerCode && (
           <span className="qp-answer-code-label">{data.answerCode}</span>
         )}
       </div>
       <div className="qp-header-center">
-        <p className="qp-subject-label">{data.subject}</p>
-        <p className="qp-textbook-info">{data.course} · {data.grade}</p>
+        <p className="qp-subject-label">{cfg.label}</p>
+        <p className="qp-textbook-info">{data.course} · {data.grade} · {data.subject}</p>
         <p className="qp-concept-title">{data.conceptTitle}</p>
         <div className="qp-header-meta">
           <span>{data.questions.length}문제</span>
@@ -265,7 +280,7 @@ export default function QuizPrintPage() {
     </div>
   );
 
-  // ── Workspace: taller lines ──
+  /* ── Workspace: lined note area with auto-height ── */
   const WorkspaceArea = ({ q, showAnswer, lines }: { q: QuizQuestion; showAnswer: boolean; lines: number }) => (
     <div className="qp-workspace">
       <div className="qp-lined-area">
@@ -314,8 +329,8 @@ export default function QuizPrintPage() {
     </div>
   );
 
-  const PageNumber = ({ n }: { n: number }) => (
-    <div className="qp-page-number">{n}</div>
+  const PageNumber = ({ n, total }: { n: number; total: number }) => (
+    <div className="qp-page-number">{n} / {total}</div>
   );
 
   const paginateQuestions = (questions: QuizQuestion[]) => {
@@ -331,9 +346,10 @@ export default function QuizPrintPage() {
 
   const renderQuestions = (questions: QuizQuestion[], textFn?: (q: QuizQuestion) => string) => {
     const pages = paginateQuestions(questions);
+    const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const lines = page.isFirst ? 10 : 6;
+      const lines = computeLines(page.isFirst, page.questions.length);
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -353,7 +369,7 @@ export default function QuizPrintPage() {
             </div>
           </div>
           <Footer />
-          <PageNumber n={pi + 1} />
+          <PageNumber n={pi + 1} total={totalPages} />
         </div>
       );
     });
@@ -362,9 +378,10 @@ export default function QuizPrintPage() {
   const renderExamples = () => {
     const qs = exampleQuestions;
     const pages = paginateQuestions(qs);
+    const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const lines = page.isFirst ? 10 : 6;
+      const lines = computeLines(page.isFirst, page.questions.length);
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -384,7 +401,7 @@ export default function QuizPrintPage() {
             </div>
           </div>
           <Footer />
-          <PageNumber n={pi + 1} />
+          <PageNumber n={pi + 1} total={totalPages} />
         </div>
       );
     });
@@ -401,9 +418,10 @@ export default function QuizPrintPage() {
         difficulty: 'medium' as const,
       }))
     );
+    const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const blankLines = page.isFirst ? 11 : 7;
+      const blankLines = computeLines(page.isFirst, page.questions.length) + 1;
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
@@ -447,7 +465,7 @@ export default function QuizPrintPage() {
             </div>
           </div>
           <Footer />
-          <PageNumber n={pi + 1} />
+          <PageNumber n={pi + 1} total={totalPages} />
         </div>
       );
     });
@@ -534,39 +552,37 @@ export default function QuizPrintPage() {
 
       <style>{`
         /* ══════════════════════════════════════════════════
-           Quiz Print Stylesheet v4 — Optimized margins & layout
+           Quiz Print Stylesheet v5 — Perfect A4 fitting
            ══════════════════════════════════════════════════ */
         .quiz-print-wrapper { font-family: 'Pretendard', sans-serif; }
         .quiz-print-area { max-width: 210mm; margin: 0 auto; }
 
-        /* ── Page ── */
+        /* ── Page container ── */
         .qp-page {
           position: relative;
-          padding: 18px 24px 44px;
+          padding: 14px 20px 48px;
           page-break-after: always;
-          min-height: 297mm;
           box-sizing: border-box;
         }
 
-        /* ── Header (first page only) — QR LEFT, name/date RIGHT ── */
+        /* ── Header — NO outer border, clean layout ── */
         .qp-header {
-          border: 2px solid #1e293b;
-          border-radius: 6px;
-          padding: 14px 18px;
-          margin-bottom: 16px;
+          padding: 10px 0 12px;
+          margin-bottom: 10px;
           display: flex;
           align-items: center;
-          gap: 16px;
+          gap: 14px;
+          border-bottom: 2px solid #1e293b;
         }
         .qp-header-qr {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 4px;
+          gap: 3px;
           flex-shrink: 0;
         }
         .qp-answer-code-label {
-          font-size: 8px;
+          font-size: 7.5px;
           font-weight: 700;
           color: #64748b;
           letter-spacing: 0.5px;
@@ -575,40 +591,40 @@ export default function QuizPrintPage() {
           flex: 1;
           min-width: 0;
         }
-        .qp-subject-label { font-size: 16px; font-weight: 800; color: #1e293b; margin-bottom: 1px; }
-        .qp-textbook-info { font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 1px; }
-        .qp-concept-title { font-size: 12px; color: #64748b; margin-bottom: 4px; }
-        .qp-header-meta { font-size: 11px; color: #64748b; display: flex; align-items: center; gap: 6px; }
+        .qp-subject-label { font-size: 15px; font-weight: 800; color: #1e293b; margin-bottom: 1px; }
+        .qp-textbook-info { font-size: 12px; font-weight: 600; color: #334155; margin-bottom: 1px; }
+        .qp-concept-title { font-size: 11px; color: #64748b; margin-bottom: 3px; }
+        .qp-header-meta { font-size: 10px; color: #64748b; display: flex; align-items: center; gap: 6px; }
         .qp-version-badge { font-size: 9px !important; }
         .qp-header-right {
           display: flex;
           flex-direction: column;
           align-items: flex-end;
-          gap: 8px;
+          gap: 6px;
           flex-shrink: 0;
         }
-        .qp-logo { height: 32px; width: auto; object-fit: contain; }
+        .qp-logo { height: 28px; width: auto; object-fit: contain; }
         .qp-name-date-fields {
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 5px;
         }
         .qp-field-row {
           display: flex;
           align-items: baseline;
           gap: 6px;
-          font-size: 12px;
+          font-size: 11px;
           color: #334155;
         }
         .qp-field-label {
           font-weight: 700;
           white-space: nowrap;
-          min-width: 28px;
+          min-width: 26px;
         }
         .qp-field-underline {
           display: inline-block;
           border-bottom: 1.5px solid #1e293b;
-          min-width: 120px;
+          min-width: 130px;
           padding-bottom: 2px;
         }
 
@@ -616,177 +632,228 @@ export default function QuizPrintPage() {
         .qp-two-col {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 0 24px;
+          gap: 0 20px;
         }
         .qp-col { display: flex; flex-direction: column; }
 
-        /* ── Question item ── */
+        /* ── Question item — CRITICAL: break-inside avoid ── */
         .qp-item {
           break-inside: avoid;
-          margin-bottom: 12px;
+          page-break-inside: avoid;
+          -webkit-column-break-inside: avoid;
+          margin-bottom: 8px;
         }
         .qp-item-header {
           display: flex;
           align-items: flex-start;
-          gap: 8px;
-          margin-bottom: 3px;
+          gap: 6px;
+          margin-bottom: 2px;
         }
         .qp-num {
-          font-size: 22px;
+          font-size: 20px;
           font-weight: 800;
-          color: #1d4ed8;
+          color: #3b82f6;
           line-height: 1.1;
-          min-width: 30px;
+          min-width: 28px;
           flex-shrink: 0;
         }
-        .qp-question-body { flex: 1; min-width: 0; padding-top: 4px; }
+        .qp-question-body { flex: 1; min-width: 0; padding-top: 3px; }
         .qp-question-text {
-          font-size: 13px;
-          line-height: 1.7;
+          font-size: 12px;
+          line-height: 1.65;
           color: #1e293b;
         }
         .qp-source {
-          font-size: 9px;
+          font-size: 8px;
           color: #94a3b8;
-          margin-left: 6px;
+          margin-left: 4px;
           font-style: italic;
         }
 
-        /* ── Smart choices — strict vertical when ANY choice is long ── */
-        .qp-choices { margin-top: 8px; padding-left: 2px; }
-        .qp-choices-vertical { display: flex; flex-direction: column; gap: 3px; }
+        /* ── Smart choices ── */
+        .qp-choices { margin-top: 6px; padding-left: 2px; }
+        .qp-choices-vertical { display: flex; flex-direction: column; gap: 2px; }
         .qp-choice-row {
           display: flex;
           align-items: baseline;
-          gap: 8px;
-          padding-left: 0;
+          gap: 6px;
         }
-        .qp-choices-grid { display: flex; flex-direction: column; gap: 3px; }
-        .qp-choice-grid-row { display: flex; gap: 20px; }
+        .qp-choices-grid { display: flex; flex-direction: column; gap: 2px; }
+        .qp-choice-grid-row { display: flex; gap: 16px; }
         .qp-choice-cell {
           display: flex;
           align-items: baseline;
-          gap: 6px;
+          gap: 5px;
           min-width: 0;
           flex: 1;
         }
         .qp-choice-marker {
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 700;
           color: #334155;
           flex-shrink: 0;
-          min-width: 16px;
+          min-width: 14px;
           text-align: center;
         }
-        .qp-choice-text { font-size: 12.5px; color: #1e293b; line-height: 1.6; }
+        .qp-choice-text { font-size: 11.5px; color: #1e293b; line-height: 1.55; }
 
-        /* ── Workspace (lined, no outer border) — taller lines ── */
+        /* ── Workspace — light gray lines only, no outer border ── */
         .qp-workspace {
-          margin-left: 38px;
-          margin-top: 6px;
+          margin-left: 34px;
+          margin-top: 4px;
           position: relative;
         }
         .qp-lined-area {
-          background: #f8fafc;
-          padding: 4px 8px 2px;
-          border-radius: 3px;
+          padding: 2px 6px 1px;
         }
         .qp-line {
           border-bottom: 1px solid #e2e8f0;
-          height: 26px;
+          height: 24px;
         }
-        .qp-line-tall { height: 28px; }
+        .qp-line-tall { height: 26px; }
         .qp-answer-box {
           position: absolute;
           right: 0; bottom: 0;
-          border: 2px solid #1e293b;
-          border-radius: 4px;
-          min-width: 80px; min-height: 32px;
-          display: flex; align-items: center; gap: 6px;
-          padding: 4px 10px;
+          border: 1.5px solid #334155;
+          border-radius: 3px;
+          min-width: 72px; min-height: 28px;
+          display: flex; align-items: center; gap: 5px;
+          padding: 3px 8px;
           background: #fff;
         }
-        .qp-answer-label { font-size: 10px; font-weight: 700; color: #1e293b; white-space: nowrap; }
-        .qp-answer-value { font-size: 13px; font-weight: 700; color: #1d4ed8; }
+        .qp-answer-label { font-size: 9px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+        .qp-answer-value { font-size: 12px; font-weight: 700; color: #3b82f6; }
 
         /* ── Keyword chip (blank mode) ── */
         .qp-keyword-chip {
           display: inline-block;
-          font-size: 13px; font-weight: 600;
+          font-size: 12px; font-weight: 600;
           border: 1px solid #cbd5e1; border-radius: 4px;
-          padding: 3px 14px;
+          padding: 2px 12px;
           background: #f1f5f9; color: #1e293b;
         }
 
         /* ── Answer banner ── */
         .qp-answer-banner {
           text-align: center;
-          font-size: 11px; font-weight: 700;
-          color: #1d4ed8;
+          font-size: 10px; font-weight: 700;
+          color: #3b82f6;
           border: 1px solid #bfdbfe;
           background: #eff6ff;
           border-radius: 4px;
-          padding: 4px 0;
-          margin-bottom: 12px;
+          padding: 3px 0;
+          margin-bottom: 8px;
         }
 
         /* ── Example intro ── */
         .qp-example-intro {
-          font-size: 13px; font-weight: 500;
-          color: #334155; margin-bottom: 12px;
+          font-size: 12px; font-weight: 500;
+          color: #334155; margin-bottom: 8px;
         }
 
         /* ── Memo section ── */
         .qp-memo-section {
-          border: 2px solid #e2e8f0; border-radius: 8px;
-          padding: 20px; margin-top: 8px;
+          border: 1.5px solid #e2e8f0; border-radius: 6px;
+          padding: 16px; margin-top: 8px;
         }
-        .qp-memo-title { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
-        .qp-memo-subtitle { font-size: 11px; color: #64748b; margin-bottom: 12px; }
+        .qp-memo-title { font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
+        .qp-memo-subtitle { font-size: 10px; color: #64748b; margin-bottom: 10px; }
         .qp-memo-lines { border: none; padding: 0; background: transparent; }
 
-        /* ── Footer (all pages) ── */
+        /* ── Footer — navy bar, inside safe zone ── */
         .qp-footer {
           position: absolute;
-          bottom: 8px; left: 0; right: 0;
+          bottom: 18px; left: 20px; right: 20px;
           background: #1e293b;
           color: #fff;
           text-align: center;
-          padding: 6px 16px;
-          font-size: 10px; font-weight: 500;
-          display: flex; align-items: center; justify-content: center; gap: 8px;
+          padding: 5px 14px;
+          font-size: 9px; font-weight: 500;
+          border-radius: 3px;
+          display: flex; align-items: center; justify-content: center; gap: 6px;
         }
         .qp-footer-brand { font-weight: 700; white-space: nowrap; }
         .qp-footer-divider { opacity: 0.5; }
         .qp-footer-text { margin: 0; }
 
-        /* ── Page number ── */
+        /* ── Page number — above footer, inside safe zone ── */
         .qp-page-number {
-          position: absolute; bottom: 0; left: 50%;
+          position: absolute;
+          bottom: 6px; left: 50%;
           transform: translateX(-50%);
-          font-size: 9px; font-weight: 600;
-          color: #1e293b; background: #fff; padding: 0 6px;
+          font-size: 8px; font-weight: 600;
+          color: #94a3b8;
         }
 
-        /* ── KaTeX: Computer Modern style, slightly larger ── */
+        /* ── KaTeX: Computer Modern, slightly enlarged ── */
         .qp-question-text .katex,
         .qp-choice-text .katex,
         .qp-answer-value .katex {
           font-size: 1.08em;
         }
 
-        /* ══ Print overrides ══ */
+        /* ══════════════════════════════════════════════════
+           PRINT OVERRIDES — Perfect A4
+           ══════════════════════════════════════════════════ */
         @media print {
-          @page { margin: 6mm 0 4mm 0; size: A4; }
-          html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm 10mm 10mm;
+          }
+          html, body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            margin: 0; padding: 0;
+          }
           body * { visibility: hidden; }
           .quiz-print-area, .quiz-print-area * { visibility: visible; }
-          .quiz-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .quiz-print-area {
+            position: absolute;
+            left: 0; top: 0;
+            width: 100%;
+          }
           .print\\:hidden { display: none !important; }
-          .qp-item { break-inside: avoid; }
-          .qp-page { min-height: auto; padding: 8mm 12mm 12mm; }
-          .qp-footer { position: relative; bottom: auto; margin-top: 8px; }
-          .qp-page-number { position: relative; bottom: auto; margin-top: 2px; text-align: center; }
+
+          .qp-page {
+            min-height: auto;
+            padding: 0 0 36px;
+            page-break-after: always;
+            page-break-inside: avoid;
+          }
+
+          /* Ensure items never split across pages */
+          .qp-item {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .qp-two-col {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Footer repositioned for print safe zone */
+          .qp-footer {
+            position: relative;
+            bottom: auto;
+            margin-top: 6px;
+          }
+          .qp-page-number {
+            position: relative;
+            bottom: auto;
+            margin-top: 2px;
+            text-align: center;
+            transform: none;
+            left: auto;
+          }
+
+          /* Auto-scale: if content overflows, shrink slightly */
+          .qp-page {
+            font-size: 11.5px;
+          }
+          .qp-question-text { font-size: 11.5px; }
+          .qp-choice-text { font-size: 11px; }
+          .qp-num { font-size: 18px; }
+          .qp-line { height: 22px; }
         }
 
         /* ══ Screen preview ══ */
@@ -798,7 +865,7 @@ export default function QuizPrintPage() {
             margin: 16px auto;
             box-shadow: 0 4px 20px rgba(0,0,0,0.06);
             max-width: 210mm;
-            min-height: auto;
+            min-height: 297mm;
           }
         }
       `}</style>
