@@ -30,11 +30,13 @@ function extractExpression(text: string): string | null {
 }
 
 interface Props {
-  quiz: { id: string; questions: QuizQuestion[]; status: string } | null;
+  quiz: { id: string; questions: QuizQuestion[]; status: string; version_number?: number; version_label?: string | null } | null;
   loading: boolean;
   onSave: (questions: QuizQuestion[]) => void;
   onRegenerate: () => void;
   regenerating: boolean;
+  allVersions?: { id: string; version_number: number; version_label: string | null; created_at: string }[];
+  onSelectVersion?: (quizId: string) => void;
 }
 
 type RewriteMode = 'easier' | 'deeper' | 'example' | 'fix_code';
