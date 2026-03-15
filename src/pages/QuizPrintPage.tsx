@@ -105,12 +105,20 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
   },
 };
 
-/* ── Minimum lined-note rows (flex-grow will expand them to fill page) ── */
-function computeMinLines(isFirst: boolean, itemsOnPage: number): number {
-  if (isFirst) {
-    return itemsOnPage <= 2 ? 8 : itemsOnPage <= 3 ? 6 : 5;
-  }
-  return itemsOnPage <= 4 ? 5 : 4;
+/* ── Line height is FIXED at ~8.5mm. We compute how many lines fit. ── */
+const LINE_HEIGHT_MM = 8.5;
+const PAGE_HEIGHT_MM = 297;
+const PAGE_MARGIN_MM = 15 * 2; // top+bottom @page margin
+const HEADER_HEIGHT_MM = 38;   // first-page header block
+const FOOTER_HEIGHT_MM = 12;   // footer bar
+const QUESTION_OVERHEAD_MM = 22; // question text + number + gaps per item
+
+function computeLineCount(isFirst: boolean, itemsPerCol: number): number {
+  const usable = PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM - (isFirst ? HEADER_HEIGHT_MM : 0);
+  const totalOverhead = QUESTION_OVERHEAD_MM * itemsPerCol;
+  const spaceForLines = usable - totalOverhead;
+  const linesPerItem = Math.max(4, Math.floor(spaceForLines / itemsPerCol / LINE_HEIGHT_MM));
+  return linesPerItem;
 }
 
 export default function QuizPrintPage() {
