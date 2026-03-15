@@ -3,11 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
-import { Printer, ArrowLeft, BookOpen, ClipboardCheck, FileText } from 'lucide-react';
+import { Printer, ArrowLeft, BookOpen, ClipboardCheck, FileText, Calculator } from 'lucide-react';
 import { MathRenderer } from '@/components/math/MathRenderer';
 import logoImg from '@/assets/logo-thementor.png';
 
-type PrintMode = 'study' | 'quiz' | 'blank';
+type PrintMode = 'study' | 'quiz' | 'blank' | 'example';
 
 interface QuizQuestion {
   question_number: number;
@@ -27,7 +27,6 @@ interface PrintData {
   questions: QuizQuestion[];
 }
 
-/** Strip HTML tags from a string to get pure text for keyword extraction */
 function stripHtml(str: string): string {
   return str
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
@@ -36,18 +35,15 @@ function stripHtml(str: string): string {
     .trim();
 }
 
-/** Words that should never appear as blank-test keywords */
 const KEYWORD_BLACKLIST = new Set([
   '참', '거짓', 'O', 'X', 'o', 'x', 'O/X', '단답', '빈칸',
   '맞다', '틀리다', '예', '아니오', '네', '아니요',
   'true', 'false', 'TRUE', 'FALSE', 'True', 'False',
 ]);
 
-/** Check if a keyword is meaningful (not a trivial answer or too short) */
 function isValidKeyword(kw: string): boolean {
   if (!kw || kw.length < 2) return false;
   if (KEYWORD_BLACKLIST.has(kw)) return false;
-  // Filter out pure punctuation or single characters
   if (/^[.,;:!?~\-=+*\/\\]+$/.test(kw)) return false;
   return true;
 }
@@ -70,6 +66,12 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
     icon: FileText,
     subtitle: '키워드를 보고 스스로 정의와 성질을 서술하세요',
     footer: '각 키워드의 정의, 성질, 조건을 빠짐없이 서술해 보세요! 개념을 완벽히 내 것으로! 🔥',
+  },
+  example: {
+    label: '기초 예제 학습지',
+    icon: Calculator,
+    subtitle: '개념을 숫자와 식에 대입하여 연습하세요',
+    footer: '풀이 과정을 빠짐없이 적어주세요! 기초가 탄탄해야 실력이 쑥쑥! 💪',
   },
 };
 
@@ -108,13 +110,11 @@ export default function QuizPrintPage() {
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
   const qrPayload = data ? `${window.location.origin}/quiz-submit?quiz_id=${data.quizId}${studentId ? `&student_id=${studentId}` : ''}` : '';
 
-  // Extract clean keywords from answers for blank mode — filter out trivial answers
   const keywords = useMemo(() => {
     if (!data) return [] as string[];
     const seen = new Set<string>();
     const result: string[] = [];
     data.questions.forEach(q => {
-      // Skip true/false questions entirely — their answers are never good keywords
       if (q.question_type === 'true_false') return;
       const clean = stripHtml(q.answer);
       if (isValidKeyword(clean) && !seen.has(clean)) {
@@ -123,6 +123,15 @@ export default function QuizPrintPage() {
       }
     });
     return result;
+  }, [data]);
+
+  // Example mode: filter to short_answer/fill_blank questions that look like computation
+  const exampleQuestions = useMemo(() => {
+    if (!data) return [];
+    return data.questions.filter(q =>
+      q.question_type !== 'true_false' &&
+      (q.difficulty === 'easy' || q.difficulty === 'medium')
+    );
   }, [data]);
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">로딩 중...</div>;
@@ -139,7 +148,6 @@ export default function QuizPrintPage() {
     }
   };
 
-  /** For study mode: replace answer in question text with blank */
   const toStudyText = (q: QuizQuestion): string => {
     const ans = stripHtml(q.answer);
     if (!ans) return q.question_text;
@@ -151,7 +159,6 @@ export default function QuizPrintPage() {
     return plainText + ' ___BLANK___';
   };
 
-  // ─── Shared header ───
   const Header = () => (
     <div className="flex items-start justify-between border-b-2 border-foreground/80 pb-4 mb-5">
       <div className="flex items-center gap-3">
@@ -174,7 +181,7 @@ export default function QuizPrintPage() {
     <div className="flex flex-wrap gap-x-6 gap-y-1 mb-5 text-sm">
       <span>이름: <span className="inline-block border-b border-foreground min-w-[120px]">{studentName || '\u00A0'}</span></span>
       <span>날짜: <span className="inline-block border-b border-foreground min-w-[100px]">{today}</span></span>
-      <span>점수: _______ / {mode === 'blank' ? keywords.length : data.questions.length}</span>
+      <span>점수: _______ / {mode === 'blank' ? keywords.length : mode === 'example' ? exampleQuestions.length : data.questions.length}</span>
       <span className="ml-auto text-xs text-muted-foreground">대표 황은지</span>
     </div>
   );
@@ -185,7 +192,6 @@ export default function QuizPrintPage() {
     </div>
   );
 
-  // ─── Question renderer (shared for quiz & study) ───
   const QuestionItem = ({ q, textOverride }: { q: QuizQuestion; textOverride?: string }) => (
     <div className="qp-item mb-6 break-inside-avoid">
       <div className="flex items-start gap-2">
@@ -207,7 +213,30 @@ export default function QuizPrintPage() {
     </div>
   );
 
-  // ─── Quiz mode ───
+  // Example mode question with larger workspace
+  const ExampleQuestionItem = ({ q, num }: { q: QuizQuestion; num: number }) => (
+    <div className="qp-item mb-8 break-inside-avoid">
+      <div className="flex items-start gap-2">
+        <span className="font-bold text-sm shrink-0 w-6 text-right">{num}.</span>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm leading-relaxed">
+            <MathRenderer text={q.question_text} />
+          </span>
+        </div>
+      </div>
+      {/* Larger workspace for computation */}
+      <div className="mt-3 ml-8 border-2 border-foreground/30 rounded-md p-3 min-h-[100px]">
+        {showAnswerKey ? (
+          <span className="text-sm font-semibold" style={{ color: 'hsl(217,91%,60%)' }}>
+            <MathRenderer text={q.answer} />
+          </span>
+        ) : (
+          <p className="text-xs text-muted-foreground">풀이:</p>
+        )}
+      </div>
+    </div>
+  );
+
   const QuizMode = () => {
     const mid = Math.ceil(data.questions.length / 2);
     return (
@@ -218,7 +247,6 @@ export default function QuizPrintPage() {
     );
   };
 
-  // ─── Study mode ───
   const StudyMode = () => {
     const mid = Math.ceil(data.questions.length / 2);
     return (
@@ -238,7 +266,6 @@ export default function QuizPrintPage() {
     );
   };
 
-  // ─── Blank mode ───
   const BlankMode = () => (
     <div className="space-y-8">
       <p className="text-sm font-medium">아래 핵심 키워드의 <strong>정의, 성질, 조건</strong>을 직접 서술하세요.</p>
@@ -260,9 +287,23 @@ export default function QuizPrintPage() {
     </div>
   );
 
+  const ExampleMode = () => {
+    const qs = exampleQuestions;
+    const mid = Math.ceil(qs.length / 2);
+    return (
+      <>
+        <p className="text-sm font-medium mb-4">아래 문제의 풀이 과정을 자세히 작성하세요.</p>
+        <div className="grid grid-cols-2 gap-x-8">
+          <div>{qs.slice(0, mid).map((q, i) => <ExampleQuestionItem key={i} q={q} num={i + 1} />)}</div>
+          <div>{qs.slice(mid).map((q, i) => <ExampleQuestionItem key={i} q={q} num={mid + i + 1} />)}</div>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div className="quiz-print-wrapper">
-      {/* ─── Toolbar (screen only) ─── */}
+      {/* Toolbar (screen only) */}
       <div className="print:hidden max-w-4xl mx-auto px-4 pt-4 pb-2 flex items-center gap-2 flex-wrap">
         <Button variant="outline" size="sm" onClick={() => window.history.back()}>
           <ArrowLeft className="w-3.5 h-3.5 mr-1" /> 돌아가기
@@ -298,7 +339,7 @@ export default function QuizPrintPage() {
         </Button>
       </div>
 
-      {/* ─── Printable area ─── */}
+      {/* Printable area */}
       <div className="quiz-print-area max-w-4xl mx-auto p-8">
         <Header />
         <InfoRow />
@@ -310,6 +351,7 @@ export default function QuizPrintPage() {
         {mode === 'quiz' && <QuizMode />}
         {mode === 'study' && <StudyMode />}
         {mode === 'blank' && <BlankMode />}
+        {mode === 'example' && <ExampleMode />}
         <Footer />
       </div>
 

@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.grade-quiz-submission]
 verify_jwt = false
+
+[functions.rewrite-quiz-question]
+verify_jwt = false
