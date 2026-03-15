@@ -217,6 +217,28 @@ export function TextbookLibrary() {
     const results: BatchResult[] = [];
     setBatchProgress({ current: 0, total: extractFiles.length, results: [] });
 
+    const parseInvokeError = async (error: any) => {
+      let message = error?.message || 'AI 추출 호출 실패';
+      let reason = '';
+
+      if (error instanceof FunctionsHttpError) {
+        try {
+          const payload = await error.context.json();
+          if (payload?.error) message = payload.error;
+          if (payload?.detail?.reason) reason = payload.detail.reason;
+        } catch {
+          // no-op
+        }
+      }
+
+      if (message.includes('non-2xx')) {
+        message = '서버 처리 중 메모리 제한으로 실패했습니다. PDF는 8MB 이하 또는 페이지별 이미지로 업로드해 주세요.';
+        reason = reason || 'edge_non_2xx';
+      }
+
+      return { message, reason };
+    };
+
     for (let i = 0; i < extractFiles.length; i++) {
       const rawFile = extractFiles[i];
       setBatchProgress({ current: i + 1, total: extractFiles.length, results: [...results] });
@@ -243,8 +265,15 @@ export function TextbookLibrary() {
           }
         }
 
-        if (uploadFile.size > MAX_EXTRACT_FILE_BYTES) {
-          results.push({ fileName: rawFile.name, status: 'error', message: `파일이 너무 큽니다 (${(uploadFile.size / 1024 / 1024).toFixed(1)}MB). 20MB 이하로 줄여 주세요.` });
+        const maxBytes = getUploadLimitBytes(uploadFile);
+        if (uploadFile.size > maxBytes) {
+          const limitMb = Math.floor(maxBytes / 1024 / 1024);
+          results.push({
+            fileName: rawFile.name,
+            status: 'error',
+            message: `파일이 너무 큽니다 (${(uploadFile.size / 1024 / 1024).toFixed(1)}MB). ${isPdfUpload(uploadFile) ? `PDF는 ${limitMb}MB 이하` : `${limitMb}MB 이하`}로 줄여 주세요.`,
+            reason: 'file_too_large',
+          });
           continue;
         }
 
@@ -259,7 +288,8 @@ export function TextbookLibrary() {
         });
 
         if (error) {
-          results.push({ fileName: rawFile.name, status: 'error', message: error.message || 'AI 추출 호출 실패' });
+          const parsed = await parseInvokeError(error);
+          results.push({ fileName: rawFile.name, status: 'error', message: parsed.message, reason: parsed.reason });
           continue;
         }
 
@@ -267,8 +297,8 @@ export function TextbookLibrary() {
           const detail = data?.detail;
           const reason = detail?.reason || '';
           let msg = data?.error || 'AI 추출 실패';
-          if (reason === 'pdf_too_large') {
-            msg = `PDF가 너무 큽니다. 페이지를 나누어 이미지로 업로드해 주세요.`;
+          if (reason === 'pdf_too_large' || reason === 'request_too_large') {
+            msg = 'PDF가 너무 큽니다. 페이지 단위 이미지로 나누어 업로드해 주세요.';
           }
           results.push({ fileName: rawFile.name, status: 'error', message: msg, reason });
           continue;
@@ -288,9 +318,12 @@ export function TextbookLibrary() {
 
     const successCount = results.filter(r => r.status === 'success').length;
     const totalExtracted = results.reduce((sum, r) => sum + (r.count || 0), 0);
+    const firstError = results.find((r) => r.status === 'error');
     toast({
       title: `${successCount}/${extractFiles.length}개 파일 처리 완료`,
-      description: totalExtracted > 0 ? `총 ${totalExtracted}개 문항 추출` : '추출된 문항이 없습니다.',
+      description: totalExtracted > 0
+        ? `총 ${totalExtracted}개 문항 추출`
+        : (firstError?.message || '추출된 문항이 없습니다.'),
       variant: successCount === 0 ? 'destructive' : undefined,
     });
 
