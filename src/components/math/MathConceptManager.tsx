@@ -689,6 +689,10 @@ export function MathConceptManager() {
         <TabsContent value="review">
           <QuizSubmissionReview />
         </TabsContent>
+
+        <TabsContent value="tracking">
+          <QuizVersionTracker />
+        </TabsContent>
       </Tabs>
     </div>
   );
