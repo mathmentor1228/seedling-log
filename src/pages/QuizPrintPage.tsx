@@ -792,8 +792,8 @@ export default function QuizPrintPage() {
         .qp-footer-text { margin: 0; flex: 1; }
         .qp-footer-page {
           font-weight: 700;
-          font-size: 11px;
-          letter-spacing: 1px;
+          font-size: 13px;
+          letter-spacing: 1.5px;
           white-space: nowrap;
         }
 
