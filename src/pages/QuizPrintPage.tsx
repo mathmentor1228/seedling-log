@@ -583,8 +583,9 @@ export default function QuizPrintPage() {
 
         /* ── Header — refined, bottom accent line ── */
         .qp-header {
-          padding: 10px 0 10px;
-          margin-bottom: 10px;
+          padding: 14px 0 10px;
+          margin-bottom: 12px;
+          margin-top: 6px;
           display: flex;
           align-items: center;
           gap: 16px;
