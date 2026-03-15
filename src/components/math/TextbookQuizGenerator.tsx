@@ -65,6 +65,9 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
   // Killer toggle
   const [includeKiller, setIncludeKiller] = useState(true);
 
+  // Category filter
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
   // Order
   const [randomOrder, setRandomOrder] = useState(true);
 
