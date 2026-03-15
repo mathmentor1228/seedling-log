@@ -1398,6 +1398,8 @@ export type Database = {
           questions: Json
           status: string
           updated_at: string
+          version_label: string | null
+          version_number: number
         }
         Insert: {
           concept_id: string
@@ -1406,6 +1408,8 @@ export type Database = {
           questions?: Json
           status?: string
           updated_at?: string
+          version_label?: string | null
+          version_number?: number
         }
         Update: {
           concept_id?: string
@@ -1414,6 +1418,8 @@ export type Database = {
           questions?: Json
           status?: string
           updated_at?: string
+          version_label?: string | null
+          version_number?: number
         }
         Relationships: [
           {
@@ -1480,6 +1486,7 @@ export type Database = {
         Row: {
           assigned_at: string
           assigned_by: string
+          class_id: string | null
           id: string
           quiz_id: string
           student_id: string
@@ -1487,6 +1494,7 @@ export type Database = {
         Insert: {
           assigned_at?: string
           assigned_by: string
+          class_id?: string | null
           id?: string
           quiz_id: string
           student_id: string
@@ -1494,11 +1502,19 @@ export type Database = {
         Update: {
           assigned_at?: string
           assigned_by?: string
+          class_id?: string | null
           id?: string
           quiz_id?: string
           student_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "math_quiz_assignments_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "math_quiz_assignments_quiz_id_fkey"
             columns: ["quiz_id"]

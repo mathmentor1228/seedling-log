@@ -26,6 +26,7 @@ import {
 import { MathQuizPreview } from './MathQuizPreview';
 import { QuizSubmissionReview } from './QuizSubmissionReview';
 import { MathQuizAssignManager } from './MathQuizAssignManager';
+import { QuizVersionTracker } from './QuizVersionTracker';
 
 interface ConceptCreator {
   full_name: string | null;
@@ -63,6 +64,15 @@ interface QuizData {
   concept_id: string;
   questions: QuizQuestion[];
   status: string;
+  version_number?: number;
+  version_label?: string | null;
+}
+
+interface QuizVersionSummary {
+  id: string;
+  version_number: number;
+  version_label: string | null;
+  created_at: string;
 }
 
 export interface QuizQuestion {
@@ -105,6 +115,7 @@ export function MathConceptManager() {
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
   const [quizData, setQuizData] = useState<QuizData | null>(null);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
+  const [conceptVersions, setConceptVersions] = useState<QuizVersionSummary[]>([]);
 
   // Concept tuning
   const [conceptSubjectDraft, setConceptSubjectDraft] = useState(SUBJECTS[0]);
@@ -311,13 +322,31 @@ export function MathConceptManager() {
     }
   };
 
-  const loadQuiz = async (conceptId: string) => {
+  const loadQuiz = async (conceptId: string, specificQuizId?: string) => {
     setLoadingQuiz(true);
-    const { data, error } = await supabase
+
+    // Load all versions for this concept
+    const { data: allVers } = await supabase
+      .from('math_concept_quizzes')
+      .select('id, version_number, version_label, created_at')
+      .eq('concept_id', conceptId)
+      .order('version_number', { ascending: false }) as any;
+
+    setConceptVersions((allVers || []) as QuizVersionSummary[]);
+
+    // Load specific version or latest
+    let query = supabase
       .from('math_concept_quizzes')
       .select('*')
-      .eq('concept_id', conceptId)
-      .maybeSingle();
+      .eq('concept_id', conceptId);
+
+    if (specificQuizId) {
+      query = query.eq('id', specificQuizId);
+    } else {
+      query = query.order('version_number', { ascending: false }).limit(1);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (!error && data) {
       setQuizData(data as any);
@@ -433,7 +462,7 @@ export function MathConceptManager() {
       </div>
 
       <Tabs defaultValue="concepts" className="space-y-4">
-        <TabsList className="w-full grid grid-cols-3 h-11">
+        <TabsList className="w-full grid grid-cols-4 h-11">
           <TabsTrigger value="concepts" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <BookOpen className="w-4 h-4" />
             개념 & 퀴즈
@@ -445,6 +474,10 @@ export function MathConceptManager() {
           <TabsTrigger value="review" className="flex items-center gap-1.5 text-xs sm:text-sm">
             <ClipboardCheck className="w-4 h-4" />
             제출 채점
+          </TabsTrigger>
+          <TabsTrigger value="tracking" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <ChevronRight className="w-4 h-4" />
+            추적 대시보드
           </TabsTrigger>
         </TabsList>
 
@@ -670,6 +703,8 @@ export function MathConceptManager() {
               onSave={handleSaveQuiz}
               onRegenerate={() => handleGenerateQuiz(selectedConceptId)}
               regenerating={generating === selectedConceptId}
+              allVersions={conceptVersions}
+              onSelectVersion={(quizId) => loadQuiz(selectedConceptId, quizId)}
             />
           )}
         </TabsContent>
@@ -680,6 +715,10 @@ export function MathConceptManager() {
 
         <TabsContent value="review">
           <QuizSubmissionReview />
+        </TabsContent>
+
+        <TabsContent value="tracking">
+          <QuizVersionTracker />
         </TabsContent>
       </Tabs>
     </div>

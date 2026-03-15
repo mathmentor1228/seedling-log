@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
   Loader2, Eye, Save, RefreshCw, Edit2, Check, Lightbulb, Printer,
-  Trash2, Wand2, ChevronDown, BarChart3,
+  Trash2, Wand2, ChevronDown, BarChart3, History,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -30,11 +30,13 @@ function extractExpression(text: string): string | null {
 }
 
 interface Props {
-  quiz: { id: string; questions: QuizQuestion[]; status: string } | null;
+  quiz: { id: string; questions: QuizQuestion[]; status: string; version_number?: number; version_label?: string | null } | null;
   loading: boolean;
   onSave: (questions: QuizQuestion[]) => void;
   onRegenerate: () => void;
   regenerating: boolean;
+  allVersions?: { id: string; version_number: number; version_label: string | null; created_at: string }[];
+  onSelectVersion?: (quizId: string) => void;
 }
 
 type RewriteMode = 'easier' | 'deeper' | 'example' | 'fix_code';
@@ -46,7 +48,7 @@ const REWRITE_LABELS: Record<RewriteMode, { label: string; desc: string; icon?: 
   example: { label: '예제 추가', desc: '기초 수치 예제 문제를 아래 생성' },
 };
 
-export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerating }: Props) {
+export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerating, allVersions, onSelectVersion }: Props) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [editMode, setEditMode] = useState(false);
@@ -162,11 +164,19 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="w-5 h-5" />
-            퀴즈 미리보기 ({displayQuestions.length}문항)
-          </CardTitle>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              퀴즈 미리보기 ({displayQuestions.length}문항)
+            </CardTitle>
+            {quiz.version_number && (
+              <Badge variant="secondary" className="text-xs">V{quiz.version_number}</Badge>
+            )}
+            {quiz.version_label && (
+              <span className="text-xs text-muted-foreground">{quiz.version_label}</span>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={onRegenerate} disabled={regenerating}>
               {regenerating ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
@@ -191,6 +201,26 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
             </Button>
           </div>
         </div>
+        {/* Version selector */}
+        {allVersions && allVersions.length > 1 && onSelectVersion && (
+          <div className="flex items-center gap-2 mt-2">
+            <History className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">이전 버전:</span>
+            <div className="flex gap-1 flex-wrap">
+              {allVersions.map(v => (
+                <Button
+                  key={v.id}
+                  size="sm"
+                  variant={v.id === quiz.id ? 'default' : 'outline'}
+                  className="h-6 text-xs px-2"
+                  onClick={() => onSelectVersion(v.id)}
+                >
+                  V{v.version_number}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <div className="space-y-6">

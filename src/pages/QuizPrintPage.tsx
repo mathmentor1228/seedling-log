@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Printer, ArrowLeft, BookOpen, ClipboardCheck, FileText, Calculator } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { MathRenderer } from '@/components/math/MathRenderer';
 import logoImg from '@/assets/logo-thementor.png';
 
@@ -25,6 +26,8 @@ interface PrintData {
   grade: string;
   subject: string;
   questions: QuizQuestion[];
+  versionNumber: number;
+  versionLabel: string | null;
 }
 
 function stripHtml(str: string): string {
@@ -90,7 +93,7 @@ export default function QuizPrintPage() {
     (async () => {
       const { data: quiz, error } = await supabase
         .from('math_concept_quizzes')
-        .select('id, questions, math_concepts(title, course, grade, subject)')
+        .select('id, questions, version_number, version_label, math_concepts(title, course, grade, subject)')
         .eq('id', quizId)
         .single();
       if (error || !quiz) { setLoading(false); return; }
@@ -102,6 +105,8 @@ export default function QuizPrintPage() {
         grade: concept?.grade || '',
         subject: concept?.subject || '수학',
         questions: (quiz.questions as any) as QuizQuestion[],
+        versionNumber: (quiz as any).version_number || 1,
+        versionLabel: (quiz as any).version_label || null,
       });
       setLoading(false);
     })();
@@ -167,12 +172,13 @@ export default function QuizPrintPage() {
           <h1 className="text-lg font-bold leading-tight">{cfg.label}</h1>
           <p className="text-[11px] text-muted-foreground">{cfg.subtitle}</p>
           <p className="text-sm mt-1">{data.subject} · {data.grade} · {data.course}</p>
-          <p className="text-sm font-semibold mt-0.5">{data.conceptTitle}</p>
+           <p className="text-sm font-semibold mt-0.5">{data.conceptTitle}</p>
         </div>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <QRCodeSVG value={qrPayload} size={68} level="M" />
         <span className="text-[9px] text-muted-foreground">QR로 제출하기</span>
+        <Badge variant="secondary" className="text-[9px] mt-0.5">V{data.versionNumber}</Badge>
       </div>
     </div>
   );

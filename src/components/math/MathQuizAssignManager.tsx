@@ -218,7 +218,17 @@ export function MathQuizAssignManager({ quizzes }: Props) {
     setAssigning(true);
     const { data: { user } } = await supabase.auth.getUser();
     const alreadyAssigned = getAssignedStudents(selectedQuizId);
+    const duplicates = Array.from(assignSelection).filter(sid => alreadyAssigned.has(sid));
     const newStudents = Array.from(assignSelection).filter(sid => !alreadyAssigned.has(sid));
+
+    if (duplicates.length > 0) {
+      const dupNames = duplicates.map(sid => students.find(s => s.id === sid)?.name || '?').join(', ');
+      toast({
+        title: '⚠️ 중복 배포 감지',
+        description: `${dupNames}에게 이미 배포된 퀴즈입니다. 새로운 학생에게만 배포합니다.`,
+        variant: 'destructive',
+      });
+    }
 
     if (newStudents.length > 0) {
       const rows = newStudents.map(sid => ({
@@ -232,7 +242,7 @@ export function MathQuizAssignManager({ quizzes }: Props) {
       } else {
         toast({ title: `${newStudents.length}명에게 퀴즈 배정 완료` });
       }
-    } else {
+    } else if (duplicates.length === 0) {
       toast({ title: '이미 배정된 학생들입니다.' });
     }
     await fetchAll();
