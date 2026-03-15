@@ -268,6 +268,16 @@ export function TextbookLibrary() {
     medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     hard: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   };
+  const categoryLabel: Record<string, string> = {
+    '일반문항': '일반', '예제': '예제', '활동형': '활동', '사고력': '사고력', '마무리': '마무리',
+  };
+  const categoryColor: Record<string, string> = {
+    '일반문항': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    '예제': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    '활동형': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    '사고력': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    '마무리': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  };
 
   return (
     <div className="space-y-4">
