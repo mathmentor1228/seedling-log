@@ -421,7 +421,8 @@ export default function QuizPrintPage() {
     const totalPages = pages.length;
     return pages.map((page, pi) => {
       const mid = Math.ceil(page.questions.length / 2);
-      const blankLines = computeMinLines(page.isFirst, page.questions.length) + 1;
+      const mid2 = Math.ceil(page.questions.length / 2);
+      const blankLines = computeLineCount(page.isFirst, mid2);
       return (
         <div key={pi} className="qp-page">
           {page.isFirst && <FullHeader />}
