@@ -287,8 +287,15 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
                 </div>
               ) : (
                 <>
-                  <div className="text-base leading-relaxed">
-                    <MathRenderer text={q.question_text} />
+                  <div className="flex gap-4">
+                    <div className="text-base leading-relaxed flex-1">
+                      <MathRenderer text={q.question_text} />
+                    </div>
+                    {GRAPH_KEYWORDS.test(q.question_text) && extractExpression(q.question_text) && (
+                      <div className="shrink-0">
+                        <MathGraph expression={extractExpression(q.question_text)!} width={180} height={180} />
+                      </div>
+                    )}
                   </div>
                   <div className="bg-muted/50 rounded-md p-3 space-y-1">
                     <div className="flex items-center gap-2">
