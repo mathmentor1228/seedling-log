@@ -109,14 +109,20 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
 const LINE_HEIGHT_MM = 8.5;
 const PAGE_HEIGHT_MM = 297;
 const PAGE_MARGIN_MM = 15 * 2; // top+bottom @page margin
-const HEADER_HEIGHT_MM = 38;   // first-page header block
+const HEADER_HEIGHT_MM = 42;   // first-page header block (increased top margin)
 const FOOTER_HEIGHT_MM = 12;   // footer bar
 const QUESTION_OVERHEAD_MM = 22; // question text + number + gaps per item
 
-function computeLineCount(isFirst: boolean, itemsPerCol: number): number {
+/** Count (1), (2)… sub-question markers in text */
+function countSubQuestions(text: string): number {
+  const matches = text.match(/\(([0-9]{1,2})\)|⑴|⑵|⑶|⑷|⑸|⑹|⑺|⑻|⑼|⑽/g);
+  return matches ? matches.length : 0;
+}
+
+function computeLineCount(isFirst: boolean, itemsPerCol: number, extraSubLines = 0): number {
   const usable = PAGE_HEIGHT_MM - PAGE_MARGIN_MM - FOOTER_HEIGHT_MM - (isFirst ? HEADER_HEIGHT_MM : 0);
   const totalOverhead = QUESTION_OVERHEAD_MM * itemsPerCol;
-  const spaceForLines = usable - totalOverhead;
+  const spaceForLines = usable - totalOverhead - (extraSubLines * LINE_HEIGHT_MM);
   const linesPerItem = Math.max(4, Math.floor(spaceForLines / itemsPerCol / LINE_HEIGHT_MM));
   return linesPerItem;
 }
@@ -285,28 +291,34 @@ export default function QuizPrintPage() {
   );
 
   /* ── Workspace: lined note area with FIXED line height, variable count ── */
-  const WorkspaceArea = ({ q, showAnswer, lines }: { q: QuizQuestion; showAnswer: boolean; lines: number }) => (
-    <div className="qp-workspace">
-      <div className="qp-lined-area">
-        {Array.from({ length: lines }).map((_, i) => (
-          <div key={i} className="qp-line" />
-        ))}
+  const WorkspaceArea = ({ q, showAnswer, lines, subCount }: { q: QuizQuestion; showAnswer: boolean; lines: number; subCount?: number }) => {
+    // Add extra lines proportional to sub-question count
+    const extraLines = subCount && subCount > 1 ? Math.min((subCount - 1) * 2, 8) : 0;
+    const totalLines = lines + extraLines;
+    return (
+      <div className="qp-workspace">
+        <div className="qp-lined-area">
+          {Array.from({ length: totalLines }).map((_, i) => (
+            <div key={i} className="qp-line" />
+          ))}
+        </div>
+        <div className="qp-answer-box">
+          <span className="qp-answer-label">정답</span>
+          {showAnswer && (
+            <span className="qp-answer-value">
+              <MathRenderer text={q.answer} />
+            </span>
+          )}
+        </div>
       </div>
-      <div className="qp-answer-box">
-        <span className="qp-answer-label">정답</span>
-        {showAnswer && (
-          <span className="qp-answer-value">
-            <MathRenderer text={q.answer} />
-          </span>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   const QuestionItem = ({ q, textOverride, lines }: { q: QuizQuestion; textOverride?: string; lines: number }) => {
     const num = String(q.question_number).padStart(2, '0');
     const raw = textOverride ?? q.question_text;
     const parsed = parseChoices(raw);
+    const subCount = countSubQuestions(raw);
 
     return (
       <div className="qp-item">
@@ -314,13 +326,13 @@ export default function QuizPrintPage() {
           <span className="qp-num">{num}</span>
           <div className="qp-question-body">
             <span className="qp-question-text">
-              <MathRenderer text={parsed ? parsed.body : raw} />
+              <MathRenderer text={parsed ? parsed.body : raw} autoSubBreak={true} />
             </span>
             <SourceInfo q={q} />
             {parsed && <ChoicesRenderer choices={parsed.choices} />}
           </div>
         </div>
-        <WorkspaceArea q={q} showAnswer={showAnswerKey} lines={lines} />
+        <WorkspaceArea q={q} showAnswer={showAnswerKey} lines={lines} subCount={subCount} />
       </div>
     );
   };
@@ -571,8 +583,9 @@ export default function QuizPrintPage() {
 
         /* ── Header — refined, bottom accent line ── */
         .qp-header {
-          padding: 10px 0 10px;
-          margin-bottom: 10px;
+          padding: 14px 0 10px;
+          margin-bottom: 12px;
+          margin-top: 6px;
           display: flex;
           align-items: center;
           gap: 16px;
@@ -687,6 +700,34 @@ export default function QuizPrintPage() {
           color: #94a3b8;
           margin-left: 4px;
           font-style: italic;
+        }
+
+        /* ── Sub-question auto line-break styling ── */
+        .mr-sub-break {
+          display: block;
+          height: 6px;
+        }
+        .mr-sub-marker {
+          font-weight: 700;
+          color: #334155;
+          margin-right: 4px;
+        }
+        /* Answer blank after each sub-question */
+        .mr-sub-marker::after {
+          content: '';
+          display: inline-block;
+          border-bottom: 1.5px solid #94a3b8;
+          min-width: 60px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
+
+        /* ── Formula visual separation — display math gets extra spacing & weight ── */
+        .qp-question-text .katex-display {
+          margin: 6px 0 4px !important;
+        }
+        .qp-question-text .katex {
+          font-weight: 500;
         }
 
         /* ── Smart choices ── */
@@ -805,11 +846,13 @@ export default function QuizPrintPage() {
           white-space: nowrap;
         }
 
-        /* ── KaTeX: Computer Modern, slightly enlarged ── */
+        /* ── KaTeX: Computer Modern, enlarged for readability ── */
         .qp-question-text .katex,
         .qp-choice-text .katex,
         .qp-answer-value .katex {
-          font-size: 1.08em;
+          font-size: 1.15em;
+          font-weight: 500;
+        }
         }
 
         /* ══════════════════════════════════════════════════
