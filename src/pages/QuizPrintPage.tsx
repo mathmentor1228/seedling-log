@@ -846,11 +846,13 @@ export default function QuizPrintPage() {
           white-space: nowrap;
         }
 
-        /* ── KaTeX: Computer Modern, slightly enlarged ── */
+        /* ── KaTeX: Computer Modern, enlarged for readability ── */
         .qp-question-text .katex,
         .qp-choice-text .katex,
         .qp-answer-value .katex {
-          font-size: 1.08em;
+          font-size: 1.15em;
+          font-weight: 500;
+        }
         }
 
         /* ══════════════════════════════════════════════════
