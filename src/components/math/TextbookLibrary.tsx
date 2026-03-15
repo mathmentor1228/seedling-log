@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { TextbookQuizGenerator } from './TextbookQuizGenerator';
+import { compressImage } from '@/lib/imageCompression';
 
 interface Textbook {
   id: string;
