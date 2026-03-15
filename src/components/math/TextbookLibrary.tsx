@@ -420,6 +420,9 @@ export function TextbookLibrary() {
                         추출하기
                       </Button>
                     </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      문제가 보이는 단일 페이지 파일(PDF/이미지)을 권장합니다.
+                    </p>
                   </CardContent>
                 </Card>
 
