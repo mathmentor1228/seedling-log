@@ -27,6 +27,18 @@ const isPdfFile = (file: File) => {
   return lowerType === 'application/pdf' || lowerName.endsWith('.pdf');
 };
 
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = '';
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+};
+
 // --- Category classification logic ---
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   '활동형': ['함께 풀기', '확인하기', '탐구 활동', '활동'],
@@ -141,45 +153,53 @@ serve(async (req) => {
 
     const pdfUpload = isPdfFile(file);
     const mimeType = pdfUpload ? 'application/pdf' : (file.type || 'application/octet-stream');
-    let fileUrl: string;
+    let aiFileUrl: string;
 
-    // MEMORY-FIX-V2: Always use Storage + Signed URL to avoid OOM in edge function
-    // Base64 encoding doubles memory usage and causes "Memory limit exceeded" for files > ~2MB
-    uploadedTempPath = `extract-textbook-examples/${user.id}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
+    if (pdfUpload) {
+      // Gemini(OpenAI-compatible) does not accept PDF via remote URL.
+      // PDFs must be sent as a data URL with MIME type.
+      const fileBytes = new Uint8Array(await file.arrayBuffer());
+      const base64Pdf = toBase64(fileBytes);
+      aiFileUrl = `data:application/pdf;base64,${base64Pdf}`;
+      console.log(`[extract] PDF encoded as data URL (${(file.size / 1024).toFixed(0)}KB)`);
+    } else {
+      // Keep signed URL flow for image files to avoid unnecessary memory usage.
+      uploadedTempPath = `extract-textbook-examples/${user.id}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
 
-    console.log(`[extract] Uploading to storage: ${uploadedTempPath} (${(file.size / 1024).toFixed(0)}KB, ${mimeType})`);
+      console.log(`[extract] Uploading to storage: ${uploadedTempPath} (${(file.size / 1024).toFixed(0)}KB, ${mimeType})`);
 
-    const { error: uploadError } = await adminClient.storage
-      .from(TEMP_UPLOAD_BUCKET)
-      .upload(uploadedTempPath, file, {
-        contentType: mimeType,
-        upsert: false,
-      });
+      const { error: uploadError } = await adminClient.storage
+        .from(TEMP_UPLOAD_BUCKET)
+        .upload(uploadedTempPath, file, {
+          contentType: mimeType,
+          upsert: false,
+        });
 
-    if (uploadError) {
-      console.error('[extract] Temp upload failed:', uploadError);
-      return jsonResponse({
-        success: false,
-        error: '파일 업로드 중 오류가 발생했습니다.',
-        detail: { fileName: file.name, batchLabel, reason: 'storage_upload_failed', dbError: uploadError.message },
-      });
+      if (uploadError) {
+        console.error('[extract] Temp upload failed:', uploadError);
+        return jsonResponse({
+          success: false,
+          error: '파일 업로드 중 오류가 발생했습니다.',
+          detail: { fileName: file.name, batchLabel, reason: 'storage_upload_failed', dbError: uploadError.message },
+        });
+      }
+
+      const { data: signedData, error: signedError } = await adminClient.storage
+        .from(TEMP_UPLOAD_BUCKET)
+        .createSignedUrl(uploadedTempPath, TEMP_UPLOAD_TTL_SECONDS);
+
+      if (signedError || !signedData?.signedUrl) {
+        console.error('[extract] Signed URL failed:', signedError);
+        return jsonResponse({
+          success: false,
+          error: '파일 접근 링크 생성에 실패했습니다.',
+          detail: { fileName: file.name, batchLabel, reason: 'signed_url_failed' },
+        });
+      }
+
+      aiFileUrl = signedData.signedUrl;
+      console.log(`[extract] Signed URL created, proceeding to AI analysis`);
     }
-
-    const { data: signedData, error: signedError } = await adminClient.storage
-      .from(TEMP_UPLOAD_BUCKET)
-      .createSignedUrl(uploadedTempPath, TEMP_UPLOAD_TTL_SECONDS);
-
-    if (signedError || !signedData?.signedUrl) {
-      console.error('[extract] Signed URL failed:', signedError);
-      return jsonResponse({
-        success: false,
-        error: '파일 접근 링크 생성에 실패했습니다.',
-        detail: { fileName: file.name, batchLabel, reason: 'signed_url_failed' },
-      });
-    }
-
-    fileUrl = signedData.signedUrl;
-    console.log(`[extract] Signed URL created, proceeding to AI analysis`);
 
     const systemPrompt = `당신은 한국 수학/과학 교과서 전문 문항 추출기입니다.
 주어진 교과서 페이지에서 **모든 학습 요소**를 빠짐없이 추출하세요.
@@ -243,7 +263,7 @@ serve(async (req) => {
               { type: 'text', text: userPrompt },
               {
                 type: 'image_url',
-                image_url: { url: fileUrl },
+                image_url: { url: aiFileUrl },
               },
             ],
           },
