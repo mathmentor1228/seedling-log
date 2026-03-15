@@ -475,7 +475,7 @@ export default function QuizPrintPage() {
               ))}
             </div>
           </div>
-          <Footer />
+          <Footer pageNum={1} totalPages={1} />
         </div>
       </>
     );
