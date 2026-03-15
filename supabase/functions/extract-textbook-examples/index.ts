@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { encode as encodeBase64 } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -9,8 +8,8 @@ const corsHeaders = {
 };
 
 const STAFF_ROLES = ['admin', 'teacher'];
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-const INLINE_BASE64_LIMIT_BYTES = 3 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 9 * 1024 * 1024;
 const TEMP_UPLOAD_BUCKET = 'attachments';
 const TEMP_UPLOAD_TTL_SECONDS = 60 * 10;
 
@@ -99,6 +98,15 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: '선생님/관리자만 사용할 수 있습니다.' }, 403);
     }
 
+    const requestBytes = Number(req.headers.get('content-length') || 0);
+    if (Number.isFinite(requestBytes) && requestBytes > MAX_REQUEST_BYTES) {
+      return jsonResponse({
+        success: false,
+        error: `요청 크기가 너무 큽니다 (${(requestBytes / 1024 / 1024).toFixed(1)}MB). PDF는 8MB 이하로 나누어 업로드해 주세요.`,
+        detail: { reason: 'request_too_large', requestBytes, limitBytes: MAX_REQUEST_BYTES },
+      }, 413);
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const textbookId = (formData.get('textbook_id') as string | null)?.trim();
@@ -116,9 +124,9 @@ serve(async (req) => {
     if (file.size > MAX_UPLOAD_BYTES) {
       return jsonResponse({
         success: false,
-        error: `파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). 20MB 이하로 업로드해 주세요.`,
-        detail: { fileName: file.name, fileSize: file.size, batchLabel },
-      });
+        error: `파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). PDF는 8MB 이하로 나누어 업로드해 주세요.`,
+        detail: { fileName: file.name, fileSize: file.size, batchLabel, reason: 'pdf_too_large' },
+      }, 413);
     }
 
     const { data: textbook, error: textbookError } = await adminClient
@@ -354,7 +362,7 @@ serve(async (req) => {
     if (examples.length === 0) {
       return jsonResponse({
         success: false,
-        error: '이 페이지에서 문제를 찾지 못했습니다. 문제가 포함된 페이지인지 확인해 주세요.',
+        error: '문항을 감지하지 못했습니다. 문제 영역만 보이도록 페이지별 이미지(또는 8MB 이하 PDF)로 다시 업로드해 주세요.',
         detail: { fileName: file.name, batchLabel, reason: 'no_examples_found' },
       });
     }
