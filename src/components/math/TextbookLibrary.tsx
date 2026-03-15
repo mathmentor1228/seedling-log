@@ -194,31 +194,36 @@ export function TextbookLibrary() {
   const handleAIExtract = async () => {
     if (!selectedTextbook || !extractFile) return;
     setExtracting(true);
+
     try {
+      let uploadFile = extractFile;
+
+      if (uploadFile.type.startsWith('image/') && uploadFile.size > IMAGE_COMPRESS_TARGET_BYTES) {
+        uploadFile = await compressImage(uploadFile, 1800, 1800, 0.8);
+      }
+
+      if (uploadFile.size > MAX_EXTRACT_FILE_BYTES) {
+        throw new Error('파일이 너무 큽니다. 20MB 이하의 단일 페이지 파일을 업로드해 주세요.');
+      }
+
       const formData = new FormData();
-      formData.append('file', extractFile);
+      formData.append('file', uploadFile);
       formData.append('textbook_id', selectedTextbook.id);
       formData.append('chapter', extractChapter.trim() || '전체');
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-textbook-examples`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: formData,
-        },
-      );
+      const { data, error } = await supabase.functions.invoke('extract-textbook-examples', {
+        body: formData,
+      });
 
-      if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.error || 'AI 추출 실패');
+      if (error) {
+        throw new Error(error.message || 'AI 추출 호출에 실패했습니다.');
       }
 
-      const result = await resp.json();
-      toast({ title: `${result.count}개 문제가 추출되었습니다` });
+      if (!data?.success) {
+        throw new Error(data?.error || 'AI 추출 실패');
+      }
+
+      toast({ title: `${data.count}개 문제가 추출되었습니다` });
       setExtractFile(null);
       setExtractChapter('');
       fetchExamples(selectedTextbook.id);
