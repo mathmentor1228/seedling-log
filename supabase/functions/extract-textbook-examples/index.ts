@@ -27,6 +27,18 @@ const isPdfFile = (file: File) => {
   return lowerType === 'application/pdf' || lowerName.endsWith('.pdf');
 };
 
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = '';
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+};
+
 // --- Category classification logic ---
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   '활동형': ['함께 풀기', '확인하기', '탐구 활동', '활동'],
