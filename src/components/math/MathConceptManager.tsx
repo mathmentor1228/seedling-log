@@ -53,6 +53,12 @@ interface QuizSummary {
   id: string;
   concept_id: string;
   status: string;
+  created_at?: string;
+  questions?: any;
+  version_number?: number;
+  version_label?: string | null;
+  answer_code?: string | null;
+  creator_name?: string;
   math_concepts: {
     title: string;
     course: string;
