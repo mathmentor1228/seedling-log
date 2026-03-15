@@ -32,6 +32,7 @@ import ExamPrepPage from "./pages/ExamPrepPage";
 import QuizPrintPage from "./pages/QuizPrintPage";
 import QuizSubmitPage from "./pages/QuizSubmitPage";
 import QuizBulkUploadPage from "./pages/QuizBulkUploadPage";
+import QuizLookupPage from "./pages/QuizLookupPage";
 import NotFound from "./pages/NotFound";
 import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
