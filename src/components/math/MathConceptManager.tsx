@@ -208,7 +208,26 @@ export function MathConceptManager() {
     if (quizzesRes.error) {
       console.error(quizzesRes.error);
     } else {
-      setAllQuizzes((quizzesRes.data || []) as QuizSummary[]);
+      const quizRows = (quizzesRes.data || []) as any[];
+      // Resolve creator names for quizzes using the same creatorMap
+      const quizCreatorIds = Array.from(
+        new Set(quizRows.map((q: any) => q.math_concepts?.created_by).filter(Boolean) as string[]),
+      );
+      // Fetch any missing creators not already in creatorMap
+      const missingIds = quizCreatorIds.filter(id => !creatorMap[id]);
+      if (missingIds.length > 0) {
+        const { data: extraProfiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', missingIds as any);
+        (extraProfiles || []).forEach((p: any) => {
+          creatorMap[p.id] = p.full_name || '이름 없음';
+        });
+      }
+      setAllQuizzes(quizRows.map((q: any) => ({
+        ...q,
+        creator_name: q.math_concepts?.created_by ? (creatorMap[q.math_concepts.created_by] || '미확인') : '미지정',
+      })));
     }
 
     setLoading(false);
