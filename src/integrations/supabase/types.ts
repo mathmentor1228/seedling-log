@@ -2858,6 +2858,65 @@ export type Database = {
           },
         ]
       }
+      textbook_examples: {
+        Row: {
+          answer: string | null
+          chapter: string
+          created_at: string
+          created_by: string | null
+          difficulty: string | null
+          explanation: string | null
+          graph_data: Json | null
+          id: string
+          page_number: number | null
+          problem_number: string | null
+          question_text: string
+          sort_order: number
+          textbook_id: string
+          updated_at: string
+        }
+        Insert: {
+          answer?: string | null
+          chapter: string
+          created_at?: string
+          created_by?: string | null
+          difficulty?: string | null
+          explanation?: string | null
+          graph_data?: Json | null
+          id?: string
+          page_number?: number | null
+          problem_number?: string | null
+          question_text: string
+          sort_order?: number
+          textbook_id: string
+          updated_at?: string
+        }
+        Update: {
+          answer?: string | null
+          chapter?: string
+          created_at?: string
+          created_by?: string | null
+          difficulty?: string | null
+          explanation?: string | null
+          graph_data?: Json | null
+          id?: string
+          page_number?: number | null
+          problem_number?: string | null
+          question_text?: string
+          sort_order?: number
+          textbook_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "textbook_examples_textbook_id_fkey"
+            columns: ["textbook_id"]
+            isOneToOne: false
+            referencedRelation: "textbooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       textbook_orders: {
         Row: {
           approved_at: string | null
@@ -2911,6 +2970,45 @@ export type Database = {
           subject?: string
           textbook_name?: string
           unit_price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      textbooks: {
+        Row: {
+          course: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          grade: string | null
+          id: string
+          publisher: string | null
+          subject: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          course?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          grade?: string | null
+          id?: string
+          publisher?: string | null
+          subject?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          course?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          grade?: string | null
+          id?: string
+          publisher?: string | null
+          subject?: string
+          title?: string
           updated_at?: string
         }
         Relationships: []
