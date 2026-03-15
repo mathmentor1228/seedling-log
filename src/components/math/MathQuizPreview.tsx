@@ -293,10 +293,19 @@ export function MathQuizPreview({ quiz, loading, onSave, onRegenerate, regenerat
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground">난이도</label>
-                      <Input
-                        value={editedQuestions[idx]?.difficulty || ''}
-                        onChange={e => updateQuestion(idx, 'difficulty', e.target.value)}
-                      />
+                      <Select
+                        value={editedQuestions[idx]?.difficulty || 'medium'}
+                        onValueChange={v => updateQuestion(idx, 'difficulty', v)}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="easy">쉬움</SelectItem>
+                          <SelectItem value="medium">보통</SelectItem>
+                          <SelectItem value="hard">어려움</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div>
