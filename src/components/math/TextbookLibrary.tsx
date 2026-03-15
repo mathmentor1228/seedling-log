@@ -76,6 +76,9 @@ export function TextbookLibrary() {
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [extractChapter, setExtractChapter] = useState('');
 
+  // Quiz generator
+  const [showQuizGen, setShowQuizGen] = useState(false);
+
   const fetchTextbooks = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
