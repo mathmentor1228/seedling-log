@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { TextbookQuizGenerator } from './TextbookQuizGenerator';
+import { compressImage } from '@/lib/imageCompression';
 
 interface Textbook {
   id: string;
@@ -42,6 +43,8 @@ interface TextbookExample {
 }
 
 const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '기타'];
+const MAX_EXTRACT_FILE_BYTES = 20 * 1024 * 1024;
+const IMAGE_COMPRESS_TARGET_BYTES = 2 * 1024 * 1024;
 
 export function TextbookLibrary() {
   const { toast } = useToast();
@@ -191,31 +194,36 @@ export function TextbookLibrary() {
   const handleAIExtract = async () => {
     if (!selectedTextbook || !extractFile) return;
     setExtracting(true);
+
     try {
+      let uploadFile = extractFile;
+
+      if (uploadFile.type.startsWith('image/') && uploadFile.size > IMAGE_COMPRESS_TARGET_BYTES) {
+        uploadFile = await compressImage(uploadFile, 1800, 1800, 0.8);
+      }
+
+      if (uploadFile.size > MAX_EXTRACT_FILE_BYTES) {
+        throw new Error('파일이 너무 큽니다. 20MB 이하의 단일 페이지 파일을 업로드해 주세요.');
+      }
+
       const formData = new FormData();
-      formData.append('file', extractFile);
+      formData.append('file', uploadFile);
       formData.append('textbook_id', selectedTextbook.id);
       formData.append('chapter', extractChapter.trim() || '전체');
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-textbook-examples`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: formData,
-        },
-      );
+      const { data, error } = await supabase.functions.invoke('extract-textbook-examples', {
+        body: formData,
+      });
 
-      if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.error || 'AI 추출 실패');
+      if (error) {
+        throw new Error(error.message || 'AI 추출 호출에 실패했습니다.');
       }
 
-      const result = await resp.json();
-      toast({ title: `${result.count}개 문제가 추출되었습니다` });
+      if (!data?.success) {
+        throw new Error(data?.error || 'AI 추출 실패');
+      }
+
+      toast({ title: `${data.count}개 문제가 추출되었습니다` });
       setExtractFile(null);
       setExtractChapter('');
       fetchExamples(selectedTextbook.id);
@@ -382,7 +390,20 @@ export function TextbookLibrary() {
                         type="file"
                         accept=".pdf,image/*"
                         className="text-xs h-8 col-span-1 sm:col-span-1"
-                        onChange={(e) => setExtractFile(e.target.files?.[0] || null)}
+                        onChange={(e) => {
+                          const selected = e.target.files?.[0] || null;
+                          if (selected && selected.size > MAX_EXTRACT_FILE_BYTES) {
+                            toast({
+                              title: '파일 용량 초과',
+                              description: '20MB 이하의 단일 페이지 파일을 업로드해 주세요.',
+                              variant: 'destructive',
+                            });
+                            e.currentTarget.value = '';
+                            setExtractFile(null);
+                            return;
+                          }
+                          setExtractFile(selected);
+                        }}
                       />
                       <Input
                         value={extractChapter}
@@ -399,6 +420,9 @@ export function TextbookLibrary() {
                         추출하기
                       </Button>
                     </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      문제가 보이는 단일 페이지 파일(PDF/이미지)을 권장합니다.
+                    </p>
                   </CardContent>
                 </Card>
 
