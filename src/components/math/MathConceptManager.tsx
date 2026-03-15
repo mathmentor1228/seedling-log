@@ -751,7 +751,7 @@ export function MathConceptManager() {
         </TabsContent>
 
         <TabsContent value="assign">
-          <MathQuizAssignManager quizzes={allQuizzes} />
+          <MathQuizAssignManager quizzes={allQuizzes} onQuizDeleted={fetchConcepts} />
         </TabsContent>
 
         <TabsContent value="review">
