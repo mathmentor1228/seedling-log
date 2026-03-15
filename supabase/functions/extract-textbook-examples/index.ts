@@ -242,13 +242,21 @@ serve(async (req) => {
     });
 
     if (!aiResponse.ok) {
+      const errText = await aiResponse.text();
+
       if (aiResponse.status === 429) {
         return jsonResponse({ success: false, error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' });
       }
       if (aiResponse.status === 402) {
         return jsonResponse({ success: false, error: 'AI 크레딧이 부족합니다.' });
       }
-      const errText = await aiResponse.text();
+      if (aiResponse.status === 400 && errText.includes('Unsupported image format')) {
+        return jsonResponse({
+          success: false,
+          error: '지원 형식은 PNG/JPEG/WEBP/GIF 이미지 또는 PDF입니다. HEIC 파일은 JPG로 변환 후 업로드해 주세요.',
+        });
+      }
+
       console.error('AI error:', aiResponse.status, errText);
       return jsonResponse({ success: false, error: 'AI 추출에 실패했습니다. 파일을 페이지 단위로 다시 시도해주세요.' });
     }
