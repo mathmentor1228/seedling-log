@@ -158,7 +158,6 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
       prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
     );
   };
-  };
 
   const handleGenerate = async () => {
     if (!textbook) return;
