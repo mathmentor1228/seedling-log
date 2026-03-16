@@ -295,6 +295,59 @@ export function AcademyCalendar() {
     }
   }
 
+  async function fetchPastEvents() {
+    try {
+      setPastLoading(true);
+      const today = getTodayKST();
+      const pastDate = format(addDays(getKSTDateObject(), -180), 'yyyy-MM-dd');
+      const todayStart = today + 'T00:00:00+09:00';
+      const pastStart = pastDate + 'T00:00:00+09:00';
+
+      let query = supabase
+        .from('academy_events')
+        .select('*')
+        .lt('start_at', todayStart)
+        .gte('start_at', pastStart)
+        .order('start_at', { ascending: false });
+
+      if (filterCategory !== 'all') {
+        query = query.eq('category', filterCategory);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const eventsWithDetails: AcademyEvent[] = [];
+      for (const event of (data || [])) {
+        const { data: creatorProfile } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', event.created_by)
+          .maybeSingle();
+        const { data: attachments } = await supabase
+          .from('event_attachments')
+          .select('*')
+          .eq('event_id', event.id);
+        eventsWithDetails.push({
+          ...event,
+          creator_name: creatorProfile?.full_name || creatorProfile?.email || '알 수 없음',
+          attachments: attachments || [],
+        });
+      }
+      setPastEvents(eventsWithDetails);
+
+      const noticeEventIds = eventsWithDetails
+        .filter(e => e.category === 'notice')
+        .map(e => e.id);
+      const acks = await fetchAcksForEvents(noticeEventIds);
+      setEventAcks(prev => ({ ...prev, ...acks }));
+    } catch (error) {
+      console.error('Error fetching past events:', error);
+    } finally {
+      setPastLoading(false);
+    }
+  }
+
   async function uploadPostersToEvent(eventId: string, files: File[]) {
     if (!user || files.length === 0) return;
     
