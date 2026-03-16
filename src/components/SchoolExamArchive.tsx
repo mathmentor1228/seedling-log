@@ -495,6 +495,15 @@ export function SchoolExamArchive() {
     '사회': 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200 dark:border-rose-800',
   };
 
+  // Helper to get subject color - supports parenthesized subjects like 수학(기하)
+  const getSubjectColor = (subject: string) => {
+    if (SUBJECT_COLORS[subject]) return SUBJECT_COLORS[subject];
+    // Try base subject (e.g. '수학' from '수학(기하)')
+    const base = subject.split('(')[0];
+    if (SUBJECT_COLORS[base]) return SUBJECT_COLORS[base];
+    return 'bg-muted text-foreground border-border';
+  };
+
   // Signed URL cache for inline image preview
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
 
