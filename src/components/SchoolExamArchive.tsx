@@ -672,7 +672,7 @@ export function SchoolExamArchive() {
   const renderSubjectCard = (archive: Archive) => {
     const isExpanded = expandedArchives.has(archive.id);
     const archiveMaterials = materials[archive.id] || [];
-    const subjectColor = SUBJECT_COLORS[archive.subject] || 'bg-muted text-foreground border-border';
+    const subjectColor = getSubjectColor(archive.subject);
 
     return (
       <div key={archive.id} className={`rounded-lg border p-2.5 transition-all ${subjectColor} ${isExpanded ? 'col-span-1 sm:col-span-2 lg:col-span-4' : ''}`}>
