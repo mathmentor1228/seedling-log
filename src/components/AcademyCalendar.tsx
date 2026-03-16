@@ -109,6 +109,7 @@ const CATEGORY_OPTIONS = [
   { value: 'event', label: '행사', variant: 'success' as const, color: 'bg-emerald-500' },
   { value: 'makeup', label: '보강', variant: 'outline' as const, color: 'bg-cyan-500' },
   { value: 'attendance_issue', label: '출결이슈', variant: 'destructive' as const, color: 'bg-orange-500' },
+  { value: 'update', label: '기능업데이트', variant: 'outline' as const, color: 'bg-teal-500' },
 ];
 
 const VISIBILITY_OPTIONS = [
