@@ -1101,7 +1101,50 @@ export function AcademyCalendar() {
               </div>
             </div>
             
-            {loading ? (
+            {timeScope === 'past' ? (
+              pastLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-16" />
+                  <Skeleton className="h-16" />
+                </div>
+              ) : pastEvents.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <Clock className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">지난 일정이 없습니다</p>
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                  {(() => {
+                    const pastGrouped = pastEvents.reduce<Record<string, AcademyEvent[]>>((acc, event) => {
+                      const dateKey = format(new Date(event.start_at), 'yyyy-MM-dd');
+                      if (!acc[dateKey]) acc[dateKey] = [];
+                      acc[dateKey].push(event);
+                      return acc;
+                    }, {});
+                    const pastDateKeys = Object.keys(pastGrouped).sort((a, b) => b.localeCompare(a));
+                    return pastDateKeys.map((dateKey) => {
+                      const dayEvents = pastGrouped[dateKey];
+                      const dateObj = new Date(dateKey + 'T00:00:00+09:00');
+                      return (
+                        <div key={dateKey} className="mb-2">
+                          <div className="sticky top-0 z-10 flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-semibold bg-muted/60 text-muted-foreground">
+                            <span className="tabular-nums">{format(dateObj, 'M/d', { locale: ko })}</span>
+                            <span>{format(dateObj, 'EEEE', { locale: ko })}</span>
+                          </div>
+                          <div className="space-y-0.5 mt-0.5">
+                            {dayEvents
+                              .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime())
+                              .map((event) => (
+                                <div key={event.id}>{renderEventRow(event)}</div>
+                              ))}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              )
+            ) : loading ? (
               <div className="space-y-2">
                 <Skeleton className="h-16" />
                 <Skeleton className="h-16" />
