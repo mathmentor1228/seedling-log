@@ -1346,10 +1346,26 @@ export function SchoolExamArchive() {
               </div>
               <div>
                 <Label>과목</Label>
-                <Select value={formData.subject} onValueChange={v => setFormData(p => ({ ...p, subject: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
+                <div className="flex gap-1">
+                  <Select value={SUBJECTS.includes(formData.subject) ? formData.subject : '__custom__'} onValueChange={v => {
+                    if (v === '__custom__') return;
+                    setFormData(p => ({ ...p, subject: v }));
+                  }}>
+                    <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {!SUBJECTS.includes(formData.subject) && formData.subject && (
+                        <SelectItem value="__custom__">✏️ 직접입력</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Input
+                  value={formData.subject}
+                  onChange={e => setFormData(p => ({ ...p, subject: e.target.value }))}
+                  placeholder="직접 입력 (예: 수학(기하))"
+                  className="mt-1 h-7 text-xs"
+                />
               </div>
               <div>
                 <Label>연도</Label>
