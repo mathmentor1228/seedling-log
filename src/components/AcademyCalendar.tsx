@@ -192,10 +192,14 @@ export function AcademyCalendar() {
 
   useEffect(() => {
     if (user) {
-      fetchEvents();
+      if (timeScope === 'upcoming') {
+        fetchEvents();
+      } else {
+        fetchPastEvents();
+      }
       fetchTotalTeachers();
     }
-  }, [user, filterCategory]);
+  }, [user, filterCategory, timeScope]);
 
   async function fetchTotalTeachers() {
     const { data } = await supabase
