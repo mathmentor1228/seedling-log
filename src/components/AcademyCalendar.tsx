@@ -127,10 +127,13 @@ export function AcademyCalendar() {
   
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<AcademyEvent[]>([]);
+  const [pastEvents, setPastEvents] = useState<AcademyEvent[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
+  const [timeScope, setTimeScope] = useState<'upcoming' | 'past'>('upcoming');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [pastLoading, setPastLoading] = useState(false);
   
   // Ack state
   const [eventAcks, setEventAcks] = useState<Record<string, EventAck[]>>({});
