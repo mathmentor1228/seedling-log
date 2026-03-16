@@ -60,7 +60,7 @@ interface Material {
 }
 
 const SCHOOL_LEVELS = ['초', '중', '고'];
-const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '공통', '기타'];
+const SUBJECTS = ['수학', '영어', '국어', '과학', '사회', '수학(대수)', '수학(기하)', '수학(미적분)', '수학(확률과통계)', '영어I', '영어II', '공통', '기타'];
 const SEMESTERS = ['1학기', '2학기'];
 const EXAM_TYPES = ['중간고사', '기말고사', '기타'];
 const FILE_CATEGORIES = ['교과서', '기출시험지', '프린트', '시험범위', '시험지(실제)', '학원수업자료', '학교제공자료', '시험분석서', '기타'];
@@ -495,6 +495,15 @@ export function SchoolExamArchive() {
     '사회': 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 border-rose-200 dark:border-rose-800',
   };
 
+  // Helper to get subject color - supports parenthesized subjects like 수학(기하)
+  const getSubjectColor = (subject: string) => {
+    if (SUBJECT_COLORS[subject]) return SUBJECT_COLORS[subject];
+    // Try base subject (e.g. '수학' from '수학(기하)')
+    const base = subject.split('(')[0];
+    if (SUBJECT_COLORS[base]) return SUBJECT_COLORS[base];
+    return 'bg-muted text-foreground border-border';
+  };
+
   // Signed URL cache for inline image preview
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
 
@@ -663,7 +672,7 @@ export function SchoolExamArchive() {
   const renderSubjectCard = (archive: Archive) => {
     const isExpanded = expandedArchives.has(archive.id);
     const archiveMaterials = materials[archive.id] || [];
-    const subjectColor = SUBJECT_COLORS[archive.subject] || 'bg-muted text-foreground border-border';
+    const subjectColor = getSubjectColor(archive.subject);
 
     return (
       <div key={archive.id} className={`rounded-lg border p-2.5 transition-all ${subjectColor} ${isExpanded ? 'col-span-1 sm:col-span-2 lg:col-span-4' : ''}`}>
@@ -932,7 +941,7 @@ export function SchoolExamArchive() {
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                   {group.subjects.map(archive => {
-                    const subjectColor = SUBJECT_COLORS[archive.subject] || 'bg-muted text-foreground border-border';
+                    const subjectColor = getSubjectColor(archive.subject);
                     const isExpanded = expandedArchives.has(archive.id);
                     return (
                       <div key={archive.id} className={`${isExpanded ? 'w-full' : ''}`}>
@@ -1163,10 +1172,16 @@ export function SchoolExamArchive() {
             </SelectContent>
           </Select>
           <Select value={filterSubject} onValueChange={setFilterSubject}>
-            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 과목</SelectItem>
-              {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {(() => {
+                const allSubjects = new Set(SUBJECTS);
+                archives.forEach(a => allSubjects.add(a.subject));
+                return Array.from(allSubjects).sort().map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ));
+              })()}
             </SelectContent>
           </Select>
           <Select value={filterSemester} onValueChange={setFilterSemester}>
@@ -1346,10 +1361,26 @@ export function SchoolExamArchive() {
               </div>
               <div>
                 <Label>과목</Label>
-                <Select value={formData.subject} onValueChange={v => setFormData(p => ({ ...p, subject: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
+                <div className="flex gap-1">
+                  <Select value={SUBJECTS.includes(formData.subject) ? formData.subject : '__custom__'} onValueChange={v => {
+                    if (v === '__custom__') return;
+                    setFormData(p => ({ ...p, subject: v }));
+                  }}>
+                    <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {!SUBJECTS.includes(formData.subject) && formData.subject && (
+                        <SelectItem value="__custom__">✏️ 직접입력</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Input
+                  value={formData.subject}
+                  onChange={e => setFormData(p => ({ ...p, subject: e.target.value }))}
+                  placeholder="직접 입력 (예: 수학(기하))"
+                  className="mt-1 h-7 text-xs"
+                />
               </div>
               <div>
                 <Label>연도</Label>

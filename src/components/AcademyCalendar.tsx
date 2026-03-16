@@ -127,10 +127,13 @@ export function AcademyCalendar() {
   
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<AcademyEvent[]>([]);
+  const [pastEvents, setPastEvents] = useState<AcademyEvent[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
+  const [timeScope, setTimeScope] = useState<'upcoming' | 'past'>('upcoming');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [pastLoading, setPastLoading] = useState(false);
   
   // Ack state
   const [eventAcks, setEventAcks] = useState<Record<string, EventAck[]>>({});
@@ -189,10 +192,14 @@ export function AcademyCalendar() {
 
   useEffect(() => {
     if (user) {
-      fetchEvents();
+      if (timeScope === 'upcoming') {
+        fetchEvents();
+      } else {
+        fetchPastEvents();
+      }
       fetchTotalTeachers();
     }
-  }, [user, filterCategory]);
+  }, [user, filterCategory, timeScope]);
 
   async function fetchTotalTeachers() {
     const { data } = await supabase
@@ -285,6 +292,59 @@ export function AcademyCalendar() {
       });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchPastEvents() {
+    try {
+      setPastLoading(true);
+      const today = getTodayKST();
+      const pastDate = format(addDays(getKSTDateObject(), -180), 'yyyy-MM-dd');
+      const todayStart = today + 'T00:00:00+09:00';
+      const pastStart = pastDate + 'T00:00:00+09:00';
+
+      let query = supabase
+        .from('academy_events')
+        .select('*')
+        .lt('start_at', todayStart)
+        .gte('start_at', pastStart)
+        .order('start_at', { ascending: false });
+
+      if (filterCategory !== 'all') {
+        query = query.eq('category', filterCategory);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const eventsWithDetails: AcademyEvent[] = [];
+      for (const event of (data || [])) {
+        const { data: creatorProfile } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', event.created_by)
+          .maybeSingle();
+        const { data: attachments } = await supabase
+          .from('event_attachments')
+          .select('*')
+          .eq('event_id', event.id);
+        eventsWithDetails.push({
+          ...event,
+          creator_name: creatorProfile?.full_name || creatorProfile?.email || '알 수 없음',
+          attachments: attachments || [],
+        });
+      }
+      setPastEvents(eventsWithDetails);
+
+      const noticeEventIds = eventsWithDetails
+        .filter(e => e.category === 'notice')
+        .map(e => e.id);
+      const acks = await fetchAcksForEvents(noticeEventIds);
+      setEventAcks(prev => ({ ...prev, ...acks }));
+    } catch (error) {
+      console.error('Error fetching past events:', error);
+    } finally {
+      setPastLoading(false);
     }
   }
 
@@ -988,18 +1048,34 @@ export function AcademyCalendar() {
           <CardContent className="pt-0">
             {/* View toggle and filters */}
             <div className="flex items-center justify-between mb-4">
-              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'calendar' | 'list')}>
+            <div className="flex items-center gap-2">
+              <Tabs value={timeScope} onValueChange={(v) => setTimeScope(v as 'upcoming' | 'past')}>
                 <TabsList className="grid w-[200px] grid-cols-2">
-                  <TabsTrigger value="list">
-                    <List className="w-4 h-4 mr-1" />
-                    목록
+                  <TabsTrigger value="upcoming">
+                    <CalendarDays className="w-4 h-4 mr-1" />
+                    예정
                   </TabsTrigger>
-                  <TabsTrigger value="calendar">
-                    <CalendarIcon className="w-4 h-4 mr-1" />
-                    달력
+                  <TabsTrigger value="past">
+                    <Clock className="w-4 h-4 mr-1" />
+                    지난 일정
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
+              {timeScope === 'upcoming' && (
+                <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'calendar' | 'list')}>
+                  <TabsList className="grid w-[140px] grid-cols-2">
+                    <TabsTrigger value="list">
+                      <List className="w-4 h-4 mr-1" />
+                      목록
+                    </TabsTrigger>
+                    <TabsTrigger value="calendar">
+                      <CalendarIcon className="w-4 h-4 mr-1" />
+                      달력
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              )}
+            </div>
               
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 <Button
@@ -1025,7 +1101,50 @@ export function AcademyCalendar() {
               </div>
             </div>
             
-            {loading ? (
+            {timeScope === 'past' ? (
+              pastLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-16" />
+                  <Skeleton className="h-16" />
+                </div>
+              ) : pastEvents.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <Clock className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">지난 일정이 없습니다</p>
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                  {(() => {
+                    const pastGrouped = pastEvents.reduce<Record<string, AcademyEvent[]>>((acc, event) => {
+                      const dateKey = format(new Date(event.start_at), 'yyyy-MM-dd');
+                      if (!acc[dateKey]) acc[dateKey] = [];
+                      acc[dateKey].push(event);
+                      return acc;
+                    }, {});
+                    const pastDateKeys = Object.keys(pastGrouped).sort((a, b) => b.localeCompare(a));
+                    return pastDateKeys.map((dateKey) => {
+                      const dayEvents = pastGrouped[dateKey];
+                      const dateObj = new Date(dateKey + 'T00:00:00+09:00');
+                      return (
+                        <div key={dateKey} className="mb-2">
+                          <div className="sticky top-0 z-10 flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-semibold bg-muted/60 text-muted-foreground">
+                            <span className="tabular-nums">{format(dateObj, 'M/d', { locale: ko })}</span>
+                            <span>{format(dateObj, 'EEEE', { locale: ko })}</span>
+                          </div>
+                          <div className="space-y-0.5 mt-0.5">
+                            {dayEvents
+                              .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime())
+                              .map((event) => (
+                                <div key={event.id}>{renderEventRow(event)}</div>
+                              ))}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              )
+            ) : loading ? (
               <div className="space-y-2">
                 <Skeleton className="h-16" />
                 <Skeleton className="h-16" />
