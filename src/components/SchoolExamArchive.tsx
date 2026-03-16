@@ -1172,10 +1172,16 @@ export function SchoolExamArchive() {
             </SelectContent>
           </Select>
           <Select value={filterSubject} onValueChange={setFilterSubject}>
-            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 과목</SelectItem>
-              {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {(() => {
+                const allSubjects = new Set(SUBJECTS);
+                archives.forEach(a => allSubjects.add(a.subject));
+                return Array.from(allSubjects).sort().map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ));
+              })()}
             </SelectContent>
           </Select>
           <Select value={filterSemester} onValueChange={setFilterSemester}>
