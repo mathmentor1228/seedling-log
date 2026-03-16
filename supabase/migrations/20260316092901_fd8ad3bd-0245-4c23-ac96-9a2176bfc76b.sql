@@ -1,0 +1,2 @@
+ALTER TABLE public.academy_events DROP CONSTRAINT academy_events_category_check;
+ALTER TABLE public.academy_events ADD CONSTRAINT academy_events_category_check CHECK (category = ANY (ARRAY['general','notice','exam','meeting','holiday','event','makeup','attendance_issue','update']));
