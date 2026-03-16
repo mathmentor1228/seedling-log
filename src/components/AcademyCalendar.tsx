@@ -1048,18 +1048,34 @@ export function AcademyCalendar() {
           <CardContent className="pt-0">
             {/* View toggle and filters */}
             <div className="flex items-center justify-between mb-4">
-              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'calendar' | 'list')}>
+            <div className="flex items-center gap-2">
+              <Tabs value={timeScope} onValueChange={(v) => setTimeScope(v as 'upcoming' | 'past')}>
                 <TabsList className="grid w-[200px] grid-cols-2">
-                  <TabsTrigger value="list">
-                    <List className="w-4 h-4 mr-1" />
-                    목록
+                  <TabsTrigger value="upcoming">
+                    <CalendarDays className="w-4 h-4 mr-1" />
+                    예정
                   </TabsTrigger>
-                  <TabsTrigger value="calendar">
-                    <CalendarIcon className="w-4 h-4 mr-1" />
-                    달력
+                  <TabsTrigger value="past">
+                    <Clock className="w-4 h-4 mr-1" />
+                    지난 일정
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
+              {timeScope === 'upcoming' && (
+                <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'calendar' | 'list')}>
+                  <TabsList className="grid w-[140px] grid-cols-2">
+                    <TabsTrigger value="list">
+                      <List className="w-4 h-4 mr-1" />
+                      목록
+                    </TabsTrigger>
+                    <TabsTrigger value="calendar">
+                      <CalendarIcon className="w-4 h-4 mr-1" />
+                      달력
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              )}
+            </div>
               
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 <Button
