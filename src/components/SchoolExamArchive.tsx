@@ -941,7 +941,7 @@ export function SchoolExamArchive() {
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                   {group.subjects.map(archive => {
-                    const subjectColor = SUBJECT_COLORS[archive.subject] || 'bg-muted text-foreground border-border';
+                    const subjectColor = getSubjectColor(archive.subject);
                     const isExpanded = expandedArchives.has(archive.id);
                     return (
                       <div key={archive.id} className={`${isExpanded ? 'w-full' : ''}`}>
