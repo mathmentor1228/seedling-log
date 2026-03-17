@@ -68,12 +68,14 @@ const HOMEWORK_STATUS_OPTIONS = [
   { value: 'none_assigned', label: '없음' },
 ];
 
-type EditableField = 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items';
+type EditableField = 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields';
 
 const FIELD_LABELS: Record<EditableField, string> = {
   lesson_range: '수업 내용',
   understanding_score: '이해도',
   homework_status: '숙제 상태',
+  learning_issues: '학습상세상황',
+  test_fields: '테스트',
   notes: '비고 / 메모',
   next_lesson_goal: '다음 수업 목표',
   homework_items: '숙제 배정',
