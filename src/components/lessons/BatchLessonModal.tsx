@@ -237,8 +237,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
       }
       if (activeFields.has('test_fields')) {
-        updatePayload.test_content = testContent.trim() || null;
-        updatePayload.test_name = testName.trim() || null;
+        const unified = testContent.trim() || null;
+        updatePayload.test_content = unified;
+        updatePayload.test_name = unified;
+        updatePayload.test_title = unified;
       }
       if (submitAfter) {
         updatePayload.submitted = true;
