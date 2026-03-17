@@ -27,6 +27,13 @@ import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRig
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
+const SUBJECT_SPECIFIC_ISSUES: Record<SubjectType, string[]> = {
+  '수학': ['개념 이해 부족', '계산 실수 잦음', '문제 해석 미흡', '풀이 과정 정리 필요', '응용·서술형 약함', '시간 관리 어려움', '풀이 루틴을 지키지 않음'],
+  '과학': ['개념 연결 미흡', '암기 부족', '자료 해석 어려움', '실험·탐구 서술 약함', '단원 간 개념 혼동', '풀이 루틴을 지키지 않음'],
+  '영어': ['단어 이해 부족', '문법 개념 혼동', '독해 속도 느림', '근거 문장 찾기 어려움', '듣기 이해 부족', '풀이 루틴을 지키지 않음'],
+  '국어': ['지문 독해 어려움', '핵심 개념어 정리 미흡', '서술형 논리 부족', '문학 표현 분석 미흡', '시간 배분 문제', '풀이 루틴을 지키지 않음'],
+};
+
 interface DraftRecord {
   id: string;
   student_id: string;
