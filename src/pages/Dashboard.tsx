@@ -2499,11 +2499,24 @@ export default function Dashboard() {
                         : `${todaySlots.length}개`
                       }
                     </Badge>
+                    {/* BULK-DRAFT-CREATE-V1: Batch create draft records for all unrecorded students */}
+                    {isTeacher(role) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-auto h-7 text-xs border-primary/40 text-primary hover:bg-primary/5"
+                        disabled={bulkDraftSaving}
+                        onClick={handleBulkDraftCreate}
+                      >
+                        {bulkDraftSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <PenLine className="w-3 h-3 mr-1" />}
+                        일괄 임시저장
+                      </Button>
+                    )}
                     {/* SUPPLEMENT-LESSON-V1: Add supplementary lesson button */}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="ml-auto h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                      className={`${isTeacher(role) ? '' : 'ml-auto'} h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50`}
                       onClick={() => {
                         setAdminLessonModalContext({
                           student_id: '',
