@@ -509,25 +509,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('test_fields')}
                   onToggle={() => toggleField('test_fields')}
                 >
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">시험 제목</Label>
-                      <Input
-                        value={testName}
-                        onChange={e => setTestName(e.target.value)}
-                        placeholder="예: 단원평가, 쪽지시험..."
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">시험 범위/내용</Label>
-                      <Input
-                        value={testContent}
-                        onChange={e => setTestContent(e.target.value)}
-                        placeholder="예: 미적분 1~3단원, 단어 Day1~5..."
-                        className="h-8 text-sm"
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">테스트내용 및 범위 <span className="text-destructive">*</span></Label>
+                    <Input
+                      value={testContent}
+                      onChange={e => setTestContent(e.target.value)}
+                      placeholder="예: 중2 1단원 단원평가, 영단어 Day1~5 쪽지시험..."
+                      className="h-8 text-sm"
+                    />
                   </div>
                 </FieldToggleBlock>
 

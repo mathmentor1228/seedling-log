@@ -2333,7 +2333,7 @@ export function LessonRecordForm({
         <div className="p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-sm">테스트 제목 <span className="text-destructive text-xs">(단원/범위 필수)</span></Label>
+            <Label className="text-sm">테스트내용 및 범위 <span className="text-destructive text-xs">*필수</span></Label>
             <Input
               value={testFormData.test_name}
               onChange={(e) => setTestFormData({ ...testFormData, test_name: e.target.value })}
