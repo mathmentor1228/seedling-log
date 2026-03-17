@@ -1829,7 +1829,64 @@ export default function Dashboard() {
 
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(lessonRecordMap).length;
+
+  // BULK-DRAFT-CREATE-V1: Create draft lesson records for all students without records today
+  async function handleBulkDraftCreate() {
+    if (!user) return;
+    setBulkDraftSaving(true);
+    try {
+      const today = getTodayKST();
+      // Collect students who don't have a lesson record yet
+      const toCreate: { student_id: string; class_id: string; subject: string }[] = [];
       
+      todaySlots.forEach(slot => {
+        if (slot.isOverridden && slot.overrideType === 'cancelled') return;
+        slot.students.forEach(student => {
+          if (!student.lessonRecordId && !student.hyugangRecordId) {
+            toCreate.push({
+              student_id: student.id,
+              class_id: slot.class_id,
+              subject: slot.subject,
+            });
+          }
+        });
+      });
+
+      if (toCreate.length === 0) {
+        toast({ title: '이미 모든 학생의 일지가 생성되어 있습니다.' });
+        setBulkDraftSaving(false);
+        return;
+      }
+
+      const records = toCreate.map(item => ({
+        student_id: item.student_id,
+        class_id: item.class_id,
+        subject: item.subject as any,
+        teacher_id: user.id,
+        lesson_date: today,
+        lesson_range: '',
+        homework_status: 'none_assigned',
+        understanding_score: 3,
+        submitted: false,
+      }));
+
+      const { error } = await supabase.from('lesson_records').insert(records);
+      if (error) throw error;
+
+      toast({
+        title: '일괄 임시저장 완료',
+        description: `${toCreate.length}명의 수업일지를 생성했습니다.`,
+      });
+      
+      // Refresh roster
+      await fetchTodaySlots();
+    } catch (err: any) {
+      console.error('Bulk draft create error:', err);
+      toast({ title: '일괄 생성 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setBulkDraftSaving(false);
+    }
+  }
 
       setTodaySlots(slots);
     } catch (error: any) {
