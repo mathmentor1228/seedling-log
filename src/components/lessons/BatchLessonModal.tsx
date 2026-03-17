@@ -127,6 +127,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setNotes('');
     setNextLessonGoal('');
     setHomeworkItems([]);
+    setLearningIssues([]);
+    setLearningIssuesNote('');
+    setTestContent('');
+    setTestName('');
     setSubmitAfter(false);
   }
 
