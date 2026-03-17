@@ -234,6 +234,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
       if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
       if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
+      if (activeFields.has('learning_issues')) {
+        updatePayload.learning_issues = learningIssues;
+        updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
+      }
+      if (activeFields.has('test_fields')) {
+        updatePayload.test_content = testContent.trim() || null;
+        updatePayload.test_name = testName.trim() || null;
+      }
       if (submitAfter) {
         updatePayload.submitted = true;
         updatePayload.submitted_at = now;
