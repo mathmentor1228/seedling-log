@@ -102,6 +102,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const [notes, setNotes] = useState('');
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
+  const [learningIssues, setLearningIssues] = useState<string[]>([]);
+  const [learningIssuesNote, setLearningIssuesNote] = useState('');
+  const [testContent, setTestContent] = useState('');
+  const [testName, setTestName] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitAfter, setSubmitAfter] = useState(false);
 
