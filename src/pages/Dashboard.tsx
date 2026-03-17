@@ -475,6 +475,9 @@ export default function Dashboard() {
   // TEXTBOOK-ARRIVAL-ALERT-V1: Arrived textbook orders for teacher alert
   const [arrivedTextbookCount, setArrivedTextbookCount] = useState(0);
 
+  // BULK-DRAFT-CREATE-V1: Bulk draft creation state
+  const [bulkDraftSaving, setBulkDraftSaving] = useState(false);
+
   // SCHEDULE-OVERRIDE-V1: Override modal state
   const [overrideModalOpen, setOverrideModalOpen] = useState(false);
   const [overrideModalContext, setOverrideModalContext] = useState<{
