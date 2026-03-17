@@ -129,7 +129,6 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setLearningIssues([]);
     setLearningIssuesNote('');
     setTestContent('');
-    setTestName('');
     setSubmitAfter(false);
   }
 
