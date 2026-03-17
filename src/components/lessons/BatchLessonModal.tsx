@@ -105,7 +105,6 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const [learningIssues, setLearningIssues] = useState<string[]>([]);
   const [learningIssuesNote, setLearningIssuesNote] = useState('');
   const [testContent, setTestContent] = useState('');
-  const [testName, setTestName] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitAfter, setSubmitAfter] = useState(false);
 
@@ -130,7 +129,6 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setLearningIssues([]);
     setLearningIssuesNote('');
     setTestContent('');
-    setTestName('');
     setSubmitAfter(false);
   }
 
@@ -239,8 +237,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
       }
       if (activeFields.has('test_fields')) {
-        updatePayload.test_content = testContent.trim() || null;
-        updatePayload.test_name = testName.trim() || null;
+        const unified = testContent.trim() || null;
+        updatePayload.test_content = unified;
+        updatePayload.test_name = unified;
+        updatePayload.test_title = unified;
       }
       if (submitAfter) {
         updatePayload.submitted = true;
@@ -509,25 +509,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('test_fields')}
                   onToggle={() => toggleField('test_fields')}
                 >
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">시험 제목</Label>
-                      <Input
-                        value={testName}
-                        onChange={e => setTestName(e.target.value)}
-                        placeholder="예: 단원평가, 쪽지시험..."
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">시험 범위/내용</Label>
-                      <Input
-                        value={testContent}
-                        onChange={e => setTestContent(e.target.value)}
-                        placeholder="예: 미적분 1~3단원, 단어 Day1~5..."
-                        className="h-8 text-sm"
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">테스트내용 및 범위 <span className="text-destructive">*</span></Label>
+                    <Input
+                      value={testContent}
+                      onChange={e => setTestContent(e.target.value)}
+                      placeholder="예: 중2 1단원 단원평가, 영단어 Day1~5 쪽지시험..."
+                      className="h-8 text-sm"
+                    />
                   </div>
                 </FieldToggleBlock>
 

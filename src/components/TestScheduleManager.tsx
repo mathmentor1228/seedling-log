@@ -989,7 +989,7 @@ export function TestScheduleManager() {
                 <p className="text-xs text-muted-foreground">{resultDialogSchedule.subject} · {resultDialogSchedule.content || '—'}</p>
               </div>
               <div>
-                <Label className="text-xs">시험 제목</Label>
+                <Label className="text-xs">테스트내용 및 범위 <span className="text-destructive">*</span></Label>
                 <Input
                   value={resultForm.title}
                   onChange={e => setResultForm(p => ({ ...p, title: e.target.value }))}
