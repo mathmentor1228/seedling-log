@@ -461,6 +461,76 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   </Select>
                 </FieldToggleBlock>
 
+                {/* Learning Issues */}
+                <FieldToggleBlock
+                  field="learning_issues"
+                  active={activeFields.has('learning_issues')}
+                  onToggle={() => toggleField('learning_issues')}
+                >
+                  <div className="space-y-2">
+                    {(() => {
+                      // Get common subject from selected records
+                      const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
+                      const subjects = [...new Set(selectedRecords.map(d => d.subject))];
+                      const allIssues = new Set<string>();
+                      subjects.forEach(s => {
+                        const issues = SUBJECT_SPECIFIC_ISSUES[s as SubjectType];
+                        if (issues) issues.forEach(i => allIssues.add(i));
+                      });
+                      return (
+                        <div className="flex flex-wrap gap-1.5">
+                          {[...allIssues].map(issue => (
+                            <Badge
+                              key={issue}
+                              variant={learningIssues.includes(issue) ? 'default' : 'outline'}
+                              className="cursor-pointer text-xs"
+                              onClick={() => setLearningIssues(prev => 
+                                prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
+                              )}
+                            >
+                              {issue}
+                            </Badge>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    <Textarea
+                      value={learningIssuesNote}
+                      onChange={e => setLearningIssuesNote(e.target.value)}
+                      placeholder="학습 상황 상세 (리포트 근거)..."
+                      className="min-h-[50px] resize-none"
+                    />
+                  </div>
+                </FieldToggleBlock>
+
+                {/* Test Fields */}
+                <FieldToggleBlock
+                  field="test_fields"
+                  active={activeFields.has('test_fields')}
+                  onToggle={() => toggleField('test_fields')}
+                >
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">시험 제목</Label>
+                      <Input
+                        value={testName}
+                        onChange={e => setTestName(e.target.value)}
+                        placeholder="예: 단원평가, 쪽지시험..."
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">시험 범위/내용</Label>
+                      <Input
+                        value={testContent}
+                        onChange={e => setTestContent(e.target.value)}
+                        placeholder="예: 미적분 1~3단원, 단어 Day1~5..."
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </FieldToggleBlock>
+
                 {/* Notes */}
                 <FieldToggleBlock
                   field="notes"
