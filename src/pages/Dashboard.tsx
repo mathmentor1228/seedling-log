@@ -475,6 +475,9 @@ export default function Dashboard() {
   // TEXTBOOK-ARRIVAL-ALERT-V1: Arrived textbook orders for teacher alert
   const [arrivedTextbookCount, setArrivedTextbookCount] = useState(0);
 
+  // BULK-DRAFT-CREATE-V1: Bulk draft creation state
+  const [bulkDraftSaving, setBulkDraftSaving] = useState(false);
+
   // SCHEDULE-OVERRIDE-V1: Override modal state
   const [overrideModalOpen, setOverrideModalOpen] = useState(false);
   const [overrideModalContext, setOverrideModalContext] = useState<{
@@ -1826,7 +1829,8 @@ export default function Dashboard() {
 
       // DEBUG: Log attendance data fetched
       const attendanceCount = Object.keys(lessonRecordMap).length;
-      
+
+
 
       setTodaySlots(slots);
     } catch (error: any) {
@@ -1839,7 +1843,62 @@ export default function Dashboard() {
     }
   }
 
-  // SUPPLEMENT-LESSON-V2: Fetch supplementary lessons for today and merge into admin roster
+  // BULK-DRAFT-CREATE-V1: Create draft lesson records for all students without records today
+  async function handleBulkDraftCreate() {
+    if (!user) return;
+    setBulkDraftSaving(true);
+    try {
+      const today = getTodayKST();
+      const toCreate: { student_id: string; class_id: string; subject: string }[] = [];
+      
+      todaySlots.forEach(slot => {
+        if (slot.isOverridden && slot.overrideType === 'cancelled') return;
+        slot.students.forEach(student => {
+          if (!student.lessonRecordId && !student.hyugangRecordId) {
+            toCreate.push({
+              student_id: student.id,
+              class_id: slot.class_id,
+              subject: slot.subject,
+            });
+          }
+        });
+      });
+
+      if (toCreate.length === 0) {
+        toast({ title: '이미 모든 학생의 일지가 생성되어 있습니다.' });
+        setBulkDraftSaving(false);
+        return;
+      }
+
+      const records = toCreate.map(item => ({
+        student_id: item.student_id,
+        class_id: item.class_id,
+        subject: item.subject as any,
+        teacher_id: user.id,
+        lesson_date: today,
+        lesson_range: '',
+        homework_status: 'none_assigned',
+        understanding_score: 3,
+        submitted: false,
+      }));
+
+      const { error } = await supabase.from('lesson_records').insert(records);
+      if (error) throw error;
+
+      toast({
+        title: '일괄 임시저장 완료',
+        description: `${toCreate.length}명의 수업일지를 생성했습니다.`,
+      });
+      
+      await fetchTodaySlots();
+    } catch (err: any) {
+      console.error('Bulk draft create error:', err);
+      toast({ title: '일괄 생성 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setBulkDraftSaving(false);
+    }
+  }
+
   async function fetchSupplementaryLessons() {
     if (!user) return;
     try {
@@ -2499,11 +2558,24 @@ export default function Dashboard() {
                         : `${todaySlots.length}개`
                       }
                     </Badge>
+                    {/* BULK-DRAFT-CREATE-V1: Batch create draft records for all unrecorded students */}
+                    {isTeacher(role) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-auto h-7 text-xs border-primary/40 text-primary hover:bg-primary/5"
+                        disabled={bulkDraftSaving}
+                        onClick={handleBulkDraftCreate}
+                      >
+                        {bulkDraftSaving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <PenLine className="w-3 h-3 mr-1" />}
+                        일괄 임시저장
+                      </Button>
+                    )}
                     {/* SUPPLEMENT-LESSON-V1: Add supplementary lesson button */}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="ml-auto h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                      className={`${isTeacher(role) ? '' : 'ml-auto'} h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50`}
                       onClick={() => {
                         setAdminLessonModalContext({
                           student_id: '',

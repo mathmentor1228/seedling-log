@@ -27,6 +27,13 @@ import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRig
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
+const SUBJECT_SPECIFIC_ISSUES: Record<SubjectType, string[]> = {
+  '수학': ['개념 이해 부족', '계산 실수 잦음', '문제 해석 미흡', '풀이 과정 정리 필요', '응용·서술형 약함', '시간 관리 어려움', '풀이 루틴을 지키지 않음'],
+  '과학': ['개념 연결 미흡', '암기 부족', '자료 해석 어려움', '실험·탐구 서술 약함', '단원 간 개념 혼동', '풀이 루틴을 지키지 않음'],
+  '영어': ['단어 이해 부족', '문법 개념 혼동', '독해 속도 느림', '근거 문장 찾기 어려움', '듣기 이해 부족', '풀이 루틴을 지키지 않음'],
+  '국어': ['지문 독해 어려움', '핵심 개념어 정리 미흡', '서술형 논리 부족', '문학 표현 분석 미흡', '시간 배분 문제', '풀이 루틴을 지키지 않음'],
+};
+
 interface DraftRecord {
   id: string;
   student_id: string;
@@ -61,12 +68,14 @@ const HOMEWORK_STATUS_OPTIONS = [
   { value: 'none_assigned', label: '없음' },
 ];
 
-type EditableField = 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items';
+type EditableField = 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields';
 
 const FIELD_LABELS: Record<EditableField, string> = {
   lesson_range: '수업 내용',
   understanding_score: '이해도',
   homework_status: '숙제 상태',
+  learning_issues: '학습상세상황',
+  test_fields: '테스트',
   notes: '비고 / 메모',
   next_lesson_goal: '다음 수업 목표',
   homework_items: '숙제 배정',
@@ -93,6 +102,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const [notes, setNotes] = useState('');
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
+  const [learningIssues, setLearningIssues] = useState<string[]>([]);
+  const [learningIssuesNote, setLearningIssuesNote] = useState('');
+  const [testContent, setTestContent] = useState('');
+  const [testName, setTestName] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitAfter, setSubmitAfter] = useState(false);
 
@@ -114,6 +127,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setNotes('');
     setNextLessonGoal('');
     setHomeworkItems([]);
+    setLearningIssues([]);
+    setLearningIssuesNote('');
+    setTestContent('');
+    setTestName('');
     setSubmitAfter(false);
   }
 
@@ -217,6 +234,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
       if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
       if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
+      if (activeFields.has('learning_issues')) {
+        updatePayload.learning_issues = learningIssues;
+        updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
+      }
+      if (activeFields.has('test_fields')) {
+        updatePayload.test_content = testContent.trim() || null;
+        updatePayload.test_name = testName.trim() || null;
+      }
       if (submitAfter) {
         updatePayload.submitted = true;
         updatePayload.submitted_at = now;
@@ -434,6 +459,76 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                       ))}
                     </SelectContent>
                   </Select>
+                </FieldToggleBlock>
+
+                {/* Learning Issues */}
+                <FieldToggleBlock
+                  field="learning_issues"
+                  active={activeFields.has('learning_issues')}
+                  onToggle={() => toggleField('learning_issues')}
+                >
+                  <div className="space-y-2">
+                    {(() => {
+                      // Get common subject from selected records
+                      const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
+                      const subjects = [...new Set(selectedRecords.map(d => d.subject))];
+                      const allIssues = new Set<string>();
+                      subjects.forEach(s => {
+                        const issues = SUBJECT_SPECIFIC_ISSUES[s as SubjectType];
+                        if (issues) issues.forEach(i => allIssues.add(i));
+                      });
+                      return (
+                        <div className="flex flex-wrap gap-1.5">
+                          {[...allIssues].map(issue => (
+                            <Badge
+                              key={issue}
+                              variant={learningIssues.includes(issue) ? 'default' : 'outline'}
+                              className="cursor-pointer text-xs"
+                              onClick={() => setLearningIssues(prev => 
+                                prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
+                              )}
+                            >
+                              {issue}
+                            </Badge>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    <Textarea
+                      value={learningIssuesNote}
+                      onChange={e => setLearningIssuesNote(e.target.value)}
+                      placeholder="학습 상황 상세 (리포트 근거)..."
+                      className="min-h-[50px] resize-none"
+                    />
+                  </div>
+                </FieldToggleBlock>
+
+                {/* Test Fields */}
+                <FieldToggleBlock
+                  field="test_fields"
+                  active={activeFields.has('test_fields')}
+                  onToggle={() => toggleField('test_fields')}
+                >
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">시험 제목</Label>
+                      <Input
+                        value={testName}
+                        onChange={e => setTestName(e.target.value)}
+                        placeholder="예: 단원평가, 쪽지시험..."
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">시험 범위/내용</Label>
+                      <Input
+                        value={testContent}
+                        onChange={e => setTestContent(e.target.value)}
+                        placeholder="예: 미적분 1~3단원, 단어 Day1~5..."
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
                 </FieldToggleBlock>
 
                 {/* Notes */}
