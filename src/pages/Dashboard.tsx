@@ -2580,8 +2580,8 @@ export default function Dashboard() {
                         : `${todaySlots.length}개`
                       }
                     </Badge>
-                    {/* BULK-DRAFT-CREATE-V1: Batch create draft records for all unrecorded students */}
-                    {isTeacher(role) && (
+                    {/* BULK-DRAFT-CREATE-V2: Batch create draft records for all unrecorded students (teacher + admin) */}
+                    {(isTeacher(role) || isAdmin(role)) && (
                       <Button
                         variant="outline"
                         size="sm"
