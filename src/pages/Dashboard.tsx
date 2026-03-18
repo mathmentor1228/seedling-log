@@ -1911,7 +1911,7 @@ export default function Dashboard() {
       await fetchTodaySlots();
       if (isAdmin(role)) {
         await fetchAdminRosterData();
-        await fetchLessonStatusMap();
+        
       }
     } catch (err: any) {
       console.error('Bulk draft create error:', err);
