@@ -1843,26 +1843,44 @@ export default function Dashboard() {
     }
   }
 
-  // BULK-DRAFT-CREATE-V1: Create draft lesson records for all students without records today
+  // BULK-DRAFT-CREATE-V2: Create draft lesson records for all students without records today (teacher + admin)
   async function handleBulkDraftCreate() {
     if (!user) return;
     setBulkDraftSaving(true);
     try {
       const today = getTodayKST();
-      const toCreate: { student_id: string; class_id: string; subject: string }[] = [];
-      
-      todaySlots.forEach(slot => {
-        if (slot.isOverridden && slot.overrideType === 'cancelled') return;
-        slot.students.forEach(student => {
-          if (!student.lessonRecordId && !student.hyugangRecordId) {
+      const toCreate: { student_id: string; class_id: string; subject: string; teacher_id: string }[] = [];
+
+      if (isAdmin(role) && adminRosterData) {
+        // Admin: iterate adminRosterData, check lessonStatusMap for existing records
+        adminRosterData.roster_rows.forEach(row => {
+          const statusKey = `${row.student_id}_${row.class_id}`;
+          const status = lessonStatusMap[statusKey];
+          if (!status?.recordId) {
             toCreate.push({
-              student_id: student.id,
-              class_id: slot.class_id,
-              subject: slot.subject,
+              student_id: row.student_id,
+              class_id: row.class_id,
+              subject: row.subject,
+              teacher_id: row.teacher_id,
             });
           }
         });
-      });
+      } else {
+        // Teacher: use todaySlots
+        todaySlots.forEach(slot => {
+          if (slot.isOverridden && slot.overrideType === 'cancelled') return;
+          slot.students.forEach(student => {
+            if (!student.lessonRecordId && !student.hyugangRecordId) {
+              toCreate.push({
+                student_id: student.id,
+                class_id: slot.class_id,
+                subject: slot.subject,
+                teacher_id: user.id,
+              });
+            }
+          });
+        });
+      }
 
       if (toCreate.length === 0) {
         toast({ title: '이미 모든 학생의 일지가 생성되어 있습니다.' });
@@ -1874,7 +1892,7 @@ export default function Dashboard() {
         student_id: item.student_id,
         class_id: item.class_id,
         subject: item.subject as any,
-        teacher_id: user.id,
+        teacher_id: item.teacher_id,
         lesson_date: today,
         lesson_range: '',
         homework_status: 'none_assigned',
@@ -1891,6 +1909,10 @@ export default function Dashboard() {
       });
       
       await fetchTodaySlots();
+      if (isAdmin(role)) {
+        await fetchAdminRosterData();
+        await fetchLessonStatusMap();
+      }
     } catch (err: any) {
       console.error('Bulk draft create error:', err);
       toast({ title: '일괄 생성 실패', description: err.message, variant: 'destructive' });
