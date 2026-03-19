@@ -229,33 +229,53 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       const ids = Array.from(selectedIds);
       const now = new Date().toISOString();
 
-      // Build update payload with only active fields
-      const updatePayload: Record<string, any> = { updated_at: now };
-      if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
-      if (activeFields.has('understanding_score')) updatePayload.understanding_score = understandingScore;
-      if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
-      if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
-      if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
-      if (activeFields.has('learning_issues')) {
-        updatePayload.learning_issues = learningIssues;
-        updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
-      }
-      if (activeFields.has('test_fields')) {
-        const unified = testContent.trim() || null;
-        updatePayload.test_content = unified;
-        updatePayload.test_name = unified;
-        updatePayload.test_title = unified;
-      }
-      if (submitAfter) {
-        updatePayload.submitted = true;
-        updatePayload.submitted_at = now;
-      }
+      // Check if we need per-student updates (learning_issues with individual notes)
+      const needsPerStudent = activeFields.has('learning_issues') && usePerStudentNotes;
 
-      const { error: updateError } = await supabase
-        .from('lesson_records')
-        .update(updatePayload)
-        .in('id', ids);
-      if (updateError) throw updateError;
+      // Build common update payload with only active fields
+      const buildPayload = (recordId?: string): Record<string, any> => {
+        const updatePayload: Record<string, any> = { updated_at: now };
+        if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
+        if (activeFields.has('understanding_score')) updatePayload.understanding_score = understandingScore;
+        if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
+        if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
+        if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
+        if (activeFields.has('learning_issues')) {
+          updatePayload.learning_issues = learningIssues;
+          if (usePerStudentNotes && recordId) {
+            updatePayload.learning_issues_note = (perStudentIssuesNote[recordId] || '').trim() || null;
+          } else {
+            updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
+          }
+        }
+        if (activeFields.has('test_fields')) {
+          const unified = testContent.trim() || null;
+          updatePayload.test_content = unified;
+          updatePayload.test_name = unified;
+          updatePayload.test_title = unified;
+        }
+        if (submitAfter) {
+          updatePayload.submitted = true;
+          updatePayload.submitted_at = now;
+        }
+        return updatePayload;
+      };
+
+      if (needsPerStudent) {
+        // Update each record individually for per-student notes
+        for (const id of ids) {
+          const payload = buildPayload(id);
+          const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
+          if (error) throw error;
+        }
+      } else {
+        const updatePayload = buildPayload();
+        const { error: updateError } = await supabase
+          .from('lesson_records')
+          .update(updatePayload)
+          .in('id', ids);
+        if (updateError) throw updateError;
+      }
 
       // Handle homework assignment if toggled
       if (activeFields.has('homework_items') && homeworkItems.filter(h => h.content.trim()).length > 0) {
