@@ -277,7 +277,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       // Build common update payload with only active fields
       const buildPayload = (recordId?: string): Record<string, any> => {
         const updatePayload: Record<string, any> = { updated_at: now };
-        if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
+        if (activeFields.has('lesson_range')) {
+          updatePayload.lesson_range = (usePerStudentLessonRange && recordId)
+            ? (perStudentLessonRange[recordId] ?? lessonRange).trim()
+            : lessonRange.trim();
+        }
         if (activeFields.has('understanding_score')) {
           updatePayload.understanding_score = (usePerStudentScore && recordId)
             ? (perStudentScore[recordId] ?? understandingScore)
