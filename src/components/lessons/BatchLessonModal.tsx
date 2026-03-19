@@ -491,9 +491,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('learning_issues')}
                   onToggle={() => toggleField('learning_issues')}
                 >
-                  <div className="space-y-2">
+                   <div className="space-y-2">
                     {(() => {
-                      // Get common subject from selected records
                       const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
                       const subjects = [...new Set(selectedRecords.map(d => d.subject))];
                       const allIssues = new Set<string>();
@@ -502,28 +501,59 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                         if (issues) issues.forEach(i => allIssues.add(i));
                       });
                       return (
-                        <div className="flex flex-wrap gap-1.5">
-                          {[...allIssues].map(issue => (
-                            <Badge
-                              key={issue}
-                              variant={learningIssues.includes(issue) ? 'default' : 'outline'}
-                              className="cursor-pointer text-xs"
-                              onClick={() => setLearningIssues(prev => 
-                                prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
-                              )}
-                            >
-                              {issue}
-                            </Badge>
-                          ))}
-                        </div>
+                        <>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[...allIssues].map(issue => (
+                              <Badge
+                                key={issue}
+                                variant={learningIssues.includes(issue) ? 'default' : 'outline'}
+                                className="cursor-pointer text-xs"
+                                onClick={() => setLearningIssues(prev => 
+                                  prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
+                                )}
+                              >
+                                {issue}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          {/* Toggle: shared vs per-student notes */}
+                          <label className="flex items-center gap-2 cursor-pointer mt-1">
+                            <Checkbox
+                              checked={usePerStudentNotes}
+                              onCheckedChange={v => setUsePerStudentNotes(v === true)}
+                            />
+                            <span className="text-xs font-medium text-muted-foreground">학생별 개별 상세 입력</span>
+                          </label>
+
+                          {usePerStudentNotes ? (
+                            <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                              {selectedRecords.map(d => (
+                                <div key={d.id} className="space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold">{d.student_name}</span>
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{d.subject}</Badge>
+                                  </div>
+                                  <Textarea
+                                    value={perStudentIssuesNote[d.id] || ''}
+                                    onChange={e => setPerStudentIssuesNote(prev => ({ ...prev, [d.id]: e.target.value }))}
+                                    placeholder={`${d.student_name} 학습 상황 상세...`}
+                                    className="min-h-[40px] resize-none text-sm"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <Textarea
+                              value={learningIssuesNote}
+                              onChange={e => setLearningIssuesNote(e.target.value)}
+                              placeholder="학습 상황 상세 (리포트 근거)..."
+                              className="min-h-[50px] resize-none"
+                            />
+                          )}
+                        </>
                       );
                     })()}
-                    <Textarea
-                      value={learningIssuesNote}
-                      onChange={e => setLearningIssuesNote(e.target.value)}
-                      placeholder="학습 상황 상세 (리포트 근거)..."
-                      className="min-h-[50px] resize-none"
-                    />
                   </div>
                 </FieldToggleBlock>
 
