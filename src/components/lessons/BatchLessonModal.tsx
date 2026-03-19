@@ -568,10 +568,6 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                       </Select>
                     )}
                   </div>
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </FieldToggleBlock>
 
                 {/* Learning Issues */}
