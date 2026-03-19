@@ -102,6 +102,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const [notes, setNotes] = useState('');
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
+  const [usePerStudentHomeworkItems, setUsePerStudentHomeworkItems] = useState(false);
+  const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
   const [learningIssues, setLearningIssues] = useState<string[]>([]);
   const [learningIssuesNote, setLearningIssuesNote] = useState('');
   const [perStudentIssuesNote, setPerStudentIssuesNote] = useState<Record<string, string>>({});
@@ -132,6 +134,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setNotes('');
     setNextLessonGoal('');
     setHomeworkItems([]);
+    setUsePerStudentHomeworkItems(false);
+    setPerStudentHomeworkItems({});
     setLearningIssues([]);
     setLearningIssuesNote('');
     setPerStudentIssuesNote({});
