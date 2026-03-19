@@ -237,15 +237,26 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       const ids = Array.from(selectedIds);
       const now = new Date().toISOString();
 
-      // Check if we need per-student updates (learning_issues with individual notes)
-      const needsPerStudent = activeFields.has('learning_issues') && usePerStudentNotes;
+      // Check if we need per-student updates
+      const needsPerStudent = 
+        (activeFields.has('learning_issues') && usePerStudentNotes) ||
+        (activeFields.has('understanding_score') && usePerStudentScore) ||
+        (activeFields.has('homework_status') && usePerStudentHomework);
 
       // Build common update payload with only active fields
       const buildPayload = (recordId?: string): Record<string, any> => {
         const updatePayload: Record<string, any> = { updated_at: now };
         if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
-        if (activeFields.has('understanding_score')) updatePayload.understanding_score = understandingScore;
-        if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
+        if (activeFields.has('understanding_score')) {
+          updatePayload.understanding_score = (usePerStudentScore && recordId)
+            ? (perStudentScore[recordId] ?? understandingScore)
+            : understandingScore;
+        }
+        if (activeFields.has('homework_status')) {
+          updatePayload.homework_status = (usePerStudentHomework && recordId)
+            ? (perStudentHomework[recordId] || homeworkStatus)
+            : homeworkStatus;
+        }
         if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
         if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
         if (activeFields.has('learning_issues')) {
@@ -270,7 +281,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       };
 
       if (needsPerStudent) {
-        // Update each record individually for per-student notes
+        // Update each record individually for per-student values
         for (const id of ids) {
           const payload = buildPayload(id);
           const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
