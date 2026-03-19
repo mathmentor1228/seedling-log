@@ -136,6 +136,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setLearningIssuesNote('');
     setPerStudentIssuesNote({});
     setUsePerStudentNotes(false);
+    setUsePerStudentScore(false);
+    setPerStudentScore({});
+    setUsePerStudentHomework(false);
+    setPerStudentHomework({});
     setTestContent('');
     setSubmitAfter(false);
   }
