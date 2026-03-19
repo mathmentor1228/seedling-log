@@ -525,18 +525,18 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   onToggle={() => toggleField('homework_status')}
                 >
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                       <Checkbox
                         checked={usePerStudentHomework}
                         onCheckedChange={v => setUsePerStudentHomework(v === true)}
                       />
-                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
-                    </label>
+                      <span className="text-xs font-medium text-muted-foreground cursor-pointer" onClick={() => setUsePerStudentHomework(prev => !prev)}>학생별 개별 입력</span>
+                    </div>
 
                     {usePerStudentHomework ? (
                       <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
                         {drafts.filter(d => selectedIds.has(d.id)).map(d => (
-                          <div key={d.id} className="flex items-center gap-2">
+                          <div key={d.id} className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                             <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
                             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
                             <Select
