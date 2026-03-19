@@ -846,6 +846,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                                       <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="daily">일일</SelectItem>
+                                        <SelectItem value="regular">정기</SelectItem>
                                         <SelectItem value="weekly">주간</SelectItem>
                                         <SelectItem value="long_term">장기</SelectItem>
                                       </SelectContent>
