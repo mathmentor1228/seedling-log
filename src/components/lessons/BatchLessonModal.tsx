@@ -106,6 +106,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const [learningIssuesNote, setLearningIssuesNote] = useState('');
   const [perStudentIssuesNote, setPerStudentIssuesNote] = useState<Record<string, string>>({});
   const [usePerStudentNotes, setUsePerStudentNotes] = useState(false);
+  const [usePerStudentScore, setUsePerStudentScore] = useState(false);
+  const [perStudentScore, setPerStudentScore] = useState<Record<string, number>>({});
+  const [usePerStudentHomework, setUsePerStudentHomework] = useState(false);
+  const [perStudentHomework, setPerStudentHomework] = useState<Record<string, string>>({});
   const [testContent, setTestContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitAfter, setSubmitAfter] = useState(false);
@@ -132,6 +136,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setLearningIssuesNote('');
     setPerStudentIssuesNote({});
     setUsePerStudentNotes(false);
+    setUsePerStudentScore(false);
+    setPerStudentScore({});
+    setUsePerStudentHomework(false);
+    setPerStudentHomework({});
     setTestContent('');
     setSubmitAfter(false);
   }
@@ -229,15 +237,26 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       const ids = Array.from(selectedIds);
       const now = new Date().toISOString();
 
-      // Check if we need per-student updates (learning_issues with individual notes)
-      const needsPerStudent = activeFields.has('learning_issues') && usePerStudentNotes;
+      // Check if we need per-student updates
+      const needsPerStudent = 
+        (activeFields.has('learning_issues') && usePerStudentNotes) ||
+        (activeFields.has('understanding_score') && usePerStudentScore) ||
+        (activeFields.has('homework_status') && usePerStudentHomework);
 
       // Build common update payload with only active fields
       const buildPayload = (recordId?: string): Record<string, any> => {
         const updatePayload: Record<string, any> = { updated_at: now };
         if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
-        if (activeFields.has('understanding_score')) updatePayload.understanding_score = understandingScore;
-        if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
+        if (activeFields.has('understanding_score')) {
+          updatePayload.understanding_score = (usePerStudentScore && recordId)
+            ? (perStudentScore[recordId] ?? understandingScore)
+            : understandingScore;
+        }
+        if (activeFields.has('homework_status')) {
+          updatePayload.homework_status = (usePerStudentHomework && recordId)
+            ? (perStudentHomework[recordId] || homeworkStatus)
+            : homeworkStatus;
+        }
         if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
         if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
         if (activeFields.has('learning_issues')) {
@@ -262,7 +281,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       };
 
       if (needsPerStudent) {
-        // Update each record individually for per-student notes
+        // Update each record individually for per-student values
         for (const id of ids) {
           const payload = buildPayload(id);
           const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
@@ -454,16 +473,48 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('understanding_score')}
                   onToggle={() => toggleField('understanding_score')}
                 >
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map(score => (
-                      <button
-                        key={score}
-                        onClick={() => setUnderstandingScore(score)}
-                        className={`transition-transform hover:scale-110 ${understandingScore === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
-                      >
-                        <ScoreBadge score={score} />
-                      </button>
-                    ))}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={usePerStudentScore}
+                        onCheckedChange={v => setUsePerStudentScore(v === true)}
+                      />
+                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
+                    </label>
+
+                    {usePerStudentScore ? (
+                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                          <div key={d.id} className="flex items-center gap-2">
+                            <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                            <div className="flex items-center gap-0.5 ml-auto">
+                              {[1, 2, 3, 4, 5].map(score => (
+                                <button
+                                  key={score}
+                                  onClick={() => setPerStudentScore(prev => ({ ...prev, [d.id]: score }))}
+                                  className={`transition-transform hover:scale-110 ${(perStudentScore[d.id] ?? 3) === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
+                                >
+                                  <ScoreBadge score={score} />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map(score => (
+                          <button
+                            key={score}
+                            onClick={() => setUnderstandingScore(score)}
+                            className={`transition-transform hover:scale-110 ${understandingScore === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
+                          >
+                            <ScoreBadge score={score} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </FieldToggleBlock>
 
@@ -473,16 +524,50 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('homework_status')}
                   onToggle={() => toggleField('homework_status')}
                 >
-                  <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {HOMEWORK_STATUS_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={usePerStudentHomework}
+                        onCheckedChange={v => setUsePerStudentHomework(v === true)}
+                      />
+                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
+                    </label>
+
+                    {usePerStudentHomework ? (
+                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                          <div key={d.id} className="flex items-center gap-2">
+                            <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                            <Select
+                              value={perStudentHomework[d.id] || homeworkStatus}
+                              onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}
+                            >
+                              <SelectTrigger className="h-8 w-28 text-xs ml-auto">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {HOMEWORK_STATUS_OPTIONS.map(opt => (
+                                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HOMEWORK_STATUS_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                 </FieldToggleBlock>
 
                 {/* Learning Issues */}
