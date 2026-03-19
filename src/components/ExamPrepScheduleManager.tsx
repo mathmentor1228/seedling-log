@@ -1032,14 +1032,28 @@ export function ExamPrepScheduleManager() {
 }
 
 // ── Course Card Component ──
-function CourseCard({ course, expanded, onToggle, onDelete, studentMap, teacherMap }: {
+function CourseCard({ course, expanded, onToggle, onDelete, studentMap, teacherMap, existingSchedules }: {
   course: CourseView; expanded: boolean;
   onToggle: () => void; onDelete: (id: string) => void;
   studentMap: Record<string, Student>; teacherMap: Record<string, string>;
+  existingSchedules: ExistingSchedule[];
 }) {
   const cPending = course.enrollments.filter(e => e.status === 'pending').length;
   const cConfirmed = course.enrollments.filter(e => e.status === 'confirmed').length;
   const cAuto = course.enrollments.filter(e => e.status === 'auto_confirmed').length;
+
+  function getStudentConflicts(studentId: string, sessionDate: string, slotStart: string, slotEnd: string) {
+    if (!sessionDate || !slotStart || !slotEnd) return [];
+    const d = new Date(sessionDate + 'T00:00:00');
+    const dow = d.getDay();
+    const conflicts: string[] = [];
+    for (const es of existingSchedules) {
+      if (es.student_id === studentId && es.day_of_week === dow && slotStart < es.end_time && slotEnd > es.start_time) {
+        conflicts.push(`${es.class_name} ${es.start_time.slice(0, 5)}-${es.end_time.slice(0, 5)}`);
+      }
+    }
+    return conflicts;
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -1087,11 +1101,18 @@ function CourseCard({ course, expanded, onToggle, onDelete, studentMap, teacherM
                             {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)}
                           </span>
                           <div className="flex flex-wrap gap-1">
-                            {slot.students.map(ss => (
-                              <Badge key={ss.id} variant="secondary" className="text-[10px]">
-                                {studentMap[ss.student_id]?.name || '—'}
-                              </Badge>
-                            ))}
+                            {slot.students.map(ss => {
+                              const conflicts = getStudentConflicts(ss.student_id, sess.schedule_date, slot.start_time, slot.end_time);
+                              const hasConflict = conflicts.length > 0;
+                              return (
+                                <Badge key={ss.id} variant={hasConflict ? 'destructive' : 'secondary'}
+                                  className="text-[10px] gap-0.5"
+                                  title={hasConflict ? `정규수업 충돌: ${conflicts.join(', ')}` : ''}>
+                                  {hasConflict && <AlertTriangle className="w-2.5 h-2.5" />}
+                                  {studentMap[ss.student_id]?.name || '—'}
+                                </Badge>
+                              );
+                            })}
                             {slot.students.length === 0 && <span className="text-[10px] text-muted-foreground italic">배치된 학생 없음</span>}
                           </div>
                         </div>
