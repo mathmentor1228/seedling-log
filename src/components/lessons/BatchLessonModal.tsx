@@ -724,43 +724,112 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('homework_items')}
                   onToggle={() => toggleField('homework_items')}
                 >
-                  <div className="space-y-2">
-                    {homeworkItems.length === 0 ? (
-                      <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addHomework}>
-                        <Plus className="w-3 h-3" /> 숙제 추가
-                      </Button>
-                    ) : (
-                      <>
-                        {homeworkItems.map((hw, idx) => (
-                          <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
-                            <div className="flex-1 space-y-1.5">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={usePerStudentHomeworkItems}
+                        onCheckedChange={v => setUsePerStudentHomeworkItems(v === true)}
+                      />
+                      <span
+                        className="text-xs font-medium text-muted-foreground cursor-pointer"
+                        onClick={() => setUsePerStudentHomeworkItems(prev => !prev)}
+                      >
+                        학생별 개별 입력
+                      </span>
+                    </div>
+
+                    {usePerStudentHomeworkItems ? (
+                      <div className="space-y-3 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => {
+                          const studentHomeworkItems = perStudentHomeworkItems[d.id] || [];
+                          return (
+                            <div key={d.id} className="space-y-2 rounded-lg border bg-background p-2">
                               <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
-                                <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
-                                  <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="daily">일일</SelectItem>
-                                    <SelectItem value="weekly">주간</SelectItem>
-                                    <SelectItem value="long_term">장기</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
                               </div>
-                              <Input
-                                value={hw.content}
-                                onChange={e => updateHomework(hw.tempId, 'content', e.target.value)}
-                                placeholder="숙제 내용을 입력하세요"
-                                className="h-8 text-sm"
-                              />
+
+                              {studentHomeworkItems.length === 0 ? (
+                                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework(d.id)}>
+                                  <Plus className="w-3 h-3" /> 숙제 추가
+                                </Button>
+                              ) : (
+                                <>
+                                  {studentHomeworkItems.map((hw, idx) => (
+                                    <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
+                                      <div className="flex-1 space-y-1.5">
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
+                                          <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v, d.id)}>
+                                            <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="daily">일일</SelectItem>
+                                              <SelectItem value="weekly">주간</SelectItem>
+                                              <SelectItem value="long_term">장기</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <Input
+                                          value={hw.content}
+                                          onChange={e => updateHomework(hw.tempId, 'content', e.target.value, d.id)}
+                                          placeholder="숙제 내용을 입력하세요"
+                                          className="h-8 text-sm"
+                                        />
+                                      </div>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId, d.id)}>
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework(d.id)}>
+                                    <Plus className="w-3 h-3" /> 숙제 추가
+                                  </Button>
+                                </>
+                              )}
                             </div>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId)}>
-                              <Trash2 className="w-3.5 h-3.5" />
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {homeworkItems.length === 0 ? (
+                          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework()}>
+                            <Plus className="w-3 h-3" /> 숙제 추가
+                          </Button>
+                        ) : (
+                          <>
+                            {homeworkItems.map((hw, idx) => (
+                              <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
+                                <div className="flex-1 space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
+                                    <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
+                                      <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="daily">일일</SelectItem>
+                                        <SelectItem value="weekly">주간</SelectItem>
+                                        <SelectItem value="long_term">장기</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <Input
+                                    value={hw.content}
+                                    onChange={e => updateHomework(hw.tempId, 'content', e.target.value)}
+                                    placeholder="숙제 내용을 입력하세요"
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework()}>
+                              <Plus className="w-3 h-3" /> 숙제 추가
                             </Button>
-                          </div>
-                        ))}
-                        <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addHomework}>
-                          <Plus className="w-3 h-3" /> 숙제 추가
-                        </Button>
-                      </>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 </FieldToggleBlock>
