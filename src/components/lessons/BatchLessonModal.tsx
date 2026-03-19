@@ -200,13 +200,35 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     });
   }
 
-  function addHomework() {
-    setHomeworkItems(prev => [...prev, { tempId: crypto.randomUUID(), content: '', homework_type: 'daily' }]);
+  function addHomework(studentId?: string) {
+    const newItem = { tempId: crypto.randomUUID(), content: '', homework_type: 'daily' };
+    if (studentId) {
+      setPerStudentHomeworkItems(prev => ({
+        ...prev,
+        [studentId]: [...(prev[studentId] || []), newItem],
+      }));
+      return;
+    }
+    setHomeworkItems(prev => [...prev, newItem]);
   }
-  function removeHomework(tempId: string) {
+  function removeHomework(tempId: string, studentId?: string) {
+    if (studentId) {
+      setPerStudentHomeworkItems(prev => ({
+        ...prev,
+        [studentId]: (prev[studentId] || []).filter(h => h.tempId !== tempId),
+      }));
+      return;
+    }
     setHomeworkItems(prev => prev.filter(h => h.tempId !== tempId));
   }
-  function updateHomework(tempId: string, field: keyof HomeworkItem, value: string) {
+  function updateHomework(tempId: string, field: keyof HomeworkItem, value: string, studentId?: string) {
+    if (studentId) {
+      setPerStudentHomeworkItems(prev => ({
+        ...prev,
+        [studentId]: (prev[studentId] || []).map(h => h.tempId === tempId ? { ...h, [field]: value } : h),
+      }));
+      return;
+    }
     setHomeworkItems(prev => prev.map(h => h.tempId === tempId ? { ...h, [field]: value } : h));
   }
 
