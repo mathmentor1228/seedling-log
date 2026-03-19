@@ -102,6 +102,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const [notes, setNotes] = useState('');
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
+  const [usePerStudentHomeworkItems, setUsePerStudentHomeworkItems] = useState(false);
+  const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
   const [learningIssues, setLearningIssues] = useState<string[]>([]);
   const [learningIssuesNote, setLearningIssuesNote] = useState('');
   const [perStudentIssuesNote, setPerStudentIssuesNote] = useState<Record<string, string>>({});
@@ -132,6 +134,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setNotes('');
     setNextLessonGoal('');
     setHomeworkItems([]);
+    setUsePerStudentHomeworkItems(false);
+    setPerStudentHomeworkItems({});
     setLearningIssues([]);
     setLearningIssuesNote('');
     setPerStudentIssuesNote({});
@@ -196,13 +200,35 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     });
   }
 
-  function addHomework() {
-    setHomeworkItems(prev => [...prev, { tempId: crypto.randomUUID(), content: '', homework_type: 'daily' }]);
+  function addHomework(studentId?: string) {
+    const newItem = { tempId: crypto.randomUUID(), content: '', homework_type: 'daily' };
+    if (studentId) {
+      setPerStudentHomeworkItems(prev => ({
+        ...prev,
+        [studentId]: [...(prev[studentId] || []), newItem],
+      }));
+      return;
+    }
+    setHomeworkItems(prev => [...prev, newItem]);
   }
-  function removeHomework(tempId: string) {
+  function removeHomework(tempId: string, studentId?: string) {
+    if (studentId) {
+      setPerStudentHomeworkItems(prev => ({
+        ...prev,
+        [studentId]: (prev[studentId] || []).filter(h => h.tempId !== tempId),
+      }));
+      return;
+    }
     setHomeworkItems(prev => prev.filter(h => h.tempId !== tempId));
   }
-  function updateHomework(tempId: string, field: keyof HomeworkItem, value: string) {
+  function updateHomework(tempId: string, field: keyof HomeworkItem, value: string, studentId?: string) {
+    if (studentId) {
+      setPerStudentHomeworkItems(prev => ({
+        ...prev,
+        [studentId]: (prev[studentId] || []).map(h => h.tempId === tempId ? { ...h, [field]: value } : h),
+      }));
+      return;
+    }
     setHomeworkItems(prev => prev.map(h => h.tempId === tempId ? { ...h, [field]: value } : h));
   }
 
@@ -297,10 +323,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       }
 
       // Handle homework assignment if toggled
-      if (activeFields.has('homework_items') && homeworkItems.filter(h => h.content.trim()).length > 0) {
+      if (activeFields.has('homework_items')) {
         const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
-        const hwAssignments = selectedRecords.flatMap(record =>
-          homeworkItems
+        const hwAssignments = selectedRecords.flatMap(record => {
+          const sourceItems = usePerStudentHomeworkItems
+            ? (perStudentHomeworkItems[record.id] || [])
+            : homeworkItems;
+
+          return sourceItems
             .filter(hw => hw.content.trim())
             .map(hw => ({
               student_id: record.student_id,
@@ -311,8 +341,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
               homework_type: hw.homework_type,
               check_status: 'unchecked' as const,
               created_by: user!.id,
-            }))
-        );
+            }));
+        });
+
         if (hwAssignments.length > 0) {
           const { error: hwError } = await supabase.from('homework_assignments').insert(hwAssignments);
           if (hwError) throw hwError;
@@ -693,43 +724,112 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('homework_items')}
                   onToggle={() => toggleField('homework_items')}
                 >
-                  <div className="space-y-2">
-                    {homeworkItems.length === 0 ? (
-                      <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addHomework}>
-                        <Plus className="w-3 h-3" /> 숙제 추가
-                      </Button>
-                    ) : (
-                      <>
-                        {homeworkItems.map((hw, idx) => (
-                          <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
-                            <div className="flex-1 space-y-1.5">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={usePerStudentHomeworkItems}
+                        onCheckedChange={v => setUsePerStudentHomeworkItems(v === true)}
+                      />
+                      <span
+                        className="text-xs font-medium text-muted-foreground cursor-pointer"
+                        onClick={() => setUsePerStudentHomeworkItems(prev => !prev)}
+                      >
+                        학생별 개별 입력
+                      </span>
+                    </div>
+
+                    {usePerStudentHomeworkItems ? (
+                      <div className="space-y-3 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => {
+                          const studentHomeworkItems = perStudentHomeworkItems[d.id] || [];
+                          return (
+                            <div key={d.id} className="space-y-2 rounded-lg border bg-background p-2">
                               <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
-                                <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
-                                  <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="daily">일일</SelectItem>
-                                    <SelectItem value="weekly">주간</SelectItem>
-                                    <SelectItem value="long_term">장기</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
                               </div>
-                              <Input
-                                value={hw.content}
-                                onChange={e => updateHomework(hw.tempId, 'content', e.target.value)}
-                                placeholder="숙제 내용을 입력하세요"
-                                className="h-8 text-sm"
-                              />
+
+                              {studentHomeworkItems.length === 0 ? (
+                                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework(d.id)}>
+                                  <Plus className="w-3 h-3" /> 숙제 추가
+                                </Button>
+                              ) : (
+                                <>
+                                  {studentHomeworkItems.map((hw, idx) => (
+                                    <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
+                                      <div className="flex-1 space-y-1.5">
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
+                                          <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v, d.id)}>
+                                            <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="daily">일일</SelectItem>
+                                              <SelectItem value="weekly">주간</SelectItem>
+                                              <SelectItem value="long_term">장기</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <Input
+                                          value={hw.content}
+                                          onChange={e => updateHomework(hw.tempId, 'content', e.target.value, d.id)}
+                                          placeholder="숙제 내용을 입력하세요"
+                                          className="h-8 text-sm"
+                                        />
+                                      </div>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId, d.id)}>
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework(d.id)}>
+                                    <Plus className="w-3 h-3" /> 숙제 추가
+                                  </Button>
+                                </>
+                              )}
                             </div>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId)}>
-                              <Trash2 className="w-3.5 h-3.5" />
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {homeworkItems.length === 0 ? (
+                          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework()}>
+                            <Plus className="w-3 h-3" /> 숙제 추가
+                          </Button>
+                        ) : (
+                          <>
+                            {homeworkItems.map((hw, idx) => (
+                              <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
+                                <div className="flex-1 space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
+                                    <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
+                                      <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="daily">일일</SelectItem>
+                                        <SelectItem value="weekly">주간</SelectItem>
+                                        <SelectItem value="long_term">장기</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <Input
+                                    value={hw.content}
+                                    onChange={e => updateHomework(hw.tempId, 'content', e.target.value)}
+                                    placeholder="숙제 내용을 입력하세요"
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework()}>
+                              <Plus className="w-3 h-3" /> 숙제 추가
                             </Button>
-                          </div>
-                        ))}
-                        <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={addHomework}>
-                          <Plus className="w-3 h-3" /> 숙제 추가
-                        </Button>
-                      </>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 </FieldToggleBlock>
