@@ -1849,15 +1849,15 @@ export default function Dashboard() {
     setBulkDraftSaving(true);
     try {
       const today = getTodayKST();
-      const toCreate: { student_id: string; class_id: string; subject: string; teacher_id: string }[] = [];
+      const candidates = new Map<string, { student_id: string; class_id: string; subject: string; teacher_id: string }>();
 
       if (isAdmin(role) && adminRosterData) {
         // Admin: iterate adminRosterData, check lessonStatusMap for existing records
         adminRosterData.roster_rows.forEach(row => {
-          const statusKey = `${row.student_id}_${row.class_id}`;
+          const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
           const status = lessonStatusMap[statusKey];
           if (!status?.recordId) {
-            toCreate.push({
+            candidates.set(statusKey, {
               student_id: row.student_id,
               class_id: row.class_id,
               subject: row.subject,
@@ -1871,7 +1871,8 @@ export default function Dashboard() {
           if (slot.isOverridden && slot.overrideType === 'cancelled') return;
           slot.students.forEach(student => {
             if (!student.lessonRecordId && !student.hyugangRecordId) {
-              toCreate.push({
+              const key = `${student.id}:${slot.class_id}:${slot.subject}`;
+              candidates.set(key, {
                 student_id: student.id,
                 class_id: slot.class_id,
                 subject: slot.subject,
@@ -1882,29 +1883,53 @@ export default function Dashboard() {
         });
       }
 
+      const toCreate = Array.from(candidates.values());
+
       if (toCreate.length === 0) {
         toast({ title: '이미 모든 학생의 일지가 생성되어 있습니다.' });
         setBulkDraftSaving(false);
         return;
       }
 
-      const records = toCreate.map(item => ({
-        student_id: item.student_id,
-        class_id: item.class_id,
-        subject: item.subject as any,
-        teacher_id: item.teacher_id,
-        lesson_date: today,
-        lesson_range: '',
-        homework_status: 'none_assigned',
-        understanding_score: 3,
-        submitted: false,
-      }));
+      const studentIds = [...new Set(toCreate.map(item => item.student_id))];
+      const classIds = [...new Set(toCreate.map(item => item.class_id))];
+      const subjects = [...new Set(toCreate.map(item => item.subject))];
 
-      // Use upsert with ignoreDuplicates to skip already-existing records
-      const { error } = await supabase.from('lesson_records').upsert(records, {
-        onConflict: 'student_id,lesson_date,subject,class_id',
-        ignoreDuplicates: true,
-      });
+      const { data: existingRecords, error: existingError } = await supabase
+        .from('lesson_records')
+        .select('student_id, class_id, subject')
+        .eq('lesson_date', today)
+        .in('student_id', studentIds)
+        .in('class_id', classIds)
+        .in('subject', subjects as any);
+
+      if (existingError) throw existingError;
+
+      const existingKeys = new Set(
+        (existingRecords || []).map((record: any) => `${record.student_id}:${record.class_id}:${record.subject}`)
+      );
+
+      const records = toCreate
+        .filter(item => !existingKeys.has(`${item.student_id}:${item.class_id}:${item.subject}`))
+        .map(item => ({
+          student_id: item.student_id,
+          class_id: item.class_id,
+          subject: item.subject as any,
+          teacher_id: item.teacher_id,
+          lesson_date: today,
+          lesson_range: '',
+          homework_status: 'none_assigned',
+          understanding_score: 3,
+          submitted: false,
+        }));
+
+      if (records.length === 0) {
+        toast({ title: '이미 모든 학생의 일지가 생성되어 있습니다.' });
+        setBulkDraftSaving(false);
+        return;
+      }
+
+      const { error } = await supabase.from('lesson_records').insert(records);
       if (error) throw error;
 
       toast({
