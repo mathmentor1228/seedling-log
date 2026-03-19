@@ -525,18 +525,18 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   onToggle={() => toggleField('homework_status')}
                 >
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                       <Checkbox
                         checked={usePerStudentHomework}
                         onCheckedChange={v => setUsePerStudentHomework(v === true)}
                       />
-                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
-                    </label>
+                      <span className="text-xs font-medium text-muted-foreground cursor-pointer" onClick={() => setUsePerStudentHomework(prev => !prev)}>학생별 개별 입력</span>
+                    </div>
 
                     {usePerStudentHomework ? (
                       <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
                         {drafts.filter(d => selectedIds.has(d.id)).map(d => (
-                          <div key={d.id} className="flex items-center gap-2">
+                          <div key={d.id} className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                             <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
                             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
                             <Select
@@ -788,12 +788,12 @@ function FieldToggleBlock({
 }) {
   return (
     <div className={`rounded-lg border p-3 transition-colors ${active ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20 opacity-60'}`}>
-      <label className="flex items-center gap-2 cursor-pointer mb-2">
+      <div className="flex items-center gap-2 cursor-pointer mb-2" onClick={onToggle}>
         <Checkbox checked={active} onCheckedChange={onToggle} />
         <span className="text-sm font-semibold">{FIELD_LABELS[field]}</span>
         {active && <Badge className="text-[10px] ml-auto bg-primary/10 text-primary border-0">적용됨</Badge>}
-      </label>
-      {active && <div className="mt-1">{children}</div>}
+      </div>
+      {active && <div className="mt-1" onClick={e => e.stopPropagation()}>{children}</div>}
     </div>
   );
 }
