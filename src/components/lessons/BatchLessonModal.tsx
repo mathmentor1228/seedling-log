@@ -131,6 +131,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   function resetEditState() {
     setActiveFields(new Set());
     setLessonRange('');
+    setUsePerStudentLessonRange(false);
+    setPerStudentLessonRange({});
     setUnderstandingScore(3);
     setHomeworkStatus('none_assigned');
     setNotes('');
