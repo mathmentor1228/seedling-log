@@ -97,6 +97,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   // Edit state - which fields to apply
   const [activeFields, setActiveFields] = useState<Set<EditableField>>(new Set());
   const [lessonRange, setLessonRange] = useState('');
+  const [usePerStudentLessonRange, setUsePerStudentLessonRange] = useState(false);
+  const [perStudentLessonRange, setPerStudentLessonRange] = useState<Record<string, string>>({});
   const [understandingScore, setUnderstandingScore] = useState<number>(3);
   const [homeworkStatus, setHomeworkStatus] = useState('none_assigned');
   const [notes, setNotes] = useState('');
@@ -129,6 +131,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   function resetEditState() {
     setActiveFields(new Set());
     setLessonRange('');
+    setUsePerStudentLessonRange(false);
+    setPerStudentLessonRange({});
     setUnderstandingScore(3);
     setHomeworkStatus('none_assigned');
     setNotes('');
@@ -265,6 +269,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
 
       // Check if we need per-student updates
       const needsPerStudent = 
+        (activeFields.has('lesson_range') && usePerStudentLessonRange) ||
         (activeFields.has('learning_issues') && usePerStudentNotes) ||
         (activeFields.has('understanding_score') && usePerStudentScore) ||
         (activeFields.has('homework_status') && usePerStudentHomework);
@@ -272,7 +277,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       // Build common update payload with only active fields
       const buildPayload = (recordId?: string): Record<string, any> => {
         const updatePayload: Record<string, any> = { updated_at: now };
-        if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
+        if (activeFields.has('lesson_range')) {
+          updatePayload.lesson_range = (usePerStudentLessonRange && recordId)
+            ? (perStudentLessonRange[recordId] ?? lessonRange).trim()
+            : lessonRange.trim();
+        }
         if (activeFields.has('understanding_score')) {
           updatePayload.understanding_score = (usePerStudentScore && recordId)
             ? (perStudentScore[recordId] ?? understandingScore)
@@ -490,12 +499,41 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('lesson_range')}
                   onToggle={() => toggleField('lesson_range')}
                 >
-                  <Textarea
-                    value={lessonRange}
-                    onChange={e => setLessonRange(e.target.value)}
-                    placeholder="예: 미적분 - 도함수의 활용 (증가·감소, 극값)"
-                    className="min-h-[60px] resize-none"
-                  />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={usePerStudentLessonRange}
+                        onCheckedChange={v => setUsePerStudentLessonRange(v === true)}
+                      />
+                      <span className="text-xs font-medium text-muted-foreground cursor-pointer" onClick={() => setUsePerStudentLessonRange(prev => !prev)}>학생별 개별 입력</span>
+                    </div>
+
+                    {usePerStudentLessonRange ? (
+                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                          <div key={d.id} className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold">{d.student_name}</span>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{d.subject}</Badge>
+                            </div>
+                            <Textarea
+                              value={perStudentLessonRange[d.id] ?? ''}
+                              onChange={e => setPerStudentLessonRange(prev => ({ ...prev, [d.id]: e.target.value }))}
+                              placeholder={`${d.student_name} 수업 내용...`}
+                              className="min-h-[50px] resize-none text-sm"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Textarea
+                        value={lessonRange}
+                        onChange={e => setLessonRange(e.target.value)}
+                        placeholder="예: 미적분 - 도함수의 활용 (증가·감소, 극값)"
+                        className="min-h-[60px] resize-none"
+                      />
+                    )}
+                  </div>
                 </FieldToggleBlock>
 
                 {/* Understanding Score */}
@@ -764,6 +802,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                                             <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
                                             <SelectContent>
                                               <SelectItem value="daily">일일</SelectItem>
+                                              <SelectItem value="regular">정기</SelectItem>
                                               <SelectItem value="weekly">주간</SelectItem>
                                               <SelectItem value="long_term">장기</SelectItem>
                                             </SelectContent>
@@ -807,6 +846,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                                       <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="daily">일일</SelectItem>
+                                        <SelectItem value="regular">정기</SelectItem>
                                         <SelectItem value="weekly">주간</SelectItem>
                                         <SelectItem value="long_term">장기</SelectItem>
                                       </SelectContent>
