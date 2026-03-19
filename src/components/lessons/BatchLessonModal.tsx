@@ -269,6 +269,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
 
       // Check if we need per-student updates
       const needsPerStudent = 
+        (activeFields.has('lesson_range') && usePerStudentLessonRange) ||
         (activeFields.has('learning_issues') && usePerStudentNotes) ||
         (activeFields.has('understanding_score') && usePerStudentScore) ||
         (activeFields.has('homework_status') && usePerStudentHomework);
