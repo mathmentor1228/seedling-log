@@ -499,12 +499,41 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('lesson_range')}
                   onToggle={() => toggleField('lesson_range')}
                 >
-                  <Textarea
-                    value={lessonRange}
-                    onChange={e => setLessonRange(e.target.value)}
-                    placeholder="예: 미적분 - 도함수의 활용 (증가·감소, 극값)"
-                    className="min-h-[60px] resize-none"
-                  />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={usePerStudentLessonRange}
+                        onCheckedChange={v => setUsePerStudentLessonRange(v === true)}
+                      />
+                      <span className="text-xs font-medium text-muted-foreground cursor-pointer" onClick={() => setUsePerStudentLessonRange(prev => !prev)}>학생별 개별 입력</span>
+                    </div>
+
+                    {usePerStudentLessonRange ? (
+                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                          <div key={d.id} className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold">{d.student_name}</span>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{d.subject}</Badge>
+                            </div>
+                            <Textarea
+                              value={perStudentLessonRange[d.id] ?? ''}
+                              onChange={e => setPerStudentLessonRange(prev => ({ ...prev, [d.id]: e.target.value }))}
+                              placeholder={`${d.student_name} 수업 내용...`}
+                              className="min-h-[50px] resize-none text-sm"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Textarea
+                        value={lessonRange}
+                        onChange={e => setLessonRange(e.target.value)}
+                        placeholder="예: 미적분 - 도함수의 활용 (증가·감소, 극값)"
+                        className="min-h-[60px] resize-none"
+                      />
+                    )}
+                  </div>
                 </FieldToggleBlock>
 
                 {/* Understanding Score */}
