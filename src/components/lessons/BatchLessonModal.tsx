@@ -323,10 +323,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       }
 
       // Handle homework assignment if toggled
-      if (activeFields.has('homework_items') && homeworkItems.filter(h => h.content.trim()).length > 0) {
+      if (activeFields.has('homework_items')) {
         const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
-        const hwAssignments = selectedRecords.flatMap(record =>
-          homeworkItems
+        const hwAssignments = selectedRecords.flatMap(record => {
+          const sourceItems = usePerStudentHomeworkItems
+            ? (perStudentHomeworkItems[record.id] || [])
+            : homeworkItems;
+
+          return sourceItems
             .filter(hw => hw.content.trim())
             .map(hw => ({
               student_id: record.student_id,
@@ -337,8 +341,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
               homework_type: hw.homework_type,
               check_status: 'unchecked' as const,
               created_by: user!.id,
-            }))
-        );
+            }));
+        });
+
         if (hwAssignments.length > 0) {
           const { error: hwError } = await supabase.from('homework_assignments').insert(hwAssignments);
           if (hwError) throw hwError;
