@@ -97,6 +97,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   // Edit state - which fields to apply
   const [activeFields, setActiveFields] = useState<Set<EditableField>>(new Set());
   const [lessonRange, setLessonRange] = useState('');
+  const [usePerStudentLessonRange, setUsePerStudentLessonRange] = useState(false);
+  const [perStudentLessonRange, setPerStudentLessonRange] = useState<Record<string, string>>({});
   const [understandingScore, setUnderstandingScore] = useState<number>(3);
   const [homeworkStatus, setHomeworkStatus] = useState('none_assigned');
   const [notes, setNotes] = useState('');
