@@ -473,16 +473,48 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('understanding_score')}
                   onToggle={() => toggleField('understanding_score')}
                 >
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map(score => (
-                      <button
-                        key={score}
-                        onClick={() => setUnderstandingScore(score)}
-                        className={`transition-transform hover:scale-110 ${understandingScore === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
-                      >
-                        <ScoreBadge score={score} />
-                      </button>
-                    ))}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={usePerStudentScore}
+                        onCheckedChange={v => setUsePerStudentScore(v === true)}
+                      />
+                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
+                    </label>
+
+                    {usePerStudentScore ? (
+                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                          <div key={d.id} className="flex items-center gap-2">
+                            <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                            <div className="flex items-center gap-0.5 ml-auto">
+                              {[1, 2, 3, 4, 5].map(score => (
+                                <button
+                                  key={score}
+                                  onClick={() => setPerStudentScore(prev => ({ ...prev, [d.id]: score }))}
+                                  className={`transition-transform hover:scale-110 ${(perStudentScore[d.id] ?? 3) === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
+                                >
+                                  <ScoreBadge score={score} />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map(score => (
+                          <button
+                            key={score}
+                            onClick={() => setUnderstandingScore(score)}
+                            className={`transition-transform hover:scale-110 ${understandingScore === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
+                          >
+                            <ScoreBadge score={score} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </FieldToggleBlock>
 
@@ -492,12 +524,50 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('homework_status')}
                   onToggle={() => toggleField('homework_status')}
                 >
-                  <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {HOMEWORK_STATUS_OPTIONS.map(opt => (
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={usePerStudentHomework}
+                        onCheckedChange={v => setUsePerStudentHomework(v === true)}
+                      />
+                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
+                    </label>
+
+                    {usePerStudentHomework ? (
+                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                          <div key={d.id} className="flex items-center gap-2">
+                            <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                            <Select
+                              value={perStudentHomework[d.id] || homeworkStatus}
+                              onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}
+                            >
+                              <SelectTrigger className="h-8 w-28 text-xs ml-auto">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {HOMEWORK_STATUS_OPTIONS.map(opt => (
+                                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HOMEWORK_STATUS_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                         <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                       ))}
                     </SelectContent>
