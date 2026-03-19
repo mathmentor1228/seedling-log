@@ -1900,7 +1900,11 @@ export default function Dashboard() {
         submitted: false,
       }));
 
-      const { error } = await supabase.from('lesson_records').insert(records);
+      // Use upsert with ignoreDuplicates to skip already-existing records
+      const { error } = await supabase.from('lesson_records').upsert(records, {
+        onConflict: 'student_id,lesson_date,subject,class_id',
+        ignoreDuplicates: true,
+      });
       if (error) throw error;
 
       toast({

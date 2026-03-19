@@ -104,6 +104,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
   const [learningIssues, setLearningIssues] = useState<string[]>([]);
   const [learningIssuesNote, setLearningIssuesNote] = useState('');
+  const [perStudentIssuesNote, setPerStudentIssuesNote] = useState<Record<string, string>>({});
+  const [usePerStudentNotes, setUsePerStudentNotes] = useState(false);
   const [testContent, setTestContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitAfter, setSubmitAfter] = useState(false);
@@ -128,6 +130,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setHomeworkItems([]);
     setLearningIssues([]);
     setLearningIssuesNote('');
+    setPerStudentIssuesNote({});
+    setUsePerStudentNotes(false);
     setTestContent('');
     setSubmitAfter(false);
   }
@@ -225,33 +229,53 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       const ids = Array.from(selectedIds);
       const now = new Date().toISOString();
 
-      // Build update payload with only active fields
-      const updatePayload: Record<string, any> = { updated_at: now };
-      if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
-      if (activeFields.has('understanding_score')) updatePayload.understanding_score = understandingScore;
-      if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
-      if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
-      if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
-      if (activeFields.has('learning_issues')) {
-        updatePayload.learning_issues = learningIssues;
-        updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
-      }
-      if (activeFields.has('test_fields')) {
-        const unified = testContent.trim() || null;
-        updatePayload.test_content = unified;
-        updatePayload.test_name = unified;
-        updatePayload.test_title = unified;
-      }
-      if (submitAfter) {
-        updatePayload.submitted = true;
-        updatePayload.submitted_at = now;
-      }
+      // Check if we need per-student updates (learning_issues with individual notes)
+      const needsPerStudent = activeFields.has('learning_issues') && usePerStudentNotes;
 
-      const { error: updateError } = await supabase
-        .from('lesson_records')
-        .update(updatePayload)
-        .in('id', ids);
-      if (updateError) throw updateError;
+      // Build common update payload with only active fields
+      const buildPayload = (recordId?: string): Record<string, any> => {
+        const updatePayload: Record<string, any> = { updated_at: now };
+        if (activeFields.has('lesson_range')) updatePayload.lesson_range = lessonRange.trim();
+        if (activeFields.has('understanding_score')) updatePayload.understanding_score = understandingScore;
+        if (activeFields.has('homework_status')) updatePayload.homework_status = homeworkStatus;
+        if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
+        if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
+        if (activeFields.has('learning_issues')) {
+          updatePayload.learning_issues = learningIssues;
+          if (usePerStudentNotes && recordId) {
+            updatePayload.learning_issues_note = (perStudentIssuesNote[recordId] || '').trim() || null;
+          } else {
+            updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
+          }
+        }
+        if (activeFields.has('test_fields')) {
+          const unified = testContent.trim() || null;
+          updatePayload.test_content = unified;
+          updatePayload.test_name = unified;
+          updatePayload.test_title = unified;
+        }
+        if (submitAfter) {
+          updatePayload.submitted = true;
+          updatePayload.submitted_at = now;
+        }
+        return updatePayload;
+      };
+
+      if (needsPerStudent) {
+        // Update each record individually for per-student notes
+        for (const id of ids) {
+          const payload = buildPayload(id);
+          const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
+          if (error) throw error;
+        }
+      } else {
+        const updatePayload = buildPayload();
+        const { error: updateError } = await supabase
+          .from('lesson_records')
+          .update(updatePayload)
+          .in('id', ids);
+        if (updateError) throw updateError;
+      }
 
       // Handle homework assignment if toggled
       if (activeFields.has('homework_items') && homeworkItems.filter(h => h.content.trim()).length > 0) {
@@ -467,9 +491,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                   active={activeFields.has('learning_issues')}
                   onToggle={() => toggleField('learning_issues')}
                 >
-                  <div className="space-y-2">
+                   <div className="space-y-2">
                     {(() => {
-                      // Get common subject from selected records
                       const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
                       const subjects = [...new Set(selectedRecords.map(d => d.subject))];
                       const allIssues = new Set<string>();
@@ -478,28 +501,59 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                         if (issues) issues.forEach(i => allIssues.add(i));
                       });
                       return (
-                        <div className="flex flex-wrap gap-1.5">
-                          {[...allIssues].map(issue => (
-                            <Badge
-                              key={issue}
-                              variant={learningIssues.includes(issue) ? 'default' : 'outline'}
-                              className="cursor-pointer text-xs"
-                              onClick={() => setLearningIssues(prev => 
-                                prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
-                              )}
-                            >
-                              {issue}
-                            </Badge>
-                          ))}
-                        </div>
+                        <>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[...allIssues].map(issue => (
+                              <Badge
+                                key={issue}
+                                variant={learningIssues.includes(issue) ? 'default' : 'outline'}
+                                className="cursor-pointer text-xs"
+                                onClick={() => setLearningIssues(prev => 
+                                  prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
+                                )}
+                              >
+                                {issue}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          {/* Toggle: shared vs per-student notes */}
+                          <label className="flex items-center gap-2 cursor-pointer mt-1">
+                            <Checkbox
+                              checked={usePerStudentNotes}
+                              onCheckedChange={v => setUsePerStudentNotes(v === true)}
+                            />
+                            <span className="text-xs font-medium text-muted-foreground">학생별 개별 상세 입력</span>
+                          </label>
+
+                          {usePerStudentNotes ? (
+                            <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                              {selectedRecords.map(d => (
+                                <div key={d.id} className="space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold">{d.student_name}</span>
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{d.subject}</Badge>
+                                  </div>
+                                  <Textarea
+                                    value={perStudentIssuesNote[d.id] || ''}
+                                    onChange={e => setPerStudentIssuesNote(prev => ({ ...prev, [d.id]: e.target.value }))}
+                                    placeholder={`${d.student_name} 학습 상황 상세...`}
+                                    className="min-h-[40px] resize-none text-sm"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <Textarea
+                              value={learningIssuesNote}
+                              onChange={e => setLearningIssuesNote(e.target.value)}
+                              placeholder="학습 상황 상세 (리포트 근거)..."
+                              className="min-h-[50px] resize-none"
+                            />
+                          )}
+                        </>
                       );
                     })()}
-                    <Textarea
-                      value={learningIssuesNote}
-                      onChange={e => setLearningIssuesNote(e.target.value)}
-                      placeholder="학습 상황 상세 (리포트 근거)..."
-                      className="min-h-[50px] resize-none"
-                    />
                   </div>
                 </FieldToggleBlock>
 
