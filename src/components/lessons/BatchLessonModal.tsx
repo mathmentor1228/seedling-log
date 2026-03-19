@@ -788,12 +788,12 @@ function FieldToggleBlock({
 }) {
   return (
     <div className={`rounded-lg border p-3 transition-colors ${active ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20 opacity-60'}`}>
-      <label className="flex items-center gap-2 cursor-pointer mb-2">
+      <div className="flex items-center gap-2 cursor-pointer mb-2" onClick={onToggle}>
         <Checkbox checked={active} onCheckedChange={onToggle} />
         <span className="text-sm font-semibold">{FIELD_LABELS[field]}</span>
         {active && <Badge className="text-[10px] ml-auto bg-primary/10 text-primary border-0">적용됨</Badge>}
-      </label>
-      {active && <div className="mt-1">{children}</div>}
+      </div>
+      {active && <div className="mt-1" onClick={e => e.stopPropagation()}>{children}</div>}
     </div>
   );
 }
