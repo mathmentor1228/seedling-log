@@ -120,10 +120,11 @@ export function QuizVersionTracker() {
 
   const filteredVersions = useMemo(() => {
     if (!searchQuery.trim()) return versions;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
     return versions.filter(v =>
       (v.version_label || '').toLowerCase().includes(q) ||
-      (v.math_concepts?.title || '').toLowerCase().includes(q),
+      (v.math_concepts?.title || '').toLowerCase().includes(q) ||
+      (v.answer_code || '').toLowerCase().includes(q),
     );
   }, [versions, searchQuery]);
 
