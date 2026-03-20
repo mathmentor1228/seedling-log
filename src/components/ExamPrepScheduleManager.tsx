@@ -95,6 +95,7 @@ export function ExamPrepScheduleManager() {
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
   const [schoolFilter, setSchoolFilter] = useState<string>('all');
   const [showPast, setShowPast] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
 
   // Form state
   const [formSubject, setFormSubject] = useState('수학');
