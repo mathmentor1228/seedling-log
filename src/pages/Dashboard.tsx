@@ -481,6 +481,8 @@ export default function Dashboard() {
 
   // SCHEDULE-OVERRIDE-V1: Override modal state
   const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  // BATCH-SUPPLEMENT-V1: Batch supplementary lesson modal
+  const [batchSupplementOpen, setBatchSupplementOpen] = useState(false);
   const [overrideModalContext, setOverrideModalContext] = useState<{
     scheduleId: string;
     classId: string;
