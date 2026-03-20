@@ -1093,6 +1093,7 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
   const cPending = course.enrollments.filter(e => e.status === 'pending').length;
   const cConfirmed = course.enrollments.filter(e => e.status === 'confirmed').length;
   const cAuto = course.enrollments.filter(e => e.status === 'auto_confirmed').length;
+  const hasEditable = cPending > 0 || course.enrollments.length === 0;
 
   function getStudentConflicts(studentId: string, sessionDate: string, slotStart: string, slotEnd: string) {
     if (!sessionDate || !slotStart || !slotEnd) return [];
