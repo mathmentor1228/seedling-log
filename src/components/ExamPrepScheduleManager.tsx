@@ -554,6 +554,7 @@ export function ExamPrepScheduleManager() {
       { label: '직전특강', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
     ]);
     setSlotAssignments({}); setActiveStudentId(null);
+    setEditingCourseId(null);
   }
 
   // ── Course classification ──
