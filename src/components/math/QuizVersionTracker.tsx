@@ -16,6 +16,7 @@ interface QuizVersion {
   concept_id: string;
   version_number: number;
   version_label: string | null;
+  answer_code: string | null;
   status: string;
   created_at: string;
   questions: any[];
