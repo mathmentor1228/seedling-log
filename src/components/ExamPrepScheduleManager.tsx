@@ -419,6 +419,45 @@ export function ExamPrepScheduleManager() {
     setSlotAssignments(newAssignments);
   }
 
+  function handleEditCourse(courseId: string) {
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+    setFormSubject(course.subject);
+    setFormTeacherId(course.teacher_id);
+    setFormSchool(course.school_name || '');
+    setFormTitle(course.title || '');
+    setFormDescription(course.description || '');
+    setFormDeadline(course.deadline_date);
+
+    const loadedSessions: SessionEntry[] = course.sessions.map(sess => {
+      const slots: TimeSlotEntry[] = sess.time_slots.length > 0
+        ? sess.time_slots.map(sl => ({ id: tempId(), startTime: sl.start_time.slice(0, 5), endTime: sl.end_time.slice(0, 5) }))
+        : [{ id: tempId(), startTime: sess.start_time.slice(0, 5), endTime: sess.end_time.slice(0, 5) }];
+      return { label: sess.session_label, date: sess.schedule_date, slots };
+    });
+    if (loadedSessions.length === 0) {
+      loadedSessions.push({ label: '1회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] });
+    }
+    setSessions(loadedSessions);
+
+    // Rebuild slot assignments
+    const newAssignments: Record<string, string[]> = {};
+    course.sessions.forEach((sess, si) => {
+      if (si >= loadedSessions.length) return;
+      const loadedSlots = loadedSessions[si].slots;
+      sess.time_slots.forEach((dbSlot, sli) => {
+        if (sli >= loadedSlots.length) return;
+        const studentIds = dbSlot.students.map(ss => ss.student_id);
+        if (studentIds.length > 0) newAssignments[loadedSlots[sli].id] = studentIds;
+      });
+    });
+    setSlotAssignments(newAssignments);
+    setActiveStudentId(null);
+    setEditingCourseId(courseId);
+    setMode('create');
+    setStep(1);
+  }
+
   async function handleSave() {
     const filledSessions = sessions.filter(s => s.date && s.slots.some(sl => sl.startTime && sl.endTime));
     const allAssignedIds = new Set<string>();
@@ -428,6 +467,17 @@ export function ExamPrepScheduleManager() {
       return;
     }
     setSaving(true);
+
+    // If editing, delete the old course first (cascade will remove sessions/slots/enrollments)
+    if (editingCourseId) {
+      const { error: delErr } = await supabase.from('exam_prep_courses').delete().eq('id', editingCourseId);
+      if (delErr) {
+        toast({ title: '기존 특강 삭제 실패', description: delErr.message, variant: 'destructive' });
+        setSaving(false);
+        return;
+      }
+    }
+
     const { data: course, error: courseErr } = await supabase.from('exam_prep_courses').insert({
       subject: formSubject, teacher_id: formTeacherId,
       title: formTitle || `${formSchool || ''} ${formSubject} 내신 특강`.trim(),
@@ -478,7 +528,7 @@ export function ExamPrepScheduleManager() {
     if (slotStudentRows.length > 0) await supabase.from('exam_prep_slot_students').insert(slotStudentRows);
     const enrollRows = [...allAssignedIds].map(sid => ({ course_id: course.id, student_id: sid }));
     await supabase.from('exam_prep_enrollments').insert(enrollRows);
-    toast({ title: `${allAssignedIds.size}명 · ${filledSessions.length}회차 특강 등록 완료` });
+    toast({ title: `${allAssignedIds.size}명 · ${filledSessions.length}회차 특강 ${editingCourseId ? '수정' : '등록'} 완료` });
     resetAndGoBack();
     await fetchCourses();
     setSaving(false);
