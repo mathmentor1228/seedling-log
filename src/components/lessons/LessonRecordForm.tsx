@@ -1523,8 +1523,8 @@ export function LessonRecordForm({
               <span className="text-xs text-orange-500">⚠ 시간을 입력해주세요</span>
             )}
             <span className="text-sm text-muted-foreground ml-2">선생님:</span>
-            {/* SUPPLEMENT-LOCK-V1: Lock teacher once saved in existing record */}
-            {editingLesson && formData.supplement_teacher_name ? (
+            {/* SUPPLEMENT-LOCK-V2: Lock teacher only for submitted records */}
+            {editingLesson?.submitted && formData.supplement_teacher_name ? (
               <Badge variant="secondary" className="h-8 px-3 text-sm">{formData.supplement_teacher_name}</Badge>
             ) : teachers && teachers.length > 0 ? (
               <Select
