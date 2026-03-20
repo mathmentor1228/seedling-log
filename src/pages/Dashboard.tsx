@@ -3455,6 +3455,15 @@ export default function Dashboard() {
           }}
         />
       )}
+      {/* BATCH-SUPPLEMENT-V1: Batch supplementary lesson modal */}
+      <BatchSupplementaryModal
+        open={batchSupplementOpen}
+        onOpenChange={setBatchSupplementOpen}
+        onSaved={async () => {
+          await fetchSupplementaryLessons();
+          if (isAdmin(role)) await fetchAdminRosterData();
+        }}
+      />
     </div>
   );
 }
