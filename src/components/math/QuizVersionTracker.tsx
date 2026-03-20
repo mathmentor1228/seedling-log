@@ -16,6 +16,7 @@ interface QuizVersion {
   concept_id: string;
   version_number: number;
   version_label: string | null;
+  answer_code: string | null;
   status: string;
   created_at: string;
   questions: any[];
@@ -61,7 +62,7 @@ export function QuizVersionTracker() {
     const [versionsRes, assignRes, subRes, studentsRes] = await Promise.all([
       supabase
         .from('math_concept_quizzes')
-        .select('id, concept_id, version_number, version_label, status, created_at, questions, math_concepts(title, course, grade, subject)')
+        .select('id, concept_id, version_number, version_label, answer_code, status, created_at, questions, math_concepts(title, course, grade, subject)')
         .order('created_at', { ascending: false }) as any,
       supabase.from('math_quiz_assignments').select('id, quiz_id, student_id, assigned_at') as any,
       supabase.from('math_quiz_submissions').select('id, quiz_id, student_id, ai_total_score, ai_total_questions, status, submitted_at') as any,
@@ -119,10 +120,11 @@ export function QuizVersionTracker() {
 
   const filteredVersions = useMemo(() => {
     if (!searchQuery.trim()) return versions;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
     return versions.filter(v =>
       (v.version_label || '').toLowerCase().includes(q) ||
-      (v.math_concepts?.title || '').toLowerCase().includes(q),
+      (v.math_concepts?.title || '').toLowerCase().includes(q) ||
+      (v.answer_code || '').toLowerCase().includes(q),
     );
   }, [versions, searchQuery]);
 
@@ -150,7 +152,7 @@ export function QuizVersionTracker() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="버전 또는 단원명 검색..."
+                placeholder="버전, 단원명 또는 코드(MT-...) 검색..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="pl-9 h-9"
@@ -174,6 +176,7 @@ export function QuizVersionTracker() {
                       <div className="flex items-center gap-1.5 mb-1">
                         <Badge variant="secondary" className="text-[10px]">V{v.version_number}</Badge>
                         <Badge variant="outline" className="text-[10px]">{v.math_concepts?.subject || '기타'}</Badge>
+                        {v.answer_code && <Badge variant="outline" className="text-[10px] font-mono">{v.answer_code}</Badge>}
                       </div>
                       <p className="font-medium truncate">{v.math_concepts?.title || '퀴즈'}</p>
                       <p className="text-xs text-muted-foreground truncate">{v.version_label || ''}</p>
