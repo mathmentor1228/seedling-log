@@ -383,7 +383,7 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
   };
 
   const handlePrint = (quizId: string) => {
-    window.open(`/quiz-print?id=${quizId}`, '_blank');
+    window.open(`/quiz-print?quiz_id=${quizId}`, '_blank');
   };
 
   if (loading) {
