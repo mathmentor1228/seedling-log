@@ -152,7 +152,7 @@ export function QuizVersionTracker() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="버전 또는 단원명 검색..."
+                placeholder="버전, 단원명 또는 코드(MT-...) 검색..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="pl-9 h-9"
