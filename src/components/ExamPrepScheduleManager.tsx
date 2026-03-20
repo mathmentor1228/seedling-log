@@ -606,7 +606,7 @@ export function ExamPrepScheduleManager() {
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetAndGoBack}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <h2 className="text-lg font-bold">내신 특강 등록</h2>
+          <h2 className="text-lg font-bold">{editingCourseId ? '내신 특강 수정' : '내신 특강 등록'}</h2>
           <div className="ml-auto flex items-center gap-2">
             <Badge variant={step === 1 ? 'default' : 'outline'} className="text-xs cursor-pointer" onClick={() => setStep(1)}>
               1. 기본 정보
