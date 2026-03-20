@@ -1051,7 +1051,7 @@ export function ExamPrepScheduleManager() {
               {filteredUpcoming.map(course => (
                 <CourseCard key={course.id} course={course} expanded={expandedCourseId === course.id}
                   onToggle={() => setExpandedCourseId(expandedCourseId === course.id ? null : course.id)}
-                  onDelete={handleDeleteCourse} studentMap={studentMap} teacherMap={teacherMap} existingSchedules={existingSchedules} />
+                  onDelete={handleDeleteCourse} onEdit={handleEditCourse} studentMap={studentMap} teacherMap={teacherMap} existingSchedules={existingSchedules} />
               ))}
             </div>
           ) : (
