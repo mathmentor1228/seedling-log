@@ -2645,6 +2645,16 @@ export default function Dashboard() {
                     >
                       + 보충수업
                     </Button>
+                    {/* BATCH-SUPPLEMENT-V1: Batch supplementary lesson button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                      onClick={() => setBatchSupplementOpen(true)}
+                    >
+                      <Users className="w-3 h-3 mr-1" />
+                      보충 일괄등록
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
