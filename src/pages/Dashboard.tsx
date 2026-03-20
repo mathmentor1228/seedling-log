@@ -26,6 +26,7 @@ import StudentProgressWidget from '@/components/StudentProgressWidget';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
+import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
 
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
@@ -480,6 +481,8 @@ export default function Dashboard() {
 
   // SCHEDULE-OVERRIDE-V1: Override modal state
   const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  // BATCH-SUPPLEMENT-V1: Batch supplementary lesson modal
+  const [batchSupplementOpen, setBatchSupplementOpen] = useState(false);
   const [overrideModalContext, setOverrideModalContext] = useState<{
     scheduleId: string;
     classId: string;
@@ -2642,6 +2645,16 @@ export default function Dashboard() {
                     >
                       + 보충수업
                     </Button>
+                    {/* BATCH-SUPPLEMENT-V1: Batch supplementary lesson button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                      onClick={() => setBatchSupplementOpen(true)}
+                    >
+                      <Users className="w-3 h-3 mr-1" />
+                      보충 일괄등록
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -3442,6 +3455,15 @@ export default function Dashboard() {
           }}
         />
       )}
+      {/* BATCH-SUPPLEMENT-V1: Batch supplementary lesson modal */}
+      <BatchSupplementaryModal
+        open={batchSupplementOpen}
+        onOpenChange={setBatchSupplementOpen}
+        onSaved={async () => {
+          await fetchSupplementaryLessons();
+          if (isAdmin(role)) await fetchAdminRosterData();
+        }}
+      />
     </div>
   );
 }

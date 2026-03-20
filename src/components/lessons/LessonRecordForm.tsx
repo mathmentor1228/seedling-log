@@ -1506,8 +1506,8 @@ export function LessonRecordForm({
         {formData.lesson_types.includes('보충수업') ? (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground">시간:</span>
-            {/* SUPPLEMENT-LOCK-V1: Lock time once saved in existing record */}
-            {editingLesson && formData.supplement_time ? (
+            {/* SUPPLEMENT-LOCK-V2: Lock time only for submitted records, drafts remain editable */}
+            {editingLesson?.submitted && formData.supplement_time ? (
               <Badge variant="secondary" className="h-8 px-3 text-sm font-mono">{formData.supplement_time}</Badge>
             ) : (
               <Input
@@ -1519,12 +1519,12 @@ export function LessonRecordForm({
                 disabled={isViewMode}
               />
             )}
-            {!formData.supplement_time && !isViewMode && !editingLesson && (
+            {!formData.supplement_time && !isViewMode && !(editingLesson?.submitted) && (
               <span className="text-xs text-orange-500">⚠ 시간을 입력해주세요</span>
             )}
             <span className="text-sm text-muted-foreground ml-2">선생님:</span>
-            {/* SUPPLEMENT-LOCK-V1: Lock teacher once saved in existing record */}
-            {editingLesson && formData.supplement_teacher_name ? (
+            {/* SUPPLEMENT-LOCK-V2: Lock teacher only for submitted records */}
+            {editingLesson?.submitted && formData.supplement_teacher_name ? (
               <Badge variant="secondary" className="h-8 px-3 text-sm">{formData.supplement_teacher_name}</Badge>
             ) : teachers && teachers.length > 0 ? (
               <Select
