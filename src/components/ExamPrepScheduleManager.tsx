@@ -1084,9 +1084,9 @@ export function ExamPrepScheduleManager() {
 }
 
 // ── Course Card Component ──
-function CourseCard({ course, expanded, onToggle, onDelete, studentMap, teacherMap, existingSchedules }: {
+function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, teacherMap, existingSchedules }: {
   course: CourseView; expanded: boolean;
-  onToggle: () => void; onDelete: (id: string) => void;
+  onToggle: () => void; onDelete: (id: string) => void; onEdit: (id: string) => void;
   studentMap: Record<string, Student>; teacherMap: Record<string, string>;
   existingSchedules: ExistingSchedule[];
 }) {
