@@ -1193,9 +1193,16 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
 
           <div className="flex items-center justify-between pt-2">
             <p className="text-[11px] text-muted-foreground">마지노선: {course.deadline_date}</p>
-            <Button variant="ghost" size="sm" className="text-destructive h-7 text-xs" onClick={() => onDelete(course.id)}>
-              <Trash2 className="w-3 h-3 mr-1" /> 삭제
-            </Button>
+            <div className="flex items-center gap-1">
+              {hasEditable && (
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onEdit(course.id)}>
+                  <Pencil className="w-3 h-3 mr-1" /> 수정
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" className="text-destructive h-7 text-xs" onClick={() => onDelete(course.id)}>
+                <Trash2 className="w-3 h-3 mr-1" /> 삭제
+              </Button>
+            </div>
           </div>
         </CardContent>
       )}
