@@ -176,6 +176,7 @@ export function QuizVersionTracker() {
                       <div className="flex items-center gap-1.5 mb-1">
                         <Badge variant="secondary" className="text-[10px]">V{v.version_number}</Badge>
                         <Badge variant="outline" className="text-[10px]">{v.math_concepts?.subject || '기타'}</Badge>
+                        {v.answer_code && <Badge variant="outline" className="text-[10px] font-mono">{v.answer_code}</Badge>}
                       </div>
                       <p className="font-medium truncate">{v.math_concepts?.title || '퀴즈'}</p>
                       <p className="text-xs text-muted-foreground truncate">{v.version_label || ''}</p>
