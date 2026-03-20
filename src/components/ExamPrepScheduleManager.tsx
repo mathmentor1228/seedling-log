@@ -877,7 +877,7 @@ export function ExamPrepScheduleManager() {
               <div className="flex items-center justify-between pt-2">
                 <Button variant="outline" onClick={() => setStep(1)}>← 이전</Button>
                 <Button onClick={handleSave} disabled={saving || assignedStudentIds.size === 0} size="lg">
-                  {saving ? '저장 중...' : `${assignedStudentIds.size}명 · ${sessions.filter(s => s.date).length}회차 등록`}
+                  {saving ? '저장 중...' : `${assignedStudentIds.size}명 · ${sessions.filter(s => s.date).length}회차 ${editingCourseId ? '수정' : '등록'}`}
                 </Button>
               </div>
             </div>
