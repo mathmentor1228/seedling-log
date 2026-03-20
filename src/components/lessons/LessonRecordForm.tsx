@@ -1519,7 +1519,7 @@ export function LessonRecordForm({
                 disabled={isViewMode}
               />
             )}
-            {!formData.supplement_time && !isViewMode && !editingLesson && (
+            {!formData.supplement_time && !isViewMode && !(editingLesson?.submitted) && (
               <span className="text-xs text-orange-500">⚠ 시간을 입력해주세요</span>
             )}
             <span className="text-sm text-muted-foreground ml-2">선생님:</span>
