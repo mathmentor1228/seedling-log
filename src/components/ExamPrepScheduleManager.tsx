@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Plus, Trash2, AlertTriangle, CalendarCheck, Clock, Users, X,
   ChevronDown, ChevronUp, ArrowLeft, UserPlus, UserMinus, GripVertical,
-  School, CalendarDays, Search, Eye, Copy, ClipboardPaste, UsersRound,
+  School, CalendarDays, Search, Eye, Copy, ClipboardPaste, UsersRound, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, differenceInDays, parseISO } from 'date-fns';
@@ -95,6 +95,7 @@ export function ExamPrepScheduleManager() {
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
   const [schoolFilter, setSchoolFilter] = useState<string>('all');
   const [showPast, setShowPast] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
 
   // Form state
   const [formSubject, setFormSubject] = useState('수학');
@@ -418,6 +419,45 @@ export function ExamPrepScheduleManager() {
     setSlotAssignments(newAssignments);
   }
 
+  function handleEditCourse(courseId: string) {
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+    setFormSubject(course.subject);
+    setFormTeacherId(course.teacher_id);
+    setFormSchool(course.school_name || '');
+    setFormTitle(course.title || '');
+    setFormDescription(course.description || '');
+    setFormDeadline(course.deadline_date);
+
+    const loadedSessions: SessionEntry[] = course.sessions.map(sess => {
+      const slots: TimeSlotEntry[] = sess.time_slots.length > 0
+        ? sess.time_slots.map(sl => ({ id: tempId(), startTime: sl.start_time.slice(0, 5), endTime: sl.end_time.slice(0, 5) }))
+        : [{ id: tempId(), startTime: sess.start_time.slice(0, 5), endTime: sess.end_time.slice(0, 5) }];
+      return { label: sess.session_label, date: sess.schedule_date, slots };
+    });
+    if (loadedSessions.length === 0) {
+      loadedSessions.push({ label: '1회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] });
+    }
+    setSessions(loadedSessions);
+
+    // Rebuild slot assignments
+    const newAssignments: Record<string, string[]> = {};
+    course.sessions.forEach((sess, si) => {
+      if (si >= loadedSessions.length) return;
+      const loadedSlots = loadedSessions[si].slots;
+      sess.time_slots.forEach((dbSlot, sli) => {
+        if (sli >= loadedSlots.length) return;
+        const studentIds = dbSlot.students.map(ss => ss.student_id);
+        if (studentIds.length > 0) newAssignments[loadedSlots[sli].id] = studentIds;
+      });
+    });
+    setSlotAssignments(newAssignments);
+    setActiveStudentId(null);
+    setEditingCourseId(courseId);
+    setMode('create');
+    setStep(1);
+  }
+
   async function handleSave() {
     const filledSessions = sessions.filter(s => s.date && s.slots.some(sl => sl.startTime && sl.endTime));
     const allAssignedIds = new Set<string>();
@@ -427,6 +467,17 @@ export function ExamPrepScheduleManager() {
       return;
     }
     setSaving(true);
+
+    // If editing, delete the old course first (cascade will remove sessions/slots/enrollments)
+    if (editingCourseId) {
+      const { error: delErr } = await supabase.from('exam_prep_courses').delete().eq('id', editingCourseId);
+      if (delErr) {
+        toast({ title: '기존 특강 삭제 실패', description: delErr.message, variant: 'destructive' });
+        setSaving(false);
+        return;
+      }
+    }
+
     const { data: course, error: courseErr } = await supabase.from('exam_prep_courses').insert({
       subject: formSubject, teacher_id: formTeacherId,
       title: formTitle || `${formSchool || ''} ${formSubject} 내신 특강`.trim(),
@@ -477,7 +528,7 @@ export function ExamPrepScheduleManager() {
     if (slotStudentRows.length > 0) await supabase.from('exam_prep_slot_students').insert(slotStudentRows);
     const enrollRows = [...allAssignedIds].map(sid => ({ course_id: course.id, student_id: sid }));
     await supabase.from('exam_prep_enrollments').insert(enrollRows);
-    toast({ title: `${allAssignedIds.size}명 · ${filledSessions.length}회차 특강 등록 완료` });
+    toast({ title: `${allAssignedIds.size}명 · ${filledSessions.length}회차 특강 ${editingCourseId ? '수정' : '등록'} 완료` });
     resetAndGoBack();
     await fetchCourses();
     setSaving(false);
@@ -503,6 +554,7 @@ export function ExamPrepScheduleManager() {
       { label: '직전특강', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
     ]);
     setSlotAssignments({}); setActiveStudentId(null);
+    setEditingCourseId(null);
   }
 
   // ── Course classification ──
@@ -554,7 +606,7 @@ export function ExamPrepScheduleManager() {
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetAndGoBack}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <h2 className="text-lg font-bold">내신 특강 등록</h2>
+          <h2 className="text-lg font-bold">{editingCourseId ? '내신 특강 수정' : '내신 특강 등록'}</h2>
           <div className="ml-auto flex items-center gap-2">
             <Badge variant={step === 1 ? 'default' : 'outline'} className="text-xs cursor-pointer" onClick={() => setStep(1)}>
               1. 기본 정보
@@ -825,7 +877,7 @@ export function ExamPrepScheduleManager() {
               <div className="flex items-center justify-between pt-2">
                 <Button variant="outline" onClick={() => setStep(1)}>← 이전</Button>
                 <Button onClick={handleSave} disabled={saving || assignedStudentIds.size === 0} size="lg">
-                  {saving ? '저장 중...' : `${assignedStudentIds.size}명 · ${sessions.filter(s => s.date).length}회차 등록`}
+                  {saving ? '저장 중...' : `${assignedStudentIds.size}명 · ${sessions.filter(s => s.date).length}회차 ${editingCourseId ? '수정' : '등록'}`}
                 </Button>
               </div>
             </div>
@@ -999,7 +1051,7 @@ export function ExamPrepScheduleManager() {
               {filteredUpcoming.map(course => (
                 <CourseCard key={course.id} course={course} expanded={expandedCourseId === course.id}
                   onToggle={() => setExpandedCourseId(expandedCourseId === course.id ? null : course.id)}
-                  onDelete={handleDeleteCourse} studentMap={studentMap} teacherMap={teacherMap} existingSchedules={existingSchedules} />
+                  onDelete={handleDeleteCourse} onEdit={handleEditCourse} studentMap={studentMap} teacherMap={teacherMap} existingSchedules={existingSchedules} />
               ))}
             </div>
           ) : (
@@ -1019,7 +1071,7 @@ export function ExamPrepScheduleManager() {
                   {filteredPast.map(course => (
                     <CourseCard key={course.id} course={course} expanded={expandedCourseId === course.id}
                       onToggle={() => setExpandedCourseId(expandedCourseId === course.id ? null : course.id)}
-                      onDelete={handleDeleteCourse} studentMap={studentMap} teacherMap={teacherMap} existingSchedules={existingSchedules} />
+                      onDelete={handleDeleteCourse} onEdit={handleEditCourse} studentMap={studentMap} teacherMap={teacherMap} existingSchedules={existingSchedules} />
                   ))}
                 </div>
               )}
@@ -1032,15 +1084,16 @@ export function ExamPrepScheduleManager() {
 }
 
 // ── Course Card Component ──
-function CourseCard({ course, expanded, onToggle, onDelete, studentMap, teacherMap, existingSchedules }: {
+function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, teacherMap, existingSchedules }: {
   course: CourseView; expanded: boolean;
-  onToggle: () => void; onDelete: (id: string) => void;
+  onToggle: () => void; onDelete: (id: string) => void; onEdit: (id: string) => void;
   studentMap: Record<string, Student>; teacherMap: Record<string, string>;
   existingSchedules: ExistingSchedule[];
 }) {
   const cPending = course.enrollments.filter(e => e.status === 'pending').length;
   const cConfirmed = course.enrollments.filter(e => e.status === 'confirmed').length;
   const cAuto = course.enrollments.filter(e => e.status === 'auto_confirmed').length;
+  const hasEditable = cPending > 0 || course.enrollments.length === 0;
 
   function getStudentConflicts(studentId: string, sessionDate: string, slotStart: string, slotEnd: string) {
     if (!sessionDate || !slotStart || !slotEnd) return [];
@@ -1141,9 +1194,16 @@ function CourseCard({ course, expanded, onToggle, onDelete, studentMap, teacherM
 
           <div className="flex items-center justify-between pt-2">
             <p className="text-[11px] text-muted-foreground">마지노선: {course.deadline_date}</p>
-            <Button variant="ghost" size="sm" className="text-destructive h-7 text-xs" onClick={() => onDelete(course.id)}>
-              <Trash2 className="w-3 h-3 mr-1" /> 삭제
-            </Button>
+            <div className="flex items-center gap-1">
+              {hasEditable && (
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onEdit(course.id)}>
+                  <Pencil className="w-3 h-3 mr-1" /> 수정
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" className="text-destructive h-7 text-xs" onClick={() => onDelete(course.id)}>
+                <Trash2 className="w-3 h-3 mr-1" /> 삭제
+              </Button>
+            </div>
           </div>
         </CardContent>
       )}
