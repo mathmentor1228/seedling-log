@@ -26,6 +26,7 @@ import StudentProgressWidget from '@/components/StudentProgressWidget';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
+import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
 
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
