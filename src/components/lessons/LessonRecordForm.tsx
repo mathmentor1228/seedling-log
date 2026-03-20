@@ -1506,8 +1506,8 @@ export function LessonRecordForm({
         {formData.lesson_types.includes('보충수업') ? (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground">시간:</span>
-            {/* SUPPLEMENT-LOCK-V1: Lock time once saved in existing record */}
-            {editingLesson && formData.supplement_time ? (
+            {/* SUPPLEMENT-LOCK-V2: Lock time only for submitted records, drafts remain editable */}
+            {editingLesson?.submitted && formData.supplement_time ? (
               <Badge variant="secondary" className="h-8 px-3 text-sm font-mono">{formData.supplement_time}</Badge>
             ) : (
               <Input
