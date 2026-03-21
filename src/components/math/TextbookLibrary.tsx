@@ -737,9 +737,36 @@ export function TextbookLibrary() {
                             <div key={ex.id} className="p-3 rounded-md border bg-muted/30 space-y-1.5">
                                 <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant="outline" className="text-xs">
-                                    {ex.problem_number || `#${idx + 1}`}
-                                  </Badge>
+                                  {editingExampleId === ex.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <Input
+                                        value={editingExampleNumber}
+                                        onChange={e => setEditingExampleNumber(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleRenameExample(ex.id); if (e.key === 'Escape') setEditingExampleId(null); }}
+                                        className="h-6 text-xs w-28"
+                                        placeholder="문항 제목"
+                                        autoFocus
+                                      />
+                                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleRenameExample(ex.id)}>
+                                        <Check className="w-3 h-3 text-green-600" />
+                                      </Button>
+                                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingExampleId(null)}>
+                                        <X className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Badge variant="outline" className="text-xs">
+                                        {ex.problem_number || `#${idx + 1}`}
+                                      </Badge>
+                                      <Button
+                                        size="sm" variant="ghost" className="h-5 w-5 p-0"
+                                        onClick={() => { setEditingExampleId(ex.id); setEditingExampleNumber(ex.problem_number || ''); }}
+                                      >
+                                        <Edit className="w-3 h-3 text-muted-foreground" />
+                                      </Button>
+                                    </>
+                                  )}
                                   {ex.page_number && (
                                     <span className="text-xs text-muted-foreground">p.{ex.page_number}</span>
                                   )}
