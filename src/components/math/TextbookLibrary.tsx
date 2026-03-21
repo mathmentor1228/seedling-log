@@ -102,6 +102,37 @@ export function TextbookLibrary() {
   // Quiz generator
   const [showQuizGen, setShowQuizGen] = useState(false);
 
+  // Inline editing
+  const [editingTextbookId, setEditingTextbookId] = useState<string | null>(null);
+  const [editingTextbookTitle, setEditingTextbookTitle] = useState('');
+  const [editingExampleId, setEditingExampleId] = useState<string | null>(null);
+  const [editingExampleNumber, setEditingExampleNumber] = useState('');
+
+  const handleRenameTextbook = async (id: string) => {
+    const trimmed = editingTextbookTitle.trim();
+    if (!trimmed) return;
+    const { error } = await supabase.from('textbooks').update({ title: trimmed } as any).eq('id', id);
+    if (error) {
+      toast({ title: '수정 실패', variant: 'destructive' });
+    } else {
+      toast({ title: '교재명이 수정되었습니다' });
+      setTextbooks(prev => prev.map(tb => tb.id === id ? { ...tb, title: trimmed } : tb));
+      if (selectedTextbook?.id === id) setSelectedTextbook(prev => prev ? { ...prev, title: trimmed } : prev);
+    }
+    setEditingTextbookId(null);
+  };
+
+  const handleRenameExample = async (id: string) => {
+    const trimmed = editingExampleNumber.trim();
+    const { error } = await supabase.from('textbook_examples').update({ problem_number: trimmed || null } as any).eq('id', id);
+    if (error) {
+      toast({ title: '수정 실패', variant: 'destructive' });
+    } else {
+      setExamples(prev => prev.map(ex => ex.id === id ? { ...ex, problem_number: trimmed || null } : ex));
+    }
+    setEditingExampleId(null);
+  };
+
   const fetchTextbooks = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
