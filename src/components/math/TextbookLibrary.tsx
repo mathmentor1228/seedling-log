@@ -89,6 +89,7 @@ export function TextbookLibrary() {
   const [extracting, setExtracting] = useState(false);
   const [extractFiles, setExtractFiles] = useState<File[]>([]);
   const [extractChapter, setExtractChapter] = useState('');
+  const [extractTitle, setExtractTitle] = useState('');
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; results: BatchResult[] } | null>(null);
 
   interface BatchResult {
