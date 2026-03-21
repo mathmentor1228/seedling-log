@@ -488,18 +488,47 @@ export function TextbookLibrary() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{tb.title}</p>
+                    <div className="min-w-0 flex-1">
+                      {editingTextbookId === tb.id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={editingTextbookTitle}
+                            onChange={e => setEditingTextbookTitle(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleRenameTextbook(tb.id); if (e.key === 'Escape') setEditingTextbookId(null); }}
+                            className="h-7 text-sm"
+                            autoFocus
+                            onClick={e => e.stopPropagation()}
+                          />
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={(e) => { e.stopPropagation(); handleRenameTextbook(tb.id); }}>
+                            <Check className="w-3.5 h-3.5 text-green-600" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={(e) => { e.stopPropagation(); setEditingTextbookId(null); }}>
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm font-medium truncate">{tb.title}</p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         {[tb.publisher, tb.subject, tb.grade].filter(Boolean).join(' · ')}
                       </p>
                     </div>
-                    <Button
-                      size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteTextbook(tb.id); }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {editingTextbookId !== tb.id && (
+                        <Button
+                          size="sm" variant="ghost" className="h-7 w-7 p-0"
+                          onClick={(e) => { e.stopPropagation(); setEditingTextbookId(tb.id); setEditingTextbookTitle(tb.title); }}
+                        >
+                          <Edit className="w-3.5 h-3.5 text-muted-foreground" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm" variant="ghost" className="h-7 w-7 p-0"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteTextbook(tb.id); }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))
