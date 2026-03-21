@@ -29,6 +29,7 @@ import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
 import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
 import MathConceptPage from "./pages/MathConceptPage";
 import ExamPrepPage from "./pages/ExamPrepPage";
+import StudySessionPage from "./pages/StudySessionPage";
 import QuizPrintPage from "./pages/QuizPrintPage";
 import QuizSubmitPage from "./pages/QuizSubmitPage";
 import QuizBulkUploadPage from "./pages/QuizBulkUploadPage";
