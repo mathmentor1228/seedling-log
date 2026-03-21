@@ -592,7 +592,7 @@ export function StudySessionManager() {
 
             {formType === '테스트' && (
               <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-warning" />
                 <span>테스트 세부 내용(시험 내용, 결과 등)은 세션 생성 후 편집 버튼(✏️)을 통해 입력할 수 있습니다. 같은 날짜에 기존 수업일지가 있으면 연결 여부를 물어봅니다.</span>
               </div>
             )}
