@@ -571,12 +571,12 @@ export function TextbookLibrary() {
                       <Sparkles className="w-3.5 h-3.5 text-primary" />
                       AI 자동 추출 (PDF/이미지) — 여러 파일 동시 업로드 가능
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                       <Input
                         type="file"
                         accept=".pdf,image/*"
                         multiple
-                        className="text-xs h-8 col-span-1 sm:col-span-1"
+                        className="text-xs h-8 col-span-1"
                         onChange={(e) => {
                           const files = Array.from(e.target.files || []);
                           const valid: File[] = [];
@@ -599,6 +599,12 @@ export function TextbookLibrary() {
                           }
                           setExtractFiles(valid);
                         }}
+                      />
+                      <Input
+                        value={extractTitle}
+                        onChange={(e) => setExtractTitle(e.target.value)}
+                        placeholder="학습지 제목 (선택)"
+                        className="text-xs h-8"
                       />
                       <Input
                         value={extractChapter}
