@@ -47,6 +47,7 @@ import StudentSchedule from "./pages/student/StudentSchedule";
 import StudentFeedback from "./pages/student/StudentFeedback";
 import StudentVocab from "./pages/student/StudentVocab";
 import StudentMathQuiz from "./pages/student/StudentMathQuiz";
+import StudentStudySession from "./pages/student/StudentStudySession";
 import { StudentLayout } from "@/components/student/StudentLayout";
 
 const queryClient = new QueryClient();
