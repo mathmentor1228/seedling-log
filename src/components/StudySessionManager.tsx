@@ -435,7 +435,7 @@ export function StudySessionManager() {
                             <div className="space-y-0.5">
                               {session.tasks?.map(task => (
                                 <div key={task.id} className={`flex items-center gap-2 text-xs p-1 rounded ${task.is_completed ? 'text-muted-foreground line-through' : ''}`}>
-                                  {task.is_completed ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" /> : <Circle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                                  {task.is_completed ? <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" /> : <Circle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                                   {task.content}
                                   {task.completed_at && <span className="text-[10px] ml-auto">{new Date(task.completed_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>}
                                 </div>
