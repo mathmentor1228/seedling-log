@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Printer, Eye, Loader2 } from 'lucide-react';
+import { Search, Printer, Eye, EyeOff, Loader2, BookOpen, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { MathRenderer } from '@/components/math/MathRenderer';
+
+type AnswerMode = 'hidden' | 'quick' | 'detail';
 
 interface QuizResult {
   id: string;
@@ -27,7 +29,7 @@ function QuizLookupContent() {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QuizResult | null>(null);
-  const [showAnswers, setShowAnswers] = useState(false);
+  const [answerMode, setAnswerMode] = useState<AnswerMode>('hidden');
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -62,7 +64,10 @@ function QuizLookupContent() {
       course: concept?.course || '',
       grade: concept?.grade || '',
     });
+    setAnswerMode('hidden');
   };
+
+  const diffLabel = (d: string) => d === 'easy' ? '쉬움' : d === 'hard' ? '어려움' : '보통';
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-6">
@@ -102,12 +107,33 @@ function QuizLookupContent() {
                   {result.course} · {result.grade} · {result.questions.length}문항
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant="secondary">V{result.version_number}</Badge>
-                <Badge variant="outline">{result.answer_code}</Badge>
-                <Button size="sm" variant="outline" onClick={() => setShowAnswers(!showAnswers)}>
-                  <Eye className="w-4 h-4 mr-1" /> {showAnswers ? '정답 숨기기' : '정답 보기'}
+                <Badge variant="outline" className="font-mono">{result.answer_code}</Badge>
+                <div className="h-5 w-px bg-border" />
+                {/* Answer mode buttons */}
+                <Button
+                  size="sm"
+                  variant={answerMode === 'hidden' ? 'default' : 'outline'}
+                  onClick={() => setAnswerMode('hidden')}
+                >
+                  <EyeOff className="w-4 h-4 mr-1" /> 문제만
                 </Button>
+                <Button
+                  size="sm"
+                  variant={answerMode === 'quick' ? 'default' : 'outline'}
+                  onClick={() => setAnswerMode('quick')}
+                >
+                  <Eye className="w-4 h-4 mr-1" /> 빠른 정답
+                </Button>
+                <Button
+                  size="sm"
+                  variant={answerMode === 'detail' ? 'default' : 'outline'}
+                  onClick={() => setAnswerMode('detail')}
+                >
+                  <BookOpen className="w-4 h-4 mr-1" /> 해설 포함
+                </Button>
+                <div className="h-5 w-px bg-border" />
                 <Button size="sm" variant="outline" onClick={() => navigate(`/quiz-print?quiz_id=${result.id}`)}>
                   <Printer className="w-4 h-4 mr-1" /> 인쇄
                 </Button>
@@ -115,6 +141,23 @@ function QuizLookupContent() {
             </div>
           </CardHeader>
           <CardContent>
+            {/* Quick answer grid */}
+            {answerMode === 'quick' && (
+              <div className="mb-6 p-4 bg-muted/50 rounded-lg border">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                  <FileText className="w-4 h-4" /> 빠른 정답표
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {result.questions.map((q: any) => (
+                    <div key={q.question_number} className="flex items-baseline gap-2 p-2 bg-background rounded border text-sm">
+                      <span className="font-bold text-primary min-w-[24px]">{q.question_number}.</span>
+                      <span className="font-medium"><MathRenderer text={q.answer} /></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
               {result.questions.map((q: any, i: number) => (
                 <div key={i} className="border rounded-lg p-3">
@@ -122,17 +165,20 @@ function QuizLookupContent() {
                     <span className="font-bold text-primary min-w-[28px]">Q{q.question_number}.</span>
                     <div className="flex-1">
                       <MathRenderer text={q.question_text} />
-                      {showAnswers && (
+                      {answerMode !== 'hidden' && (
                         <div className="mt-2 p-2 bg-muted/50 rounded-md">
                           <p className="text-sm font-medium">정답: <MathRenderer text={q.answer} /></p>
-                          {q.explanation && (
-                            <p className="text-xs text-muted-foreground mt-1"><MathRenderer text={q.explanation} /></p>
+                          {answerMode === 'detail' && q.explanation && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              <span className="font-medium">해설: </span>
+                              <MathRenderer text={q.explanation} />
+                            </p>
                           )}
                         </div>
                       )}
                     </div>
                     <Badge variant="outline" className="text-xs shrink-0">
-                      {q.difficulty === 'easy' ? '쉬움' : q.difficulty === 'hard' ? '어려움' : '보통'}
+                      {diffLabel(q.difficulty)}
                     </Badge>
                   </div>
                 </div>
