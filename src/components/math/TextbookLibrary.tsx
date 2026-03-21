@@ -331,6 +331,7 @@ export function TextbookLibrary() {
         formData.append('textbook_id', selectedTextbook.id);
         formData.append('chapter', extractChapter.trim() || '전체');
         formData.append('batch_label', `${i + 1}/${extractFiles.length}`);
+        if (extractTitle.trim()) formData.append('title', extractTitle.trim());
 
         const { data, error } = await supabase.functions.invoke('extract-textbook-examples', {
           body: formData,
