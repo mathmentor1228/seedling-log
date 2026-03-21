@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
-  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap,
+  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap, Check, X,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { TextbookQuizGenerator } from './TextbookQuizGenerator';
