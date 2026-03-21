@@ -103,6 +103,9 @@ const App = () => (
                 <Route path="/student/math-quiz" element={
                   <StudentAuthProvider><StudentLayout><StudentMathQuiz /></StudentLayout></StudentAuthProvider>
                 } />
+                <Route path="/student/study" element={
+                  <StudentAuthProvider><StudentLayout><StudentStudySession /></StudentLayout></StudentAuthProvider>
+                } />
 
                 {/* Admin App Routes */}
                 <Route path="/dashboard" element={<DashboardPage />} />
@@ -130,6 +133,7 @@ const App = () => (
                 <Route path="/quiz-bulk-upload" element={<QuizBulkUploadPage />} />
                 <Route path="/quiz-lookup" element={<QuizLookupPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
+                <Route path="/study-sessions" element={<StudySessionPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
