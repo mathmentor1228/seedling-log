@@ -1085,6 +1085,113 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // STUDY-SESSION-V1: Get today's study sessions for this student
+      case 'study_sessions': {
+        const todayStr = getNowKST().toISOString().split('T')[0];
+        
+        const { data: sessionsData } = await supabase
+          .from('study_sessions')
+          .select('*')
+          .eq('student_id', student_id)
+          .eq('session_date', todayStr)
+          .order('start_time');
+
+        const sessionsList = sessionsData || [];
+        
+        // Fetch tasks for all sessions
+        if (sessionsList.length > 0) {
+          const sessionIds = sessionsList.map((s: any) => s.id);
+          const { data: tasksData } = await supabase
+            .from('study_session_tasks')
+            .select('*')
+            .in('session_id', sessionIds)
+            .order('sort_order');
+
+          const taskMap: Record<string, any[]> = {};
+          for (const t of (tasksData || [])) {
+            if (!taskMap[t.session_id]) taskMap[t.session_id] = [];
+            taskMap[t.session_id].push(t);
+          }
+
+          result = {
+            sessions: sessionsList.map((s: any) => ({
+              ...s,
+              tasks: taskMap[s.id] || [],
+            })),
+          };
+        } else {
+          result = { sessions: [] };
+        }
+        break;
+      }
+
+      case 'start_study_session': {
+        const { session_id } = params;
+        if (!session_id) {
+          return new Response(
+            JSON.stringify({ error: 'session_id required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateErr } = await supabase
+          .from('study_sessions')
+          .update({ 
+            status: 'in_progress', 
+            actual_start_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', session_id)
+          .eq('student_id', student_id);
+
+        result = { success: !updateErr };
+        break;
+      }
+
+      case 'end_study_session': {
+        const { session_id } = params;
+        if (!session_id) {
+          return new Response(
+            JSON.stringify({ error: 'session_id required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateErr } = await supabase
+          .from('study_sessions')
+          .update({ 
+            status: 'completed', 
+            actual_end_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', session_id)
+          .eq('student_id', student_id);
+
+        result = { success: !updateErr };
+        break;
+      }
+
+      case 'toggle_study_task': {
+        const { task_id, completed } = params;
+        if (!task_id) {
+          return new Response(
+            JSON.stringify({ error: 'task_id required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { error: updateErr } = await supabase
+          .from('study_session_tasks')
+          .update({ 
+            is_completed: completed,
+            completed_at: completed ? new Date().toISOString() : null,
+          })
+          .eq('id', task_id);
+
+        result = { success: !updateErr };
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),
