@@ -103,6 +103,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         { label: '일괄 채점', href: '/quiz-bulk-upload', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
         { label: '내신 특강', href: '/exam-prep', icon: <CalendarDays className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
+        { label: '자습/테스트', href: '/study-sessions', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
       ],
     },
     ...materialGroup,

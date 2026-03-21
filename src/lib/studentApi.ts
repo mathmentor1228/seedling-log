@@ -128,4 +128,16 @@ export const studentApi = {
 
   confirmExamPrepSchedule: (scheduleId: string) =>
     studentApiCall<{ success: boolean }>('confirm_exam_prep', { schedule_id: scheduleId }),
+
+  // Study sessions
+  getStudySessions: () => studentApiCall<{ sessions: any[] }>('study_sessions'),
+
+  startStudySession: (sessionId: string) =>
+    studentApiCall<{ success: boolean }>('start_study_session', { session_id: sessionId }),
+
+  endStudySession: (sessionId: string) =>
+    studentApiCall<{ success: boolean }>('end_study_session', { session_id: sessionId }),
+
+  toggleStudyTask: (sessionId: string, taskId: string, completed: boolean) =>
+    studentApiCall<{ success: boolean }>('toggle_study_task', { session_id: sessionId, task_id: taskId, completed }),
 };

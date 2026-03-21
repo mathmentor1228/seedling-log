@@ -89,6 +89,7 @@ export function TextbookLibrary() {
   const [extracting, setExtracting] = useState(false);
   const [extractFiles, setExtractFiles] = useState<File[]>([]);
   const [extractChapter, setExtractChapter] = useState('');
+  const [extractTitle, setExtractTitle] = useState('');
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; results: BatchResult[] } | null>(null);
 
   interface BatchResult {
@@ -330,6 +331,7 @@ export function TextbookLibrary() {
         formData.append('textbook_id', selectedTextbook.id);
         formData.append('chapter', extractChapter.trim() || '전체');
         formData.append('batch_label', `${i + 1}/${extractFiles.length}`);
+        if (extractTitle.trim()) formData.append('title', extractTitle.trim());
 
         const { data, error } = await supabase.functions.invoke('extract-textbook-examples', {
           body: formData,
@@ -377,6 +379,7 @@ export function TextbookLibrary() {
 
     setExtractFiles([]);
     setExtractChapter('');
+    setExtractTitle('');
     if (selectedTextbook) fetchExamples(selectedTextbook.id);
     setExtracting(false);
   };
@@ -571,12 +574,12 @@ export function TextbookLibrary() {
                       <Sparkles className="w-3.5 h-3.5 text-primary" />
                       AI 자동 추출 (PDF/이미지) — 여러 파일 동시 업로드 가능
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                       <Input
                         type="file"
                         accept=".pdf,image/*"
                         multiple
-                        className="text-xs h-8 col-span-1 sm:col-span-1"
+                        className="text-xs h-8 col-span-1"
                         onChange={(e) => {
                           const files = Array.from(e.target.files || []);
                           const valid: File[] = [];
@@ -599,6 +602,12 @@ export function TextbookLibrary() {
                           }
                           setExtractFiles(valid);
                         }}
+                      />
+                      <Input
+                        value={extractTitle}
+                        onChange={(e) => setExtractTitle(e.target.value)}
+                        placeholder="학습지 제목 (선택)"
+                        className="text-xs h-8"
                       />
                       <Input
                         value={extractChapter}
