@@ -2360,6 +2360,7 @@ export type Database = {
           created_by: string | null
           end_time: string
           id: string
+          linked_lesson_id: string | null
           notes: string | null
           session_date: string
           session_type: string
@@ -2369,6 +2370,8 @@ export type Database = {
           subject: string
           supervisor_id: string | null
           supervisor_name: string | null
+          test_content: string | null
+          test_result: string | null
           updated_at: string
         }
         Insert: {
@@ -2378,6 +2381,7 @@ export type Database = {
           created_by?: string | null
           end_time: string
           id?: string
+          linked_lesson_id?: string | null
           notes?: string | null
           session_date?: string
           session_type?: string
@@ -2387,6 +2391,8 @@ export type Database = {
           subject: string
           supervisor_id?: string | null
           supervisor_name?: string | null
+          test_content?: string | null
+          test_result?: string | null
           updated_at?: string
         }
         Update: {
@@ -2396,6 +2402,7 @@ export type Database = {
           created_by?: string | null
           end_time?: string
           id?: string
+          linked_lesson_id?: string | null
           notes?: string | null
           session_date?: string
           session_type?: string
@@ -2405,9 +2412,25 @@ export type Database = {
           subject?: string
           supervisor_id?: string | null
           supervisor_name?: string | null
+          test_content?: string | null
+          test_result?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "study_sessions_linked_lesson_id_fkey"
+            columns: ["linked_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_sessions_linked_lesson_id_fkey"
+            columns: ["linked_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_lesson_drafts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "study_sessions_student_id_fkey"
             columns: ["student_id"]

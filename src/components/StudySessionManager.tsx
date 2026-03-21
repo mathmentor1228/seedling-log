@@ -132,7 +132,7 @@ export function StudySessionManager() {
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
     ]);
 
-    const sessData = (sessRes.data || []) as StudySession[];
+    const sessData = (sessRes.data || []) as unknown as StudySession[];
     setStudents(studRes.data || []);
     setTeachers(teachRes.data || []);
 
