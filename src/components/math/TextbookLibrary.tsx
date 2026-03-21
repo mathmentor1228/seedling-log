@@ -379,6 +379,7 @@ export function TextbookLibrary() {
 
     setExtractFiles([]);
     setExtractChapter('');
+    setExtractTitle('');
     if (selectedTextbook) fetchExamples(selectedTextbook.id);
     setExtracting(false);
   };
