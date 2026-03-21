@@ -413,7 +413,7 @@ export function StudySessionManager() {
                         {/* Time tracking */}
                         {session.actual_start_at && (
                           <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <Play className="w-3 h-3 text-green-500" />
+                            <Play className="w-3 h-3 text-primary" />
                             실제 학습: {new Date(session.actual_start_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                             {session.actual_end_at && ` ~ ${new Date(session.actual_end_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`}
                             {session.actual_start_at && session.actual_end_at && (() => {
