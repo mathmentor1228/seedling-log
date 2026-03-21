@@ -2314,6 +2314,109 @@ export type Database = {
         }
         Relationships: []
       }
+      study_session_tasks: {
+        Row: {
+          completed_at: string | null
+          content: string
+          created_at: string
+          id: string
+          is_completed: boolean
+          session_id: string
+          sort_order: number
+        }
+        Insert: {
+          completed_at?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          is_completed?: boolean
+          session_id: string
+          sort_order?: number
+        }
+        Update: {
+          completed_at?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          is_completed?: boolean
+          session_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_session_tasks_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "study_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_sessions: {
+        Row: {
+          actual_end_at: string | null
+          actual_start_at: string | null
+          created_at: string
+          created_by: string | null
+          end_time: string
+          id: string
+          notes: string | null
+          session_date: string
+          session_type: string
+          start_time: string
+          status: string
+          student_id: string
+          subject: string
+          supervisor_id: string | null
+          supervisor_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          actual_end_at?: string | null
+          actual_start_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          id?: string
+          notes?: string | null
+          session_date?: string
+          session_type?: string
+          start_time: string
+          status?: string
+          student_id: string
+          subject: string
+          supervisor_id?: string | null
+          supervisor_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          actual_end_at?: string | null
+          actual_start_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          id?: string
+          notes?: string | null
+          session_date?: string
+          session_type?: string
+          start_time?: string
+          status?: string
+          student_id?: string
+          subject?: string
+          supervisor_id?: string | null
+          supervisor_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_sessions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_attachments: {
         Row: {
           created_at: string
