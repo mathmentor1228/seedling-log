@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
-  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap,
+  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap, Check, X,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { TextbookQuizGenerator } from './TextbookQuizGenerator';
@@ -101,6 +101,37 @@ export function TextbookLibrary() {
 
   // Quiz generator
   const [showQuizGen, setShowQuizGen] = useState(false);
+
+  // Inline editing
+  const [editingTextbookId, setEditingTextbookId] = useState<string | null>(null);
+  const [editingTextbookTitle, setEditingTextbookTitle] = useState('');
+  const [editingExampleId, setEditingExampleId] = useState<string | null>(null);
+  const [editingExampleNumber, setEditingExampleNumber] = useState('');
+
+  const handleRenameTextbook = async (id: string) => {
+    const trimmed = editingTextbookTitle.trim();
+    if (!trimmed) return;
+    const { error } = await supabase.from('textbooks').update({ title: trimmed } as any).eq('id', id);
+    if (error) {
+      toast({ title: '수정 실패', variant: 'destructive' });
+    } else {
+      toast({ title: '교재명이 수정되었습니다' });
+      setTextbooks(prev => prev.map(tb => tb.id === id ? { ...tb, title: trimmed } : tb));
+      if (selectedTextbook?.id === id) setSelectedTextbook(prev => prev ? { ...prev, title: trimmed } : prev);
+    }
+    setEditingTextbookId(null);
+  };
+
+  const handleRenameExample = async (id: string) => {
+    const trimmed = editingExampleNumber.trim();
+    const { error } = await supabase.from('textbook_examples').update({ problem_number: trimmed || null } as any).eq('id', id);
+    if (error) {
+      toast({ title: '수정 실패', variant: 'destructive' });
+    } else {
+      setExamples(prev => prev.map(ex => ex.id === id ? { ...ex, problem_number: trimmed || null } : ex));
+    }
+    setEditingExampleId(null);
+  };
 
   const fetchTextbooks = useCallback(async () => {
     setLoading(true);
@@ -457,18 +488,47 @@ export function TextbookLibrary() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{tb.title}</p>
+                    <div className="min-w-0 flex-1">
+                      {editingTextbookId === tb.id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={editingTextbookTitle}
+                            onChange={e => setEditingTextbookTitle(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleRenameTextbook(tb.id); if (e.key === 'Escape') setEditingTextbookId(null); }}
+                            className="h-7 text-sm"
+                            autoFocus
+                            onClick={e => e.stopPropagation()}
+                          />
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={(e) => { e.stopPropagation(); handleRenameTextbook(tb.id); }}>
+                            <Check className="w-3.5 h-3.5 text-green-600" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={(e) => { e.stopPropagation(); setEditingTextbookId(null); }}>
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm font-medium truncate">{tb.title}</p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         {[tb.publisher, tb.subject, tb.grade].filter(Boolean).join(' · ')}
                       </p>
                     </div>
-                    <Button
-                      size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteTextbook(tb.id); }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {editingTextbookId !== tb.id && (
+                        <Button
+                          size="sm" variant="ghost" className="h-7 w-7 p-0"
+                          onClick={(e) => { e.stopPropagation(); setEditingTextbookId(tb.id); setEditingTextbookTitle(tb.title); }}
+                        >
+                          <Edit className="w-3.5 h-3.5 text-muted-foreground" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm" variant="ghost" className="h-7 w-7 p-0"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteTextbook(tb.id); }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -677,9 +737,36 @@ export function TextbookLibrary() {
                             <div key={ex.id} className="p-3 rounded-md border bg-muted/30 space-y-1.5">
                                 <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant="outline" className="text-xs">
-                                    {ex.problem_number || `#${idx + 1}`}
-                                  </Badge>
+                                  {editingExampleId === ex.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <Input
+                                        value={editingExampleNumber}
+                                        onChange={e => setEditingExampleNumber(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleRenameExample(ex.id); if (e.key === 'Escape') setEditingExampleId(null); }}
+                                        className="h-6 text-xs w-28"
+                                        placeholder="문항 제목"
+                                        autoFocus
+                                      />
+                                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleRenameExample(ex.id)}>
+                                        <Check className="w-3 h-3 text-green-600" />
+                                      </Button>
+                                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingExampleId(null)}>
+                                        <X className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Badge variant="outline" className="text-xs">
+                                        {ex.problem_number || `#${idx + 1}`}
+                                      </Badge>
+                                      <Button
+                                        size="sm" variant="ghost" className="h-5 w-5 p-0"
+                                        onClick={() => { setEditingExampleId(ex.id); setEditingExampleNumber(ex.problem_number || ''); }}
+                                      >
+                                        <Edit className="w-3 h-3 text-muted-foreground" />
+                                      </Button>
+                                    </>
+                                  )}
                                   {ex.page_number && (
                                     <span className="text-xs text-muted-foreground">p.{ex.page_number}</span>
                                   )}
