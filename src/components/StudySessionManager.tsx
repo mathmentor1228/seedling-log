@@ -402,7 +402,7 @@ export function StudySessionManager() {
 
                         {/* Test content display */}
                         {isTest && (session as any).test_content && (
-                          <div className="text-xs bg-destructive/5 border border-destructive/20 rounded p-2">
+                          <div className="text-xs bg-muted/50 border border-destructive/20 rounded p-2">
                             <span className="font-medium">테스트 내용:</span> {(session as any).test_content}
                             {(session as any).test_result && (
                               <span className="ml-2 font-medium">결과: {(session as any).test_result}</span>
