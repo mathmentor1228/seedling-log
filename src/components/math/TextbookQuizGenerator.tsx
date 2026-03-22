@@ -169,14 +169,20 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
   }, [examples]);
 
   // English: filtered by chapter + category matching english mode
+  // Check both category AND chapter fields since extraction may put type info in either
   const engFilteredExamples = useMemo(() => {
     let filtered = [...examples];
     if (engSelectedChapters.length > 0) filtered = filtered.filter(e => engSelectedChapters.includes(e.chapter));
 
-    // Filter by english sub-mode category
-    if (englishMode === 'vocab') filtered = filtered.filter(e => e.category === '단어');
-    else if (englishMode === 'translation') filtered = filtered.filter(e => e.category === '해석');
-    else if (englishMode === 'reading') filtered = filtered.filter(e => ['독해', '문법', '일반문항'].includes(e.category || '일반문항'));
+    const matchField = (ex: TextbookExample, keywords: string[]) => {
+      const cat = (ex.category || '').toLowerCase();
+      const ch = (ex.chapter || '').toLowerCase();
+      return keywords.some(k => cat.includes(k) || ch.includes(k));
+    };
+
+    if (englishMode === 'vocab') filtered = filtered.filter(e => matchField(e, ['단어', 'vocab', 'word']));
+    else if (englishMode === 'translation') filtered = filtered.filter(e => matchField(e, ['해석', 'translation', '문장']));
+    else if (englishMode === 'reading') filtered = filtered.filter(e => matchField(e, ['독해', '문법', 'reading', 'grammar']) || (!matchField(e, ['단어', 'vocab', 'word', '해석', 'translation', '문장'])));
 
     return filtered;
   }, [examples, engSelectedChapters, englishMode]);
