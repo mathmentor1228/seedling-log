@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  Loader2, Shuffle, BookOpen, Sparkles, Zap, AlertTriangle, ListChecks, RotateCcw,
+  Loader2, Shuffle, BookOpen, Sparkles, Zap, AlertTriangle, ListChecks, RotateCcw, Video,
 } from 'lucide-react';
 
 interface Textbook {
