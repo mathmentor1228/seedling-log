@@ -1133,7 +1133,185 @@ export default function QuizPrintPage() {
         }
 
         /* ══════════════════════════════════════════════════
-           PRINT OVERRIDES — Perfect A4 with safe margins
+           English: Vocab 3-column layout
+           ══════════════════════════════════════════════════ */
+        .qp-vocab-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 0 16px;
+          flex: 1;
+        }
+        .qp-vocab-col {
+          display: flex;
+          flex-direction: column;
+        }
+        .qp-vocab-row {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 2px;
+          border-bottom: 1px solid #f1f5f9;
+          min-height: 22px;
+        }
+        .qp-vocab-row:nth-child(odd) { background: #fafbfc; }
+        .qp-vocab-num {
+          font-size: 9px;
+          font-weight: 700;
+          color: #94a3b8;
+          min-width: 18px;
+          text-align: right;
+          flex-shrink: 0;
+        }
+        .qp-vocab-prompt {
+          font-size: 11px;
+          font-weight: 600;
+          color: #1e293b;
+          flex: 1;
+          min-width: 0;
+        }
+        .qp-vocab-answer-space {
+          flex: 1;
+          min-width: 0;
+          border-bottom: 1px solid #cbd5e1;
+          min-height: 16px;
+          margin-left: 4px;
+        }
+        .qp-vocab-answer-text {
+          font-size: 10.5px;
+          color: #3b82f6;
+          font-weight: 600;
+        }
+        .qp-vocab-explanations {
+          margin-top: 8px;
+          padding: 6px 8px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          columns: 2;
+          column-gap: 16px;
+        }
+        .qp-vocab-exp-row {
+          font-size: 9px;
+          color: #64748b;
+          break-inside: avoid;
+          padding: 1px 0;
+        }
+        .qp-vocab-exp-num { font-weight: 700; margin-right: 2px; }
+        .qp-vocab-exp-word { font-weight: 600; color: #334155; margin-right: 4px; }
+        .qp-vocab-exp-text { font-style: italic; }
+
+        /* ══════════════════════════════════════════════════
+           English: Translation — sentence + lined answer
+           ══════════════════════════════════════════════════ */
+        .qp-translation-list {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .qp-translation-item {
+          break-inside: avoid;
+          page-break-inside: avoid;
+          margin-bottom: 2px;
+        }
+        .qp-translation-header {
+          display: flex;
+          align-items: flex-start;
+          gap: 6px;
+          margin-bottom: 2px;
+        }
+        .qp-translation-sentence {
+          font-size: 12px;
+          line-height: 1.7;
+          color: #1e293b;
+          font-weight: 500;
+          padding-top: 3px;
+        }
+        .qp-translation-lines {
+          margin-left: 34px;
+          padding: 2px 6px;
+        }
+        .qp-translation-lines .qp-line {
+          border-bottom: 1px solid #d4d8dd;
+          height: 10mm;
+        }
+        .qp-translation-answer-area {
+          margin-left: 34px;
+          padding: 4px 8px;
+          background: #eff6ff;
+          border-radius: 4px;
+          border-left: 3px solid #3b82f6;
+        }
+        .qp-translation-answer-text {
+          font-size: 11px;
+          color: #1e40af;
+          font-weight: 500;
+          line-height: 1.6;
+        }
+        .qp-translation-explanation {
+          font-size: 10px;
+          color: #64748b;
+          margin-top: 2px;
+          font-style: italic;
+        }
+
+        /* ══════════════════════════════════════════════════
+           English: Reading — passage with proper typography
+           ══════════════════════════════════════════════════ */
+        .qp-reading-page .qp-reading-list {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .qp-reading-item {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+        .qp-reading-header {
+          display: flex;
+          align-items: flex-start;
+          gap: 6px;
+          margin-bottom: 4px;
+        }
+        .qp-reading-passage {
+          font-size: 10.5pt;
+          line-height: 1.6;
+          color: #1e293b;
+          padding: 8px 12px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          margin-left: 34px;
+          margin-bottom: 6px;
+          white-space: pre-wrap;
+        }
+        .qp-reading-question {
+          font-size: 11.5px;
+          line-height: 1.6;
+          color: #1e293b;
+          margin-left: 34px;
+          font-weight: 500;
+          white-space: pre-wrap;
+        }
+        .qp-reading-answer {
+          margin-left: 34px;
+          margin-top: 4px;
+          padding: 4px 8px;
+          background: #eff6ff;
+          border-radius: 4px;
+          font-size: 11px;
+          color: #1e40af;
+          border-left: 3px solid #3b82f6;
+        }
+        .qp-reading-explanation {
+          font-size: 10px;
+          color: #64748b;
+          margin-top: 2px;
+          font-style: italic;
+        }
+
+
            ══════════════════════════════════════════════════ */
         @media print {
           @page {
