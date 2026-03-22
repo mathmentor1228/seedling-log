@@ -588,6 +588,22 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
               <Switch checked={randomOrder} onCheckedChange={setRandomOrder} />
             </div>
 
+            {/* QR code toggle (reprint) */}
+            {examples.some(e => e.video_url) && (
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">해설 영상 QR 포함</p>
+                    <p className="text-xs text-muted-foreground">
+                      영상 등록 문항에 QR코드 인쇄
+                    </p>
+                  </div>
+                </div>
+                <Switch checked={includeQR} onCheckedChange={setIncludeQR} />
+              </div>
+            )}
+
             <Button onClick={handleGenerate} disabled={generating || reprintCount === 0} className="w-full gap-2">
               {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />}
               선택 문항 퀴즈 생성 ({reprintCount}문항)
