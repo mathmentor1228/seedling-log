@@ -407,7 +407,7 @@ export default function Reports() {
       if (error) throw error;
 
       const formattedReports: WeeklyReport[] = (data || [])
-        .filter((r: any) => r.students?.enrollment_status === '재원')
+        .filter((r: any) => ['재원', '재원예정'].includes(r.students?.enrollment_status))
         .map((r: any) => ({
           ...r,
           student_name: r.students?.name,
