@@ -749,7 +749,7 @@ export default function QuizPrintPage() {
     });
   };
 
-
+  const copyAnswerCode = () => {
     if (data.answerCode) {
       navigator.clipboard.writeText(data.answerCode);
       toast({ title: '복사 완료', description: `정답 확인 코드 ${data.answerCode}가 클립보드에 복사되었습니다.` });
