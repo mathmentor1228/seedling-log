@@ -709,6 +709,19 @@ export default function QuizPrintPage() {
           margin-left: 4px;
           font-style: italic;
         }
+        .qp-video-qr {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
+        .qp-video-qr-label {
+          font-size: 7px;
+          color: #64748b;
+          writing-mode: vertical-rl;
+          letter-spacing: 1px;
+        }
 
         /* ── Sub-question auto line-break styling ── */
         .mr-sub-break {
