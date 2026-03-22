@@ -37,6 +37,7 @@ interface TextbookExample {
   category: string | null;
   graph_data: any;
   sort_order: number;
+  video_url: string | null;
 }
 
 interface Props {
