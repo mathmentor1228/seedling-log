@@ -246,7 +246,7 @@ export default function Reports() {
       const { data, error } = await supabase
         .from('students')
         .select('id, name, grade')
-        .eq('enrollment_status', '재원')
+        .in('enrollment_status', ['재원', '재원예정'])
         .order('name');
       
       if (error) throw error;
@@ -407,7 +407,7 @@ export default function Reports() {
       if (error) throw error;
 
       const formattedReports: WeeklyReport[] = (data || [])
-        .filter((r: any) => r.students?.enrollment_status === '재원')
+        .filter((r: any) => ['재원', '재원예정'].includes(r.students?.enrollment_status))
         .map((r: any) => ({
           ...r,
           student_name: r.students?.name,

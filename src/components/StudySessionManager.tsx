@@ -128,7 +128,7 @@ export function StudySessionManager() {
         .select('*')
         .eq('session_date', selectedDate)
         .order('start_time'),
-      supabase.from('students').select('id, name, school_level, grade_year, grade').eq('enrollment_status', '재원').order('name'),
+      supabase.from('students').select('id, name, school_level, grade_year, grade').in('enrollment_status', ['재원', '재원예정']).order('name'),
       supabase.from('profiles').select('id, full_name').eq('is_active', true).order('full_name'),
     ]);
 
