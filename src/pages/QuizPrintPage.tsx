@@ -22,6 +22,7 @@ interface QuizQuestion {
   source_page?: number | null;
   source_chapter?: string;
   source_problem?: string;
+  video_url?: string | null;
 }
 
 interface PrintData {
