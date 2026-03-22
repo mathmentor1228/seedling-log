@@ -57,6 +57,7 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
 
   // ─── Common ───
   const [randomOrder, setRandomOrder] = useState(true);
+  const [includeQR, setIncludeQR] = useState(false);
 
   // ─── Bank mode ───
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
