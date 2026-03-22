@@ -9,7 +9,7 @@ import { MathRenderer } from '@/components/math/MathRenderer';
 import { useToast } from '@/hooks/use-toast';
 import logoImg from '@/assets/logo-thementor.png';
 
-type PrintMode = 'study' | 'quiz' | 'blank' | 'example';
+type PrintMode = 'study' | 'quiz' | 'blank' | 'example' | 'eng_vocab' | 'eng_translation' | 'eng_reading';
 
 interface QuizQuestion {
   question_number: number;
@@ -23,6 +23,9 @@ interface QuizQuestion {
   source_chapter?: string;
   source_problem?: string;
   video_url?: string | null;
+  english_mode?: string;
+  vocab_direction?: string;
+  category?: string;
 }
 
 interface PrintData {
@@ -104,6 +107,24 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
     subtitle: '개념을 숫자와 식에 대입하여 연습하세요',
     footer: '풀이 과정을 빠짐없이 적어주세요! 기초가 탄탄해야 실력이 쑥쑥! 💪',
   },
+  eng_vocab: {
+    label: '🔤 단어 시험지',
+    icon: ClipboardCheck,
+    subtitle: '영단어 시험입니다',
+    footer: '빈칸에 정답을 정자로 깔끔하게 적어주세요! 단어가 실력의 기초! 📚',
+  },
+  eng_translation: {
+    label: '📝 해석 시험지',
+    icon: FileText,
+    subtitle: '영어 문장을 해석하세요',
+    footer: '문장의 의미를 자연스러운 한국어로 옮겨보세요! ✍️',
+  },
+  eng_reading: {
+    label: '📖 독해 시험지',
+    icon: BookOpen,
+    subtitle: '지문을 읽고 문제에 답하세요',
+    footer: '지문을 꼼꼼히 읽고 정답의 근거를 찾아보세요! 🔍',
+  },
 };
 
 /* ── Line height is FIXED at ~8.5mm. We compute how many lines fit. ── */
@@ -137,7 +158,26 @@ export default function QuizPrintPage() {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<PrintMode>('quiz');
   const [showAnswerKey, setShowAnswerKey] = useState(false);
+  const [answerDetail, setAnswerDetail] = useState<'quick' | 'full'>('quick');
   const { toast } = useToast();
+
+  // Detect if this is an English quiz
+  const isEnglishQuiz = useMemo(() => {
+    if (!data) return false;
+    return data.questions.some(q => (q as any).english_mode);
+  }, [data]);
+
+  const englishMode = useMemo(() => {
+    if (!data) return null;
+    const first = data.questions.find(q => (q as any).english_mode);
+    return first ? (first as any).english_mode : null;
+  }, [data]);
+
+  const vocabDirection = useMemo(() => {
+    if (!data) return 'mixed';
+    const first = data.questions.find(q => (q as any).vocab_direction);
+    return first ? (first as any).vocab_direction : 'mixed';
+  }, [data]);
 
   useEffect(() => {
     if (!quizId) { setLoading(false); return; }
@@ -163,6 +203,15 @@ export default function QuizPrintPage() {
       setLoading(false);
     })();
   }, [quizId]);
+
+  // Auto-detect English mode and set initial print mode
+  useEffect(() => {
+    if (!data) return;
+    const firstQ = data.questions[0] as any;
+    if (firstQ?.english_mode === 'vocab') setMode('eng_vocab');
+    else if (firstQ?.english_mode === 'translation') setMode('eng_translation');
+    else if (firstQ?.english_mode === 'reading') setMode('eng_reading');
+  }, [data]);
 
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
   const qrPayload = data ? `${window.location.origin}/quiz-submit?quiz_id=${data.quizId}${studentId ? `&student_id=${studentId}` : ''}` : '';
@@ -514,6 +563,192 @@ export default function QuizPrintPage() {
     );
   };
 
+  /* ════ English: Vocab — 3-column layout ════ */
+  const renderVocab = () => {
+    const qs = data.questions;
+    const dir = vocabDirection;
+    const ITEMS_PER_PAGE_FIRST = 45; // 3 cols × 15 rows
+    const ITEMS_PER_PAGE = 54; // 3 cols × 18 rows
+
+    const pages: { questions: QuizQuestion[]; isFirst: boolean }[] = [];
+    if (qs.length === 0) return null;
+    pages.push({ questions: qs.slice(0, ITEMS_PER_PAGE_FIRST), isFirst: true });
+    for (let i = ITEMS_PER_PAGE_FIRST; i < qs.length; i += ITEMS_PER_PAGE) {
+      pages.push({ questions: qs.slice(i, i + ITEMS_PER_PAGE), isFirst: false });
+    }
+    const totalPages = pages.length;
+
+    return pages.map((page, pi) => {
+      const colSize = Math.ceil(page.questions.length / 3);
+      const cols = [
+        page.questions.slice(0, colSize),
+        page.questions.slice(colSize, colSize * 2),
+        page.questions.slice(colSize * 2),
+      ];
+      return (
+        <div key={pi} className="qp-page">
+          {page.isFirst && <FullHeader />}
+          {showAnswerKey && (
+            <div className="qp-answer-banner">
+              ※ 답지 ({answerDetail === 'quick' ? '빠른 정답' : '해설 포함'}){data.answerCode && ` — ${data.answerCode}`}
+            </div>
+          )}
+          <div className="qp-vocab-grid">
+            {cols.map((col, ci) => (
+              <div key={ci} className="qp-vocab-col">
+                {col.map((q, qi) => {
+                  const num = q.question_number;
+                  const isEnToKr = dir === 'en_to_kr' || (dir === 'mixed' && qi % 2 === 0);
+                  const prompt = isEnToKr ? q.question_text : q.answer;
+                  const answer = isEnToKr ? q.answer : q.question_text;
+                  return (
+                    <div key={q.question_number} className="qp-vocab-row">
+                      <span className="qp-vocab-num">{num}</span>
+                      <span className="qp-vocab-prompt">{prompt}</span>
+                      <span className="qp-vocab-answer-space">
+                        {showAnswerKey ? (
+                          <span className="qp-vocab-answer-text">{answer}</span>
+                        ) : null}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          {showAnswerKey && answerDetail === 'full' && (
+            <div className="qp-vocab-explanations">
+              {page.questions.filter(q => q.explanation).map(q => (
+                <div key={q.question_number} className="qp-vocab-exp-row">
+                  <span className="qp-vocab-exp-num">{q.question_number}.</span>
+                  <span className="qp-vocab-exp-word">{q.question_text}</span>
+                  <span className="qp-vocab-exp-text">{q.explanation}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <Footer pageNum={pi + 1} totalPages={totalPages} />
+        </div>
+      );
+    });
+  };
+
+  /* ════ English: Translation — sentence with lined answer space ════ */
+  const renderTranslation = () => {
+    const qs = data.questions;
+    const ITEMS_PER_PAGE_FIRST = 6;
+    const ITEMS_PER_PAGE = 8;
+
+    const pages: { questions: QuizQuestion[]; isFirst: boolean }[] = [];
+    if (qs.length === 0) return null;
+    pages.push({ questions: qs.slice(0, ITEMS_PER_PAGE_FIRST), isFirst: true });
+    for (let i = ITEMS_PER_PAGE_FIRST; i < qs.length; i += ITEMS_PER_PAGE) {
+      pages.push({ questions: qs.slice(i, i + ITEMS_PER_PAGE), isFirst: false });
+    }
+    const totalPages = pages.length;
+
+    return pages.map((page, pi) => (
+      <div key={pi} className="qp-page">
+        {page.isFirst && <FullHeader />}
+        {showAnswerKey && (
+          <div className="qp-answer-banner">
+            ※ 답지 ({answerDetail === 'quick' ? '빠른 정답' : '해설 포함'}){data.answerCode && ` — ${data.answerCode}`}
+          </div>
+        )}
+        <div className="qp-translation-list">
+          {page.questions.map(q => (
+            <div key={q.question_number} className="qp-translation-item">
+              <div className="qp-translation-header">
+                <span className="qp-num">{String(q.question_number).padStart(2, '0')}</span>
+                <span className="qp-translation-sentence">{q.question_text}</span>
+              </div>
+              {showAnswerKey ? (
+                <div className="qp-translation-answer-area">
+                  <div className="qp-translation-answer-text">→ {q.answer}</div>
+                  {answerDetail === 'full' && q.explanation && (
+                    <div className="qp-translation-explanation">💡 {q.explanation}</div>
+                  )}
+                </div>
+              ) : (
+                <div className="qp-translation-lines">
+                  <div className="qp-line" />
+                  <div className="qp-line" />
+                  <div className="qp-line" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <Footer pageNum={pi + 1} totalPages={totalPages} />
+      </div>
+    ));
+  };
+
+  /* ════ English: Reading — passage + questions with proper font ════ */
+  const renderReading = () => {
+    const qs = data.questions;
+    // Use standard quiz renderer but with reading-specific styling
+    const pages = paginateQuestions(qs);
+    const totalPages = pages.length;
+    return pages.map((page, pi) => {
+      const mid = Math.ceil(page.questions.length / 2);
+      const lines = computeLineCount(page.isFirst, mid);
+      return (
+        <div key={pi} className="qp-page qp-reading-page">
+          {page.isFirst && <FullHeader />}
+          {showAnswerKey && (
+            <div className="qp-answer-banner">
+              ※ 답지 ({answerDetail === 'quick' ? '빠른 정답' : '해설 포함'}){data.answerCode && ` — ${data.answerCode}`}
+            </div>
+          )}
+          <div className="qp-reading-list">
+            {page.questions.map(q => {
+              const text = q.question_text;
+              // Split [지문] and [문제] if present
+              const passageMatch = text.match(/\[지문\]\s*([\s\S]*?)\s*\[문제\]\s*([\s\S]*)/);
+              return (
+                <div key={q.question_number} className="qp-reading-item">
+                  <div className="qp-reading-header">
+                    <span className="qp-num">{String(q.question_number).padStart(2, '0')}</span>
+                  </div>
+                  {passageMatch ? (
+                    <>
+                      <div className="qp-reading-passage">{passageMatch[1].trim()}</div>
+                      <div className="qp-reading-question">{passageMatch[2].trim()}</div>
+                    </>
+                  ) : (
+                    <div className="qp-reading-question">{text}</div>
+                  )}
+                  {showAnswerKey && (
+                    <div className="qp-reading-answer">
+                      <strong>정답:</strong> {q.answer}
+                      {answerDetail === 'full' && q.explanation && (
+                        <div className="qp-reading-explanation">💡 {q.explanation}</div>
+                      )}
+                    </div>
+                  )}
+                  {!showAnswerKey && (
+                    <div className="qp-workspace" style={{ marginLeft: 34 }}>
+                      <div className="qp-lined-area">
+                        {Array.from({ length: Math.min(lines, 4) }).map((_, i) => (
+                          <div key={i} className="qp-line" />
+                        ))}
+                      </div>
+                      <div className="qp-answer-box">
+                        <span className="qp-answer-label">정답</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <Footer pageNum={pi + 1} totalPages={totalPages} />
+        </div>
+      );
+    });
+  };
+
   const copyAnswerCode = () => {
     if (data.answerCode) {
       navigator.clipboard.writeText(data.answerCode);
@@ -529,30 +764,48 @@ export default function QuizPrintPage() {
           <ArrowLeft className="w-3.5 h-3.5 mr-1" /> 돌아가기
         </Button>
         <div className="h-5 w-px bg-border mx-1" />
-        {(Object.entries(MODE_META) as [PrintMode, typeof cfg][]).map(([key, m]) => {
-          const Icon = m.icon;
-          return (
-            <Button
-              key={key}
-              variant="outline"
-              size="sm"
-              onClick={() => { setMode(key); setShowAnswerKey(false); }}
-              className={mode === key ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}
-            >
-              <Icon className="w-3.5 h-3.5 mr-1" /> {m.label}
-            </Button>
-          );
-        })}
+        {(Object.entries(MODE_META) as [PrintMode, typeof cfg][])
+          .filter(([key]) => {
+            // Show only relevant modes
+            if (isEnglishQuiz) return key.startsWith('eng_') || key === 'quiz';
+            return !key.startsWith('eng_');
+          })
+          .map(([key, m]) => {
+            const Icon = m.icon;
+            return (
+              <Button
+                key={key}
+                variant="outline"
+                size="sm"
+                onClick={() => { setMode(key as PrintMode); setShowAnswerKey(false); }}
+                className={mode === key ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}
+              >
+                <Icon className="w-3.5 h-3.5 mr-1" /> {m.label}
+              </Button>
+            );
+          })}
         <div className="h-5 w-px bg-border mx-1" />
         {mode !== 'blank' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAnswerKey(!showAnswerKey)}
-            className={showAnswerKey ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
-          >
-            {showAnswerKey ? '답지 보기 중' : '답지 보기'}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAnswerKey(!showAnswerKey)}
+              className={showAnswerKey ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+            >
+              {showAnswerKey ? '답지 보기 중' : '답지 보기'}
+            </Button>
+            {showAnswerKey && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAnswerDetail(prev => prev === 'quick' ? 'full' : 'quick')}
+                className={answerDetail === 'full' ? 'bg-amber-100 border-amber-300 text-amber-800' : ''}
+              >
+                {answerDetail === 'quick' ? '빠른정답' : '해설포함'}
+              </Button>
+            )}
+          </>
         )}
         <Button variant="outline" size="sm" onClick={() => window.print()}>
           <Printer className="w-3.5 h-3.5 mr-1" /> 인쇄
@@ -570,6 +823,9 @@ export default function QuizPrintPage() {
         {mode === 'study' && renderStudy()}
         {mode === 'blank' && renderBlank()}
         {mode === 'example' && renderExamples()}
+        {mode === 'eng_vocab' && renderVocab()}
+        {mode === 'eng_translation' && renderTranslation()}
+        {mode === 'eng_reading' && renderReading()}
       </div>
 
       <style>{`
@@ -877,7 +1133,185 @@ export default function QuizPrintPage() {
         }
 
         /* ══════════════════════════════════════════════════
-           PRINT OVERRIDES — Perfect A4 with safe margins
+           English: Vocab 3-column layout
+           ══════════════════════════════════════════════════ */
+        .qp-vocab-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 0 16px;
+          flex: 1;
+        }
+        .qp-vocab-col {
+          display: flex;
+          flex-direction: column;
+        }
+        .qp-vocab-row {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 2px;
+          border-bottom: 1px solid #f1f5f9;
+          min-height: 22px;
+        }
+        .qp-vocab-row:nth-child(odd) { background: #fafbfc; }
+        .qp-vocab-num {
+          font-size: 9px;
+          font-weight: 700;
+          color: #94a3b8;
+          min-width: 18px;
+          text-align: right;
+          flex-shrink: 0;
+        }
+        .qp-vocab-prompt {
+          font-size: 11px;
+          font-weight: 600;
+          color: #1e293b;
+          flex: 1;
+          min-width: 0;
+        }
+        .qp-vocab-answer-space {
+          flex: 1;
+          min-width: 0;
+          border-bottom: 1px solid #cbd5e1;
+          min-height: 16px;
+          margin-left: 4px;
+        }
+        .qp-vocab-answer-text {
+          font-size: 10.5px;
+          color: #3b82f6;
+          font-weight: 600;
+        }
+        .qp-vocab-explanations {
+          margin-top: 8px;
+          padding: 6px 8px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          columns: 2;
+          column-gap: 16px;
+        }
+        .qp-vocab-exp-row {
+          font-size: 9px;
+          color: #64748b;
+          break-inside: avoid;
+          padding: 1px 0;
+        }
+        .qp-vocab-exp-num { font-weight: 700; margin-right: 2px; }
+        .qp-vocab-exp-word { font-weight: 600; color: #334155; margin-right: 4px; }
+        .qp-vocab-exp-text { font-style: italic; }
+
+        /* ══════════════════════════════════════════════════
+           English: Translation — sentence + lined answer
+           ══════════════════════════════════════════════════ */
+        .qp-translation-list {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .qp-translation-item {
+          break-inside: avoid;
+          page-break-inside: avoid;
+          margin-bottom: 2px;
+        }
+        .qp-translation-header {
+          display: flex;
+          align-items: flex-start;
+          gap: 6px;
+          margin-bottom: 2px;
+        }
+        .qp-translation-sentence {
+          font-size: 12px;
+          line-height: 1.7;
+          color: #1e293b;
+          font-weight: 500;
+          padding-top: 3px;
+        }
+        .qp-translation-lines {
+          margin-left: 34px;
+          padding: 2px 6px;
+        }
+        .qp-translation-lines .qp-line {
+          border-bottom: 1px solid #d4d8dd;
+          height: 10mm;
+        }
+        .qp-translation-answer-area {
+          margin-left: 34px;
+          padding: 4px 8px;
+          background: #eff6ff;
+          border-radius: 4px;
+          border-left: 3px solid #3b82f6;
+        }
+        .qp-translation-answer-text {
+          font-size: 11px;
+          color: #1e40af;
+          font-weight: 500;
+          line-height: 1.6;
+        }
+        .qp-translation-explanation {
+          font-size: 10px;
+          color: #64748b;
+          margin-top: 2px;
+          font-style: italic;
+        }
+
+        /* ══════════════════════════════════════════════════
+           English: Reading — passage with proper typography
+           ══════════════════════════════════════════════════ */
+        .qp-reading-page .qp-reading-list {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .qp-reading-item {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+        .qp-reading-header {
+          display: flex;
+          align-items: flex-start;
+          gap: 6px;
+          margin-bottom: 4px;
+        }
+        .qp-reading-passage {
+          font-size: 10.5pt;
+          line-height: 1.6;
+          color: #1e293b;
+          padding: 8px 12px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 4px;
+          margin-left: 34px;
+          margin-bottom: 6px;
+          white-space: pre-wrap;
+        }
+        .qp-reading-question {
+          font-size: 11.5px;
+          line-height: 1.6;
+          color: #1e293b;
+          margin-left: 34px;
+          font-weight: 500;
+          white-space: pre-wrap;
+        }
+        .qp-reading-answer {
+          margin-left: 34px;
+          margin-top: 4px;
+          padding: 4px 8px;
+          background: #eff6ff;
+          border-radius: 4px;
+          font-size: 11px;
+          color: #1e40af;
+          border-left: 3px solid #3b82f6;
+        }
+        .qp-reading-explanation {
+          font-size: 10px;
+          color: #64748b;
+          margin-top: 2px;
+          font-style: italic;
+        }
+
+
            ══════════════════════════════════════════════════ */
         @media print {
           @page {

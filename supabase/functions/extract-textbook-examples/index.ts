@@ -58,31 +58,43 @@ function getSystemPrompt(subject: string): string {
 
 [자료 유형 자동 감지 & 추출 방식]
 
-**1. 단어 시험지 (Vocabulary)**
+**1. 단어 시험지 (Vocabulary) — 표(Table) 구조 완벽 인식 필수**
 - category: "단어"
-- 영단어와 한국어 뜻을 쌍으로 추출
-- question_text: 영단어
-- answer: 한국어 뜻(들)
-- difficulty: easy/medium/hard (단어 수준에 따라)
-- 품사 정보가 있으면 explanation에 포함 (예: "n. 명사")
+- **핵심**: 표(테이블) 형태로 나열된 단어 목록을 행 단위로 인식합니다.
+  - 각 행에서 영단어와 한국어 뜻을 정확히 분리합니다.
+  - 한 칸에 여러 뜻이 있으면 쉼표로 연결합니다.
+  - 품사(n. v. adj. adv. prep. conj.)가 있으면 explanation에 기록합니다.
+- question_text: 영단어 (원형만, 깨끗하게)
+- answer: 한국어 뜻 (여러 뜻은 쉼표 구분)
+- explanation: 품사 정보 (예: "n. 명사" 또는 "v. 동사, 타동사")
+- difficulty: easy(기초단어) / medium(중급) / hard(고급/다의어)
+- problem_number: 표에서의 순번 (1, 2, 3, ...)
 
-**2. 해석 워크시트 (Translation)**
+**2. 해석 워크시트 (Translation) — 문장 단위 분리 필수**
 - category: "해석"
-- 영어 문장을 question_text에, 한국어 해석을 answer에 기입
-- 문장 번호가 있으면 problem_number에 기입
-- difficulty: 문장 길이/복잡도 기준
+- **핵심**: 지문을 온점(.), 물음표(?), 느낌표(!) 기준으로 문장 단위 분리합니다.
+  - 약어(Mr. Dr. U.S. etc.)는 분리하지 않습니다.
+  - 각 문장은 독립된 하나의 항목으로 저장합니다.
+  - 원본 문장 번호가 있으면 그대로 사용하고, 없으면 순번을 매깁니다.
+- question_text: 영어 문장 (한 문장씩, 원문 그대로)
+- answer: 한국어 해석
+- explanation: 핵심 문법 포인트가 있으면 간략히 기록
+- difficulty: easy(단문) / medium(복문/관계절) / hard(도치/삽입/긴문장)
 
-**3. 독해 문제 (Reading Comprehension)**
+**3. 독해 문제 (Reading Comprehension) — 지문+발문+보기 세트 인식**
 - category: "독해"
-- 지문과 문제를 함께 추출
-- question_text: 문제 전체 (지문 포함 시 지문도 포함)
-- answer: 정답
-- explanation: 해설
+- **핵심**: [지문 + 발문(질문) + 보기(①~⑤)]를 하나의 세트로 인식합니다.
+  - 하나의 지문에 여러 문제가 달린 경우, 각 문제를 별도 항목으로 추출하되
+    question_text에 지문 전체를 포함합니다.
+  - 보기가 있으면 ①②③④⑤ 형태로 question_text 뒤에 포함합니다.
+- question_text: "[지문] 본문 전체 \\n\\n[문제] 발문 텍스트 \\n①보기1 ②보기2 ..."
+- answer: 정답 (번호 또는 텍스트)
+- explanation: 해설 (근거가 되는 지문 부분 인용 포함)
 - difficulty: easy/medium/hard
 
 **4. 문법 문제 (Grammar)**
 - category: "문법"
-- question_text: 문법 문제
+- question_text: 문법 문제 전체
 - answer: 정답
 - explanation: 문법 규칙 설명
 
@@ -90,7 +102,8 @@ function getSystemPrompt(subject: string): string {
 1) 모든 항목에 problem_number를 부여 (있으면 원본, 없으면 순번)
 2) 수식이나 특수문자는 그대로 보존
 3) 페이지 번호가 보이면 기록
-4) 항목 순서대로 정렬`;
+4) 항목 순서대로 정렬
+5) 표 구조는 행 단위로 빠짐없이 추출 — 누락 금지`;
   }
 
   // Default: math/science prompt
@@ -126,6 +139,7 @@ function getSystemPrompt(subject: string): string {
 7) 페이지 번호가 보이면 기록, 아니면 null
 8) 문제 순서대로 정렬`;
 }
+
 
 function getToolSchema(subject: string) {
   const categoryEnum = subject === '영어'
