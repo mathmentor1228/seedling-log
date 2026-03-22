@@ -107,6 +107,24 @@ const MODE_META: Record<PrintMode, { label: string; icon: typeof BookOpen; subti
     subtitle: '개념을 숫자와 식에 대입하여 연습하세요',
     footer: '풀이 과정을 빠짐없이 적어주세요! 기초가 탄탄해야 실력이 쑥쑥! 💪',
   },
+  eng_vocab: {
+    label: '🔤 단어 시험지',
+    icon: ClipboardCheck,
+    subtitle: '영단어 시험입니다',
+    footer: '빈칸에 정답을 정자로 깔끔하게 적어주세요! 단어가 실력의 기초! 📚',
+  },
+  eng_translation: {
+    label: '📝 해석 시험지',
+    icon: FileText,
+    subtitle: '영어 문장을 해석하세요',
+    footer: '문장의 의미를 자연스러운 한국어로 옮겨보세요! ✍️',
+  },
+  eng_reading: {
+    label: '📖 독해 시험지',
+    icon: BookOpen,
+    subtitle: '지문을 읽고 문제에 답하세요',
+    footer: '지문을 꼼꼼히 읽고 정답의 근거를 찾아보세요! 🔍',
+  },
 };
 
 /* ── Line height is FIXED at ~8.5mm. We compute how many lines fit. ── */
