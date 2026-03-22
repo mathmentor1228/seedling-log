@@ -3118,6 +3118,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          folder: string | null
           grade: string | null
           id: string
           publisher: string | null
@@ -3130,6 +3131,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          folder?: string | null
           grade?: string | null
           id?: string
           publisher?: string | null
@@ -3142,6 +3144,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          folder?: string | null
           grade?: string | null
           id?: string
           publisher?: string | null
