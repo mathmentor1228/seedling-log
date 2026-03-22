@@ -138,10 +138,8 @@ function getSystemPrompt(subject: string): string {
 6) 난이도는 문제 복잡도에 따라 easy/medium/hard로 분류
 7) 페이지 번호가 보이면 기록, 아니면 null
 8) 문제 순서대로 정렬`;
-
-
-8) 문제 순서대로 정렬`;
 }
+
 
 function getToolSchema(subject: string) {
   const categoryEnum = subject === '영어'
