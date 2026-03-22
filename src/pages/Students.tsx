@@ -39,7 +39,7 @@ import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapp
 import StudentCsvImport from '@/components/StudentCsvImport';
 import StudentPinManager from '@/components/StudentPinManager';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
-import { normalizePhone } from '@/lib/phoneUtils';
+import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
 
 // STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1, STUDENT-PIN-MANAGER-V1
 interface Student {
