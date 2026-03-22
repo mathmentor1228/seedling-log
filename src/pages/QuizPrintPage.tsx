@@ -204,6 +204,15 @@ export default function QuizPrintPage() {
     })();
   }, [quizId]);
 
+  // Auto-detect English mode and set initial print mode
+  useEffect(() => {
+    if (!data) return;
+    const firstQ = data.questions[0] as any;
+    if (firstQ?.english_mode === 'vocab') setMode('eng_vocab');
+    else if (firstQ?.english_mode === 'translation') setMode('eng_translation');
+    else if (firstQ?.english_mode === 'reading') setMode('eng_reading');
+  }, [data]);
+
   const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
   const qrPayload = data ? `${window.location.origin}/quiz-submit?quiz_id=${data.quizId}${studentId ? `&student_id=${studentId}` : ''}` : '';
 
