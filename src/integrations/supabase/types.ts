@@ -3007,6 +3007,7 @@ export type Database = {
           sort_order: number
           textbook_id: string
           updated_at: string
+          video_url: string | null
         }
         Insert: {
           answer?: string | null
@@ -3024,6 +3025,7 @@ export type Database = {
           sort_order?: number
           textbook_id: string
           updated_at?: string
+          video_url?: string | null
         }
         Update: {
           answer?: string | null
@@ -3041,6 +3043,7 @@ export type Database = {
           sort_order?: number
           textbook_id?: string
           updated_at?: string
+          video_url?: string | null
         }
         Relationships: [
           {
