@@ -764,30 +764,48 @@ export default function QuizPrintPage() {
           <ArrowLeft className="w-3.5 h-3.5 mr-1" /> 돌아가기
         </Button>
         <div className="h-5 w-px bg-border mx-1" />
-        {(Object.entries(MODE_META) as [PrintMode, typeof cfg][]).map(([key, m]) => {
-          const Icon = m.icon;
-          return (
-            <Button
-              key={key}
-              variant="outline"
-              size="sm"
-              onClick={() => { setMode(key); setShowAnswerKey(false); }}
-              className={mode === key ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}
-            >
-              <Icon className="w-3.5 h-3.5 mr-1" /> {m.label}
-            </Button>
-          );
-        })}
+        {(Object.entries(MODE_META) as [PrintMode, typeof cfg][])
+          .filter(([key]) => {
+            // Show only relevant modes
+            if (isEnglishQuiz) return key.startsWith('eng_') || key === 'quiz';
+            return !key.startsWith('eng_');
+          })
+          .map(([key, m]) => {
+            const Icon = m.icon;
+            return (
+              <Button
+                key={key}
+                variant="outline"
+                size="sm"
+                onClick={() => { setMode(key as PrintMode); setShowAnswerKey(false); }}
+                className={mode === key ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''}
+              >
+                <Icon className="w-3.5 h-3.5 mr-1" /> {m.label}
+              </Button>
+            );
+          })}
         <div className="h-5 w-px bg-border mx-1" />
         {mode !== 'blank' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAnswerKey(!showAnswerKey)}
-            className={showAnswerKey ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
-          >
-            {showAnswerKey ? '답지 보기 중' : '답지 보기'}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAnswerKey(!showAnswerKey)}
+              className={showAnswerKey ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+            >
+              {showAnswerKey ? '답지 보기 중' : '답지 보기'}
+            </Button>
+            {showAnswerKey && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAnswerDetail(prev => prev === 'quick' ? 'full' : 'quick')}
+                className={answerDetail === 'full' ? 'bg-amber-100 border-amber-300 text-amber-800' : ''}
+              >
+                {answerDetail === 'quick' ? '빠른정답' : '해설포함'}
+              </Button>
+            )}
+          </>
         )}
         <Button variant="outline" size="sm" onClick={() => window.print()}>
           <Printer className="w-3.5 h-3.5 mr-1" /> 인쇄
@@ -805,6 +823,9 @@ export default function QuizPrintPage() {
         {mode === 'study' && renderStudy()}
         {mode === 'blank' && renderBlank()}
         {mode === 'example' && renderExamples()}
+        {mode === 'eng_vocab' && renderVocab()}
+        {mode === 'eng_translation' && renderTranslation()}
+        {mode === 'eng_reading' && renderReading()}
       </div>
 
       <style>{`
