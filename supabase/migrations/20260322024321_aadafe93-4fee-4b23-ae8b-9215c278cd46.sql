@@ -1,0 +1,1 @@
+ALTER TABLE public.textbooks ADD COLUMN IF NOT EXISTS folder text DEFAULT NULL;
