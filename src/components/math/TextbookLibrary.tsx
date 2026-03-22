@@ -813,6 +813,12 @@ export function TextbookLibrary() {
                                   <MathRenderer text={ex.explanation} />
                                 </div>
                               )}
+                              {/* Video URL inline edit */}
+                              <VideoUrlEditor
+                                exampleId={ex.id}
+                                currentUrl={ex.video_url}
+                                onSaved={(url) => setExamples(prev => prev.map(e => e.id === ex.id ? { ...e, video_url: url } : e))}
+                              />
                             </div>
                           ))}
                         </AccordionContent>
