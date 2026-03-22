@@ -563,7 +563,193 @@ export default function QuizPrintPage() {
     );
   };
 
-  const copyAnswerCode = () => {
+  /* ════ English: Vocab — 3-column layout ════ */
+  const renderVocab = () => {
+    const qs = data.questions;
+    const dir = vocabDirection;
+    const ITEMS_PER_PAGE_FIRST = 45; // 3 cols × 15 rows
+    const ITEMS_PER_PAGE = 54; // 3 cols × 18 rows
+
+    const pages: { questions: QuizQuestion[]; isFirst: boolean }[] = [];
+    if (qs.length === 0) return null;
+    pages.push({ questions: qs.slice(0, ITEMS_PER_PAGE_FIRST), isFirst: true });
+    for (let i = ITEMS_PER_PAGE_FIRST; i < qs.length; i += ITEMS_PER_PAGE) {
+      pages.push({ questions: qs.slice(i, i + ITEMS_PER_PAGE), isFirst: false });
+    }
+    const totalPages = pages.length;
+
+    return pages.map((page, pi) => {
+      const colSize = Math.ceil(page.questions.length / 3);
+      const cols = [
+        page.questions.slice(0, colSize),
+        page.questions.slice(colSize, colSize * 2),
+        page.questions.slice(colSize * 2),
+      ];
+      return (
+        <div key={pi} className="qp-page">
+          {page.isFirst && <FullHeader />}
+          {showAnswerKey && (
+            <div className="qp-answer-banner">
+              ※ 답지 ({answerDetail === 'quick' ? '빠른 정답' : '해설 포함'}){data.answerCode && ` — ${data.answerCode}`}
+            </div>
+          )}
+          <div className="qp-vocab-grid">
+            {cols.map((col, ci) => (
+              <div key={ci} className="qp-vocab-col">
+                {col.map((q, qi) => {
+                  const num = q.question_number;
+                  const isEnToKr = dir === 'en_to_kr' || (dir === 'mixed' && qi % 2 === 0);
+                  const prompt = isEnToKr ? q.question_text : q.answer;
+                  const answer = isEnToKr ? q.answer : q.question_text;
+                  return (
+                    <div key={q.question_number} className="qp-vocab-row">
+                      <span className="qp-vocab-num">{num}</span>
+                      <span className="qp-vocab-prompt">{prompt}</span>
+                      <span className="qp-vocab-answer-space">
+                        {showAnswerKey ? (
+                          <span className="qp-vocab-answer-text">{answer}</span>
+                        ) : null}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          {showAnswerKey && answerDetail === 'full' && (
+            <div className="qp-vocab-explanations">
+              {page.questions.filter(q => q.explanation).map(q => (
+                <div key={q.question_number} className="qp-vocab-exp-row">
+                  <span className="qp-vocab-exp-num">{q.question_number}.</span>
+                  <span className="qp-vocab-exp-word">{q.question_text}</span>
+                  <span className="qp-vocab-exp-text">{q.explanation}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <Footer pageNum={pi + 1} totalPages={totalPages} />
+        </div>
+      );
+    });
+  };
+
+  /* ════ English: Translation — sentence with lined answer space ════ */
+  const renderTranslation = () => {
+    const qs = data.questions;
+    const ITEMS_PER_PAGE_FIRST = 6;
+    const ITEMS_PER_PAGE = 8;
+
+    const pages: { questions: QuizQuestion[]; isFirst: boolean }[] = [];
+    if (qs.length === 0) return null;
+    pages.push({ questions: qs.slice(0, ITEMS_PER_PAGE_FIRST), isFirst: true });
+    for (let i = ITEMS_PER_PAGE_FIRST; i < qs.length; i += ITEMS_PER_PAGE) {
+      pages.push({ questions: qs.slice(i, i + ITEMS_PER_PAGE), isFirst: false });
+    }
+    const totalPages = pages.length;
+
+    return pages.map((page, pi) => (
+      <div key={pi} className="qp-page">
+        {page.isFirst && <FullHeader />}
+        {showAnswerKey && (
+          <div className="qp-answer-banner">
+            ※ 답지 ({answerDetail === 'quick' ? '빠른 정답' : '해설 포함'}){data.answerCode && ` — ${data.answerCode}`}
+          </div>
+        )}
+        <div className="qp-translation-list">
+          {page.questions.map(q => (
+            <div key={q.question_number} className="qp-translation-item">
+              <div className="qp-translation-header">
+                <span className="qp-num">{String(q.question_number).padStart(2, '0')}</span>
+                <span className="qp-translation-sentence">{q.question_text}</span>
+              </div>
+              {showAnswerKey ? (
+                <div className="qp-translation-answer-area">
+                  <div className="qp-translation-answer-text">→ {q.answer}</div>
+                  {answerDetail === 'full' && q.explanation && (
+                    <div className="qp-translation-explanation">💡 {q.explanation}</div>
+                  )}
+                </div>
+              ) : (
+                <div className="qp-translation-lines">
+                  <div className="qp-line" />
+                  <div className="qp-line" />
+                  <div className="qp-line" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <Footer pageNum={pi + 1} totalPages={totalPages} />
+      </div>
+    ));
+  };
+
+  /* ════ English: Reading — passage + questions with proper font ════ */
+  const renderReading = () => {
+    const qs = data.questions;
+    // Use standard quiz renderer but with reading-specific styling
+    const pages = paginateQuestions(qs);
+    const totalPages = pages.length;
+    return pages.map((page, pi) => {
+      const mid = Math.ceil(page.questions.length / 2);
+      const lines = computeLineCount(page.isFirst, mid);
+      return (
+        <div key={pi} className="qp-page qp-reading-page">
+          {page.isFirst && <FullHeader />}
+          {showAnswerKey && (
+            <div className="qp-answer-banner">
+              ※ 답지 ({answerDetail === 'quick' ? '빠른 정답' : '해설 포함'}){data.answerCode && ` — ${data.answerCode}`}
+            </div>
+          )}
+          <div className="qp-reading-list">
+            {page.questions.map(q => {
+              const text = q.question_text;
+              // Split [지문] and [문제] if present
+              const passageMatch = text.match(/\[지문\]\s*([\s\S]*?)\s*\[문제\]\s*([\s\S]*)/);
+              return (
+                <div key={q.question_number} className="qp-reading-item">
+                  <div className="qp-reading-header">
+                    <span className="qp-num">{String(q.question_number).padStart(2, '0')}</span>
+                  </div>
+                  {passageMatch ? (
+                    <>
+                      <div className="qp-reading-passage">{passageMatch[1].trim()}</div>
+                      <div className="qp-reading-question">{passageMatch[2].trim()}</div>
+                    </>
+                  ) : (
+                    <div className="qp-reading-question">{text}</div>
+                  )}
+                  {showAnswerKey && (
+                    <div className="qp-reading-answer">
+                      <strong>정답:</strong> {q.answer}
+                      {answerDetail === 'full' && q.explanation && (
+                        <div className="qp-reading-explanation">💡 {q.explanation}</div>
+                      )}
+                    </div>
+                  )}
+                  {!showAnswerKey && (
+                    <div className="qp-workspace" style={{ marginLeft: 34 }}>
+                      <div className="qp-lined-area">
+                        {Array.from({ length: Math.min(lines, 4) }).map((_, i) => (
+                          <div key={i} className="qp-line" />
+                        ))}
+                      </div>
+                      <div className="qp-answer-box">
+                        <span className="qp-answer-label">정답</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <Footer pageNum={pi + 1} totalPages={totalPages} />
+        </div>
+      );
+    });
+  };
+
+
     if (data.answerCode) {
       navigator.clipboard.writeText(data.answerCode);
       toast({ title: '복사 완료', description: `정답 확인 코드 ${data.answerCode}가 클립보드에 복사되었습니다.` });
