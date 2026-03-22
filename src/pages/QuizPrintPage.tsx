@@ -9,7 +9,7 @@ import { MathRenderer } from '@/components/math/MathRenderer';
 import { useToast } from '@/hooks/use-toast';
 import logoImg from '@/assets/logo-thementor.png';
 
-type PrintMode = 'study' | 'quiz' | 'blank' | 'example';
+type PrintMode = 'study' | 'quiz' | 'blank' | 'example' | 'eng_vocab' | 'eng_translation' | 'eng_reading';
 
 interface QuizQuestion {
   question_number: number;
@@ -23,6 +23,9 @@ interface QuizQuestion {
   source_chapter?: string;
   source_problem?: string;
   video_url?: string | null;
+  english_mode?: string;
+  vocab_direction?: string;
+  category?: string;
 }
 
 interface PrintData {
