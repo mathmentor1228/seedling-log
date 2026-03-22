@@ -22,6 +22,7 @@ interface QuizQuestion {
   source_page?: number | null;
   source_chapter?: string;
   source_problem?: string;
+  video_url?: string | null;
 }
 
 interface PrintData {
@@ -330,6 +331,13 @@ export default function QuizPrintPage() {
             </span>
             <SourceInfo q={q} />
             {parsed && <ChoicesRenderer choices={parsed.choices} />}
+            {/* Video QR code inline */}
+            {q.video_url && (
+              <div className="qp-video-qr">
+                <QRCodeSVG value={q.video_url} size={28} level="L" />
+                <span className="qp-video-qr-label">해설영상</span>
+              </div>
+            )}
           </div>
         </div>
         <WorkspaceArea q={q} showAnswer={showAnswerKey} lines={lines} subCount={subCount} />
@@ -700,6 +708,19 @@ export default function QuizPrintPage() {
           color: #94a3b8;
           margin-left: 4px;
           font-style: italic;
+        }
+        .qp-video-qr {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
+        .qp-video-qr-label {
+          font-size: 7px;
+          color: #64748b;
+          writing-mode: vertical-rl;
+          letter-spacing: 1px;
         }
 
         /* ── Sub-question auto line-break styling ── */

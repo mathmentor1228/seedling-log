@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
-  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap, Check, X,
+  Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap, Check, X, Video,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { TextbookQuizGenerator } from './TextbookQuizGenerator';
@@ -41,6 +41,7 @@ interface TextbookExample {
   difficulty: string | null;
   category: string | null;
   graph_data: any;
+  video_url: string | null;
   sort_order: number;
 }
 
@@ -56,6 +57,59 @@ const isPdfUpload = (file: File) => {
 };
 
 const getUploadLimitBytes = (file: File) => (isPdfUpload(file) ? MAX_PDF_EXTRACT_FILE_BYTES : MAX_IMAGE_EXTRACT_FILE_BYTES);
+
+/* ── VideoUrlEditor: inline YouTube URL editor per example ── */
+function VideoUrlEditor({ exampleId, currentUrl, onSaved }: { exampleId: string; currentUrl: string | null; onSaved: (url: string | null) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [url, setUrl] = useState(currentUrl || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const trimmed = url.trim() || null;
+    const { error } = await supabase.from('textbook_examples').update({ video_url: trimmed } as any).eq('id', exampleId);
+    if (!error) {
+      onSaved(trimmed);
+      setEditing(false);
+    }
+    setSaving(false);
+  };
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        {currentUrl ? (
+          <a href={currentUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-600 dark:text-blue-400 flex items-center gap-1 hover:underline">
+            <Video className="w-3 h-3" /> 해설 영상
+          </a>
+        ) : null}
+        <Button size="sm" variant="ghost" className="h-5 px-1 text-[10px] text-muted-foreground" onClick={() => { setEditing(true); setUrl(currentUrl || ''); }}>
+          <Video className="w-3 h-3 mr-0.5" /> {currentUrl ? '영상 수정' : '영상 추가'}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 mt-1">
+      <Input
+        value={url}
+        onChange={e => setUrl(e.target.value)}
+        placeholder="https://youtu.be/..."
+        className="h-6 text-xs flex-1"
+        autoFocus
+        onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+      />
+      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleSave} disabled={saving}>
+        <Check className="w-3 h-3 text-green-600" />
+      </Button>
+      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditing(false)}>
+        <X className="w-3 h-3" />
+      </Button>
+    </div>
+  );
+}
+
 
 export function TextbookLibrary() {
   const { toast } = useToast();
@@ -812,6 +866,12 @@ export function TextbookLibrary() {
                                   <MathRenderer text={ex.explanation} />
                                 </div>
                               )}
+                              {/* Video URL inline edit */}
+                              <VideoUrlEditor
+                                exampleId={ex.id}
+                                currentUrl={ex.video_url}
+                                onSaved={(url) => setExamples(prev => prev.map(e => e.id === ex.id ? { ...e, video_url: url } : e))}
+                              />
                             </div>
                           ))}
                         </AccordionContent>

@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  Loader2, Shuffle, BookOpen, Sparkles, Zap, AlertTriangle, ListChecks, RotateCcw,
+  Loader2, Shuffle, BookOpen, Sparkles, Zap, AlertTriangle, ListChecks, RotateCcw, Video,
 } from 'lucide-react';
 
 interface Textbook {
@@ -37,6 +37,7 @@ interface TextbookExample {
   category: string | null;
   graph_data: any;
   sort_order: number;
+  video_url: string | null;
 }
 
 interface Props {
@@ -56,6 +57,7 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
 
   // ─── Common ───
   const [randomOrder, setRandomOrder] = useState(true);
+  const [includeQR, setIncludeQR] = useState(false);
 
   // ─── Bank mode ───
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
@@ -264,6 +266,7 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
         source_page: ex.page_number,
         source_chapter: ex.chapter,
         source_problem: ex.problem_number,
+        video_url: includeQR ? (ex.video_url || null) : null,
       }));
 
       let conceptId: string;
@@ -476,6 +479,22 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
               <Switch checked={randomOrder} onCheckedChange={setRandomOrder} />
             </div>
 
+            {/* QR code toggle */}
+            {examples.some(e => e.video_url) && (
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">해설 영상 QR 포함</p>
+                    <p className="text-xs text-muted-foreground">
+                      영상이 등록된 문항에 QR코드 인쇄 ({examples.filter(e => e.video_url).length}개 등록됨)
+                    </p>
+                  </div>
+                </div>
+                <Switch checked={includeQR} onCheckedChange={setIncludeQR} />
+              </div>
+            )}
+
             <Button onClick={handleGenerate} disabled={generating || filteredExamples.length === 0} className="w-full gap-2">
               {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               문제은행 퀴즈 생성 ({bankQuestionCount}문항)
@@ -568,6 +587,22 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
               </div>
               <Switch checked={randomOrder} onCheckedChange={setRandomOrder} />
             </div>
+
+            {/* QR code toggle (reprint) */}
+            {examples.some(e => e.video_url) && (
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">해설 영상 QR 포함</p>
+                    <p className="text-xs text-muted-foreground">
+                      영상 등록 문항에 QR코드 인쇄
+                    </p>
+                  </div>
+                </div>
+                <Switch checked={includeQR} onCheckedChange={setIncludeQR} />
+              </div>
+            )}
 
             <Button onClick={handleGenerate} disabled={generating || reprintCount === 0} className="w-full gap-2">
               {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />}
