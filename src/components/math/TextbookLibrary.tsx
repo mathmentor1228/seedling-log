@@ -41,6 +41,7 @@ interface TextbookExample {
   difficulty: string | null;
   category: string | null;
   graph_data: any;
+  video_url: string | null;
   sort_order: number;
 }
 
