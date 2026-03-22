@@ -158,7 +158,26 @@ export default function QuizPrintPage() {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<PrintMode>('quiz');
   const [showAnswerKey, setShowAnswerKey] = useState(false);
+  const [answerDetail, setAnswerDetail] = useState<'quick' | 'full'>('quick');
   const { toast } = useToast();
+
+  // Detect if this is an English quiz
+  const isEnglishQuiz = useMemo(() => {
+    if (!data) return false;
+    return data.questions.some(q => (q as any).english_mode);
+  }, [data]);
+
+  const englishMode = useMemo(() => {
+    if (!data) return null;
+    const first = data.questions.find(q => (q as any).english_mode);
+    return first ? (first as any).english_mode : null;
+  }, [data]);
+
+  const vocabDirection = useMemo(() => {
+    if (!data) return 'mixed';
+    const first = data.questions.find(q => (q as any).vocab_direction);
+    return first ? (first as any).vocab_direction : 'mixed';
+  }, [data]);
 
   useEffect(() => {
     if (!quizId) { setLoading(false); return; }
