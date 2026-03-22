@@ -331,6 +331,13 @@ export default function QuizPrintPage() {
             </span>
             <SourceInfo q={q} />
             {parsed && <ChoicesRenderer choices={parsed.choices} />}
+            {/* Video QR code inline */}
+            {q.video_url && (
+              <div className="qp-video-qr">
+                <QRCodeSVG value={q.video_url} size={28} level="L" />
+                <span className="qp-video-qr-label">해설영상</span>
+              </div>
+            )}
           </div>
         </div>
         <WorkspaceArea q={q} showAnswer={showAnswerKey} lines={lines} subCount={subCount} />

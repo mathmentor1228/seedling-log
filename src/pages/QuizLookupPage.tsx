@@ -147,11 +147,18 @@ function QuizLookupContent() {
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
                   <FileText className="w-4 h-4" /> 빠른 정답표
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {result.questions.map((q: any) => (
-                    <div key={q.question_number} className="flex items-baseline gap-2 p-2 bg-background rounded border text-sm">
-                      <span className="font-bold text-primary min-w-[24px]">{q.question_number}.</span>
-                      <span className="font-medium"><MathRenderer text={q.answer} /></span>
+                    <div key={q.question_number} className="p-2 bg-background rounded border text-sm space-y-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-bold text-primary min-w-[24px]">{q.question_number}.</span>
+                        <span className="font-medium"><MathRenderer text={q.answer} /></span>
+                      </div>
+                      {q.explanation && (
+                        <p className="text-xs text-muted-foreground pl-7">
+                          <MathRenderer text={q.explanation} />
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
