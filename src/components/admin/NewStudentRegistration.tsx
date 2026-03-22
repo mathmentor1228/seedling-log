@@ -16,6 +16,7 @@ import { Loader2, CalendarIcon, Copy, CheckCircle2, UserPlus } from 'lucide-reac
 import { format, isAfter, startOfDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
 
 interface NewStudentRegistrationProps {
   open: boolean;
@@ -103,6 +104,28 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     const today = startOfDay(new Date());
     const start = startOfDay(startDate);
     const enrollmentStatus = isAfter(start, today) ? '재원예정' : '재원';
+    const normalizedParentPhone = normalizePhone(parentPhone);
+    const normalizedStudentPhone = normalizePhone(studentPhone);
+
+    const { data: existingCodes } = await supabase
+      .from('students')
+      .select('student_code')
+      .not('student_code', 'is', null);
+
+    const existingSet = new Set(
+      (existingCodes || []).map((s: any) => s.student_code).filter(Boolean)
+    );
+
+    const { code: studentCode, error: studentCodeError } = await generateStudentCode(
+      normalizedStudentPhone,
+      existingSet,
+    );
+
+    if (!studentCode) {
+      toast.error(studentCodeError || '학생 코드 생성에 실패했습니다');
+      setCreating(false);
+      return;
+    }
 
     // Generate parent token
     const { data: tokenData } = await supabase.rpc('generate_parent_token' as any);
@@ -116,8 +139,9 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
         grade_year: gradeYear,
         grade: `${schoolLevel}${gradeYear}`,
         school: school.trim() || null,
-        parent_phone: parentPhone.trim() || null,
-        student_phone: studentPhone.trim() || null,
+        parent_phone: normalizedParentPhone || null,
+        student_phone: normalizedStudentPhone || null,
+        student_code: studentCode,
         enrollment_status: enrollmentStatus,
         parent_token: parentToken || null,
         notes: [
