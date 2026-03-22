@@ -266,6 +266,7 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
         source_page: ex.page_number,
         source_chapter: ex.chapter,
         source_problem: ex.problem_number,
+        video_url: includeQR ? (ex.video_url || null) : null,
       }));
 
       let conceptId: string;
