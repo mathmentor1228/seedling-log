@@ -61,7 +61,7 @@ export function StudentVocabAssignment() {
 
   const loadData = async () => {
     const [studentsRes, setsRes, foldersRes, assignRes, completionsRes] = await Promise.all([
-      supabase.from('students').select('id, name, school, grade_year, school_level').eq('enrollment_status', '재원').order('name'),
+      supabase.from('students').select('id, name, school, grade_year, school_level').in('enrollment_status', ['재원', '재원예정']).order('name'),
       supabase.from('vocab_word_sets').select('id, title, round_number, folder_id').order('round_number'),
       supabase.from('vocab_folders').select('id, name, parent_id').order('sort_order'),
       supabase.from('student_vocab_assignments').select('student_id, word_set_id, required_rounds'),

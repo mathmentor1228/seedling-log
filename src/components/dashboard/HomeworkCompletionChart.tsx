@@ -76,7 +76,7 @@ export function HomeworkCompletionChart() {
         
         const [hwRes, studRes, profRes] = await Promise.all([
           supabase.from('homework_assignments').select('id, student_id, subject, content, assigned_date, check_status, created_by').gte('assigned_date', since),
-          supabase.from('students').select('id, name').eq('enrollment_status', '재원'),
+          supabase.from('students').select('id, name').in('enrollment_status', ['재원', '재원예정']),
           supabase.from('profiles').select('id, full_name'),
         ]);
 

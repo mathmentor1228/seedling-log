@@ -101,7 +101,7 @@ export function NewStudentOnboarding() {
       supabase
         .from('students')
         .select('id, name, parent_name, parent_phone, parent_token, created_at, grade')
-        .eq('enrollment_status', '재원')
+        .in('enrollment_status', ['재원', '재원예정'])
         .gte('created_at', thirtyDaysAgo)
         .order('created_at', { ascending: false }),
       supabase
