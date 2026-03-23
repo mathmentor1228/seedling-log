@@ -313,7 +313,7 @@ ${studentPageUrl}
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v && !created) resetForm(); onOpenChange(v); }}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
