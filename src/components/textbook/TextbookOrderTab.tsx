@@ -129,9 +129,29 @@ export function TextbookOrderTab() {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, role, fetchOrders]);
 
+  // Check for duplicate textbooks when name changes
+  const checkDuplicates = useCallback((inputName: string) => {
+    if (inputName.trim().length < 2) {
+      setDuplicateMatches([]);
+      return;
+    }
+    const matches = groups.filter(g =>
+      g.textbook_name.toLowerCase().includes(inputName.trim().toLowerCase()) ||
+      inputName.trim().toLowerCase().includes(g.textbook_name.toLowerCase())
+    );
+    setDuplicateMatches(matches);
+  }, [groups]);
+
   const handleCreate = async () => {
     if (!name.trim()) { toast.error('교재명을 입력해주세요'); return; }
     if (!price.trim() || isNaN(Number(price))) { toast.error('단가를 입력해주세요'); return; }
+
+    // Show duplicate warning once if similar textbooks exist
+    if (duplicateMatches.length > 0 && !duplicateWarningShown) {
+      setShowDuplicateAlert(true);
+      return;
+    }
+
     setCreating(true);
     const { error } = await supabase.from('textbook_orders').insert({
       textbook_name: name.trim(),
@@ -150,6 +170,8 @@ export function TextbookOrderTab() {
       toast.success('교재 신청이 등록되었습니다');
       setShowDialog(false);
       setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes(''); setGrade(''); setCategory('기타');
+      setDuplicateWarningShown(false);
+      setDuplicateMatches([]);
       fetchOrders();
     }
     setCreating(false);
