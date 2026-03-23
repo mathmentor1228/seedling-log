@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { toast } from 'sonner';
 import { Plus, Loader2, Package, PackageCheck, Trash2, FileSpreadsheet, Download, Search, X, Pencil, ShoppingCart, ChevronDown, ChevronRight, Users } from 'lucide-react';
 import { format } from 'date-fns';
+import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TextbookOrder {
@@ -87,6 +88,11 @@ export function TextbookOrderTab() {
   // Expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
+  // Duplicate check state
+  const [duplicateWarningShown, setDuplicateWarningShown] = useState(false);
+  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
+  const [duplicateMatches, setDuplicateMatches] = useState<TextbookGroup[]>([]);
+
   useEffect(() => {
     if (user) {
       supabase.from('profiles').select('full_name').eq('id', user.id).single()
@@ -128,9 +134,47 @@ export function TextbookOrderTab() {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, role, fetchOrders]);
 
+  // Check for duplicate textbooks when name changes (use orders directly to avoid forward reference)
+  const checkDuplicates = useCallback((inputName: string) => {
+    if (inputName.trim().length < 2) {
+      setDuplicateMatches([]);
+      return;
+    }
+    const lowerInput = inputName.trim().toLowerCase();
+    const matchingNames = new Set<string>();
+    orders.forEach(o => {
+      if (o.textbook_name.toLowerCase().includes(lowerInput) || lowerInput.includes(o.textbook_name.toLowerCase())) {
+        matchingNames.add(o.textbook_name);
+      }
+    });
+    // Build lightweight group info for display
+    const matches: TextbookGroup[] = Array.from(matchingNames).map(tName => {
+      const matching = orders.filter(o => o.textbook_name === tName);
+      return {
+        textbook_name: tName,
+        subject: matching[0]?.subject || '',
+        unit_price: matching[0]?.unit_price || 0,
+        grade: matching[0]?.grade || null,
+        category: matching[0]?.category || null,
+        orders: matching,
+        totalQty: matching.reduce((s, o) => s + o.quantity, 0),
+        totalDistributed: matching.reduce((s, o) => s + (o.distributed_qty || 0), 0),
+        status: matching[0]?.status || '교재신청',
+      };
+    });
+    setDuplicateMatches(matches);
+  }, [orders]);
+
   const handleCreate = async () => {
     if (!name.trim()) { toast.error('교재명을 입력해주세요'); return; }
     if (!price.trim() || isNaN(Number(price))) { toast.error('단가를 입력해주세요'); return; }
+
+    // Show duplicate warning once if similar textbooks exist
+    if (duplicateMatches.length > 0 && !duplicateWarningShown) {
+      setShowDuplicateAlert(true);
+      return;
+    }
+
     setCreating(true);
     const { error } = await supabase.from('textbook_orders').insert({
       textbook_name: name.trim(),
@@ -149,6 +193,8 @@ export function TextbookOrderTab() {
       toast.success('교재 신청이 등록되었습니다');
       setShowDialog(false);
       setName(''); setSubject('수학'); setQty('1'); setPrice(''); setNotes(''); setGrade(''); setCategory('기타');
+      setDuplicateWarningShown(false);
+      setDuplicateMatches([]);
       fetchOrders();
     }
     setCreating(false);
@@ -452,30 +498,8 @@ export function TextbookOrderTab() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-medium text-foreground">교재명 *</label>
-                    <Input value={name} onChange={e => setName(e.target.value)} placeholder="[개념]교재명_중1" />
+                    <Input value={name} onChange={e => { setName(e.target.value); checkDuplicates(e.target.value); setDuplicateWarningShown(false); }} placeholder="[개념]교재명_중1" />
                     <p className="text-[10px] text-muted-foreground mt-0.5">[개념/유형/심화/응용/내신/독해/문법/듣기/기타]교재명_학년/레벨명</p>
-                    {/* Show existing stock info */}
-                    {name.trim().length >= 2 && (() => {
-                      const matchingGroups = groups.filter(g => 
-                        g.textbook_name.toLowerCase().includes(name.trim().toLowerCase())
-                      );
-                      if (matchingGroups.length === 0) return null;
-                      return (
-                        <div className="mt-1 space-y-1">
-                          {matchingGroups.map(g => {
-                            const remaining = g.totalQty - g.totalDistributed;
-                            return (
-                              <div key={g.textbook_name} className="text-[11px] px-2 py-1 rounded bg-muted border border-border">
-                                <span className="font-medium text-foreground">{g.textbook_name}</span>
-                                <span className="text-muted-foreground ml-1">
-                                  — 기존 {g.totalQty}권 (배부 {g.totalDistributed}권 / 재고 {remaining}권)
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground">과목</label>
@@ -805,6 +829,43 @@ export function TextbookOrderTab() {
             <Button variant="outline" onClick={() => setEditOrder(null)}>취소</Button>
             <Button onClick={handleEdit} disabled={saving}>
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate textbook warning dialog */}
+      <Dialog open={showDuplicateAlert} onOpenChange={setShowDuplicateAlert}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-warning">
+              <AlertTriangle className="w-5 h-5" />유사 교재 재고 확인
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-foreground">
+              입력하신 교재명과 유사한 교재가 이미 등록되어 있습니다. 재고를 확인하셨나요?
+            </p>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {duplicateMatches.map(g => (
+                <div key={g.textbook_name} className="text-[12px] px-3 py-2 rounded-md bg-muted border border-border">
+                  <span className="font-medium text-foreground">{g.textbook_name}</span>
+                  <span className="text-muted-foreground ml-1">({g.subject})</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowDuplicateAlert(false)}>
+              취소
+            </Button>
+            <Button onClick={() => {
+              setShowDuplicateAlert(false);
+              setDuplicateWarningShown(true);
+              // Re-trigger create after confirming
+              setTimeout(() => handleCreate(), 100);
+            }}>
+              확인했습니다, 신청하기
             </Button>
           </DialogFooter>
         </DialogContent>
