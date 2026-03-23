@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Users, Clock, Building2, GripVertical, ArrowRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -57,11 +56,19 @@ interface Props {
   onDataChange: () => void;
 }
 
+// Column can be a teacher or a classroom
+interface MatrixColumn {
+  id: string;
+  label: string;
+  subLabel: string;
+  capacity?: number;
+}
+
 export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onDayChange, mode, onDataChange }: Props) {
   const { toast } = useToast();
   const [detailPopup, setDetailPopup] = useState<ScheduleRow | null>(null);
   const [dragItem, setDragItem] = useState<ScheduleRow | null>(null);
-  const [moveTarget, setMoveTarget] = useState<{ classroomId: string; timeSlot: string } | null>(null);
+  const [moveTarget, setMoveTarget] = useState<{ columnId: string; timeSlot: string } | null>(null);
   const [moving, setMoving] = useState(false);
 
   // Filter rows for selected day
@@ -69,6 +76,53 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
     scheduleRows.filter(r => r.dayOfWeek === selectedDay && !r.scheduleId.startsWith('exam-')),
     [scheduleRows, selectedDay]
   );
+
+  // Determine if we should use classroom-based or teacher-based columns
+  const hasClassroomAssignments = useMemo(() => 
+    dayRows.some(r => r.classroomId), [dayRows]
+  );
+
+  // Build columns: use classrooms if assigned, otherwise teachers
+  const columns: MatrixColumn[] = useMemo(() => {
+    if (hasClassroomAssignments) {
+      // Classroom-based: show classrooms that have schedules + unassigned column if needed
+      const usedIds = new Set(dayRows.map(r => r.classroomId).filter(Boolean));
+      const hasUnassigned = dayRows.some(r => !r.classroomId);
+      const cols: MatrixColumn[] = classrooms
+        .filter(c => usedIds.has(c.id) || classrooms.length <= 12)
+        .map(c => ({
+          id: c.id,
+          label: c.name,
+          subLabel: `${c.manager_name} · 정원 ${c.capacity}`,
+          capacity: c.capacity,
+        }));
+      if (hasUnassigned) {
+        cols.push({ id: '__unassigned__', label: '미배정', subLabel: '강의실 미지정' });
+      }
+      return cols;
+    } else {
+      // Teacher-based columns
+      const teacherMap = new Map<string, { name: string; classroomName?: string; capacity?: number }>();
+      dayRows.forEach(r => {
+        if (!teacherMap.has(r.teacherId)) {
+          const room = r.classroomId ? classrooms.find(c => c.id === r.classroomId) : null;
+          teacherMap.set(r.teacherId, {
+            name: r.teacherName,
+            classroomName: room?.name,
+            capacity: room?.capacity,
+          });
+        }
+      });
+      return Array.from(teacherMap.entries())
+        .sort((a, b) => a[1].name.localeCompare(b[1].name))
+        .map(([id, info]) => ({
+          id,
+          label: info.name,
+          subLabel: info.classroomName || '',
+          capacity: info.capacity,
+        }));
+    }
+  }, [dayRows, classrooms, hasClassroomAssignments]);
 
   // Build unique time slots from data
   const timeSlots = useMemo(() => {
@@ -79,37 +133,38 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
     return Array.from(slotSet).sort();
   }, [dayRows]);
 
-  // Active classrooms (those with schedules or all)
-  const activeClassrooms = useMemo(() => {
-    if (classrooms.length === 0) return [];
-    const usedIds = new Set(dayRows.map(r => r.classroomId).filter(Boolean));
-    // Show all classrooms in timeline, only used ones if many
-    return classrooms.filter(c => usedIds.has(c.id) || classrooms.length <= 12);
-  }, [classrooms, dayRows]);
-
   // Get rows for a specific cell
-  const getCellRows = useCallback((classroomId: string, timeSlot: string) => {
+  const getCellRows = useCallback((columnId: string, timeSlot: string) => {
     const [start, end] = timeSlot.split('-');
-    return dayRows.filter(r => 
-      r.classroomId === classroomId &&
-      r.startTime.slice(0, 5) === start &&
-      r.endTime.slice(0, 5) === end
-    );
-  }, [dayRows]);
+    if (hasClassroomAssignments) {
+      if (columnId === '__unassigned__') {
+        return dayRows.filter(r => !r.classroomId && r.startTime.slice(0, 5) === start && r.endTime.slice(0, 5) === end);
+      }
+      return dayRows.filter(r => r.classroomId === columnId && r.startTime.slice(0, 5) === start && r.endTime.slice(0, 5) === end);
+    } else {
+      return dayRows.filter(r => r.teacherId === columnId && r.startTime.slice(0, 5) === start && r.endTime.slice(0, 5) === end);
+    }
+  }, [dayRows, hasClassroomAssignments]);
 
-  // Get occupancy for a classroom at a time slot
-  const getOccupancy = useCallback((classroomId: string, timeSlot: string) => {
+  // Get occupancy for a column at a time slot
+  const getOccupancy = useCallback((columnId: string, timeSlot: string) => {
     const [start, end] = timeSlot.split('-');
-    const room = classrooms.find(c => c.id === classroomId);
-    if (!room) return { current: 0, max: 0, ratio: 0 };
-    // Sum all overlapping slots in same room
-    const overlapping = dayRows.filter(r =>
-      r.classroomId === classroomId &&
-      r.startTime.slice(0, 5) < end && start < r.endTime.slice(0, 5)
-    );
+    const col = columns.find(c => c.id === columnId);
+    const maxCap = col?.capacity || 0;
+
+    let overlapping: ScheduleRow[];
+    if (hasClassroomAssignments) {
+      if (columnId === '__unassigned__') {
+        overlapping = dayRows.filter(r => !r.classroomId && r.startTime.slice(0, 5) < end && start < r.endTime.slice(0, 5));
+      } else {
+        overlapping = dayRows.filter(r => r.classroomId === columnId && r.startTime.slice(0, 5) < end && start < r.endTime.slice(0, 5));
+      }
+    } else {
+      overlapping = dayRows.filter(r => r.teacherId === columnId && r.startTime.slice(0, 5) < end && start < r.endTime.slice(0, 5));
+    }
     const current = overlapping.reduce((sum, r) => sum + r.students.length, 0);
-    return { current, max: room.capacity, ratio: room.capacity > 0 ? current / room.capacity : 0 };
-  }, [dayRows, classrooms]);
+    return { current, max: maxCap, ratio: maxCap > 0 ? current / maxCap : 0 };
+  }, [dayRows, columns, hasClassroomAssignments]);
 
   // Congestion color
   const getCongestionColor = (ratio: number) => {
@@ -138,20 +193,10 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = async (e: React.DragEvent, classroomId: string, timeSlot: string) => {
+  const handleDrop = async (e: React.DragEvent, columnId: string, timeSlot: string) => {
     e.preventDefault();
     if (!dragItem) return;
-    
-    // Same cell - ignore
-    const [newStart, newEnd] = timeSlot.split('-');
-    if (dragItem.classroomId === classroomId && 
-        dragItem.startTime.slice(0, 5) === newStart && 
-        dragItem.endTime.slice(0, 5) === newEnd) {
-      setDragItem(null);
-      return;
-    }
-
-    setMoveTarget({ classroomId, timeSlot });
+    setMoveTarget({ columnId, timeSlot });
   };
 
   const confirmMove = async () => {
@@ -159,13 +204,15 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
     setMoving(true);
     try {
       const [newStart, newEnd] = moveTarget.timeSlot.split('-');
+      const updates: Record<string, any> = { start_time: newStart, end_time: newEnd };
+
+      if (hasClassroomAssignments && moveTarget.columnId !== '__unassigned__') {
+        updates.classroom_id = moveTarget.columnId;
+      }
+
       const { error } = await supabase
         .from('class_schedules')
-        .update({
-          start_time: newStart,
-          end_time: newEnd,
-          classroom_id: moveTarget.classroomId,
-        })
+        .update(updates)
         .eq('id', dragItem.scheduleId);
       
       if (error) throw error;
@@ -182,35 +229,26 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
 
   const today = new Date().getDay();
 
-  if (activeClassrooms.length === 0) {
+  if (columns.length === 0 && dayRows.length === 0) {
     return (
-      <div className="text-center py-12 text-sm text-muted-foreground">
-        강의실이 배정된 수업이 없습니다. 수업 편집에서 강의실을 지정해주세요.
+      <div className="space-y-4">
+        <DaySelector days={DAYS_OF_WEEK} selectedDay={selectedDay} onDayChange={onDayChange} today={today} />
+        <div className="text-center py-12 text-sm text-muted-foreground">
+          {DAYS_OF_WEEK.find(d => d.value === selectedDay)?.label}요일에 등록된 수업이 없습니다
+        </div>
       </div>
     );
   }
 
+  const getTargetLabel = () => {
+    if (!moveTarget) return '';
+    const col = columns.find(c => c.id === moveTarget.columnId);
+    return col?.label || '';
+  };
+
   return (
     <div className="space-y-4">
-      {/* Day selector */}
-      <div className="flex gap-1.5 flex-wrap">
-        {DAYS_OF_WEEK.map(d => (
-          <button
-            key={d.value}
-            onClick={() => onDayChange(d.value)}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
-              selectedDay === d.value
-                ? 'bg-primary text-primary-foreground'
-                : d.value === today
-                  ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            )}
-          >
-            {d.label}
-          </button>
-        ))}
-      </div>
+      <DaySelector days={DAYS_OF_WEEK} selectedDay={selectedDay} onDayChange={onDayChange} today={today} />
 
       {timeSlots.length === 0 ? (
         <div className="text-center py-12 text-sm text-muted-foreground">
@@ -225,10 +263,10 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                   <Clock className="w-3.5 h-3.5 inline mr-1" />
                   교시
                 </th>
-                {activeClassrooms.map(room => (
-                  <th key={room.id} className="border-r border-b px-2 py-2.5 text-center text-xs font-semibold min-w-[120px]">
-                    <div>{room.name}</div>
-                    <div className="text-[10px] text-muted-foreground font-normal">{room.manager_name} · 정원 {room.capacity}</div>
+                {columns.map(col => (
+                  <th key={col.id} className="border-r border-b px-2 py-2.5 text-center text-xs font-semibold min-w-[130px]">
+                    <div>{col.label}</div>
+                    {col.subLabel && <div className="text-[10px] text-muted-foreground font-normal">{col.subLabel}</div>}
                   </th>
                 ))}
               </tr>
@@ -241,22 +279,22 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                       <span key={i} className={i === 1 ? 'text-[10px] block' : ''}>{t}</span>
                     ))}
                   </td>
-                  {activeClassrooms.map(room => {
-                    const cellRows = getCellRows(room.id, slot);
-                    const occ = getOccupancy(room.id, slot);
+                  {columns.map(col => {
+                    const cellRows = getCellRows(col.id, slot);
+                    const occ = getOccupancy(col.id, slot);
                     const isCongestion = mode === 'congestion';
 
                     return (
                       <td
-                        key={room.id}
+                        key={col.id}
                         className={cn(
                           'border-r border-b px-1.5 py-1.5 align-top transition-colors min-h-[60px]',
-                          isCongestion && getCongestionColor(occ.ratio),
-                          isCongestion && occ.ratio > 0 && `border ${getCongestionBorder(occ.ratio)}`,
+                          isCongestion && occ.max > 0 && getCongestionColor(occ.ratio),
+                          isCongestion && occ.ratio > 0 && occ.max > 0 && `border ${getCongestionBorder(occ.ratio)}`,
                           dragItem && 'hover:bg-primary/10'
                         )}
                         onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, room.id, slot)}
+                        onDrop={(e) => handleDrop(e, col.id, slot)}
                       >
                         {cellRows.length > 0 ? (
                           <div className="space-y-1">
@@ -280,17 +318,20 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                                   </span>
                                 </div>
                                 <div className="text-xs font-medium truncate pl-4">{row.className}</div>
-                                {isCongestion ? (
-                                  <div className={cn(
-                                    'text-xs font-bold pl-4 mt-0.5',
-                                    occ.ratio > 1 ? 'text-destructive' : occ.ratio > 0.8 ? 'text-warning' : 'text-success'
-                                  )}>
-                                    {row.students.length}명
-                                    {occ.ratio > 1 && <AlertTriangle className="w-3 h-3 inline ml-1" />}
-                                  </div>
-                                ) : (
-                                  <div className="text-[10px] text-muted-foreground pl-4">
-                                    {row.students.length}명/{room.capacity}
+                                <div className="text-[10px] text-muted-foreground pl-4">
+                                  {row.students.length}명
+                                  {isCongestion && occ.max > 0 && (
+                                    <span className={cn('ml-1 font-bold', occ.ratio > 1 ? 'text-destructive' : occ.ratio > 0.8 ? 'text-warning' : 'text-success')}>
+                                      ({occ.current}/{occ.max})
+                                      {occ.ratio > 1 && <AlertTriangle className="w-3 h-3 inline ml-0.5" />}
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Show student names in timeline mode */}
+                                {mode === 'timeline' && row.students.length > 0 && (
+                                  <div className="text-[10px] text-muted-foreground pl-4 mt-0.5 leading-tight">
+                                    {row.students.slice(0, 4).map(s => s.name).join(', ')}
+                                    {row.students.length > 4 && ` 외 ${row.students.length - 4}명`}
                                   </div>
                                 )}
                               </div>
@@ -300,11 +341,7 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                           <div className={cn(
                             'h-full min-h-[50px] rounded-md flex items-center justify-center',
                             dragItem && 'border-2 border-dashed border-primary/30'
-                          )}>
-                            {isCongestion && occ.current > 0 && (
-                              <span className="text-xs text-muted-foreground">{occ.current}/{occ.max}</span>
-                            )}
-                          </div>
+                          )} />
                         )}
                       </td>
                     );
@@ -386,12 +423,12 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
                 <div className="flex-1 p-2 rounded-md bg-muted text-center">
                   <div className="font-medium">{dragItem.className}</div>
                   <div className="text-xs text-muted-foreground">
-                    {dragItem.classroomName || '미지정'} · {dragItem.startTime.slice(0, 5)}-{dragItem.endTime.slice(0, 5)}
+                    {dragItem.classroomName || dragItem.teacherName} · {dragItem.startTime.slice(0, 5)}-{dragItem.endTime.slice(0, 5)}
                   </div>
                 </div>
                 <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 <div className="flex-1 p-2 rounded-md bg-primary/10 text-center border border-primary/20">
-                  <div className="font-medium">{classrooms.find(c => c.id === moveTarget.classroomId)?.name}</div>
+                  <div className="font-medium">{getTargetLabel()}</div>
                   <div className="text-xs text-muted-foreground">{moveTarget.timeSlot}</div>
                 </div>
               </div>
@@ -408,6 +445,30 @@ export function TimetableMatrixView({ scheduleRows, classrooms, selectedDay, onD
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// Extracted day selector component
+function DaySelector({ days, selectedDay, onDayChange, today }: { days: { value: number; label: string }[]; selectedDay: number; onDayChange: (d: number) => void; today: number }) {
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {days.map(d => (
+        <button
+          key={d.value}
+          onClick={() => onDayChange(d.value)}
+          className={cn(
+            'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+            selectedDay === d.value
+              ? 'bg-primary text-primary-foreground'
+              : d.value === today
+                ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+          )}
+        >
+          {d.label}
+        </button>
+      ))}
     </div>
   );
 }
