@@ -467,12 +467,14 @@ export function Timetable() {
       endTime: row.endTime,
       teacherId: row.teacherId,
       dayOfWeek: row.dayOfWeek,
-    });
+      classroomId: row.classroomId || '',
+    } as any);
     setEditForm({
       className: row.className,
       startTime: row.startTime.slice(0, 5),
       endTime: row.endTime.slice(0, 5),
       teacherId: row.teacherId,
+      classroomId: row.classroomId || '',
     });
   }
 
