@@ -270,6 +270,7 @@ export type Database = {
       class_schedules: {
         Row: {
           class_id: string
+          classroom_id: string | null
           created_at: string
           day_of_week: number
           end_time: string
@@ -283,6 +284,7 @@ export type Database = {
         }
         Insert: {
           class_id: string
+          classroom_id?: string | null
           created_at?: string
           day_of_week: number
           end_time: string
@@ -296,6 +298,7 @@ export type Database = {
         }
         Update: {
           class_id?: string
+          classroom_id?: string | null
           created_at?: string
           day_of_week?: number
           end_time?: string
@@ -313,6 +316,13 @@ export type Database = {
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_schedules_classroom_id_fkey"
+            columns: ["classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
             referencedColumns: ["id"]
           },
         ]
@@ -380,6 +390,36 @@ export type Database = {
           subject?: Database["public"]["Enums"]["subject_type"]
           teacher_id?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      classrooms: {
+        Row: {
+          capacity: number
+          created_at: string
+          id: string
+          is_active: boolean
+          manager_name: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          capacity?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          manager_name?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          capacity?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          manager_name?: string
+          name?: string
+          sort_order?: number
         }
         Relationships: []
       }
