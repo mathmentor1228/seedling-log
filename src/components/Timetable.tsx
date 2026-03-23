@@ -62,6 +62,7 @@ interface ScheduleRow {
   teacherId: string;
   teacherName: string;
   students: { id: string; name: string }[];
+  groupNames?: string[];
 }
 
 interface Teacher {
