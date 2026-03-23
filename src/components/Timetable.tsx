@@ -661,6 +661,7 @@ export function Timetable() {
 
   const SlotCard = ({ row, showTeacher = false, editable = false }: { row: ScheduleRow; showTeacher?: boolean; editable?: boolean }) => {
     const isExamPrep = isExamPrepRow(row);
+    const capStatus = getSlotCapacityStatus(row);
     return (
     <div
       className={cn(
