@@ -1240,6 +1240,7 @@ export function Timetable() {
             </div>
           </TabsContent>
         </Tabs>
+        )}
       </CardContent>
 
       {/* Student management dialog */}
