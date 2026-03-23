@@ -15,10 +15,12 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save } from 'lucide-react';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
+import { StudentGroupManager } from '@/components/timetable/StudentGroupManager';
+import { GroupSlotAssignment } from '@/components/timetable/GroupSlotAssignment';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: '월', full: '월요일' },
@@ -60,6 +62,7 @@ interface ScheduleRow {
   teacherId: string;
   teacherName: string;
   students: { id: string; name: string }[];
+  groupNames?: string[];
 }
 
 interface Teacher {
@@ -215,6 +218,29 @@ export function Timetable() {
         }
       }
 
+      // Fetch group assignments for schedules
+      const scheduleIds = (schedulesData || []).map((s: any) => s.id);
+      let groupsBySchedule: Record<string, string[]> = {};
+      if (scheduleIds.length > 0) {
+        const { data: sgaData } = await supabase
+          .from('schedule_group_assignments')
+          .select('schedule_id, group_id')
+          .in('schedule_id', scheduleIds);
+        if (sgaData && sgaData.length > 0) {
+          const groupIds = [...new Set(sgaData.map((a: any) => a.group_id))];
+          const { data: groupsData } = await supabase
+            .from('student_groups')
+            .select('id, name')
+            .in('id', groupIds);
+          const groupNameMap: Record<string, string> = {};
+          (groupsData || []).forEach((g: any) => { groupNameMap[g.id] = g.name; });
+          sgaData.forEach((a: any) => {
+            if (!groupsBySchedule[a.schedule_id]) groupsBySchedule[a.schedule_id] = [];
+            if (groupNameMap[a.group_id]) groupsBySchedule[a.schedule_id].push(groupNameMap[a.group_id]);
+          });
+        }
+      }
+
       const rows: ScheduleRow[] = (schedulesData || []).map((s: any) => {
         const teacherId = s.teacher_id || s.classes?.teacher_id;
         return {
@@ -228,6 +254,7 @@ export function Timetable() {
           teacherId: teacherId || '',
           teacherName: teacherId ? teacherMap[teacherId] || '미배정' : '미배정',
           students: studentsByClass[s.class_id] || [],
+          groupNames: groupsBySchedule[s.id] || [],
         };
       });
 
@@ -614,6 +641,16 @@ export function Timetable() {
           {row.teacherName}
         </div>
       )}
+      {row.groupNames && row.groupNames.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1">
+          {row.groupNames.map((gn, i) => (
+            <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0 border-primary/30 text-primary">
+              <FolderOpen className="w-2.5 h-2.5 mr-0.5" />
+              {gn}
+            </Badge>
+          ))}
+        </div>
+      )}
       {row.students.length > 0 && (
         <div className="flex flex-wrap gap-1 items-center">
           <Users className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -749,7 +786,7 @@ export function Timetable() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="day" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="day" className="text-xs sm:text-sm">
               <Calendar className="w-4 h-4 mr-1 hidden sm:inline" />
               요일별
@@ -761,6 +798,10 @@ export function Timetable() {
             <TabsTrigger value="student" className="text-xs sm:text-sm">
               <Users className="w-4 h-4 mr-1 hidden sm:inline" />
               학생별
+            </TabsTrigger>
+            <TabsTrigger value="group" className="text-xs sm:text-sm">
+              <FolderOpen className="w-4 h-4 mr-1 hidden sm:inline" />
+              그룹(반)
             </TabsTrigger>
           </TabsList>
 
@@ -1058,6 +1099,13 @@ export function Timetable() {
                 )}
               </div>
             )}
+          </TabsContent>
+          {/* ── 그룹(반) 뷰 ── */}
+          <TabsContent value="group" className="space-y-6">
+            <StudentGroupManager />
+            <div className="border-t pt-4">
+              <GroupSlotAssignment onDataChange={() => fetchScheduleData()} />
+            </div>
           </TabsContent>
         </Tabs>
       </CardContent>
