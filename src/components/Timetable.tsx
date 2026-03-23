@@ -22,6 +22,7 @@ import { ClassStudentManager } from '@/components/ClassStudentManager';
 import { StudentGroupManager } from '@/components/timetable/StudentGroupManager';
 import { GroupSlotAssignment } from '@/components/timetable/GroupSlotAssignment';
 import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
+import { TimetableMatrixView } from '@/components/timetable/TimetableMatrixView';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: '월', full: '월요일' },
