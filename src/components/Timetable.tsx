@@ -19,6 +19,8 @@ import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, Chevron
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
+import { StudentGroupManager } from '@/components/timetable/StudentGroupManager';
+import { GroupSlotAssignment } from '@/components/timetable/GroupSlotAssignment';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: '월', full: '월요일' },
