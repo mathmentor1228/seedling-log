@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle } from 'lucide-react';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle, List, LayoutGrid, Thermometer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
