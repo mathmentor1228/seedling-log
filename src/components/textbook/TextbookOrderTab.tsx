@@ -498,30 +498,8 @@ export function TextbookOrderTab() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-medium text-foreground">교재명 *</label>
-                    <Input value={name} onChange={e => setName(e.target.value)} placeholder="[개념]교재명_중1" />
+                    <Input value={name} onChange={e => { setName(e.target.value); checkDuplicates(e.target.value); setDuplicateWarningShown(false); }} placeholder="[개념]교재명_중1" />
                     <p className="text-[10px] text-muted-foreground mt-0.5">[개념/유형/심화/응용/내신/독해/문법/듣기/기타]교재명_학년/레벨명</p>
-                    {/* Show existing stock info */}
-                    {name.trim().length >= 2 && (() => {
-                      const matchingGroups = groups.filter(g => 
-                        g.textbook_name.toLowerCase().includes(name.trim().toLowerCase())
-                      );
-                      if (matchingGroups.length === 0) return null;
-                      return (
-                        <div className="mt-1 space-y-1">
-                          {matchingGroups.map(g => {
-                            const remaining = g.totalQty - g.totalDistributed;
-                            return (
-                              <div key={g.textbook_name} className="text-[11px] px-2 py-1 rounded bg-muted border border-border">
-                                <span className="font-medium text-foreground">{g.textbook_name}</span>
-                                <span className="text-muted-foreground ml-1">
-                                  — 기존 {g.totalQty}권 (배부 {g.totalDistributed}권 / 재고 {remaining}권)
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground">과목</label>
