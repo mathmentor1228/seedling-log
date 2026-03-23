@@ -15,12 +15,13 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen } from 'lucide-react';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
 import { StudentGroupManager } from '@/components/timetable/StudentGroupManager';
 import { GroupSlotAssignment } from '@/components/timetable/GroupSlotAssignment';
+import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: '월', full: '월요일' },
@@ -51,6 +52,13 @@ const SUBJECT_COLORS: Record<string, string> = {
 
 const STUDENT_PAGE_SIZE = 50;
 
+interface Classroom {
+  id: string;
+  name: string;
+  manager_name: string;
+  capacity: number;
+}
+
 interface ScheduleRow {
   scheduleId: string;
   classId: string;
@@ -63,6 +71,8 @@ interface ScheduleRow {
   teacherName: string;
   students: { id: string; name: string }[];
   groupNames?: string[];
+  classroomId?: string | null;
+  classroomName?: string;
 }
 
 interface Teacher {
@@ -95,6 +105,7 @@ export function Timetable() {
   const [examPrepRows, setExamPrepRows] = useState<ScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -113,7 +124,7 @@ export function Timetable() {
     teacherId: string;
     dayOfWeek: number;
   } | null>(null);
-  const [editForm, setEditForm] = useState({ className: '', startTime: '', endTime: '', teacherId: '' });
+  const [editForm, setEditForm] = useState({ className: '', startTime: '', endTime: '', teacherId: '', classroomId: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
 
@@ -130,7 +141,10 @@ export function Timetable() {
 
   useEffect(() => {
     fetchScheduleData();
-    if (isAdminUser || isAssistantUser) fetchAllTeachers();
+    if (isAdminUser || isAssistantUser) {
+      fetchAllTeachers();
+      fetchClassrooms();
+    }
   }, [user, isAdminUser]);
 
   useEffect(() => {
@@ -151,7 +165,7 @@ export function Timetable() {
       let scheduleQuery = supabase
         .from('class_schedules')
         .select(`
-          id, class_id, day_of_week, start_time, end_time, teacher_id, is_active,
+          id, class_id, day_of_week, start_time, end_time, teacher_id, is_active, classroom_id,
           classes (id, name, subject, teacher_id)
         `)
         .eq('is_active', true);
@@ -241,6 +255,11 @@ export function Timetable() {
         }
       }
 
+      // Fetch classrooms for mapping
+      const { data: classroomsData } = await supabase.from('classrooms').select('id, name').eq('is_active', true);
+      const classroomNameMap: Record<string, string> = {};
+      (classroomsData || []).forEach((cr: any) => { classroomNameMap[cr.id] = cr.name; });
+
       const rows: ScheduleRow[] = (schedulesData || []).map((s: any) => {
         const teacherId = s.teacher_id || s.classes?.teacher_id;
         return {
@@ -255,6 +274,8 @@ export function Timetable() {
           teacherName: teacherId ? teacherMap[teacherId] || '미배정' : '미배정',
           students: studentsByClass[s.class_id] || [],
           groupNames: groupsBySchedule[s.id] || [],
+          classroomId: s.classroom_id || null,
+          classroomName: s.classroom_id ? classroomNameMap[s.classroom_id] || '' : '',
         };
       });
 
@@ -371,6 +392,15 @@ export function Timetable() {
     }
   }
 
+  async function fetchClassrooms() {
+    try {
+      const { data } = await supabase.from('classrooms').select('id, name, manager_name, capacity').eq('is_active', true).order('sort_order');
+      setClassrooms((data || []) as Classroom[]);
+    } catch (e) {
+      console.error('Error fetching classrooms:', e);
+    }
+  }
+
   async function handleEditSave() {
     if (!editSlot) return;
     setEditSaving(true);
@@ -387,15 +417,17 @@ export function Timetable() {
         }
       }
 
-      // Update schedule time if changed (teacher_id changes only for admin/assistant)
+      // Update schedule time/classroom if changed
       const updates: Record<string, any> = {};
       if (editForm.startTime !== editSlot.startTime.slice(0, 5)) updates.start_time = editForm.startTime;
       if (editForm.endTime !== editSlot.endTime.slice(0, 5)) updates.end_time = editForm.endTime;
+      if (editForm.classroomId !== (editSlot as any).classroomId) {
+        updates.classroom_id = editForm.classroomId || null;
+      }
       
-      // Only process teacher change for admin/assistant (teachers don't see the dropdown)
+      // Only process teacher change for admin/assistant
       if ((isAdminUser || isAssistantUser) && editForm.teacherId !== editSlot.teacherId) {
         updates.teacher_id = editForm.teacherId;
-        // Also update class teacher_id
         const { error: classTeacherErr } = await supabase.from('classes').update({ teacher_id: editForm.teacherId }).eq('id', editSlot.classId);
         if (classTeacherErr) {
           console.error('[TIMETABLE_EDIT] class teacher update error:', classTeacherErr);
@@ -435,12 +467,14 @@ export function Timetable() {
       endTime: row.endTime,
       teacherId: row.teacherId,
       dayOfWeek: row.dayOfWeek,
-    });
+      classroomId: row.classroomId || '',
+    } as any);
     setEditForm({
       className: row.className,
       startTime: row.startTime.slice(0, 5),
       endTime: row.endTime.slice(0, 5),
       teacherId: row.teacherId,
+      classroomId: row.classroomId || '',
     });
   }
 
@@ -595,16 +629,45 @@ export function Timetable() {
     return map;
   }, [studentScheduleRows]);
 
+  // ── Capacity slots data for dashboard ──
+  const capacitySlots = useMemo(() => {
+    return allRows.map(r => ({
+      scheduleId: r.scheduleId,
+      classroomId: r.classroomId || null,
+      dayOfWeek: r.dayOfWeek,
+      startTime: r.startTime,
+      endTime: r.endTime,
+      studentCount: r.students.length,
+    }));
+  }, [allRows]);
+
+  // Check if a slot is over capacity
+  const getSlotCapacityStatus = useCallback((row: ScheduleRow): { isOver: boolean; current: number; max: number } | null => {
+    if (!row.classroomId) return null;
+    const room = classrooms.find(c => c.id === row.classroomId);
+    if (!room) return null;
+    // Sum all students in same classroom + same day + overlapping time
+    const sameRoomSlots = allRows.filter(r =>
+      r.classroomId === row.classroomId &&
+      r.dayOfWeek === row.dayOfWeek &&
+      r.startTime < row.endTime && row.startTime < r.endTime
+    );
+    const totalStudents = sameRoomSlots.reduce((sum, r) => sum + r.students.length, 0);
+    return { isOver: totalStudents > room.capacity, current: totalStudents, max: room.capacity };
+  }, [classrooms, allRows]);
+
   // ── Render helpers ──
   const isExamPrepRow = (row: ScheduleRow) => row.scheduleId.startsWith('exam-');
 
   const SlotCard = ({ row, showTeacher = false, editable = false }: { row: ScheduleRow; showTeacher?: boolean; editable?: boolean }) => {
     const isExamPrep = isExamPrepRow(row);
+    const capStatus = getSlotCapacityStatus(row);
     return (
     <div
       className={cn(
         'border-l-4 rounded-lg bg-card p-3 shadow-sm hover:shadow-md transition-shadow',
-        isExamPrep ? 'border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20' : DAY_ACCENT[row.dayOfWeek],
+        isExamPrep ? 'border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20' : 
+        capStatus?.isOver ? 'border-l-destructive bg-destructive/5' : DAY_ACCENT[row.dayOfWeek],
         editable && !isExamPrep && 'cursor-pointer ring-transparent hover:ring-1 hover:ring-primary/30'
       )}
       onClick={editable && !isExamPrep ? () => { setEditClassId(row.classId); setEditClassName(row.className); } : undefined}
@@ -635,12 +698,29 @@ export function Timetable() {
           )}
         </div>
       </div>
-      {showTeacher && (
-        <div className="text-xs text-muted-foreground mb-2">
-          <User className="w-3 h-3 inline mr-1" />
-          {row.teacherName}
-        </div>
-      )}
+      {/* Classroom & teacher info */}
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        {showTeacher && (
+          <span className="text-xs text-muted-foreground">
+            <User className="w-3 h-3 inline mr-0.5" />
+            {row.teacherName}
+          </span>
+        )}
+        {row.classroomName && (
+          <span className="text-xs text-muted-foreground">
+            <Building2 className="w-3 h-3 inline mr-0.5" />
+            {row.classroomName}
+          </span>
+        )}
+        {capStatus && (
+          <span className={cn('text-[10px] font-semibold', capStatus.isOver ? 'text-destructive' : 'text-muted-foreground')}>
+            {capStatus.current}/{capStatus.max}명
+            {capStatus.isOver && (
+              <AlertTriangle className="w-3 h-3 inline ml-0.5 text-destructive" />
+            )}
+          </span>
+        )}
+      </div>
       {row.groupNames && row.groupNames.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-1">
           {row.groupNames.map((gn, i) => (
@@ -807,6 +887,14 @@ export function Timetable() {
 
           {/* ── 요일별 뷰 ── */}
           <TabsContent value="day" className="space-y-4">
+            {/* Capacity Dashboard */}
+            {classrooms.length > 0 && (
+              <ClassroomCapacityDashboard
+                classrooms={classrooms}
+                slots={capacitySlots}
+                selectedDay={selectedDayFilter !== 'all' ? parseInt(selectedDayFilter) : today}
+              />
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
                 <SelectTrigger className="w-[160px]">
@@ -1171,19 +1259,38 @@ export function Timetable() {
               </div>
 
               {(isAdminUser || isAssistantUser) && (
-                <div className="space-y-2">
-                  <Label>담당 선생님</Label>
-                  <Select value={editForm.teacherId} onValueChange={(v) => setEditForm(f => ({ ...f, teacherId: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="선생님 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allTeachers.map(t => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label>담당 선생님</Label>
+                    <Select value={editForm.teacherId} onValueChange={(v) => setEditForm(f => ({ ...f, teacherId: v }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="선생님 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allTeachers.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>강의실</Label>
+                    <Select value={editForm.classroomId || 'none'} onValueChange={(v) => setEditForm(f => ({ ...f, classroomId: v === 'none' ? '' : v }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="강의실 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">미지정</SelectItem>
+                        {classrooms.map(cr => (
+                          <SelectItem key={cr.id} value={cr.id}>
+                            {cr.name} ({cr.manager_name}, 정원 {cr.capacity}명)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
 
               <div className="flex justify-end gap-2 pt-2">
