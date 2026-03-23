@@ -165,7 +165,7 @@ export function Timetable() {
       let scheduleQuery = supabase
         .from('class_schedules')
         .select(`
-          id, class_id, day_of_week, start_time, end_time, teacher_id, is_active,
+          id, class_id, day_of_week, start_time, end_time, teacher_id, is_active, classroom_id,
           classes (id, name, subject, teacher_id)
         `)
         .eq('is_active', true);
