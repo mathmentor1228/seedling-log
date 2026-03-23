@@ -887,6 +887,14 @@ export function Timetable() {
 
           {/* ── 요일별 뷰 ── */}
           <TabsContent value="day" className="space-y-4">
+            {/* Capacity Dashboard */}
+            {classrooms.length > 0 && (
+              <ClassroomCapacityDashboard
+                classrooms={classrooms}
+                slots={capacitySlots}
+                selectedDay={selectedDayFilter !== 'all' ? parseInt(selectedDayFilter) : today}
+              />
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
                 <SelectTrigger className="w-[160px]">
