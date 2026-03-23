@@ -376,7 +376,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
               checked_by: user!.id,
             })
             .eq('student_id', record.student_id)
-            .eq('subject', record.subject)
+            .eq('subject', record.subject as any)
             .eq('check_status', 'unchecked')
             .lt('assigned_date', searchDate);
 
