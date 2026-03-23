@@ -833,6 +833,43 @@ export function TextbookOrderTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Duplicate textbook warning dialog */}
+      <Dialog open={showDuplicateAlert} onOpenChange={setShowDuplicateAlert}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-warning">
+              <AlertTriangle className="w-5 h-5" />유사 교재 재고 확인
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-foreground">
+              입력하신 교재명과 유사한 교재가 이미 등록되어 있습니다. 재고를 확인하셨나요?
+            </p>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {duplicateMatches.map(g => (
+                <div key={g.textbook_name} className="text-[12px] px-3 py-2 rounded-md bg-muted border border-border">
+                  <span className="font-medium text-foreground">{g.textbook_name}</span>
+                  <span className="text-muted-foreground ml-1">({g.subject})</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowDuplicateAlert(false)}>
+              취소
+            </Button>
+            <Button onClick={() => {
+              setShowDuplicateAlert(false);
+              setDuplicateWarningShown(true);
+              // Re-trigger create after confirming
+              setTimeout(() => handleCreate(), 100);
+            }}>
+              확인했습니다, 신청하기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
