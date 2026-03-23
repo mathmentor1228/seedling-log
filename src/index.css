@@ -249,11 +249,28 @@
 }
 
 .math-renderer .katex {
-  font-size: 1em;
+  font-size: 1.05em;
 }
 
 @media (max-width: 640px) {
   .math-renderer .katex {
     font-size: 0.9em;
   }
+}
+
+/* ── ㄱㄴㄷ Boxed items (global) ── */
+.mr-boxed-item {
+  display: block;
+  border: 1.5px solid hsl(var(--border));
+  border-radius: 6px;
+  padding: 5px 12px;
+  margin: 4px 0;
+  background: hsl(var(--muted) / 0.4);
+  font-size: 0.925em;
+  line-height: 1.7;
+}
+.mr-boxed-marker {
+  font-weight: 800;
+  color: hsl(var(--primary));
+  margin-right: 4px;
 }
