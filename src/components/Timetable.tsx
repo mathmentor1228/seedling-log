@@ -1065,6 +1065,13 @@ export function Timetable() {
               </div>
             )}
           </TabsContent>
+          {/* ── 그룹(반) 뷰 ── */}
+          <TabsContent value="group" className="space-y-6">
+            <StudentGroupManager />
+            <div className="border-t pt-4">
+              <GroupSlotAssignment onDataChange={() => fetchScheduleData()} />
+            </div>
+          </TabsContent>
         </Tabs>
       </CardContent>
 
