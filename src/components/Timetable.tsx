@@ -698,12 +698,29 @@ export function Timetable() {
           )}
         </div>
       </div>
-      {showTeacher && (
-        <div className="text-xs text-muted-foreground mb-2">
-          <User className="w-3 h-3 inline mr-1" />
-          {row.teacherName}
-        </div>
-      )}
+      {/* Classroom & teacher info */}
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        {showTeacher && (
+          <span className="text-xs text-muted-foreground">
+            <User className="w-3 h-3 inline mr-0.5" />
+            {row.teacherName}
+          </span>
+        )}
+        {row.classroomName && (
+          <span className="text-xs text-muted-foreground">
+            <Building2 className="w-3 h-3 inline mr-0.5" />
+            {row.classroomName}
+          </span>
+        )}
+        {capStatus && (
+          <span className={cn('text-[10px] font-semibold', capStatus.isOver ? 'text-destructive' : 'text-muted-foreground')}>
+            {capStatus.current}/{capStatus.max}명
+            {capStatus.isOver && (
+              <AlertTriangle className="w-3 h-3 inline ml-0.5 text-destructive" />
+            )}
+          </span>
+        )}
+      </div>
       {row.groupNames && row.groupNames.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-1">
           {row.groupNames.map((gn, i) => (
