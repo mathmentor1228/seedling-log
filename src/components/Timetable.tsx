@@ -641,6 +641,16 @@ export function Timetable() {
           {row.teacherName}
         </div>
       )}
+      {row.groupNames && row.groupNames.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-1">
+          {row.groupNames.map((gn, i) => (
+            <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0 border-primary/30 text-primary">
+              <FolderOpen className="w-2.5 h-2.5 mr-0.5" />
+              {gn}
+            </Badge>
+          ))}
+        </div>
+      )}
       {row.students.length > 0 && (
         <div className="flex flex-wrap gap-1 items-center">
           <Users className="w-3 h-3 text-muted-foreground shrink-0" />
