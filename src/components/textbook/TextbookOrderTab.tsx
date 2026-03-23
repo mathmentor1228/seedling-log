@@ -134,18 +134,36 @@ export function TextbookOrderTab() {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, role, fetchOrders]);
 
-  // Check for duplicate textbooks when name changes
+  // Check for duplicate textbooks when name changes (use orders directly to avoid forward reference)
   const checkDuplicates = useCallback((inputName: string) => {
     if (inputName.trim().length < 2) {
       setDuplicateMatches([]);
       return;
     }
-    const matches = groups.filter(g =>
-      g.textbook_name.toLowerCase().includes(inputName.trim().toLowerCase()) ||
-      inputName.trim().toLowerCase().includes(g.textbook_name.toLowerCase())
-    );
+    const lowerInput = inputName.trim().toLowerCase();
+    const matchingNames = new Set<string>();
+    orders.forEach(o => {
+      if (o.textbook_name.toLowerCase().includes(lowerInput) || lowerInput.includes(o.textbook_name.toLowerCase())) {
+        matchingNames.add(o.textbook_name);
+      }
+    });
+    // Build lightweight group info for display
+    const matches: TextbookGroup[] = Array.from(matchingNames).map(tName => {
+      const matching = orders.filter(o => o.textbook_name === tName);
+      return {
+        textbook_name: tName,
+        subject: matching[0]?.subject || '',
+        unit_price: matching[0]?.unit_price || 0,
+        grade: matching[0]?.grade || null,
+        category: matching[0]?.category || null,
+        orders: matching,
+        totalQty: matching.reduce((s, o) => s + o.quantity, 0),
+        totalDistributed: matching.reduce((s, o) => s + (o.distributed_qty || 0), 0),
+        status: matching[0]?.status || '교재신청',
+      };
+    });
     setDuplicateMatches(matches);
-  }, [groups]);
+  }, [orders]);
 
   const handleCreate = async () => {
     if (!name.trim()) { toast.error('교재명을 입력해주세요'); return; }
