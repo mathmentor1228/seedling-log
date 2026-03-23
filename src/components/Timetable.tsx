@@ -629,6 +629,33 @@ export function Timetable() {
     return map;
   }, [studentScheduleRows]);
 
+  // ── Capacity slots data for dashboard ──
+  const capacitySlots = useMemo(() => {
+    return allRows.map(r => ({
+      scheduleId: r.scheduleId,
+      classroomId: r.classroomId || null,
+      dayOfWeek: r.dayOfWeek,
+      startTime: r.startTime,
+      endTime: r.endTime,
+      studentCount: r.students.length,
+    }));
+  }, [allRows]);
+
+  // Check if a slot is over capacity
+  const getSlotCapacityStatus = useCallback((row: ScheduleRow): { isOver: boolean; current: number; max: number } | null => {
+    if (!row.classroomId) return null;
+    const room = classrooms.find(c => c.id === row.classroomId);
+    if (!room) return null;
+    // Sum all students in same classroom + same day + overlapping time
+    const sameRoomSlots = allRows.filter(r =>
+      r.classroomId === row.classroomId &&
+      r.dayOfWeek === row.dayOfWeek &&
+      r.startTime < row.endTime && row.startTime < r.endTime
+    );
+    const totalStudents = sameRoomSlots.reduce((sum, r) => sum + r.students.length, 0);
+    return { isOver: totalStudents > room.capacity, current: totalStudents, max: room.capacity };
+  }, [classrooms, allRows]);
+
   // ── Render helpers ──
   const isExamPrepRow = (row: ScheduleRow) => row.scheduleId.startsWith('exam-');
 
