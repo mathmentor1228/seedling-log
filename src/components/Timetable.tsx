@@ -141,7 +141,10 @@ export function Timetable() {
 
   useEffect(() => {
     fetchScheduleData();
-    if (isAdminUser || isAssistantUser) fetchAllTeachers();
+    if (isAdminUser || isAssistantUser) {
+      fetchAllTeachers();
+      fetchClassrooms();
+    }
   }, [user, isAdminUser]);
 
   useEffect(() => {
