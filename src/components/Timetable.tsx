@@ -392,6 +392,15 @@ export function Timetable() {
     }
   }
 
+  async function fetchClassrooms() {
+    try {
+      const { data } = await supabase.from('classrooms').select('id, name, manager_name, capacity').eq('is_active', true).order('sort_order');
+      setClassrooms((data || []) as Classroom[]);
+    } catch (e) {
+      console.error('Error fetching classrooms:', e);
+    }
+  }
+
   async function handleEditSave() {
     if (!editSlot) return;
     setEditSaving(true);
