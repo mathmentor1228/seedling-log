@@ -666,7 +666,8 @@ export function Timetable() {
     <div
       className={cn(
         'border-l-4 rounded-lg bg-card p-3 shadow-sm hover:shadow-md transition-shadow',
-        isExamPrep ? 'border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20' : DAY_ACCENT[row.dayOfWeek],
+        isExamPrep ? 'border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20' : 
+        capStatus?.isOver ? 'border-l-destructive bg-destructive/5' : DAY_ACCENT[row.dayOfWeek],
         editable && !isExamPrep && 'cursor-pointer ring-transparent hover:ring-1 hover:ring-primary/30'
       )}
       onClick={editable && !isExamPrep ? () => { setEditClassId(row.classId); setEditClassName(row.className); } : undefined}
