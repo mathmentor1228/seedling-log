@@ -1259,7 +1259,7 @@ export function Timetable() {
               </div>
 
               {(isAdminUser || isAssistantUser) && (
-                <div className="space-y-2">
+                 <div className="space-y-2">
                   <Label>담당 선생님</Label>
                   <Select value={editForm.teacherId} onValueChange={(v) => setEditForm(f => ({ ...f, teacherId: v }))}>
                     <SelectTrigger>
@@ -1268,6 +1268,23 @@ export function Timetable() {
                     <SelectContent>
                       {allTeachers.map(t => (
                         <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>강의실</Label>
+                  <Select value={editForm.classroomId || 'none'} onValueChange={(v) => setEditForm(f => ({ ...f, classroomId: v === 'none' ? '' : v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="강의실 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">미지정</SelectItem>
+                      {classrooms.map(cr => (
+                        <SelectItem key={cr.id} value={cr.id}>
+                          {cr.name} ({cr.manager_name}, 정원 {cr.capacity}명)
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
