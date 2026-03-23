@@ -313,7 +313,7 @@ ${studentPageUrl}
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v && !created) resetForm(); onOpenChange(v); }}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -505,9 +505,14 @@ ${studentPageUrl}
               </Button>
             </div>
 
-            <Button onClick={() => { resetForm(); onOpenChange(false); }} variant="ghost" className="w-full">
-              닫기
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => { resetForm(); onOpenChange(false); }} variant="ghost" className="flex-1">
+                닫기 (초기화)
+              </Button>
+              <Button onClick={() => onOpenChange(false)} variant="outline" className="flex-1">
+                닫기 (보존)
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>
