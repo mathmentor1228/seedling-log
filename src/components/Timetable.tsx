@@ -218,6 +218,29 @@ export function Timetable() {
         }
       }
 
+      // Fetch group assignments for schedules
+      const scheduleIds = (schedulesData || []).map((s: any) => s.id);
+      let groupsBySchedule: Record<string, string[]> = {};
+      if (scheduleIds.length > 0) {
+        const { data: sgaData } = await supabase
+          .from('schedule_group_assignments')
+          .select('schedule_id, group_id')
+          .in('schedule_id', scheduleIds);
+        if (sgaData && sgaData.length > 0) {
+          const groupIds = [...new Set(sgaData.map((a: any) => a.group_id))];
+          const { data: groupsData } = await supabase
+            .from('student_groups')
+            .select('id, name')
+            .in('id', groupIds);
+          const groupNameMap: Record<string, string> = {};
+          (groupsData || []).forEach((g: any) => { groupNameMap[g.id] = g.name; });
+          sgaData.forEach((a: any) => {
+            if (!groupsBySchedule[a.schedule_id]) groupsBySchedule[a.schedule_id] = [];
+            if (groupNameMap[a.group_id]) groupsBySchedule[a.schedule_id].push(groupNameMap[a.group_id]);
+          });
+        }
+      }
+
       const rows: ScheduleRow[] = (schedulesData || []).map((s: any) => {
         const teacherId = s.teacher_id || s.classes?.teacher_id;
         return {
@@ -231,6 +254,7 @@ export function Timetable() {
           teacherId: teacherId || '',
           teacherName: teacherId ? teacherMap[teacherId] || '미배정' : '미배정',
           students: studentsByClass[s.class_id] || [],
+          groupNames: groupsBySchedule[s.id] || [],
         };
       });
 
