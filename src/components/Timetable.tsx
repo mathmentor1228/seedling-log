@@ -105,6 +105,7 @@ export function Timetable() {
   const [examPrepRows, setExamPrepRows] = useState<ScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
