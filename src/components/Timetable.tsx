@@ -52,6 +52,13 @@ const SUBJECT_COLORS: Record<string, string> = {
 
 const STUDENT_PAGE_SIZE = 50;
 
+interface Classroom {
+  id: string;
+  name: string;
+  manager_name: string;
+  capacity: number;
+}
+
 interface ScheduleRow {
   scheduleId: string;
   classId: string;
@@ -64,6 +71,8 @@ interface ScheduleRow {
   teacherName: string;
   students: { id: string; name: string }[];
   groupNames?: string[];
+  classroomId?: string | null;
+  classroomName?: string;
 }
 
 interface Teacher {
