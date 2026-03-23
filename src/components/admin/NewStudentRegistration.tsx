@@ -255,6 +255,10 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
       ? `\n📱 수업 관리 페이지\n• 학부모 수업관리: ${parentPortalUrl}\n`
       : '';
 
+    const tuitionSection = tuitionFee
+      ? `\n📍원비안내\n\n${schoolLevel}등 ${subjectsText} ${tuitionFee}\n\n신한 110-265-698329(황은지)\n\n카드결제 가능합니다.\n\n앱결제도 가능합니다.`
+      : '';
+
     return `안녕하세요, 학부모님.
 
 ${studentName} 학생의 등록이 완료되었습니다.
@@ -266,16 +270,7 @@ ${studentName} 학생의 등록이 완료되었습니다.
 • 수업 시간: ${classTime || '-'}
 ${classroomSection}${portalSection}
 준비물 및 기타 안내사항은 첫 수업 시 안내드리겠습니다.
-
-📍원비안내
-
-중등 영어/수학 45만원
-
-신한 110-265-698329(황은지)
-
-카드결제 가능합니다.
-
-앱결제도 가능합니다.
+${tuitionSection}
 
 믿고 맡겨주신만큼,
 세심하게 신경쓰겠습니다.
