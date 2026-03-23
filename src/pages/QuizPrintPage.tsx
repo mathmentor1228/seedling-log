@@ -955,8 +955,8 @@ export default function QuizPrintPage() {
         }
         .qp-question-body { flex: 1; min-width: 0; padding-top: 3px; }
         .qp-question-text {
-          font-size: 12px;
-          line-height: 1.65;
+          font-size: 13px;
+          line-height: 1.7;
           color: #1e293b;
         }
         .qp-source {
@@ -999,12 +999,33 @@ export default function QuizPrintPage() {
           vertical-align: middle;
         }
 
+        /* ── ㄱㄴㄷ Boxed items ── */
+        .mr-boxed-item {
+          display: block;
+          border: 1.5px solid #cbd5e1;
+          border-radius: 5px;
+          padding: 4px 10px;
+          margin: 4px 0;
+          background: #f8fafc;
+          font-size: 12.5px;
+          line-height: 1.7;
+        }
+        .mr-boxed-marker {
+          font-weight: 800;
+          color: #3b82f6;
+          margin-right: 4px;
+        }
+
         /* ── Formula visual separation — display math gets extra spacing & weight ── */
         .qp-question-text .katex-display {
-          margin: 6px 0 4px !important;
+          margin: 8px 0 6px !important;
         }
         .qp-question-text .katex {
+          font-size: 1.15em !important;
           font-weight: 500;
+        }
+        .qp-answer-value .katex {
+          font-size: 1.1em !important;
         }
 
         /* ── Smart choices ── */
