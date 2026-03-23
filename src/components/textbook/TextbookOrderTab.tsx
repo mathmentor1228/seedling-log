@@ -88,6 +88,11 @@ export function TextbookOrderTab() {
   // Expanded groups
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
+  // Duplicate check state
+  const [duplicateWarningShown, setDuplicateWarningShown] = useState(false);
+  const [showDuplicateAlert, setShowDuplicateAlert] = useState(false);
+  const [duplicateMatches, setDuplicateMatches] = useState<TextbookGroup[]>([]);
+
   useEffect(() => {
     if (user) {
       supabase.from('profiles').select('full_name').eq('id', user.id).single()
