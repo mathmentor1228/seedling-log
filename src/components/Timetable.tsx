@@ -15,13 +15,14 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle } from 'lucide-react';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle, List, LayoutGrid, Thermometer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
 import { StudentGroupManager } from '@/components/timetable/StudentGroupManager';
 import { GroupSlotAssignment } from '@/components/timetable/GroupSlotAssignment';
 import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
+import { TimetableMatrixView } from '@/components/timetable/TimetableMatrixView';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: '월', full: '월요일' },
@@ -110,6 +111,8 @@ export function Timetable() {
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'time' | 'teacher_time'>('time');
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'congestion'>('list');
+  const [matrixDay, setMatrixDay] = useState<number>(new Date().getDay());
   const [editClassId, setEditClassId] = useState<string | null>(null);
   const [editClassName, setEditClassName] = useState('');
 
@@ -865,6 +868,47 @@ export function Timetable() {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {/* View Mode Selector */}
+        <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit mb-4">
+          <button
+            onClick={() => setViewMode('list')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+              viewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <List className="w-3.5 h-3.5" /> 리스트 뷰
+          </button>
+          <button
+            onClick={() => setViewMode('timeline')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+              viewMode === 'timeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" /> 타임라인 뷰
+          </button>
+          <button
+            onClick={() => setViewMode('congestion')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+              viewMode === 'congestion' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Thermometer className="w-3.5 h-3.5" /> 혼잡도 뷰
+          </button>
+        </div>
+
+        {viewMode === 'timeline' || viewMode === 'congestion' ? (
+          <TimetableMatrixView
+            scheduleRows={allRows}
+            classrooms={classrooms}
+            selectedDay={matrixDay}
+            onDayChange={setMatrixDay}
+            mode={viewMode}
+            onDataChange={fetchScheduleData}
+          />
+        ) : (
         <Tabs defaultValue="day" className="space-y-4">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="day" className="text-xs sm:text-sm">
@@ -1196,6 +1240,7 @@ export function Timetable() {
             </div>
           </TabsContent>
         </Tabs>
+        )}
       </CardContent>
 
       {/* Student management dialog */}
