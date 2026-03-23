@@ -124,7 +124,7 @@ export function Timetable() {
     teacherId: string;
     dayOfWeek: number;
   } | null>(null);
-  const [editForm, setEditForm] = useState({ className: '', startTime: '', endTime: '', teacherId: '' });
+  const [editForm, setEditForm] = useState({ className: '', startTime: '', endTime: '', teacherId: '', classroomId: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
 
