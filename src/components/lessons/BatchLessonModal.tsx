@@ -331,6 +331,59 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         if (updateError) throw updateError;
       }
 
+      // BATCH-HW-SYNC-V1: When homework_status is set to completed/partial/not_done,
+      // also update the linked homework_assignments.check_status
+      if (activeFields.has('homework_status')) {
+        const statusToResult: Record<string, string> = {
+          completed: 'completed',
+          partial: 'partial',
+          not_done: 'not_done',
+        };
+
+        for (const id of ids) {
+          const record = drafts.find(d => d.id === id);
+          if (!record) continue;
+
+          const effectiveStatus = (usePerStudentHomework)
+            ? (perStudentHomework[id] || homeworkStatus)
+            : homeworkStatus;
+
+          if (effectiveStatus === 'none_assigned') continue;
+
+          const resultValue = statusToResult[effectiveStatus] || 'completed';
+
+          // Update all unchecked homework_assignments linked to this lesson record
+          const { error: hwSyncErr } = await supabase
+            .from('homework_assignments')
+            .update({
+              check_status: 'checked',
+              result: resultValue,
+              checked_at: now,
+              checked_by: user!.id,
+            })
+            .eq('lesson_record_id', id)
+            .eq('check_status', 'unchecked');
+
+          if (hwSyncErr) console.error('hw sync error:', hwSyncErr);
+
+          // Also update unchecked homework assigned before this lesson date for same student+subject
+          const { error: hwPrevErr } = await supabase
+            .from('homework_assignments')
+            .update({
+              check_status: 'checked',
+              result: resultValue,
+              checked_at: now,
+              checked_by: user!.id,
+            })
+            .eq('student_id', record.student_id)
+            .eq('subject', record.subject)
+            .eq('check_status', 'unchecked')
+            .lt('assigned_date', searchDate);
+
+          if (hwPrevErr) console.error('hw prev sync error:', hwPrevErr);
+        }
+      }
+
       // Handle homework assignment if toggled
       if (activeFields.has('homework_items')) {
         const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
