@@ -35,10 +35,27 @@ export function MathRenderer({ text, autoSubBreak = false }: Props) {
     result = result.replace(/\bmath-render(er)?\b/gi, '');
 
     // ── Step 2.5: Normalize recurring-dot notation ──
-    // Convert plain-text dot patterns like 1.6̇ or 0.1̇23̇ into proper LaTeX
-    // Also ensure \dot{} and \overset{\cdot}{} are preserved for KaTeX
-    // Handle Unicode combining dot above (U+0307) → wrap in \dot{}
     result = result.replace(/([0-9])\u0307/g, '\\dot{$1}');
+
+    // ── Step 2.6: Normalize lim notation ──
+    // Convert plain "lim_{...}" or "lim_{ ... }" to proper LaTeX \lim_{...}
+    // Also handle "lim_{n→∞}" with Unicode arrow
+    result = result.replace(/(?<!\\)lim\s*_\s*\{([^}]+)\}/g, '\\lim_{$1}');
+    result = result.replace(/(?<!\\)lim\s*_\s*([a-zA-Z])/g, '\\lim_{$1}');
+    // Convert Unicode arrow → to \to inside math contexts
+    result = result.replace(/→/g, '\\to ');
+    // Convert ∞ to \infty
+    result = result.replace(/∞/g, '\\infty ');
+    // Wrap standalone \lim not inside $ with inline math if needed
+    // Handle "lim" followed by subscript-like patterns without braces
+    result = result.replace(/(?<!\\)lim([_{(])/g, '\\lim$1');
+
+    // ── Step 2.7: Box for ㄱ,ㄴ,ㄷ composite answer items ──
+    // Detect lines starting with ㄱ. / ㄴ. / ㄷ. / ㄹ. and wrap in styled box
+    result = result.replace(
+      /([ㄱㄴㄷㄹ])\.\s*([^\n]*)/g,
+      '<span class="mr-boxed-item"><span class="mr-boxed-marker">$1.</span> $2</span>'
+    );
 
     // ── Step 3: Replace ___BLANK___ with styled blank ──
     result = result.replace(
