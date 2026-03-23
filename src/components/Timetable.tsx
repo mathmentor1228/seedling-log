@@ -417,15 +417,17 @@ export function Timetable() {
         }
       }
 
-      // Update schedule time if changed (teacher_id changes only for admin/assistant)
+      // Update schedule time/classroom if changed
       const updates: Record<string, any> = {};
       if (editForm.startTime !== editSlot.startTime.slice(0, 5)) updates.start_time = editForm.startTime;
       if (editForm.endTime !== editSlot.endTime.slice(0, 5)) updates.end_time = editForm.endTime;
+      if (editForm.classroomId !== (editSlot as any).classroomId) {
+        updates.classroom_id = editForm.classroomId || null;
+      }
       
-      // Only process teacher change for admin/assistant (teachers don't see the dropdown)
+      // Only process teacher change for admin/assistant
       if ((isAdminUser || isAssistantUser) && editForm.teacherId !== editSlot.teacherId) {
         updates.teacher_id = editForm.teacherId;
-        // Also update class teacher_id
         const { error: classTeacherErr } = await supabase.from('classes').update({ teacher_id: editForm.teacherId }).eq('id', editSlot.classId);
         if (classTeacherErr) {
           console.error('[TIMETABLE_EDIT] class teacher update error:', classTeacherErr);
