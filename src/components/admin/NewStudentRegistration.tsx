@@ -505,9 +505,14 @@ ${studentPageUrl}
               </Button>
             </div>
 
-            <Button onClick={() => { resetForm(); onOpenChange(false); }} variant="ghost" className="w-full">
-              닫기
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => { resetForm(); onOpenChange(false); }} variant="ghost" className="flex-1">
+                닫기 (초기화)
+              </Button>
+              <Button onClick={() => onOpenChange(false)} variant="outline" className="flex-1">
+                닫기 (보존)
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>
