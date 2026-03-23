@@ -751,7 +751,7 @@ export function Timetable() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="day" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="day" className="text-xs sm:text-sm">
               <Calendar className="w-4 h-4 mr-1 hidden sm:inline" />
               요일별
@@ -763,6 +763,10 @@ export function Timetable() {
             <TabsTrigger value="student" className="text-xs sm:text-sm">
               <Users className="w-4 h-4 mr-1 hidden sm:inline" />
               학생별
+            </TabsTrigger>
+            <TabsTrigger value="group" className="text-xs sm:text-sm">
+              <FolderOpen className="w-4 h-4 mr-1 hidden sm:inline" />
+              그룹(반)
             </TabsTrigger>
           </TabsList>
 
