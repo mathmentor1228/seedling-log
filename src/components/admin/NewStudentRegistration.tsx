@@ -279,6 +279,10 @@ ${tuitionSection}
 
   const generateStudentMessage = () => {
     const studentPageUrl = `${window.location.origin}/student`;
+    const classroomLines = getClassroomInfo();
+    const classroomSection = classroomLines.length > 0
+      ? `\n🏫 강의실 안내\n${classroomLines.join('\n')}\n`
+      : '';
 
     return `안녕 ${studentName}!
 
@@ -287,7 +291,7 @@ ${tuitionSection}
 • 담당 선생님: ${assigneeText}
 • 수업 시작일: ${startDate ? format(startDate, 'yyyy년 M월 d일 (EEE)', { locale: ko }) : '-'}
 • 수업 시간: ${classTime || '-'}
-
+${classroomSection}
 📱 학생 로그인 페이지
 ${studentPageUrl}
 
