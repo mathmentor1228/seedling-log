@@ -368,14 +368,6 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
     return `${day} ${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)} ${s.className} (${s.teacherName})`;
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   // Current assignments grouped by group
   const assignmentsByGroup = useMemo(() => {
     const map: Record<string, { group: GroupInfo; slots: { assignment: GroupAssignment; schedule: ScheduleSlot; exceptions: GroupException[] }[] }> = {};
@@ -389,6 +381,15 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
     });
     return map;
   }, [assignments, groups, schedules, exceptions]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-4">
