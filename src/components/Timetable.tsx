@@ -255,6 +255,11 @@ export function Timetable() {
         }
       }
 
+      // Fetch classrooms for mapping
+      const { data: classroomsData } = await supabase.from('classrooms').select('id, name').eq('is_active', true);
+      const classroomNameMap: Record<string, string> = {};
+      (classroomsData || []).forEach((cr: any) => { classroomNameMap[cr.id] = cr.name; });
+
       const rows: ScheduleRow[] = (schedulesData || []).map((s: any) => {
         const teacherId = s.teacher_id || s.classes?.teacher_id;
         return {
@@ -269,6 +274,8 @@ export function Timetable() {
           teacherName: teacherId ? teacherMap[teacherId] || '미배정' : '미배정',
           students: studentsByClass[s.class_id] || [],
           groupNames: groupsBySchedule[s.id] || [],
+          classroomId: s.classroom_id || null,
+          classroomName: s.classroom_id ? classroomNameMap[s.classroom_id] || '' : '',
         };
       });
 
