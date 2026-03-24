@@ -320,10 +320,10 @@ export function Timetable() {
     try {
       const todayStr = new Date().toISOString().split('T')[0];
       // Fetch courses with confirmed/auto_confirmed enrollments that have future sessions
-      let courseQuery = supabase.from('exam_prep_courses').select('id, subject, teacher_id, title, school_name');
-      if (!isAdminUser && !isAssistantUser && user) {
-        courseQuery = courseQuery.eq('teacher_id', user.id);
-      }
+      const courseQuery = supabase
+        .from('exam_prep_courses')
+        .select('id, subject, teacher_id, title, school_name')
+        .is('deleted_at', null);
       const { data: courses } = await courseQuery;
       if (!courses || courses.length === 0) { setExamPrepRows([]); return; }
 
@@ -933,24 +933,24 @@ export function Timetable() {
           />
         ) : (
         <Tabs defaultValue="day" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="day" className="text-xs sm:text-sm">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-5">
+            <TabsTrigger value="day" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
               <Calendar className="w-4 h-4 mr-1 hidden sm:inline" />
               요일별
             </TabsTrigger>
-            <TabsTrigger value="teacher" className="text-xs sm:text-sm">
+            <TabsTrigger value="teacher" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
               <User className="w-4 h-4 mr-1 hidden sm:inline" />
               선생님별
             </TabsTrigger>
-            <TabsTrigger value="student" className="text-xs sm:text-sm">
+            <TabsTrigger value="student" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
               <Users className="w-4 h-4 mr-1 hidden sm:inline" />
               학생별
             </TabsTrigger>
-            <TabsTrigger value="group" className="text-xs sm:text-sm">
+            <TabsTrigger value="group" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
               <FolderOpen className="w-4 h-4 mr-1 hidden sm:inline" />
               그룹(반)
             </TabsTrigger>
-            <TabsTrigger value="create" className="text-xs sm:text-sm">
+            <TabsTrigger value="create" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
               <Pencil className="w-4 h-4 mr-1 hidden sm:inline" />
               수업 만들기
             </TabsTrigger>
