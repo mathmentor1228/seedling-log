@@ -1268,6 +1268,13 @@ export function Timetable() {
               <GroupSlotAssignment onDataChange={() => fetchScheduleData()} />
             </div>
           </TabsContent>
+
+          {/* ── 수업 만들기 (선생님 전용) ── */}
+          {!isAdminUser && !isAssistantUser && (
+            <TabsContent value="create" className="space-y-4">
+              <TeacherScheduleCreator />
+            </TabsContent>
+          )}
         </Tabs>
         )}
       </CardContent>
