@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle2, Ban, Copy, Clock, MessageCircle, ChevronDown, BookOpen, Send } from 'lucide-react';
+import { Loader2, CheckCircle2, Ban, Copy, Clock, MessageCircle, ChevronDown, BookOpen, Send, ShoppingBag } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
@@ -176,6 +176,18 @@ export function TextbookPaymentTab() {
     fetchData();
   };
 
+  const handleSelfPurchase = async (dist: Distribution) => {
+    const { error } = await supabase.from('textbook_distributions').update({
+      payment_status: '개별구매',
+      paid_at: new Date().toISOString(),
+      confirmed_by: userName,
+      depositor_name: null,
+    } as any).eq('id', dist.id);
+    if (error) { toast.error('처리 실패'); return; }
+    toast.success(`${dist.student_name} 개별구매 처리되었습니다`);
+    fetchData();
+  };
+
   const handleRevertPayment = async (dist: Distribution) => {
     const { error } = await supabase.from('textbook_distributions').update({
       payment_status: '미납',
@@ -199,7 +211,8 @@ export function TextbookPaymentTab() {
       return dt >= start && dt <= end;
     });
 
-    const totalBilled = monthlyDists.reduce((s, d) => s + d.total_amount, 0);
+    const selfPurchaseAmount = monthlyDists.filter(d => d.payment_status === '개별구매').reduce((s, d) => s + d.total_amount, 0);
+    const totalBilled = monthlyDists.reduce((s, d) => s + d.total_amount, 0) - selfPurchaseAmount;
     const totalPaid = monthlyDists.filter(d => d.payment_status === '수납완료').reduce((s, d) => s + d.total_amount, 0);
     const totalUnpaid = totalBilled - totalPaid;
 
@@ -327,14 +340,24 @@ export function TextbookPaymentTab() {
                           <p className="text-sm text-muted-foreground">
                             {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
                           </p>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs gap-1 text-green-600 hover:text-green-700"
-                            onClick={() => openPaymentConfirm(dist)}
-                          >
-                            <CheckCircle2 className="w-3 h-3" />수납
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs gap-1 text-orange-600 hover:text-orange-700"
+                              onClick={() => handleSelfPurchase(dist)}
+                            >
+                              <ShoppingBag className="w-3 h-3" />개별구매
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs gap-1 text-green-600 hover:text-green-700"
+                              onClick={() => openPaymentConfirm(dist)}
+                            >
+                              <CheckCircle2 className="w-3 h-3" />수납
+                            </Button>
+                          </div>
                         </div>
                       ))}
 
@@ -412,7 +435,10 @@ export function TextbookPaymentTab() {
                   {dist.depositor_name && (
                     <span className="text-xs font-bold text-primary">[입금: {dist.depositor_name}]</span>
                   )}
-                  <Badge variant={dist.payment_status === '수납완료' ? 'success' : 'destructive'} className="text-[10px]">
+                  <Badge 
+                    variant={dist.payment_status === '수납완료' ? 'success' : dist.payment_status === '개별구매' ? 'outline' : 'destructive'} 
+                    className={`text-[10px] ${dist.payment_status === '개별구매' ? 'border-orange-400 text-orange-600' : ''}`}
+                  >
                     {dist.payment_status}
                   </Badge>
                   <span className="text-xs text-muted-foreground truncate">
@@ -421,7 +447,7 @@ export function TextbookPaymentTab() {
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                   <span>{format(new Date(dist.created_at), 'MM/dd')}</span>
-                  {dist.payment_status === '수납완료' && (
+                  {(dist.payment_status === '수납완료' || dist.payment_status === '개별구매') && (
                     <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => handleRevertPayment(dist)} title="미납으로 변경">
                       <Ban className="w-3.5 h-3.5" />
                     </Button>
