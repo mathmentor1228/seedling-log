@@ -22,6 +22,7 @@ import { ClassStudentManager } from '@/components/ClassStudentManager';
 import { StudentGroupManager } from '@/components/timetable/StudentGroupManager';
 import { GroupSlotAssignment } from '@/components/timetable/GroupSlotAssignment';
 import { TeacherGroupAssignment } from '@/components/timetable/TeacherGroupAssignment';
+import { TeacherScheduleCreator } from '@/components/timetable/TeacherScheduleCreator';
 import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
 import { TimetableMatrixView } from '@/components/timetable/TimetableMatrixView';
 
@@ -932,7 +933,7 @@ export function Timetable() {
           />
         ) : (
         <Tabs defaultValue="day" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="day" className="text-xs sm:text-sm">
               <Calendar className="w-4 h-4 mr-1 hidden sm:inline" />
               요일별
@@ -948,6 +949,10 @@ export function Timetable() {
             <TabsTrigger value="group" className="text-xs sm:text-sm">
               <FolderOpen className="w-4 h-4 mr-1 hidden sm:inline" />
               그룹(반)
+            </TabsTrigger>
+            <TabsTrigger value="create" className="text-xs sm:text-sm">
+              <Pencil className="w-4 h-4 mr-1 hidden sm:inline" />
+              수업 만들기
             </TabsTrigger>
           </TabsList>
 
@@ -1260,6 +1265,11 @@ export function Timetable() {
             <div className="border-t pt-4">
               <GroupSlotAssignment onDataChange={() => fetchScheduleData()} />
             </div>
+          </TabsContent>
+
+          {/* ── 수업 만들기 ── */}
+          <TabsContent value="create" className="space-y-4">
+            <TeacherScheduleCreator />
           </TabsContent>
         </Tabs>
         )}

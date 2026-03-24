@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Loader2, CheckCircle2, XCircle, HelpCircle, Eye, MessageSquare,
   Search, Users, BookOpen, BarChart3, AlertTriangle, Filter, Star,
-  ChevronDown, ChevronRight
+  ChevronDown, ChevronRight, Pencil
 } from 'lucide-react';
+import { ManualQuizGrading } from './ManualQuizGrading';
 
 interface Submission {
   id: string;
@@ -306,12 +307,18 @@ export function QuizSubmissionReview() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-4">
+        <TabsList className="w-full grid grid-cols-5">
           <TabsTrigger value="list" className="text-xs"><Eye className="w-3 h-3 mr-1" />제출 목록</TabsTrigger>
+          <TabsTrigger value="manual" className="text-xs"><Pencil className="w-3 h-3 mr-1" />수동 채점</TabsTrigger>
           <TabsTrigger value="students" className="text-xs"><Users className="w-3 h-3 mr-1" />학생별</TabsTrigger>
           <TabsTrigger value="courses" className="text-xs"><BookOpen className="w-3 h-3 mr-1" />과정별</TabsTrigger>
           <TabsTrigger value="wrong" className="text-xs"><AlertTriangle className="w-3 h-3 mr-1" />오답 추출</TabsTrigger>
         </TabsList>
+
+        {/* TAB: Manual Grading */}
+        <TabsContent value="manual">
+          <ManualQuizGrading />
+        </TabsContent>
 
         {/* TAB 1: Submission list with detail */}
         <TabsContent value="list" className="space-y-3">
