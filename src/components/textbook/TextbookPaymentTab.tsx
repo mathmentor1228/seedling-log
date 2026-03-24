@@ -446,7 +446,7 @@ export function TextbookPaymentTab() {
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                   <span>{format(new Date(dist.created_at), 'MM/dd')}</span>
-                  {dist.payment_status === '수납완료' && (
+                  {(dist.payment_status === '수납완료' || dist.payment_status === '개별구매') && (
                     <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => handleRevertPayment(dist)} title="미납으로 변경">
                       <Ban className="w-3.5 h-3.5" />
                     </Button>
