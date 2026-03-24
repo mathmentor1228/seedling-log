@@ -727,6 +727,13 @@ export default function StudentHomework() {
     !hw.is_no_homework &&
     hw.content?.trim() !== '없음'
   );
+  const expiredHomework = homework.filter(hw =>
+    hw.check_status === 'unchecked' &&
+    (hw.is_deadline_passed || hw.is_expired) &&
+    !hw.is_submission_closed &&
+    !hw.is_no_homework &&
+    hw.content?.trim() !== '없음'
+  );
   const completedHomework = homework.filter(hw => hw.check_status === 'checked');
 
   // Group homework by date, then sort subjects within each date
@@ -750,6 +757,7 @@ export default function StudentHomework() {
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
   };
 
+  const expiredByDate = groupByDate(expiredHomework);
   const pendingByDate = groupByDate(pendingHomework);
   const completedByDate = groupByDate(completedHomework);
 
@@ -850,6 +858,53 @@ export default function StudentHomework() {
           renderDateGroup(pendingByDate, true)
         )}
       </div>
+
+      {/* Expired Section */}
+      {expiredByDate.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium text-destructive flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" />
+            제출 시간 초과 ({expiredHomework.length})
+          </h2>
+          {expiredByDate.map(([dateKey, items]) => (
+            <div key={dateKey} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs font-medium text-muted-foreground px-2">
+                  {format(new Date(dateKey + 'T00:00:00'), 'M월 d일 (EEE)', { locale: ko })}
+                </span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              {items.map(hw => (
+                <Card 
+                  key={hw.id}
+                  className="opacity-70 hover:opacity-100 transition-colors cursor-pointer border-destructive/20"
+                  onClick={() => {
+                    setSelectedHomework(hw);
+                    navigate(`/student/homework/${hw.id}`);
+                  }}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <Badge className={getSubjectColor(hw.subject)}>
+                            {hw.subject}
+                          </Badge>
+                        </div>
+                        <p className="text-sm line-clamp-2">{hw.content}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs border-destructive/40 text-destructive flex-shrink-0">
+                        시간 초과
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Completed Section */}
       {completedByDate.length > 0 && (
