@@ -845,7 +845,7 @@ export function Timetable() {
             <Pencil className="w-4 h-4" />
             수업 만들기
           </h3>
-          <TeacherScheduleCreator onCreated={() => fetchScheduleData()} />
+          <TeacherScheduleCreator />
         </div>
 
         {/* Student/Group management dialog for teachers */}
