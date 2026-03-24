@@ -17,6 +17,7 @@ import {
   Plus, Trash2, AlertTriangle, CalendarCheck, Clock, Users, X,
   ChevronDown, ChevronUp, ArrowLeft, UserPlus, UserMinus, GripVertical,
   School, CalendarDays, Search, Eye, Copy, ClipboardPaste, UsersRound, Pencil,
+  Undo2, Archive,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, differenceInDays, parseISO } from 'date-fns';
@@ -89,13 +90,14 @@ export function ExamPrepScheduleManager() {
   const [schoolExams, setSchoolExams] = useState<SchoolExamInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [mode, setMode] = useState<'list' | 'create'>('list');
+  const [mode, setMode] = useState<'list' | 'create' | 'trash'>('list');
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
   const [schoolFilter, setSchoolFilter] = useState<string>('all');
   const [showPast, setShowPast] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [deletedCourses, setDeletedCourses] = useState<(DbCourse & { deleted_at: string })[]>([]);
 
   // Form state
   const [formSubject, setFormSubject] = useState('수학');
@@ -161,7 +163,7 @@ export function ExamPrepScheduleManager() {
   }
 
   async function fetchCourses() {
-    const { data: coursesData } = await supabase.from('exam_prep_courses').select('*').order('created_at', { ascending: false });
+    const { data: coursesData } = await supabase.from('exam_prep_courses').select('*').is('deleted_at', null).order('created_at', { ascending: false });
     if (!coursesData || coursesData.length === 0) { setCourses([]); return; }
     const courseIds = coursesData.map((c: any) => c.id);
     const [sessRes, enrRes] = await Promise.all([
@@ -535,10 +537,33 @@ export function ExamPrepScheduleManager() {
   }
 
   async function handleDeleteCourse(courseId: string) {
-    const { error } = await supabase.from('exam_prep_courses').delete().eq('id', courseId);
+    const { error } = await supabase.from('exam_prep_courses').update({ deleted_at: new Date().toISOString() } as any).eq('id', courseId);
     if (!error) {
       setCourses(prev => prev.filter(c => c.id !== courseId));
-      toast({ title: '삭제되었습니다' });
+      toast({ title: '휴지통으로 이동했습니다', description: '휴지통에서 복원할 수 있습니다' });
+    }
+  }
+
+  async function fetchDeletedCourses() {
+    const { data } = await supabase.from('exam_prep_courses').select('*').not('deleted_at', 'is', null).order('deleted_at' as any, { ascending: false });
+    setDeletedCourses((data || []) as any);
+  }
+
+  async function handleRestoreCourse(courseId: string) {
+    const { error } = await supabase.from('exam_prep_courses').update({ deleted_at: null } as any).eq('id', courseId);
+    if (!error) {
+      toast({ title: '복원되었습니다' });
+      setDeletedCourses(prev => prev.filter(c => c.id !== courseId));
+      await fetchCourses();
+    }
+  }
+
+  async function handlePermanentDelete(courseId: string) {
+    if (!confirm('영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+    const { error } = await supabase.from('exam_prep_courses').delete().eq('id', courseId);
+    if (!error) {
+      setDeletedCourses(prev => prev.filter(c => c.id !== courseId));
+      toast({ title: '영구 삭제되었습니다' });
     }
   }
 
@@ -597,6 +622,49 @@ export function ExamPrepScheduleManager() {
   const pendingCount = allEnrollments.filter(e => e.status === 'pending').length;
   const confirmedCount = allEnrollments.filter(e => e.status === 'confirmed').length;
   const autoCount = allEnrollments.filter(e => e.status === 'auto_confirmed').length;
+
+  // ═══════════════ TRASH MODE ═══════════════
+  if (mode === 'trash') {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMode('list')}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Archive className="w-5 h-5" /> 삭제된 특강 (휴지통)
+          </h2>
+        </div>
+        {deletedCourses.length === 0 ? (
+          <p className="text-center py-12 text-muted-foreground text-sm">삭제된 특강이 없습니다</p>
+        ) : (
+          <div className="space-y-3">
+            {deletedCourses.map(dc => (
+              <Card key={dc.id} className="opacity-70">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {dc.school_name && <Badge variant="outline" className="text-[10px] gap-1"><School className="w-3 h-3" />{dc.school_name}</Badge>}
+                    <Badge variant="secondary" className="text-[10px]">{dc.subject}</Badge>
+                    <span className="text-sm font-medium">{dc.title || `${dc.school_name || ''} ${dc.subject} 내신 특강`}</span>
+                    <span className="text-xs text-muted-foreground">마감: {dc.deadline_date}</span>
+                    <span className="text-xs text-destructive">삭제: {format(parseISO(dc.deleted_at), 'M/d HH:mm')}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleRestoreCourse(dc.id)}>
+                      <Undo2 className="w-3.5 h-3.5 mr-1" /> 복원
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => handlePermanentDelete(dc.id)}>
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> 영구삭제
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ═══════════════ CREATE MODE ═══════════════
   if (mode === 'create') {
@@ -1030,6 +1098,9 @@ export function ExamPrepScheduleManager() {
             </button>
           ))}
         </div>
+        <Button variant="outline" size="sm" onClick={() => { fetchDeletedCourses(); setMode('trash'); }}>
+          <Archive className="w-4 h-4 mr-1" /> 휴지통
+        </Button>
         <Button onClick={() => { resetAndGoBack(); setMode('create'); }}>
           <Plus className="w-4 h-4 mr-1" /> 내신 특강 등록
         </Button>

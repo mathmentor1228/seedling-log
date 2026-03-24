@@ -621,6 +621,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deadline_date: string
+          deleted_at: string | null
           description: string | null
           id: string
           school_name: string | null
@@ -633,6 +634,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deadline_date: string
+          deleted_at?: string | null
           description?: string | null
           id?: string
           school_name?: string | null
@@ -645,6 +647,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deadline_date?: string
+          deleted_at?: string | null
           description?: string | null
           id?: string
           school_name?: string | null
