@@ -953,11 +953,17 @@ export default function QuizPrintPage() {
           min-width: 28px;
           flex-shrink: 0;
         }
-        .qp-question-body { flex: 1; min-width: 0; padding-top: 3px; }
+        .qp-question-body { flex: 1; min-width: 0; padding-top: 3px; overflow: visible; }
         .qp-question-text {
           font-size: 13px;
           line-height: 1.7;
           color: #1e293b;
+          overflow-wrap: break-word;
+          word-break: break-word;
+        }
+        .qp-question-text .math-renderer {
+          display: inline;
+          overflow: visible;
         }
         .qp-source {
           font-size: 8px;
@@ -1014,6 +1020,41 @@ export default function QuizPrintPage() {
           font-weight: 800;
           color: #3b82f6;
           margin-right: 4px;
+        }
+
+        /* ── <보기> Box ── */
+        .mr-bogi-box {
+          display: block;
+          border: 2px solid #334155;
+          border-radius: 6px;
+          padding: 8px 12px;
+          margin: 8px 0;
+          background: #fafbfc;
+          position: relative;
+        }
+        .mr-bogi-label {
+          font-size: 11px;
+          font-weight: 800;
+          color: #1e293b;
+          display: block;
+          margin-bottom: 4px;
+          letter-spacing: 0.5px;
+        }
+        .mr-bogi-content {
+          font-size: 13px;
+          line-height: 1.8;
+          color: #1e293b;
+        }
+        .mr-bogi-content .katex {
+          font-size: 1.15em !important;
+        }
+
+        /* ── Circled letter markers (ⓐⓑⓒ…) ── */
+        .mr-circled-letter {
+          font-weight: 700;
+          color: #334155;
+          margin: 0 2px;
+          font-size: 13px;
         }
 
         /* ── Formula visual separation — display math gets extra spacing & weight ── */

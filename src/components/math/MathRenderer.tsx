@@ -28,30 +28,78 @@ export function MathRenderer({ text, autoSubBreak = false }: Props) {
       .replace(/&#39;/g, "'")
       .replace(/&nbsp;/g, ' ');
 
+    // ── Step 1.5: Preserve <보기> tags before HTML stripping ──
+    // Detect <보기> ... content and wrap in a styled box
+    result = result.replace(
+      /<보기>\s*([\s\S]*?)(?=(?:①|②|③|④|⑤|\n\n|$))/g,
+      '<BOGI_START>$1<BOGI_END>'
+    );
+    // Also handle standalone <보기> marker
+    result = result.replace(/<보기>/g, '<BOGI_MARKER>');
+
     // ── Step 2: Strip all HTML tags, attributes, and code artifacts ──
     result = result.replace(/\s*(class|style|data-[\w-]+)\s*=\s*"[^"]*"/gi, '');
     result = result.replace(/\s*(class|style|data-[\w-]+)\s*=\s*'[^']*'/gi, '');
     result = result.replace(/<\/?[a-zA-Z][^>]*>/g, '');
     result = result.replace(/\bmath-render(er)?\b/gi, '');
 
+    // ── Step 2.3: Restore <보기> as styled box ──
+    result = result.replace(
+      /BOGI_START([\s\S]*?)BOGI_END/g,
+      '<div class="mr-bogi-box"><span class="mr-bogi-label">&lt;보기&gt;</span><div class="mr-bogi-content">$1</div></div>'
+    );
+    result = result.replace(
+      /BOGI_MARKER/g,
+      '<span class="mr-bogi-label">&lt;보기&gt;</span>'
+    );
+
+    // ── Step 2.4: Handle circled letters ⓐⓑⓒⓓⓔⓕ as styled markers ──
+    result = result.replace(
+      /([ⓐⓑⓒⓓⓔⓕⓖⓗⓘⓙ])\s*/g,
+      '<span class="mr-circled-letter">$1</span> '
+    );
+
     // ── Step 2.5: Normalize recurring-dot notation ──
     result = result.replace(/([0-9])\u0307/g, '\\dot{$1}');
 
+    // ── Step 2.55: Convert Unicode math symbols to LaTeX ──
+    // √ followed by number/expression → \sqrt{...}
+    // Handle √(expr)
+    result = result.replace(/√\(([^)]+)\)/g, (_, inner) => `$\\sqrt{${inner}}$`);
+    // Handle √number (e.g. √4, √81, √1.44, √12)
+    result = result.replace(/√([0-9]+(?:\.[0-9]+)?)/g, (_, num) => `$\\sqrt{${num}}$`);
+    // Handle −√ (negative sqrt)
+    result = result.replace(/−√\(([^)]+)\)/g, (_, inner) => `$-\\sqrt{${inner}}$`);
+    result = result.replace(/−√([0-9]+(?:\.[0-9]+)?)/g, (_, num) => `$-\\sqrt{${num}}$`);
+    // Handle -√ (ASCII minus)
+    result = result.replace(/-√\(([^)]+)\)/g, (_, inner) => `$-\\sqrt{${inner}}$`);
+    result = result.replace(/-√([0-9]+(?:\.[0-9]+)?)/g, (_, num) => `$-\\sqrt{${num}}$`);
+
+    // Superscript ² ³ → ^2 ^3 (only outside $ delimiters, near numbers/parens)
+    result = result.replace(/\)²/g, ')^{2}');
+    result = result.replace(/\)³/g, ')^{3}');
+    result = result.replace(/([0-9])²/g, '$1^{2}');
+    result = result.replace(/([0-9])³/g, '$1^{3}');
+
+    // Unicode × → \times
+    result = result.replace(/×/g, '\\times ');
+    // Unicode ÷ → \div
+    result = result.replace(/÷/g, '\\div ');
+    // Unicode ± → \pm
+    result = result.replace(/±/g, '\\pm ');
+    // Unicode ≤ ≥ ≠ → LaTeX
+    result = result.replace(/≤/g, '\\leq ');
+    result = result.replace(/≥/g, '\\geq ');
+    result = result.replace(/≠/g, '\\neq ');
+
     // ── Step 2.6: Normalize lim notation ──
-    // Convert plain "lim_{...}" or "lim_{ ... }" to proper LaTeX \lim_{...}
-    // Also handle "lim_{n→∞}" with Unicode arrow
     result = result.replace(/(?<!\\)lim\s*_\s*\{([^}]+)\}/g, '\\lim_{$1}');
     result = result.replace(/(?<!\\)lim\s*_\s*([a-zA-Z])/g, '\\lim_{$1}');
-    // Convert Unicode arrow → to \to inside math contexts
     result = result.replace(/→/g, '\\to ');
-    // Convert ∞ to \infty
     result = result.replace(/∞/g, '\\infty ');
-    // Wrap standalone \lim not inside $ with inline math if needed
-    // Handle "lim" followed by subscript-like patterns without braces
     result = result.replace(/(?<!\\)lim([_{(])/g, '\\lim$1');
 
     // ── Step 2.7: Box for ㄱ,ㄴ,ㄷ composite answer items ──
-    // Detect lines starting with ㄱ. / ㄴ. / ㄷ. / ㄹ. and wrap in styled box
     result = result.replace(
       /([ㄱㄴㄷㄹ])\.\s*([^\n]*)/g,
       '<span class="mr-boxed-item"><span class="mr-boxed-marker">$1.</span> $2</span>'
@@ -65,13 +113,10 @@ export function MathRenderer({ text, autoSubBreak = false }: Props) {
 
     // ── Step 3.5: Sub-question auto line-break ──
     if (autoSubBreak) {
-      // Match patterns like (1), (2), ⑴, ⑵, or ① ② at start or after content
-      // Insert a styled line break before each sub-question marker (except the first occurrence at the very start)
       result = result.replace(
         /(?<!^)\s*(\(([0-9]{1,2})\)|⑴|⑵|⑶|⑷|⑸|⑹|⑺|⑻|⑼|⑽)/g,
         '<div class="mr-sub-break"></div><span class="mr-sub-marker">$1</span>'
       );
-      // Handle the first sub-question at the very beginning
       result = result.replace(
         /^(\(([0-9]{1,2})\)|⑴|⑵|⑶|⑷|⑸|⑹|⑺|⑻|⑼|⑽)/,
         '<span class="mr-sub-marker">$1</span>'
@@ -88,8 +133,8 @@ export function MathRenderer({ text, autoSubBreak = false }: Props) {
       }
     });
 
-    // Inline math: $...$
-    result = result.replace(/(?<!\$)\$(?!\$)(.*?)(?<!\$)\$(?!\$)/g, (_, math) => {
+    // Inline math: $...$ — improved to avoid double-rendering from step 2.55
+    result = result.replace(/(?<!\$)\$(?!\$)((?:[^$]|\\\$)*?)(?<!\$)\$(?!\$)/g, (_, math) => {
       try {
         return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
       } catch {
