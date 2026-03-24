@@ -536,10 +536,33 @@ export function ExamPrepScheduleManager() {
   }
 
   async function handleDeleteCourse(courseId: string) {
-    const { error } = await supabase.from('exam_prep_courses').delete().eq('id', courseId);
+    const { error } = await supabase.from('exam_prep_courses').update({ deleted_at: new Date().toISOString() } as any).eq('id', courseId);
     if (!error) {
       setCourses(prev => prev.filter(c => c.id !== courseId));
-      toast({ title: '삭제되었습니다' });
+      toast({ title: '휴지통으로 이동했습니다', description: '휴지통에서 복원할 수 있습니다' });
+    }
+  }
+
+  async function fetchDeletedCourses() {
+    const { data } = await supabase.from('exam_prep_courses').select('*').not('deleted_at', 'is', null).order('deleted_at' as any, { ascending: false });
+    setDeletedCourses((data || []) as any);
+  }
+
+  async function handleRestoreCourse(courseId: string) {
+    const { error } = await supabase.from('exam_prep_courses').update({ deleted_at: null } as any).eq('id', courseId);
+    if (!error) {
+      toast({ title: '복원되었습니다' });
+      setDeletedCourses(prev => prev.filter(c => c.id !== courseId));
+      await fetchCourses();
+    }
+  }
+
+  async function handlePermanentDelete(courseId: string) {
+    if (!confirm('영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+    const { error } = await supabase.from('exam_prep_courses').delete().eq('id', courseId);
+    if (!error) {
+      setDeletedCourses(prev => prev.filter(c => c.id !== courseId));
+      toast({ title: '영구 삭제되었습니다' });
     }
   }
 
