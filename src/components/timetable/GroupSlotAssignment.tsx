@@ -71,6 +71,17 @@ interface GroupException {
   reason: string | null;
 }
 
+interface TeacherInfo {
+  id: string;
+  name: string;
+}
+
+interface ConflictDetail {
+  studentId: string;
+  studentName: string;
+  conflictSlot: ScheduleSlot;
+}
+
 interface GroupSlotAssignmentProps {
   onDataChange?: () => void;
 }
@@ -84,9 +95,15 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
+  // All student assignments (for conflict detection)
+  const [allStudentAssignments, setAllStudentAssignments] = useState<
+    { studentId: string; classId: string; scheduleId: string }[]
+  >([]);
+
   // Assign dialog
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
 
   // Move dialog
@@ -148,7 +165,7 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
         (profiles || []).forEach((p: any) => { teacherMap[p.id] = p.full_name; });
       }
 
-      setSchedules((schedulesRes.data || []).map((s: any) => ({
+      const parsedSchedules = (schedulesRes.data || []).map((s: any) => ({
         id: s.id,
         classId: s.class_id,
         className: s.classes?.name || '',
@@ -158,7 +175,9 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
         endTime: s.end_time,
         teacherId: s.teacher_id || '',
         teacherName: teacherMap[s.teacher_id] || '미배정',
-      })));
+      }));
+
+      setSchedules(parsedSchedules);
 
       setAssignments((assignmentsRes.data || []).map((a: any) => ({
         id: a.id,
@@ -173,6 +192,30 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
         studentId: e.student_id,
         reason: e.reason,
       })));
+
+      // Fetch all class_students for conflict detection
+      if (studentIds.length > 0) {
+        const { data: csData } = await supabase
+          .from('class_students')
+          .select('student_id, class_id')
+          .in('student_id', studentIds);
+        
+        // Map class_id to schedule_id
+        const classToSchedules: Record<string, string[]> = {};
+        parsedSchedules.forEach(s => {
+          if (!classToSchedules[s.classId]) classToSchedules[s.classId] = [];
+          classToSchedules[s.classId].push(s.id);
+        });
+
+        const studentAssignments: { studentId: string; classId: string; scheduleId: string }[] = [];
+        (csData || []).forEach((cs: any) => {
+          const schedIds = classToSchedules[cs.class_id] || [];
+          schedIds.forEach(sid => {
+            studentAssignments.push({ studentId: cs.student_id, classId: cs.class_id, scheduleId: sid });
+          });
+        });
+        setAllStudentAssignments(studentAssignments);
+      }
     } catch (error) {
       console.error('Error fetching group assignment data:', error);
     } finally {
@@ -180,15 +223,81 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
     }
   }
 
+  // Detect conflicts for a group being assigned to a target schedule
+  const conflicts = useMemo<ConflictDetail[]>(() => {
+    if (!selectedGroupId || !selectedScheduleId) return [];
+    const group = groups.find(g => g.id === selectedGroupId);
+    const targetSchedule = schedules.find(s => s.id === selectedScheduleId);
+    if (!group || !targetSchedule) return [];
+
+    const targetDay = targetSchedule.dayOfWeek;
+    const targetStart = targetSchedule.startTime.slice(0, 5);
+    const targetEnd = targetSchedule.endTime.slice(0, 5);
+
+    const result: ConflictDetail[] = [];
+
+    for (const member of group.members) {
+      // Find all schedules this student is already in
+      const memberScheduleIds = allStudentAssignments
+        .filter(a => a.studentId === member.id)
+        .map(a => a.scheduleId);
+
+      for (const sid of memberScheduleIds) {
+        if (sid === selectedScheduleId) continue; // skip same slot
+        const existingSlot = schedules.find(s => s.id === sid);
+        if (!existingSlot) continue;
+
+        // Check same day + time overlap
+        if (
+          existingSlot.dayOfWeek === targetDay &&
+          targetStart < existingSlot.endTime.slice(0, 5) &&
+          existingSlot.startTime.slice(0, 5) < targetEnd
+        ) {
+          result.push({
+            studentId: member.id,
+            studentName: member.name,
+            conflictSlot: existingSlot,
+          });
+        }
+      }
+    }
+
+    return result;
+  }, [selectedGroupId, selectedScheduleId, groups, schedules, allStudentAssignments]);
+
+  // Teachers list derived from schedules
+  const availableTeachers = useMemo<TeacherInfo[]>(() => {
+    const map = new Map<string, string>();
+    schedules.forEach(s => {
+      if (s.teacherId) map.set(s.teacherId, s.teacherName);
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [schedules]);
+
+  // Filtered schedules by teacher
+  const filteredSchedules = useMemo(() => {
+    if (selectedTeacherId === 'all') return schedules;
+    return schedules.filter(s => s.teacherId === selectedTeacherId);
+  }, [schedules, selectedTeacherId]);
+
   // Assign group to schedule
   async function handleAssign() {
     if (!selectedGroupId || !selectedScheduleId) return;
+
+    // Warn about conflicts
+    if (conflicts.length > 0) {
+      const uniqueStudents = [...new Set(conflicts.map(c => c.studentName))];
+      const msg = `${uniqueStudents.join(', ')} 학생이 같은 시간대에 이미 다른 수업이 있습니다. 그래도 배정하시겠습니까?`;
+      if (!confirm(msg)) return;
+    }
+
     setSaving(true);
     try {
       const group = groups.find(g => g.id === selectedGroupId);
       if (!group) throw new Error('그룹을 찾을 수 없습니다');
 
-      // 1. Create schedule_group_assignment
       const { error: assignErr } = await supabase
         .from('schedule_group_assignments')
         .insert({ schedule_id: selectedScheduleId, group_id: selectedGroupId });
@@ -201,14 +310,12 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
         throw assignErr;
       }
 
-      // 2. Bulk insert members into class_students
       const schedule = schedules.find(s => s.id === selectedScheduleId);
       if (schedule && group.members.length > 0) {
         const inserts = group.members.map(m => ({
           class_id: schedule.classId,
           student_id: m.id,
         }));
-        // Use upsert to avoid duplicate errors
         await supabase.from('class_students').upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
       }
 
@@ -216,6 +323,7 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
       setAssignDialogOpen(false);
       setSelectedGroupId('');
       setSelectedScheduleId('');
+      setSelectedTeacherId('all');
       fetchAll();
       onDataChange?.();
     } catch (error: any) {
@@ -232,7 +340,6 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
       const { error } = await supabase.from('schedule_group_assignments').delete().eq('id', assignment.id);
       if (error) throw error;
 
-      // Also remove exceptions for this assignment
       await supabase.from('schedule_group_exceptions')
         .delete()
         .eq('schedule_id', assignment.scheduleId)
@@ -257,7 +364,6 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
 
       if (!group || !oldSchedule || !newSchedule) throw new Error('데이터를 찾을 수 없습니다');
 
-      // 1. Remove old class_students entries
       const activeExceptions = exceptions.filter(
         e => e.scheduleId === moveAssignment.scheduleId && e.groupId === moveAssignment.groupId
       );
@@ -270,14 +376,12 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
           .eq('student_id', member.id);
       }
 
-      // 2. Update assignment to new schedule
       const { error: updateErr } = await supabase
         .from('schedule_group_assignments')
         .update({ schedule_id: moveTargetScheduleId })
         .eq('id', moveAssignment.id);
       if (updateErr) throw updateErr;
 
-      // 3. Add to new class_students
       const newInserts = activeMembers.map(m => ({
         class_id: newSchedule.classId,
         student_id: m.id,
@@ -286,7 +390,6 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
         await supabase.from('class_students').upsert(newInserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
       }
 
-      // 4. Update exception schedule_ids
       if (activeExceptions.length > 0) {
         for (const exc of activeExceptions) {
           await supabase.from('schedule_group_exceptions')
@@ -315,13 +418,11 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
     try {
       const { scheduleId, groupId } = exceptionAssignment;
 
-      // Delete existing exceptions for this schedule+group
       await supabase.from('schedule_group_exceptions')
         .delete()
         .eq('schedule_id', scheduleId)
         .eq('group_id', groupId);
 
-      // Insert new exceptions
       if (excludedStudentIds.size > 0) {
         const inserts = [...excludedStudentIds].map(sid => ({
           schedule_id: scheduleId,
@@ -332,17 +433,14 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
         if (error) throw error;
       }
 
-      // Update class_students accordingly
       const group = groups.find(g => g.id === groupId);
       const schedule = schedules.find(s => s.id === scheduleId);
       if (group && schedule) {
-        // Remove excluded students from class
         for (const sid of excludedStudentIds) {
           await supabase.from('class_students').delete()
             .eq('class_id', schedule.classId)
             .eq('student_id', sid);
         }
-        // Ensure non-excluded members are in class
         const nonExcluded = group.members.filter(m => !excludedStudentIds.has(m.id));
         if (nonExcluded.length > 0) {
           await supabase.from('class_students').upsert(
@@ -390,7 +488,6 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
     );
   }
 
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -400,7 +497,12 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
         </div>
         <Button
           size="sm"
-          onClick={() => setAssignDialogOpen(true)}
+          onClick={() => {
+            setSelectedGroupId('');
+            setSelectedTeacherId('all');
+            setSelectedScheduleId('');
+            setAssignDialogOpen(true);
+          }}
           disabled={groups.length === 0}
         >
           <Plus className="w-3 h-3 mr-1" />
@@ -483,16 +585,17 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
         </div>
       ))}
 
-      {/* Assign dialog */}
+      {/* Assign dialog - with teacher filter & conflict detection */}
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>그룹 슬롯 배정</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
+            {/* Group selection */}
             <div className="space-y-2">
               <Label>그룹 선택</Label>
-              <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+              <Select value={selectedGroupId} onValueChange={(v) => { setSelectedGroupId(v); setSelectedScheduleId(''); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="그룹 선택..." />
                 </SelectTrigger>
@@ -504,7 +607,41 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
                   ))}
                 </SelectContent>
               </Select>
+              {selectedGroupId && (() => {
+                const group = groups.find(g => g.id === selectedGroupId);
+                if (!group) return null;
+                return (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {group.members.slice(0, 10).map(m => (
+                      <span key={m.id} className="text-xs bg-muted px-1.5 py-0.5 rounded">{m.name}</span>
+                    ))}
+                    {group.members.length > 10 && (
+                      <span className="text-xs text-muted-foreground">+{group.members.length - 10}명</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
+
+            {/* Teacher filter */}
+            <div className="space-y-2">
+              <Label>선생님 필터</Label>
+              <Select value={selectedTeacherId} onValueChange={(v) => { setSelectedTeacherId(v); setSelectedScheduleId(''); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="선생님 선택..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 선생님</SelectItem>
+                  {availableTeachers.map(t => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Slot selection */}
             <div className="space-y-2">
               <Label>슬롯 선택</Label>
               <Select value={selectedScheduleId} onValueChange={setSelectedScheduleId}>
@@ -512,7 +649,7 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
                   <SelectValue placeholder="슬롯 선택..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {schedules.map(s => (
+                  {filteredSchedules.map(s => (
                     <SelectItem key={s.id} value={s.id}>
                       {formatSlotLabel(s)}
                     </SelectItem>
@@ -520,11 +657,38 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Conflict warnings */}
+            {conflicts.length > 0 && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-destructive text-sm font-medium">
+                  <AlertTriangle className="w-4 h-4" />
+                  시간표 충돌 감지 ({[...new Set(conflicts.map(c => c.studentId))].length}명)
+                </div>
+                <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                  {conflicts.map((c, i) => {
+                    const day = DAYS_OF_WEEK.find(d => d.value === c.conflictSlot.dayOfWeek)?.label || '';
+                    return (
+                      <div key={i} className="text-xs text-destructive/80">
+                        <span className="font-medium">{c.studentName}</span>
+                        {' → '}
+                        {c.conflictSlot.className} ({day} {c.conflictSlot.startTime.slice(0, 5)}–{c.conflictSlot.endTime.slice(0, 5)})
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>취소</Button>
-              <Button onClick={handleAssign} disabled={saving || !selectedGroupId || !selectedScheduleId}>
+              <Button
+                onClick={handleAssign}
+                disabled={saving || !selectedGroupId || !selectedScheduleId}
+                variant={conflicts.length > 0 ? 'destructive' : 'default'}
+              >
                 {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                배정
+                {conflicts.length > 0 ? '충돌 무시 배정' : '배정'}
               </Button>
             </div>
           </div>
