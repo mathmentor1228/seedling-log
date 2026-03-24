@@ -339,14 +339,24 @@ export function TextbookPaymentTab() {
                           <p className="text-sm text-muted-foreground">
                             {dist.textbook_orders?.textbook_name} · {dist.total_amount.toLocaleString()}원
                           </p>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs gap-1 text-green-600 hover:text-green-700"
-                            onClick={() => openPaymentConfirm(dist)}
-                          >
-                            <CheckCircle2 className="w-3 h-3" />수납
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs gap-1 text-orange-600 hover:text-orange-700"
+                              onClick={() => handleSelfPurchase(dist)}
+                            >
+                              <ShoppingBag className="w-3 h-3" />개별구매
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs gap-1 text-green-600 hover:text-green-700"
+                              onClick={() => openPaymentConfirm(dist)}
+                            >
+                              <CheckCircle2 className="w-3 h-3" />수납
+                            </Button>
+                          </div>
                         </div>
                       ))}
 
