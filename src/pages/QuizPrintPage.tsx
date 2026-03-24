@@ -1016,6 +1016,41 @@ export default function QuizPrintPage() {
           margin-right: 4px;
         }
 
+        /* ── <보기> Box ── */
+        .mr-bogi-box {
+          display: block;
+          border: 2px solid #334155;
+          border-radius: 6px;
+          padding: 8px 12px;
+          margin: 8px 0;
+          background: #fafbfc;
+          position: relative;
+        }
+        .mr-bogi-label {
+          font-size: 11px;
+          font-weight: 800;
+          color: #1e293b;
+          display: block;
+          margin-bottom: 4px;
+          letter-spacing: 0.5px;
+        }
+        .mr-bogi-content {
+          font-size: 13px;
+          line-height: 1.8;
+          color: #1e293b;
+        }
+        .mr-bogi-content .katex {
+          font-size: 1.15em !important;
+        }
+
+        /* ── Circled letter markers (ⓐⓑⓒ…) ── */
+        .mr-circled-letter {
+          font-weight: 700;
+          color: #334155;
+          margin: 0 2px;
+          font-size: 13px;
+        }
+
         /* ── Formula visual separation — display math gets extra spacing & weight ── */
         .qp-question-text .katex-display {
           margin: 8px 0 6px !important;
