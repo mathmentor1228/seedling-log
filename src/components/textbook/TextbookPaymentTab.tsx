@@ -398,10 +398,10 @@ export function TextbookPaymentTab() {
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-2">전체 이력</h3>
         <div className="space-y-2">
-          {distributions.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-12">수납 이력이 없습니다</p>
+          {filteredDistributions.length === 0 && (
+            <p className="text-center text-sm text-muted-foreground py-12">{searchQuery ? '검색 결과가 없습니다' : '수납 이력이 없습니다'}</p>
           )}
-          {distributions.map(dist => (
+          {filteredDistributions.map(dist => (
             <Card key={dist.id} className="p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
