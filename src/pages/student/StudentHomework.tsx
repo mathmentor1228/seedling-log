@@ -727,6 +727,13 @@ export default function StudentHomework() {
     !hw.is_no_homework &&
     hw.content?.trim() !== '없음'
   );
+  const expiredHomework = homework.filter(hw =>
+    hw.check_status === 'unchecked' &&
+    (hw.is_deadline_passed || hw.is_expired) &&
+    !hw.is_submission_closed &&
+    !hw.is_no_homework &&
+    hw.content?.trim() !== '없음'
+  );
   const completedHomework = homework.filter(hw => hw.check_status === 'checked');
 
   // Group homework by date, then sort subjects within each date
