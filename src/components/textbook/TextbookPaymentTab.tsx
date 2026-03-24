@@ -39,6 +39,7 @@ export function TextbookPaymentTab() {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [monthFilter, setMonthFilter] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Depositor name popup state
   const [paymentTarget, setPaymentTarget] = useState<Distribution | null>(null);
@@ -215,9 +216,22 @@ export function TextbookPaymentTab() {
     return opts;
   }, []);
 
+  // Filter distributions by search query
+  const filteredDistributions = useMemo(() => {
+    if (!searchQuery.trim()) return distributions;
+    const q = searchQuery.trim().toLowerCase();
+    return distributions.filter(d =>
+      d.student_name.toLowerCase().includes(q) ||
+      (d.textbook_orders?.textbook_name || '').toLowerCase().includes(q) ||
+      (d.distributed_by_name || '').toLowerCase().includes(q) ||
+      (d.depositor_name || '').toLowerCase().includes(q) ||
+      (d.parent_name || '').toLowerCase().includes(q)
+    );
+  }, [distributions, searchQuery]);
+
   // Group unpaid by student
   const unpaidByStudent = useMemo(() => {
-    const unpaid = distributions.filter(d => d.payment_status === '미납');
+    const unpaid = filteredDistributions.filter(d => d.payment_status === '미납');
     const grouped = new Map<string, { studentName: string; parentName: string | null; dists: Distribution[] }>();
     for (const d of unpaid) {
       if (!grouped.has(d.student_id)) {
@@ -226,7 +240,7 @@ export function TextbookPaymentTab() {
       grouped.get(d.student_id)!.dists.push(d);
     }
     return Array.from(grouped.values());
-  }, [distributions]);
+  }, [filteredDistributions]);
 
   const totalUnpaidCount = unpaidByStudent.reduce((s, g) => s + g.dists.length, 0);
 
@@ -235,7 +249,7 @@ export function TextbookPaymentTab() {
   return (
     <div className="space-y-6">
       {/* Month filter & stats */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Select value={monthFilter} onValueChange={setMonthFilter}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -244,6 +258,12 @@ export function TextbookPaymentTab() {
             ))}
           </SelectContent>
         </Select>
+        <Input
+          placeholder="학생/교재/담당자 검색..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-48"
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -378,10 +398,10 @@ export function TextbookPaymentTab() {
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-2">전체 이력</h3>
         <div className="space-y-2">
-          {distributions.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-12">수납 이력이 없습니다</p>
+          {filteredDistributions.length === 0 && (
+            <p className="text-center text-sm text-muted-foreground py-12">{searchQuery ? '검색 결과가 없습니다' : '수납 이력이 없습니다'}</p>
           )}
-          {distributions.map(dist => (
+          {filteredDistributions.map(dist => (
             <Card key={dist.id} className="p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
