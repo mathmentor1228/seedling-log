@@ -211,7 +211,8 @@ export function TextbookPaymentTab() {
       return dt >= start && dt <= end;
     });
 
-    const totalBilled = monthlyDists.reduce((s, d) => s + d.total_amount, 0);
+    const selfPurchaseAmount = monthlyDists.filter(d => d.payment_status === '개별구매').reduce((s, d) => s + d.total_amount, 0);
+    const totalBilled = monthlyDists.reduce((s, d) => s + d.total_amount, 0) - selfPurchaseAmount;
     const totalPaid = monthlyDists.filter(d => d.payment_status === '수납완료').reduce((s, d) => s + d.total_amount, 0);
     const totalUnpaid = totalBilled - totalPaid;
 
