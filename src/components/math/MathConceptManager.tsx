@@ -490,28 +490,28 @@ export function MathConceptManager() {
       </div>
 
       <Tabs defaultValue="concepts" className="space-y-4">
-        <TabsList className="w-full grid grid-cols-5 h-11">
-          <TabsTrigger value="concepts" className="flex items-center gap-1.5 text-xs sm:text-sm">
+        <TabsList className="w-full grid h-auto grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-5">
+          <TabsTrigger value="concepts" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <BookOpen className="w-4 h-4" />
             <span className="hidden sm:inline">개념 & 퀴즈</span>
             <span className="sm:hidden">개념</span>
           </TabsTrigger>
-          <TabsTrigger value="textbook-lib" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="textbook-lib" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <Library className="w-4 h-4" />
             <span className="hidden sm:inline">교재 라이브러리</span>
             <span className="sm:hidden">교재</span>
           </TabsTrigger>
-          <TabsTrigger value="assign" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="assign" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <Send className="w-4 h-4" />
             <span className="hidden sm:inline">퀴즈 배정</span>
             <span className="sm:hidden">배정</span>
           </TabsTrigger>
-          <TabsTrigger value="review" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="review" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <ClipboardCheck className="w-4 h-4" />
             <span className="hidden sm:inline">제출 채점</span>
             <span className="sm:hidden">채점</span>
           </TabsTrigger>
-          <TabsTrigger value="tracking" className="flex items-center gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="tracking" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <ChevronRight className="w-4 h-4" />
             <span className="hidden sm:inline">추적 대시보드</span>
             <span className="sm:hidden">추적</span>

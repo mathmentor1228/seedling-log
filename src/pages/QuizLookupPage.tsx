@@ -175,11 +175,15 @@ function QuizLookupContent() {
                       {answerMode !== 'hidden' && (
                         <div className="mt-2 p-2 bg-muted/50 rounded-md">
                           <p className="text-sm font-medium">정답: <MathRenderer text={q.answer} /></p>
-                          {answerMode === 'detail' && q.explanation && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              <span className="font-medium">해설: </span>
-                              <MathRenderer text={q.explanation} />
-                            </p>
+                          {answerMode === 'detail' && (
+                            <div className="text-sm text-muted-foreground mt-2 space-y-1">
+                              <span className="font-semibold text-foreground">해설:</span>
+                              {(q.explanation || q.hint) ? (
+                                <MathRenderer text={q.explanation || q.hint} />
+                              ) : (
+                                <span className="text-xs italic">해설이 등록되지 않았습니다.</span>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}

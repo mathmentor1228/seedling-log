@@ -307,12 +307,12 @@ export function QuizSubmissionReview() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-5">
-          <TabsTrigger value="list" className="text-xs"><Eye className="w-3 h-3 mr-1" />제출 목록</TabsTrigger>
-          <TabsTrigger value="manual" className="text-xs"><Pencil className="w-3 h-3 mr-1" />수동 채점</TabsTrigger>
-          <TabsTrigger value="students" className="text-xs"><Users className="w-3 h-3 mr-1" />학생별</TabsTrigger>
-          <TabsTrigger value="courses" className="text-xs"><BookOpen className="w-3 h-3 mr-1" />과정별</TabsTrigger>
-          <TabsTrigger value="wrong" className="text-xs"><AlertTriangle className="w-3 h-3 mr-1" />오답 추출</TabsTrigger>
+        <TabsList className="w-full grid h-auto grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-5">
+          <TabsTrigger value="list" className="min-h-9 border border-border bg-muted/40 text-xs"><Eye className="w-3 h-3 mr-1" />제출 목록</TabsTrigger>
+          <TabsTrigger value="manual" className="min-h-9 border border-border bg-muted/40 text-xs"><Pencil className="w-3 h-3 mr-1" />수동 채점</TabsTrigger>
+          <TabsTrigger value="students" className="min-h-9 border border-border bg-muted/40 text-xs"><Users className="w-3 h-3 mr-1" />학생별</TabsTrigger>
+          <TabsTrigger value="courses" className="min-h-9 border border-border bg-muted/40 text-xs"><BookOpen className="w-3 h-3 mr-1" />과정별</TabsTrigger>
+          <TabsTrigger value="wrong" className="min-h-9 border border-border bg-muted/40 text-xs"><AlertTriangle className="w-3 h-3 mr-1" />오답 추출</TabsTrigger>
         </TabsList>
 
         {/* TAB: Manual Grading */}
