@@ -757,6 +757,7 @@ export default function StudentHomework() {
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
   };
 
+  const expiredByDate = groupByDate(expiredHomework);
   const pendingByDate = groupByDate(pendingHomework);
   const completedByDate = groupByDate(completedHomework);
 
