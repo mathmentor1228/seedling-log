@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle2, Ban, Copy, Clock, MessageCircle, ChevronDown, BookOpen, Send } from 'lucide-react';
+import { Loader2, CheckCircle2, Ban, Copy, Clock, MessageCircle, ChevronDown, BookOpen, Send, ShoppingBag } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 const ACCOUNT_INFO = '카카오 3333156191775 최윤기';
