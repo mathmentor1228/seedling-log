@@ -839,6 +839,15 @@ export function Timetable() {
           )}
         </CardContent>
 
+        {/* 수업 만들기 섹션 for teachers */}
+        <div className="mt-6 border-t pt-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Pencil className="w-4 h-4" />
+            수업 만들기
+          </h3>
+          <TeacherScheduleCreator onCreated={() => fetchScheduleData()} />
+        </div>
+
         {/* Student/Group management dialog for teachers */}
         <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) setEditClassId(null); }}>
           <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
