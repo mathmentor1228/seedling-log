@@ -953,11 +953,17 @@ export default function QuizPrintPage() {
           min-width: 28px;
           flex-shrink: 0;
         }
-        .qp-question-body { flex: 1; min-width: 0; padding-top: 3px; }
+        .qp-question-body { flex: 1; min-width: 0; padding-top: 3px; overflow: visible; }
         .qp-question-text {
           font-size: 13px;
           line-height: 1.7;
           color: #1e293b;
+          overflow-wrap: break-word;
+          word-break: break-word;
+        }
+        .qp-question-text .math-renderer {
+          display: inline;
+          overflow: visible;
         }
         .qp-source {
           font-size: 8px;
