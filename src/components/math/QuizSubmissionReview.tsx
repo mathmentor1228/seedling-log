@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Loader2, CheckCircle2, XCircle, HelpCircle, Eye, MessageSquare,
   Search, Users, BookOpen, BarChart3, AlertTriangle, Filter, Star,
-  ChevronDown, ChevronRight
+  ChevronDown, ChevronRight, Pencil
 } from 'lucide-react';
+import { ManualQuizGrading } from './ManualQuizGrading';
 
 interface Submission {
   id: string;
