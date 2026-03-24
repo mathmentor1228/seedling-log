@@ -838,20 +838,41 @@ export function Timetable() {
           )}
         </CardContent>
 
-        {/* Student management dialog for teachers */}
+        {/* Student/Group management dialog for teachers */}
         <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) setEditClassId(null); }}>
           <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
-                학생 배정 – {editClassName}
+                수업 관리 – {editClassName}
               </DialogTitle>
             </DialogHeader>
             {editClassId && (
-              <ClassStudentManager
-                classId={editClassId}
-                onStudentCountChange={() => fetchScheduleData()}
-              />
+              <Tabs defaultValue="students" className="space-y-3">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="students" className="text-xs">
+                    <User className="w-3.5 h-3.5 mr-1" />
+                    개별 학생
+                  </TabsTrigger>
+                  <TabsTrigger value="groups" className="text-xs">
+                    <FolderOpen className="w-3.5 h-3.5 mr-1" />
+                    그룹(반)
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="students">
+                  <ClassStudentManager
+                    classId={editClassId}
+                    onStudentCountChange={() => fetchScheduleData()}
+                  />
+                </TabsContent>
+                <TabsContent value="groups">
+                  <TeacherGroupAssignment
+                    classId={editClassId}
+                    className={editClassName}
+                    onDataChange={() => fetchScheduleData()}
+                  />
+                </TabsContent>
+              </Tabs>
             )}
           </DialogContent>
         </Dialog>
