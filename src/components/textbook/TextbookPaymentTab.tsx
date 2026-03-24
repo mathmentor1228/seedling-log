@@ -176,6 +176,18 @@ export function TextbookPaymentTab() {
     fetchData();
   };
 
+  const handleSelfPurchase = async (dist: Distribution) => {
+    const { error } = await supabase.from('textbook_distributions').update({
+      payment_status: '개별구매',
+      paid_at: new Date().toISOString(),
+      confirmed_by: userName,
+      depositor_name: null,
+    } as any).eq('id', dist.id);
+    if (error) { toast.error('처리 실패'); return; }
+    toast.success(`${dist.student_name} 개별구매 처리되었습니다`);
+    fetchData();
+  };
+
   const handleRevertPayment = async (dist: Distribution) => {
     const { error } = await supabase.from('textbook_distributions').update({
       payment_status: '미납',
