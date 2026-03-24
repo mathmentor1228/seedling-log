@@ -22,6 +22,7 @@ import { ClassStudentManager } from '@/components/ClassStudentManager';
 import { StudentGroupManager } from '@/components/timetable/StudentGroupManager';
 import { GroupSlotAssignment } from '@/components/timetable/GroupSlotAssignment';
 import { TeacherGroupAssignment } from '@/components/timetable/TeacherGroupAssignment';
+import { TeacherScheduleCreator } from '@/components/timetable/TeacherScheduleCreator';
 import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
 import { TimetableMatrixView } from '@/components/timetable/TimetableMatrixView';
 
