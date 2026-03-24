@@ -933,7 +933,7 @@ export function Timetable() {
           />
         ) : (
         <Tabs defaultValue="day" className="space-y-4">
-          <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${canViewAllStudents ? 5 : 4}, 1fr)` }}>
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="day" className="text-xs sm:text-sm">
               <Calendar className="w-4 h-4 mr-1 hidden sm:inline" />
               요일별
