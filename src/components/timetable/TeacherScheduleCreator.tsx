@@ -61,7 +61,7 @@ interface ConflictInfo {
 }
 
 export function TeacherScheduleCreator() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
 
   const [groups, setGroups] = useState<GroupInfo[]>([]);

@@ -217,16 +217,6 @@ export function ManualQuizGrading() {
             status: 'reviewed',
           } as any);
 
-        // Award points
-        if (pointsAwarded > 0) {
-          await supabase.from('student_points').insert({
-            student_id: selectedStudentId,
-            points: pointsAwarded,
-            reason: `퀴즈 채점 (${selectedQuiz?.math_concepts?.title || '퀴즈'}) - ${totalCorrect}/${totalGraded} 정답`,
-            awarded_by: user.user?.id,
-          } as any);
-        }
-
         toast({ title: '수동 채점 저장 완료', description: `${totalCorrect}/${totalGraded} 정답 · +${pointsAwarded}포인트` });
       }
 
