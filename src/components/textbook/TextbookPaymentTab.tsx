@@ -434,7 +434,10 @@ export function TextbookPaymentTab() {
                   {dist.depositor_name && (
                     <span className="text-xs font-bold text-primary">[입금: {dist.depositor_name}]</span>
                   )}
-                  <Badge variant={dist.payment_status === '수납완료' ? 'success' : 'destructive'} className="text-[10px]">
+                  <Badge 
+                    variant={dist.payment_status === '수납완료' ? 'success' : dist.payment_status === '개별구매' ? 'outline' : 'destructive'} 
+                    className={`text-[10px] ${dist.payment_status === '개별구매' ? 'border-orange-400 text-orange-600' : ''}`}
+                  >
                     {dist.payment_status}
                   </Badge>
                   <span className="text-xs text-muted-foreground truncate">
