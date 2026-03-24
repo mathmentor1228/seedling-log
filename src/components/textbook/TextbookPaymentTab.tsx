@@ -249,7 +249,7 @@ export function TextbookPaymentTab() {
   return (
     <div className="space-y-6">
       {/* Month filter & stats */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Select value={monthFilter} onValueChange={setMonthFilter}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -258,6 +258,12 @@ export function TextbookPaymentTab() {
             ))}
           </SelectContent>
         </Select>
+        <Input
+          placeholder="학생/교재/담당자 검색..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-48"
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-3">
