@@ -216,9 +216,22 @@ export function TextbookPaymentTab() {
     return opts;
   }, []);
 
+  // Filter distributions by search query
+  const filteredDistributions = useMemo(() => {
+    if (!searchQuery.trim()) return distributions;
+    const q = searchQuery.trim().toLowerCase();
+    return distributions.filter(d =>
+      d.student_name.toLowerCase().includes(q) ||
+      (d.textbook_orders?.textbook_name || '').toLowerCase().includes(q) ||
+      (d.distributed_by_name || '').toLowerCase().includes(q) ||
+      (d.depositor_name || '').toLowerCase().includes(q) ||
+      (d.parent_name || '').toLowerCase().includes(q)
+    );
+  }, [distributions, searchQuery]);
+
   // Group unpaid by student
   const unpaidByStudent = useMemo(() => {
-    const unpaid = distributions.filter(d => d.payment_status === '미납');
+    const unpaid = filteredDistributions.filter(d => d.payment_status === '미납');
     const grouped = new Map<string, { studentName: string; parentName: string | null; dists: Distribution[] }>();
     for (const d of unpaid) {
       if (!grouped.has(d.student_id)) {
@@ -227,7 +240,7 @@ export function TextbookPaymentTab() {
       grouped.get(d.student_id)!.dists.push(d);
     }
     return Array.from(grouped.values());
-  }, [distributions]);
+  }, [filteredDistributions]);
 
   const totalUnpaidCount = unpaidByStudent.reduce((s, g) => s + g.dists.length, 0);
 
