@@ -859,6 +859,53 @@ export default function StudentHomework() {
         )}
       </div>
 
+      {/* Expired Section */}
+      {expiredByDate.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium text-destructive flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" />
+            제출 시간 초과 ({expiredHomework.length})
+          </h2>
+          {expiredByDate.map(([dateKey, items]) => (
+            <div key={dateKey} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs font-medium text-muted-foreground px-2">
+                  {format(new Date(dateKey + 'T00:00:00'), 'M월 d일 (EEE)', { locale: ko })}
+                </span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              {items.map(hw => (
+                <Card 
+                  key={hw.id}
+                  className="opacity-70 hover:opacity-100 transition-colors cursor-pointer border-destructive/20"
+                  onClick={() => {
+                    setSelectedHomework(hw);
+                    navigate(`/student/homework/${hw.id}`);
+                  }}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <Badge className={getSubjectColor(hw.subject)}>
+                            {hw.subject}
+                          </Badge>
+                        </div>
+                        <p className="text-sm line-clamp-2">{hw.content}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs border-destructive/40 text-destructive flex-shrink-0">
+                        시간 초과
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Completed Section */}
       {completedByDate.length > 0 && (
         <div className="space-y-3">
