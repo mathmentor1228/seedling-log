@@ -89,13 +89,14 @@ export function ExamPrepScheduleManager() {
   const [schoolExams, setSchoolExams] = useState<SchoolExamInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [mode, setMode] = useState<'list' | 'create'>('list');
+  const [mode, setMode] = useState<'list' | 'create' | 'trash'>('list');
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
   const [schoolFilter, setSchoolFilter] = useState<string>('all');
   const [showPast, setShowPast] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [deletedCourses, setDeletedCourses] = useState<(DbCourse & { deleted_at: string })[]>([]);
 
   // Form state
   const [formSubject, setFormSubject] = useState('수학');
