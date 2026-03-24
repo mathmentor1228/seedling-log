@@ -39,6 +39,7 @@ export function TextbookPaymentTab() {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [monthFilter, setMonthFilter] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Depositor name popup state
   const [paymentTarget, setPaymentTarget] = useState<Distribution | null>(null);
