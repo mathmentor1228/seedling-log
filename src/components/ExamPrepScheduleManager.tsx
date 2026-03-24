@@ -1098,6 +1098,9 @@ export function ExamPrepScheduleManager() {
             </button>
           ))}
         </div>
+        <Button variant="outline" size="sm" onClick={() => { fetchDeletedCourses(); setMode('trash'); }}>
+          <Archive className="w-4 h-4 mr-1" /> 휴지통
+        </Button>
         <Button onClick={() => { resetAndGoBack(); setMode('create'); }}>
           <Plus className="w-4 h-4 mr-1" /> 내신 특강 등록
         </Button>
