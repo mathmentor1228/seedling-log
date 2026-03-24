@@ -162,7 +162,7 @@ export function ExamPrepScheduleManager() {
   }
 
   async function fetchCourses() {
-    const { data: coursesData } = await supabase.from('exam_prep_courses').select('*').order('created_at', { ascending: false });
+    const { data: coursesData } = await supabase.from('exam_prep_courses').select('*').is('deleted_at', null).order('created_at', { ascending: false });
     if (!coursesData || coursesData.length === 0) { setCourses([]); return; }
     const courseIds = coursesData.map((c: any) => c.id);
     const [sessRes, enrRes] = await Promise.all([
