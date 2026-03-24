@@ -623,6 +623,49 @@ export function ExamPrepScheduleManager() {
   const confirmedCount = allEnrollments.filter(e => e.status === 'confirmed').length;
   const autoCount = allEnrollments.filter(e => e.status === 'auto_confirmed').length;
 
+  // ═══════════════ TRASH MODE ═══════════════
+  if (mode === 'trash') {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMode('list')}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Archive className="w-5 h-5" /> 삭제된 특강 (휴지통)
+          </h2>
+        </div>
+        {deletedCourses.length === 0 ? (
+          <p className="text-center py-12 text-muted-foreground text-sm">삭제된 특강이 없습니다</p>
+        ) : (
+          <div className="space-y-3">
+            {deletedCourses.map(dc => (
+              <Card key={dc.id} className="opacity-70">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {dc.school_name && <Badge variant="outline" className="text-[10px] gap-1"><School className="w-3 h-3" />{dc.school_name}</Badge>}
+                    <Badge variant="secondary" className="text-[10px]">{dc.subject}</Badge>
+                    <span className="text-sm font-medium">{dc.title || `${dc.school_name || ''} ${dc.subject} 내신 특강`}</span>
+                    <span className="text-xs text-muted-foreground">마감: {dc.deadline_date}</span>
+                    <span className="text-xs text-destructive">삭제: {format(parseISO(dc.deleted_at), 'M/d HH:mm')}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleRestoreCourse(dc.id)}>
+                      <Undo2 className="w-3.5 h-3.5 mr-1" /> 복원
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => handlePermanentDelete(dc.id)}>
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> 영구삭제
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ═══════════════ CREATE MODE ═══════════════
   if (mode === 'create') {
     return (
