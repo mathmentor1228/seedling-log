@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus } from 'lucide-react';
+import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { TuitionCalculator } from './TuitionCalculator';
 import { NewStudentRegistration } from './NewStudentRegistration';
