@@ -11,10 +11,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus } from 'lucide-react';
+import { Plus, MessageSquare, CheckCircle2, Clock, Loader2, Send, Trash2, Calculator, UserPlus, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { TuitionCalculator } from './TuitionCalculator';
 import { NewStudentRegistration } from './NewStudentRegistration';
+import { ParentAnnouncementTemplates } from './ParentAnnouncementTemplates';
 
 const CATEGORIES = ['신규생 정보', '퇴원생 안내', '수강과목 변경', '등록 문자', '시간표', '원비 수납', '미납 확인', '교재비 정리', '기타'];
 const STUDENT_NAME_CATEGORIES = ['퇴원생 안내', '수강과목 변경'];
@@ -199,8 +200,13 @@ export function AdminOfficeBoard() {
       <Tabs defaultValue="tasks">
         <TabsList className="mb-4">
           <TabsTrigger value="tasks">업무 보드</TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5"><FileText className="w-3.5 h-3.5" />안내문 양식</TabsTrigger>
           <TabsTrigger value="calculator" className="gap-1.5"><Calculator className="w-3.5 h-3.5" />원비 계산기</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="templates">
+          <ParentAnnouncementTemplates />
+        </TabsContent>
 
         <TabsContent value="calculator">
           <TuitionCalculator />

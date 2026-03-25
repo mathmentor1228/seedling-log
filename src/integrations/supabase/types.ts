@@ -1495,6 +1495,7 @@ export type Database = {
           id: string
           questions: Json
           status: string
+          subtitle: string | null
           title: string | null
           updated_at: string
           version_label: string | null
@@ -1507,6 +1508,7 @@ export type Database = {
           id?: string
           questions?: Json
           status?: string
+          subtitle?: string | null
           title?: string | null
           updated_at?: string
           version_label?: string | null
@@ -1519,6 +1521,7 @@ export type Database = {
           id?: string
           questions?: Json
           status?: string
+          subtitle?: string | null
           title?: string | null
           updated_at?: string
           version_label?: string | null
@@ -1806,6 +1809,39 @@ export type Database = {
           log_date?: string
           log_type?: string
           target?: string | null
+        }
+        Relationships: []
+      }
+      parent_announcement_templates: {
+        Row: {
+          body: string
+          category: string
+          created_at: string
+          created_by: string
+          id: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          category?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          category?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }

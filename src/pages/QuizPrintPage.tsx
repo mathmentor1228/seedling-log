@@ -38,6 +38,7 @@ interface PrintData {
   versionNumber: number;
   versionLabel: string | null;
   answerCode: string | null;
+  subtitle: string | null;
 }
 
 function stripHtml(str: string): string {
@@ -184,7 +185,7 @@ export default function QuizPrintPage() {
     (async () => {
       const { data: quiz, error } = await supabase
         .from('math_concept_quizzes')
-        .select('id, questions, version_number, version_label, answer_code, math_concepts(title, course, grade, subject)')
+        .select('id, questions, version_number, version_label, answer_code, subtitle, math_concepts(title, course, grade, subject)')
         .eq('id', quizId)
         .single();
       if (error || !quiz) { setLoading(false); return; }
@@ -199,6 +200,7 @@ export default function QuizPrintPage() {
         versionNumber: (quiz as any).version_number || 1,
         versionLabel: (quiz as any).version_label || null,
         answerCode: (quiz as any).answer_code || null,
+        subtitle: (quiz as any).subtitle || null,
       });
       setLoading(false);
     })();
@@ -329,6 +331,7 @@ export default function QuizPrintPage() {
         <p className="qp-subject-label">{cfg.label}</p>
         <p className="qp-textbook-info">{data.course} · {data.grade} · {data.subject}</p>
         <p className="qp-concept-title">{data.conceptTitle}</p>
+        {data.subtitle && <p className="qp-subtitle" style={{ fontSize: '9pt', color: '#666', marginTop: '1px' }}>{data.subtitle}</p>}
         <div className="qp-header-meta">
           <span>{data.questions.length}문제</span>
           <Badge variant="secondary" className="qp-version-badge">V{data.versionNumber}</Badge>
