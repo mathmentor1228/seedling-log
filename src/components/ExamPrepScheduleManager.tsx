@@ -1,4 +1,4 @@
-// EXAM-PREP-SYSTEM-V3: School-based exam prep scheduling with cross-school visibility
+// EXAM-PREP-SYSTEM-V4: Individual lock, partial reschedule, re-confirmation flow
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -11,13 +11,15 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   Plus, Trash2, AlertTriangle, CalendarCheck, Clock, Users, X,
   ChevronDown, ChevronUp, ArrowLeft, UserPlus, UserMinus, GripVertical,
-  School, CalendarDays, Search, Eye, Copy, ClipboardPaste, UsersRound, Pencil,
-  Undo2, Archive,
+  School, CalendarDays, Eye, Copy, ClipboardPaste, UsersRound, Pencil,
+  Undo2, Archive, Lock, RefreshCw, ShieldAlert,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, differenceInDays, parseISO } from 'date-fns';
@@ -65,6 +67,7 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
   pending: { label: '미확인', variant: 'destructive' },
   confirmed: { label: '확인완료', variant: 'default' },
   auto_confirmed: { label: '시스템 확정', variant: 'secondary' },
+  needs_reconfirm: { label: '재확인 필요', variant: 'destructive' },
 };
 
 let _tempId = 0;
@@ -119,10 +122,15 @@ export function ExamPrepScheduleManager() {
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [copiedSessionIdx, setCopiedSessionIdx] = useState<number | null>(null);
 
+  // INDIVIDUAL-LOCK: Track confirmed student IDs from original course when editing
+  const [originalConfirmedStudents, setOriginalConfirmedStudents] = useState<Set<string>>(new Set());
+  const [originalSlotAssignments, setOriginalSlotAssignments] = useState<Record<string, string[]>>({});
+  // Warning dialog for modifying confirmed students
+  const [confirmWarningDialog, setConfirmWarningDialog] = useState<{ studentId: string; action: 'add' | 'remove'; slotId?: string } | null>(null);
+
   const studentMap = useMemo(() => students.reduce<Record<string, Student>>((acc, s) => { acc[s.id] = s; return acc; }, {}), [students]);
   const teacherMap = useMemo(() => teachers.reduce<Record<string, string>>((acc, t) => { acc[t.id] = t.full_name; return acc; }, {}), [teachers]);
 
-  // All unique school names from students
   const allSchools = useMemo(() => {
     const schools = new Set<string>();
     students.forEach(s => { if (s.school) schools.add(s.school); });
@@ -202,7 +210,6 @@ export function ExamPrepScheduleManager() {
     }));
   }
 
-  // ── Upcoming exam dates per school ──
   const upcomingExamsBySchool = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     const map: Record<string, SchoolExamInfo> = {};
@@ -216,7 +223,6 @@ export function ExamPrepScheduleManager() {
     return Object.entries(map).sort(([, a], [, b]) => (a.exam_date_start || '').localeCompare(b.exam_date_start || ''));
   }, [schoolExams]);
 
-  // ── Filtered students by subject + teacher + school ──
   const filteredStudents = useMemo(() => {
     if (!formSubject || !formTeacherId) return [];
     const sids = new Set(classInfos.filter(ci => ci.subject === formSubject && ci.teacher_id === formTeacherId).map(ci => ci.student_id));
@@ -227,7 +233,6 @@ export function ExamPrepScheduleManager() {
     return filtered;
   }, [formSubject, formTeacherId, formSchool, classInfos, students]);
 
-  // Group by school + grade
   const groupedStudents = useMemo(() => {
     const groups: Record<string, Student[]> = {};
     for (const s of filteredStudents) {
@@ -254,9 +259,7 @@ export function ExamPrepScheduleManager() {
     return set;
   }, [slotAssignments]);
 
-  // Cross-school: get students assigned to other courses' slots on the same date/time
   const crossSchoolAssignments = useMemo(() => {
-    // Build: date+time → { studentId, school, courseName }[]
     const map: Record<string, Array<{ studentId: string; school: string; courseTitle: string }>> = {};
     for (const c of courses) {
       for (const sess of c.sessions) {
@@ -265,11 +268,7 @@ export function ExamPrepScheduleManager() {
           if (!map[key]) map[key] = [];
           for (const ss of slot.students) {
             const st = studentMap[ss.student_id];
-            map[key].push({
-              studentId: ss.student_id,
-              school: st?.school || '—',
-              courseTitle: c.title || `${c.subject} 특강`,
-            });
+            map[key].push({ studentId: ss.student_id, school: st?.school || '—', courseTitle: c.title || `${c.subject} 특강` });
           }
         }
       }
@@ -277,7 +276,6 @@ export function ExamPrepScheduleManager() {
     return map;
   }, [courses, studentMap]);
 
-  // Get cross-school students for a given session date + slot time (excluding current school)
   function getCrossSchoolForSlot(sessionDate: string, startTime: string, endTime: string) {
     const key = `${sessionDate}|${startTime}|${endTime}`;
     return (crossSchoolAssignments[key] || []).filter(a => a.school !== formSchool);
@@ -295,6 +293,25 @@ export function ExamPrepScheduleManager() {
     }
     return conflicts;
   }, [existingSchedules]);
+
+  // ── Check if a student's slot assignments have changed from original ──
+  function hasStudentScheduleChanged(studentId: string): boolean {
+    if (!editingCourseId) return false;
+    // Compare current assignments with original
+    const currentSlots = new Set<string>();
+    const originalSlots = new Set<string>();
+    
+    for (const [slotId, ids] of Object.entries(slotAssignments)) {
+      if (ids.includes(studentId)) currentSlots.add(slotId);
+    }
+    for (const [slotId, ids] of Object.entries(originalSlotAssignments)) {
+      if (ids.includes(studentId)) originalSlots.add(slotId);
+    }
+    
+    if (currentSlots.size !== originalSlots.size) return true;
+    for (const s of currentSlots) if (!originalSlots.has(s)) return true;
+    return false;
+  }
 
   // ── Session / Slot Editors ──
   function updateSessionField(si: number, field: 'label' | 'date', value: string) {
@@ -332,20 +349,49 @@ export function ExamPrepScheduleManager() {
     } : s));
   }
 
+  // INDIVIDUAL-LOCK: Check before modifying confirmed student
+  function tryModifyStudentSlot(slotId: string, studentId: string, action: 'add' | 'remove') {
+    if (editingCourseId && originalConfirmedStudents.has(studentId)) {
+      setConfirmWarningDialog({ studentId, action, slotId });
+      return;
+    }
+    executeSlotModification(slotId, studentId, action);
+  }
+
+  function executeSlotModification(slotId: string, studentId: string, action: 'add' | 'remove') {
+    if (action === 'add') {
+      const current = slotAssignments[slotId] || [];
+      if (!current.includes(studentId)) {
+        setSlotAssignments(prev => ({ ...prev, [slotId]: [...(prev[slotId] || []), studentId] }));
+      }
+    } else {
+      setSlotAssignments(prev => ({
+        ...prev, [slotId]: (prev[slotId] || []).filter(id => id !== studentId),
+      }));
+    }
+    setConfirmWarningDialog(null);
+  }
+
   function handleSlotClick(slotId: string) {
     if (!activeStudentId) return;
     const current = slotAssignments[slotId] || [];
     if (current.includes(activeStudentId)) return;
-    setSlotAssignments(prev => ({ ...prev, [slotId]: [...(prev[slotId] || []), activeStudentId] }));
+    tryModifyStudentSlot(slotId, activeStudentId, 'add');
   }
 
   function removeStudentFromSlot(slotId: string, studentId: string) {
-    setSlotAssignments(prev => ({
-      ...prev, [slotId]: (prev[slotId] || []).filter(id => id !== studentId),
-    }));
+    tryModifyStudentSlot(slotId, studentId, 'remove');
   }
 
   function assignStudentToAllSlots(studentId: string) {
+    if (editingCourseId && originalConfirmedStudents.has(studentId)) {
+      setConfirmWarningDialog({ studentId, action: 'add' });
+      return;
+    }
+    doAssignAllSlots(studentId);
+  }
+
+  function doAssignAllSlots(studentId: string) {
     const newAssignments = { ...slotAssignments };
     for (const sess of sessions) {
       for (const slot of sess.slots) {
@@ -356,17 +402,26 @@ export function ExamPrepScheduleManager() {
       }
     }
     setSlotAssignments(newAssignments);
+    setConfirmWarningDialog(null);
   }
 
   function removeStudentFromAllSlots(studentId: string) {
+    if (editingCourseId && originalConfirmedStudents.has(studentId)) {
+      setConfirmWarningDialog({ studentId, action: 'remove' });
+      return;
+    }
+    doRemoveAllSlots(studentId);
+  }
+
+  function doRemoveAllSlots(studentId: string) {
     const newAssignments: Record<string, string[]> = {};
     for (const [slotId, ids] of Object.entries(slotAssignments)) {
       const filtered = ids.filter(id => id !== studentId);
       if (filtered.length > 0) newAssignments[slotId] = filtered;
     }
     setSlotAssignments(newAssignments);
+    setConfirmWarningDialog(null);
   }
-
 
   function copySessionSlots(sourceIdx: number) {
     setCopiedSessionIdx(sourceIdx);
@@ -379,23 +434,13 @@ export function ExamPrepScheduleManager() {
 
     setSessions(prev => prev.map((s, i) => {
       if (i !== targetIdx) return s;
-      // Copy slot structure (times) from source, generate new IDs
-      const newSlots = source.slots.map(sl => ({
-        id: tempId(),
-        startTime: sl.startTime,
-        endTime: sl.endTime,
-      }));
-      // Also copy student assignments
+      const newSlots = source.slots.map(sl => ({ id: tempId(), startTime: sl.startTime, endTime: sl.endTime }));
       const newAssignments = { ...slotAssignments };
-      // Remove old slot assignments for target
       s.slots.forEach(sl => delete newAssignments[sl.id]);
-      // Copy assignments from source slots to new slots
       source.slots.forEach((srcSlot, idx) => {
         if (idx < newSlots.length) {
           const srcAssigned = slotAssignments[srcSlot.id] || [];
-          if (srcAssigned.length > 0) {
-            newAssignments[newSlots[idx].id] = [...srcAssigned];
-          }
+          if (srcAssigned.length > 0) newAssignments[newSlots[idx].id] = [...srcAssigned];
         }
       });
       setSlotAssignments(newAssignments);
@@ -403,14 +448,11 @@ export function ExamPrepScheduleManager() {
     }));
   }
 
-  // ── Assign all students of a grade group to all slots in a session ──
   function assignGradeToSession(sessionIdx: number, groupKey: string) {
     const groupStudents = groupedStudents.find(([key]) => key === groupKey)?.[1] || [];
     if (groupStudents.length === 0) return;
-
     const sess = sessions[sessionIdx];
     if (!sess) return;
-
     const newAssignments = { ...slotAssignments };
     for (const slot of sess.slots) {
       if (!slot.startTime || !slot.endTime) continue;
@@ -454,6 +496,10 @@ export function ExamPrepScheduleManager() {
       });
     });
     setSlotAssignments(newAssignments);
+    // INDIVIDUAL-LOCK: Track which students are confirmed
+    const confirmedIds = new Set(course.enrollments.filter(e => e.status === 'confirmed' || e.status === 'auto_confirmed').map(e => e.student_id));
+    setOriginalConfirmedStudents(confirmedIds);
+    setOriginalSlotAssignments(JSON.parse(JSON.stringify(newAssignments)));
     setActiveStudentId(null);
     setEditingCourseId(courseId);
     setMode('create');
@@ -470,7 +516,21 @@ export function ExamPrepScheduleManager() {
     }
     setSaving(true);
 
+    // INDIVIDUAL-LOCK: Determine which confirmed students had schedule changes
+    const changedConfirmedStudents = new Set<string>();
+    if (editingCourseId) {
+      for (const sid of originalConfirmedStudents) {
+        if (hasStudentScheduleChanged(sid)) {
+          changedConfirmedStudents.add(sid);
+        }
+      }
+    }
+
     // If editing, delete the old course first (cascade will remove sessions/slots/enrollments)
+    const oldEnrollments = editingCourseId
+      ? courses.find(c => c.id === editingCourseId)?.enrollments || []
+      : [];
+
     if (editingCourseId) {
       const { error: delErr } = await supabase.from('exam_prep_courses').delete().eq('id', editingCourseId);
       if (delErr) {
@@ -528,9 +588,51 @@ export function ExamPrepScheduleManager() {
       for (const sid of studentIds) slotStudentRows.push({ slot_id: dbSlot.id, student_id: sid });
     }
     if (slotStudentRows.length > 0) await supabase.from('exam_prep_slot_students').insert(slotStudentRows);
-    const enrollRows = [...allAssignedIds].map(sid => ({ course_id: course.id, student_id: sid }));
-    await supabase.from('exam_prep_enrollments').insert(enrollRows);
-    toast({ title: `${allAssignedIds.size}명 · ${filledSessions.length}회차 특강 ${editingCourseId ? '수정' : '등록'} 완료` });
+
+    // INDIVIDUAL-LOCK: Preserve enrollment statuses
+    const enrollRows = [...allAssignedIds].map(sid => {
+      // If editing, carry over the original status for unchanged confirmed students
+      const oldEnrollment = oldEnrollments.find(e => e.student_id === sid);
+      if (oldEnrollment && (oldEnrollment.status === 'confirmed' || oldEnrollment.status === 'auto_confirmed')) {
+        if (changedConfirmedStudents.has(sid)) {
+          // Schedule changed → needs_reconfirm
+          return {
+            course_id: course.id, student_id: sid,
+            status: 'needs_reconfirm',
+            confirmed_at: null,
+            schedule_changed_at: new Date().toISOString(),
+            change_reason: '관리자에 의한 일정 변경',
+          };
+        } else {
+          // No change → keep confirmed status
+          return {
+            course_id: course.id, student_id: sid,
+            status: oldEnrollment.status,
+            confirmed_at: oldEnrollment.confirmed_at,
+          };
+        }
+      }
+      // New or pending student
+      return { course_id: course.id, student_id: sid };
+    });
+    await (supabase.from('exam_prep_enrollments') as any).insert(enrollRows);
+
+    // INDIVIDUAL-LOCK: Send notifications to changed confirmed students
+    if (changedConfirmedStudents.size > 0) {
+      const notifRows = [...changedConfirmedStudents].map(sid => ({
+        course_id: course.id,
+        student_id: sid,
+        notification_type: 'schedule_changed',
+        message: '내신 특강 일정이 변경되었습니다. 재확인이 필요합니다.',
+        created_by: user?.id || null,
+      }));
+      await (supabase.from('exam_prep_notifications') as any).insert(notifRows);
+    }
+
+    const changeInfo = changedConfirmedStudents.size > 0
+      ? ` (${changedConfirmedStudents.size}명 재확인 필요)`
+      : '';
+    toast({ title: `${allAssignedIds.size}명 · ${filledSessions.length}회차 특강 ${editingCourseId ? '수정' : '등록'} 완료${changeInfo}` });
     resetAndGoBack();
     await fetchCourses();
     setSaving(false);
@@ -580,12 +682,11 @@ export function ExamPrepScheduleManager() {
     ]);
     setSlotAssignments({}); setActiveStudentId(null);
     setEditingCourseId(null);
+    setOriginalConfirmedStudents(new Set());
+    setOriginalSlotAssignments({});
   }
 
-  // ── Course classification ──
   const today = new Date().toISOString().split('T')[0];
-
-  // Get latest session date for a course
   function getLatestSessionDate(course: CourseView) {
     if (course.sessions.length === 0) return '';
     return course.sessions.reduce((max, s) => s.schedule_date > max ? s.schedule_date : max, '');
@@ -606,27 +707,66 @@ export function ExamPrepScheduleManager() {
     [courses, today]
   );
 
-  // Filter by school
   const filteredUpcoming = schoolFilter === 'all' ? upcomingCourses : upcomingCourses.filter(c => c.school_name === schoolFilter);
   const filteredPast = schoolFilter === 'all' ? pastCourses : pastCourses.filter(c => c.school_name === schoolFilter);
 
-  // Schools present in courses
   const courseSchools = useMemo(() => {
     const set = new Set<string>();
     courses.forEach(c => { if (c.school_name) set.add(c.school_name); });
     return [...set].sort();
   }, [courses]);
 
-  // Stats
   const allEnrollments = courses.flatMap(c => c.enrollments);
   const pendingCount = allEnrollments.filter(e => e.status === 'pending').length;
   const confirmedCount = allEnrollments.filter(e => e.status === 'confirmed').length;
   const autoCount = allEnrollments.filter(e => e.status === 'auto_confirmed').length;
+  const reconfirmCount = allEnrollments.filter(e => e.status === 'needs_reconfirm').length;
+
+  // ═══════════════ WARNING DIALOG ═══════════════
+  const warningDialogContent = confirmWarningDialog ? (
+    <Dialog open={!!confirmWarningDialog} onOpenChange={() => setConfirmWarningDialog(null)}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-600">
+            <ShieldAlert className="w-5 h-5" /> 확정 학생 일정 변경
+          </DialogTitle>
+          <DialogDescription>
+            <strong>{studentMap[confirmWarningDialog.studentId]?.name}</strong> 학생은 이미 일정을 <strong>확정</strong>한 상태입니다.
+            수정을 진행하시겠습니까?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+          <p className="text-xs text-amber-800 dark:text-amber-300 flex items-start gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            수정 시 이 학생은 '재확인 필요' 상태로 변경되며, 학생에게 재확인 알림이 전송됩니다.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmWarningDialog(null)}>취소</Button>
+          <Button variant="destructive" onClick={() => {
+            const { studentId, action, slotId } = confirmWarningDialog;
+            if (action === 'add' && slotId) {
+              executeSlotModification(slotId, studentId, 'add');
+            } else if (action === 'remove' && slotId) {
+              executeSlotModification(slotId, studentId, 'remove');
+            } else if (action === 'add') {
+              doAssignAllSlots(studentId);
+            } else {
+              doRemoveAllSlots(studentId);
+            }
+          }}>
+            수정 진행
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  ) : null;
 
   // ═══════════════ TRASH MODE ═══════════════
   if (mode === 'trash') {
     return (
       <div className="space-y-5">
+        {warningDialogContent}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMode('list')}>
             <ArrowLeft className="w-4 h-4" />
@@ -670,6 +810,7 @@ export function ExamPrepScheduleManager() {
   if (mode === 'create') {
     return (
       <div className="space-y-5">
+        {warningDialogContent}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={resetAndGoBack}>
             <ArrowLeft className="w-4 h-4" />
@@ -688,7 +829,6 @@ export function ExamPrepScheduleManager() {
         {step === 1 && (
           <Card>
             <CardContent className="p-5 space-y-5">
-              {/* School Selection - FIRST */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold flex items-center gap-1.5">
                   <School className="w-3.5 h-3.5" /> 학교 선택
@@ -701,7 +841,6 @@ export function ExamPrepScheduleManager() {
                 </Select>
               </div>
 
-              {/* School exam info hint */}
               {formSchool && (() => {
                 const examInfo = upcomingExamsBySchool.find(([name]) => name === formSchool);
                 if (!examInfo) return null;
@@ -754,7 +893,6 @@ export function ExamPrepScheduleManager() {
                 <Textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} placeholder="특강 내용, 준비물 등" rows={2} />
               </div>
 
-              {/* Preview: filtered students */}
               {formSubject && formTeacherId && (
                 <div className="border rounded-lg p-3 bg-muted/20">
                   <p className="text-xs font-semibold mb-2 flex items-center gap-1.5">
@@ -767,7 +905,7 @@ export function ExamPrepScheduleManager() {
                       {filteredStudents.slice(0, 20).map(s => (
                         <Badge key={s.id} variant="outline" className="text-[10px]">{s.name}</Badge>
                       ))}
-                      {filteredStudents.length > 20 && <Badge variant="muted" className="text-[10px]">+{filteredStudents.length - 20}명</Badge>}
+                      {filteredStudents.length > 20 && <Badge variant="secondary" className="text-[10px]">+{filteredStudents.length - 20}명</Badge>}
                     </div>
                   )}
                 </div>
@@ -796,9 +934,18 @@ export function ExamPrepScheduleManager() {
                 </Button>
               </div>
 
+              {/* Confirmed students info banner (editing mode only) */}
+              {editingCourseId && originalConfirmedStudents.size > 0 && (
+                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <p className="text-xs text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5" />
+                    <strong>{originalConfirmedStudents.size}명</strong>이 이미 확정 상태입니다. 이들의 일정 수정 시 경고가 표시됩니다.
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-3">
                 {sessions.map((sess, si) => {
-                  // Cross-school students for this session
                   const crossSchoolStudents = sess.date ? sess.slots.flatMap(slot =>
                     slot.startTime && slot.endTime ? getCrossSchoolForSlot(sess.date, slot.startTime, slot.endTime) : []
                   ) : [];
@@ -813,9 +960,7 @@ export function ExamPrepScheduleManager() {
                           className="h-7 text-xs w-[160px] bg-background" />
                         {sess.date && <span className="text-[10px] text-muted-foreground">{fmtDate(sess.date)}</span>}
                         <div className="ml-auto flex items-center gap-1">
-                          {/* Copy/Paste buttons */}
-                          <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1" onClick={() => copySessionSlots(si)}
-                            title="이 회차의 시간표 복사">
+                          <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1" onClick={() => copySessionSlots(si)} title="이 회차의 시간표 복사">
                             <Copy className="w-3 h-3" /> 복사
                           </Button>
                           {copiedSessionIdx !== null && copiedSessionIdx !== si && (
@@ -835,7 +980,6 @@ export function ExamPrepScheduleManager() {
                         </div>
                       </div>
 
-                      {/* Cross-school notice */}
                       {uniqueCrossSchool.length > 0 && (
                         <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900">
                           <p className="text-[10px] text-blue-700 dark:text-blue-400 flex items-center gap-1">
@@ -845,14 +989,13 @@ export function ExamPrepScheduleManager() {
                         </div>
                       )}
 
-                      {/* Grade bulk assign buttons */}
                       {groupedStudents.length > 0 && sess.slots.some(sl => sl.startTime && sl.endTime) && (
                         <div className="px-4 py-1.5 border-b flex items-center gap-1.5 flex-wrap bg-muted/20">
                           <span className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
                             <UsersRound className="w-3 h-3" /> 학년 일괄 배치:
                           </span>
                           {groupedStudents.map(([groupKey, groupStudents]) => {
-                            const [school, levelGrade] = groupKey.split('|');
+                            const [, levelGrade] = groupKey.split('|');
                             const levelChar = levelGrade?.[0] || '';
                             const yearNum = levelGrade?.slice(1) || '';
                             const shortLabel = `${levelChar}${yearNum}`;
@@ -860,7 +1003,7 @@ export function ExamPrepScheduleManager() {
                               <Button key={groupKey} variant="outline" size="sm"
                                 className="h-5 text-[9px] px-1.5 gap-0.5"
                                 onClick={() => assignGradeToSession(si, groupKey)}
-                                title={`${school} ${shortLabel} ${groupStudents.length}명 전체 배치`}>
+                                title={`${shortLabel} ${groupStudents.length}명 전체 배치`}>
                                 {shortLabel} ({groupStudents.length})
                               </Button>
                             );
@@ -872,7 +1015,6 @@ export function ExamPrepScheduleManager() {
                         {sess.slots.map((slot, sli) => {
                           const assigned = slotAssignments[slot.id] || [];
                           const isTargetable = !!activeStudentId && !assigned.includes(activeStudentId) && slot.startTime && slot.endTime;
-                          // Cross-school students for this specific slot
                           const crossForSlot = sess.date && slot.startTime && slot.endTime
                             ? getCrossSchoolForSlot(sess.date, slot.startTime, slot.endTime) : [];
 
@@ -895,7 +1037,6 @@ export function ExamPrepScheduleManager() {
                                   </Button>
                                 )}
                               </div>
-                              {/* Cross-school students in lighter color */}
                               {crossForSlot.length > 0 && (
                                 <div className="flex flex-wrap gap-1 ml-[42px] mb-1">
                                   {crossForSlot.map((c, i) => (
@@ -905,18 +1046,22 @@ export function ExamPrepScheduleManager() {
                                   ))}
                                 </div>
                               )}
-                              {/* Assigned students */}
                               {assigned.length > 0 && (
                                 <div className="flex flex-wrap gap-1 ml-[42px]">
                                   {assigned.map(sid => {
                                     const st = studentMap[sid];
                                     const conflicts = getConflictsForSlot(sid, sess.date, slot.startTime, slot.endTime);
                                     const hasConflict = conflicts.length > 0;
+                                    const isConfirmed = editingCourseId && originalConfirmedStudents.has(sid);
                                     return (
-                                      <Badge key={sid} variant={hasConflict ? 'destructive' : 'secondary'}
-                                        className="text-[10px] pl-1.5 pr-0.5 py-0.5 gap-1 cursor-default group"
-                                        title={hasConflict ? `충돌: ${conflicts.join(', ')}` : st?.name || ''}>
+                                      <Badge key={sid}
+                                        variant={hasConflict ? 'destructive' : isConfirmed ? 'default' : 'secondary'}
+                                        className={cn('text-[10px] pl-1.5 pr-0.5 py-0.5 gap-1 cursor-default group',
+                                          isConfirmed && !hasConflict && 'border-primary/50'
+                                        )}
+                                        title={hasConflict ? `충돌: ${conflicts.join(', ')}` : isConfirmed ? '확정 학생 (수정 시 재확인 필요)' : st?.name || ''}>
                                         {hasConflict && <AlertTriangle className="w-2.5 h-2.5" />}
+                                        {isConfirmed && !hasConflict && <Lock className="w-2.5 h-2.5" />}
                                         {st?.name || sid.slice(0, 6)}
                                         <button className="ml-0.5 rounded-full p-0.5 hover:bg-background/50 transition-colors"
                                           onClick={e => { e.stopPropagation(); removeStudentFromSlot(slot.id, sid); }}>
@@ -930,7 +1075,6 @@ export function ExamPrepScheduleManager() {
                               {assigned.length === 0 && slot.startTime && slot.endTime && (
                                 <p className="text-[10px] text-muted-foreground/50 ml-[42px] italic">
                                   {activeStudentId ? '클릭하여 학생 배치' : '학생을 선택 후 클릭'}
-                                  {crossForSlot.length > 0 && ` (타 학교 ${crossForSlot.length}명 배정됨)`}
                                 </p>
                               )}
                             </div>
@@ -977,6 +1121,7 @@ export function ExamPrepScheduleManager() {
                           {groupStudents.map(s => {
                             const isActive = activeStudentId === s.id;
                             const isAssigned = assignedStudentIds.has(s.id);
+                            const isConfirmed = editingCourseId && originalConfirmedStudents.has(s.id);
                             return (
                               <div key={s.id}
                                 className={cn('flex items-center gap-2 px-3 py-2 border-b border-border/30 cursor-pointer transition-all text-sm select-none',
@@ -984,9 +1129,14 @@ export function ExamPrepScheduleManager() {
                                     : isAssigned ? 'bg-primary/5' : 'hover:bg-accent/40'
                                 )}
                                 onClick={() => setActiveStudentId(isActive ? null : s.id)}>
-                                <div className={`w-2 h-2 rounded-full shrink-0 ${isAssigned ? 'bg-primary' : 'bg-muted-foreground/20'}`} />
+                                <div className={cn('w-2 h-2 rounded-full shrink-0',
+                                  isConfirmed ? 'bg-emerald-500' : isAssigned ? 'bg-primary' : 'bg-muted-foreground/20'
+                                )} />
                                 <span className={cn('font-medium', isActive && 'text-primary')}>{s.name}</span>
-                                {isAssigned && !isActive && (
+                                {isConfirmed && (
+                                  <Lock className="w-3 h-3 text-emerald-600 ml-auto shrink-0" />
+                                )}
+                                {isAssigned && !isActive && !isConfirmed && (
                                   <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto">배치됨</Badge>
                                 )}
                               </div>
@@ -1000,10 +1150,23 @@ export function ExamPrepScheduleManager() {
               )}
 
               {activeStudentId && (
-                <Card className="border-primary/30 bg-primary/5">
+                <Card className={cn('border-primary/30 bg-primary/5',
+                  editingCourseId && originalConfirmedStudents.has(activeStudentId) && 'border-amber-400/50 bg-amber-50/50 dark:bg-amber-950/20'
+                )}>
                   <CardContent className="p-3 space-y-2">
-                    <p className="text-xs font-bold text-primary">{studentMap[activeStudentId]?.name} 선택됨</p>
-                    <p className="text-[10px] text-muted-foreground">왼쪽 시간표를 클릭하면 해당 시간에 배치됩니다.</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-primary">{studentMap[activeStudentId]?.name} 선택됨</p>
+                      {editingCourseId && originalConfirmedStudents.has(activeStudentId) && (
+                        <Badge variant="outline" className="text-[9px] gap-0.5 border-amber-400 text-amber-700">
+                          <Lock className="w-2.5 h-2.5" /> 확정됨
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {editingCourseId && originalConfirmedStudents.has(activeStudentId)
+                        ? '확정 학생입니다. 수정 시 재확인 요청이 발송됩니다.'
+                        : '왼쪽 시간표를 클릭하면 해당 시간에 배치됩니다.'}
+                    </p>
                     <div className="flex gap-1.5">
                       <Button size="sm" variant="outline" className="h-7 text-[10px] flex-1" onClick={() => assignStudentToAllSlots(activeStudentId)}>
                         <UserPlus className="w-3 h-3 mr-1" /> 전체 배치
@@ -1025,7 +1188,8 @@ export function ExamPrepScheduleManager() {
   // ═══════════════ LIST VIEW ═══════════════
   return (
     <div className="space-y-6">
-      {/* ── Upcoming Exam Dates Banner ── */}
+      {warningDialogContent}
+
       {upcomingExamsBySchool.length > 0 && (
         <Card className="border-amber-200 dark:border-amber-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30">
           <CardContent className="p-4">
@@ -1040,7 +1204,7 @@ export function ExamPrepScheduleManager() {
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-bold truncate">{schoolName}</span>
                       {dday !== null && dday >= 0 && (
-                        <Badge variant={dday <= 7 ? 'destructive' : dday <= 14 ? 'warning' : 'secondary'} className="text-[10px] shrink-0">
+                        <Badge variant={dday <= 7 ? 'destructive' : dday <= 14 ? 'outline' : 'secondary'} className="text-[10px] shrink-0">
                           D-{dday}
                         </Badge>
                       )}
@@ -1061,23 +1225,31 @@ export function ExamPrepScheduleManager() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-destructive">{pendingCount}</p>
-            <p className="text-xs text-muted-foreground">미확인</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-destructive">{pendingCount}</p>
+            <p className="text-[10px] text-muted-foreground">미확인</p>
           </CardContent>
         </Card>
         <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-primary">{confirmedCount}</p>
-            <p className="text-xs text-muted-foreground">확인완료</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-primary">{confirmedCount}</p>
+            <p className="text-[10px] text-muted-foreground">확인완료</p>
           </CardContent>
         </Card>
+        {reconfirmCount > 0 && (
+          <Card className="border-amber-400/30 bg-amber-50 dark:bg-amber-950/30">
+            <CardContent className="p-3 text-center">
+              <p className="text-xl font-bold text-amber-600">{reconfirmCount}</p>
+              <p className="text-[10px] text-muted-foreground">재확인 필요</p>
+            </CardContent>
+          </Card>
+        )}
         <Card className="border-muted-foreground/30 bg-muted/50">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-muted-foreground">{autoCount}</p>
-            <p className="text-xs text-muted-foreground">시스템 확정</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-muted-foreground">{autoCount}</p>
+            <p className="text-[10px] text-muted-foreground">시스템 확정</p>
           </CardContent>
         </Card>
       </div>
@@ -1112,7 +1284,6 @@ export function ExamPrepScheduleManager() {
         </div>
       ) : (
         <>
-          {/* Upcoming courses */}
           {filteredUpcoming.length > 0 ? (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -1129,7 +1300,6 @@ export function ExamPrepScheduleManager() {
             <p className="text-center py-8 text-muted-foreground text-sm">진행 중인 내신 특강이 없습니다</p>
           )}
 
-          {/* Past courses */}
           {filteredPast.length > 0 && (
             <div className="space-y-3 mt-8">
               <button onClick={() => setShowPast(!showPast)}
@@ -1164,7 +1334,7 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
   const cPending = course.enrollments.filter(e => e.status === 'pending').length;
   const cConfirmed = course.enrollments.filter(e => e.status === 'confirmed').length;
   const cAuto = course.enrollments.filter(e => e.status === 'auto_confirmed').length;
-  const hasEditable = cPending > 0 || course.enrollments.length === 0;
+  const cReconfirm = course.enrollments.filter(e => e.status === 'needs_reconfirm').length;
 
   function getStudentConflicts(studentId: string, sessionDate: string, slotStart: string, slotEnd: string) {
     if (!sessionDate || !slotStart || !slotEnd) return [];
@@ -1177,6 +1347,11 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
       }
     }
     return conflicts;
+  }
+
+  // Get enrollment status for a student
+  function getEnrollmentStatus(studentId: string) {
+    return course.enrollments.find(e => e.student_id === studentId)?.status || 'pending';
   }
 
   return (
@@ -1199,6 +1374,7 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex gap-1">
             {cPending > 0 && <Badge variant="destructive" className="text-[10px] px-1.5">{cPending} 미확인</Badge>}
+            {cReconfirm > 0 && <Badge className="text-[10px] px-1.5 bg-amber-500 hover:bg-amber-600">{cReconfirm} 재확인</Badge>}
             {cConfirmed > 0 && <Badge variant="default" className="text-[10px] px-1.5">{cConfirmed} 확인</Badge>}
             {cAuto > 0 && <Badge variant="secondary" className="text-[10px] px-1.5">{cAuto} 자동</Badge>}
           </div>
@@ -1228,11 +1404,17 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
                             {slot.students.map(ss => {
                               const conflicts = getStudentConflicts(ss.student_id, sess.schedule_date, slot.start_time, slot.end_time);
                               const hasConflict = conflicts.length > 0;
+                              const status = getEnrollmentStatus(ss.student_id);
                               return (
-                                <Badge key={ss.id} variant={hasConflict ? 'destructive' : 'secondary'}
-                                  className="text-[10px] gap-0.5"
-                                  title={hasConflict ? `정규수업 충돌: ${conflicts.join(', ')}` : ''}>
+                                <Badge key={ss.id}
+                                  variant={hasConflict ? 'destructive' : status === 'confirmed' || status === 'auto_confirmed' ? 'default' : status === 'needs_reconfirm' ? 'outline' : 'secondary'}
+                                  className={cn('text-[10px] gap-0.5',
+                                    status === 'needs_reconfirm' && 'border-amber-400 text-amber-700'
+                                  )}
+                                  title={hasConflict ? `정규수업 충돌: ${conflicts.join(', ')}` : STATUS_MAP[status]?.label || ''}>
                                   {hasConflict && <AlertTriangle className="w-2.5 h-2.5" />}
+                                  {status === 'confirmed' && <Lock className="w-2.5 h-2.5" />}
+                                  {status === 'needs_reconfirm' && <RefreshCw className="w-2.5 h-2.5" />}
                                   {studentMap[ss.student_id]?.name || '—'}
                                 </Badge>
                               );
@@ -1256,7 +1438,13 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
             <p className="text-xs font-semibold text-muted-foreground mb-2">확약 현황 ({course.enrollments.length}명)</p>
             <div className="flex flex-wrap gap-1.5">
               {course.enrollments.map(enr => (
-                <Badge key={enr.id} variant={STATUS_MAP[enr.status]?.variant || 'outline'} className="text-xs">
+                <Badge key={enr.id}
+                  variant={STATUS_MAP[enr.status]?.variant || 'outline'}
+                  className={cn('text-xs',
+                    enr.status === 'needs_reconfirm' && 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300'
+                  )}>
+                  {enr.status === 'needs_reconfirm' && <RefreshCw className="w-3 h-3 mr-0.5" />}
+                  {enr.status === 'confirmed' && <Lock className="w-3 h-3 mr-0.5" />}
                   {studentMap[enr.student_id]?.name || '—'} · {STATUS_MAP[enr.status]?.label || enr.status}
                 </Badge>
               ))}
@@ -1266,11 +1454,9 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
           <div className="flex items-center justify-between pt-2">
             <p className="text-[11px] text-muted-foreground">마지노선: {course.deadline_date}</p>
             <div className="flex items-center gap-1">
-              {hasEditable && (
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onEdit(course.id)}>
-                  <Pencil className="w-3 h-3 mr-1" /> 수정
-                </Button>
-              )}
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onEdit(course.id)}>
+                <Pencil className="w-3 h-3 mr-1" /> 수정
+              </Button>
               <Button variant="ghost" size="sm" className="text-destructive h-7 text-xs" onClick={() => onDelete(course.id)}>
                 <Trash2 className="w-3 h-3 mr-1" /> 삭제
               </Button>
