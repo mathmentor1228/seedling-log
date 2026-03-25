@@ -286,13 +286,34 @@ export function ExamPrepScheduleManager() {
     const d = new Date(sessionDate + 'T00:00:00');
     const dow = d.getDay();
     const conflicts: string[] = [];
+    // 1) Regular class schedule conflicts (partial overlap)
     for (const es of existingSchedules) {
       if (es.student_id === studentId && es.day_of_week === dow && slotStartTime < es.end_time && slotEndTime > es.start_time) {
-        conflicts.push(`${es.class_name} ${es.start_time.slice(0, 5)}-${es.end_time.slice(0, 5)}`);
+        conflicts.push(`정규 ${es.class_name} ${es.start_time.slice(0, 5)}-${es.end_time.slice(0, 5)}`);
+      }
+    }
+    // 2) Cross-course exam prep conflicts (other subjects especially)
+    const currentEditId = editingCourseId;
+    for (const c of courses) {
+      if (currentEditId && c.id === currentEditId) continue; // skip the course being edited
+      for (const sess of c.sessions) {
+        if (sess.schedule_date !== sessionDate) continue;
+        for (const slot of sess.time_slots) {
+          const sStart = slot.start_time.slice(0, 5);
+          const sEnd = slot.end_time.slice(0, 5);
+          // Partial overlap check
+          if (slotStartTime < sEnd && slotEndTime > sStart) {
+            const hasStudent = slot.students.some(ss => ss.student_id === studentId);
+            if (hasStudent) {
+              const label = c.subject !== formSubject ? `⚠️타과목 ${c.subject}` : `${c.subject}특강`;
+              conflicts.push(`${label} ${sStart}-${sEnd}`);
+            }
+          }
+        }
       }
     }
     return conflicts;
-  }, [existingSchedules]);
+  }, [existingSchedules, courses, editingCourseId, formSubject]);
 
   // ── Check if a student's slot assignments have changed from original ──
   function hasStudentScheduleChanged(studentId: string): boolean {
