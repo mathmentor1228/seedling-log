@@ -28,6 +28,13 @@ function fmt(dateStr: string) {
   return `${d.getMonth() + 1}/${d.getDate()} (${WEEKDAYS[d.getDay()]})`;
 }
 
+const STATUS_INFO: Record<string, { label: string; color: string }> = {
+  pending: { label: '미확인', color: 'text-amber-700' },
+  needs_reconfirm: { label: '재확인 필요', color: 'text-destructive' },
+  confirmed: { label: '확인완료', color: 'text-primary' },
+  auto_confirmed: { label: '시스템 확정', color: 'text-muted-foreground' },
+};
+
 export function StudentExamPrepSchedule() {
   const { student } = useStudentAuth();
   const [courses, setCourses] = useState<ExamPrepCourseItem[]>([]);
@@ -54,8 +61,8 @@ export function StudentExamPrepSchedule() {
     setConfirming(false);
   }
 
-  const pendingCourses = courses.filter(c => c.status === 'pending');
-  const confirmedCourses = courses.filter(c => c.status !== 'pending');
+  const pendingCourses = courses.filter(c => c.status === 'pending' || c.status === 'needs_reconfirm');
+  const confirmedCourses = courses.filter(c => c.status !== 'pending' && c.status !== 'needs_reconfirm');
 
   if (loading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>;
   if (courses.length === 0) return null;
@@ -111,12 +118,21 @@ export function StudentExamPrepSchedule() {
                 <div className="space-y-1.5">{course.sessions.map(renderSessionSlots)}</div>
                 {course.description && <p className="text-xs text-muted-foreground">{course.description}</p>}
                 <div className="pt-1">
+                {course.status === 'needs_reconfirm' ? (
+                  <div className="bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-md p-2.5 mb-2">
+                    <p className="text-xs text-amber-800 dark:text-amber-300 font-medium flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      일정이 변경되었습니다. 변경된 일정을 확인하고 다시 동의해주세요.
+                    </p>
+                  </div>
+                ) : (
                   <div className="bg-destructive/10 border border-destructive/20 rounded-md p-2.5 mb-2">
                     <p className="text-xs text-destructive font-medium flex items-start gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                       일정 확정 시 추후 변경 및 보강은 불가능합니다. 신중히 확인 후 동의해주세요.
                     </p>
                   </div>
+                )}
                   <Button size="sm" className="w-full" onClick={() => setConfirmDialog(course.course_id)}>
                     <CheckCircle2 className="w-4 h-4 mr-1" /> 일정 확인 및 동의
                   </Button>

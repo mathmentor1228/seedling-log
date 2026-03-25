@@ -1070,12 +1070,13 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Accept both 'pending' and 'needs_reconfirm' statuses for confirmation
         const { error: updateErr } = await supabase
           .from('exam_prep_enrollments')
-          .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+          .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), schedule_changed_at: null, change_reason: null })
           .eq('course_id', course_id)
           .eq('student_id', student_id)
-          .eq('status', 'pending');
+          .in('status', ['pending', 'needs_reconfirm']);
 
         if (updateErr) {
           result = { success: false, error: updateErr.message };
