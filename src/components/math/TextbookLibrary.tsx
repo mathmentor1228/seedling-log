@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
   Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap, Check, X, Video,
-  FolderOpen, FolderPlus, ChevronDown, ChevronRight,
+  FolderOpen, FolderPlus, ChevronDown, ChevronRight, RotateCw,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { TextbookQuizGenerator } from './TextbookQuizGenerator';
