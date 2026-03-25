@@ -776,9 +776,15 @@ export function TextbookLibrary() {
                                   )}
                                   {ex.difficulty && <span className={`text-xs px-1.5 py-0.5 rounded ${difficultyColor[ex.difficulty] || ''}`}>{difficultyLabel[ex.difficulty] || ex.difficulty}</span>}
                                 </div>
-                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleDeleteExample(ex.id)}><Trash2 className="w-3 h-3 text-destructive" /></Button>
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] gap-0.5" onClick={() => handleReExtractExample(ex.id)} disabled={reExtractingId === ex.id}>
+                                    {reExtractingId === ex.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCw className="w-3 h-3" />}
+                                    재추출
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleDeleteExample(ex.id)}><Trash2 className="w-3 h-3 text-destructive" /></Button>
+                                </div>
                               </div>
-                              <div className="text-sm"><MathRenderer text={ex.question_text} /></div>
+                              <div className="text-[15px] leading-relaxed math-enlarged"><MathRenderer text={ex.question_text} autoSubBreak /></div>
                               {ex.answer && <div className="text-xs text-muted-foreground"><span className="font-medium">정답: </span><MathRenderer text={ex.answer} /></div>}
                               {ex.explanation && <div className="text-xs text-muted-foreground"><span className="font-medium">해설: </span><MathRenderer text={ex.explanation} /></div>}
                               <VideoUrlEditor exampleId={ex.id} currentUrl={ex.video_url} onSaved={url => setExamples(prev => prev.map(e => e.id === ex.id ? { ...e, video_url: url } : e))} />

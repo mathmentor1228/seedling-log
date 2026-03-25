@@ -166,7 +166,7 @@ export function MathRenderer({ text, autoSubBreak = false }: Props) {
   return (
     <span
       className="math-renderer"
-      style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
+      style={{ overflowWrap: 'break-word', wordBreak: 'break-word', fontSize: 'inherit' }}
       dangerouslySetInnerHTML={{ __html: rendered }}
     />
   );
