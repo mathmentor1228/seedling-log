@@ -3262,6 +3262,7 @@ export type Database = {
           status: string
           subject: string
           textbook_name: string
+          textbook_type: string
           unit_price: number
           updated_at: string
         }
@@ -3280,6 +3281,7 @@ export type Database = {
           status?: string
           subject?: string
           textbook_name: string
+          textbook_type?: string
           unit_price?: number
           updated_at?: string
         }
@@ -3298,6 +3300,7 @@ export type Database = {
           status?: string
           subject?: string
           textbook_name?: string
+          textbook_type?: string
           unit_price?: number
           updated_at?: string
         }
