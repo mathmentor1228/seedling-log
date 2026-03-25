@@ -28,6 +28,13 @@ function fmt(dateStr: string) {
   return `${d.getMonth() + 1}/${d.getDate()} (${WEEKDAYS[d.getDay()]})`;
 }
 
+const STATUS_INFO: Record<string, { label: string; color: string }> = {
+  pending: { label: '미확인', color: 'text-amber-700' },
+  needs_reconfirm: { label: '재확인 필요', color: 'text-destructive' },
+  confirmed: { label: '확인완료', color: 'text-primary' },
+  auto_confirmed: { label: '시스템 확정', color: 'text-muted-foreground' },
+};
+
 export function StudentExamPrepSchedule() {
   const { student } = useStudentAuth();
   const [courses, setCourses] = useState<ExamPrepCourseItem[]>([]);
