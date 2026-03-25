@@ -61,8 +61,8 @@ export function StudentExamPrepSchedule() {
     setConfirming(false);
   }
 
-  const pendingCourses = courses.filter(c => c.status === 'pending');
-  const confirmedCourses = courses.filter(c => c.status !== 'pending');
+  const pendingCourses = courses.filter(c => c.status === 'pending' || c.status === 'needs_reconfirm');
+  const confirmedCourses = courses.filter(c => c.status !== 'pending' && c.status !== 'needs_reconfirm');
 
   if (loading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>;
   if (courses.length === 0) return null;
