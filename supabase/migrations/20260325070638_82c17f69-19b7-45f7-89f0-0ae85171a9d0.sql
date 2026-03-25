@@ -1,0 +1,1 @@
+ALTER TABLE public.textbook_orders ADD COLUMN IF NOT EXISTS textbook_type text NOT NULL DEFAULT 'student';
