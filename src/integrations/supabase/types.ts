@@ -660,26 +660,32 @@ export type Database = {
       }
       exam_prep_enrollments: {
         Row: {
+          change_reason: string | null
           confirmed_at: string | null
           course_id: string
           created_at: string
           id: string
+          schedule_changed_at: string | null
           status: string
           student_id: string
         }
         Insert: {
+          change_reason?: string | null
           confirmed_at?: string | null
           course_id: string
           created_at?: string
           id?: string
+          schedule_changed_at?: string | null
           status?: string
           student_id: string
         }
         Update: {
+          change_reason?: string | null
           confirmed_at?: string | null
           course_id?: string
           created_at?: string
           id?: string
+          schedule_changed_at?: string | null
           status?: string
           student_id?: string
         }
@@ -693,6 +699,54 @@ export type Database = {
           },
           {
             foreignKeyName: "exam_prep_enrollments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_prep_notifications: {
+        Row: {
+          course_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_read: boolean
+          message: string | null
+          notification_type: string
+          student_id: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_read?: boolean
+          message?: string | null
+          notification_type?: string
+          student_id: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_read?: boolean
+          message?: string | null
+          notification_type?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_prep_notifications_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "exam_prep_courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_prep_notifications_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
