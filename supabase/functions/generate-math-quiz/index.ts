@@ -374,6 +374,9 @@ serve(async (req) => {
     const today = new Date().toISOString().slice(0, 10);
     const versionLabel = `${today}_${concept.title}_V${nextVersion}`;
 
+    // Auto-generate subtitle from concept metadata
+    const subtitle = [course, grade, concept.title].filter(Boolean).join(' · ');
+
     const { data: newQuiz, error: insertError } = await supabase
       .from('math_concept_quizzes')
       .insert({
@@ -382,6 +385,7 @@ serve(async (req) => {
         status: 'draft',
         version_number: nextVersion,
         version_label: versionLabel,
+        subtitle,
       })
       .select('id')
       .single();

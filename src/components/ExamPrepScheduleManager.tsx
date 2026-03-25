@@ -1361,10 +1361,13 @@ function CourseCard({ course, expanded, onToggle, onDelete, onEdit, studentMap, 
     if (!sessionDate || !slotStart || !slotEnd) return [];
     const d = new Date(sessionDate + 'T00:00:00');
     const dow = d.getDay();
+    const slotS = slotStart.slice(0, 5);
+    const slotE = slotEnd.slice(0, 5);
     const conflicts: string[] = [];
+    // Regular schedule conflicts
     for (const es of existingSchedules) {
-      if (es.student_id === studentId && es.day_of_week === dow && slotStart < es.end_time && slotEnd > es.start_time) {
-        conflicts.push(`${es.class_name} ${es.start_time.slice(0, 5)}-${es.end_time.slice(0, 5)}`);
+      if (es.student_id === studentId && es.day_of_week === dow && slotS < es.end_time.slice(0, 5) && slotE > es.start_time.slice(0, 5)) {
+        conflicts.push(`정규 ${es.class_name} ${es.start_time.slice(0, 5)}-${es.end_time.slice(0, 5)}`);
       }
     }
     return conflicts;
