@@ -8,13 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Loader2, CheckCircle2, XCircle, Search, Users, Pencil, Save, ClipboardCheck,
+  Loader2, CheckCircle2, XCircle, Search, Users, Save, ClipboardCheck,
+  Calendar, ChevronRight, CheckCheck, XOctagon,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 
@@ -23,6 +21,7 @@ interface Quiz {
   concept_id: string;
   answer_code: string | null;
   questions: any[];
+  created_at: string;
   math_concepts: { title: string; course: string; grade: string; subject: string } | null;
 }
 
@@ -35,8 +34,7 @@ interface Student {
 
 interface ManualEntry {
   questionNumber: number;
-  studentAnswer: string;
-  isCorrect: boolean | null; // null = not graded yet
+  isCorrect: boolean;
 }
 
 export function ManualQuizGrading() {
@@ -47,26 +45,27 @@ export function ManualQuizGrading() {
   const [saving, setSaving] = useState(false);
 
   // Selection
-  const [selectedQuizId, setSelectedQuizId] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [quizSearch, setQuizSearch] = useState('');
+  const [selectedQuizId, setSelectedQuizId] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
+  const [quizSearch, setQuizSearch] = useState('');
 
   // Manual entry
   const [entries, setEntries] = useState<ManualEntry[]>([]);
   const [feedback, setFeedback] = useState('');
   const [showResult, setShowResult] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Student detail dialog
+  const [detailStudentId, setDetailStudentId] = useState<string | null>(null);
+
+  useEffect(() => { fetchData(); }, []);
 
   async function fetchData() {
     setLoading(true);
     const [quizRes, studentRes] = await Promise.all([
       supabase
         .from('math_concept_quizzes')
-        .select('id, concept_id, answer_code, questions, math_concepts(title, course, grade, subject)')
+        .select('id, concept_id, answer_code, questions, created_at, math_concepts(title, course, grade, subject)')
         .in('status', ['draft', 'published'])
         .order('created_at', { ascending: false }) as any,
       supabase
@@ -87,13 +86,12 @@ export function ManualQuizGrading() {
     return qs.sort((a: any, b: any) => (a.question_number || 0) - (b.question_number || 0));
   }, [selectedQuiz]);
 
-  // When quiz changes, reset entries
+  // When quiz changes, reset entries — default all to correct
   useEffect(() => {
     if (questions.length > 0) {
       setEntries(questions.map((q: any) => ({
         questionNumber: q.question_number,
-        studentAnswer: '',
-        isCorrect: null,
+        isCorrect: true, // default: all correct
       })));
       setShowResult(false);
       setFeedback('');
@@ -101,6 +99,12 @@ export function ManualQuizGrading() {
       setEntries([]);
     }
   }, [selectedQuizId, questions.length]);
+
+  const filteredStudents = useMemo(() => {
+    if (!studentSearch.trim()) return students;
+    const q = studentSearch.toLowerCase();
+    return students.filter(s => s.name.toLowerCase().includes(q));
+  }, [students, studentSearch]);
 
   const filteredQuizzes = useMemo(() => {
     if (!quizSearch.trim()) return quizzes;
@@ -113,66 +117,45 @@ export function ManualQuizGrading() {
     });
   }, [quizzes, quizSearch]);
 
-  const filteredStudents = useMemo(() => {
-    if (!studentSearch.trim()) return students;
-    const q = studentSearch.toLowerCase();
-    return students.filter(s => s.name.toLowerCase().includes(q));
-  }, [students, studentSearch]);
-
-  function updateEntry(idx: number, field: keyof ManualEntry, value: any) {
-    setEntries(prev => prev.map((e, i) => i === idx ? { ...e, [field]: value } : e));
+  function toggleCorrect(idx: number) {
+    setEntries(prev => prev.map((e, i) => i === idx ? { ...e, isCorrect: !e.isCorrect } : e));
   }
 
-  function autoGrade() {
-    // Compare student answers with correct answers
-    const newEntries = entries.map(entry => {
-      const question = questions.find((q: any) => q.question_number === entry.questionNumber);
-      if (!question || !entry.studentAnswer.trim()) return { ...entry, isCorrect: null };
-
-      const correctAnswer = (question.answer || '').trim().toLowerCase()
-        .replace(/\s+/g, '').replace(/,/g, '');
-      const studentAnswer = entry.studentAnswer.trim().toLowerCase()
-        .replace(/\s+/g, '').replace(/,/g, '');
-
-      return { ...entry, isCorrect: correctAnswer === studentAnswer };
-    });
-    setEntries(newEntries);
-    setShowResult(true);
+  function markAllCorrect() {
+    setEntries(prev => prev.map(e => ({ ...e, isCorrect: true })));
   }
+
+  function markAllIncorrect() {
+    setEntries(prev => prev.map(e => ({ ...e, isCorrect: false })));
+  }
+
+  const correctCount = entries.filter(e => e.isCorrect).length;
+  const incorrectCount = entries.filter(e => !e.isCorrect).length;
+  const totalCount = entries.length;
+  const scorePercent = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
 
   async function handleSave() {
     if (!selectedQuizId || !selectedStudentId) {
       toast({ title: '퀴즈와 학생을 선택하세요', variant: 'destructive' });
       return;
     }
-    if (entries.every(e => !e.studentAnswer.trim())) {
-      toast({ title: '답안을 하나 이상 입력해주세요', variant: 'destructive' });
-      return;
-    }
 
     setSaving(true);
     try {
-      const gradedEntries = entries.filter(e => e.studentAnswer.trim());
-      const totalGraded = gradedEntries.length;
-      const totalCorrect = gradedEntries.filter(e => e.isCorrect === true).length;
-
-      const results = gradedEntries.map(e => {
+      const results = entries.map(e => {
         const question = questions.find((q: any) => q.question_number === e.questionNumber);
         return {
           question_number: e.questionNumber,
-          student_answer: e.studentAnswer,
+          student_answer: e.isCorrect ? (question?.answer || '정답') : '오답',
           correct_answer: question?.answer || '',
           is_correct: e.isCorrect,
-          status: e.isCorrect === true ? 'correct' : e.isCorrect === false ? 'incorrect' : 'ungraded',
+          status: e.isCorrect ? 'correct' : 'incorrect',
         };
       });
 
-      // Calculate points
-      const pointsAwarded = totalCorrect * 2;
-
+      const pointsAwarded = correctCount * 2;
       const { data: user } = await supabase.auth.getUser();
 
-      // Check for existing submission
       const { data: existing } = await supabase
         .from('math_quiz_submissions')
         .select('id')
@@ -181,52 +164,34 @@ export function ManualQuizGrading() {
         .order('created_at', { ascending: false })
         .limit(1) as any;
 
-      if (existing && existing.length > 0) {
-        // Update existing
-        await supabase
-          .from('math_quiz_submissions')
-          .update({
-            ai_grading_result: { results, total_correct: totalCorrect, total_graded: totalGraded, overall_feedback: feedback || '수동 채점' },
-            ai_total_score: totalCorrect,
-            ai_total_questions: totalGraded,
-            points_awarded: pointsAwarded,
-            teacher_feedback: feedback || null,
-            teacher_reviewed_by: user.user?.id,
-            teacher_reviewed_at: new Date().toISOString(),
-            status: 'reviewed',
-            updated_at: new Date().toISOString(),
-          } as any)
-          .eq('id', existing[0].id);
-        toast({ title: '기존 제출물 채점 업데이트 완료' });
-      } else {
-        // Create new submission as manual entry
-        await supabase
-          .from('math_quiz_submissions')
-          .insert({
-            student_id: selectedStudentId,
-            concept_id: selectedQuiz!.concept_id,
-            quiz_id: selectedQuizId,
-            image_urls: [],
-            ai_grading_result: { results, total_correct: totalCorrect, total_graded: totalGraded, overall_feedback: feedback || '수동 채점' },
-            ai_total_score: totalCorrect,
-            ai_total_questions: totalGraded,
-            points_awarded: pointsAwarded,
-            teacher_feedback: feedback || null,
-            teacher_reviewed_by: user.user?.id,
-            teacher_reviewed_at: new Date().toISOString(),
-            status: 'reviewed',
-          } as any);
+      const gradingPayload = {
+        ai_grading_result: { results, total_correct: correctCount, total_graded: totalCount, overall_feedback: feedback || '수동 채점' },
+        ai_total_score: correctCount,
+        ai_total_questions: totalCount,
+        points_awarded: pointsAwarded,
+        teacher_feedback: feedback || null,
+        teacher_reviewed_by: user.user?.id,
+        teacher_reviewed_at: new Date().toISOString(),
+        status: 'reviewed',
+        updated_at: new Date().toISOString(),
+      };
 
-        toast({ title: '수동 채점 저장 완료', description: `${totalCorrect}/${totalGraded} 정답 · +${pointsAwarded}포인트` });
+      if (existing && existing.length > 0) {
+        await supabase.from('math_quiz_submissions').update(gradingPayload as any).eq('id', existing[0].id);
+      } else {
+        await supabase.from('math_quiz_submissions').insert({
+          student_id: selectedStudentId,
+          concept_id: selectedQuiz!.concept_id,
+          quiz_id: selectedQuizId,
+          image_urls: [],
+          ...gradingPayload,
+        } as any);
       }
 
+      toast({ title: '채점 저장 완료', description: `${correctCount}/${totalCount} 정답 (${scorePercent}점) · +${pointsAwarded}포인트` });
+
       // Reset
-      setShowResult(false);
-      setEntries(questions.map((q: any) => ({
-        questionNumber: q.question_number,
-        studentAnswer: '',
-        isCorrect: null,
-      })));
+      setEntries(questions.map((q: any) => ({ questionNumber: q.question_number, isCorrect: true })));
       setFeedback('');
       setSelectedStudentId('');
     } catch (error: any) {
@@ -240,237 +205,200 @@ export function ManualQuizGrading() {
     return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>;
   }
 
-  const correctCount = entries.filter(e => e.isCorrect === true).length;
-  const incorrectCount = entries.filter(e => e.isCorrect === false).length;
-  const gradedCount = entries.filter(e => e.isCorrect !== null).length;
-
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Left: Quiz & Student Selection */}
-        <div className="space-y-4">
-          {/* Quiz Selection */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <ClipboardCheck className="w-4 h-4" />
-                퀴즈 선택
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="퀴즈 검색 (제목/과정/코드)..."
-                  value={quizSearch}
-                  onChange={e => setQuizSearch(e.target.value)}
-                  className="pl-8 h-9 text-sm"
-                />
-              </div>
-              <div className="max-h-[200px] overflow-y-auto space-y-1">
-                {filteredQuizzes.map(quiz => (
-                  <div
-                    key={quiz.id}
-                    className={`p-2 border rounded cursor-pointer text-sm transition-colors ${
-                      selectedQuizId === quiz.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => setSelectedQuizId(quiz.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium truncate">{quiz.math_concepts?.title || '제목 없음'}</span>
-                      {quiz.answer_code && (
-                        <Badge variant="outline" className="text-[10px] font-mono shrink-0 ml-1">{quiz.answer_code}</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{quiz.math_concepts?.course} · {quiz.math_concepts?.subject}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+      {/* Step 1: Select student */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            1단계: 학생 선택
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="학생 이름 검색..."
+              value={studentSearch}
+              onChange={e => setStudentSearch(e.target.value)}
+              className="pl-8 h-9 text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto">
+            {filteredStudents.map(student => (
+              <button
+                key={student.id}
+                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                  selectedStudentId === student.id
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border hover:bg-muted/50'
+                }`}
+                onClick={() => setSelectedStudentId(student.id)}
+              >
+                {student.name}
+                {student.school_level && student.grade_year && (
+                  <span className="ml-1 opacity-70">{student.school_level}{student.grade_year}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Student Selection */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                학생 선택
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="학생 검색..."
-                  value={studentSearch}
-                  onChange={e => setStudentSearch(e.target.value)}
-                  className="pl-8 h-9 text-sm"
-                />
-              </div>
-              <div className="max-h-[200px] overflow-y-auto space-y-1">
-                {filteredStudents.map(student => (
-                  <div
-                    key={student.id}
-                    className={`p-2 border rounded cursor-pointer text-sm transition-colors ${
-                      selectedStudentId === student.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => setSelectedStudentId(student.id)}
-                  >
-                    <span className="font-medium">{student.name}</span>
-                    {student.school_level && student.grade_year && (
-                      <span className="text-xs text-muted-foreground ml-2">{student.school_level}{student.grade_year}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right: Answer Entry */}
+      {/* Step 2: Select quiz */}
+      {selectedStudentId && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Pencil className="w-4 h-4" />
-              답안 입력
-              {selectedQuiz && (
-                <Badge variant="secondary" className="ml-auto text-xs">{selectedQuiz.math_concepts?.title}</Badge>
-              )}
+              <ClipboardCheck className="w-4 h-4" />
+              2단계: 시험지 선택
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {!selectedQuiz ? (
-              <p className="text-center text-muted-foreground py-8 text-sm">퀴즈를 먼저 선택해주세요</p>
-            ) : questions.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8 text-sm">문항이 없습니다</p>
-            ) : (
-              <div className="space-y-3">
-                {/* Score summary */}
-                {showResult && (
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-primary">{correctCount}/{gradedCount}</p>
-                      <p className="text-xs text-muted-foreground">정답률</p>
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2 text-xs">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                        <span>정답 {correctCount}문항</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <XCircle className="w-3.5 h-3.5 text-destructive" />
-                        <span>오답 {incorrectCount}문항</span>
-                      </div>
+          <CardContent className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="퀴즈 검색 (제목/과정/코드)..."
+                value={quizSearch}
+                onChange={e => setQuizSearch(e.target.value)}
+                className="pl-8 h-9 text-sm"
+              />
+            </div>
+            <div className="max-h-[200px] overflow-y-auto space-y-1">
+              {filteredQuizzes.map(quiz => (
+                <div
+                  key={quiz.id}
+                  className={`p-2.5 border rounded-lg cursor-pointer text-sm transition-colors ${
+                    selectedQuizId === quiz.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                  }`}
+                  onClick={() => setSelectedQuizId(quiz.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium truncate">{quiz.math_concepts?.title || '제목 없음'}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {quiz.answer_code && (
+                        <Badge variant="outline" className="text-[10px] font-mono">{quiz.answer_code}</Badge>
+                      )}
                     </div>
                   </div>
-                )}
-
-                {/* Question entries */}
-                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                  {entries.map((entry, idx) => {
-                    const question = questions.find((q: any) => q.question_number === entry.questionNumber);
-                    return (
-                      <div
-                        key={entry.questionNumber}
-                        className={`p-3 border rounded-lg space-y-2 ${
-                          entry.isCorrect === true ? 'border-green-300 bg-green-50/50 dark:bg-green-950/20' :
-                          entry.isCorrect === false ? 'border-destructive/30 bg-destructive/5' : ''
-                        }`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <Badge variant="outline" className="shrink-0 text-xs mt-0.5">Q{entry.questionNumber}</Badge>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-muted-foreground truncate">
-                              <MathRenderer text={question?.question_text?.substring(0, 80) || ''} />
-                            </p>
-                          </div>
-                          {entry.isCorrect !== null && (
-                            entry.isCorrect 
-                              ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                              : <XCircle className="w-4 h-4 text-destructive shrink-0" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            placeholder="학생 답안 입력"
-                            value={entry.studentAnswer}
-                            onChange={e => updateEntry(idx, 'studentAnswer', e.target.value)}
-                            className="h-8 text-sm flex-1"
-                          />
-                          {showResult && entry.isCorrect === false && question && (
-                            <span className="text-xs text-green-600 whitespace-nowrap">
-                              정답: <MathRenderer text={question.answer} />
-                            </span>
-                          )}
-                        </div>
-                        {/* Manual override buttons */}
-                        {showResult && (
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant={entry.isCorrect === true ? 'default' : 'ghost'}
-                              className="h-6 text-xs px-2"
-                              onClick={() => updateEntry(idx, 'isCorrect', true)}
-                            >
-                              <CheckCircle2 className="w-3 h-3 mr-1" />정답
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={entry.isCorrect === false ? 'destructive' : 'ghost'}
-                              className="h-6 text-xs px-2"
-                              onClick={() => updateEntry(idx, 'isCorrect', false)}
-                            >
-                              <XCircle className="w-3 h-3 mr-1" />오답
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                    <Calendar className="w-3 h-3" />
+                    <span>{new Date(quiz.created_at).toLocaleDateString('ko-KR')}</span>
+                    <span>·</span>
+                    <span>{quiz.math_concepts?.course} · {quiz.math_concepts?.subject}</span>
+                  </div>
                 </div>
-
-                {/* Feedback */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">선생님 코멘트 (선택)</Label>
-                  <Textarea
-                    value={feedback}
-                    onChange={e => setFeedback(e.target.value)}
-                    placeholder="학생에게 전달할 피드백..."
-                    rows={2}
-                    className="text-sm"
-                  />
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  {!showResult ? (
-                    <Button
-                      className="flex-1"
-                      onClick={autoGrade}
-                      disabled={entries.every(e => !e.studentAnswer.trim())}
-                    >
-                      <ClipboardCheck className="w-4 h-4 mr-2" />
-                      자동 채점
-                    </Button>
-                  ) : (
-                    <Button
-                      className="flex-1"
-                      onClick={handleSave}
-                      disabled={saving || !selectedStudentId}
-                    >
-                      {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                      채점 결과 저장 ({correctCount}/{gradedCount})
-                    </Button>
-                  )}
-                </div>
-                {!selectedStudentId && showResult && (
-                  <p className="text-xs text-destructive">학생을 선택해야 저장할 수 있습니다.</p>
-                )}
-              </div>
-            )}
+              ))}
+            </div>
           </CardContent>
         </Card>
-      </div>
+      )}
+
+      {/* Step 3: Grading */}
+      {selectedStudentId && selectedQuiz && questions.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ChevronRight className="w-4 h-4" />
+                3단계: 채점
+                <Badge variant="secondary" className="text-xs">{selectedQuiz.math_concepts?.title}</Badge>
+                <Badge variant="outline" className="text-xs">
+                  {students.find(s => s.id === selectedStudentId)?.name}
+                </Badge>
+              </CardTitle>
+              <div className="flex gap-1.5">
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={markAllCorrect}>
+                  <CheckCheck className="w-3.5 h-3.5 text-green-500" /> 일괄 정답
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={markAllIncorrect}>
+                  <XOctagon className="w-3.5 h-3.5 text-destructive" /> 일괄 오답
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              기본적으로 모든 문항이 정답으로 설정됩니다. 틀린 문항만 클릭하여 오답 처리하세요.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Score summary */}
+            <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 border">
+              <div className="text-center">
+                <p className="text-3xl font-bold text-primary">{correctCount}<span className="text-lg text-muted-foreground">/{totalCount}</span></p>
+                <p className="text-xs text-muted-foreground">맞은 문제</p>
+              </div>
+              <div className="h-12 w-px bg-border" />
+              <div className="text-center">
+                <p className="text-3xl font-bold text-destructive">{incorrectCount}</p>
+                <p className="text-xs text-muted-foreground">틀린 문제</p>
+              </div>
+              <div className="h-12 w-px bg-border" />
+              <div className="text-center">
+                <p className={`text-3xl font-bold ${scorePercent >= 80 ? 'text-green-600' : scorePercent >= 50 ? 'text-yellow-600' : 'text-destructive'}`}>
+                  {scorePercent}<span className="text-lg">점</span>
+                </p>
+                <p className="text-xs text-muted-foreground">환산 점수</p>
+              </div>
+              <div className="flex-1">
+                <div className="h-3 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${scorePercent >= 80 ? 'bg-green-500' : scorePercent >= 50 ? 'bg-yellow-500' : 'bg-destructive'}`}
+                    style={{ width: `${scorePercent}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Question grid — click to toggle */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              {entries.map((entry, idx) => {
+                const question = questions.find((q: any) => q.question_number === entry.questionNumber);
+                return (
+                  <button
+                    key={entry.questionNumber}
+                    onClick={() => toggleCorrect(idx)}
+                    className={`p-3 rounded-lg border-2 text-left transition-all hover:shadow-sm ${
+                      entry.isCorrect
+                        ? 'border-green-300 bg-green-50/50 dark:bg-green-950/20 hover:border-green-400'
+                        : 'border-destructive/40 bg-destructive/5 hover:border-destructive/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-sm">Q{entry.questionNumber}</span>
+                      {entry.isCorrect
+                        ? <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        : <XCircle className="w-5 h-5 text-destructive" />
+                      }
+                    </div>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      답: {question?.answer || '-'}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Feedback */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">선생님 코멘트 (선택)</Label>
+              <Textarea
+                value={feedback}
+                onChange={e => setFeedback(e.target.value)}
+                placeholder="학생에게 전달할 피드백..."
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+
+            {/* Save */}
+            <Button className="w-full" onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              채점 결과 저장 ({correctCount}/{totalCount} · {scorePercent}점)
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
