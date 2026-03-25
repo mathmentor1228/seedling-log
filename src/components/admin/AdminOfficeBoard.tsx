@@ -200,8 +200,13 @@ export function AdminOfficeBoard() {
       <Tabs defaultValue="tasks">
         <TabsList className="mb-4">
           <TabsTrigger value="tasks">업무 보드</TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5"><FileText className="w-3.5 h-3.5" />안내문 양식</TabsTrigger>
           <TabsTrigger value="calculator" className="gap-1.5"><Calculator className="w-3.5 h-3.5" />원비 계산기</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="templates">
+          <ParentAnnouncementTemplates />
+        </TabsContent>
 
         <TabsContent value="calculator">
           <TuitionCalculator />
