@@ -1857,6 +1857,8 @@ export default function Dashboard() {
       if (isAdmin(role) && adminRosterData) {
         // Admin: iterate adminRosterData, check lessonStatusMap for existing records
         adminRosterData.roster_rows.forEach(row => {
+          // Skip rows with missing or invalid UUIDs (e.g. supplementary without class_id)
+          if (!row.student_id || !row.class_id || !row.teacher_id || row.class_id === '') return;
           const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
           const status = lessonStatusMap[statusKey];
           if (!status?.recordId) {
