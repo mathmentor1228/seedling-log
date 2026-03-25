@@ -490,16 +490,16 @@ export function MathConceptManager() {
       </div>
 
       <Tabs defaultValue="concepts" className="space-y-4">
-        <TabsList className="w-full grid h-auto grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-5">
+        <TabsList className="w-full grid h-auto grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-6">
           <TabsTrigger value="concepts" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <BookOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">개념 & 퀴즈</span>
+            <span className="hidden sm:inline">개념 퀴즈</span>
             <span className="sm:hidden">개념</span>
           </TabsTrigger>
           <TabsTrigger value="textbook-lib" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <Library className="w-4 h-4" />
-            <span className="hidden sm:inline">교재 라이브러리</span>
-            <span className="sm:hidden">교재</span>
+            <span className="hidden sm:inline">라이브러리</span>
+            <span className="sm:hidden">문제은행</span>
           </TabsTrigger>
           <TabsTrigger value="assign" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <Send className="w-4 h-4" />
@@ -508,7 +508,7 @@ export function MathConceptManager() {
           </TabsTrigger>
           <TabsTrigger value="review" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
             <ClipboardCheck className="w-4 h-4" />
-            <span className="hidden sm:inline">제출 채점</span>
+            <span className="hidden sm:inline">채점 관리</span>
             <span className="sm:hidden">채점</span>
           </TabsTrigger>
           <TabsTrigger value="tracking" className="min-h-10 flex items-center gap-1.5 border border-border bg-muted/40 text-xs sm:text-sm">
