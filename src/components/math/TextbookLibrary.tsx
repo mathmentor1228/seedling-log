@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import {
   Loader2, Plus, BookOpen, Upload, Trash2, Edit, FileText, Sparkles, Zap, Check, X, Video,
-  FolderOpen, FolderPlus, ChevronDown, ChevronRight,
+  FolderOpen, FolderPlus, ChevronDown, ChevronRight, RotateCw,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { TextbookQuizGenerator } from './TextbookQuizGenerator';
@@ -134,6 +134,7 @@ export function TextbookLibrary() {
   const [extractFiles, setExtractFiles] = useState<File[]>([]);
   const [extractLabel, setExtractLabel] = useState('');
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; results: BatchResult[] } | null>(null);
+  const [reExtractingId, setReExtractingId] = useState<string | null>(null);
 
   interface BatchResult { fileName: string; status: 'success' | 'error'; count?: number; message: string; reason?: string; }
 
@@ -268,6 +269,59 @@ export function TextbookLibrary() {
     const { error } = await supabase.from('textbook_examples').delete().eq('textbook_id', selectedTextbook.id).eq('chapter', chapter);
     if (error) { toast({ title: '단원 삭제 실패', description: error.message, variant: 'destructive' }); }
     else { toast({ title: `"${chapter}" 단원 ${count}개 문항 삭제 완료` }); fetchExamples(selectedTextbook.id); }
+  };
+
+  const handleReExtractExample = async (exampleId: string) => {
+    if (!selectedTextbook) return;
+    const ex = examples.find(e => e.id === exampleId);
+    if (!ex) return;
+
+    setReExtractingId(exampleId);
+    try {
+      const { data, error } = await supabase.functions.invoke('rewrite-quiz-question', {
+        body: {
+          quiz_id: '__textbook_re_extract__',
+          question_index: 0,
+          rewrite_mode: 'fix_code',
+          question: {
+            question_number: 1,
+            question_type: 'short_answer',
+            question_text: ex.question_text,
+            answer: ex.answer || '',
+            explanation: ex.explanation || '',
+            difficulty: ex.difficulty || 'medium',
+          },
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const newQ = data.question;
+      const { error: updateErr } = await supabase
+        .from('textbook_examples')
+        .update({
+          question_text: newQ.question_text || ex.question_text,
+          answer: newQ.answer || ex.answer,
+          explanation: newQ.explanation || ex.explanation,
+        } as any)
+        .eq('id', exampleId);
+
+      if (updateErr) throw updateErr;
+
+      setExamples(prev => prev.map(e => e.id === exampleId ? {
+        ...e,
+        question_text: newQ.question_text || e.question_text,
+        answer: newQ.answer || e.answer,
+        explanation: newQ.explanation || e.explanation,
+      } : e));
+
+      toast({ title: '문항 재추출 완료', description: '수식과 텍스트가 정리되었습니다.' });
+    } catch (err: any) {
+      toast({ title: '재추출 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setReExtractingId(null);
+    }
   };
 
   const handleAIExtract = async () => {
@@ -722,9 +776,15 @@ export function TextbookLibrary() {
                                   )}
                                   {ex.difficulty && <span className={`text-xs px-1.5 py-0.5 rounded ${difficultyColor[ex.difficulty] || ''}`}>{difficultyLabel[ex.difficulty] || ex.difficulty}</span>}
                                 </div>
-                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleDeleteExample(ex.id)}><Trash2 className="w-3 h-3 text-destructive" /></Button>
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] gap-0.5" onClick={() => handleReExtractExample(ex.id)} disabled={reExtractingId === ex.id}>
+                                    {reExtractingId === ex.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCw className="w-3 h-3" />}
+                                    재추출
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleDeleteExample(ex.id)}><Trash2 className="w-3 h-3 text-destructive" /></Button>
+                                </div>
                               </div>
-                              <div className="text-sm"><MathRenderer text={ex.question_text} /></div>
+                              <div className="text-[15px] leading-relaxed math-enlarged"><MathRenderer text={ex.question_text} autoSubBreak /></div>
                               {ex.answer && <div className="text-xs text-muted-foreground"><span className="font-medium">정답: </span><MathRenderer text={ex.answer} /></div>}
                               {ex.explanation && <div className="text-xs text-muted-foreground"><span className="font-medium">해설: </span><MathRenderer text={ex.explanation} /></div>}
                               <VideoUrlEditor exampleId={ex.id} currentUrl={ex.video_url} onSaved={url => setExamples(prev => prev.map(e => e.id === ex.id ? { ...e, video_url: url } : e))} />
