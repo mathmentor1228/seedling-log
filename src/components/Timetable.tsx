@@ -318,8 +318,18 @@ export function Timetable() {
 
   async function fetchExamPrepForTimetable(teacherMap: Record<string, string>) {
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
-      // Fetch courses with confirmed/auto_confirmed enrollments that have future sessions
+      // Only show exam prep sessions for the current week (Mon–Sun)
+      const now = new Date();
+      const currentDay = now.getDay(); // 0=Sun
+      const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() + mondayOffset);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const weekStartStr = weekStart.toISOString().split('T')[0];
+      const weekEndStr = weekEnd.toISOString().split('T')[0];
+
       const courseQuery = supabase
         .from('exam_prep_courses')
         .select('id, subject, teacher_id, title, school_name')
@@ -327,11 +337,24 @@ export function Timetable() {
       const { data: courses } = await courseQuery;
       if (!courses || courses.length === 0) { setExamPrepRows([]); return; }
 
+      // Fetch teacher names for exam prep courses that might not be in teacherMap
+      const missingTeacherIds = (courses as any[])
+        .map((c: any) => c.teacher_id)
+        .filter((tid: string) => tid && !teacherMap[tid]);
+      if (missingTeacherIds.length > 0) {
+        const { data: extraProfiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', [...new Set(missingTeacherIds)]);
+        (extraProfiles || []).forEach((p: any) => { teacherMap[p.id] = p.full_name; });
+      }
+
       const courseIds = courses.map((c: any) => c.id);
       const { data: sessionsData } = await supabase.from('exam_prep_sessions')
         .select('id, course_id, session_label, schedule_date, start_time, end_time')
         .in('course_id', courseIds)
-        .gte('schedule_date', todayStr)
+        .gte('schedule_date', weekStartStr)
+        .lte('schedule_date', weekEndStr)
         .order('schedule_date');
       if (!sessionsData || sessionsData.length === 0) { setExamPrepRows([]); return; }
 
