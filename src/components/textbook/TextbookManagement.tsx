@@ -15,9 +15,9 @@ export function TextbookManagement() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">교재 관리</h1>
+        <h1 className="text-2xl font-bold text-foreground">📦 교재 관리</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {canSeePayment ? '교재 신청 · 배부 · 수납을 한 곳에서 관리합니다' : '교재 신청 · 배부를 관리합니다'}
+          {canSeePayment ? '신청 · 배부 · 수납을 한 곳에서 관리합니다' : '교재 신청 · 배부를 관리합니다'}
         </p>
       </div>
 
