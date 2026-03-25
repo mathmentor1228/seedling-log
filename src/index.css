@@ -249,7 +249,12 @@
 }
 
 .math-renderer .katex {
-  font-size: 1.05em;
+  font-size: 1.15em;
+}
+
+/* Enlarged math for textbook library */
+.math-enlarged .math-renderer .katex {
+  font-size: 1.25em;
 }
 
 @media (max-width: 640px) {
