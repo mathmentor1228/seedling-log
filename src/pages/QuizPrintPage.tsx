@@ -38,6 +38,7 @@ interface PrintData {
   versionNumber: number;
   versionLabel: string | null;
   answerCode: string | null;
+  subtitle: string | null;
 }
 
 function stripHtml(str: string): string {
