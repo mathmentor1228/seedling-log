@@ -329,6 +329,7 @@ export default function QuizPrintPage() {
         <p className="qp-subject-label">{cfg.label}</p>
         <p className="qp-textbook-info">{data.course} · {data.grade} · {data.subject}</p>
         <p className="qp-concept-title">{data.conceptTitle}</p>
+        {data.subtitle && <p className="qp-subtitle" style={{ fontSize: '9pt', color: '#666', marginTop: '1px' }}>{data.subtitle}</p>}
         <div className="qp-header-meta">
           <span>{data.questions.length}문제</span>
           <Badge variant="secondary" className="qp-version-badge">V{data.versionNumber}</Badge>
