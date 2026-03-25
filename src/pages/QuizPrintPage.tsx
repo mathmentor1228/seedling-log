@@ -201,7 +201,6 @@ export default function QuizPrintPage() {
         versionLabel: (quiz as any).version_label || null,
         answerCode: (quiz as any).answer_code || null,
         subtitle: (quiz as any).subtitle || null,
-        answerCode: (quiz as any).answer_code || null,
       });
       setLoading(false);
     })();
