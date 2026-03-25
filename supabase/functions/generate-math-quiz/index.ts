@@ -377,6 +377,8 @@ serve(async (req) => {
     // Auto-generate subtitle from concept metadata
     const subtitle = [course, grade, concept.title].filter(Boolean).join(' · ');
 
+    const quizTitle = `${concept.title} (${course})`;
+
     const { data: newQuiz, error: insertError } = await supabase
       .from('math_concept_quizzes')
       .insert({
@@ -386,6 +388,7 @@ serve(async (req) => {
         version_number: nextVersion,
         version_label: versionLabel,
         subtitle,
+        title: quizTitle,
       })
       .select('id')
       .single();
