@@ -271,6 +271,59 @@ export function TextbookLibrary() {
     else { toast({ title: `"${chapter}" 단원 ${count}개 문항 삭제 완료` }); fetchExamples(selectedTextbook.id); }
   };
 
+  const handleReExtractExample = async (exampleId: string) => {
+    if (!selectedTextbook) return;
+    const ex = examples.find(e => e.id === exampleId);
+    if (!ex) return;
+
+    setReExtractingId(exampleId);
+    try {
+      const { data, error } = await supabase.functions.invoke('rewrite-quiz-question', {
+        body: {
+          quiz_id: '__textbook_re_extract__',
+          question_index: 0,
+          rewrite_mode: 'fix_code',
+          question: {
+            question_number: 1,
+            question_type: 'short_answer',
+            question_text: ex.question_text,
+            answer: ex.answer || '',
+            explanation: ex.explanation || '',
+            difficulty: ex.difficulty || 'medium',
+          },
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const newQ = data.question;
+      const { error: updateErr } = await supabase
+        .from('textbook_examples')
+        .update({
+          question_text: newQ.question_text || ex.question_text,
+          answer: newQ.answer || ex.answer,
+          explanation: newQ.explanation || ex.explanation,
+        } as any)
+        .eq('id', exampleId);
+
+      if (updateErr) throw updateErr;
+
+      setExamples(prev => prev.map(e => e.id === exampleId ? {
+        ...e,
+        question_text: newQ.question_text || e.question_text,
+        answer: newQ.answer || e.answer,
+        explanation: newQ.explanation || e.explanation,
+      } : e));
+
+      toast({ title: '문항 재추출 완료', description: '수식과 텍스트가 정리되었습니다.' });
+    } catch (err: any) {
+      toast({ title: '재추출 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setReExtractingId(null);
+    }
+  };
+
   const handleAIExtract = async () => {
     if (!selectedTextbook || extractFiles.length === 0) return;
     setExtracting(true);
