@@ -185,7 +185,7 @@ export default function QuizPrintPage() {
     (async () => {
       const { data: quiz, error } = await supabase
         .from('math_concept_quizzes')
-        .select('id, questions, version_number, version_label, answer_code, math_concepts(title, course, grade, subject)')
+        .select('id, questions, version_number, version_label, answer_code, subtitle, math_concepts(title, course, grade, subject)')
         .eq('id', quizId)
         .single();
       if (error || !quiz) { setLoading(false); return; }
@@ -199,6 +199,8 @@ export default function QuizPrintPage() {
         questions: (quiz.questions as any) as QuizQuestion[],
         versionNumber: (quiz as any).version_number || 1,
         versionLabel: (quiz as any).version_label || null,
+        answerCode: (quiz as any).answer_code || null,
+        subtitle: (quiz as any).subtitle || null,
         answerCode: (quiz as any).answer_code || null,
       });
       setLoading(false);
