@@ -46,19 +46,27 @@ serve(async (req) => {
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     if (!lovableApiKey) throw new Error('LOVABLE_API_KEY not configured');
 
+    // Detect if original is multiple choice (has ① or options pattern)
+    const isMultipleChoice = /[①②③④⑤]/.test(question.question_text || '');
+    const originalType = isMultipleChoice ? 'multiple_choice' : (question.question_type || 'short_answer');
+
     let instruction = '';
+    const mcWarning = isMultipleChoice
+      ? `\n\n⚠️ 중요: 이 문제는 객관식(①②③④⑤ 보기 포함)입니다. 반드시 객관식 형태를 유지하세요. 보기 번호(①②③④⑤)와 각 보기의 수식을 LaTeX($...$)로 정확히 작성하세요. 절대 주관식으로 변경하지 마세요.`
+      : '';
+
     switch (rewrite_mode) {
       case 'fix_code':
         instruction = `이 문제의 텍스트에서 HTML 태그(<span>, <div>, class=, style= 등), 영어 코드 문자열, math-renderer 같은 기술적 문자열을 모두 제거하세요.
 순수하게 한국어 문제 내용과 올바른 LaTeX 수식($...$)만 남기세요.
 문제의 의미, 정답, 해설 내용은 절대 바꾸지 마세요. 오직 코드/태그 정제만 수행하세요.
-문제 유형(${question.question_type})과 난이도(${question.difficulty})를 그대로 유지하세요.`;
+문제 유형(${originalType})과 난이도(${question.difficulty})를 그대로 유지하세요.${mcWarning}`;
         break;
       case 'easier':
-        instruction = `이 문제를 더 쉽게 다시 작성하세요. 초보자도 이해할 수 있는 수준으로 풀어서 출제하되, 같은 개념을 다뤄야 합니다. 문제 유형(${question.question_type})은 유지하세요.`;
+        instruction = `이 문제를 더 쉽게 다시 작성하세요. 초보자도 이해할 수 있는 수준으로 풀어서 출제하되, 같은 개념을 다뤄야 합니다. 문제 유형(${originalType})을 반드시 유지하세요.${mcWarning}`;
         break;
       case 'deeper':
-        instruction = `이 문제를 심화 버전으로 다시 작성하세요. 해당 개념의 원리, 증명 과정, 조건의 경계 케이스 등을 묻는 깊은 문제로 변경하세요. 문제 유형(${question.question_type})은 유지하세요.`;
+        instruction = `이 문제를 심화 버전으로 다시 작성하세요. 해당 개념의 원리, 증명 과정, 조건의 경계 케이스 등을 묻는 깊은 문제로 변경하세요. 문제 유형(${originalType})을 반드시 유지하세요.${mcWarning}`;
         break;
       case 'example':
         instruction = `이 개념을 실제 숫자나 식에 대입해 풀어볼 수 있는 기초 수치 예제 문제를 1개 만들어주세요. 문제 유형은 short_answer로 설정하세요.`;
