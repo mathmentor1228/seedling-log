@@ -2069,6 +2069,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Error fetching supplementary lessons:', error);
+    }
   }
 
   // EXAM-PREP-ROSTER-V1: Fetch today's exam prep sessions and merge into dashboard roster
