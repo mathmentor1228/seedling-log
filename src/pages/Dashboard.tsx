@@ -3125,13 +3125,16 @@ export default function Dashboard() {
                     ) : (
                       <div className="space-y-4">
                         {(todaySlots || []).map((slot) => (
-                          <div key={slot.id} className={`border rounded-lg bg-background overflow-hidden ${slot.isOverridden ? 'opacity-60 border-amber-400/50' : ''} ${slot.isMovedIn ? 'border-blue-400/50 ring-1 ring-blue-400/20' : ''}`}>
+                          <div key={slot.id} className={`border rounded-lg bg-background overflow-hidden ${slot.isOverridden ? 'opacity-60 border-amber-400/50' : ''} ${slot.isMovedIn ? 'border-blue-400/50 ring-1 ring-blue-400/20' : ''} ${slot.isExamPrep ? 'border-violet-400/50 ring-1 ring-violet-400/20' : ''}`}>
                             {/* Slot header */}
-                            <div className={`flex items-center justify-between px-4 py-2.5 border-b ${slot.isOverridden ? 'bg-amber-50 dark:bg-amber-900/10' : slot.isMovedIn ? 'bg-blue-50 dark:bg-blue-900/10' : 'bg-muted/40'}`}>
+                            <div className={`flex items-center justify-between px-4 py-2.5 border-b ${slot.isOverridden ? 'bg-amber-50 dark:bg-amber-900/10' : slot.isMovedIn ? 'bg-blue-50 dark:bg-blue-900/10' : slot.isExamPrep ? 'bg-violet-50 dark:bg-violet-900/10' : 'bg-muted/40'}`}>
                               <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-muted-foreground" />
                                 <span className="font-semibold text-sm">{slot.class_name}</span>
                                 <Badge variant="outline" className="text-[11px]">{slot.subject}</Badge>
+                                {slot.isExamPrep && (
+                                  <Badge className="bg-violet-100 text-violet-700 border-violet-300 text-[10px] px-1.5 py-0">내신특강</Badge>
+                                )}
                                 {slot.isOverridden && (
                                   <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">
                                     수업일자 변경
