@@ -125,7 +125,7 @@ hint는 정답을 직접 노출하지 말고 사고 방향만 제시하세요.
               parameters: {
                 type: 'object',
                 properties: {
-                  question_type: { type: 'string', enum: ['fill_blank', 'true_false', 'short_answer'] },
+                  question_type: { type: 'string', enum: ['fill_blank', 'true_false', 'short_answer', 'multiple_choice'] },
                   question_text: { type: 'string' },
                   answer: { type: 'string' },
                   explanation: { type: 'string' },

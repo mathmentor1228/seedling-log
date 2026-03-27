@@ -99,9 +99,9 @@ export function MathRenderer({ text, autoSubBreak = false }: Props) {
     result = result.replace(/∞/g, '\\infty ');
     result = result.replace(/(?<!\\)lim([_{(])/g, '\\lim$1');
 
-    // ── Step 2.7: Box for ㄱ,ㄴ,ㄷ composite answer items ──
+    // ── Step 2.7: Box for ㄱ,ㄴ,ㄷ,ㄹ,ㅁ,ㅂ composite answer items ──
     result = result.replace(
-      /([ㄱㄴㄷㄹ])\.\s*([^\n]*)/g,
+      /([ㄱㄴㄷㄹㅁㅂ])\.\s*([^\n]*)/g,
       '<span class="mr-boxed-item"><span class="mr-boxed-marker">$1.</span> $2</span>'
     );
 
