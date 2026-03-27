@@ -2885,6 +2885,9 @@ export default function Dashboard() {
                                       {slot.rows.some((r: any) => r.isSupplementary) && !slot.rows.some((r: any) => !r.isSupplementary) && (
                                         <Badge className="bg-orange-100 text-orange-700 border-orange-300 text-[10px] px-1.5 py-0">보충</Badge>
                                       )}
+                                      {slot.rows.some((r: any) => r.isExamPrep) && (
+                                        <Badge className="bg-violet-100 text-violet-700 border-violet-300 text-[10px] px-1.5 py-0">내신특강</Badge>
+                                      )}
                                     </div>
                                     {slot.startTime !== '99:99' ? (
                                       <span className="text-sm text-muted-foreground font-medium">{slot.startTime}–{slot.endTime}</span>
