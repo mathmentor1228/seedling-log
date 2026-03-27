@@ -210,8 +210,10 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
         `• 이름: ${studentName.trim()}`,
         `• 학교: ${school.trim() || '미입력'}`,
         `• 학년: ${schoolLevel}${gradeYear}`,
+        `• 수강과목: ${subjectsText}`,
         `• 수업시간: ${classTime || '미정'}`,
         classroomLines.length > 0 ? `\n🏫 강의실\n${classroomLines.join('\n')}` : '',
+        `\n📅 시간표 확인 후 학생 수업 일정을 편성해 주세요.`,
       ].filter(Boolean).join('\n');
 
       if (teacherProfiles && teacherProfiles.length > 0) {
