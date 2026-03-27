@@ -2242,7 +2242,6 @@ export default function Dashboard() {
       console.error('Error fetching exam prep roster:', error);
     }
   }
-  }
 
   async function fetchTodayHolidays() {
     if (!user) return;
