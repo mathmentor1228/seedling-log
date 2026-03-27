@@ -279,3 +279,28 @@
   color: hsl(var(--primary));
   margin-right: 4px;
 }
+
+/* ── Markdown table rendering ── */
+.mr-table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.85em;
+  width: auto;
+  max-width: 100%;
+  overflow-x: auto;
+  display: block;
+}
+.mr-table th,
+.mr-table td {
+  border: 1px solid hsl(var(--border));
+  padding: 4px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+.mr-table th {
+  background: hsl(var(--muted) / 0.6);
+  font-weight: 700;
+}
+.mr-table tr:nth-child(even) td {
+  background: hsl(var(--muted) / 0.25);
+}
