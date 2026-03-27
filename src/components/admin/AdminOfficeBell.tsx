@@ -19,12 +19,23 @@ interface RecentTask {
   created_at: string;
 }
 
+interface NotificationItem {
+  id: string;
+  title: string;
+  category: string;
+  status: string;
+  created_by_name: string;
+  created_at: string;
+  type: 'office' | 'textbook';
+}
+
 export function AdminOfficeBell() {
   const { user, role } = useAuth();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [textbookOrderCount, setTextbookOrderCount] = useState(0);
   const [lastReadAt, setLastReadAt] = useState<string | null>(null);
-  const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
+  const [recentItems, setRecentItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
   const initializedRef = useRef(false);
 
@@ -41,6 +52,16 @@ export function AdminOfficeBell() {
     const lr = (data as any)?.last_read_at || null;
     setLastReadAt(lr);
     return lr;
+  }, [user]);
+
+  const fetchTextbookOrders = useCallback(async () => {
+    // Count pending textbook orders (교재신청 status) not created by current user
+    const { count } = await supabase
+      .from('textbook_orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', '교재신청')
+      .neq('requested_by', user?.id || '');
+    setTextbookOrderCount(count || 0);
   }, [user]);
 
   const fetchUnreadCount = useCallback(async (lr?: string | null) => {
@@ -65,13 +86,36 @@ export function AdminOfficeBell() {
     setUnreadCount((count || 0) + (commentCount || 0));
   }, [lastReadAt, user]);
 
-  const fetchRecentTasks = useCallback(async () => {
-    const { data } = await supabase
+  const fetchRecentItems = useCallback(async () => {
+    // Fetch office tasks
+    const { data: officeTasks } = await supabase
       .from('admin_office_tasks')
       .select('id, title, category, status, created_by_name, created_at')
       .order('created_at', { ascending: false })
-      .limit(10);
-    setRecentTasks((data as any[]) || []);
+      .limit(8);
+
+    // Fetch recent textbook orders
+    const { data: textbookOrders } = await supabase
+      .from('textbook_orders')
+      .select('id, textbook_name, status, requested_by_name, created_at')
+      .eq('status', '교재신청')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    const items: NotificationItem[] = [
+      ...((officeTasks || []) as any[]).map(t => ({
+        id: t.id, title: t.title, category: t.category, status: t.status,
+        created_by_name: t.created_by_name, created_at: t.created_at, type: 'office' as const,
+      })),
+      ...((textbookOrders || []) as any[]).map(o => ({
+        id: o.id, title: `📦 교재 신청: ${o.textbook_name}`,
+        category: '교재주문', status: o.status,
+        created_by_name: o.requested_by_name, created_at: o.created_at, type: 'textbook' as const,
+      })),
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+     .slice(0, 12);
+
+    setRecentItems(items);
   }, []);
 
   // Init
@@ -80,9 +124,10 @@ export function AdminOfficeBell() {
     initializedRef.current = true;
     fetchLastRead().then((lr) => {
       fetchUnreadCount(lr);
-      fetchRecentTasks();
+      fetchRecentItems();
+      fetchTextbookOrders();
     });
-  }, [isAllowed, user, fetchLastRead, fetchUnreadCount, fetchRecentTasks]);
+  }, [isAllowed, user, fetchLastRead, fetchUnreadCount, fetchRecentItems, fetchTextbookOrders]);
 
   // Realtime subscription
   useEffect(() => {
@@ -107,7 +152,7 @@ export function AdminOfficeBell() {
             });
           }
           setUnreadCount(prev => prev + (newTask.created_by !== user.id ? 1 : 0));
-          fetchRecentTasks();
+          fetchRecentItems();
         }
       )
       .on(
@@ -124,10 +169,34 @@ export function AdminOfficeBell() {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'textbook_orders' },
+        (payload) => {
+          const newOrder = payload.new as any;
+          if (newOrder.requested_by !== user.id) {
+            toast.info(`📦 교재 주문 신청`, {
+              description: `${newOrder.requested_by_name}님이 "${newOrder.textbook_name}" 교재를 신청했습니다`,
+              duration: 6000,
+              action: {
+                label: '확인',
+                onClick: () => navigate('/textbooks'),
+              },
+            });
+            setTextbookOrderCount(prev => prev + 1);
+          }
+          fetchRecentItems();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'textbook_orders' },
+        () => { fetchTextbookOrders(); }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [isAllowed, user, navigate, fetchRecentTasks]);
+  }, [isAllowed, user, navigate, fetchRecentItems, fetchTextbookOrders]);
 
   // Mark as read
   const markAsRead = async () => {
@@ -143,15 +212,17 @@ export function AdminOfficeBell() {
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen) {
-      fetchRecentTasks();
+      fetchRecentItems();
+      fetchTextbookOrders();
     }
   };
 
-  const handleTaskClick = (task: RecentTask) => {
+  const handleItemClick = (item: NotificationItem) => {
     markAsRead();
     setOpen(false);
-    // 수납 관련 카테고리면 교재 수납 탭으로 이동
-    if (task.category === '수납' || task.title.includes('수납') || task.title.includes('입금') || task.title.includes('교재비')) {
+    if (item.type === 'textbook') {
+      navigate('/textbooks');
+    } else if (item.category === '수납' || item.title.includes('수납') || item.title.includes('입금') || item.title.includes('교재비')) {
       navigate('/textbook?tab=payment');
     } else {
       navigate('/admin/office');
@@ -160,21 +231,30 @@ export function AdminOfficeBell() {
 
   if (!isAllowed) return null;
 
+  const totalBadge = unreadCount + textbookOrderCount;
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative h-9 w-9 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent">
           <Bell className="w-4 h-4" />
-          {unreadCount > 0 && (
+          {totalBadge > 0 && (
             <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 animate-pulse">
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {totalBadge > 99 ? '99+' : totalBadge}
             </span>
           )}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <p className="text-sm font-semibold text-foreground">행정 업무 알림</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-foreground">알림</p>
+            {textbookOrderCount > 0 && (
+              <Badge variant="destructive" className="text-[9px] px-1.5 py-0">
+                📦 교재 {textbookOrderCount}
+              </Badge>
+            )}
+          </div>
           {unreadCount > 0 && (
             <Button variant="ghost" size="sm" className="text-xs h-7" onClick={markAsRead}>
               모두 읽음
@@ -182,15 +262,17 @@ export function AdminOfficeBell() {
           )}
         </div>
         <div className="max-h-80 overflow-y-auto">
-          {recentTasks.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">등록된 업무가 없습니다</p>
+          {recentItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">등록된 알림이 없습니다</p>
           ) : (
-            recentTasks.map(task => {
-              const isUnread = lastReadAt ? new Date(task.created_at) > new Date(lastReadAt) : true;
+            recentItems.map(item => {
+              const isUnread = item.type === 'textbook'
+                ? item.status === '교재신청'
+                : (lastReadAt ? new Date(item.created_at) > new Date(lastReadAt) : true);
               return (
                   <button
-                  key={task.id}
-                  onClick={() => handleTaskClick(task)}
+                  key={`${item.type}-${item.id}`}
+                  onClick={() => handleItemClick(item)}
                   className={cn(
                     "w-full text-left px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors",
                     isUnread && "bg-primary/5"
@@ -202,17 +284,17 @@ export function AdminOfficeBell() {
                         {isUnread && (
                           <Badge variant="destructive" className="text-[9px] px-1 py-0">NEW</Badge>
                         )}
-                        <Badge variant="outline" className="text-[9px]">{task.category}</Badge>
+                        <Badge variant="outline" className="text-[9px]">{item.category}</Badge>
                         <Badge
-                          variant={task.status === '완료' ? 'success' : task.status === '진행 중' ? 'default' : 'warning'}
+                          variant={item.status === '완료' || item.status === '입고완료' ? 'success' : item.status === '진행 중' || item.status === '주문중' ? 'default' : 'warning'}
                           className="text-[9px]"
                         >
-                          {task.status}
+                          {item.status}
                         </Badge>
                       </div>
-                      <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {task.created_by_name} · {format(new Date(task.created_at), 'MM/dd HH:mm')}
+                        {item.created_by_name} · {format(new Date(item.created_at), 'MM/dd HH:mm')}
                       </p>
                     </div>
                   </div>
