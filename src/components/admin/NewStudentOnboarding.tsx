@@ -33,6 +33,7 @@ const CHECKLIST_ITEMS = [
   { key: 'channel_guide_msg', label: '원내 채널안내문자', icon: '💬' },
   { key: 'channel_confirm', label: '원내 채널등록확인', icon: '✅' },
   { key: 'webapp_guide_msg', label: '학생관리 웹페이지 안내문자', icon: '🌐' },
+  { key: 'ecoding_registration', label: 'e코딩 학생정보등록', icon: '💻' },
 ];
 
 function buildRegistrationMsg(student: NewStudent): string {
