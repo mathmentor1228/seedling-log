@@ -174,6 +174,7 @@ interface TodaySlot {
   overrideReason?: string;
   isMovedIn?: boolean; // SCHEDULE-OVERRIDE-V1: this slot was moved here from another day
   movedFromDate?: string;
+  isExamPrep?: boolean; // EXAM-PREP-ROSTER-V1: exam prep session slot
 }
 
 interface ScheduleOverride {
@@ -568,6 +569,7 @@ export default function Dashboard() {
           await fetchTodaySlots();
           await fetchTodayHolidays();
           await fetchSupplementaryLessons();
+          await fetchExamPrepRoster();
         }
 
         // Fetch pending homework (unchecked)
@@ -1379,7 +1381,6 @@ export default function Dashboard() {
         return;
       }
 
-      
 
       // Get students for each class - also build a map of class_id -> subject for RPC
       const classIds = activeSchedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
@@ -2071,6 +2072,177 @@ export default function Dashboard() {
     }
   }
 
+  // EXAM-PREP-ROSTER-V1: Fetch today's exam prep sessions and merge into dashboard roster
+  async function fetchExamPrepRoster() {
+    if (!user) return;
+    try {
+      const today = getTodayKST();
+
+      // 1. Fetch exam prep sessions scheduled for today
+      const { data: sessions, error: sessError } = await supabase
+        .from('exam_prep_sessions')
+        .select('id, course_id, session_label, schedule_date, start_time, end_time')
+        .eq('schedule_date', today);
+
+      if (sessError || !sessions || sessions.length === 0) return;
+
+      const courseIds = [...new Set(sessions.map(s => s.course_id))];
+
+      // 2. Fetch courses for teacher_id, subject, title
+      const { data: courses } = await supabase
+        .from('exam_prep_courses')
+        .select('id, teacher_id, subject, title, school_name')
+        .in('id', courseIds)
+        .is('deleted_at', null);
+
+      if (!courses || courses.length === 0) return;
+
+      const courseMap = new Map(courses.map(c => [c.id, c]));
+
+      // 3. Fetch enrolled students for these courses
+      const { data: enrollments } = await supabase
+        .from('exam_prep_enrollments')
+        .select('course_id, student_id')
+        .in('course_id', courseIds)
+        .neq('status', 'cancelled');
+
+      if (!enrollments || enrollments.length === 0) return;
+
+      // 4. Fetch student names
+      const studentIds = [...new Set(enrollments.map(e => e.student_id))];
+      const { data: students } = await supabase
+        .from('students')
+        .select('id, name')
+        .in('id', studentIds)
+        .neq('enrollment_status', '퇴원');
+
+      const studentNameMap: Record<string, string> = {};
+      (students || []).forEach(s => { studentNameMap[s.id] = s.name; });
+
+      // 5. Fetch teacher names
+      const teacherIds = [...new Set(courses.map(c => c.teacher_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', teacherIds);
+
+      const teacherNameMap: Record<string, string> = {};
+      (profiles || []).forEach(p => { teacherNameMap[p.id] = p.full_name || '알 수 없음'; });
+
+      // 6. Build enrollment map: course_id -> student_ids
+      const enrollmentMap: Record<string, string[]> = {};
+      enrollments.forEach(e => {
+        if (!enrollmentMap[e.course_id]) enrollmentMap[e.course_id] = [];
+        if (!enrollmentMap[e.course_id].includes(e.student_id)) {
+          enrollmentMap[e.course_id].push(e.student_id);
+        }
+      });
+
+      // 7. For teacher view: add exam prep slots to todaySlots
+      if (isTeacher(role)) {
+        const myExamPrepSlots: TodaySlot[] = [];
+        sessions.forEach(session => {
+          const course = courseMap.get(session.course_id);
+          if (!course || course.teacher_id !== user.id) return;
+
+          const enrolledStudentIds = enrollmentMap[session.course_id] || [];
+          const slotStudents: TodaySlotStudent[] = enrolledStudentIds
+            .filter(sid => studentNameMap[sid])
+            .map(sid => ({
+              id: sid,
+              name: studentNameMap[sid],
+            }));
+
+          if (slotStudents.length === 0) return;
+
+          const examPrepLabel = course.title || `내신특강 (${course.subject})`;
+
+          myExamPrepSlots.push({
+            id: `exam-prep-${session.id}`,
+            class_id: `exam-prep-${session.course_id}`,
+            class_name: `📋 ${examPrepLabel}`,
+            subject: course.subject,
+            start_time: session.start_time,
+            end_time: session.end_time,
+            students: slotStudents,
+            isExamPrep: true,
+          });
+        });
+
+        if (myExamPrepSlots.length > 0) {
+          setTodaySlots(prev => {
+            // Remove old exam prep slots to avoid duplicates
+            const filtered = prev.filter(s => !s.id.startsWith('exam-prep-'));
+            const merged = [...filtered, ...myExamPrepSlots];
+            merged.sort((a, b) => a.start_time.localeCompare(b.start_time));
+            return merged;
+          });
+        }
+      }
+
+      // 8. For admin view: merge into adminRosterData
+      if (isAdmin(role)) {
+        const newRows: any[] = [];
+        const newTeachers: { teacher_id: string; teacher_name: string }[] = [];
+
+        sessions.forEach(session => {
+          const course = courseMap.get(session.course_id);
+          if (!course) return;
+
+          const enrolledStudentIds = enrollmentMap[session.course_id] || [];
+          const examPrepLabel = course.title || `내신특강 (${course.subject})`;
+
+          enrolledStudentIds.forEach(sid => {
+            if (!studentNameMap[sid]) return;
+            newRows.push({
+              teacher_id: course.teacher_id,
+              teacher_name: teacherNameMap[course.teacher_id] || '알 수 없음',
+              student_id: sid,
+              student_name: studentNameMap[sid],
+              class_id: `exam-prep-${session.course_id}`,
+              class_name: `📋 ${examPrepLabel}`,
+              subject: course.subject,
+              start_time: session.start_time,
+              end_time: session.end_time,
+              isExamPrep: true,
+            });
+          });
+
+          // Ensure teacher exists
+          if (!newTeachers.some(t => t.teacher_id === course.teacher_id)) {
+            newTeachers.push({
+              teacher_id: course.teacher_id,
+              teacher_name: teacherNameMap[course.teacher_id] || '알 수 없음',
+            });
+          }
+        });
+
+        if (newRows.length > 0) {
+          setAdminRosterData(prev => {
+            if (!prev) return prev;
+            // Remove old exam prep rows
+            const existingRows = prev.roster_rows.filter((r: any) => !r.isExamPrep);
+            const existingTeachers = [...prev.teachers];
+
+            newTeachers.forEach(nt => {
+              if (!existingTeachers.some(t => t.teacher_id === nt.teacher_id)) {
+                existingTeachers.push(nt);
+              }
+            });
+
+            return {
+              ...prev,
+              teachers: existingTeachers,
+              roster_rows: [...existingRows, ...newRows],
+            };
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching exam prep roster:', error);
+    }
+  }
+
   async function fetchTodayHolidays() {
     if (!user) return;
     
@@ -2713,6 +2885,9 @@ export default function Dashboard() {
                                       {slot.rows.some((r: any) => r.isSupplementary) && !slot.rows.some((r: any) => !r.isSupplementary) && (
                                         <Badge className="bg-orange-100 text-orange-700 border-orange-300 text-[10px] px-1.5 py-0">보충</Badge>
                                       )}
+                                      {slot.rows.some((r: any) => r.isExamPrep) && (
+                                        <Badge className="bg-violet-100 text-violet-700 border-violet-300 text-[10px] px-1.5 py-0">내신특강</Badge>
+                                      )}
                                     </div>
                                     {slot.startTime !== '99:99' ? (
                                       <span className="text-sm text-muted-foreground font-medium">{slot.startTime}–{slot.endTime}</span>
@@ -2950,13 +3125,16 @@ export default function Dashboard() {
                     ) : (
                       <div className="space-y-4">
                         {(todaySlots || []).map((slot) => (
-                          <div key={slot.id} className={`border rounded-lg bg-background overflow-hidden ${slot.isOverridden ? 'opacity-60 border-amber-400/50' : ''} ${slot.isMovedIn ? 'border-blue-400/50 ring-1 ring-blue-400/20' : ''}`}>
+                          <div key={slot.id} className={`border rounded-lg bg-background overflow-hidden ${slot.isOverridden ? 'opacity-60 border-amber-400/50' : ''} ${slot.isMovedIn ? 'border-blue-400/50 ring-1 ring-blue-400/20' : ''} ${slot.isExamPrep ? 'border-violet-400/50 ring-1 ring-violet-400/20' : ''}`}>
                             {/* Slot header */}
-                            <div className={`flex items-center justify-between px-4 py-2.5 border-b ${slot.isOverridden ? 'bg-amber-50 dark:bg-amber-900/10' : slot.isMovedIn ? 'bg-blue-50 dark:bg-blue-900/10' : 'bg-muted/40'}`}>
+                            <div className={`flex items-center justify-between px-4 py-2.5 border-b ${slot.isOverridden ? 'bg-amber-50 dark:bg-amber-900/10' : slot.isMovedIn ? 'bg-blue-50 dark:bg-blue-900/10' : slot.isExamPrep ? 'bg-violet-50 dark:bg-violet-900/10' : 'bg-muted/40'}`}>
                               <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-muted-foreground" />
                                 <span className="font-semibold text-sm">{slot.class_name}</span>
                                 <Badge variant="outline" className="text-[11px]">{slot.subject}</Badge>
+                                {slot.isExamPrep && (
+                                  <Badge className="bg-violet-100 text-violet-700 border-violet-300 text-[10px] px-1.5 py-0">내신특강</Badge>
+                                )}
                                 {slot.isOverridden && (
                                   <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">
                                     수업일자 변경
