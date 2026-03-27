@@ -316,7 +316,6 @@ Deno.serve(async (req) => {
                 time_slots: mySlots.map((sl: any) => ({ start_time: sl.start_time, end_time: sl.end_time })),
               };
             }),
-            })),
           })).filter((c: any) => c.sessions.length > 0);
         })(),
       }),
