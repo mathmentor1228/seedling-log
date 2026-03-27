@@ -105,6 +105,23 @@ export function MathRenderer({ text, autoSubBreak = false }: Props) {
       '<span class="mr-boxed-item"><span class="mr-boxed-marker">$1.</span> $2</span>'
     );
 
+    // ── Step 2.8: Render markdown tables ──
+    result = result.replace(
+      /(?:^|\n)((?:\|[^\n]+\|\s*\n){2,})/g,
+      (_, tableBlock: string) => {
+        const rows = tableBlock.trim().split('\n').filter(r => r.trim());
+        // Skip separator rows (|---|---|)
+        const dataRows = rows.filter(r => !/^\|[\s\-:|]+\|$/.test(r.trim()));
+        if (dataRows.length === 0) return tableBlock;
+        const html = dataRows.map((row, ri) => {
+          const cells = row.split('|').filter((c, i, a) => i > 0 && i < a.length - 1);
+          const tag = ri === 0 ? 'th' : 'td';
+          return `<tr>${cells.map(c => `<${tag} class="mr-table-cell">${c.trim()}</${tag}>`).join('')}</tr>`;
+        }).join('');
+        return `<table class="mr-table"><tbody>${html}</tbody></table>`;
+      }
+    );
+
     // ── Step 3: Replace ___BLANK___ with styled blank ──
     result = result.replace(
       /___BLANK___/g,
