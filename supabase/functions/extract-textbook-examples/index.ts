@@ -177,6 +177,7 @@ function getToolSchema(subject: string) {
                 difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
                 category: { type: 'string', enum: categoryEnum },
                 has_illustration: { type: 'boolean' },
+                illustration_description: { type: 'string', description: '그림/도형/그래프의 시각적 설명' },
                 graph_data: {
                   type: 'object',
                   properties: {
