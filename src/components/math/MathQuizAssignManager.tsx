@@ -898,15 +898,26 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground">배정됨 ({assignedList.length})</p>
                     <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                      {assignedList.map(s => (
-                        <div key={s.id} className="flex items-center justify-between px-3 py-1.5 bg-muted/50 rounded">
-                          <span className="text-sm">{gradeLabel(s)} {s.name}</span>
-                          <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive"
-                            onClick={async () => { await handleUnassign(quizId, s.id); }}>
-                            <UserMinus className="w-3 h-3 mr-1" />제거
-                          </Button>
-                        </div>
-                      ))}
+                      {assignedList.map(s => {
+                        const submitUrl = `${window.location.origin}/quiz-submit?quiz_id=${quizId}&student_id=${s.id}`;
+                        return (
+                          <div key={s.id} className="flex items-center justify-between px-3 py-1.5 bg-muted/50 rounded gap-1">
+                            <span className="text-sm flex-1 min-w-0 truncate">{gradeLabel(s)} {s.name}</span>
+                            <Button size="sm" variant="ghost" className="h-6 text-xs shrink-0"
+                              title="로그인 없이 바로 제출할 수 있는 링크 복사"
+                              onClick={() => {
+                                navigator.clipboard.writeText(submitUrl);
+                                toast({ title: `${s.name} 제출 링크 복사됨` });
+                              }}>
+                              <Link2 className="w-3 h-3 mr-1" />링크
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive shrink-0"
+                              onClick={async () => { await handleUnassign(quizId, s.id); }}>
+                              <UserMinus className="w-3 h-3 mr-1" />제거
+                            </Button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
