@@ -1379,9 +1379,10 @@ export default function Dashboard() {
           variant: 'destructive',
         });
         return;
-      }
+    }
+  }
 
-      
+
 
       // Get students for each class - also build a map of class_id -> subject for RPC
       const classIds = activeSchedules?.map(s => (s.classes as any)?.id).filter(Boolean) || [];
