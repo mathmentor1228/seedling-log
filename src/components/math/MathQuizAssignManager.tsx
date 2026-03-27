@@ -16,7 +16,7 @@ import {
 import {
   Users, FolderPlus, Send, Trash2, Loader2, CheckCircle2, Search,
   ArrowUpDown, Eye, User, Printer, X, CheckSquare, Square,
-  ChevronDown, ChevronUp, UserPlus, UserMinus,
+  ChevronDown, ChevronUp, UserPlus, UserMinus, Link2, Copy,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { useNavigate } from 'react-router-dom';
