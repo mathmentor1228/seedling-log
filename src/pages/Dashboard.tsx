@@ -1379,9 +1379,7 @@ export default function Dashboard() {
           variant: 'destructive',
         });
         return;
-    }
-  }
-
+      }
 
 
       // Get students for each class - also build a map of class_id -> subject for RPC
