@@ -174,6 +174,7 @@ interface TodaySlot {
   overrideReason?: string;
   isMovedIn?: boolean; // SCHEDULE-OVERRIDE-V1: this slot was moved here from another day
   movedFromDate?: string;
+  isExamPrep?: boolean; // EXAM-PREP-ROSTER-V1: exam prep session slot
 }
 
 interface ScheduleOverride {
