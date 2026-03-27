@@ -568,6 +568,7 @@ export default function Dashboard() {
           await fetchTodaySlots();
           await fetchTodayHolidays();
           await fetchSupplementaryLessons();
+          await fetchExamPrepRoster();
         }
 
         // Fetch pending homework (unchecked)
