@@ -824,8 +824,7 @@ export function Timetable() {
     );
   }
 
-  // ── Teacher view mode ──
-  const [teacherViewMode, setTeacherViewMode] = useState<'list' | 'timeline'>('list');
+  // ── Teacher-only view ──
 
   // ── Teacher-only view ──
   if (!isAdminUser && !isAssistantUser) {
