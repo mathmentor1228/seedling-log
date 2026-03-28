@@ -8,11 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { Loader2, Wand2, Trash2, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i),
@@ -56,6 +58,7 @@ interface StudentScheduleInfo {
   teacherId: string;
   assignedTeacher: string | null;
   scheduleCount: number;
+  expectedTestCount: number;
 }
 
 interface IndividualSchedule {
@@ -117,6 +120,7 @@ export function VocabScheduleGenerator() {
   const fetchStudentScheduleInfo = async () => {
     setLoading(true);
     const { start, end } = getMonthRange();
+    const target = new Date(Number(year), Number(month), 1);
 
     const [settingsRes, schedulesRes] = await Promise.all([
       supabase
@@ -139,21 +143,31 @@ export function VocabScheduleGenerator() {
       countMap[s.student_id] = (countMap[s.student_id] || 0) + 1;
     }
 
-    const infos: StudentScheduleInfo[] = settings.map((s: any) => ({
-      settingId: s.id,
-      studentId: s.student_id,
-      studentName: s.students?.name || '—',
-      grade: s.students?.grade || null,
-      bookName: s.book_name,
-      testDays: s.test_days || ['mon', 'wed'],
-      currentDay: s.current_day_number,
-      daysPerTest: s.days_per_test,
-      bundleDays: s.bundle_days || false,
-      totalDays: s.total_days || null,
-      teacherId: s.teacher_id,
-      assignedTeacher: s.assigned_teacher || null,
-      scheduleCount: countMap[s.student_id] || 0,
-    }));
+    // Estimate expected test count for the month
+    const allMonthDays = eachDayOfInterval({ start: startOfMonth(target), end: endOfMonth(target) });
+
+    const infos: StudentScheduleInfo[] = settings.map((s: any) => {
+      const daysCodes = normalizeTestDays(s.test_days || ['mon', 'wed']);
+      const allowedDays = daysCodes.map(d => DAY_CODE_TO_JS[d]).filter(Boolean);
+      const expectedTestCount = allMonthDays.filter(d => allowedDays.includes(getDay(d))).length;
+
+      return {
+        settingId: s.id,
+        studentId: s.student_id,
+        studentName: s.students?.name || '—',
+        grade: s.students?.grade || null,
+        bookName: s.book_name,
+        testDays: s.test_days || ['mon', 'wed'],
+        currentDay: s.current_day_number,
+        daysPerTest: s.days_per_test,
+        bundleDays: s.bundle_days || false,
+        totalDays: s.total_days || null,
+        teacherId: s.teacher_id,
+        assignedTeacher: s.assigned_teacher || null,
+        scheduleCount: countMap[s.student_id] || 0,
+        expectedTestCount,
+      };
+    });
 
     setStudentInfos(infos);
     setSelectedIds(new Set());
@@ -406,7 +420,23 @@ export function VocabScheduleGenerator() {
       .lte('test_date', end)
       .order('test_date')
       .order('day_number');
-    setStudentSchedules(prev => ({ ...prev, [studentId]: (data || []) as IndividualSchedule[] }));
+
+    const schedIds = (data || []).map(s => s.id);
+    let resultMap: Record<string, { passed: boolean }> = {};
+    if (schedIds.length > 0) {
+      const { data: resultsData } = await supabase
+        .from('vocab_test_results')
+        .select('schedule_id, passed')
+        .in('schedule_id', schedIds);
+      if (resultsData) {
+        for (const r of resultsData) resultMap[r.schedule_id] = { passed: r.passed };
+      }
+    }
+
+    setStudentSchedules(prev => ({
+      ...prev,
+      [studentId]: (data || []).map(s => ({ ...s, result: resultMap[s.id] || null })) as any,
+    }));
     setLoadingSchedules(prev => {
       const n = new Set(prev);
       n.delete(studentId);
@@ -688,15 +718,22 @@ export function VocabScheduleGenerator() {
                       </TableCell>
                       <TableCell className="text-center">
                         {info.scheduleCount > 0 ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-xs gap-1"
-                            onClick={() => toggleExpand(info.studentId)}
-                          >
-                            {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                            <Badge variant="outline" className="text-xs">{info.scheduleCount}건</Badge>
-                          </Button>
+                          <div className="space-y-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs gap-1"
+                              onClick={() => toggleExpand(info.studentId)}
+                            >
+                              {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              <Badge variant="outline" className="text-xs">{info.scheduleCount}건</Badge>
+                            </Button>
+                            <Progress
+                              value={info.expectedTestCount > 0 ? Math.min(100, (info.scheduleCount / info.expectedTestCount) * 100) : 0}
+                              className="h-1.5"
+                            />
+                            <span className="text-[9px] text-muted-foreground">{info.scheduleCount}/{info.expectedTestCount}</span>
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">없음</span>
                         )}
@@ -705,14 +742,14 @@ export function VocabScheduleGenerator() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                           onClick={() => {
                             setDeleteSettingId(info.settingId);
                             setDeleteSettingName(info.studentName);
                             setBulkDeleteSettings(false);
                           }}
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -742,19 +779,26 @@ export function VocabScheduleGenerator() {
                                     </Badge>
                                   )}
                                 </div>
-                                <div className="flex flex-wrap gap-1">
+                                <div className="flex flex-wrap gap-1 overflow-x-auto">
                                   {scheds.map(sched => {
                                     const d = new Date(sched.test_date + 'T00:00:00');
                                     const dayName = DAY_NAMES[d.getDay()];
                                     const isSelected = selectedScheduleIds.has(sched.id);
+                                    const result = (sched as any).result;
+                                    const chipColor = isSelected
+                                      ? 'bg-destructive/10 border-destructive/40 text-destructive'
+                                      : result
+                                        ? result.passed
+                                          ? 'bg-emerald-500/10 border-emerald-400/40 text-emerald-700'
+                                          : 'bg-destructive/10 border-destructive/30 text-destructive'
+                                        : 'bg-muted/50 border-border text-foreground hover:bg-accent/50';
                                     return (
                                       <label
                                         key={sched.id}
-                                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs cursor-pointer transition-colors ${
-                                          isSelected
-                                            ? 'bg-destructive/10 border-destructive/40 text-destructive'
-                                            : 'bg-card border-border hover:bg-accent/50'
-                                        }`}
+                                        className={cn(
+                                          'inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs cursor-pointer transition-colors whitespace-nowrap',
+                                          chipColor
+                                        )}
                                       >
                                         <Checkbox
                                           checked={isSelected}
@@ -764,7 +808,12 @@ export function VocabScheduleGenerator() {
                                         <span className="font-mono">
                                           {format(d, 'M/d')}({dayName})
                                         </span>
-                                        <span className="text-muted-foreground">Day{sched.day_number}</span>
+                                        <span className="opacity-70">Day{sched.day_number}</span>
+                                        {result && (
+                                          <span className="text-[9px] font-semibold">
+                                            {result.passed ? '✓' : '✗'}
+                                          </span>
+                                        )}
                                       </label>
                                     );
                                   })}

@@ -56,9 +56,17 @@ interface SavedTest {
   notes: string | null;
 }
 
-export function VocabTestGenerator() {
+interface VocabTestGeneratorProps {
+  controlledTab?: string;
+  onTabChange?: (tab: string) => void;
+}
+
+export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGeneratorProps = {}) {
   const { user } = useAuth();
-  const [tab, setTab] = useState('edit');
+  const [internalTab, setInternalTab] = useState('edit');
+  const tab = controlledTab || internalTab;
+  const setTab = onTabChange || setInternalTab;
+  const isControlled = !!controlledTab;
 
   // Folders
   const [folders, setFolders] = useState<VocabFolder[]>([]);
@@ -591,30 +599,34 @@ export function VocabTestGenerator() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <div>
-        <h1 className="text-lg font-semibold">단어 시험 출제</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">폴더별로 단어를 관리하고, 여러 범위를 선택해 시험을 출제합니다</p>
-      </div>
+      {!isControlled && (
+        <div>
+          <h1 className="text-lg font-semibold">단어 시험 출제</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">폴더별로 단어를 관리하고, 여러 범위를 선택해 시험을 출제합니다</p>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="edit" className="gap-1.5 text-xs">
-            <FileText className="w-3.5 h-3.5" />
-            단어 입력
-          </TabsTrigger>
-          <TabsTrigger value="generate" className="gap-1.5 text-xs">
-            <Shuffle className="w-3.5 h-3.5" />
-            시험 출제
-          </TabsTrigger>
-          <TabsTrigger value="result" className="gap-1.5 text-xs" disabled={generated.length === 0}>
-            <Printer className="w-3.5 h-3.5" />
-            시험지 / 답지
-          </TabsTrigger>
-          <TabsTrigger value="saved" className="gap-1.5 text-xs">
-            <FolderOpen className="w-3.5 h-3.5" />
-            저장된 시험지
-          </TabsTrigger>
-        </TabsList>
+        {!isControlled && (
+          <TabsList>
+            <TabsTrigger value="edit" className="gap-1.5 text-xs">
+              <FileText className="w-3.5 h-3.5" />
+              단어 입력
+            </TabsTrigger>
+            <TabsTrigger value="generate" className="gap-1.5 text-xs">
+              <Shuffle className="w-3.5 h-3.5" />
+              시험 출제
+            </TabsTrigger>
+            <TabsTrigger value="result" className="gap-1.5 text-xs" disabled={generated.length === 0}>
+              <Printer className="w-3.5 h-3.5" />
+              시험지 / 답지
+            </TabsTrigger>
+            <TabsTrigger value="saved" className="gap-1.5 text-xs">
+              <FolderOpen className="w-3.5 h-3.5" />
+              저장된 시험지
+            </TabsTrigger>
+          </TabsList>
+        )}
 
         {/* === TAB: Word Input === */}
         <TabsContent value="edit">
