@@ -7,6 +7,8 @@ export const ROOMS = [
   { value: 'glass', label: '유리문강의실' },
 ] as const;
 
+export const SUBJECTS = ['수학', '영어', '국어', '과학'] as const;
+
 export const TEST_TYPES = [
   { value: 'guerrilla', label: '게릴라' },
   { value: 'regular', label: '정기' },

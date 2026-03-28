@@ -207,7 +207,7 @@ export function TestTab() {
         </CardContent>
       </Card>
 
-      <UnifiedRecordModal open={modalOpen} onOpenChange={setModalOpen} defaultTypes={['test']} editRecord={editRecord} onSaved={fetchRecords} />
+      <UnifiedRecordModal open={modalOpen} onOpenChange={setModalOpen} defaultTypes={['test']} onSaved={fetchRecords} />
       <RoutineModal open={routineOpen} onOpenChange={setRoutineOpen} type="test" />
     </div>
   );
