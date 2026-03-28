@@ -345,7 +345,31 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     setSelectedSetId(null);
     setSetTitle('');
     setSetFolderAssign(selectedFolderId);
-    setWords([{ english: '', meaning: '', sort_order: 0 }]);
+    setWords([{ english: '', meaning: '', english_definition: '', sort_order: 0 }]);
+  };
+
+  // AI definition generation
+  const handleGenerateDefinition = async (idx: number) => {
+    const item = words[idx];
+    if (!item?.english) {
+      toast({ title: '영어 단어를 먼저 입력하세요', variant: 'destructive' });
+      return;
+    }
+    const itemKey = `${idx}`;
+    setGeneratingId(itemKey);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-vocab-definition', {
+        body: { word: item.english, meaning: item.meaning || undefined },
+      });
+      if (error) throw error;
+      if (data?.definition) {
+        updateWord(idx, 'english_definition', data.definition);
+        toast({ title: '영영풀이 생성 완료' });
+      }
+    } catch (e: any) {
+      toast({ title: '생성 실패', description: e.message, variant: 'destructive' });
+    }
+    setGeneratingId(null);
   };
 
   // Generate test
