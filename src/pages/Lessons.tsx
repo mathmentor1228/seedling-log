@@ -33,6 +33,7 @@ import { LessonModal } from '@/components/lessons/LessonModal';
 import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
+import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
 
 interface Teacher {
   id: string;
