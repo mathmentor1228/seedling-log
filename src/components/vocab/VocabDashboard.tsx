@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatCard } from '@/components/ui/stat-card';
+
 import { Progress } from '@/components/ui/progress';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -229,45 +229,73 @@ export function VocabDashboard({ onTabChange }: Props) {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="cursor-pointer" onClick={() => onTabChange?.('schedule')}>
-          <StatCard
-            title="시험 스케줄"
-            value={scheduleCount}
-            subtitle="이번 달"
-            icon={<CalendarDays className="w-5 h-5" />}
-            iconColor="primary"
-          />
+          <Card className="border-blue-500/20 bg-blue-500/5">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground">시험 스케줄</span>
+                <CalendarDays className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="text-2xl font-bold">{scheduleCount}</div>
+              <div className="text-xs text-muted-foreground mt-1">이번 달</div>
+            </CardContent>
+          </Card>
         </div>
         <div className="cursor-pointer" onClick={() => onTabChange?.('results')}>
-          <StatCard
-            title="결과 입력"
-            value={resultCount}
-            subtitle={`${scheduleCount}건 중`}
-            icon={<ClipboardList className="w-5 h-5" />}
-            iconColor="muted"
-          />
+          <Card className="border-muted-foreground/20">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground">결과 입력</span>
+                <ClipboardList className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="text-2xl font-bold">{resultCount}</div>
+              <Progress value={scheduleCount > 0 ? (resultCount / scheduleCount) * 100 : 0} className="mt-2 h-1.5" />
+              <div className="text-xs text-muted-foreground mt-1">{scheduleCount}건 중</div>
+            </CardContent>
+          </Card>
         </div>
-        <StatCard
-          title="통과"
-          value={passedResults.length}
-          subtitle={resultCount > 0 ? `${Math.round((passedResults.length / resultCount) * 100)}%` : '—'}
-          icon={<CheckCircle2 className="w-5 h-5" />}
-          iconColor="success"
-        />
-        <StatCard
-          title="불통과"
-          value={failedResults.length}
-          subtitle={resultCount > 0 ? `${Math.round((failedResults.length / resultCount) * 100)}%` : '—'}
-          icon={<XCircle className="w-5 h-5" />}
-          iconColor="destructive"
-        />
+        {(() => {
+          const passRate = resultCount > 0 ? Math.round((passedResults.length / resultCount) * 100) : 0;
+          const colorClass = passRate >= 80 ? 'green' : passRate >= 60 ? 'amber' : 'red';
+          return (
+            <Card className={`border-${colorClass}-500/20 bg-${colorClass}-500/5`}>
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-muted-foreground">통과율</span>
+                  <CheckCircle2 className={`w-4 h-4 text-${colorClass}-500`} />
+                </div>
+                <div className={`text-2xl font-bold text-${colorClass}-600`}>
+                  {resultCount > 0 ? `${passRate}%` : '—'}
+                </div>
+                <Progress value={passRate} className="mt-2 h-1.5" />
+                <div className="text-xs text-muted-foreground mt-1">{passedResults.length} / {resultCount}건</div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+        <Card className="border-red-500/20 bg-red-500/5">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-muted-foreground">불통과</span>
+              <XCircle className="w-4 h-4 text-red-500" />
+            </div>
+            <div className="text-2xl font-bold text-red-600">{failedResults.length}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {resultCount > 0 ? `${Math.round((failedResults.length / resultCount) * 100)}%` : '—'}
+              {failedResults.length > 0 && ' · 즉시 확인 필요'}
+            </div>
+          </CardContent>
+        </Card>
         <div className="cursor-pointer" onClick={() => onTabChange?.('vocab-assign')}>
-          <StatCard
-            title="숙제 완료"
-            value={completionCount}
-            subtitle="이번 달"
-            icon={<BookOpen className="w-5 h-5" />}
-            iconColor="warning"
-          />
+          <Card className="border-amber-500/20 bg-amber-500/5">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground">숙제 완료</span>
+                <BookOpen className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="text-2xl font-bold">{completionCount}</div>
+              <div className="text-xs text-muted-foreground mt-1">이번 달</div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -280,43 +308,58 @@ export function VocabDashboard({ onTabChange }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-6 gap-2">
-            {weekSchedules.map(({ date, dateStr, schedules: dayScheds }) => {
-              const today = isToday(date);
-              return (
-                <div
-                  key={dateStr}
-                  className={cn(
-                    'rounded-lg border p-2 min-h-[120px] transition-colors',
-                    today ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20' : 'border-border'
-                  )}
-                >
-                  <div className={cn('text-xs font-semibold mb-1.5', today ? 'text-primary' : 'text-muted-foreground')}>
-                    {format(date, 'E', { locale: ko })} {format(date, 'M/d')}
-                    {today && <Badge variant="default" className="ml-1 text-[9px] px-1 py-0">오늘</Badge>}
-                  </div>
-                  <div className="space-y-1">
-                    {dayScheds.length === 0 ? (
-                      <p className="text-[10px] text-muted-foreground/50">없음</p>
-                    ) : dayScheds.map(s => (
-                      <div key={s.id} className="flex items-center gap-1">
-                        <span className="text-[11px] truncate flex-1">{s.studentName}</span>
-                        {s.schedule_type === 'cumulative' && (
-                          <Badge variant="outline" className="text-[8px] px-1 py-0 border-amber-400 text-amber-600">누적</Badge>
-                        )}
-                        {!s.result ? (
-                          <Badge variant="secondary" className="text-[8px] px-1 py-0">예정</Badge>
-                        ) : s.result.passed ? (
-                          <Badge className="text-[8px] px-1 py-0 bg-emerald-500/15 text-emerald-700 border-emerald-200">통과</Badge>
-                        ) : (
-                          <Badge variant="destructive" className="text-[8px] px-1 py-0">불통과</Badge>
-                        )}
+          <div className="overflow-x-auto">
+            <div className="flex gap-3 min-w-max pb-2">
+              {weekSchedules.map(({ date, dateStr, schedules: dayScheds }) => {
+                const today = isToday(date);
+                const passCount = dayScheds.filter(s => s.result?.passed).length;
+                const failCount = dayScheds.filter(s => s.result && !s.result.passed).length;
+                const pendingCount = dayScheds.filter(s => !s.result).length;
+                return (
+                  <div
+                    key={dateStr}
+                    className={cn(
+                      'w-44 rounded-xl border p-3 flex-shrink-0 transition-colors',
+                      today ? 'border-primary bg-primary/5' : 'border-border bg-card'
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={cn('text-sm font-semibold', today ? 'text-primary' : 'text-foreground')}>
+                        {format(date, 'M/d (EEE)', { locale: ko })}
+                      </span>
+                      {dayScheds.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {dayScheds.length}명
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {dayScheds.length === 0 ? (
+                        <p className="text-[10px] text-muted-foreground/50">없음</p>
+                      ) : dayScheds.map(s => (
+                        <div key={s.id} className="flex items-center justify-between text-xs py-0.5">
+                          <span className="truncate mr-2">{s.studentName}</span>
+                          {!s.result ? (
+                            <Badge variant="outline" className="text-[10px] px-1.5 shrink-0">예정</Badge>
+                          ) : s.result.passed ? (
+                            <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-[10px] px-1.5 shrink-0">통과</Badge>
+                          ) : (
+                            <Badge className="bg-red-500/15 text-red-600 border-red-500/30 text-[10px] px-1.5 shrink-0">불통과</Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {dayScheds.length > 0 && (
+                      <div className="mt-2 pt-2 border-t flex gap-2 text-[10px] text-muted-foreground">
+                        <span className="text-green-600">✓ {passCount}</span>
+                        <span className="text-red-600">✗ {failCount}</span>
+                        <span>· {pendingCount}예정</span>
                       </div>
-                    ))}
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -325,42 +368,75 @@ export function VocabDashboard({ onTabChange }: Props) {
       {attentionStudents.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-warning" />
-              주의 학생
-              <Badge variant="destructive" className="text-[10px]">{attentionStudents.length}명</Badge>
-            </CardTitle>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5 text-sm">
+                <AlertTriangle className="w-4 h-4 text-red-500" />
+                <span className="font-medium">주의 학생</span>
+                <Badge variant="destructive" className="ml-1">{attentionStudents.length}명</Badge>
+              </div>
+              <div className="flex gap-3 text-xs text-muted-foreground">
+                <span>결과 미입력 <strong className="text-foreground">{attentionStudents.filter(s => s.reasons.some(r => r.includes('결과'))).length}명</strong></span>
+                <span>숙제 미제출 <strong className="text-foreground">{attentionStudents.filter(s => s.reasons.some(r => r.includes('숙제'))).length}명</strong></span>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {attentionStudents.map(s => (
-                <HoverCard key={s.id}>
-                  <HoverCardTrigger asChild>
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors">
-                      <div>
-                        <span className="text-sm font-medium">{s.name}</span>
-                        <span className="text-[10px] text-muted-foreground ml-1.5">{s.teacher}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {attentionStudents.map(s => {
+                const isUrgent = s.reasons.some(r => r.includes('결과 미입력')) && s.stats.tests === 0;
+                return (
+                  <HoverCard key={s.id}>
+                    <HoverCardTrigger asChild>
+                      <Card className={cn(
+                        'cursor-pointer hover:shadow-sm transition-all',
+                        isUrgent
+                          ? 'border-red-500/40 bg-red-500/5'
+                          : 'border-amber-500/30 bg-amber-500/5'
+                      )}>
+                        <CardContent className="p-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm">{s.name}</span>
+                                <span className="text-xs text-muted-foreground">{s.teacher}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {s.reasons.map((r, i) => (
+                                  <Badge
+                                    key={i}
+                                    className={cn(
+                                      'text-[10px]',
+                                      r.includes('결과')
+                                        ? 'bg-red-500/15 text-red-600 border-red-500/30'
+                                        : 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                                    )}
+                                  >
+                                    {r}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                            {isUrgent && (
+                              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-48">
+                      <div className="space-y-1.5 text-xs">
+                        <p className="font-semibold">{s.name} — 이번 달</p>
+                        <div className="grid grid-cols-2 gap-1">
+                          <span className="text-muted-foreground">시험 횟수</span><span className="text-right font-mono">{s.stats.tests}</span>
+                          <span className="text-muted-foreground">통과</span><span className="text-right font-mono text-emerald-600">{s.stats.passed}</span>
+                          <span className="text-muted-foreground">불통과</span><span className="text-right font-mono text-destructive">{s.stats.failed}</span>
+                          <span className="text-muted-foreground">숙제 완료</span><span className="text-right font-mono">{s.stats.homework}</span>
+                        </div>
                       </div>
-                      <div className="flex gap-1 flex-wrap justify-end">
-                        {s.reasons.map((r, i) => (
-                          <Badge key={i} variant="destructive" className="text-[9px] px-1.5 py-0">{r}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </HoverCardTrigger>
-                  <HoverCardContent className="w-48">
-                    <div className="space-y-1.5 text-xs">
-                      <p className="font-semibold">{s.name} — 이번 달</p>
-                      <div className="grid grid-cols-2 gap-1">
-                        <span className="text-muted-foreground">시험 횟수</span><span className="text-right font-mono">{s.stats.tests}</span>
-                        <span className="text-muted-foreground">통과</span><span className="text-right font-mono text-emerald-600">{s.stats.passed}</span>
-                        <span className="text-muted-foreground">불통과</span><span className="text-right font-mono text-destructive">{s.stats.failed}</span>
-                        <span className="text-muted-foreground">숙제 완료</span><span className="text-right font-mono">{s.stats.homework}</span>
-                      </div>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              ))}
+                    </HoverCardContent>
+                  </HoverCard>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
