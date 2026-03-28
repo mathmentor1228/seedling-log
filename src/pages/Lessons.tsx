@@ -840,6 +840,9 @@ export default function Lessons() {
                 <TabsTrigger value="clinic">🏥 클리닉</TabsTrigger>
               </>
             )}
+            {(isAdmin || isTeacher) && (
+              <TabsTrigger value="student-profile">👤 학생 캐릭터</TabsTrigger>
+            )}
           </TabsList>
           {canManage && (
             <div className="flex gap-2">
