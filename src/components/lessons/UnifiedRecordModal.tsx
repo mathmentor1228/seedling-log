@@ -231,7 +231,7 @@ export function UnifiedRecordModal({
           content: testContent.trim(),
           score: testScore.trim() || null,
           passed: testPassed,
-          assistant_name: testAssistant || null,
+          assistant_name: testAssistant && testAssistant !== 'none' ? testAssistant : null,
           room: selectedRoom,
         });
       }
@@ -454,7 +454,7 @@ export function UnifiedRecordModal({
                   <Select value={testAssistant} onValueChange={setTestAssistant}>
                     <SelectTrigger><SelectValue placeholder="조교 선택" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">없음</SelectItem>
+                      <SelectItem value="none">없음</SelectItem>
                       {ASSISTANTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                     </SelectContent>
                   </Select>
