@@ -368,42 +368,75 @@ export function VocabDashboard({ onTabChange }: Props) {
       {attentionStudents.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-warning" />
-              주의 학생
-              <Badge variant="destructive" className="text-[10px]">{attentionStudents.length}명</Badge>
-            </CardTitle>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5 text-sm">
+                <AlertTriangle className="w-4 h-4 text-red-500" />
+                <span className="font-medium">주의 학생</span>
+                <Badge variant="destructive" className="ml-1">{attentionStudents.length}명</Badge>
+              </div>
+              <div className="flex gap-3 text-xs text-muted-foreground">
+                <span>결과 미입력 <strong className="text-foreground">{attentionStudents.filter(s => s.reasons.some(r => r.includes('결과'))).length}명</strong></span>
+                <span>숙제 미제출 <strong className="text-foreground">{attentionStudents.filter(s => s.reasons.some(r => r.includes('숙제'))).length}명</strong></span>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {attentionStudents.map(s => (
-                <HoverCard key={s.id}>
-                  <HoverCardTrigger asChild>
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors">
-                      <div>
-                        <span className="text-sm font-medium">{s.name}</span>
-                        <span className="text-[10px] text-muted-foreground ml-1.5">{s.teacher}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {attentionStudents.map(s => {
+                const isUrgent = s.reasons.some(r => r.includes('결과 미입력')) && s.stats.tests === 0;
+                return (
+                  <HoverCard key={s.id}>
+                    <HoverCardTrigger asChild>
+                      <Card className={cn(
+                        'cursor-pointer hover:shadow-sm transition-all',
+                        isUrgent
+                          ? 'border-red-500/40 bg-red-500/5'
+                          : 'border-amber-500/30 bg-amber-500/5'
+                      )}>
+                        <CardContent className="p-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm">{s.name}</span>
+                                <span className="text-xs text-muted-foreground">{s.teacher}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {s.reasons.map((r, i) => (
+                                  <Badge
+                                    key={i}
+                                    className={cn(
+                                      'text-[10px]',
+                                      r.includes('결과')
+                                        ? 'bg-red-500/15 text-red-600 border-red-500/30'
+                                        : 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                                    )}
+                                  >
+                                    {r}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                            {isUrgent && (
+                              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-48">
+                      <div className="space-y-1.5 text-xs">
+                        <p className="font-semibold">{s.name} — 이번 달</p>
+                        <div className="grid grid-cols-2 gap-1">
+                          <span className="text-muted-foreground">시험 횟수</span><span className="text-right font-mono">{s.stats.tests}</span>
+                          <span className="text-muted-foreground">통과</span><span className="text-right font-mono text-emerald-600">{s.stats.passed}</span>
+                          <span className="text-muted-foreground">불통과</span><span className="text-right font-mono text-destructive">{s.stats.failed}</span>
+                          <span className="text-muted-foreground">숙제 완료</span><span className="text-right font-mono">{s.stats.homework}</span>
+                        </div>
                       </div>
-                      <div className="flex gap-1 flex-wrap justify-end">
-                        {s.reasons.map((r, i) => (
-                          <Badge key={i} variant="destructive" className="text-[9px] px-1.5 py-0">{r}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </HoverCardTrigger>
-                  <HoverCardContent className="w-48">
-                    <div className="space-y-1.5 text-xs">
-                      <p className="font-semibold">{s.name} — 이번 달</p>
-                      <div className="grid grid-cols-2 gap-1">
-                        <span className="text-muted-foreground">시험 횟수</span><span className="text-right font-mono">{s.stats.tests}</span>
-                        <span className="text-muted-foreground">통과</span><span className="text-right font-mono text-emerald-600">{s.stats.passed}</span>
-                        <span className="text-muted-foreground">불통과</span><span className="text-right font-mono text-destructive">{s.stats.failed}</span>
-                        <span className="text-muted-foreground">숙제 완료</span><span className="text-right font-mono">{s.stats.homework}</span>
-                      </div>
-                    </div>
-                  </HoverCardContent>
-                </HoverCard>
-              ))}
+                    </HoverCardContent>
+                  </HoverCard>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
