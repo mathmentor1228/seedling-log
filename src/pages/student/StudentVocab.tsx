@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { speakEnglish } from '@/lib/ttsUtils';
 import VocabSelfTest from '@/components/student/VocabSelfTest';
+import EnglishEnglishTest from '@/components/student/EnglishEnglishTest';
 
 interface VocabWord {
   english: string;
