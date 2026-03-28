@@ -85,6 +85,7 @@ interface TodaySlotStudent {
   firstSubject?: boolean;
   followup2wDue?: boolean;
   hyugangRecordId?: string | null;
+  hasClinicNote?: boolean;
 }
 
 interface TodaySlot {
@@ -603,6 +604,21 @@ export default function Lessons() {
         }
       }
 
+      // Fetch unconfirmed clinic notes for today's students
+      const allStudentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
+      const clinicNoteMap: Record<string, boolean> = {};
+      if (allStudentIds.length > 0) {
+        const { data: clinicNotes } = await supabase
+          .from('clinic_records')
+          .select('student_id, teacher_note, clinic_date')
+          .in('student_id', allStudentIds)
+          .eq('teacher_note_shown', false)
+          .not('teacher_note', 'is', null);
+        (clinicNotes || []).forEach((c: any) => {
+          clinicNoteMap[c.student_id] = true;
+        });
+      }
+
       Object.keys(studentsMap).forEach(classId => {
         studentsMap[classId] = studentsMap[classId].map(student => {
           const key = `${student.id}:${classId}`;
@@ -614,6 +630,7 @@ export default function Lessons() {
             firstSubject: mapped?.firstSubject || false,
             followup2wDue: mapped?.followup2wDue || false,
             hyugangRecordId: hyugangMap[key] || null,
+            hasClinicNote: clinicNoteMap[student.id] || false,
           };
         });
       });
@@ -908,6 +925,11 @@ export default function Lessons() {
                                 slot.subject,
                                 isAdmin,
                                 () => markFollowupDone(student.id, slot.subject)
+                              )}
+                              {student.hasClinicNote && (
+                                <Badge className="bg-warning/10 text-warning border-warning/30 text-xs">
+                                  🏥 클리닉 메모
+                                </Badge>
                               )}
                             </div>
                             <div className="flex items-center gap-2">
