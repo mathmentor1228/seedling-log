@@ -456,7 +456,7 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           className="pl-8 h-9 text-sm"
-                          placeholder="제목 / 과정 / 출제자 / 코드 검색..."
+                          placeholder="제목 / 과정 / 출제자 / 코드 / 학생이름 검색..."
                           value={quizSearchQuery}
                           onChange={e => setQuizSearchQuery(e.target.value)}
                         />
