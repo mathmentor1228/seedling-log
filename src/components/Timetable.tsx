@@ -117,6 +117,7 @@ export function Timetable() {
   const [matrixDay, setMatrixDay] = useState<number>(new Date().getDay());
   const [editClassId, setEditClassId] = useState<string | null>(null);
   const [editClassName, setEditClassName] = useState('');
+  const [teacherViewMode, setTeacherViewMode] = useState<'list' | 'timeline'>('list');
 
   // Inline edit state
   const [editSlot, setEditSlot] = useState<{
@@ -146,9 +147,9 @@ export function Timetable() {
 
   useEffect(() => {
     fetchScheduleData();
+    fetchClassrooms();
     if (isAdminUser || isAssistantUser) {
       fetchAllTeachers();
-      fetchClassrooms();
     }
   }, [user, isAdminUser]);
 
@@ -824,6 +825,8 @@ export function Timetable() {
   }
 
   // ── Teacher-only view ──
+
+  // ── Teacher-only view ──
   if (!isAdminUser && !isAssistantUser) {
     return (
       <Card>
@@ -834,7 +837,38 @@ export function Timetable() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {allRows.length === 0 ? (
+          {/* View Mode Toggle for teachers */}
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit mb-4">
+            <button
+              onClick={() => setTeacherViewMode('list')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                teacherViewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <List className="w-3.5 h-3.5" /> 리스트 뷰
+            </button>
+            <button
+              onClick={() => setTeacherViewMode('timeline')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                teacherViewMode === 'timeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> 타임라인 뷰
+            </button>
+          </div>
+
+          {teacherViewMode === 'timeline' ? (
+            <TimetableMatrixView
+              scheduleRows={allRows}
+              classrooms={classrooms}
+              selectedDay={matrixDay}
+              onDayChange={setMatrixDay}
+              mode="timeline"
+              onDataChange={fetchScheduleData}
+            />
+          ) : allRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">등록된 시간표가 없습니다</p>
           ) : (
             <div className="space-y-6">
@@ -1043,8 +1077,7 @@ export function Timetable() {
                 전체
               </button>
               {DAYS_OF_WEEK.map((d) => {
-                const count = scheduleRows.filter(r => r.dayOfWeek === d.value && (selectedTeacherId === 'all' || r.teacherId === selectedTeacherId)).length;
-                if (count === 0) return null;
+                const count = allRows.filter(r => r.dayOfWeek === d.value && (selectedTeacherId === 'all' || r.teacherId === selectedTeacherId)).length;
                 return (
                   <button
                     key={d.value}
@@ -1055,7 +1088,9 @@ export function Timetable() {
                         ? 'bg-primary text-primary-foreground'
                         : d.value === today
                           ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                          : count === 0
+                            ? 'bg-muted/50 text-muted-foreground/50'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
                     )}
                   >
                     {d.label} <span className="opacity-70">{count}</span>

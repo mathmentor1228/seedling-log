@@ -159,6 +159,13 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
     new Set(assignments.filter(a => a.quiz_id === quizId).map(a => a.student_id)),
   [assignments]);
 
+  // Build a map of student_id -> student_name for quick lookup in quiz search
+  const studentNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    students.forEach(s => { map[s.id] = s.name.toLowerCase(); });
+    return map;
+  }, [students]);
+
   const filteredQuizzes = useMemo(() => {
     let list = [...availableQuizzes];
     if (quizSubjectFilter !== 'all') {
@@ -171,7 +178,12 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
         const course = (q.math_concepts?.course || '').toLowerCase();
         const creator = (q.creator_name || '').toLowerCase();
         const code = (q.answer_code || '').toLowerCase();
-        return title.includes(query) || course.includes(query) || creator.includes(query) || code.includes(query);
+        if (title.includes(query) || course.includes(query) || creator.includes(query) || code.includes(query)) {
+          return true;
+        }
+        // Also search by assigned student name
+        const assignedStudentIds = assignments.filter(a => a.quiz_id === q.id).map(a => a.student_id);
+        return assignedStudentIds.some(sid => (studentNameMap[sid] || '').includes(query));
       });
     }
     list.sort((a, b) => {
@@ -196,7 +208,7 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
       return sortAsc ? cmp : -cmp;
     });
     return list;
-  }, [availableQuizzes, quizSubjectFilter, quizSearchQuery, sortKey, sortAsc, getAssignedStudents]);
+  }, [availableQuizzes, quizSubjectFilter, quizSearchQuery, sortKey, sortAsc, getAssignedStudents, assignments, studentNameMap]);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -444,7 +456,7 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           className="pl-8 h-9 text-sm"
-                          placeholder="제목 / 과정 / 출제자 / 코드 검색..."
+                          placeholder="제목 / 과정 / 출제자 / 코드 / 학생이름 검색..."
                           value={quizSearchQuery}
                           onChange={e => setQuizSearchQuery(e.target.value)}
                         />
