@@ -212,6 +212,14 @@ export default function StudentVocab() {
   // Check if any set has homework (required_rounds > 0)
   const hasHomework = vocabSets.some(s => s.required_rounds > 0);
 
+  // Check if any selected sets have english_definition
+  const hasEngDefinitions = useMemo(() => {
+    const selected = selectedSetIds.length > 0
+      ? vocabSets.filter(s => selectedSetIds.includes(s.set_id))
+      : vocabSets;
+    return selected.some(s => s.words.some(w => w.english_definition));
+  }, [vocabSets, selectedSetIds]);
+
   if (loading) {
     return (
       <div className="space-y-4 p-4">
