@@ -718,15 +718,22 @@ export function VocabScheduleGenerator() {
                       </TableCell>
                       <TableCell className="text-center">
                         {info.scheduleCount > 0 ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-xs gap-1"
-                            onClick={() => toggleExpand(info.studentId)}
-                          >
-                            {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                            <Badge variant="outline" className="text-xs">{info.scheduleCount}건</Badge>
-                          </Button>
+                          <div className="space-y-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs gap-1"
+                              onClick={() => toggleExpand(info.studentId)}
+                            >
+                              {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              <Badge variant="outline" className="text-xs">{info.scheduleCount}건</Badge>
+                            </Button>
+                            <Progress
+                              value={info.expectedTestCount > 0 ? Math.min(100, (info.scheduleCount / info.expectedTestCount) * 100) : 0}
+                              className="h-1.5"
+                            />
+                            <span className="text-[9px] text-muted-foreground">{info.scheduleCount}/{info.expectedTestCount}</span>
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">없음</span>
                         )}
