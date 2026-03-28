@@ -10,7 +10,7 @@ import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Sparkles, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -19,6 +19,7 @@ interface WordItem {
   id?: string;
   english: string;
   meaning: string;
+  english_definition?: string;
   sort_order: number;
 }
 
@@ -81,7 +82,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [sets, setSets] = useState<WordSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [setTitle, setSetTitle] = useState('');
-  const [words, setWords] = useState<WordItem[]>([{ english: '', meaning: '', sort_order: 0 }]);
+  const [words, setWords] = useState<WordItem[]>([{ english: '', meaning: '', english_definition: '', sort_order: 0 }]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [setFolderAssign, setSetFolderAssign] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadFolders();
@@ -211,9 +213,9 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       .eq('set_id', setId)
       .order('sort_order');
     if (items && items.length > 0) {
-      setWords(items.map(i => ({ id: i.id, english: i.english, meaning: i.meaning, sort_order: i.sort_order })));
+      setWords(items.map(i => ({ id: i.id, english: i.english, meaning: i.meaning, english_definition: (i as any).english_definition || '', sort_order: i.sort_order })));
     } else {
-      setWords([{ english: '', meaning: '', sort_order: 0 }]);
+      setWords([{ english: '', meaning: '', english_definition: '', sort_order: 0 }]);
     }
     setLoading(false);
   };
@@ -255,6 +257,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
         set_id: setId!,
         english: w.english.trim(),
         meaning: w.meaning.trim(),
+        english_definition: w.english_definition?.trim() || null,
         sort_order: i,
       }));
       await supabase.from('vocab_word_items').insert(items);
@@ -272,15 +275,15 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     if (selectedSetId === id) {
       setSelectedSetId(null);
       setSetTitle('');
-      setWords([{ english: '', meaning: '', sort_order: 0 }]);
+      setWords([{ english: '', meaning: '', english_definition: '', sort_order: 0 }]);
     }
     loadSets();
     toast({ title: '삭제 완료' });
   };
 
-  const addWord = () => setWords(prev => [...prev, { english: '', meaning: '', sort_order: prev.length }]);
+  const addWord = () => setWords(prev => [...prev, { english: '', meaning: '', english_definition: '', sort_order: prev.length }]);
   const removeWord = (idx: number) => setWords(prev => prev.filter((_, i) => i !== idx));
-  const updateWord = (idx: number, field: 'english' | 'meaning', value: string) => {
+  const updateWord = (idx: number, field: 'english' | 'meaning' | 'english_definition', value: string) => {
     setWords(prev => prev.map((w, i) => i === idx ? { ...w, [field]: value } : w));
   };
 
@@ -342,7 +345,31 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     setSelectedSetId(null);
     setSetTitle('');
     setSetFolderAssign(selectedFolderId);
-    setWords([{ english: '', meaning: '', sort_order: 0 }]);
+    setWords([{ english: '', meaning: '', english_definition: '', sort_order: 0 }]);
+  };
+
+  // AI definition generation
+  const handleGenerateDefinition = async (idx: number) => {
+    const item = words[idx];
+    if (!item?.english) {
+      toast({ title: '영어 단어를 먼저 입력하세요', variant: 'destructive' });
+      return;
+    }
+    const itemKey = `${idx}`;
+    setGeneratingId(itemKey);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-vocab-definition', {
+        body: { word: item.english, meaning: item.meaning || undefined },
+      });
+      if (error) throw error;
+      if (data?.definition) {
+        updateWord(idx, 'english_definition', data.definition);
+        toast({ title: '영영풀이 생성 완료' });
+      }
+    } catch (e: any) {
+      toast({ title: '생성 실패', description: e.message, variant: 'destructive' });
+    }
+    setGeneratingId(null);
   };
 
   // Generate test
@@ -708,13 +735,40 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                     <span>#</span><span>영어</span><span>뜻</span><span />
                   </div>
                   {words.map((w, i) => (
-                    <div key={i} className="grid grid-cols-[40px_1fr_1fr_32px] gap-2 items-center">
-                      <span className="text-xs text-muted-foreground text-center">{i + 1}</span>
-                      <Input value={w.english} onChange={e => updateWord(i, 'english', e.target.value)} placeholder="apple" className="h-8 text-sm" />
-                      <Input value={w.meaning} onChange={e => updateWord(i, 'meaning', e.target.value)} placeholder="사과" className="h-8 text-sm" />
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeWord(i)} disabled={words.length <= 1}>
-                        <X className="w-3 h-3" />
-                      </Button>
+                    <div key={i} className="space-y-1">
+                      <div className="grid grid-cols-[40px_1fr_1fr_32px] gap-2 items-center">
+                        <span className="text-xs text-muted-foreground text-center">{i + 1}</span>
+                        <Input value={w.english} onChange={e => updateWord(i, 'english', e.target.value)} placeholder="apple" className="h-8 text-sm" />
+                        <Input value={w.meaning} onChange={e => updateWord(i, 'meaning', e.target.value)} placeholder="사과" className="h-8 text-sm" />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeWord(i)} disabled={words.length <= 1}>
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-[40px_1fr_32px] gap-2">
+                        <span />
+                        <div className="space-y-1">
+                          <Textarea
+                            placeholder="영영풀이 입력 (선택사항) 예: A feeling of great pleasure and happiness"
+                            value={w.english_definition || ''}
+                            onChange={e => updateWord(i, 'english_definition', e.target.value)}
+                            rows={2}
+                            className="text-xs"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-primary gap-1 h-6 px-2"
+                            onClick={() => handleGenerateDefinition(i)}
+                            disabled={!w.english || generatingId === `${i}`}
+                          >
+                            {generatingId === `${i}`
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Sparkles className="w-3 h-3" />}
+                            AI 자동생성
+                          </Button>
+                        </div>
+                        <span />
+                      </div>
                     </div>
                   ))}
                 </div>
