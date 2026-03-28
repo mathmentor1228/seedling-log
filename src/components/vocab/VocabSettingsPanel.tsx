@@ -459,6 +459,10 @@ export function VocabSettingsPanel() {
           onChange={e => setFilterName(e.target.value)}
           className="w-28 h-8 text-xs"
         />
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <Checkbox checked={showUnset} onCheckedChange={(v) => setShowUnset(!!v)} />
+          <span className="text-xs text-muted-foreground">미설정 학생</span>
+        </label>
         <Badge variant="secondary" className="text-xs">
           {(() => {
             const filtered = settings.filter(s => {
@@ -479,83 +483,131 @@ export function VocabSettingsPanel() {
         </Badge>
       </div>
 
-      {settings.length === 0 ? (
+      {/* Unset students list */}
+      {showUnset && (() => {
+        const settingStudentIds = new Set(settings.map(s => s.student_id));
+        const unsetStudents = students.filter(s => !settingStudentIds.has(s.id));
+        const filtered = unsetStudents.filter(s => {
+          if (filterName && !s.name.includes(filterName)) return false;
+          if (filterGrade !== 'all') {
+            const group = getGradeGroup(s.grade, s.school);
+            if (group !== filterGrade) return false;
+          }
+          return true;
+        });
+        return (
+          <Card className="border-warning/30 bg-warning/5">
+            <CardContent className="py-3">
+              <p className="text-xs font-semibold text-warning mb-2">단어 설정 미등록 학생 ({filtered.length}명)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {filtered.map(s => (
+                  <Badge key={s.id} variant="outline" className="text-xs border-warning/40 text-warning">
+                    {s.name} {s.grade ? `(${s.grade})` : ''}
+                  </Badge>
+                ))}
+                {filtered.length === 0 && <span className="text-xs text-muted-foreground">없음</span>}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {settings.length === 0 && !showUnset ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
             <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-40" />
             등록된 학생이 없습니다. 학생을 추가해주세요.
           </CardContent>
         </Card>
-      ) : (
+      ) : settings.length > 0 && (
         <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[80px]">선생님</TableHead>
-                <TableHead className="w-[120px]">학생</TableHead>
-                <TableHead>교재</TableHead>
-                <TableHead className="text-center w-[60px]">DAY</TableHead>
-                <TableHead className="text-center w-[80px]">회당 DAY</TableHead>
-                <TableHead className="text-center w-[60px]">총 일차</TableHead>
-                <TableHead className="text-center w-[70px]">커트라인</TableHead>
-                <TableHead className="text-center w-[60px]">요일</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {settings.filter(s => {
-                if (filterTeacher !== 'all' && s.assigned_teacher !== filterTeacher) return false;
-                if (filterGrade !== 'all') {
-                  const st = (s as any).students;
-                  const group = st ? getGradeGroup(st.grade, st.school) : null;
-                  if (group !== filterGrade) return false;
-                }
-                if (filterName) {
-                  const st = (s as any).students;
-                  if (!st?.name?.includes(filterName)) return false;
-                }
-                return true;
-              }).map(s => (
-                <TableRow key={s.id}>
-                  <TableCell className="text-xs">
-                    {TEACHER_OPTIONS.find(t => t.value === s.assigned_teacher)?.label || '—'}
-                  </TableCell>
-                  <TableCell className="font-medium text-sm">
-                    {(s as any).students?.name || '—'}
-                    {(s as any).students?.grade && (
-                      <span className="text-xs text-muted-foreground ml-1">({(s as any).students.grade})</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm">{s.book_name}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="secondary" className="text-xs font-mono">Day {s.current_day_number}</Badge>
-                  </TableCell>
-                  <TableCell className="text-center text-xs">
-                    {s.days_per_test_map
-                      ? formatDaysPerTestMap(s.days_per_test_map, s.test_days)
-                      : `${s.days_per_test}DAY`}
-                  </TableCell>
-                  <TableCell className="text-center text-xs font-mono">
-                    {s.total_days ? `${s.total_days}일` : '—'}
-                  </TableCell>
-                  <TableCell className="text-center text-sm">{s.cutline_percent}%</TableCell>
-                  <TableCell className="text-center text-xs">
-                    {formatTestDaysLabel(s.test_days)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(s)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          <div className="overflow-auto max-h-[600px]">
+            <Table>
+              <TableHeader>
+                <TableRow className="sticky top-0 bg-card z-10">
+                  <TableHead className="w-[80px] sticky top-0 bg-card">선생님</TableHead>
+                  <TableHead className="w-[120px] sticky top-0 bg-card">학생</TableHead>
+                  <TableHead className="sticky top-0 bg-card">교재</TableHead>
+                  <TableHead className="text-center w-[60px] sticky top-0 bg-card">DAY</TableHead>
+                  <TableHead className="text-center w-[80px] sticky top-0 bg-card">회당 DAY</TableHead>
+                  <TableHead className="text-center w-[60px] sticky top-0 bg-card">총 일차</TableHead>
+                  <TableHead className="text-center w-[70px] sticky top-0 bg-card">커트라인</TableHead>
+                  <TableHead className="text-center w-[60px] sticky top-0 bg-card">요일</TableHead>
+                  <TableHead className="w-[50px] sticky top-0 bg-card"></TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {settings.filter(s => {
+                  if (filterTeacher !== 'all' && s.assigned_teacher !== filterTeacher) return false;
+                  if (filterGrade !== 'all') {
+                    const st = (s as any).students;
+                    const group = st ? getGradeGroup(st.grade, st.school) : null;
+                    if (group !== filterGrade) return false;
+                  }
+                  if (filterName) {
+                    const st = (s as any).students;
+                    if (!st?.name?.includes(filterName)) return false;
+                  }
+                  return true;
+                }).map(s => {
+                  const teacherOpt = TEACHER_OPTIONS.find(t => t.value === s.assigned_teacher);
+                  return (
+                    <TableRow key={s.id} className="hover:bg-muted/50 transition-colors">
+                      <TableCell className="text-xs">
+                        {teacherOpt ? (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-[10px]',
+                              s.assigned_teacher === 'seo' ? 'border-primary/40 text-primary bg-primary/5' :
+                              s.assigned_teacher === 'kim' ? 'border-emerald-400/40 text-emerald-700 bg-emerald-500/5' :
+                              ''
+                            )}
+                          >
+                            {teacherOpt.label}
+                          </Badge>
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell className="font-medium text-sm">
+                        {(s as any).students?.name || '—'}
+                        {(s as any).students?.grade && (
+                          <span className="text-xs text-muted-foreground ml-1">({(s as any).students.grade})</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">{s.book_name}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary" className="text-xs font-mono">Day {s.current_day_number}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center text-xs">
+                        {s.days_per_test_map
+                          ? formatDaysPerTestMap(s.days_per_test_map, s.test_days)
+                          : `${s.days_per_test}DAY`}
+                      </TableCell>
+                      <TableCell className="text-center text-xs font-mono">
+                        {s.total_days ? `${s.total_days}일` : (
+                          <Badge variant="outline" className="text-[10px] border-warning/40 text-warning bg-warning/5">미설정</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center text-sm">{s.cutline_percent}%</TableCell>
+                      <TableCell className="text-center text-xs">
+                        {formatTestDaysLabel(s.test_days)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}>
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(s)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </Card>
       )}
 
