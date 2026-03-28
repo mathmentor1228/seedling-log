@@ -1875,6 +1875,8 @@ export default function Dashboard() {
         // Teacher: use todaySlots
         todaySlots.forEach(slot => {
           if (slot.isOverridden && slot.overrideType === 'cancelled') return;
+          // Skip exam-prep virtual slots (not real class_ids)
+          if (slot.isExamPrep || slot.class_id.startsWith('exam-prep-')) return;
           slot.students.forEach(student => {
             if (!student.lessonRecordId && !student.hyugangRecordId) {
               const key = `${student.id}:${slot.class_id}:${slot.subject}`;

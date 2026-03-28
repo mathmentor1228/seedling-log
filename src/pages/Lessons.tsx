@@ -1170,6 +1170,12 @@ export default function Lessons() {
           <DailyHomeworkChecklist />
         </TabsContent>
       )}
+
+      {(isAdmin || isTeacher) && (
+        <TabsContent value="exam-prep" className="mt-4">
+          <ExamPrepScheduleManager />
+        </TabsContent>
+      )}
       </Tabs>
     </div>
   );
