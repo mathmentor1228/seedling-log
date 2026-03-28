@@ -374,14 +374,65 @@ export default function StudentVocab() {
     );
   }
 
-  // Test mode view
+  // English-English test mode
+  if (testMode && (studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing')) {
+    const engEngWords = cards
+      .filter(w => w.english_definition)
+      .map(w => ({
+        english: w.english,
+        meaning: w.meaning,
+        english_definition: w.english_definition!,
+      }));
+
+    if (engEngWords.length === 0) {
+      return (
+        <div className="space-y-4 p-4 max-w-lg mx-auto text-center">
+          <Card>
+            <CardContent className="py-8">
+              <p className="text-muted-foreground">영영풀이가 입력된 단어가 없습니다.</p>
+              <Button className="mt-4" onClick={() => { setStarted(false); setTestMode(false); }}>
+                돌아가기
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return (
+      <EnglishEnglishTest
+        words={engEngWords}
+        questionType={studyType === 'eng_eng_mc' ? 'multiple_choice' : 'typing'}
+        onFinish={async (correct, wrong, total) => {
+          const modeStr = studyType === 'eng_eng_mc' ? 'eng_eng_mc' : 'eng_eng_typing';
+          const { error } = await studentApi.submitVocabCompletion(
+            selectedSetIds, correct, wrong, total, modeStr
+          );
+          if (!error) {
+            toast({ title: '테스트 기록 저장 완료! ✅' });
+            setCompletions(prev => [{
+              id: crypto.randomUUID(),
+              word_set_ids: selectedSetIds,
+              correct_count: correct,
+              wrong_count: wrong,
+              total_count: total,
+              mode: modeStr,
+              completed_at: new Date().toISOString(),
+            }, ...prev]);
+          }
+        }}
+        onBack={() => { setStarted(false); setTestMode(false); }}
+      />
+    );
+  }
+
+  // Test mode view (existing Korean test)
   if (testMode) {
     return (
       <VocabSelfTest
         words={cards}
         mode={studyType === 'listening' ? 'listening' : mode}
         onFinish={async (correct, wrong, total) => {
-          // Save completion
           const { error } = await studentApi.submitVocabCompletion(
             selectedSetIds, correct, wrong, total, mode + '_test'
           );
