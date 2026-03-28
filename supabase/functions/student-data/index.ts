@@ -821,7 +821,7 @@ Deno.serve(async (req) => {
         // Get words for each set
         const { data: allWords } = await supabase
           .from('vocab_word_items')
-          .select('set_id, english, meaning, sort_order')
+          .select('set_id, english, meaning, english_definition, sort_order')
           .in('set_id', setIds)
           .order('sort_order');
 
