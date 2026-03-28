@@ -23,44 +23,44 @@ function VocabTestContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="w-full overflow-x-auto flex-nowrap whitespace-nowrap h-auto gap-1 justify-start">
-          <TabsTrigger value="dashboard" className="text-xs shrink-0 gap-1.5">
+        <TabsList className="w-full overflow-x-auto flex-nowrap whitespace-nowrap scrollbar-hide h-auto gap-1 justify-start">
+          <TabsTrigger value="dashboard" className="text-xs shrink-0 gap-1">
             <BarChart3 className="w-3.5 h-3.5" />
             대시보드
           </TabsTrigger>
-          <TabsTrigger value="edit" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="edit" className="text-xs shrink-0 gap-1">
             <FileText className="w-3.5 h-3.5" />
             단어 입력
           </TabsTrigger>
-          <TabsTrigger value="generate" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="generate" className="text-xs shrink-0 gap-1">
             <Shuffle className="w-3.5 h-3.5" />
             시험 출제
           </TabsTrigger>
-          <TabsTrigger value="result" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="result" className="text-xs shrink-0 gap-1">
             <Printer className="w-3.5 h-3.5" />
             시험지/답지
           </TabsTrigger>
-          <TabsTrigger value="saved" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="saved" className="text-xs shrink-0 gap-1">
             <FolderOpen className="w-3.5 h-3.5" />
             저장된 시험지
           </TabsTrigger>
-          <TabsTrigger value="results" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="results" className="text-xs shrink-0 gap-1">
             <ClipboardList className="w-3.5 h-3.5" />
             시험 결과
           </TabsTrigger>
-          <TabsTrigger value="settings" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="settings" className="text-xs shrink-0 gap-1">
             <Settings className="w-3.5 h-3.5" />
             학생 설정
           </TabsTrigger>
-          <TabsTrigger value="schedule" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="schedule" className="text-xs shrink-0 gap-1">
             <BookOpen className="w-3.5 h-3.5" />
             스케줄 관리
           </TabsTrigger>
-          <TabsTrigger value="vocab-assign" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="vocab-assign" className="text-xs shrink-0 gap-1">
             <Languages className="w-3.5 h-3.5" />
             단어 배정
           </TabsTrigger>
-          <TabsTrigger value="test-schedule" className="text-xs shrink-0 gap-1.5">
+          <TabsTrigger value="test-schedule" className="text-xs shrink-0 gap-1">
             <CalendarDays className="w-3.5 h-3.5" />
             시험 일정
           </TabsTrigger>

@@ -304,3 +304,13 @@
 .mr-table tr:nth-child(even) td {
   background: hsl(var(--muted) / 0.25);
 }
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}

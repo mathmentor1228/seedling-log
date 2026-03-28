@@ -2,13 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Loader2, CalendarDays, CheckCircle2, XCircle, ClipboardList, BookOpen, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Loader2, CalendarDays, CheckCircle2, XCircle, ClipboardList, BookOpen, AlertTriangle, TrendingUp, CalendarPlus, CheckCircle } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isToday, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, Cell, ResponsiveContainer } from 'recharts';
@@ -26,6 +27,7 @@ interface Props {
 export function VocabDashboard({ onTabChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [selectedTeacher, setSelectedTeacher] = useState('all');
+  const [failModalOpen, setFailModalOpen] = useState(false);
 
   // Raw data
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -33,6 +35,7 @@ export function VocabDashboard({ onTabChange }: Props) {
   const [completions, setCompletions] = useState<any[]>([]);
   const [settings, setSettings] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
+  const [failStudents, setFailStudents] = useState<any[]>([]);
 
   const now = new Date();
   const monthStart = format(startOfMonth(now), 'yyyy-MM-dd');
@@ -62,6 +65,50 @@ export function VocabDashboard({ onTabChange }: Props) {
     setStudents(studentsRes.data || []);
     setLoading(false);
   };
+
+  // Fetch fail students for modal
+  const fetchFailStudents = async () => {
+    const { data } = await supabase
+      .from('test_schedules')
+      .select('id, student_id, subject, test_date, content, result_passed, result_recorded_at, test_type, students!inner(name)')
+      .eq('result_passed', false)
+      .gte('test_date', monthStart)
+      .order('test_date', { ascending: false });
+
+    if (!data) { setFailStudents([]); return; }
+
+    // Check for retest schedules
+    const studentIds = [...new Set(data.map(d => d.student_id))];
+    const { data: retests } = await supabase
+      .from('test_schedules')
+      .select('student_id, subject, test_date')
+      .eq('test_type', 'retest')
+      .in('student_id', studentIds)
+      .gte('test_date', format(now, 'yyyy-MM-dd'));
+
+    const retestMap = new Map<string, string>();
+    for (const r of (retests || [])) {
+      retestMap.set(`${r.student_id}-${r.subject}`, r.test_date);
+    }
+
+    setFailStudents(data.map(d => {
+      const retestDate = retestMap.get(`${d.student_id}-${d.subject}`);
+      return {
+        id: d.id,
+        studentId: d.student_id,
+        name: (d.students as any)?.name || '—',
+        subject: d.subject,
+        testDate: d.test_date,
+        content: d.content || '',
+        retestScheduled: !!retestDate,
+        retestDate: retestDate || null,
+      };
+    }));
+  };
+
+  useEffect(() => {
+    if (failModalOpen) fetchFailStudents();
+  }, [failModalOpen]);
 
   // Build setting map for teacher filter
   const settingMap = useMemo(() => {
@@ -110,6 +157,7 @@ export function VocabDashboard({ onTabChange }: Props) {
   const passedResults = filteredResults.filter(r => r.passed);
   const failedResults = filteredResults.filter(r => !r.passed);
   const completionCount = filteredCompletions.length;
+  const passRate = resultCount > 0 ? Math.round((passedResults.length / resultCount) * 100) : 0;
 
   // Weekly calendar
   const weekSchedules = useMemo(() => {
@@ -146,18 +194,14 @@ export function VocabDashboard({ onTabChange }: Props) {
       const studentComps = filteredCompletions.filter(c => c.student_id === sid);
 
       const reasons: string[] = [];
-      const cutline = setting?.cutline_percent || 80;
 
-      // Failed 2+ times
       const failed = studentResults.filter(r => !r.passed);
       if (failed.length >= 2) reasons.push(`불통과 ${failed.length}회`);
 
-      // Has schedule but no result
       const resultSchedIds = new Set(studentResults.map(r => r.schedule_id));
       const noResult = studentScheds.filter(s => !resultSchedIds.has(s.id) && s.test_date <= format(now, 'yyyy-MM-dd'));
       if (noResult.length > 0) reasons.push(`결과 미입력 ${noResult.length}건`);
 
-      // No homework completions
       if (studentComps.length === 0) reasons.push('숙제 미제출');
 
       if (reasons.length === 0) continue;
@@ -226,78 +270,156 @@ export function VocabDashboard({ onTabChange }: Props) {
         </Badge>
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards - clickable action cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <div className="cursor-pointer" onClick={() => onTabChange?.('schedule')}>
-          <Card className="border-blue-500/20 bg-blue-500/5">
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-muted-foreground">시험 스케줄</span>
-                <CalendarDays className="w-4 h-4 text-blue-500" />
-              </div>
-              <div className="text-2xl font-bold">{scheduleCount}</div>
-              <div className="text-xs text-muted-foreground mt-1">이번 달</div>
-            </CardContent>
-          </Card>
-        </div>
-        <div className="cursor-pointer" onClick={() => onTabChange?.('results')}>
-          <Card className="border-muted-foreground/20">
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-muted-foreground">결과 입력</span>
-                <ClipboardList className="w-4 h-4 text-muted-foreground" />
-              </div>
-              <div className="text-2xl font-bold">{resultCount}</div>
-              <Progress value={scheduleCount > 0 ? (resultCount / scheduleCount) * 100 : 0} className="mt-2 h-1.5" />
-              <div className="text-xs text-muted-foreground mt-1">{scheduleCount}건 중</div>
-            </CardContent>
-          </Card>
-        </div>
-        {(() => {
-          const passRate = resultCount > 0 ? Math.round((passedResults.length / resultCount) * 100) : 0;
-          const colorClass = passRate >= 80 ? 'green' : passRate >= 60 ? 'amber' : 'red';
-          return (
-            <Card className={`border-${colorClass}-500/20 bg-${colorClass}-500/5`}>
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-muted-foreground">통과율</span>
-                  <CheckCircle2 className={`w-4 h-4 text-${colorClass}-500`} />
-                </div>
-                <div className={`text-2xl font-bold text-${colorClass}-600`}>
-                  {resultCount > 0 ? `${passRate}%` : '—'}
-                </div>
-                <Progress value={passRate} className="mt-2 h-1.5" />
-                <div className="text-xs text-muted-foreground mt-1">{passedResults.length} / {resultCount}건</div>
-              </CardContent>
-            </Card>
-          );
-        })()}
-        <Card className="border-red-500/20 bg-red-500/5">
+        {/* Card 1: 시험 스케줄 */}
+        <Card
+          className="border-blue-500/20 bg-blue-500/5 cursor-pointer hover:border-blue-500/50 transition-colors"
+          onClick={() => onTabChange?.('test-schedule')}
+        >
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground">시험 스케줄</span>
+              <CalendarDays className="w-4 h-4 text-blue-500" />
+            </div>
+            <div className="text-2xl font-bold">{scheduleCount}</div>
+            <div className="text-xs text-muted-foreground mt-1">이번 달</div>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: 결과 입력 */}
+        <Card
+          className="border-amber-500/20 bg-amber-500/5 cursor-pointer hover:border-amber-500/50 transition-colors"
+          onClick={() => onTabChange?.('results')}
+        >
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground">결과 입력</span>
+              <ClipboardList className="w-4 h-4 text-amber-500" />
+            </div>
+            <div className="text-2xl font-bold">{resultCount}</div>
+            <Progress value={scheduleCount > 0 ? (resultCount / scheduleCount) * 100 : 0} className="mt-2 h-1.5" />
+            <div className="text-xs text-muted-foreground mt-1">{scheduleCount}건 중 · 클릭하여 입력</div>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: 통과율 */}
+        <Card
+          className={cn(
+            'cursor-pointer transition-colors',
+            passRate >= 80
+              ? 'border-green-500/20 bg-green-500/5 hover:border-green-500/50'
+              : passRate >= 60
+              ? 'border-amber-500/20 bg-amber-500/5 hover:border-amber-500/50'
+              : 'border-red-500/20 bg-red-500/5 hover:border-red-500/50'
+          )}
+          onClick={() => onTabChange?.('results')}
+        >
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground">통과율</span>
+              <CheckCircle2 className={cn(
+                'w-4 h-4',
+                passRate >= 80 ? 'text-green-500' : passRate >= 60 ? 'text-amber-500' : 'text-red-500'
+              )} />
+            </div>
+            <div className={cn(
+              'text-2xl font-bold',
+              passRate >= 80 ? 'text-green-600' : passRate >= 60 ? 'text-amber-600' : 'text-red-600'
+            )}>
+              {resultCount > 0 ? `${passRate}%` : '—'}
+            </div>
+            <Progress value={passRate} className="mt-2 h-1.5" />
+            <div className="text-xs text-muted-foreground mt-1">{passedResults.length} / {resultCount}건</div>
+          </CardContent>
+        </Card>
+
+        {/* Card 4: 불통과 → 재시험 모달 */}
+        <Card
+          className="border-red-500/20 bg-red-500/5 cursor-pointer hover:border-red-500/50 transition-colors"
+          onClick={() => setFailModalOpen(true)}
+        >
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-muted-foreground">불통과</span>
               <XCircle className="w-4 h-4 text-red-500" />
             </div>
             <div className="text-2xl font-bold text-red-600">{failedResults.length}</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {resultCount > 0 ? `${Math.round((failedResults.length / resultCount) * 100)}%` : '—'}
-              {failedResults.length > 0 && ' · 즉시 확인 필요'}
+            <div className="text-xs text-red-500 mt-1 font-medium">
+              {failedResults.length > 0 ? '클릭하여 재시험 관리 →' : '없음'}
             </div>
           </CardContent>
         </Card>
-        <div className="cursor-pointer" onClick={() => onTabChange?.('vocab-assign')}>
-          <Card className="border-amber-500/20 bg-amber-500/5">
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-muted-foreground">숙제 완료</span>
-                <BookOpen className="w-4 h-4 text-amber-500" />
-              </div>
-              <div className="text-2xl font-bold">{completionCount}</div>
-              <div className="text-xs text-muted-foreground mt-1">이번 달</div>
-            </CardContent>
-          </Card>
-        </div>
+
+        {/* Card 5: 숙제 완료 */}
+        <Card className="border-purple-500/20 bg-purple-500/5">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground">숙제 완료</span>
+              <BookOpen className="w-4 h-4 text-purple-500" />
+            </div>
+            <div className="text-2xl font-bold">{completionCount}</div>
+            <div className="text-xs text-muted-foreground mt-1">이번 달</div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Fail retest management modal */}
+      <Dialog open={failModalOpen} onOpenChange={setFailModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-red-500" />
+              불통과 학생 재시험 관리
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {failStudents.map(student => (
+              <div
+                key={student.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-red-500/20 bg-red-500/5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{student.name}</span>
+                    <Badge variant="outline" className="text-xs">{student.subject}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {student.testDate} · {student.content || '—'}
+                  </div>
+                  {student.retestScheduled ? (
+                    <Badge className="mt-1 bg-blue-500/15 text-blue-600 border-blue-500/30 text-xs">
+                      재시험 예정: {student.retestDate}
+                    </Badge>
+                  ) : (
+                    <Badge className="mt-1 bg-red-500/15 text-red-600 border-red-500/30 text-xs">
+                      재시험 미예약
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant={student.retestScheduled ? 'outline' : 'default'}
+                  className="shrink-0 gap-1.5 ml-2"
+                  onClick={() => {
+                    setFailModalOpen(false);
+                    onTabChange?.('test-schedule');
+                  }}
+                >
+                  <CalendarPlus className="w-3.5 h-3.5" />
+                  {student.retestScheduled ? '일정 수정' : '재시험 잡기'}
+                </Button>
+              </div>
+            ))}
+          </div>
+          {failStudents.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              <CheckCircle className="w-10 h-10 mx-auto mb-2 text-green-500" />
+              <p>불통과 학생이 없습니다 🎉</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Weekly calendar */}
       <Card>
