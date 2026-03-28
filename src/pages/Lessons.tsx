@@ -1227,6 +1227,12 @@ export default function Lessons() {
           </TabsContent>
         </>
       )}
+
+      {(isAdmin || isTeacher) && (
+        <TabsContent value="student-profile" className="mt-4">
+          <StudentProfileTab />
+        </TabsContent>
+      )}
       </Tabs>
     </div>
   );
