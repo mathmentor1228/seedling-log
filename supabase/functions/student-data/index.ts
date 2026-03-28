@@ -843,6 +843,7 @@ Deno.serve(async (req) => {
           words: (allWords || []).filter((w: any) => w.set_id === s.id).map((w: any) => ({
             english: w.english,
             meaning: w.meaning,
+            english_definition: w.english_definition || null,
           })),
         }));
 
