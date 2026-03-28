@@ -169,7 +169,7 @@ export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test']
         .select('id')
         .eq('student_id', studentId)
         .eq('lesson_date', date)
-        .eq('subject', subject || '수학')
+        .eq('subject', (subject || '수학') as any)
         .limit(1)
         .maybeSingle();
       if (existingLR) lessonRecordId = existingLR.id;
