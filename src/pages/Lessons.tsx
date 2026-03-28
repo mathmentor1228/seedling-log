@@ -37,6 +37,7 @@ import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
 import { TestTab } from '@/components/lessons/TestTab';
 import { SelfStudyTab } from '@/components/lessons/SelfStudyTab';
 import { ClinicTab } from '@/components/lessons/ClinicTab';
+import { StudentProfileTab } from '@/components/lessons/StudentProfileTab';
 
 interface Teacher {
   id: string;
@@ -839,6 +840,9 @@ export default function Lessons() {
                 <TabsTrigger value="clinic">🏥 클리닉</TabsTrigger>
               </>
             )}
+            {(isAdmin || isTeacher) && (
+              <TabsTrigger value="student-profile">👤 학생 캐릭터</TabsTrigger>
+            )}
           </TabsList>
           {canManage && (
             <div className="flex gap-2">
@@ -1222,6 +1226,12 @@ export default function Lessons() {
             <ClinicTab />
           </TabsContent>
         </>
+      )}
+
+      {(isAdmin || isTeacher) && (
+        <TabsContent value="student-profile" className="mt-4">
+          <StudentProfileTab />
+        </TabsContent>
       )}
       </Tabs>
     </div>
