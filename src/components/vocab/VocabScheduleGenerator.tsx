@@ -420,7 +420,23 @@ export function VocabScheduleGenerator() {
       .lte('test_date', end)
       .order('test_date')
       .order('day_number');
-    setStudentSchedules(prev => ({ ...prev, [studentId]: (data || []) as IndividualSchedule[] }));
+
+    const schedIds = (data || []).map(s => s.id);
+    let resultMap: Record<string, { passed: boolean }> = {};
+    if (schedIds.length > 0) {
+      const { data: resultsData } = await supabase
+        .from('vocab_test_results')
+        .select('schedule_id, passed')
+        .in('schedule_id', schedIds);
+      if (resultsData) {
+        for (const r of resultsData) resultMap[r.schedule_id] = { passed: r.passed };
+      }
+    }
+
+    setStudentSchedules(prev => ({
+      ...prev,
+      [studentId]: (data || []).map(s => ({ ...s, result: resultMap[s.id] || null })) as any,
+    }));
     setLoadingSchedules(prev => {
       const n = new Set(prev);
       n.delete(studentId);
