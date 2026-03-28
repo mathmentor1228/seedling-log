@@ -98,7 +98,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       label: '수업',
       items: [
         { label: '수업 기록', href: '/lessons', icon: <ClipboardList className="w-4 h-4" /> },
-        { label: '시험', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
+        { label: '단어시험관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '일괄 채점', href: '/quiz-bulk-upload', icon: <ClipboardCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
