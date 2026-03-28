@@ -1858,8 +1858,8 @@ export default function Dashboard() {
       if (isAdmin(role) && adminRosterData) {
         // Admin: iterate adminRosterData, check lessonStatusMap for existing records
         adminRosterData.roster_rows.forEach(row => {
-          // Skip rows with missing or invalid UUIDs (e.g. supplementary without class_id)
-          if (!row.student_id || !row.class_id || !row.teacher_id || row.class_id === '') return;
+          // Skip rows with missing or invalid UUIDs (e.g. supplementary without class_id, exam-prep virtual slots)
+          if (!row.student_id || !row.class_id || !row.teacher_id || row.class_id === '' || row.class_id.startsWith('exam-prep-')) return;
           const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
           const status = lessonStatusMap[statusKey];
           if (!status?.recordId) {
@@ -1875,6 +1875,8 @@ export default function Dashboard() {
         // Teacher: use todaySlots
         todaySlots.forEach(slot => {
           if (slot.isOverridden && slot.overrideType === 'cancelled') return;
+          // Skip exam-prep virtual slots (not real class_ids)
+          if (slot.isExamPrep || slot.class_id.startsWith('exam-prep-')) return;
           slot.students.forEach(student => {
             if (!student.lessonRecordId && !student.hyugangRecordId) {
               const key = `${student.id}:${slot.class_id}:${slot.subject}`;

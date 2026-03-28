@@ -33,6 +33,7 @@ import { LessonModal } from '@/components/lessons/LessonModal';
 import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
+import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
 
 interface Teacher {
   id: string;
@@ -808,6 +809,9 @@ export default function Lessons() {
             {(isAdmin || isTeacher || isAssistant) && (
               <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
             )}
+            {(isAdmin || isTeacher) && (
+              <TabsTrigger value="exam-prep">내신특강</TabsTrigger>
+            )}
           </TabsList>
           {canManage && (
             <div className="flex gap-2">
@@ -1165,6 +1169,12 @@ export default function Lessons() {
       {(isAdmin || isTeacher || isAssistant) && (
         <TabsContent value="daily-hw" className="mt-4">
           <DailyHomeworkChecklist />
+        </TabsContent>
+      )}
+
+      {(isAdmin || isTeacher) && (
+        <TabsContent value="exam-prep" className="mt-4">
+          <ExamPrepScheduleManager />
         </TabsContent>
       )}
       </Tabs>
