@@ -3891,9 +3891,11 @@ export type Database = {
           id: string
           notes: string | null
           question_count: number
+          question_type: string
           share_token: string | null
           source_set_ids: string[]
           test_data: Json
+          test_mode: string
           title: string
         }
         Insert: {
@@ -3903,9 +3905,11 @@ export type Database = {
           id?: string
           notes?: string | null
           question_count?: number
+          question_type?: string
           share_token?: string | null
           source_set_ids?: string[]
           test_data?: Json
+          test_mode?: string
           title: string
         }
         Update: {
@@ -3915,9 +3919,11 @@ export type Database = {
           id?: string
           notes?: string | null
           question_count?: number
+          question_type?: string
           share_token?: string | null
           source_set_ids?: string[]
           test_data?: Json
+          test_mode?: string
           title?: string
         }
         Relationships: []
@@ -4179,6 +4185,7 @@ export type Database = {
         Row: {
           created_at: string
           english: string
+          english_definition: string | null
           id: string
           meaning: string
           set_id: string
@@ -4187,6 +4194,7 @@ export type Database = {
         Insert: {
           created_at?: string
           english: string
+          english_definition?: string | null
           id?: string
           meaning: string
           set_id: string
@@ -4195,6 +4203,7 @@ export type Database = {
         Update: {
           created_at?: string
           english?: string
+          english_definition?: string | null
           id?: string
           meaning?: string
           set_id?: string
