@@ -742,14 +742,14 @@ export function VocabScheduleGenerator() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                           onClick={() => {
                             setDeleteSettingId(info.settingId);
                             setDeleteSettingName(info.studentName);
                             setBulkDeleteSettings(false);
                           }}
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </TableCell>
                     </TableRow>
