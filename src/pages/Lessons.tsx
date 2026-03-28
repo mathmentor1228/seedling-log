@@ -926,6 +926,11 @@ export default function Lessons() {
                                 isAdmin,
                                 () => markFollowupDone(student.id, slot.subject)
                               )}
+                              {student.hasClinicNote && (
+                                <Badge className="bg-warning/10 text-warning border-warning/30 text-xs">
+                                  🏥 클리닉 메모
+                                </Badge>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <Button
