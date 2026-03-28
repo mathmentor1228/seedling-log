@@ -37,6 +37,7 @@ import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
 import { TestTab } from '@/components/lessons/TestTab';
 import { SelfStudyTab } from '@/components/lessons/SelfStudyTab';
 import { ClinicTab } from '@/components/lessons/ClinicTab';
+import { StudentProfileTab } from '@/components/lessons/StudentProfileTab';
 
 interface Teacher {
   id: string;
