@@ -257,6 +257,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
         set_id: setId!,
         english: w.english.trim(),
         meaning: w.meaning.trim(),
+        english_definition: w.english_definition?.trim() || null,
         sort_order: i,
       }));
       await supabase.from('vocab_word_items').insert(items);
