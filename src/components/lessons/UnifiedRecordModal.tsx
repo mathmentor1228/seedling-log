@@ -231,7 +231,7 @@ export function UnifiedRecordModal({
           content: testContent.trim(),
           score: testScore.trim() || null,
           passed: testPassed,
-          assistant_name: testAssistant || null,
+          assistant_name: testAssistant && testAssistant !== 'none' ? testAssistant : null,
           room: selectedRoom,
         });
       }
