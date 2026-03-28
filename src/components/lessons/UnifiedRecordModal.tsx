@@ -100,40 +100,36 @@ export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test']
 
   async function loadEditRecord() {
     if (!editRecord) return;
-    const table = editRecord.type === 'test' ? 'test_records'
-      : editRecord.type === 'self_study' ? 'self_study_records'
-      : 'clinic_records';
-    const dateCol = editRecord.type === 'test' ? 'test_date'
-      : editRecord.type === 'self_study' ? 'study_date' : 'clinic_date';
-
-    const { data } = await supabase.from(table).select('*').eq('id', editRecord.id).single();
-    if (!data) return;
 
     setActiveType(editRecord.type);
-    setStudentId(data.student_id);
-    setTeacherId(data.teacher_id);
-    setDate(data[dateCol]);
-    setStartTime(data.start_time?.slice(0, 5) || '');
-    setEndTime(data.end_time?.slice(0, 5) || '');
-    setRoom(data.room || 'general');
-    setMemo(data.memo || '');
 
     if (editRecord.type === 'test') {
-      setSubject(data.subject || '');
-      setTestType(data.test_type || 'guerrilla');
-      setContent(data.content || '');
-      setScore(data.score || '');
-      setPassed(data.passed);
+      const { data } = await supabase.from('test_records').select('*').eq('id', editRecord.id).single();
+      if (!data) return;
+      setStudentId(data.student_id); setTeacherId(data.teacher_id);
+      setDate(data.test_date); setStartTime(data.start_time?.slice(0, 5) || '');
+      setEndTime(data.end_time?.slice(0, 5) || ''); setRoom(data.room || 'general');
+      setMemo(data.memo || ''); setSubject(data.subject || '');
+      setTestType(data.test_type || 'guerrilla'); setContent(data.content || '');
+      setScore(data.score || ''); setPassed(data.passed);
       setAssistantName(data.assistant_name || '');
     } else if (editRecord.type === 'self_study') {
-      setSubject(data.subject || '');
-      setTaskList(Array.isArray(data.task_list) ? data.task_list as TaskItem[] : []);
+      const { data } = await supabase.from('self_study_records').select('*').eq('id', editRecord.id).single();
+      if (!data) return;
+      setStudentId(data.student_id); setTeacherId(data.teacher_id);
+      setDate(data.study_date); setStartTime(data.start_time?.slice(0, 5) || '');
+      setEndTime(data.end_time?.slice(0, 5) || ''); setRoom(data.room || 'general');
+      setMemo(data.memo || ''); setSubject(data.subject || '');
+      setTaskList(Array.isArray(data.task_list) ? (data.task_list as any as TaskItem[]) : []);
       setDurationMinutes(data.duration_minutes || '');
     } else {
-      setSubject(data.subject || '');
-      setClinicContent(data.content || '');
-      setNextClinicMemo(data.next_clinic_memo || '');
-      setTeacherNote(data.teacher_note || '');
+      const { data } = await supabase.from('clinic_records').select('*').eq('id', editRecord.id).single();
+      if (!data) return;
+      setStudentId(data.student_id); setTeacherId(data.teacher_id);
+      setDate(data.clinic_date); setStartTime(data.start_time?.slice(0, 5) || '');
+      setEndTime(data.end_time?.slice(0, 5) || ''); setRoom(data.room || 'general');
+      setSubject(data.subject || ''); setClinicContent(data.content || '');
+      setNextClinicMemo(data.next_clinic_memo || ''); setTeacherNote(data.teacher_note || '');
     }
   }
 
