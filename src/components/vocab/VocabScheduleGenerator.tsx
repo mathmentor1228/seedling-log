@@ -779,19 +779,26 @@ export function VocabScheduleGenerator() {
                                     </Badge>
                                   )}
                                 </div>
-                                <div className="flex flex-wrap gap-1">
+                                <div className="flex flex-wrap gap-1 overflow-x-auto">
                                   {scheds.map(sched => {
                                     const d = new Date(sched.test_date + 'T00:00:00');
                                     const dayName = DAY_NAMES[d.getDay()];
                                     const isSelected = selectedScheduleIds.has(sched.id);
+                                    const result = (sched as any).result;
+                                    const chipColor = isSelected
+                                      ? 'bg-destructive/10 border-destructive/40 text-destructive'
+                                      : result
+                                        ? result.passed
+                                          ? 'bg-emerald-500/10 border-emerald-400/40 text-emerald-700'
+                                          : 'bg-destructive/10 border-destructive/30 text-destructive'
+                                        : 'bg-muted/50 border-border text-foreground hover:bg-accent/50';
                                     return (
                                       <label
                                         key={sched.id}
-                                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs cursor-pointer transition-colors ${
-                                          isSelected
-                                            ? 'bg-destructive/10 border-destructive/40 text-destructive'
-                                            : 'bg-card border-border hover:bg-accent/50'
-                                        }`}
+                                        className={cn(
+                                          'inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs cursor-pointer transition-colors whitespace-nowrap',
+                                          chipColor
+                                        )}
                                       >
                                         <Checkbox
                                           checked={isSelected}
@@ -801,7 +808,12 @@ export function VocabScheduleGenerator() {
                                         <span className="font-mono">
                                           {format(d, 'M/d')}({dayName})
                                         </span>
-                                        <span className="text-muted-foreground">Day{sched.day_number}</span>
+                                        <span className="opacity-70">Day{sched.day_number}</span>
+                                        {result && (
+                                          <span className="text-[9px] font-semibold">
+                                            {result.passed ? '✓' : '✗'}
+                                          </span>
+                                        )}
                                       </label>
                                     );
                                   })}
