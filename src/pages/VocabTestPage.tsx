@@ -7,20 +7,19 @@ import { StudentVocabAssignment } from '@/components/vocab/StudentVocabAssignmen
 import { VocabDashboard } from '@/components/vocab/VocabDashboard';
 import { VocabTestGenerator } from '@/components/vocab/VocabTestGenerator';
 import { TestScheduleManager } from '@/components/TestScheduleManager';
-import { TestRoutineManager } from '@/components/TestRoutineManager';
-import { BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings, BookOpen, Languages, CalendarDays, RefreshCw, ClipboardList } from 'lucide-react';
+import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
+import { BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings, BookOpen, Languages, CalendarDays, ClipboardList } from 'lucide-react';
 
 function VocabTestContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  // For VocabTestGenerator sub-tab control
   const generatorTabs = ['edit', 'generate', 'result', 'saved'];
   const isGeneratorTab = generatorTabs.includes(activeTab);
 
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h1 className="text-lg font-semibold">시험 관리</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">단어 시험 설정 · 스케줄 · 출제 · 범용 시험 일정 관리</p>
+        <h1 className="text-lg font-semibold">단어시험관리</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">단어 시험 설정, 스케줄, 결과를 관리합니다</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -65,17 +64,12 @@ function VocabTestContent() {
             <CalendarDays className="w-3.5 h-3.5" />
             시험 일정
           </TabsTrigger>
-          <TabsTrigger value="test-routine" className="gap-1.5 text-xs">
-            <RefreshCw className="w-3.5 h-3.5" />
-            시험 루틴
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
           <VocabDashboard onTabChange={setActiveTab} />
         </TabsContent>
 
-        {/* VocabTestGenerator tabs - render the component once, control its tab */}
         {isGeneratorTab && (
           <div className="mt-2">
             <VocabTestGenerator controlledTab={activeTab} onTabChange={setActiveTab} />
@@ -83,7 +77,7 @@ function VocabTestContent() {
         )}
 
         <TabsContent value="results">
-          <VocabTestResultsPanelLazy />
+          <VocabTestResultsPanel />
         </TabsContent>
 
         <TabsContent value="settings">
@@ -101,19 +95,9 @@ function VocabTestContent() {
         <TabsContent value="test-schedule">
           <TestScheduleManager />
         </TabsContent>
-
-        <TabsContent value="test-routine">
-          <TestRoutineManager />
-        </TabsContent>
       </Tabs>
     </div>
   );
-}
-
-// Lazy import to avoid large bundle
-import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
-function VocabTestResultsPanelLazy() {
-  return <VocabTestResultsPanel />;
 }
 
 export default function VocabTestPage() {
