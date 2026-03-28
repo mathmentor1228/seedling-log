@@ -10,7 +10,7 @@ import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Sparkles, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
