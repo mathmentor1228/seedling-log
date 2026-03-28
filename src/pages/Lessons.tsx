@@ -1187,6 +1187,20 @@ export default function Lessons() {
           <ExamPrepScheduleManager />
         </TabsContent>
       )}
+
+      {(isAdmin || isTeacher || isAssistant) && (
+        <>
+          <TabsContent value="test" className="mt-4">
+            <TestTab />
+          </TabsContent>
+          <TabsContent value="self_study" className="mt-4">
+            <SelfStudyTab />
+          </TabsContent>
+          <TabsContent value="clinic" className="mt-4">
+            <ClinicTab />
+          </TabsContent>
+        </>
+      )}
       </Tabs>
     </div>
   );
