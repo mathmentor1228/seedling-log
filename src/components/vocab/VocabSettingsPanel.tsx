@@ -113,6 +113,7 @@ export function VocabSettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showUnset, setShowUnset] = useState(false);
 
   // Form state
   const [formStudentId, setFormStudentId] = useState('');
