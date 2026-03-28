@@ -9,6 +9,7 @@ import { toast } from '@/hooks/use-toast';
 import { Search, Save, Folder, Users, ChevronDown, ChevronRight, Target, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 interface VocabFolder {
   id: string;
@@ -198,6 +199,18 @@ export function StudentVocabAssignment() {
     return { completed, total: withTarget.length };
   };
 
+  // Count assigned sets per folder for the selected student
+  const getAssignedCountInFolder = (folderId: string): { assigned: number; completed: number; total: number } => {
+    if (!selectedStudentId) return { assigned: 0, completed: 0, total: 0 };
+    const setIds = getSetIdsInFolder(folderId);
+    const assigned = setIds.filter(id => isSetAssigned(selectedStudentId, id)).length;
+    const completed = setIds.filter(id => {
+      const a = getStudentAssignment(selectedStudentId, id);
+      return a && a.required_rounds > 0 && getCompletionCount(selectedStudentId, id) >= a.required_rounds;
+    }).length;
+    return { assigned, completed, total: setIds.length };
+  };
+
   const renderFolderTree = (parentId: string | null, depth: number = 0) => {
     const childFolders = folders.filter(f => f.parent_id === parentId);
     return childFolders.map(folder => {
@@ -206,6 +219,7 @@ export function StudentVocabAssignment() {
       const allChecked = folderSetIds.length > 0 && folderSetIds.every(id => isSetAssigned(selectedStudentId!, id));
       const someChecked = folderSetIds.some(id => isSetAssigned(selectedStudentId!, id));
       const folderSets = sets.filter(s => s.folder_id === folder.id);
+      const folderStats = getAssignedCountInFolder(folder.id);
 
       return (
         <div key={folder.id}>
@@ -226,6 +240,19 @@ export function StudentVocabAssignment() {
               <span className="truncate">{folder.name}</span>
               <span className="text-[10px] text-muted-foreground ml-1">({folderSetIds.length})</span>
             </div>
+            {selectedStudentId && folderStats.assigned > 0 && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-[9px] px-1.5',
+                  folderStats.completed === folderStats.assigned
+                    ? 'border-emerald-400/40 text-emerald-700 bg-emerald-500/5'
+                    : 'border-warning/40 text-warning bg-warning/5'
+                )}
+              >
+                {folderStats.completed}/{folderStats.assigned}
+              </Badge>
+            )}
           </div>
           {isExpanded && (
             <div>
@@ -239,7 +266,11 @@ export function StudentVocabAssignment() {
                 return (
                   <div
                     key={s.id}
-                    className="flex items-center gap-2 p-1.5 rounded-md hover:bg-muted text-sm"
+                    className={cn(
+                      'flex items-center gap-2 p-1.5 rounded-md hover:bg-muted text-sm transition-colors',
+                      targetMet && 'bg-emerald-500/5',
+                      assigned && !targetMet && 'bg-warning/5'
+                    )}
                     style={{ paddingLeft: `${(depth + 1) * 16 + 20}px` }}
                   >
                     {selectedStudentId && (
@@ -252,9 +283,9 @@ export function StudentVocabAssignment() {
                     <span className="truncate flex-1">{s.title}</span>
                     {assigned && (
                       <div className="flex items-center gap-1">
-                        {targetMet && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                        {targetMet && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
                         {assignment!.required_rounds > 0 && (
-                          <span className={`text-[10px] ${targetMet ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <span className={cn('text-[10px]', targetMet ? 'text-emerald-600' : 'text-muted-foreground')}>
                             {completionCount}/{assignment!.required_rounds}회
                           </span>
                         )}
@@ -286,7 +317,7 @@ export function StudentVocabAssignment() {
       {/* Student list */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
             <Users className="w-4 h-4" /> 학생 선택
           </CardTitle>
           <div className="relative mt-2">
@@ -302,29 +333,35 @@ export function StudentVocabAssignment() {
         <CardContent className="space-y-0.5 max-h-[500px] overflow-y-auto">
           {filteredStudents.map(s => {
             const progress = getStudentProgress(s.id);
+            const progressPercent = progress ? Math.round((progress.completed / progress.total) * 100) : 0;
+            const isComplete = progress && progress.completed === progress.total;
             return (
               <div
                 key={s.id}
-                className={`flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors ${selectedStudentId === s.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'}`}
+                className={cn(
+                  'p-2 rounded-md cursor-pointer text-sm transition-colors',
+                  selectedStudentId === s.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted'
+                )}
                 onClick={() => setSelectedStudentId(s.id)}
               >
-                <div>
-                  <span>{s.name}</span>
-                  {s.school && <span className="text-xs text-muted-foreground ml-1.5">{s.school}</span>}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    {isComplete && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                    <span>{s.name}</span>
+                    {s.school && <span className="text-xs text-muted-foreground">{s.school}</span>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {(assignments[s.id]?.length || 0) > 0 && (
+                      <Badge variant="secondary" className="text-[10px]">{assignments[s.id].length}개</Badge>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  {progress && (
-                    <Badge
-                      variant={progress.completed === progress.total ? 'default' : 'outline'}
-                      className="text-[10px]"
-                    >
-                      {progress.completed === progress.total ? '✅' : `${progress.completed}/${progress.total}`}
-                    </Badge>
-                  )}
-                  {(assignments[s.id]?.length || 0) > 0 && (
-                    <Badge variant="secondary" className="text-[10px]">{assignments[s.id].length}개</Badge>
-                  )}
-                </div>
+                {progress && (
+                  <div className="mt-1.5 space-y-0.5">
+                    <Progress value={progressPercent} className="h-1.5" />
+                    <span className="text-[9px] text-muted-foreground">{progress.completed}/{progress.total} 완료</span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -332,19 +369,14 @@ export function StudentVocabAssignment() {
       </Card>
 
       {/* Set assignment */}
-      <Card>
+      <Card className="relative">
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between text-sm">
             <span>
               {selectedStudent
                 ? `${selectedStudent.name}의 단어 범위`
                 : '학생을 선택하세요'}
             </span>
-            {selectedStudentId && (
-              <Button size="sm" onClick={handleSave} disabled={saving}>
-                <Save className="w-3.5 h-3.5 mr-1" /> {saving ? '저장 중...' : '저장'}
-              </Button>
-            )}
           </CardTitle>
           {selectedStudentId && (
             <div className="flex items-center gap-2 mt-2">
@@ -362,7 +394,7 @@ export function StudentVocabAssignment() {
             </div>
           )}
         </CardHeader>
-        <CardContent className="max-h-[500px] overflow-y-auto">
+        <CardContent className="max-h-[440px] overflow-y-auto pb-16">
           {!selectedStudentId ? (
             <p className="text-sm text-muted-foreground text-center py-8">왼쪽에서 학생을 선택하세요</p>
           ) : (
@@ -408,6 +440,15 @@ export function StudentVocabAssignment() {
             </div>
           )}
         </CardContent>
+
+        {/* Sticky save button */}
+        {selectedStudentId && (
+          <div className="absolute bottom-0 left-0 right-0 p-3 border-t bg-card/95 backdrop-blur-sm rounded-b-lg">
+            <Button size="sm" onClick={handleSave} disabled={saving} className="w-full">
+              <Save className="w-3.5 h-3.5 mr-1.5" /> {saving ? '저장 중...' : '저장'}
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   );
