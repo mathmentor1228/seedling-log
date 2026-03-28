@@ -120,6 +120,7 @@ export function VocabScheduleGenerator() {
   const fetchStudentScheduleInfo = async () => {
     setLoading(true);
     const { start, end } = getMonthRange();
+    const target = new Date(Number(year), Number(month), 1);
 
     const [settingsRes, schedulesRes] = await Promise.all([
       supabase
@@ -142,21 +143,31 @@ export function VocabScheduleGenerator() {
       countMap[s.student_id] = (countMap[s.student_id] || 0) + 1;
     }
 
-    const infos: StudentScheduleInfo[] = settings.map((s: any) => ({
-      settingId: s.id,
-      studentId: s.student_id,
-      studentName: s.students?.name || '—',
-      grade: s.students?.grade || null,
-      bookName: s.book_name,
-      testDays: s.test_days || ['mon', 'wed'],
-      currentDay: s.current_day_number,
-      daysPerTest: s.days_per_test,
-      bundleDays: s.bundle_days || false,
-      totalDays: s.total_days || null,
-      teacherId: s.teacher_id,
-      assignedTeacher: s.assigned_teacher || null,
-      scheduleCount: countMap[s.student_id] || 0,
-    }));
+    // Estimate expected test count for the month
+    const allMonthDays = eachDayOfInterval({ start: startOfMonth(target), end: endOfMonth(target) });
+
+    const infos: StudentScheduleInfo[] = settings.map((s: any) => {
+      const daysCodes = normalizeTestDays(s.test_days || ['mon', 'wed']);
+      const allowedDays = daysCodes.map(d => DAY_CODE_TO_JS[d]).filter(Boolean);
+      const expectedTestCount = allMonthDays.filter(d => allowedDays.includes(getDay(d))).length;
+
+      return {
+        settingId: s.id,
+        studentId: s.student_id,
+        studentName: s.students?.name || '—',
+        grade: s.students?.grade || null,
+        bookName: s.book_name,
+        testDays: s.test_days || ['mon', 'wed'],
+        currentDay: s.current_day_number,
+        daysPerTest: s.days_per_test,
+        bundleDays: s.bundle_days || false,
+        totalDays: s.total_days || null,
+        teacherId: s.teacher_id,
+        assignedTeacher: s.assigned_teacher || null,
+        scheduleCount: countMap[s.student_id] || 0,
+        expectedTestCount,
+      };
+    });
 
     setStudentInfos(infos);
     setSelectedIds(new Set());
