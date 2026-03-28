@@ -807,13 +807,20 @@ export default function Lessons() {
 
       <Tabs defaultValue="lessons" className="w-full">
         <div className="flex items-center justify-between mb-4">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="lessons">수업 기록</TabsTrigger>
             {(isAdmin || isTeacher || isAssistant) && (
               <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
             )}
             {(isAdmin || isTeacher) && (
               <TabsTrigger value="exam-prep">내신특강</TabsTrigger>
+            )}
+            {(isAdmin || isTeacher || isAssistant) && (
+              <>
+                <TabsTrigger value="test">테스트</TabsTrigger>
+                <TabsTrigger value="self_study">자습</TabsTrigger>
+                <TabsTrigger value="clinic">클리닉</TabsTrigger>
+              </>
             )}
           </TabsList>
           {canManage && (
