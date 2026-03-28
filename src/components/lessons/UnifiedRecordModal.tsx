@@ -1,27 +1,29 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useState, useEffect, useMemo } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { getTodayKST } from '@/lib/utils';
-import { ASSISTANTS, ROOMS, TEST_TYPES, isSpecialRoom } from './constants';
+import { ASSISTANTS, ROOMS, SUBJECTS, TEST_TYPES, isSpecialRoom } from './constants';
 import { useTeachersList } from './useTeachersList';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface UnifiedRecordModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultTypes?: ('test' | 'self_study' | 'clinic')[];
-  editRecord?: { type: string; id: string } | null;
   onSaved?: () => void;
+  defaultDate?: string;
+  defaultStudentId?: string;
+  defaultTypes?: ('test' | 'self_study' | 'clinic')[];
 }
 
 interface StudentOption {
@@ -29,228 +31,251 @@ interface StudentOption {
   name: string;
 }
 
-interface TaskItem {
+interface StudyTask {
   id: string;
   task: string;
   done: boolean;
 }
 
-export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test'], editRecord, onSaved }: UnifiedRecordModalProps) {
+type RecordType = 'test' | 'self_study' | 'clinic';
+
+export function UnifiedRecordModal({
+  open,
+  onOpenChange,
+  onSaved,
+  defaultDate,
+  defaultStudentId,
+  defaultTypes = [],
+}: UnifiedRecordModalProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { teachers } = useTeachersList();
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [saving, setSaving] = useState(false);
-  const [activeType, setActiveType] = useState<string>(defaultTypes[0] || 'test');
+  const [studentPopoverOpen, setStudentPopoverOpen] = useState(false);
 
-  // Common fields
-  const [studentId, setStudentId] = useState('');
-  const [teacherId, setTeacherId] = useState('');
-  const [date, setDate] = useState(getTodayKST());
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
-  const [subject, setSubject] = useState('');
-  const [room, setRoom] = useState('general');
-  const [memo, setMemo] = useState('');
-  const [studentSearch, setStudentSearch] = useState('');
+  // Common
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedDate, setSelectedDate] = useState(getTodayKST());
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [selectedRoom, setSelectedRoom] = useState('general');
+  const [selectedTypes, setSelectedTypes] = useState<Set<RecordType>>(new Set());
 
-  // Test fields
+  // Test
+  const [testSubject, setTestSubject] = useState('');
   const [testType, setTestType] = useState('guerrilla');
-  const [content, setContent] = useState('');
-  const [score, setScore] = useState('');
-  const [passed, setPassed] = useState<boolean | null>(null);
-  const [assistantName, setAssistantName] = useState('');
+  const [testStartTime, setTestStartTime] = useState('');
+  const [testEndTime, setTestEndTime] = useState('');
+  const [testContent, setTestContent] = useState('');
+  const [testScore, setTestScore] = useState('');
+  const [testPassed, setTestPassed] = useState<boolean | null>(null);
+  const [testAssistant, setTestAssistant] = useState('');
 
-  // Self-study fields
-  const [taskList, setTaskList] = useState<TaskItem[]>([]);
-  const [durationMinutes, setDurationMinutes] = useState<number | ''>('');
+  // Self-study
+  const [studySubject, setStudySubject] = useState('');
+  const [studyStartTime, setStudyStartTime] = useState('');
+  const [studyEndTime, setStudyEndTime] = useState('');
+  const [studyTasks, setStudyTasks] = useState<StudyTask[]>([]);
+  const [studyMemo, setStudyMemo] = useState('');
 
-  // Clinic fields
+  // Clinic
+  const [clinicSubject, setClinicSubject] = useState('');
+  const [clinicStartTime, setClinicStartTime] = useState('');
+  const [clinicEndTime, setClinicEndTime] = useState('');
   const [clinicContent, setClinicContent] = useState('');
-  const [nextClinicMemo, setNextClinicMemo] = useState('');
-  const [teacherNote, setTeacherNote] = useState('');
+  const [clinicNextMemo, setClinicNextMemo] = useState('');
+  const [clinicTeacherNote, setClinicTeacherNote] = useState('');
+
+  // Auto-calculate study duration
+  const studyDurationMinutes = useMemo(() => {
+    if (!studyStartTime || !studyEndTime) return null;
+    const [sh, sm] = studyStartTime.split(':').map(Number);
+    const [eh, em] = studyEndTime.split(':').map(Number);
+    const diff = (eh * 60 + em) - (sh * 60 + sm);
+    return diff > 0 ? diff : null;
+  }, [studyStartTime, studyEndTime]);
 
   useEffect(() => {
     if (open) {
       fetchStudents();
-      if (!editRecord) {
-        resetForm();
-        setActiveType(defaultTypes[0] || 'test');
-        if (user) setTeacherId(user.id);
-      }
+      resetForm();
+      if (defaultDate) setSelectedDate(defaultDate);
+      if (defaultStudentId) setSelectedStudentId(defaultStudentId);
+      if (defaultTypes.length > 0) setSelectedTypes(new Set(defaultTypes));
+      if (user) setSelectedTeacherId(user.id);
     }
   }, [open]);
 
-  useEffect(() => {
-    if (editRecord && open) loadEditRecord();
-  }, [editRecord, open]);
-
   function resetForm() {
-    setStudentId(''); setDate(getTodayKST()); setStartTime(''); setEndTime('');
-    setSubject(''); setRoom('general'); setMemo(''); setTestType('guerrilla');
-    setContent(''); setScore(''); setPassed(null); setAssistantName('');
-    setTaskList([]); setDurationMinutes(''); setClinicContent('');
-    setNextClinicMemo(''); setTeacherNote(''); setStudentSearch('');
+    setSelectedStudentId('');
+    setSelectedDate(getTodayKST());
+    setSelectedTeacherId('');
+    setSelectedRoom('general');
+    setSelectedTypes(new Set());
+    setTestSubject(''); setTestType('guerrilla'); setTestStartTime(''); setTestEndTime('');
+    setTestContent(''); setTestScore(''); setTestPassed(null); setTestAssistant('');
+    setStudySubject(''); setStudyStartTime(''); setStudyEndTime('');
+    setStudyTasks([]); setStudyMemo('');
+    setClinicSubject(''); setClinicStartTime(''); setClinicEndTime('');
+    setClinicContent(''); setClinicNextMemo(''); setClinicTeacherNote('');
   }
 
   async function fetchStudents() {
-    const { data } = await supabase.from('students').select('id, name').neq('enrollment_status', '퇴원').order('name');
+    const { data } = await supabase
+      .from('students')
+      .select('id, name')
+      .eq('enrollment_status', '재원')
+      .order('name');
     setStudents(data || []);
   }
 
-  async function loadEditRecord() {
-    if (!editRecord) return;
-
-    setActiveType(editRecord.type);
-
-    if (editRecord.type === 'test') {
-      const { data } = await supabase.from('test_records').select('*').eq('id', editRecord.id).single();
-      if (!data) return;
-      setStudentId(data.student_id); setTeacherId(data.teacher_id);
-      setDate(data.test_date); setStartTime(data.start_time?.slice(0, 5) || '');
-      setEndTime(data.end_time?.slice(0, 5) || ''); setRoom(data.room || 'general');
-      setMemo(data.memo || ''); setSubject(data.subject || '');
-      setTestType(data.test_type || 'guerrilla'); setContent(data.content || '');
-      setScore(data.score || ''); setPassed(data.passed);
-      setAssistantName(data.assistant_name || '');
-    } else if (editRecord.type === 'self_study') {
-      const { data } = await supabase.from('self_study_records').select('*').eq('id', editRecord.id).single();
-      if (!data) return;
-      setStudentId(data.student_id); setTeacherId(data.teacher_id);
-      setDate(data.study_date); setStartTime(data.start_time?.slice(0, 5) || '');
-      setEndTime(data.end_time?.slice(0, 5) || ''); setRoom(data.room || 'general');
-      setMemo(data.memo || ''); setSubject(data.subject || '');
-      setTaskList(Array.isArray(data.task_list) ? (data.task_list as any as TaskItem[]) : []);
-      setDurationMinutes(data.duration_minutes || '');
-    } else {
-      const { data } = await supabase.from('clinic_records').select('*').eq('id', editRecord.id).single();
-      if (!data) return;
-      setStudentId(data.student_id); setTeacherId(data.teacher_id);
-      setDate(data.clinic_date); setStartTime(data.start_time?.slice(0, 5) || '');
-      setEndTime(data.end_time?.slice(0, 5) || ''); setRoom(data.room || 'general');
-      setSubject(data.subject || ''); setClinicContent(data.content || '');
-      setNextClinicMemo(data.next_clinic_memo || ''); setTeacherNote(data.teacher_note || '');
-    }
+  function toggleType(type: RecordType) {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
   }
 
   function addTask() {
-    setTaskList(prev => [...prev, { id: crypto.randomUUID(), task: '', done: false }]);
+    setStudyTasks(prev => [...prev, { id: crypto.randomUUID(), task: '', done: false }]);
   }
 
   function removeTask(id: string) {
-    setTaskList(prev => prev.filter(t => t.id !== id));
+    setStudyTasks(prev => prev.filter(t => t.id !== id));
   }
 
   function updateTask(id: string, field: 'task' | 'done', value: string | boolean) {
-    setTaskList(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+    setStudyTasks(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
   }
 
+  const selectedStudentName = students.find(s => s.id === selectedStudentId)?.name || '';
+
   async function handleSave() {
-    if (!studentId || !teacherId || !date) {
-      toast({ title: '필수 항목을 입력해주세요', variant: 'destructive' });
+    if (!selectedStudentId) {
+      toast({ title: '학생을 선택해주세요', variant: 'destructive' });
       return;
     }
-    if (activeType === 'test' && (!subject || !content)) {
-      toast({ title: '과목과 내용을 입력해주세요', variant: 'destructive' });
+    if (selectedTypes.size === 0) {
+      toast({ title: '기록 유형을 하나 이상 선택해주세요', variant: 'destructive' });
       return;
     }
-    if (activeType === 'clinic' && (!subject || !clinicContent)) {
-      toast({ title: '과목과 클리닉 내용을 입력해주세요', variant: 'destructive' });
+    if (selectedTypes.has('test') && !testContent.trim()) {
+      toast({ title: '테스트 범위/내용을 입력해주세요', variant: 'destructive' });
+      return;
+    }
+    if (selectedTypes.has('clinic') && !clinicContent.trim()) {
+      toast({ title: '클리닉 내용을 입력해주세요', variant: 'destructive' });
       return;
     }
 
     setSaving(true);
     try {
-      let lessonRecordId: string | null = null;
+      const teacherId = selectedTeacherId || user?.id;
 
-      // Find matching lesson_record
-      const { data: existingLR } = await supabase
-        .from('lesson_records')
-        .select('id')
-        .eq('student_id', studentId)
-        .eq('lesson_date', date)
-        .eq('subject', (subject || '수학') as any)
-        .limit(1)
-        .maybeSingle();
-      if (existingLR) lessonRecordId = existingLR.id;
+      // Upsert lesson_record for linking
+      async function upsertLessonRecord(types: string[], subject: string): Promise<string | null> {
+        const { data: existing } = await supabase
+          .from('lesson_records')
+          .select('id, lesson_types')
+          .eq('student_id', selectedStudentId)
+          .eq('lesson_date', selectedDate)
+          .maybeSingle();
 
-      if (activeType === 'test') {
-        const record = {
-          student_id: studentId,
-          teacher_id: teacherId,
+        if (existing) {
+          const merged = [...new Set([...(existing.lesson_types || []), ...types])];
+          await supabase
+            .from('lesson_records')
+            .update({ lesson_types: merged as any })
+            .eq('id', existing.id);
+          return existing.id;
+        } else {
+          const { data: newRecord } = await supabase
+            .from('lesson_records')
+            .insert({
+              student_id: selectedStudentId,
+              teacher_id: teacherId!,
+              lesson_date: selectedDate,
+              subject: subject as any,
+              lesson_types: types,
+              understanding_score: 0,
+              homework_status: 'none',
+              lesson_range: types.join('+'),
+              submitted: true,
+              submitted_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single();
+          return newRecord?.id || null;
+        }
+      }
+
+      const typesArray = Array.from(selectedTypes);
+      const firstSubject = testSubject || clinicSubject || studySubject || '기타';
+      const lessonRecordId = await upsertLessonRecord(
+        typesArray.map(t => t === 'test' ? '테스트' : t === 'self_study' ? '자습' : '클리닉'),
+        firstSubject
+      );
+
+      if (selectedTypes.has('test')) {
+        await supabase.from('test_records').insert({
+          student_id: selectedStudentId,
+          teacher_id: teacherId!,
           lesson_record_id: lessonRecordId,
-          test_date: date,
-          start_time: startTime || null,
-          end_time: endTime || null,
-          subject,
+          test_date: selectedDate,
+          start_time: testStartTime || null,
+          end_time: testEndTime || null,
+          subject: testSubject,
           test_type: testType,
-          content,
-          score: score || null,
-          passed,
-          assistant_name: assistantName || null,
-          room,
-          memo: memo || null,
-          updated_at: new Date().toISOString(),
-        };
+          content: testContent.trim(),
+          score: testScore.trim() || null,
+          passed: testPassed,
+          assistant_name: testAssistant || null,
+          room: selectedRoom,
+        });
+      }
 
-        if (editRecord) {
-          await supabase.from('test_records').update(record).eq('id', editRecord.id);
-        } else {
-          await supabase.from('test_records').insert(record);
-        }
-      } else if (activeType === 'self_study') {
-        const record = {
-          student_id: studentId,
-          teacher_id: teacherId,
+      if (selectedTypes.has('self_study')) {
+        await supabase.from('self_study_records').insert({
+          student_id: selectedStudentId,
+          teacher_id: teacherId!,
           lesson_record_id: lessonRecordId,
-          study_date: date,
-          subject: subject || null,
-          task_list: taskList as any,
-          start_time: startTime || null,
-          end_time: endTime || null,
-          duration_minutes: durationMinutes || null,
-          room,
-          memo: memo || null,
-          updated_at: new Date().toISOString(),
-        };
+          study_date: selectedDate,
+          subject: studySubject.trim() || null,
+          task_list: studyTasks as any,
+          start_time: studyStartTime || null,
+          end_time: studyEndTime || null,
+          duration_minutes: studyDurationMinutes,
+          room: selectedRoom,
+          memo: studyMemo.trim() || null,
+        });
+      }
 
-        if (editRecord) {
-          await supabase.from('self_study_records').update(record).eq('id', editRecord.id);
-        } else {
-          await supabase.from('self_study_records').insert(record);
-        }
-      } else {
-        const record = {
-          student_id: studentId,
-          teacher_id: teacherId,
+      if (selectedTypes.has('clinic')) {
+        await supabase.from('clinic_records').insert({
+          student_id: selectedStudentId,
+          teacher_id: teacherId!,
           lesson_record_id: lessonRecordId,
-          clinic_date: date,
-          start_time: startTime || null,
-          end_time: endTime || null,
-          subject,
-          content: clinicContent,
-          next_clinic_memo: nextClinicMemo || null,
-          teacher_note: teacherNote || null,
+          clinic_date: selectedDate,
+          start_time: clinicStartTime || null,
+          end_time: clinicEndTime || null,
+          subject: clinicSubject,
+          content: clinicContent.trim(),
+          next_clinic_memo: clinicNextMemo.trim() || null,
+          teacher_note: clinicTeacherNote.trim() || null,
           teacher_note_shown: false,
-          room,
-          updated_at: new Date().toISOString(),
-        };
-
-        if (editRecord) {
-          await supabase.from('clinic_records').update(record).eq('id', editRecord.id);
-        } else {
-          await supabase.from('clinic_records').insert(record);
-        }
+          room: selectedRoom,
+        });
       }
 
       toast({ title: '저장되었습니다' });
 
-      if (isSpecialRoom(room)) {
-        toast({ title: '조교 대시보드에 일정이 공유되었습니다', description: `강의실: ${ROOMS.find(r => r.value === room)?.label}` });
+      if (isSpecialRoom(selectedRoom)) {
+        toast({ description: '조교 대시보드에 일정이 공유되었습니다' });
       }
-
-      if (activeType === 'clinic' && teacherNote) {
-        toast({ title: '담당 선생님 수업 탭에 알림이 표시됩니다' });
+      if (clinicTeacherNote.trim()) {
+        toast({ description: '담당 선생님 수업 탭에 알림이 표시됩니다' });
       }
 
       onSaved?.();
@@ -263,51 +288,65 @@ export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test']
     }
   }
 
-  const filteredStudents = students.filter(s =>
-    !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase())
-  );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editRecord ? '기록 수정' : '새 기록 추가'}</DialogTitle>
+          <DialogTitle>기록 추가</DialogTitle>
         </DialogHeader>
-
-        {!editRecord && defaultTypes.length > 1 && (
-          <Tabs value={activeType} onValueChange={setActiveType}>
-            <TabsList className="w-full">
-              {defaultTypes.includes('test') && <TabsTrigger value="test">테스트</TabsTrigger>}
-              {defaultTypes.includes('self_study') && <TabsTrigger value="self_study">자습</TabsTrigger>}
-              {defaultTypes.includes('clinic') && <TabsTrigger value="clinic">클리닉</TabsTrigger>}
-            </TabsList>
-          </Tabs>
-        )}
 
         <div className="space-y-4">
           {/* Common fields */}
           <div className="grid grid-cols-2 gap-3">
+            {/* Student combobox */}
             <div className="col-span-2">
               <Label>학생 *</Label>
-              <Input
-                placeholder="학생 검색..."
-                value={studentSearch}
-                onChange={e => setStudentSearch(e.target.value)}
-                className="mb-1"
-              />
-              <Select value={studentId} onValueChange={setStudentId}>
-                <SelectTrigger><SelectValue placeholder="학생 선택" /></SelectTrigger>
-                <SelectContent>
-                  {filteredStudents.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={studentPopoverOpen} onOpenChange={setStudentPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={studentPopoverOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedStudentName || '학생 선택...'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="학생 검색..." />
+                    <CommandList>
+                      <CommandEmpty>학생을 찾을 수 없습니다</CommandEmpty>
+                      <CommandGroup>
+                        {students.map(s => (
+                          <CommandItem
+                            key={s.id}
+                            value={s.name}
+                            onSelect={() => {
+                              setSelectedStudentId(s.id);
+                              setStudentPopoverOpen(false);
+                            }}
+                          >
+                            <Check className={cn('mr-2 h-4 w-4', selectedStudentId === s.id ? 'opacity-100' : 'opacity-0')} />
+                            {s.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div>
-              <Label>담당 선생님 *</Label>
-              <Select value={teacherId} onValueChange={setTeacherId}>
+              <Label>날짜 *</Label>
+              <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+            </div>
+
+            <div>
+              <Label>담당 선생님</Label>
+              <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
                 <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
                 <SelectContent>
                   {teachers.map(t => (
@@ -317,37 +356,9 @@ export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test']
               </Select>
             </div>
 
-            <div>
-              <Label>날짜 *</Label>
-              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
-            </div>
-
-            <div>
-              <Label>시작 시간</Label>
-              <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
-            </div>
-
-            <div>
-              <Label>종료 시간</Label>
-              <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
-            </div>
-
-            <div>
-              <Label>과목 {activeType !== 'self_study' ? '*' : ''}</Label>
-              <Select value={subject} onValueChange={setSubject}>
-                <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="수학">수학</SelectItem>
-                  <SelectItem value="영어">영어</SelectItem>
-                  <SelectItem value="국어">국어</SelectItem>
-                  <SelectItem value="과학">과학</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
+            <div className="col-span-2">
               <Label>강의실</Label>
-              <Select value={room} onValueChange={setRoom}>
+              <Select value={selectedRoom} onValueChange={setSelectedRoom}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {ROOMS.map(r => (
@@ -358,50 +369,93 @@ export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test']
             </div>
           </div>
 
-          {/* Test-specific fields */}
-          {activeType === 'test' && (
-            <div className="space-y-3 border-t pt-3">
-              <h4 className="text-sm font-semibold text-primary">테스트 정보</h4>
+          {/* Type selection */}
+          <div>
+            <Label className="mb-2 block">기록 유형 *</Label>
+            <div className="flex gap-4">
+              {([
+                { type: 'test' as RecordType, label: '🔬 테스트' },
+                { type: 'self_study' as RecordType, label: '📚 자습' },
+                { type: 'clinic' as RecordType, label: '🏥 클리닉' },
+              ]).map(({ type, label }) => (
+                <label key={type} className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={selectedTypes.has(type)}
+                    onCheckedChange={() => toggleType(type)}
+                  />
+                  <span className="text-sm font-medium">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Test section */}
+          {selectedTypes.has('test') && (
+            <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+              <h3 className="text-sm font-semibold">🔬 테스트</h3>
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>과목</Label>
+                  <Select value={testSubject} onValueChange={setTestSubject}>
+                    <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div>
                   <Label>유형</Label>
                   <Select value={testType} onValueChange={setTestType}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {TEST_TYPES.map(t => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                      ))}
+                      {TEST_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>담당 조교</Label>
-                  <Select value={assistantName} onValueChange={setAssistantName}>
-                    <SelectTrigger><SelectValue placeholder="조교 선택" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">없음</SelectItem>
-                      {ASSISTANTS.map(a => (
-                        <SelectItem key={a} value={a}>{a}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>시작시간</Label>
+                  <Input type="time" value={testStartTime} onChange={e => setTestStartTime(e.target.value)} />
+                </div>
+                <div>
+                  <Label>종료시간</Label>
+                  <Input type="time" value={testEndTime} onChange={e => setTestEndTime(e.target.value)} />
                 </div>
                 <div className="col-span-2">
                   <Label>범위/내용 *</Label>
-                  <Input value={content} onChange={e => setContent(e.target.value)} placeholder="시험 범위 또는 내용" />
+                  <Input value={testContent} onChange={e => setTestContent(e.target.value)} placeholder="시험 범위 또는 내용" />
                 </div>
                 <div>
-                  <Label>결과</Label>
-                  <Input value={score} onChange={e => setScore(e.target.value)} placeholder="예: 85점, 17/20" />
+                  <Label>점수</Label>
+                  <Input value={testScore} onChange={e => setTestScore(e.target.value)} placeholder="예: 85점, 17/20" />
                 </div>
                 <div>
                   <Label>통과 여부</Label>
-                  <Select value={passed === null ? 'none' : passed ? 'pass' : 'fail'} onValueChange={v => setPassed(v === 'none' ? null : v === 'pass')}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <div className="flex gap-1">
+                    {([
+                      { val: true, label: '통과', style: 'bg-green-100 text-green-800 border-green-300' },
+                      { val: false, label: '불통과', style: 'bg-red-100 text-red-800 border-red-300' },
+                      { val: null, label: '미기록', style: 'bg-muted text-muted-foreground border-border' },
+                    ] as const).map(opt => (
+                      <Button
+                        key={String(opt.val)}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={cn('flex-1', testPassed === opt.val && opt.style)}
+                        onClick={() => setTestPassed(opt.val)}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <Label>담당 조교</Label>
+                  <Select value={testAssistant} onValueChange={setTestAssistant}>
+                    <SelectTrigger><SelectValue placeholder="조교 선택" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">미기록</SelectItem>
-                      <SelectItem value="pass">통과</SelectItem>
-                      <SelectItem value="fail">불통과</SelectItem>
+                      <SelectItem value="">없음</SelectItem>
+                      {ASSISTANTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -409,25 +463,37 @@ export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test']
             </div>
           )}
 
-          {/* Self-study fields */}
-          {activeType === 'self_study' && (
-            <div className="space-y-3 border-t pt-3">
-              <h4 className="text-sm font-semibold text-primary">자습 정보</h4>
-              <div>
-                <Label>학습 시간 (분)</Label>
-                <Input type="number" value={durationMinutes} onChange={e => setDurationMinutes(e.target.value ? parseInt(e.target.value) : '')} placeholder="예: 90" />
+          {/* Self-study section */}
+          {selectedTypes.has('self_study') && (
+            <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+              <h3 className="text-sm font-semibold">📚 자습</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label>과목</Label>
+                  <Input value={studySubject} onChange={e => setStudySubject(e.target.value)} placeholder="과목 (선택)" />
+                </div>
+                <div>
+                  <Label>시작시간</Label>
+                  <Input type="time" value={studyStartTime} onChange={e => setStudyStartTime(e.target.value)} />
+                </div>
+                <div>
+                  <Label>종료시간</Label>
+                  <Input type="time" value={studyEndTime} onChange={e => setStudyEndTime(e.target.value)} />
+                </div>
               </div>
+              {studyDurationMinutes && (
+                <p className="text-xs text-muted-foreground">학습시간: {studyDurationMinutes}분</p>
+              )}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <Label>할 일 목록</Label>
+                  <Label>할일 목록</Label>
                   <Button type="button" variant="outline" size="sm" onClick={addTask} className="gap-1">
-                    <Plus className="w-3 h-3" /> 추가
+                    <Plus className="w-3 h-3" /> 항목 추가
                   </Button>
                 </div>
                 <div className="space-y-2">
-                  {taskList.map((task, idx) => (
+                  {studyTasks.map((task, idx) => (
                     <div key={task.id} className="flex items-center gap-2">
-                      <Checkbox checked={task.done} onCheckedChange={v => updateTask(task.id, 'done', !!v)} />
                       <Input
                         value={task.task}
                         onChange={e => updateTask(task.id, 'task', e.target.value)}
@@ -441,46 +507,63 @@ export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test']
                   ))}
                 </div>
               </div>
+              <div>
+                <Label>메모</Label>
+                <Textarea value={studyMemo} onChange={e => setStudyMemo(e.target.value)} placeholder="메모 (선택)" />
+              </div>
             </div>
           )}
 
-          {/* Clinic fields */}
-          {activeType === 'clinic' && (
-            <div className="space-y-3 border-t pt-3">
-              <h4 className="text-sm font-semibold text-primary">클리닉 정보</h4>
+          {/* Clinic section */}
+          {selectedTypes.has('clinic') && (
+            <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+              <h3 className="text-sm font-semibold">🏥 클리닉</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label>과목</Label>
+                  <Select value={clinicSubject} onValueChange={setClinicSubject}>
+                    <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>시작시간</Label>
+                  <Input type="time" value={clinicStartTime} onChange={e => setClinicStartTime(e.target.value)} />
+                </div>
+                <div>
+                  <Label>종료시간</Label>
+                  <Input type="time" value={clinicEndTime} onChange={e => setClinicEndTime(e.target.value)} />
+                </div>
+              </div>
               <div>
                 <Label>클리닉 내용 *</Label>
                 <Textarea value={clinicContent} onChange={e => setClinicContent(e.target.value)} placeholder="클리닉 학습 내용" />
               </div>
               <div>
                 <Label>다음 클리닉 예정</Label>
-                <Input value={nextClinicMemo} onChange={e => setNextClinicMemo(e.target.value)} placeholder="다음 클리닉 계획" />
+                <Input value={clinicNextMemo} onChange={e => setClinicNextMemo(e.target.value)} placeholder="다음 클리닉 계획" />
               </div>
               <div>
-                <Label>담당 선생님 특이사항</Label>
-                <Textarea value={teacherNote} onChange={e => setTeacherNote(e.target.value)} placeholder="선생님에게 전달할 특이사항" />
-                {teacherNote && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    💡 저장 시 담당 선생님 수업 탭에 알림이 표시됩니다
+                <Label>선생님 특이사항</Label>
+                <Textarea value={clinicTeacherNote} onChange={e => setClinicTeacherNote(e.target.value)} placeholder="선생님에게 전달할 특이사항" />
+                {clinicTeacherNote.trim() && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️ 입력 시 수업 탭 로스터에 🏥 알림이 표시됩니다
                   </p>
                 )}
               </div>
             </div>
           )}
-
-          {/* Memo (common) */}
-          <div>
-            <Label>메모</Label>
-            <Textarea value={memo} onChange={e => setMemo(e.target.value)} placeholder="추가 메모" />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? '저장 중...' : '저장'}
-            </Button>
-          </div>
         </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? '저장 중...' : '저장'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
