@@ -85,6 +85,7 @@ interface TodaySlotStudent {
   firstSubject?: boolean;
   followup2wDue?: boolean;
   hyugangRecordId?: string | null;
+  hasClinicNote?: boolean;
 }
 
 interface TodaySlot {
