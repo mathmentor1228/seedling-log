@@ -157,7 +157,7 @@ export function SelfStudyTab() {
         </CardContent>
       </Card>
 
-      <UnifiedRecordModal open={modalOpen} onOpenChange={setModalOpen} defaultTypes={['self_study']} editRecord={editRecord} onSaved={fetchRecords} />
+      <UnifiedRecordModal open={modalOpen} onOpenChange={setModalOpen} defaultTypes={['self_study']} onSaved={fetchRecords} />
       <RoutineModal open={routineOpen} onOpenChange={setRoutineOpen} type="self_study" />
     </div>
   );

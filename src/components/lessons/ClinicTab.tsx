@@ -171,7 +171,7 @@ export function ClinicTab() {
         </CardContent>
       </Card>
 
-      <UnifiedRecordModal open={modalOpen} onOpenChange={setModalOpen} defaultTypes={['clinic']} editRecord={editRecord} onSaved={fetchRecords} />
+      <UnifiedRecordModal open={modalOpen} onOpenChange={setModalOpen} defaultTypes={['clinic']} onSaved={fetchRecords} />
       <RoutineModal open={routineOpen} onOpenChange={setRoutineOpen} type="clinic" />
     </div>
   );
