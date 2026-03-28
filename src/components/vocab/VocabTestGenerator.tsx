@@ -107,6 +107,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadFolders();
