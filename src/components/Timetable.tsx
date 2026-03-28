@@ -1043,8 +1043,7 @@ export function Timetable() {
                 전체
               </button>
               {DAYS_OF_WEEK.map((d) => {
-                const count = scheduleRows.filter(r => r.dayOfWeek === d.value && (selectedTeacherId === 'all' || r.teacherId === selectedTeacherId)).length;
-                if (count === 0) return null;
+                const count = allRows.filter(r => r.dayOfWeek === d.value && (selectedTeacherId === 'all' || r.teacherId === selectedTeacherId)).length;
                 return (
                   <button
                     key={d.value}
@@ -1055,7 +1054,9 @@ export function Timetable() {
                         ? 'bg-primary text-primary-foreground'
                         : d.value === today
                           ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                          : count === 0
+                            ? 'bg-muted/50 text-muted-foreground/50'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
                     )}
                   >
                     {d.label} <span className="opacity-70">{count}</span>
