@@ -281,9 +281,9 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     toast({ title: '삭제 완료' });
   };
 
-  const addWord = () => setWords(prev => [...prev, { english: '', meaning: '', sort_order: prev.length }]);
+  const addWord = () => setWords(prev => [...prev, { english: '', meaning: '', english_definition: '', sort_order: prev.length }]);
   const removeWord = (idx: number) => setWords(prev => prev.filter((_, i) => i !== idx));
-  const updateWord = (idx: number, field: 'english' | 'meaning', value: string) => {
+  const updateWord = (idx: number, field: 'english' | 'meaning' | 'english_definition', value: string) => {
     setWords(prev => prev.map((w, i) => i === idx ? { ...w, [field]: value } : w));
   };
 
