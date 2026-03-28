@@ -5,16 +5,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target, PenLine, Headphones } from 'lucide-react';
+import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target, PenLine, Headphones, Globe } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { speakEnglish } from '@/lib/ttsUtils';
 import VocabSelfTest from '@/components/student/VocabSelfTest';
+import EnglishEnglishTest from '@/components/student/EnglishEnglishTest';
 
 interface VocabWord {
   english: string;
   meaning: string;
+  english_definition?: string | null;
 }
 
 interface VocabSetInfo {
@@ -47,7 +49,7 @@ export default function StudentVocab() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [mode, setMode] = useState<'eng_to_kor' | 'kor_to_eng'>('eng_to_kor');
-  const [studyType, setStudyType] = useState<'flashcard' | 'test' | 'listening'>('flashcard');
+  const [studyType, setStudyType] = useState<'flashcard' | 'test' | 'listening' | 'eng_eng_mc' | 'eng_eng_typing'>('flashcard');
   const [started, setStarted] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
@@ -100,7 +102,7 @@ export default function StudentVocab() {
 
     setCards(shuffled);
     
-    if (studyType === 'test' || studyType === 'listening') {
+    if (studyType === 'test' || studyType === 'listening' || studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing') {
       setTestMode(true);
       setStarted(true);
       return;
@@ -210,6 +212,14 @@ export default function StudentVocab() {
   // Check if any set has homework (required_rounds > 0)
   const hasHomework = vocabSets.some(s => s.required_rounds > 0);
 
+  // Check if any selected sets have english_definition
+  const hasEngDefinitions = useMemo(() => {
+    const selected = selectedSetIds.length > 0
+      ? vocabSets.filter(s => selectedSetIds.includes(s.set_id))
+      : vocabSets;
+    return selected.some(s => s.words.some(w => w.english_definition));
+  }, [vocabSets, selectedSetIds]);
+
   if (loading) {
     return (
       <div className="space-y-4 p-4">
@@ -311,7 +321,7 @@ export default function StudentVocab() {
             </Card>
 
             <div className="space-y-2">
-              {studyType !== 'listening' && (
+              {studyType !== 'listening' && studyType !== 'eng_eng_mc' && studyType !== 'eng_eng_typing' && (
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">출제 방식</label>
                   <Select value={mode} onValueChange={v => setMode(v as any)}>
@@ -354,6 +364,30 @@ export default function StudentVocab() {
                     <Headphones className="w-3.5 h-3.5 mr-1" /> 듣기
                   </Button>
                 </div>
+                {/* English-English test modes */}
+                {hasEngDefinitions && (
+                  <div className="mt-2">
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">영영 테스트</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant={studyType === 'eng_eng_mc' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setStudyType('eng_eng_mc')}
+                        className="w-full"
+                      >
+                        <Globe className="w-3.5 h-3.5 mr-1" /> 영영 객관식
+                      </Button>
+                      <Button
+                        variant={studyType === 'eng_eng_typing' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setStudyType('eng_eng_typing')}
+                        className="w-full"
+                      >
+                        <PenLine className="w-3.5 h-3.5 mr-1" /> 영영 주관식
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <Button
@@ -363,7 +397,11 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                {studyType === 'test' ? '테스트 시작' : studyType === 'listening' ? '듣기 테스트 시작' : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
+                {studyType === 'test' ? '테스트 시작'
+                  : studyType === 'listening' ? '듣기 테스트 시작'
+                  : studyType === 'eng_eng_mc' ? '영영 객관식 시작'
+                  : studyType === 'eng_eng_typing' ? '영영 주관식 시작'
+                  : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
               </Button>
             </div>
           </>
@@ -372,14 +410,65 @@ export default function StudentVocab() {
     );
   }
 
-  // Test mode view
+  // English-English test mode
+  if (testMode && (studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing')) {
+    const engEngWords = cards
+      .filter(w => w.english_definition)
+      .map(w => ({
+        english: w.english,
+        meaning: w.meaning,
+        english_definition: w.english_definition!,
+      }));
+
+    if (engEngWords.length === 0) {
+      return (
+        <div className="space-y-4 p-4 max-w-lg mx-auto text-center">
+          <Card>
+            <CardContent className="py-8">
+              <p className="text-muted-foreground">영영풀이가 입력된 단어가 없습니다.</p>
+              <Button className="mt-4" onClick={() => { setStarted(false); setTestMode(false); }}>
+                돌아가기
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return (
+      <EnglishEnglishTest
+        words={engEngWords}
+        questionType={studyType === 'eng_eng_mc' ? 'multiple_choice' : 'typing'}
+        onFinish={async (correct, wrong, total) => {
+          const modeStr = studyType === 'eng_eng_mc' ? 'eng_eng_mc' : 'eng_eng_typing';
+          const { error } = await studentApi.submitVocabCompletion(
+            selectedSetIds, correct, wrong, total, modeStr
+          );
+          if (!error) {
+            toast({ title: '테스트 기록 저장 완료! ✅' });
+            setCompletions(prev => [{
+              id: crypto.randomUUID(),
+              word_set_ids: selectedSetIds,
+              correct_count: correct,
+              wrong_count: wrong,
+              total_count: total,
+              mode: modeStr,
+              completed_at: new Date().toISOString(),
+            }, ...prev]);
+          }
+        }}
+        onBack={() => { setStarted(false); setTestMode(false); }}
+      />
+    );
+  }
+
+  // Test mode view (existing Korean test)
   if (testMode) {
     return (
       <VocabSelfTest
         words={cards}
         mode={studyType === 'listening' ? 'listening' : mode}
         onFinish={async (correct, wrong, total) => {
-          // Save completion
           const { error } = await studentApi.submitVocabCompletion(
             selectedSetIds, correct, wrong, total, mode + '_test'
           );
