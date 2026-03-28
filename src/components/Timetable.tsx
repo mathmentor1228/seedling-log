@@ -360,20 +360,31 @@ export function Timetable() {
       if (!sessionsData || sessionsData.length === 0) { setExamPrepRows([]); return; }
 
       const sessionIds = sessionsData.map((s: any) => s.id);
-      const [slotsRes, slotStudentsRes] = await Promise.all([
+      const [slotsRes, slotStudentsRes, enrollmentsRes] = await Promise.all([
         supabase.from('exam_prep_time_slots').select('id, session_id, start_time, end_time').in('session_id', sessionIds).order('slot_order'),
         supabase.from('exam_prep_slot_students').select('slot_id, student_id'),
+        supabase.from('exam_prep_enrollments').select('course_id, student_id').in('course_id', courseIds).neq('status', 'cancelled'),
       ]);
       const slots = slotsRes.data || [];
       const slotStudents = slotStudentsRes.data || [];
+      const enrollments = enrollmentsRes.data || [];
       const slotIdSet = new Set(slots.map((s: any) => s.id));
       const relevantSlotStudents = slotStudents.filter((ss: any) => slotIdSet.has(ss.slot_id));
 
-      // Get student names
-      const allStudentIds = [...new Set(relevantSlotStudents.map((ss: any) => ss.student_id))];
+      // Build enrollment map: course_id -> student_ids (fallback when no time_slots)
+      const enrollmentMap: Record<string, string[]> = {};
+      enrollments.forEach((e: any) => {
+        if (!enrollmentMap[e.course_id]) enrollmentMap[e.course_id] = [];
+        if (!enrollmentMap[e.course_id].includes(e.student_id)) enrollmentMap[e.course_id].push(e.student_id);
+      });
+
+      // Get student names — include both slot students and enrolled students
+      const slotStudentIds = relevantSlotStudents.map((ss: any) => ss.student_id);
+      const enrolledStudentIds = enrollments.map((e: any) => e.student_id);
+      const allStudentIds = [...new Set([...slotStudentIds, ...enrolledStudentIds])];
       let studentNameMap: Record<string, string> = {};
       if (allStudentIds.length > 0) {
-        const { data: studData } = await supabase.from('students').select('id, name').in('id', allStudentIds);
+        const { data: studData } = await supabase.from('students').select('id, name').in('id', allStudentIds).neq('enrollment_status', '퇴원');
         (studData || []).forEach((s: any) => { studentNameMap[s.id] = s.name; });
       }
 
@@ -386,23 +397,47 @@ export function Timetable() {
         const d = new Date(sess.schedule_date + 'T00:00:00');
         const dow = d.getDay();
 
-        for (const slot of sessionSlots as any[]) {
-          const slotStuds = relevantSlotStudents.filter((ss: any) => ss.slot_id === slot.id);
-          examRows.push({
-            scheduleId: `exam-${slot.id}`,
-            classId: `exam-${course.id}-${sess.id}`,
-            className: `내신특강 ${course.school_name ? `(${course.school_name})` : ''} ${sess.session_label}`.trim(),
-            subject: course.subject,
-            dayOfWeek: dow,
-            startTime: slot.start_time,
-            endTime: slot.end_time,
-            teacherId: course.teacher_id,
-            teacherName: teacherMap[course.teacher_id] || '미배정',
-            students: slotStuds.map((ss: any) => ({
-              id: ss.student_id,
-              name: studentNameMap[ss.student_id] || '—',
-            })),
-          });
+        if (sessionSlots.length > 0) {
+          // Use time_slot level data
+          for (const slot of sessionSlots as any[]) {
+            const slotStuds = relevantSlotStudents.filter((ss: any) => ss.slot_id === slot.id);
+            examRows.push({
+              scheduleId: `exam-${slot.id}`,
+              classId: `exam-${course.id}-${sess.id}`,
+              className: `내신특강 ${course.school_name ? `(${course.school_name})` : ''} ${sess.session_label}`.trim(),
+              subject: course.subject,
+              dayOfWeek: dow,
+              startTime: slot.start_time,
+              endTime: slot.end_time,
+              teacherId: course.teacher_id,
+              teacherName: teacherMap[course.teacher_id] || '미배정',
+              students: slotStuds.map((ss: any) => ({
+                id: ss.student_id,
+                name: studentNameMap[ss.student_id] || '—',
+              })),
+            });
+          }
+        } else {
+          // Fallback: use session-level times + enrollment data
+          const enrolledIds = enrollmentMap[course.id] || [];
+          const sessionStudents = enrolledIds
+            .filter(sid => studentNameMap[sid])
+            .map(sid => ({ id: sid, name: studentNameMap[sid] }));
+
+          if (sessionStudents.length > 0) {
+            examRows.push({
+              scheduleId: `exam-session-${sess.id}`,
+              classId: `exam-${course.id}-${sess.id}`,
+              className: `내신특강 ${course.school_name ? `(${course.school_name})` : ''} ${sess.session_label}`.trim(),
+              subject: course.subject,
+              dayOfWeek: dow,
+              startTime: sess.start_time,
+              endTime: sess.end_time,
+              teacherId: course.teacher_id,
+              teacherName: teacherMap[course.teacher_id] || '미배정',
+              students: sessionStudents,
+            });
+          }
         }
       }
       setExamPrepRows(examRows);
