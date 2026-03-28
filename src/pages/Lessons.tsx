@@ -34,6 +34,9 @@ import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
+import { TestTab } from '@/components/lessons/TestTab';
+import { SelfStudyTab } from '@/components/lessons/SelfStudyTab';
+import { ClinicTab } from '@/components/lessons/ClinicTab';
 
 interface Teacher {
   id: string;
