@@ -823,6 +823,9 @@ export function Timetable() {
     );
   }
 
+  // ── Teacher view mode ──
+  const [teacherViewMode, setTeacherViewMode] = useState<'list' | 'timeline'>('list');
+
   // ── Teacher-only view ──
   if (!isAdminUser && !isAssistantUser) {
     return (
@@ -834,7 +837,38 @@ export function Timetable() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {allRows.length === 0 ? (
+          {/* View Mode Toggle for teachers */}
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit mb-4">
+            <button
+              onClick={() => setTeacherViewMode('list')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                teacherViewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <List className="w-3.5 h-3.5" /> 리스트 뷰
+            </button>
+            <button
+              onClick={() => setTeacherViewMode('timeline')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                teacherViewMode === 'timeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> 타임라인 뷰
+            </button>
+          </div>
+
+          {teacherViewMode === 'timeline' ? (
+            <TimetableMatrixView
+              scheduleRows={allRows}
+              classrooms={classrooms}
+              selectedDay={matrixDay}
+              onDayChange={setMatrixDay}
+              mode="timeline"
+              onDataChange={fetchScheduleData}
+            />
+          ) : allRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">등록된 시간표가 없습니다</p>
           ) : (
             <div className="space-y-6">
