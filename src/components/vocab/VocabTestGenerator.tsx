@@ -735,13 +735,40 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                     <span>#</span><span>영어</span><span>뜻</span><span />
                   </div>
                   {words.map((w, i) => (
-                    <div key={i} className="grid grid-cols-[40px_1fr_1fr_32px] gap-2 items-center">
-                      <span className="text-xs text-muted-foreground text-center">{i + 1}</span>
-                      <Input value={w.english} onChange={e => updateWord(i, 'english', e.target.value)} placeholder="apple" className="h-8 text-sm" />
-                      <Input value={w.meaning} onChange={e => updateWord(i, 'meaning', e.target.value)} placeholder="사과" className="h-8 text-sm" />
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeWord(i)} disabled={words.length <= 1}>
-                        <X className="w-3 h-3" />
-                      </Button>
+                    <div key={i} className="space-y-1">
+                      <div className="grid grid-cols-[40px_1fr_1fr_32px] gap-2 items-center">
+                        <span className="text-xs text-muted-foreground text-center">{i + 1}</span>
+                        <Input value={w.english} onChange={e => updateWord(i, 'english', e.target.value)} placeholder="apple" className="h-8 text-sm" />
+                        <Input value={w.meaning} onChange={e => updateWord(i, 'meaning', e.target.value)} placeholder="사과" className="h-8 text-sm" />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeWord(i)} disabled={words.length <= 1}>
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-[40px_1fr_32px] gap-2">
+                        <span />
+                        <div className="space-y-1">
+                          <Textarea
+                            placeholder="영영풀이 입력 (선택사항) 예: A feeling of great pleasure and happiness"
+                            value={w.english_definition || ''}
+                            onChange={e => updateWord(i, 'english_definition', e.target.value)}
+                            rows={2}
+                            className="text-xs"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-primary gap-1 h-6 px-2"
+                            onClick={() => handleGenerateDefinition(i)}
+                            disabled={!w.english || generatingId === `${i}`}
+                          >
+                            {generatingId === `${i}`
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Sparkles className="w-3 h-3" />}
+                            AI 자동생성
+                          </Button>
+                        </div>
+                        <span />
+                      </div>
                     </div>
                   ))}
                 </div>
