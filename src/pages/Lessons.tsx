@@ -808,6 +808,9 @@ export default function Lessons() {
             {(isAdmin || isTeacher || isAssistant) && (
               <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
             )}
+            {(isAdmin || isTeacher) && (
+              <TabsTrigger value="exam-prep">내신특강</TabsTrigger>
+            )}
           </TabsList>
           {canManage && (
             <div className="flex gap-2">
