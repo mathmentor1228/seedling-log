@@ -313,7 +313,7 @@ export default function StudentVocab() {
             </Card>
 
             <div className="space-y-2">
-              {studyType !== 'listening' && (
+              {studyType !== 'listening' && studyType !== 'eng_eng_mc' && studyType !== 'eng_eng_typing' && (
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">출제 방식</label>
                   <Select value={mode} onValueChange={v => setMode(v as any)}>
