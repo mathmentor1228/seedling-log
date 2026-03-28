@@ -423,6 +423,103 @@ export type Database = {
         }
         Relationships: []
       }
+      clinic_records: {
+        Row: {
+          assistant_attendance: boolean | null
+          assistant_confirmed: boolean
+          assistant_confirmed_at: string | null
+          assistant_memo: string | null
+          clinic_date: string
+          content: string
+          created_at: string
+          end_time: string | null
+          id: string
+          lesson_record_id: string | null
+          next_clinic_memo: string | null
+          room: string
+          start_time: string | null
+          student_id: string
+          subject: string
+          teacher_check_memo: string | null
+          teacher_checked: boolean
+          teacher_checked_at: string | null
+          teacher_id: string
+          teacher_note: string | null
+          teacher_note_shown: boolean
+          updated_at: string
+        }
+        Insert: {
+          assistant_attendance?: boolean | null
+          assistant_confirmed?: boolean
+          assistant_confirmed_at?: string | null
+          assistant_memo?: string | null
+          clinic_date: string
+          content: string
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          lesson_record_id?: string | null
+          next_clinic_memo?: string | null
+          room?: string
+          start_time?: string | null
+          student_id: string
+          subject: string
+          teacher_check_memo?: string | null
+          teacher_checked?: boolean
+          teacher_checked_at?: string | null
+          teacher_id: string
+          teacher_note?: string | null
+          teacher_note_shown?: boolean
+          updated_at?: string
+        }
+        Update: {
+          assistant_attendance?: boolean | null
+          assistant_confirmed?: boolean
+          assistant_confirmed_at?: string | null
+          assistant_memo?: string | null
+          clinic_date?: string
+          content?: string
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          lesson_record_id?: string | null
+          next_clinic_memo?: string | null
+          room?: string
+          start_time?: string | null
+          student_id?: string
+          subject?: string
+          teacher_check_memo?: string | null
+          teacher_checked?: boolean
+          teacher_checked_at?: string | null
+          teacher_id?: string
+          teacher_note?: string | null
+          teacher_note_shown?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_records_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinic_records_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_lesson_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clinic_records_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       curriculum_map: {
         Row: {
           course: string
@@ -1940,6 +2037,57 @@ export type Database = {
         }
         Relationships: []
       }
+      routine_schedules: {
+        Row: {
+          assistant_name: string | null
+          created_at: string
+          day_of_week: number
+          end_time: string | null
+          id: string
+          is_active: boolean
+          room: string
+          start_time: string | null
+          student_ids: Json
+          subject: string | null
+          teacher_id: string
+          template_content: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          assistant_name?: string | null
+          created_at?: string
+          day_of_week: number
+          end_time?: string | null
+          id?: string
+          is_active?: boolean
+          room?: string
+          start_time?: string | null
+          student_ids?: Json
+          subject?: string | null
+          teacher_id: string
+          template_content?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          assistant_name?: string | null
+          created_at?: string
+          day_of_week?: number
+          end_time?: string | null
+          id?: string
+          is_active?: boolean
+          room?: string
+          start_time?: string | null
+          student_ids?: Json
+          subject?: string | null
+          teacher_id?: string
+          template_content?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       schedule_group_assignments: {
         Row: {
           created_at: string
@@ -2254,6 +2402,100 @@ export type Database = {
             columns: ["archive_id"]
             isOneToOne: false
             referencedRelation: "school_exam_archives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      self_study_records: {
+        Row: {
+          assistant_attendance: boolean | null
+          assistant_confirmed: boolean
+          assistant_confirmed_at: string | null
+          assistant_memo: string | null
+          created_at: string
+          duration_minutes: number | null
+          end_time: string | null
+          id: string
+          lesson_record_id: string | null
+          memo: string | null
+          room: string
+          start_time: string | null
+          student_id: string
+          study_date: string
+          subject: string | null
+          task_list: Json | null
+          teacher_check_memo: string | null
+          teacher_checked: boolean
+          teacher_checked_at: string | null
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          assistant_attendance?: boolean | null
+          assistant_confirmed?: boolean
+          assistant_confirmed_at?: string | null
+          assistant_memo?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          end_time?: string | null
+          id?: string
+          lesson_record_id?: string | null
+          memo?: string | null
+          room?: string
+          start_time?: string | null
+          student_id: string
+          study_date: string
+          subject?: string | null
+          task_list?: Json | null
+          teacher_check_memo?: string | null
+          teacher_checked?: boolean
+          teacher_checked_at?: string | null
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          assistant_attendance?: boolean | null
+          assistant_confirmed?: boolean
+          assistant_confirmed_at?: string | null
+          assistant_memo?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          end_time?: string | null
+          id?: string
+          lesson_record_id?: string | null
+          memo?: string | null
+          room?: string
+          start_time?: string | null
+          student_id?: string
+          study_date?: string
+          subject?: string | null
+          task_list?: Json | null
+          teacher_check_memo?: string | null
+          teacher_checked?: boolean
+          teacher_checked_at?: string | null
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "self_study_records_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "self_study_records_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_lesson_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "self_study_records_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
             referencedColumns: ["id"]
           },
         ]
@@ -2996,6 +3238,109 @@ export type Database = {
           },
           {
             foreignKeyName: "team_notes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_records: {
+        Row: {
+          assistant_attendance: boolean | null
+          assistant_confirmed: boolean
+          assistant_confirmed_at: string | null
+          assistant_memo: string | null
+          assistant_name: string | null
+          content: string
+          created_at: string
+          end_time: string | null
+          id: string
+          lesson_record_id: string | null
+          memo: string | null
+          passed: boolean | null
+          room: string
+          score: string | null
+          start_time: string | null
+          student_id: string
+          subject: string
+          teacher_check_memo: string | null
+          teacher_checked: boolean
+          teacher_checked_at: string | null
+          teacher_id: string
+          test_date: string
+          test_type: string
+          updated_at: string
+        }
+        Insert: {
+          assistant_attendance?: boolean | null
+          assistant_confirmed?: boolean
+          assistant_confirmed_at?: string | null
+          assistant_memo?: string | null
+          assistant_name?: string | null
+          content: string
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          lesson_record_id?: string | null
+          memo?: string | null
+          passed?: boolean | null
+          room?: string
+          score?: string | null
+          start_time?: string | null
+          student_id: string
+          subject: string
+          teacher_check_memo?: string | null
+          teacher_checked?: boolean
+          teacher_checked_at?: string | null
+          teacher_id: string
+          test_date: string
+          test_type?: string
+          updated_at?: string
+        }
+        Update: {
+          assistant_attendance?: boolean | null
+          assistant_confirmed?: boolean
+          assistant_confirmed_at?: string | null
+          assistant_memo?: string | null
+          assistant_name?: string | null
+          content?: string
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          lesson_record_id?: string | null
+          memo?: string | null
+          passed?: boolean | null
+          room?: string
+          score?: string | null
+          start_time?: string | null
+          student_id?: string
+          subject?: string
+          teacher_check_memo?: string | null
+          teacher_checked?: boolean
+          teacher_checked_at?: string | null
+          teacher_id?: string
+          test_date?: string
+          test_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_records_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_records_lesson_record_id_fkey"
+            columns: ["lesson_record_id"]
+            isOneToOne: false
+            referencedRelation: "overdue_lesson_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_records_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
