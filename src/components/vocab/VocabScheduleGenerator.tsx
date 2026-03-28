@@ -58,6 +58,7 @@ interface StudentScheduleInfo {
   teacherId: string;
   assignedTeacher: string | null;
   scheduleCount: number;
+  expectedTestCount: number;
 }
 
 interface IndividualSchedule {
