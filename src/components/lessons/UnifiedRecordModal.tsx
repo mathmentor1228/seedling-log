@@ -205,7 +205,7 @@ export function UnifiedRecordModal({ open, onOpenChange, defaultTypes = ['test']
           lesson_record_id: lessonRecordId,
           study_date: date,
           subject: subject || null,
-          task_list: taskList,
+          task_list: taskList as any,
           start_time: startTime || null,
           end_time: endTime || null,
           duration_minutes: durationMinutes || null,
