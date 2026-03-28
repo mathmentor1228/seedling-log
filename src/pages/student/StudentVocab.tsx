@@ -102,7 +102,7 @@ export default function StudentVocab() {
 
     setCards(shuffled);
     
-    if (studyType === 'test' || studyType === 'listening') {
+    if (studyType === 'test' || studyType === 'listening' || studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing') {
       setTestMode(true);
       setStarted(true);
       return;
