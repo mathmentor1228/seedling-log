@@ -275,7 +275,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     if (selectedSetId === id) {
       setSelectedSetId(null);
       setSetTitle('');
-      setWords([{ english: '', meaning: '', sort_order: 0 }]);
+      setWords([{ english: '', meaning: '', english_definition: '', sort_order: 0 }]);
     }
     loadSets();
     toast({ title: '삭제 완료' });
