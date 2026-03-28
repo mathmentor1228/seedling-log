@@ -117,6 +117,7 @@ export function Timetable() {
   const [matrixDay, setMatrixDay] = useState<number>(new Date().getDay());
   const [editClassId, setEditClassId] = useState<string | null>(null);
   const [editClassName, setEditClassName] = useState('');
+  const [teacherViewMode, setTeacherViewMode] = useState<'list' | 'timeline'>('list');
 
   // Inline edit state
   const [editSlot, setEditSlot] = useState<{
