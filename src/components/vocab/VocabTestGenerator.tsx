@@ -56,9 +56,17 @@ interface SavedTest {
   notes: string | null;
 }
 
-export function VocabTestGenerator() {
+interface VocabTestGeneratorProps {
+  controlledTab?: string;
+  onTabChange?: (tab: string) => void;
+}
+
+export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGeneratorProps = {}) {
   const { user } = useAuth();
-  const [tab, setTab] = useState('edit');
+  const [internalTab, setInternalTab] = useState('edit');
+  const tab = controlledTab || internalTab;
+  const setTab = onTabChange || setInternalTab;
+  const isControlled = !!controlledTab;
 
   // Folders
   const [folders, setFolders] = useState<VocabFolder[]>([]);
