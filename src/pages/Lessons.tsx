@@ -817,9 +817,9 @@ export default function Lessons() {
             )}
             {(isAdmin || isTeacher || isAssistant) && (
               <>
-                <TabsTrigger value="test">테스트</TabsTrigger>
-                <TabsTrigger value="self_study">자습</TabsTrigger>
-                <TabsTrigger value="clinic">클리닉</TabsTrigger>
+                <TabsTrigger value="test">🔬 테스트</TabsTrigger>
+                <TabsTrigger value="self_study">📚 자습</TabsTrigger>
+                <TabsTrigger value="clinic">🏥 클리닉</TabsTrigger>
               </>
             )}
           </TabsList>
