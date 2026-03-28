@@ -34,6 +34,9 @@ import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
+import { TestTab } from '@/components/lessons/TestTab';
+import { SelfStudyTab } from '@/components/lessons/SelfStudyTab';
+import { ClinicTab } from '@/components/lessons/ClinicTab';
 
 interface Teacher {
   id: string;
@@ -804,13 +807,20 @@ export default function Lessons() {
 
       <Tabs defaultValue="lessons" className="w-full">
         <div className="flex items-center justify-between mb-4">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="lessons">수업 기록</TabsTrigger>
             {(isAdmin || isTeacher || isAssistant) && (
               <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
             )}
             {(isAdmin || isTeacher) && (
               <TabsTrigger value="exam-prep">내신특강</TabsTrigger>
+            )}
+            {(isAdmin || isTeacher || isAssistant) && (
+              <>
+                <TabsTrigger value="test">테스트</TabsTrigger>
+                <TabsTrigger value="self_study">자습</TabsTrigger>
+                <TabsTrigger value="clinic">클리닉</TabsTrigger>
+              </>
             )}
           </TabsList>
           {canManage && (
@@ -1176,6 +1186,20 @@ export default function Lessons() {
         <TabsContent value="exam-prep" className="mt-4">
           <ExamPrepScheduleManager />
         </TabsContent>
+      )}
+
+      {(isAdmin || isTeacher || isAssistant) && (
+        <>
+          <TabsContent value="test" className="mt-4">
+            <TestTab />
+          </TabsContent>
+          <TabsContent value="self_study" className="mt-4">
+            <SelfStudyTab />
+          </TabsContent>
+          <TabsContent value="clinic" className="mt-4">
+            <ClinicTab />
+          </TabsContent>
+        </>
       )}
       </Tabs>
     </div>
