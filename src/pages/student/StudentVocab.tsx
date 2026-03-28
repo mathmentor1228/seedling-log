@@ -15,6 +15,7 @@ import VocabSelfTest from '@/components/student/VocabSelfTest';
 interface VocabWord {
   english: string;
   meaning: string;
+  english_definition?: string | null;
 }
 
 interface VocabSetInfo {
