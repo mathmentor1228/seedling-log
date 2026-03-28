@@ -82,7 +82,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [sets, setSets] = useState<WordSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [setTitle, setSetTitle] = useState('');
-  const [words, setWords] = useState<WordItem[]>([{ english: '', meaning: '', sort_order: 0 }]);
+  const [words, setWords] = useState<WordItem[]>([{ english: '', meaning: '', english_definition: '', sort_order: 0 }]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [setFolderAssign, setSetFolderAssign] = useState<string | null>(null);
