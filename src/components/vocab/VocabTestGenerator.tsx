@@ -213,7 +213,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       .eq('set_id', setId)
       .order('sort_order');
     if (items && items.length > 0) {
-      setWords(items.map(i => ({ id: i.id, english: i.english, meaning: i.meaning, sort_order: i.sort_order })));
+      setWords(items.map(i => ({ id: i.id, english: i.english, meaning: i.meaning, english_definition: (i as any).english_definition || '', sort_order: i.sort_order })));
     } else {
       setWords([{ english: '', meaning: '', sort_order: 0 }]);
     }
