@@ -356,6 +356,30 @@ export default function StudentVocab() {
                     <Headphones className="w-3.5 h-3.5 mr-1" /> 듣기
                   </Button>
                 </div>
+                {/* English-English test modes */}
+                {hasEngDefinitions && (
+                  <div className="mt-2">
+                    <label className="text-xs font-medium text-muted-foreground block mb-1">영영 테스트</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant={studyType === 'eng_eng_mc' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setStudyType('eng_eng_mc')}
+                        className="w-full"
+                      >
+                        <Globe className="w-3.5 h-3.5 mr-1" /> 영영 객관식
+                      </Button>
+                      <Button
+                        variant={studyType === 'eng_eng_typing' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setStudyType('eng_eng_typing')}
+                        className="w-full"
+                      >
+                        <PenLine className="w-3.5 h-3.5 mr-1" /> 영영 주관식
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <Button
@@ -365,7 +389,11 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                {studyType === 'test' ? '테스트 시작' : studyType === 'listening' ? '듣기 테스트 시작' : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
+                {studyType === 'test' ? '테스트 시작'
+                  : studyType === 'listening' ? '듣기 테스트 시작'
+                  : studyType === 'eng_eng_mc' ? '영영 객관식 시작'
+                  : studyType === 'eng_eng_typing' ? '영영 주관식 시작'
+                  : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
               </Button>
             </div>
           </>
