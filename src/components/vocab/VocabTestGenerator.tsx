@@ -19,6 +19,7 @@ interface WordItem {
   id?: string;
   english: string;
   meaning: string;
+  english_definition?: string;
   sort_order: number;
 }
 
