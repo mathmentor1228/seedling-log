@@ -221,6 +221,11 @@ export default function AssistantDashboard() {
   // DASH-LATEST-TEST-TOGGLE-V1: Latest test toggle hook
   const latestTests = useStudentLatestTests();
 
+  // ROOM-SCHEDULE-V1: Room assignment items
+  const [roomItems, setRoomItems] = useState<any[]>([]);
+  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+  const [memoValue, setMemoValue] = useState('');
+
   useEffect(() => {
     if (user) {
       fetchAllData();
