@@ -3186,7 +3186,30 @@ export default function Dashboard() {
                                   </Badge>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
+                                {!slot.isExamPrep && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground gap-1"
+                                    onClick={() => {
+                                      const slotStudents = (slot.students || []).map((s: any) => ({
+                                        id: s.id,
+                                        name: s.name,
+                                        lessonRecordId: s.lessonRecordId || null,
+                                      }));
+                                      setBatchTestContext({
+                                        students: slotStudents,
+                                        subject: slot.subject,
+                                        className: slot.class_name,
+                                      });
+                                      setBatchTestModalOpen(true);
+                                    }}
+                                  >
+                                    <TestTube2 className="w-3.5 h-3.5" />
+                                    테스트 일괄
+                                  </Button>
+                                )}
                                 <span className="text-sm text-muted-foreground font-medium">
                                   {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
                                 </span>
