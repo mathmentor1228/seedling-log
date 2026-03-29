@@ -852,6 +852,179 @@ export default function AssistantDashboard() {
         </Card>
       )}
 
+      {/* ROOM-SCHEDULE-V1: 강의실 배정 일정 섹션 */}
+      {roomItems.length > 0 && (
+        <Card className="border-blue-500/30 bg-blue-500/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin className="w-5 h-5 text-blue-600" />
+              강의실 배정 일정
+              <Badge className="bg-blue-500/15 text-blue-600 border-blue-500/30">
+                {roomItems.length}건
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {roomItems.map(item => (
+              <div
+                key={`${item.type}-${item.id}`}
+                className={`rounded-xl border p-4 bg-background space-y-3 ${
+                  item.assistant_confirmed
+                    ? 'border-green-500/30'
+                    : 'border-amber-500/30'
+                }`}
+              >
+                {/* 상단: 기본 정보 */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {item.type === 'test' && (
+                        <Badge className="bg-purple-500/15 text-purple-600 border-purple-500/30 text-xs">
+                          🔬 테스트
+                        </Badge>
+                      )}
+                      {item.type === 'self_study' && (
+                        <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs">
+                          📚 자습
+                        </Badge>
+                      )}
+                      {item.type === 'clinic' && (
+                        <Badge className="bg-orange-500/15 text-orange-600 border-orange-500/30 text-xs">
+                          🏥 클리닉
+                        </Badge>
+                      )}
+                      <Badge className={`text-xs ${
+                        item.room === 'room10'
+                          ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
+                          : 'bg-purple-500/15 text-purple-600 border-purple-500/30'
+                      }`}>
+                        {item.room === 'room10' ? '10강의실' : '유리문강의실'}
+                      </Badge>
+                      {item.start_time && (
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {item.start_time.slice(0, 5)}
+                          {item.end_time && `~${item.end_time.slice(0, 5)}`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">{item.student_name}</span>
+                      <span className="text-xs text-muted-foreground">{item.subject}</span>
+                      {item.teacher_name && (
+                        <span className="text-xs text-muted-foreground">· {item.teacher_name} 선생님</span>
+                      )}
+                    </div>
+                    {(item.content || item.memo) && (
+                      <p className="text-xs text-muted-foreground">{item.content || item.memo}</p>
+                    )}
+                  </div>
+                  {item.assistant_confirmed ? (
+                    <Badge className="bg-green-500/15 text-green-600 border-green-500/30 text-xs shrink-0">
+                      ✅ 확인완료
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-xs shrink-0">
+                      미확인
+                    </Badge>
+                  )}
+                </div>
+
+                {/* 조교 액션 버튼 */}
+                <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-border/50">
+                  {!item.assistant_confirmed && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1 border-green-500/30 text-green-600 hover:bg-green-500/10"
+                      onClick={() => handleAssistantConfirm(item)}
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      확인 완료
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant={item.assistant_attendance === true ? 'default' : 'outline'}
+                    className={`h-7 text-xs gap-1 ${
+                      item.assistant_attendance === true ? 'bg-green-500 hover:bg-green-600' : ''
+                    }`}
+                    onClick={() => handleAssistantAttendance(item, true)}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    출석
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={item.assistant_attendance === false ? 'destructive' : 'outline'}
+                    className="h-7 text-xs gap-1"
+                    onClick={() => handleAssistantAttendance(item, false)}
+                  >
+                    결석
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs gap-1 text-muted-foreground"
+                    onClick={() => {
+                      setEditingMemoId(item.id);
+                      setMemoValue(item.assistant_memo || '');
+                    }}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    {item.assistant_memo ? '메모 수정' : '메모 추가'}
+                  </Button>
+                </div>
+
+                {/* 기존 메모 표시 */}
+                {item.assistant_memo && editingMemoId !== item.id && (
+                  <div className="text-xs bg-muted/50 rounded-lg p-2 text-muted-foreground">
+                    💬 {item.assistant_memo}
+                  </div>
+                )}
+
+                {/* 메모 편집 */}
+                {editingMemoId === item.id && (
+                  <div className="flex gap-2">
+                    <Input
+                      value={memoValue}
+                      onChange={e => setMemoValue(e.target.value)}
+                      placeholder="메모 입력..."
+                      className="h-8 text-xs flex-1"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          handleAssistantMemo(item, memoValue);
+                          setEditingMemoId(null);
+                        }
+                        if (e.key === 'Escape') setEditingMemoId(null);
+                      }}
+                      autoFocus
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        handleAssistantMemo(item, memoValue);
+                        setEditingMemoId(null);
+                      }}
+                    >
+                      저장
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-xs"
+                      onClick={() => setEditingMemoId(null)}
+                    >
+                      취소
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Assistant Checklist Section - ASSISTANT-TEST-ENTRYPOINT-V1 */}
       <AssistantChecklist onTestOnlyVisit={() => setTestVisitModalOpen(true)} />
 
