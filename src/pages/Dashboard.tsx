@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
+import { BatchTestInputModal } from '@/components/BatchTestInputModal';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
 
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
