@@ -3684,6 +3684,21 @@ export default function Dashboard() {
           if (isAdmin(role)) await fetchAdminRosterData();
         }}
       />
+      {/* BATCH-TEST-INPUT-V1: Batch test input modal */}
+      {batchTestContext && (
+        <BatchTestInputModal
+          open={batchTestModalOpen}
+          onOpenChange={setBatchTestModalOpen}
+          students={batchTestContext.students}
+          subject={batchTestContext.subject}
+          className={batchTestContext.className}
+          date={getTodayKST()}
+          onSaved={async () => {
+            if (isAdmin(role)) await fetchAdminRosterData();
+            else await fetchTodaySlots();
+          }}
+        />
+      )}
     </div>
   );
 }
