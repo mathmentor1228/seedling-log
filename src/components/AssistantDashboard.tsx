@@ -613,6 +613,46 @@ export default function AssistantDashboard() {
     }
   }
 
+  // ROOM-SCHEDULE-V1: Assistant action functions
+  async function handleAssistantConfirm(item: any) {
+    const table = item.type === 'test' ? 'test_records'
+      : item.type === 'self_study' ? 'self_study_records'
+      : 'clinic_records';
+    await supabase
+      .from(table)
+      .update({
+        assistant_confirmed: true,
+        assistant_confirmed_at: new Date().toISOString(),
+      } as any)
+      .eq('id', item.id);
+    toast({ description: '확인 완료 처리되었습니다' });
+    fetchAllData();
+  }
+
+  async function handleAssistantAttendance(item: any, attended: boolean) {
+    const table = item.type === 'test' ? 'test_records'
+      : item.type === 'self_study' ? 'self_study_records'
+      : 'clinic_records';
+    await supabase
+      .from(table)
+      .update({ assistant_attendance: attended } as any)
+      .eq('id', item.id);
+    toast({ description: attended ? '출석 처리되었습니다' : '결석 처리되었습니다' });
+    fetchAllData();
+  }
+
+  async function handleAssistantMemo(item: any, memo: string) {
+    const table = item.type === 'test' ? 'test_records'
+      : item.type === 'self_study' ? 'self_study_records'
+      : 'clinic_records';
+    await supabase
+      .from(table)
+      .update({ assistant_memo: memo } as any)
+      .eq('id', item.id);
+    toast({ description: '메모가 저장되었습니다' });
+    fetchAllData();
+  }
+
   // Apply filters
   const filteredRoster = roster.filter(item => {
     if (selectedTeacher !== 'all' && item.teacher_id !== selectedTeacher) return false;
