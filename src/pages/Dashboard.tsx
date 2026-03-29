@@ -445,6 +445,14 @@ export default function Dashboard() {
   // PHOTO-VIEW-V1: Photo viewer state for pending homework
   const [photoViewHw, setPhotoViewHw] = useState<PendingHomework | null>(null);
   
+  // BATCH-TEST-INPUT-V1: Batch test input modal state
+  const [batchTestModalOpen, setBatchTestModalOpen] = useState(false);
+  const [batchTestContext, setBatchTestContext] = useState<{
+    students: { id: string; name: string; lessonRecordId: string | null }[];
+    subject: string;
+    className: string;
+  } | null>(null);
+
   // ADMIN-ROSTER-DEBUG-V1: Fallback today's lesson records (grouped by teacher)
   const [todayLessonRecordsFallback, setTodayLessonRecordsFallback] = useState<{
     teacher_id: string;
