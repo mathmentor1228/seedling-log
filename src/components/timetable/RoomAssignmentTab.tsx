@@ -427,7 +427,7 @@ export function RoomAssignmentTab() {
           </h3>
 
           {/* Teacher filter */}
-          <Select value={filterTeacherId} onValueChange={setFilterTeacherId}>
+          <Select value={filterTeacherId || 'all'} onValueChange={v => setFilterTeacherId(v === 'all' ? '' : v)}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="전체 선생님" />
             </SelectTrigger>
@@ -440,7 +440,7 @@ export function RoomAssignmentTab() {
           </Select>
 
           {/* Subject filter */}
-          <Select value={filterSubject} onValueChange={setFilterSubject}>
+          <Select value={filterSubject || 'all'} onValueChange={v => setFilterSubject(v === 'all' ? '' : v)}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="전체 과목" />
             </SelectTrigger>
