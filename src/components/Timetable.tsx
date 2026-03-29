@@ -1061,6 +1061,10 @@ export function Timetable() {
               <DoorOpen className="w-4 h-4 mr-1 hidden sm:inline" />
               강의실 배정
             </TabsTrigger>
+            <TabsTrigger value="attendance" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
+              <LogIn className="w-4 h-4 mr-1 hidden sm:inline" />
+              입퇴실
+            </TabsTrigger>
           </TabsList>
 
           {/* ── 요일별 뷰 ── */}
