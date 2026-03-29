@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { 
+import {
   Users, 
   ClipboardCheck, 
   Calendar as CalendarIcon,
@@ -34,7 +34,9 @@ import {
   ChevronLeft,
   FlaskConical,
   TestTube2,
-  Loader2
+  Loader2,
+  MapPin,
+  MessageSquare
 } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
