@@ -158,7 +158,7 @@ export function AttendanceWidget() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (role !== 'teacher') return;
+    if (!user?.id) return;
     fetchData();
     const channel = supabase
       .channel('widget_attendance')
@@ -167,9 +167,9 @@ export function AttendanceWidget() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [role, fetchData]);
+  }, [user?.id, fetchData]);
 
-  if (role !== 'teacher') return null;
+  if (!user) return null;
 
   const notArrived = entries.filter((e) => e.status === 'not_arrived').length;
   const checkedIn = entries.filter((e) => e.status === 'checked_in').length;
