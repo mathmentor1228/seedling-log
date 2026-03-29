@@ -35,6 +35,7 @@ import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
 import { BrandFooter } from '@/components/layout/BrandFooter';
+import { AttendanceWidget } from '@/components/layout/AttendanceWidget';
 
 interface AppLayoutProps {
   children: ReactNode;

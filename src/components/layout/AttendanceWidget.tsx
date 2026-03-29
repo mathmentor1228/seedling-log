@@ -2,28 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 
-interface RoomCapacity {
-  room_id: string;
-  capacity: number;
-  label: string;
-}
-
-interface AttendanceLog {
-  id: string;
-  student_id: string;
-  student_name: string | null;
-  room_id: string | null;
-  date: string;
-  checked_in_at: string | null;
-  checked_out_at: string | null;
-}
-
-interface AssignedStudent {
-  studentId: string;
-  studentName: string;
-  roomId: string;
-}
-
 type StudentStatus = 'not_arrived' | 'checked_in' | 'checked_out';
 
 interface StudentEntry {
@@ -70,7 +48,7 @@ export function AttendanceWidget() {
       .from('room_capacities')
       .select('room_id, capacity, label');
     const capMap: Record<string, number> = {};
-    (capData ?? []).forEach((r: RoomCapacity) => {
+    (capData ?? []).forEach((r) => {
       capMap[r.room_id] = r.capacity;
     });
     setCapacities(capMap);
@@ -80,7 +58,7 @@ export function AttendanceWidget() {
       .from('classes')
       .select('id')
       .eq('teacher_id', user.id);
-    const classIds = classes?.map((c: { id: string }) => c.id) ?? [];
+    const classIds = classes?.map((c) => c.id) ?? [];
 
     if (classIds.length === 0) {
       setEntries([]);
@@ -93,7 +71,7 @@ export function AttendanceWidget() {
       .from('class_students')
       .select('student_id')
       .in('class_id', classIds);
-    const myStudentIds = [...new Set(cs?.map((r: { student_id: string }) => r.student_id) ?? [])];
+    const myStudentIds = [...new Set(cs?.map((r) => r.student_id) ?? [])];
 
     if (myStudentIds.length === 0) {
       setEntries([]);
@@ -102,30 +80,31 @@ export function AttendanceWidget() {
       return;
     }
 
-    // Today's assignments for room10, glass
+    // Today's assignments for room10, glass — column is "room" not "room_id", "assigned_date" not "date"
     const { data: assigned } = await supabase
       .from('room_assignments')
-      .select('student_ids, student_names, room_id')
-      .in('room_id', ['room10', 'glass'])
+      .select('student_ids, student_names, room')
+      .in('room', ['room10', 'glass'])
       .or(
-        `and(is_fixed.eq.true,day.eq.${dayOfWeek}),and(is_fixed.eq.false,date.eq.${today})`
+        `and(is_fixed.eq.true,day.eq.${dayOfWeek}),and(is_fixed.eq.false,assigned_date.eq.${today})`
       );
 
     // Extract assigned students that are mine
+    interface AssignedStudent { studentId: string; studentName: string; roomId: string; }
     const assignedStudents: AssignedStudent[] = [];
     const seenKeys = new Set<string>();
-    (assigned ?? []).forEach((a: { student_ids: string[] | null; student_names: string[] | null; room_id: string | null }) => {
-      const ids = a.student_ids ?? [];
-      const names = a.student_names ?? [];
+    (assigned ?? []).forEach((a) => {
+      const ids = (a.student_ids ?? []) as string[];
+      const names = (a.student_names ?? []) as string[];
       ids.forEach((id: string, i: number) => {
         if (myStudentIds.includes(id)) {
-          const key = `${id}_${a.room_id}`;
+          const key = `${id}_${a.room}`;
           if (!seenKeys.has(key)) {
             seenKeys.add(key);
             assignedStudents.push({
               studentId: id,
               studentName: names[i] ?? '이름없음',
-              roomId: a.room_id ?? 'room10',
+              roomId: a.room,
             });
           }
         }
@@ -139,9 +118,10 @@ export function AttendanceWidget() {
       .in('student_id', myStudentIds)
       .in('room_id', ['room10', 'glass'])
       .eq('date', today);
-    const logMap = new Map<string, AttendanceLog>();
-    (logs ?? []).forEach((l: AttendanceLog) => {
-      logMap.set(`${l.student_id}_${l.room_id}`, l);
+
+    const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
+    (logs ?? []).forEach((l) => {
+      logMap.set(`${l.student_id}_${l.room_id}`, { checked_in_at: l.checked_in_at, checked_out_at: l.checked_out_at });
     });
 
     // Build entries
@@ -157,7 +137,6 @@ export function AttendanceWidget() {
       return { studentId: s.studentId, studentName: s.studentName, roomId: s.roomId, roomLabel, status: 'checked_in' as const, time: fmtTime(log.checked_in_at) };
     });
 
-    // Sort: not_arrived first, then checked_in, then checked_out
     const order: Record<StudentStatus, number> = { not_arrived: 0, checked_in: 1, checked_out: 2 };
     result.sort((a, b) => order[a.status] - order[b.status]);
     setEntries(result);
@@ -171,7 +150,7 @@ export function AttendanceWidget() {
       .not('checked_in_at', 'is', null)
       .is('checked_out_at', null);
     const counts: Record<string, number> = {};
-    (allLogs ?? []).forEach((l: { room_id: string | null }) => {
+    (allLogs ?? []).forEach((l) => {
       if (l.room_id) counts[l.room_id] = (counts[l.room_id] ?? 0) + 1;
     });
     setRoomCounts(counts);
@@ -247,16 +226,13 @@ export function AttendanceWidget() {
                 className="flex items-center gap-1.5 rounded px-2 py-1"
                 style={{
                   backgroundColor: isNotArrived ? '#FCEBEB' : isIn ? '#E1F5EE' : 'hsl(var(--muted))',
-                  border: isNotArrived ? '1px solid #E24B4A' : 'none',
+                  border: isNotArrived ? '1px solid #E24B4A' : '1px solid transparent',
                   opacity: isOut ? 0.65 : 1,
                 }}
               >
-                {/* Status dot */}
                 <span
                   className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{
-                    backgroundColor: isNotArrived ? '#E24B4A' : isIn ? '#1D9E75' : '#999',
-                  }}
+                  style={{ backgroundColor: isNotArrived ? '#E24B4A' : isIn ? '#1D9E75' : '#999' }}
                 />
                 <div className="flex-1 min-w-0">
                   <span className="text-[11px] font-medium" style={{ color: isNotArrived ? '#791F1F' : isIn ? '#085041' : '#666' }}>
