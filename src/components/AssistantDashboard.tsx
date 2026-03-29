@@ -527,6 +527,67 @@ export default function AssistantDashboard() {
         extraSessions: 0, // Not implemented yet
       });
 
+      // ROOM-SCHEDULE-V1: Fetch room assignment schedules
+      const [testRoomData, studyRoomData, clinicRoomData] = await Promise.all([
+        supabase
+          .from('test_records')
+          .select('id, start_time, end_time, subject, test_type, content, room, assistant_name, assistant_confirmed, assistant_confirmed_at, assistant_attendance, assistant_memo, student_id, teacher_id')
+          .eq('test_date', dateStr)
+          .in('room', ['room10', 'glass'])
+          .order('start_time', { ascending: true }),
+        supabase
+          .from('self_study_records')
+          .select('id, start_time, end_time, subject, task_list, room, memo, assistant_confirmed, assistant_confirmed_at, assistant_attendance, assistant_memo, student_id, teacher_id')
+          .eq('study_date', dateStr)
+          .in('room', ['room10', 'glass'])
+          .order('start_time', { ascending: true }),
+        supabase
+          .from('clinic_records')
+          .select('id, start_time, end_time, subject, content, room, assistant_confirmed, assistant_confirmed_at, assistant_attendance, assistant_memo, student_id, teacher_id')
+          .eq('clinic_date', dateStr)
+          .in('room', ['room10', 'glass'])
+          .order('start_time', { ascending: true }),
+      ]);
+
+      // Collect unique student/teacher IDs for name lookup
+      const roomStudentIds = new Set<string>();
+      const roomTeacherIds = new Set<string>();
+      [...(testRoomData.data || []), ...(studyRoomData.data || []), ...(clinicRoomData.data || [])].forEach((r: any) => {
+        if (r.student_id) roomStudentIds.add(r.student_id);
+        if (r.teacher_id) roomTeacherIds.add(r.teacher_id);
+      });
+
+      let studentNameMap: Record<string, string> = {};
+      let teacherNameMap: Record<string, string> = {};
+      if (roomStudentIds.size > 0) {
+        const { data: sNames } = await supabase.from('students').select('id, name').in('id', [...roomStudentIds]);
+        (sNames || []).forEach((s: any) => { studentNameMap[s.id] = s.name; });
+      }
+      if (roomTeacherIds.size > 0) {
+        const { data: tNames } = await supabase.from('profiles').select('id, full_name').in('id', [...roomTeacherIds]);
+        (tNames || []).forEach((t: any) => { teacherNameMap[t.id] = t.full_name; });
+      }
+
+      const allRoomItems = [
+        ...(testRoomData.data || []).map((r: any) => ({
+          ...r, type: 'test' as const,
+          student_name: studentNameMap[r.student_id] || '?',
+          teacher_name: teacherNameMap[r.teacher_id] || null,
+        })),
+        ...(studyRoomData.data || []).map((r: any) => ({
+          ...r, type: 'self_study' as const,
+          student_name: studentNameMap[r.student_id] || '?',
+          teacher_name: teacherNameMap[r.teacher_id] || null,
+        })),
+        ...(clinicRoomData.data || []).map((r: any) => ({
+          ...r, type: 'clinic' as const,
+          student_name: studentNameMap[r.student_id] || '?',
+          teacher_name: teacherNameMap[r.teacher_id] || null,
+        })),
+      ].sort((a, b) => (a.start_time || '99:99').localeCompare(b.start_time || '99:99'));
+
+      setRoomItems(allRoomItems);
+
       setAllTeachers(teachersList);
       setRoster(rosterData);
       setHolidays((holidaysData || []) as Holiday[]);
