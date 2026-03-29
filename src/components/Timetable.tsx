@@ -1378,6 +1378,11 @@ export function Timetable() {
           <TabsContent value="create" className="space-y-4">
             <TeacherScheduleCreator />
           </TabsContent>
+
+          {/* ── 강의실 배정 ── */}
+          <TabsContent value="room" className="space-y-4">
+            <RoomAssignmentTab />
+          </TabsContent>
         </Tabs>
         )}
       </CardContent>
