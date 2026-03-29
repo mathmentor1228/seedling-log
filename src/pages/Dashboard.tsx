@@ -1501,7 +1501,7 @@ export default function Dashboard() {
         
         // Fetch lesson records for today (휴강, attendance_status)
         const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
-        const classIdsForRecords = [...new Set(allStudentClassPairs.map(p => p.classId))];
+        const classIdsForRecords = [...new Set(allStudentClassPairs.map(p => p.classId))].filter(id => !id.startsWith('exam-prep-'));
         
         // TEST-CONTENT-DISPLAY-V2: Include test_content and submitted as primary fields
         const { data: todayRecords } = await supabase
