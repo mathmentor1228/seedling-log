@@ -267,6 +267,67 @@ export type Database = {
           },
         ]
       }
+      attendance_logs: {
+        Row: {
+          assignment_id: string | null
+          checked_in_at: string | null
+          checked_out_at: string | null
+          created_at: string | null
+          date: string
+          id: string
+          recorded_by: string | null
+          room_id: string | null
+          student_id: string | null
+          student_name: string | null
+        }
+        Insert: {
+          assignment_id?: string | null
+          checked_in_at?: string | null
+          checked_out_at?: string | null
+          created_at?: string | null
+          date: string
+          id?: string
+          recorded_by?: string | null
+          room_id?: string | null
+          student_id?: string | null
+          student_name?: string | null
+        }
+        Update: {
+          assignment_id?: string | null
+          checked_in_at?: string | null
+          checked_out_at?: string | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          recorded_by?: string | null
+          room_id?: string | null
+          student_id?: string | null
+          student_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_logs_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "room_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_logs_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_schedules: {
         Row: {
           class_id: string
@@ -2107,6 +2168,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      room_capacities: {
+        Row: {
+          capacity: number
+          label: string | null
+          room_id: string
+        }
+        Insert: {
+          capacity?: number
+          label?: string | null
+          room_id: string
+        }
+        Update: {
+          capacity?: number
+          label?: string | null
+          room_id?: string
+        }
+        Relationships: []
       }
       room_slot_copies: {
         Row: {
