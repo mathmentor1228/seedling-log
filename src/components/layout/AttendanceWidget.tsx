@@ -169,7 +169,7 @@ export function AttendanceWidget() {
     };
   }, [role, fetchData]);
 
-  if (role !== 'teacher') return null;
+  if (!user) return null;
 
   const notArrived = entries.filter((e) => e.status === 'not_arrived').length;
   const checkedIn = entries.filter((e) => e.status === 'checked_in').length;
