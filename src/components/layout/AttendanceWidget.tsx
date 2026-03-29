@@ -158,7 +158,7 @@ export function AttendanceWidget() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (role !== 'teacher') return;
+    if (!user?.id) return;
     fetchData();
     const channel = supabase
       .channel('widget_attendance')
