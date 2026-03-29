@@ -47,6 +47,10 @@ interface DraftRecord {
   next_lesson_goal: string | null;
   class_id: string | null;
   submitted: boolean;
+  test_content: string | null;
+  test_name: string | null;
+  test_result: string | null;
+  test_result_text: string | null;
 }
 
 interface HomeworkItem {

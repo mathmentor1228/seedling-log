@@ -1856,7 +1856,7 @@ export default function Dashboard() {
     }
   }
 
-  // BULK-DRAFT-CREATE-V2: Create draft lesson records for all students without records today (teacher + admin)
+  // BULK-DRAFT-SAVE-V3: Create draft records for unrecorded students + ensure all existing drafts are saved
   async function handleBulkDraftCreate() {
     if (!user) return;
     setBulkDraftSaving(true);
@@ -1865,56 +1865,47 @@ export default function Dashboard() {
       const candidates = new Map<string, { student_id: string; class_id: string; subject: string; teacher_id: string }>();
 
       if (isAdmin(role) && adminRosterData) {
-        // Admin: iterate adminRosterData, check lessonStatusMap for existing records
         adminRosterData.roster_rows.forEach(row => {
-          // Skip rows with missing or invalid UUIDs (e.g. supplementary without class_id, exam-prep virtual slots)
           if (!row.student_id || !row.class_id || !row.teacher_id || row.class_id === '' || row.class_id.startsWith('exam-prep-')) return;
           const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
-          const status = lessonStatusMap[statusKey];
-          if (!status?.recordId) {
-            candidates.set(statusKey, {
-              student_id: row.student_id,
-              class_id: row.class_id,
-              subject: row.subject,
-              teacher_id: row.teacher_id,
-            });
-          }
+          candidates.set(statusKey, {
+            student_id: row.student_id,
+            class_id: row.class_id,
+            subject: row.subject,
+            teacher_id: row.teacher_id,
+          });
         });
       } else {
-        // Teacher: use todaySlots
         todaySlots.forEach(slot => {
           if (slot.isOverridden && slot.overrideType === 'cancelled') return;
-          // Skip exam-prep virtual slots (not real class_ids)
           if (slot.isExamPrep || slot.class_id.startsWith('exam-prep-')) return;
           slot.students.forEach(student => {
-            if (!student.lessonRecordId && !student.hyugangRecordId) {
-              const key = `${student.id}:${slot.class_id}:${slot.subject}`;
-              candidates.set(key, {
-                student_id: student.id,
-                class_id: slot.class_id,
-                subject: slot.subject,
-                teacher_id: user.id,
-              });
-            }
+            const key = `${student.id}:${slot.class_id}:${slot.subject}`;
+            candidates.set(key, {
+              student_id: student.id,
+              class_id: slot.class_id,
+              subject: slot.subject,
+              teacher_id: user.id,
+            });
           });
         });
       }
 
-      const toCreate = Array.from(candidates.values());
-
-      if (toCreate.length === 0) {
-        toast({ title: '이미 모든 학생의 일지가 생성되어 있습니다.' });
+      const allCandidates = Array.from(candidates.values());
+      if (allCandidates.length === 0) {
+        toast({ title: '오늘 수업 데이터가 없습니다.' });
         setBulkDraftSaving(false);
         return;
       }
 
-      const studentIds = [...new Set(toCreate.map(item => item.student_id))];
-      const classIds = [...new Set(toCreate.map(item => item.class_id))];
-      const subjects = [...new Set(toCreate.map(item => item.subject))];
+      const studentIds = [...new Set(allCandidates.map(item => item.student_id))];
+      const classIds = [...new Set(allCandidates.map(item => item.class_id))];
+      const subjects = [...new Set(allCandidates.map(item => item.subject))];
 
+      // Find existing records for today
       const { data: existingRecords, error: existingError } = await supabase
         .from('lesson_records')
-        .select('student_id, class_id, subject')
+        .select('id, student_id, class_id, subject, submitted')
         .eq('lesson_date', today)
         .in('student_id', studentIds)
         .in('class_id', classIds)
@@ -1926,7 +1917,8 @@ export default function Dashboard() {
         (existingRecords || []).map((record: any) => `${record.student_id}:${record.class_id}:${record.subject}`)
       );
 
-      const records = toCreate
+      // 1. Create new draft records for students without any record
+      const toCreate = allCandidates
         .filter(item => !existingKeys.has(`${item.student_id}:${item.class_id}:${item.subject}`))
         .map(item => ({
           student_id: item.student_id,
@@ -1940,18 +1932,34 @@ export default function Dashboard() {
           submitted: false,
         }));
 
-      if (records.length === 0) {
-        toast({ title: '이미 모든 학생의 일지가 생성되어 있습니다.' });
-        setBulkDraftSaving(false);
-        return;
+      let createdCount = 0;
+      if (toCreate.length > 0) {
+        const { error } = await supabase.from('lesson_records').insert(toCreate);
+        if (error) throw error;
+        createdCount = toCreate.length;
       }
 
-      const { error } = await supabase.from('lesson_records').insert(records);
-      if (error) throw error;
+      // 2. Touch existing draft records (update updated_at to confirm save)
+      const draftRecordIds = (existingRecords || [])
+        .filter((r: any) => !r.submitted)
+        .map((r: any) => r.id);
+      
+      let savedCount = 0;
+      if (draftRecordIds.length > 0) {
+        const { error: updateErr } = await supabase
+          .from('lesson_records')
+          .update({ updated_at: new Date().toISOString() })
+          .in('id', draftRecordIds);
+        if (!updateErr) savedCount = draftRecordIds.length;
+      }
+
+      const parts: string[] = [];
+      if (createdCount > 0) parts.push(`${createdCount}명 새로 생성`);
+      if (savedCount > 0) parts.push(`${savedCount}명 임시저장 완료`);
 
       toast({
         title: '일괄 임시저장 완료',
-        description: `${toCreate.length}명의 수업일지를 생성했습니다.`,
+        description: parts.join(', ') || '모든 일지가 이미 제출 상태입니다.',
       });
       
       await fetchTodaySlots();
