@@ -310,6 +310,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             })}
           </nav>
 
+          {/* Attendance widget for teachers */}
+          {!sidebarCollapsed && <AttendanceWidget />}
+
           {/* Collapse toggle (desktop only) */}
           <div className="hidden lg:flex justify-center py-2 border-t border-sidebar-border">
             <button
