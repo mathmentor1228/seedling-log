@@ -47,6 +47,10 @@ interface DraftRecord {
   next_lesson_goal: string | null;
   class_id: string | null;
   submitted: boolean;
+  test_content: string | null;
+  test_name: string | null;
+  test_result: string | null;
+  test_result_text: string | null;
 }
 
 interface HomeworkItem {
@@ -157,7 +161,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     try {
       const { data, error } = await supabase
         .from('lesson_records')
-        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, students!inner(name, grade)')
+        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, test_content, test_name, test_result, test_result_text, students!inner(name, grade)')
         .eq('lesson_date', searchDate)
         .eq('teacher_id', user!.id)
         .order('submitted', { ascending: true });
@@ -177,6 +181,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         next_lesson_goal: r.next_lesson_goal,
         class_id: r.class_id,
         submitted: r.submitted,
+        test_content: r.test_content,
+        test_name: r.test_name,
+        test_result: r.test_result,
+        test_result_text: r.test_result_text,
       }));
       setDrafts(records);
       setSelectedIds(new Set());
@@ -253,6 +261,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       setHomeworkStatus(first.homework_status || 'none_assigned');
       setNotes(first.notes || '');
       setNextLessonGoal(first.next_lesson_goal || '');
+      // Pre-fill test content from existing data
+      setTestContent(first.test_content || first.test_name || '');
     }
     setStep('edit');
   }
