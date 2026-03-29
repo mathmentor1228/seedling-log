@@ -1967,7 +1967,7 @@ export default function Dashboard() {
       }
 
       // 2. Touch existing draft records (update updated_at to confirm save)
-      const draftRecordIds = (existingRecords || [])
+      const draftRecordIds = (allExistingRecords || [])
         .filter((r: any) => !r.submitted)
         .map((r: any) => r.id);
       
