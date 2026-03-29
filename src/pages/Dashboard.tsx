@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { WeeklyScheduleVerification } from '@/components/WeeklyScheduleVerification';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
+import { BatchTestInputModal } from '@/components/BatchTestInputModal';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
 
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
@@ -444,6 +445,14 @@ export default function Dashboard() {
   // PHOTO-VIEW-V1: Photo viewer state for pending homework
   const [photoViewHw, setPhotoViewHw] = useState<PendingHomework | null>(null);
   
+  // BATCH-TEST-INPUT-V1: Batch test input modal state
+  const [batchTestModalOpen, setBatchTestModalOpen] = useState(false);
+  const [batchTestContext, setBatchTestContext] = useState<{
+    students: { id: string; name: string; lessonRecordId: string | null }[];
+    subject: string;
+    className: string;
+  } | null>(null);
+
   // ADMIN-ROSTER-DEBUG-V1: Fallback today's lesson records (grouped by teacher)
   const [todayLessonRecordsFallback, setTodayLessonRecordsFallback] = useState<{
     teacher_id: string;
@@ -909,7 +918,7 @@ export default function Dashboard() {
       // Fetch lesson status for all student/class pairs
       if (rosterRows.length > 0) {
         const studentIds = [...new Set(rosterRows.map((r: any) => r.student_id))] as string[];
-        const classIds = [...new Set(rosterRows.map((r: any) => r.class_id))] as string[];
+        const classIds = [...new Set(rosterRows.map((r: any) => r.class_id))].filter((id: string) => !id.startsWith('exam-prep-')) as string[];
         
         // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homework_status in select
         const { data: lessonRecords } = await supabase
@@ -1501,7 +1510,7 @@ export default function Dashboard() {
         
         // Fetch lesson records for today (휴강, attendance_status)
         const studentIds = [...new Set(allStudentClassPairs.map(p => p.studentId))];
-        const classIdsForRecords = [...new Set(allStudentClassPairs.map(p => p.classId))];
+        const classIdsForRecords = [...new Set(allStudentClassPairs.map(p => p.classId))].filter(id => !id.startsWith('exam-prep-'));
         
         // TEST-CONTENT-DISPLAY-V2: Include test_content and submitted as primary fields
         const { data: todayRecords } = await supabase
@@ -2891,11 +2900,40 @@ export default function Dashboard() {
                                         <Badge className="bg-violet-100 text-violet-700 border-violet-300 text-[10px] px-1.5 py-0">내신특강</Badge>
                                       )}
                                     </div>
-                                    {slot.startTime !== '99:99' ? (
-                                      <span className="text-sm text-muted-foreground font-medium">{slot.startTime}–{slot.endTime}</span>
-                                    ) : (
-                                      <span className="text-sm text-muted-foreground font-medium">시간 미정</span>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                      {!slot.rows.some((r: any) => r.isExamPrep) && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground gap-1"
+                                          onClick={() => {
+                                            const slotStudents = slot.rows.map((r: any) => {
+                                              const statusKey = `${r.student_id}:${r.class_id}:${r.subject}`;
+                                              const ls = lessonStatusMap[statusKey];
+                                              return {
+                                                id: r.student_id,
+                                                name: r.student_name,
+                                                lessonRecordId: ls?.recordId || null,
+                                              };
+                                            });
+                                            setBatchTestContext({
+                                              students: slotStudents,
+                                              subject: slot.subject,
+                                              className: slot.className,
+                                            });
+                                            setBatchTestModalOpen(true);
+                                          }}
+                                        >
+                                          <TestTube2 className="w-3.5 h-3.5" />
+                                          테스트 일괄
+                                        </Button>
+                                      )}
+                                      {slot.startTime !== '99:99' ? (
+                                        <span className="text-sm text-muted-foreground font-medium">{slot.startTime}–{slot.endTime}</span>
+                                      ) : (
+                                        <span className="text-sm text-muted-foreground font-medium">시간 미정</span>
+                                      )}
+                                    </div>
                                   </div>
                                   {/* Student rows */}
                                   <div className="divide-y divide-border/50">
@@ -3148,7 +3186,30 @@ export default function Dashboard() {
                                   </Badge>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
+                                {!slot.isExamPrep && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground gap-1"
+                                    onClick={() => {
+                                      const slotStudents = (slot.students || []).map((s: any) => ({
+                                        id: s.id,
+                                        name: s.name,
+                                        lessonRecordId: s.lessonRecordId || null,
+                                      }));
+                                      setBatchTestContext({
+                                        students: slotStudents,
+                                        subject: slot.subject,
+                                        className: slot.class_name,
+                                      });
+                                      setBatchTestModalOpen(true);
+                                    }}
+                                  >
+                                    <TestTube2 className="w-3.5 h-3.5" />
+                                    테스트 일괄
+                                  </Button>
+                                )}
                                 <span className="text-sm text-muted-foreground font-medium">
                                   {slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)}
                                 </span>
@@ -3646,6 +3707,21 @@ export default function Dashboard() {
           if (isAdmin(role)) await fetchAdminRosterData();
         }}
       />
+      {/* BATCH-TEST-INPUT-V1: Batch test input modal */}
+      {batchTestContext && (
+        <BatchTestInputModal
+          open={batchTestModalOpen}
+          onOpenChange={setBatchTestModalOpen}
+          students={batchTestContext.students}
+          subject={batchTestContext.subject}
+          className={batchTestContext.className}
+          date={getTodayKST()}
+          onSaved={async () => {
+            if (isAdmin(role)) await fetchAdminRosterData();
+            else await fetchTodaySlots();
+          }}
+        />
+      )}
     </div>
   );
 }
