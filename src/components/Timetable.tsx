@@ -25,6 +25,7 @@ import { TeacherGroupAssignment } from '@/components/timetable/TeacherGroupAssig
 import { TeacherScheduleCreator } from '@/components/timetable/TeacherScheduleCreator';
 import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
 import { TimetableMatrixView } from '@/components/timetable/TimetableMatrixView';
+import { RoomAssignmentTab } from '@/components/timetable/RoomAssignmentTab';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: '월', full: '월요일' },
