@@ -1856,29 +1856,31 @@ export default function Dashboard() {
     }
   }
 
-  // BULK-DRAFT-SAVE-V3: Create draft records for unrecorded students + ensure all existing drafts are saved
+  // BULK-DRAFT-SAVE-V4: Create draft records for unrecorded students (including exam prep) + ensure all existing drafts are saved
   async function handleBulkDraftCreate() {
     if (!user) return;
     setBulkDraftSaving(true);
     try {
       const today = getTodayKST();
-      const candidates = new Map<string, { student_id: string; class_id: string; subject: string; teacher_id: string }>();
+      const candidates = new Map<string, { student_id: string; class_id: string; subject: string; teacher_id: string; isExamPrep: boolean }>();
 
       if (isAdmin(role) && adminRosterData) {
         adminRosterData.roster_rows.forEach(row => {
-          if (!row.student_id || !row.class_id || !row.teacher_id || row.class_id === '' || row.class_id.startsWith('exam-prep-')) return;
+          if (!row.student_id || !row.class_id || !row.teacher_id || row.class_id === '') return;
+          const isEP = row.class_id.startsWith('exam-prep-');
           const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
           candidates.set(statusKey, {
             student_id: row.student_id,
             class_id: row.class_id,
             subject: row.subject,
             teacher_id: row.teacher_id,
+            isExamPrep: isEP,
           });
         });
       } else {
         todaySlots.forEach(slot => {
           if (slot.isOverridden && slot.overrideType === 'cancelled') return;
-          if (slot.isExamPrep || slot.class_id.startsWith('exam-prep-')) return;
+          const isEP = slot.isExamPrep || slot.class_id.startsWith('exam-prep-');
           slot.students.forEach(student => {
             const key = `${student.id}:${slot.class_id}:${slot.subject}`;
             candidates.set(key, {
@@ -1886,6 +1888,7 @@ export default function Dashboard() {
               class_id: slot.class_id,
               subject: slot.subject,
               teacher_id: user.id,
+              isExamPrep: isEP,
             });
           });
         });
@@ -1899,30 +1902,54 @@ export default function Dashboard() {
       }
 
       const studentIds = [...new Set(allCandidates.map(item => item.student_id))];
-      const classIds = [...new Set(allCandidates.map(item => item.class_id))];
+      const regularClassIds = [...new Set(allCandidates.filter(c => !c.isExamPrep).map(c => c.class_id))];
+      const examPrepStudentIds = [...new Set(allCandidates.filter(c => c.isExamPrep).map(c => c.student_id))];
       const subjects = [...new Set(allCandidates.map(item => item.subject))];
 
-      // Find existing records for today
-      const { data: existingRecords, error: existingError } = await supabase
-        .from('lesson_records')
-        .select('id, student_id, class_id, subject, submitted')
-        .eq('lesson_date', today)
-        .in('student_id', studentIds)
-        .in('class_id', classIds)
-        .in('subject', subjects as any);
+      // Find existing records for today - regular classes
+      let allExistingRecords: any[] = [];
+      
+      if (regularClassIds.length > 0) {
+        const { data: regularRecords, error: regularErr } = await supabase
+          .from('lesson_records')
+          .select('id, student_id, class_id, subject, submitted')
+          .eq('lesson_date', today)
+          .in('student_id', studentIds)
+          .in('class_id', regularClassIds)
+          .in('subject', subjects as any);
+        if (regularErr) throw regularErr;
+        allExistingRecords.push(...(regularRecords || []));
+      }
 
-      if (existingError) throw existingError;
+      // Find existing records for today - exam prep (class_id is null)
+      if (examPrepStudentIds.length > 0) {
+        const { data: epRecords, error: epErr } = await supabase
+          .from('lesson_records')
+          .select('id, student_id, class_id, subject, submitted')
+          .eq('lesson_date', today)
+          .in('student_id', examPrepStudentIds)
+          .is('class_id', null)
+          .in('subject', subjects as any);
+        if (epErr) throw epErr;
+        allExistingRecords.push(...(epRecords || []));
+      }
 
+      // Build existing keys: for exam prep use null class_id
       const existingKeys = new Set(
-        (existingRecords || []).map((record: any) => `${record.student_id}:${record.class_id}:${record.subject}`)
+        allExistingRecords.map((record: any) => `${record.student_id}:${record.class_id || 'null'}:${record.subject}`)
       );
 
       // 1. Create new draft records for students without any record
       const toCreate = allCandidates
-        .filter(item => !existingKeys.has(`${item.student_id}:${item.class_id}:${item.subject}`))
+        .filter(item => {
+          const key = item.isExamPrep
+            ? `${item.student_id}:null:${item.subject}`
+            : `${item.student_id}:${item.class_id}:${item.subject}`;
+          return !existingKeys.has(key);
+        })
         .map(item => ({
           student_id: item.student_id,
-          class_id: item.class_id,
+          class_id: item.isExamPrep ? null : item.class_id,
           subject: item.subject as any,
           teacher_id: item.teacher_id,
           lesson_date: today,
