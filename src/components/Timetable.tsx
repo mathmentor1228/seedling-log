@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle, List, LayoutGrid, Thermometer, DoorOpen } from 'lucide-react';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle, List, LayoutGrid, Thermometer, DoorOpen, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
@@ -26,6 +26,7 @@ import { TeacherScheduleCreator } from '@/components/timetable/TeacherScheduleCr
 import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
 import { TimetableMatrixView } from '@/components/timetable/TimetableMatrixView';
 import { RoomAssignmentTab } from '@/components/timetable/RoomAssignmentTab';
+import { AttendanceTab } from '@/components/timetable/AttendanceTab';
 
 const DAYS_OF_WEEK = [
   { value: 1, label: '월', full: '월요일' },
@@ -1060,6 +1061,10 @@ export function Timetable() {
               <DoorOpen className="w-4 h-4 mr-1 hidden sm:inline" />
               강의실 배정
             </TabsTrigger>
+            <TabsTrigger value="attendance" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
+              <LogIn className="w-4 h-4 mr-1 hidden sm:inline" />
+              입퇴실
+            </TabsTrigger>
           </TabsList>
 
           {/* ── 요일별 뷰 ── */}
@@ -1382,6 +1387,11 @@ export function Timetable() {
           {/* ── 강의실 배정 ── */}
           <TabsContent value="room" className="space-y-4">
             <RoomAssignmentTab />
+          </TabsContent>
+
+          {/* ── 입퇴실 ── */}
+          <TabsContent value="attendance" className="space-y-4">
+            <AttendanceTab />
           </TabsContent>
         </Tabs>
         )}
