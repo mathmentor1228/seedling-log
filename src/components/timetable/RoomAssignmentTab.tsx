@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DndContext,
@@ -21,11 +20,11 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { format, addDays, subDays, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
-  ChevronLeft, ChevronRight, Plus, Trash2, Copy,
-  GripVertical, Loader2, CalendarDays
+  ChevronLeft, ChevronRight, Trash2, Copy, ClipboardPaste,
+  GripVertical, Loader2, Search, Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +33,17 @@ const ROOMS = [
   { value: 'room10', label: '10강의실', color: 'bg-blue-500/15 text-blue-600 border-blue-500/30' },
   { value: 'glass', label: '유리문강의실', color: 'bg-purple-500/15 text-purple-600 border-purple-500/30' },
 ] as const;
+
+const SUBJECT_COLORS: Record<string, string> = {
+  '수학': 'bg-blue-500/20 border-blue-500/40 text-blue-700 dark:text-blue-300',
+  '영어': 'bg-green-500/20 border-green-500/40 text-green-700 dark:text-green-300',
+  '국어': 'bg-purple-500/20 border-purple-500/40 text-purple-700 dark:text-purple-300',
+  '과학': 'bg-orange-500/20 border-orange-500/40 text-orange-700 dark:text-orange-300',
+  '기타': 'bg-muted border-border text-muted-foreground',
+};
+
+const SLOT_HEIGHT = 48;
+const GRADE_ORDER = ['중1','중2','중3','고1','고2','고3'];
 
 function generateSlots(minTime: string, maxTime: string): string[] {
   const slots: string[] = [];
@@ -47,83 +57,195 @@ function generateSlots(minTime: string, maxTime: string): string[] {
   return slots;
 }
 
-function slotEnd(slot: string): string {
+function calcSlotEnd(slot: string, spanCount: number): string {
   let [h, m] = slot.split(':').map(Number);
-  m += 30;
-  if (m >= 60) { m -= 60; h++; }
+  m += 30 * spanCount;
+  while (m >= 60) { m -= 60; h++; }
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-// ── Types ──
-interface RoomAssignment {
-  id: string;
-  room: string;
-  assigned_date: string;
-  slot_start: string;
-  slot_end: string;
-  student_id: string;
-  teacher_id: string;
-  subject: string | null;
-  memo: string | null;
-  is_routine: boolean;
-  student_name?: string;
-  teacher_name?: string;
+function getTodayKST(): string {
+  return format(new Date(), 'yyyy-MM-dd');
 }
 
-interface StudentOption { id: string; name: string; }
-interface TeacherOption { id: string; full_name: string; }
+// ── Types ──
+interface Assignment {
+  id: string;
+  room: string;
+  slot_start: string;
+  slot_end: string;
+  student_ids: string[];
+  student_names: string[];
+  subject: string | null;
+  teacher_id: string | null;
+  span: number;
+}
 
-// ── Draggable Card ──
-function DraggableCard({ assignment }: { assignment: RoomAssignment }) {
+interface StudentOption { id: string; name: string; grade?: string; }
+
+// ── DroppableSlot ──
+function DroppableSlot({ id, room, slot, selectedCount }: {
+  id: string; room: string; slot: string; selectedCount: number;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id, data: { room, slot } });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ height: SLOT_HEIGHT }}
+      className={cn(
+        'border border-dashed rounded-md transition-colors flex items-center justify-center',
+        isOver && selectedCount > 0
+          ? 'border-primary bg-primary/10'
+          : 'border-border/30 hover:border-border/60'
+      )}
+    >
+      {isOver && selectedCount > 0 && (
+        <span className="text-xs text-primary font-medium">{selectedCount}명 배정</span>
+      )}
+    </div>
+  );
+}
+
+// ── AssignmentBlock ──
+function AssignmentBlock({ assignment, onRemove }: {
+  assignment: Assignment; onRemove: () => void;
+}) {
+  const colorClass = SUBJECT_COLORS[assignment.subject || '기타'] || SUBJECT_COLORS['기타'];
+  const heightPx = assignment.span * SLOT_HEIGHT - 4;
+
+  return (
+    <div
+      style={{ height: heightPx }}
+      className={cn(
+        'rounded-lg border px-2 py-1.5 relative group overflow-hidden',
+        colorClass
+      )}
+    >
+      <div className="flex flex-wrap gap-1">
+        {(assignment.student_names || []).map((name: string, i: number) => (
+          <span key={i} className="text-xs font-semibold">{name}</span>
+        ))}
+      </div>
+      {assignment.subject && (
+        <p className="text-[10px] opacity-70 mt-0.5 truncate">
+          {assignment.subject}
+        </p>
+      )}
+      <p className="text-[10px] opacity-50 mt-0.5 font-mono">
+        {assignment.slot_start?.slice(0, 5)}~{assignment.slot_end?.slice(0, 5)}
+      </p>
+      <button
+        onClick={onRemove}
+        className="absolute top-1 right-1 hidden group-hover:flex w-4 h-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px]"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ── RoomColumn ──
+function RoomColumn({ room, slots, assignments, selectedCount, onRemove }: {
+  room: string; slots: string[]; assignments: Assignment[];
+  selectedCount: number; onRemove: (id: string) => void;
+}) {
+  const assignmentMap: Record<string, Assignment> = {};
+  const occupiedSlots = new Set<string>();
+
+  assignments.forEach(a => {
+    const startKey = a.slot_start?.slice(0, 5);
+    if (startKey) {
+      assignmentMap[startKey] = a;
+      let [h, m] = startKey.split(':').map(Number);
+      for (let i = 0; i < a.span; i++) {
+        occupiedSlots.add(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        m += 30; if (m >= 60) { m -= 60; h++; }
+      }
+    }
+  });
+
+  return (
+    <div className="flex-1 min-w-[140px]">
+      {slots.map(slot => {
+        const assignment = assignmentMap[slot];
+        const isOccupied = occupiedSlots.has(slot) && !assignment;
+
+        if (assignment) {
+          return (
+            <div key={slot} style={{ height: assignment.span * SLOT_HEIGHT }}>
+              <AssignmentBlock
+                assignment={assignment}
+                onRemove={() => onRemove(assignment.id)}
+              />
+            </div>
+          );
+        }
+
+        if (isOccupied) {
+          return <div key={slot} style={{ height: SLOT_HEIGHT }} />;
+        }
+
+        return (
+          <DroppableSlot
+            key={slot}
+            id={`${room}|${slot}`}
+            room={room}
+            slot={slot}
+            selectedCount={selectedCount}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ── DraggableStudentChip ──
+function DraggableStudentChip({ student, isSelected, onToggle, selectedIds, allStudents, durationSlots, subject }: {
+  student: StudentOption; isSelected: boolean; onToggle: () => void;
+  selectedIds: Set<string>; allStudents: StudentOption[];
+  durationSlots: number; subject: string;
+}) {
+  const dragStudentIds = isSelected && selectedIds.size > 1
+    ? Array.from(selectedIds) : [student.id];
+  const dragStudentNames = isSelected && selectedIds.size > 1
+    ? allStudents.filter(s => selectedIds.has(s.id)).map(s => s.name)
+    : [student.name];
+
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: assignment.id,
-    data: assignment,
+    id: `drag-${student.id}`,
+    data: {
+      studentIds: dragStudentIds,
+      studentNames: dragStudentNames,
+      durationSlots,
+      subject,
+    },
   });
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'flex items-center gap-1 rounded-md border px-2 py-1 text-xs bg-background cursor-grab',
-        'hover:shadow-sm transition-shadow',
+        'flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs cursor-grab select-none transition-all',
+        isSelected
+          ? 'bg-primary/10 border-primary/40 text-primary font-medium'
+          : 'bg-background border-border hover:border-primary/30',
         isDragging && 'opacity-40'
       )}
       {...listeners}
       {...attributes}
     >
-      <GripVertical className="w-3 h-3 text-muted-foreground shrink-0" />
-      <span className="font-medium truncate">{assignment.student_name}</span>
-      {assignment.subject && (
-        <Badge variant="outline" className="text-[10px] px-1 py-0 shrink-0">
-          {assignment.subject}
-        </Badge>
-      )}
-    </div>
-  );
-}
-
-// ── Droppable Slot ──
-function DroppableSlot({
-  slotId,
-  children,
-  isOver,
-}: {
-  slotId: string;
-  children: React.ReactNode;
-  isOver?: boolean;
-}) {
-  const { setNodeRef, isOver: over } = useDroppable({ id: slotId });
-  const highlighted = isOver || over;
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        'min-h-[40px] rounded-md border border-dashed border-border/50 p-1 space-y-1 transition-colors',
-        highlighted && 'bg-primary/5 border-primary/30'
-      )}
-    >
-      {children}
+      <div
+        className={cn(
+          'w-4 h-4 rounded border flex items-center justify-center shrink-0 cursor-pointer',
+          isSelected ? 'bg-primary border-primary' : 'border-muted-foreground/30'
+        )}
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      >
+        {isSelected && <span className="text-primary-foreground text-[10px]">✓</span>}
+      </div>
+      <span className="truncate">{student.name}</span>
+      <GripVertical className="w-3 h-3 text-muted-foreground shrink-0 ml-auto" />
     </div>
   );
 }
@@ -133,42 +255,34 @@ export function RoomAssignmentTab() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Date navigation
-  const [currentDate, setCurrentDate] = useState(() => new Date());
-  const dateStr = format(currentDate, 'yyyy-MM-dd');
-  const dateLabel = format(currentDate, 'M월 d일 (EEEE)', { locale: ko });
+  const [selectedDate, setSelectedDate] = useState(getTodayKST);
+  const dateLabel = useMemo(() => {
+    try {
+      return format(parseISO(selectedDate), 'M월 d일 (EEEE)', { locale: ko });
+    } catch { return selectedDate; }
+  }, [selectedDate]);
 
-  // Data
-  const [assignments, setAssignments] = useState<RoomAssignment[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
-  const [teachers, setTeachers] = useState<TeacherOption[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Add dialog
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [addRoom, setAddRoom] = useState('room10');
-  const [addSlot, setAddSlot] = useState('');
-  const [addStudentId, setAddStudentId] = useState('');
-  const [addTeacherId, setAddTeacherId] = useState('');
-  const [addSubject, setAddSubject] = useState('');
-  const [addMemo, setAddMemo] = useState('');
-  const [addIsRoutine, setAddIsRoutine] = useState(false);
-  const [addRoutineDays, setAddRoutineDays] = useState<number[]>([]);
-  const [saving, setSaving] = useState(false);
+  // Student panel state
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [studentSearch, setStudentSearch] = useState('');
+  const [durationSlots, setDurationSlots] = useState(2);
+  const [selectedSubject, setSelectedSubject] = useState('');
 
-  // Copy dialog
-  const [showCopyDialog, setShowCopyDialog] = useState(false);
-  const [copyTargetDate, setCopyTargetDate] = useState('');
-  const [copyRoom, setCopyRoom] = useState('room10');
+  // Copy state
+  const [copiedDate, setCopiedDate] = useState<string | null>(null);
+  const [copiedRoom, setCopiedRoom] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
 
   // DnD
-  const [activeItem, setActiveItem] = useState<RoomAssignment | null>(null);
+  const [activeDragData, setActiveDragData] = useState<any>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  // ── Fetch time range from class_schedules ──
+  // ── Fetch time range ──
   useEffect(() => {
     (async () => {
       const { data } = await supabase
@@ -178,472 +292,376 @@ export function RoomAssignmentTab() {
       if (data && data.length > 0) {
         const starts = data.map(d => d.start_time).sort();
         const ends = data.map(d => d.end_time).sort();
-        const minT = starts[0] || '14:00';
-        const maxT = ends[ends.length - 1] || '22:00';
-        setSlots(generateSlots(minT, maxT));
+        setSlots(generateSlots(starts[0] || '14:00', ends[ends.length - 1] || '22:00'));
       } else {
         setSlots(generateSlots('14:00', '22:00'));
       }
     })();
   }, []);
 
-  // ── Fetch assignments for date ──
-  const fetchAssignments = useCallback(async () => {
+  // ── Fetch assignments ──
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from('room_assignments')
-      .select('*, students!student_id(name), profiles!teacher_id(full_name)')
-      .eq('assigned_date', dateStr)
+      .select('id, room, slot_start, slot_end, student_ids, student_names, subject, teacher_id, span')
+      .eq('assigned_date', selectedDate)
       .order('slot_start', { ascending: true });
 
-    const mapped = (data || []).map((r: any) => ({
+    setAssignments((data || []).map((r: any) => ({
       ...r,
-      student_name: r.students?.name,
-      teacher_name: r.profiles?.full_name,
-    }));
-    setAssignments(mapped);
+      student_ids: r.student_ids || [],
+      student_names: r.student_names || [],
+      span: r.span || 1,
+    })));
     setLoading(false);
-  }, [dateStr]);
+  }, [selectedDate]);
 
-  useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Fetch students & teachers once ──
+  // ── Fetch students once ──
   useEffect(() => {
     (async () => {
-      const [sRes, tRes] = await Promise.all([
-        supabase.from('students').select('id, name').neq('enrollment_status', '퇴원').order('name'),
-        supabase.from('profiles').select('id, full_name').not('full_name', 'is', null).order('full_name'),
-      ]);
-      setStudents(sRes.data || []);
-      setTeachers((tRes.data || []) as TeacherOption[]);
+      const { data } = await supabase
+        .from('students')
+        .select('id, name, grade')
+        .neq('enrollment_status', '퇴원')
+        .order('name');
+      setStudents(data || []);
     })();
   }, []);
 
-  // ── Grouped data for grid ──
-  const gridData = useMemo(() => {
-    const map: Record<string, Record<string, RoomAssignment[]>> = {};
-    for (const room of ROOMS) {
-      map[room.value] = {};
-      for (const slot of slots) {
-        map[room.value][slot] = [];
-      }
-    }
-    for (const a of assignments) {
-      const slotKey = a.slot_start?.slice(0, 5);
-      if (map[a.room]?.[slotKey]) {
-        map[a.room][slotKey].push(a);
-      }
-    }
-    return map;
-  }, [assignments, slots]);
-
-  // ── Add assignment ──
-  async function handleAdd() {
-    if (!addStudentId || !addTeacherId || !addSlot) {
-      toast({ description: '학생, 선생님, 시간을 선택해주세요', variant: 'destructive' });
-      return;
-    }
-    setSaving(true);
-
-    const inserts: any[] = [];
-    if (addIsRoutine && addRoutineDays.length > 0) {
-      const monday = startOfWeek(currentDate, { weekStartsOn: 1 });
-      for (const dow of addRoutineDays) {
-        const d = addDays(monday, dow === 0 ? 6 : dow - 1);
-        inserts.push({
-          room: addRoom,
-          assigned_date: format(d, 'yyyy-MM-dd'),
-          slot_start: addSlot,
-          slot_end: slotEnd(addSlot),
-          student_id: addStudentId,
-          teacher_id: addTeacherId,
-          subject: addSubject || null,
-          memo: addMemo || null,
-          is_routine: true,
-          routine_days: addRoutineDays,
-        });
-      }
-    } else {
-      inserts.push({
-        room: addRoom,
-        assigned_date: dateStr,
-        slot_start: addSlot,
-        slot_end: slotEnd(addSlot),
-        student_id: addStudentId,
-        teacher_id: addTeacherId,
-        subject: addSubject || null,
-        memo: addMemo || null,
-        is_routine: false,
-      });
-    }
-
-    const { error } = await supabase.from('room_assignments').insert(inserts);
-    if (error) {
-      toast({ title: '저장 실패', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ description: `${inserts.length}건 배정 완료` });
-      setShowAddDialog(false);
-      resetAddForm();
-      fetchAssignments();
-    }
-    setSaving(false);
+  // ── Student toggle ──
+  function toggleStudent(id: string) {
+    setSelectedStudentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
-  function resetAddForm() {
-    setAddRoom('room10');
-    setAddSlot('');
-    setAddStudentId('');
-    setAddTeacherId('');
-    setAddSubject('');
-    setAddMemo('');
-    setAddIsRoutine(false);
-    setAddRoutineDays([]);
-    setStudentSearch('');
-  }
+  // ── Grouped students ──
+  const groupedStudents = useMemo(() => {
+    const result: Record<string, StudentOption[]> = {};
+    GRADE_ORDER.forEach(grade => {
+      const gs = students.filter(s =>
+        (s.grade || '').includes(grade) &&
+        (!studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()))
+      );
+      if (gs.length > 0) result[grade] = gs;
+    });
+    // ungrouped
+    const ungrouped = students.filter(s =>
+      !GRADE_ORDER.some(g => (s.grade || '').includes(g)) &&
+      (!studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()))
+    );
+    if (ungrouped.length > 0) result['기타'] = ungrouped;
+    return result;
+  }, [students, studentSearch]);
 
   // ── Delete ──
-  async function handleDelete(id: string) {
-    if (!confirm('삭제하시겠습니까?')) return;
+  async function handleRemove(id: string) {
     await supabase.from('room_assignments').delete().eq('id', id);
     toast({ description: '삭제되었습니다' });
-    fetchAssignments();
+    fetchData();
   }
 
-  // ── Copy day slots ──
-  async function handleCopyDay() {
-    if (!copyTargetDate) {
-      toast({ description: '대상 날짜를 선택해주세요', variant: 'destructive' });
-      return;
-    }
+  // ── Copy / Paste ──
+  function handleCopy() {
+    setCopiedDate(selectedDate);
+    setCopiedRoom(null); // copy all rooms
+    toast({ description: `${dateLabel} 배정이 복사되었습니다` });
+  }
+
+  async function handlePaste() {
+    if (!copiedDate || copiedDate === selectedDate) return;
     setCopying(true);
 
-    const source = assignments.filter(a => a.room === copyRoom);
-    if (source.length === 0) {
+    const { data: source } = await supabase
+      .from('room_assignments')
+      .select('room, slot_start, slot_end, student_ids, student_names, subject, teacher_id, span')
+      .eq('assigned_date', copiedDate);
+
+    if (!source || source.length === 0) {
       toast({ description: '복사할 배정이 없습니다', variant: 'destructive' });
       setCopying(false);
       return;
     }
 
-    const inserts = source.map(a => ({
+    const inserts = source.map((a: any) => ({
       room: a.room,
-      assigned_date: copyTargetDate,
+      assigned_date: selectedDate,
       slot_start: a.slot_start,
       slot_end: a.slot_end,
-      student_id: a.student_id,
-      teacher_id: a.teacher_id,
+      student_ids: a.student_ids || [],
+      student_names: a.student_names || [],
       subject: a.subject,
-      memo: a.memo,
-      is_routine: a.is_routine,
-      routine_days: (a as any).routine_days || [],
+      teacher_id: a.teacher_id,
+      span: a.span || 1,
     }));
 
     const { error } = await supabase.from('room_assignments').insert(inserts);
-    if (!error && user) {
-      await supabase.from('room_slot_copies').insert({
-        source_date: dateStr,
-        target_date: copyTargetDate,
-        room: copyRoom,
-        copied_by: user.id,
-      });
-    }
-
     if (error) {
-      toast({ title: '복사 실패', description: error.message, variant: 'destructive' });
+      toast({ title: '붙여넣기 실패', description: error.message, variant: 'destructive' });
     } else {
-      toast({ description: `${inserts.length}건이 ${copyTargetDate}로 복사되었습니다` });
-      setShowCopyDialog(false);
+      if (user) {
+        await supabase.from('room_slot_copies').insert({
+          source_date: copiedDate,
+          target_date: selectedDate,
+          room: 'all',
+          copied_by: user.id,
+        });
+      }
+      toast({ description: `${inserts.length}건이 붙여넣기되었습니다` });
+      setCopiedDate(null);
+      fetchData();
     }
     setCopying(false);
   }
 
   // ── Drag & Drop ──
   function handleDragStart(event: DragStartEvent) {
-    setActiveItem(event.active.data.current as RoomAssignment);
+    setActiveDragData(event.active.data.current);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
-    setActiveItem(null);
+    setActiveDragData(null);
     const { active, over } = event;
     if (!over || !active.data.current) return;
 
-    const assignment = active.data.current as RoomAssignment;
-    // droppable id format: "room|slot"
-    const [newRoom, newSlot] = (over.id as string).split('|');
-    if (!newRoom || !newSlot) return;
-    if (assignment.room === newRoom && assignment.slot_start?.slice(0, 5) === newSlot) return;
+    const dragData = active.data.current as any;
+    const dropData = over.data.current as any;
+    if (!dragData?.studentIds || !dropData?.room || !dropData?.slot) return;
 
-    const { error } = await supabase
-      .from('room_assignments')
-      .update({ room: newRoom, slot_start: newSlot, slot_end: slotEnd(newSlot), updated_at: new Date().toISOString() })
-      .eq('id', assignment.id);
+    const { studentIds, studentNames, durationSlots: durSlots, subject } = dragData;
+    const { room, slot } = dropData;
+    const slotEnd = calcSlotEnd(slot, durSlots);
+
+    // Resolve names if needed
+    const resolvedNames = studentNames && studentNames.length > 0
+      ? studentNames
+      : students.filter(s => studentIds.includes(s.id)).map(s => s.name);
+
+    const { error } = await supabase.from('room_assignments').insert({
+      room,
+      assigned_date: selectedDate,
+      slot_start: slot,
+      slot_end: slotEnd,
+      student_ids: studentIds,
+      student_names: resolvedNames,
+      subject: subject || null,
+      teacher_id: user?.id || null,
+      span: durSlots,
+    });
 
     if (error) {
-      toast({ title: '이동 실패', variant: 'destructive' });
+      toast({ title: '배정 실패', description: error.message, variant: 'destructive' });
     } else {
-      toast({ description: '배정이 이동되었습니다' });
-      fetchAssignments();
+      toast({ description: `${resolvedNames.length}명 배정 완료` });
+      setSelectedStudentIds(new Set());
+      fetchData();
     }
   }
 
-  const filteredStudents = students.filter(s =>
-    !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase())
-  );
-
-  const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+  const selectedCount = selectedStudentIds.size;
 
   return (
-    <div className="space-y-4">
-      {/* ── Header: date nav + actions ── */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8"
-            onClick={() => setCurrentDate(d => addDays(d, -1))}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <h2 className="text-lg font-bold">{dateLabel}</h2>
-          <Button variant="outline" size="icon" className="h-8 w-8"
-            onClick={() => setCurrentDate(d => addDays(d, 1))}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="text-xs"
-            onClick={() => setCurrentDate(new Date())}>
-            오늘
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" className="gap-1 text-xs"
-            onClick={() => setShowCopyDialog(true)}>
-            <Copy className="w-3.5 h-3.5" /> 복사
-          </Button>
-          <Button size="sm" className="gap-1 text-xs"
-            onClick={() => { resetAddForm(); setShowAddDialog(true); }}>
-            <Plus className="w-3.5 h-3.5" /> 배정 추가
-          </Button>
-        </div>
-      </div>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className="flex gap-4 h-[calc(100vh-220px)]">
+        {/* ── Left: Room Grid ── */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* Date nav */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <Button variant="outline" size="icon" className="h-8 w-8"
+              onClick={() => setSelectedDate(d => format(subDays(parseISO(d), 1), 'yyyy-MM-dd'))}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="w-36 h-8 text-sm"
+            />
+            <Button variant="outline" size="icon" className="h-8 w-8"
+              onClick={() => setSelectedDate(d => format(addDays(parseISO(d), 1), 'yyyy-MM-dd'))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="text-xs h-8"
+              onClick={() => setSelectedDate(getTodayKST())}>오늘</Button>
 
-      {/* ── Room summary badges ── */}
-      <div className="flex gap-2">
-        {ROOMS.map(room => {
-          const count = assignments.filter(a => a.room === room.value).length;
-          return (
-            <Badge key={room.value} className={cn(room.color, 'text-xs')}>
-              {room.label}: {count}명
-            </Badge>
-          );
-        })}
-      </div>
+            <span className="text-sm font-semibold text-muted-foreground ml-1">{dateLabel}</span>
 
-      {/* ── Grid ── */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="overflow-x-auto">
-            <div className="min-w-[600px]">
-              {/* Header row */}
-              <div className="grid gap-1" style={{ gridTemplateColumns: '60px 1fr 1fr' }}>
-                <div className="text-xs font-medium text-muted-foreground p-2">시간</div>
+            <div className="ml-auto flex items-center gap-1">
+              <Button size="sm" variant="outline" className="gap-1 text-xs h-8"
+                onClick={handleCopy}>
+                <Copy className="w-3.5 h-3.5" /> 복사
+              </Button>
+              {copiedDate && copiedDate !== selectedDate && (
+                <Button size="sm" variant="outline" className="gap-1 text-xs h-8"
+                  onClick={handlePaste} disabled={copying}>
+                  {copying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardPaste className="w-3.5 h-3.5" />}
+                  붙여넣기
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Room summary */}
+          <div className="flex gap-2 mb-3">
+            {ROOMS.map(room => {
+              const count = assignments.filter(a => a.room === room.value)
+                .reduce((sum, a) => sum + (a.student_names?.length || 0), 0);
+              return (
+                <Badge key={room.value} className={cn(room.color, 'text-xs')}>
+                  {room.label}: {count}명
+                </Badge>
+              );
+            })}
+          </div>
+
+          {/* Grid */}
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-auto border rounded-lg bg-background">
+              {/* Header */}
+              <div className="flex border-b bg-muted/30 sticky top-0 z-10">
+                <div className="w-14 shrink-0 p-2 text-xs font-medium text-muted-foreground">시간</div>
                 {ROOMS.map(room => (
-                  <div key={room.value} className="text-center p-2">
+                  <div key={room.value} className="flex-1 min-w-[140px] p-2 text-center">
                     <Badge className={cn(room.color, 'text-xs')}>{room.label}</Badge>
                   </div>
                 ))}
               </div>
 
-              {/* Slot rows */}
-              {slots.map(slot => (
-                <div key={slot} className="grid gap-1 border-t border-border/30"
-                  style={{ gridTemplateColumns: '60px 1fr 1fr' }}>
-                  <div className="text-xs font-mono text-muted-foreground p-2 flex items-start pt-3">
-                    {slot}
-                  </div>
-                  {ROOMS.map(room => {
-                    const slotId = `${room.value}|${slot}`;
-                    const items = gridData[room.value]?.[slot] || [];
-                    return (
-                      <DroppableSlot key={slotId} slotId={slotId}>
-                        {items.map(a => (
-                          <div key={a.id} className="group relative">
-                            <DraggableCard assignment={a} />
-                            <button
-                              onClick={() => handleDelete(a.id)}
-                              className="absolute -top-1 -right-1 hidden group-hover:flex
-                                         w-4 h-4 items-center justify-center rounded-full
-                                         bg-destructive text-destructive-foreground text-[10px]"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </DroppableSlot>
-                    );
-                  })}
+              {/* Rows */}
+              <div className="flex">
+                {/* Time column */}
+                <div className="w-14 shrink-0">
+                  {slots.map(slot => (
+                    <div key={slot} style={{ height: SLOT_HEIGHT }}
+                      className="flex items-center justify-center text-[11px] font-mono text-muted-foreground border-b border-border/20">
+                      {slot}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
 
-          <DragOverlay>
-            {activeItem && (
-              <div className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs bg-background shadow-lg">
-                <GripVertical className="w-3 h-3 text-muted-foreground" />
-                <span className="font-medium">{activeItem.student_name}</span>
-                {activeItem.subject && (
-                  <Badge variant="outline" className="text-[10px] px-1 py-0">{activeItem.subject}</Badge>
-                )}
+                {/* Room columns */}
+                {ROOMS.map(room => (
+                  <RoomColumn
+                    key={room.value}
+                    room={room.value}
+                    slots={slots}
+                    assignments={assignments.filter(a => a.room === room.value)}
+                    selectedCount={selectedCount}
+                    onRemove={handleRemove}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Right: Student Panel ── */}
+        <div className="w-64 shrink-0 flex flex-col border rounded-lg bg-background">
+          <div className="p-3 border-b space-y-3">
+            <h3 className="text-sm font-bold flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-primary" />
+              학생 선택
+            </h3>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                placeholder="이름 검색..."
+                value={studentSearch}
+                onChange={e => setStudentSearch(e.target.value)}
+                className="h-8 text-xs pl-7"
+              />
+            </div>
+
+            {/* Duration */}
+            <div>
+              <Label className="text-xs text-muted-foreground">머무는 시간</Label>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {[1, 2, 3, 4, 6].map(n => (
+                  <button key={n}
+                    onClick={() => setDurationSlots(n)}
+                    className={cn(
+                      'text-xs px-2 py-1 rounded border transition-colors',
+                      durationSlots === n
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border hover:border-primary/50'
+                    )}>
+                    {n === 1 ? '30분' : n === 2 ? '1시간' : n === 3 ? '1.5h' : n === 4 ? '2시간' : '3시간'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Subject */}
+            <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="과목 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">과목 없음</SelectItem>
+                <SelectItem value="수학">수학</SelectItem>
+                <SelectItem value="영어">영어</SelectItem>
+                <SelectItem value="국어">국어</SelectItem>
+                <SelectItem value="과학">과학</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Selected count */}
+            {selectedCount > 0 && (
+              <div className="rounded-lg bg-primary/10 border border-primary/30 p-2 text-center">
+                <Badge className="bg-primary text-primary-foreground text-xs">{selectedCount}명 선택됨</Badge>
+                <p className="text-[10px] text-muted-foreground mt-1">시간 슬롯으로 드래그하세요</p>
               </div>
             )}
-          </DragOverlay>
-        </DndContext>
-      )}
+          </div>
 
-      {/* ── Add Dialog ── */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>강의실 배정 추가</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>강의실</Label>
-                <Select value={addRoom} onValueChange={setAddRoom}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ROOMS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>시간 슬롯</Label>
-                <Select value={addSlot} onValueChange={setAddSlot}>
-                  <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
-                  <SelectContent>
-                    {slots.map(s => <SelectItem key={s} value={s}>{s}~{slotEnd(s)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div>
-              <Label>학생</Label>
-              <Input placeholder="이름 검색..." value={studentSearch}
-                onChange={e => setStudentSearch(e.target.value)} className="mb-1 h-8 text-xs" />
-              <Select value={addStudentId} onValueChange={setAddStudentId}>
-                <SelectTrigger><SelectValue placeholder="학생 선택" /></SelectTrigger>
-                <SelectContent>
-                  {filteredStudents.slice(0, 50).map(s =>
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>담당 선생님</Label>
-              <Select value={addTeacherId} onValueChange={setAddTeacherId}>
-                <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
-                <SelectContent>
-                  {teachers.map(t =>
-                    <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>과목</Label>
-                <Select value={addSubject} onValueChange={setAddSubject}>
-                  <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="수학">수학</SelectItem>
-                    <SelectItem value="영어">영어</SelectItem>
-                    <SelectItem value="국어">국어</SelectItem>
-                    <SelectItem value="과학">과학</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>메모</Label>
-                <Input value={addMemo} onChange={e => setAddMemo(e.target.value)}
-                  placeholder="메모" className="h-9" />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Checkbox checked={addIsRoutine}
-                onCheckedChange={v => setAddIsRoutine(!!v)} id="routine-check" />
-              <Label htmlFor="routine-check" className="text-sm">정기 루틴</Label>
-            </div>
-
-            {addIsRoutine && (
-              <div>
-                <Label>반복 요일</Label>
-                <div className="flex gap-1 mt-1">
-                  {DAY_LABELS.map((label, idx) => (
-                    <Button key={idx} type="button" size="sm"
-                      variant={addRoutineDays.includes(idx) ? 'default' : 'outline'}
-                      className="w-9 h-8 text-xs"
-                      onClick={() => setAddRoutineDays(prev =>
-                        prev.includes(idx) ? prev.filter(x => x !== idx) : [...prev, idx].sort()
-                      )}>
-                      {label}
-                    </Button>
+          {/* Student list */}
+          <div className="flex-1 overflow-auto p-2 space-y-3">
+            {Object.entries(groupedStudents).map(([grade, gradeStudents]) => (
+              <div key={grade}>
+                <p className="text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider">{grade}</p>
+                <div className="space-y-1">
+                  {gradeStudents.map(student => (
+                    <DraggableStudentChip
+                      key={student.id}
+                      student={student}
+                      isSelected={selectedStudentIds.has(student.id)}
+                      onToggle={() => toggleStudent(student.id)}
+                      selectedIds={selectedStudentIds}
+                      allStudents={students}
+                      durationSlots={durationSlots}
+                      subject={selectedSubject === 'none' ? '' : selectedSubject}
+                    />
                   ))}
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Drag Overlay */}
+      <DragOverlay>
+        {activeDragData && (
+          <div className="flex items-center gap-1.5 rounded-lg border border-primary bg-primary/10 px-3 py-2 text-xs font-medium shadow-lg">
+            <Users className="w-3.5 h-3.5 text-primary" />
+            <span>{activeDragData.studentNames?.join(', ')}</span>
+            {activeDragData.subject && (
+              <Badge variant="outline" className="text-[10px] px-1 py-0">{activeDragData.subject}</Badge>
             )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowAddDialog(false)}>취소</Button>
-              <Button onClick={handleAdd} disabled={saving}>
-                {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
-                배정
-              </Button>
-            </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Copy Dialog ── */}
-      <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>배정 복사</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>원본 날짜</Label>
-              <p className="text-sm font-medium">{dateLabel}</p>
-            </div>
-            <div>
-              <Label>강의실</Label>
-              <Select value={copyRoom} onValueChange={setCopyRoom}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ROOMS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>대상 날짜</Label>
-              <Input type="date" value={copyTargetDate}
-                onChange={e => setCopyTargetDate(e.target.value)} />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowCopyDialog(false)}>취소</Button>
-              <Button onClick={handleCopyDay} disabled={copying}>
-                {copying ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Copy className="w-4 h-4 mr-1" />}
-                복사
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 }
