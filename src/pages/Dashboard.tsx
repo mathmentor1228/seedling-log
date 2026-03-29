@@ -909,7 +909,7 @@ export default function Dashboard() {
       // Fetch lesson status for all student/class pairs
       if (rosterRows.length > 0) {
         const studentIds = [...new Set(rosterRows.map((r: any) => r.student_id))] as string[];
-        const classIds = [...new Set(rosterRows.map((r: any) => r.class_id))] as string[];
+        const classIds = [...new Set(rosterRows.map((r: any) => r.class_id))].filter((id: string) => !id.startsWith('exam-prep-')) as string[];
         
         // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homework_status in select
         const { data: lessonRecords } = await supabase
