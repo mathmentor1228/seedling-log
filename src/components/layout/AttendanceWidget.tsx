@@ -167,7 +167,7 @@ export function AttendanceWidget() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [role, fetchData]);
+  }, [user?.id, fetchData]);
 
   if (!user) return null;
 
