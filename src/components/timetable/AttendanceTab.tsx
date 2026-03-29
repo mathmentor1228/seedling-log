@@ -117,12 +117,23 @@ export function AttendanceTab() {
       .in('id', allStudentIds);
 
     // Fetch teacher names via class_students -> classes -> profiles
+    // A student may belong to multiple classes; collect all teacher mappings
     const { data: csData } = await supabase
       .from('class_students')
-      .select('student_id, classes!inner(teacher_id, subject)')
+      .select('student_id, class_id, classes!inner(teacher_id)')
       .in('student_id', allStudentIds);
 
-    const teacherIds = [...new Set((csData || []).map((c: any) => c.classes?.teacher_id).filter(Boolean))];
+    const teacherIds = [...new Set(
+      (csData || [])
+        .map((c: any) => {
+          const cls = c.classes;
+          if (Array.isArray(cls)) return cls.map((x: any) => x.teacher_id);
+          return cls?.teacher_id;
+        })
+        .flat()
+        .filter(Boolean)
+    )];
+
     let teacherMap: Record<string, string> = {};
     if (teacherIds.length > 0) {
       const { data: profiles } = await supabase
@@ -132,9 +143,12 @@ export function AttendanceTab() {
       (profiles || []).forEach((p: any) => { teacherMap[p.id] = p.full_name; });
     }
 
+    // Map each student to their first found teacher name
     const studentTeacher: Record<string, string> = {};
     (csData || []).forEach((c: any) => {
-      const tid = c.classes?.teacher_id;
+      if (studentTeacher[c.student_id]) return; // keep first match
+      const cls = c.classes;
+      const tid = Array.isArray(cls) ? cls[0]?.teacher_id : cls?.teacher_id;
       if (tid && teacherMap[tid]) studentTeacher[c.student_id] = teacherMap[tid];
     });
 
