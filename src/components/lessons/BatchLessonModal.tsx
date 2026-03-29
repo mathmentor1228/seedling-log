@@ -261,6 +261,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       setHomeworkStatus(first.homework_status || 'none_assigned');
       setNotes(first.notes || '');
       setNextLessonGoal(first.next_lesson_goal || '');
+      // Pre-fill test content from existing data
+      setTestContent(first.test_content || first.test_name || '');
     }
     setStep('edit');
   }
