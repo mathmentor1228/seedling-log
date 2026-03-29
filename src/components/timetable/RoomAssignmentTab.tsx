@@ -83,13 +83,14 @@ function slotToMinutes(slot: string): number {
   return h * 60 + m;
 }
 
-const GRADE_ORDER = ['중1', '중2', '중3', '고1', '고2', '고3', '기타'];
+const GRADE_ORDER = ['고3', '고2', '고1', '기타'];
 
-function getGradeGroup(grade: string | null): string {
-  if (!grade) return '기타';
-  for (const g of ['중1', '중2', '중3', '고1', '고2', '고3']) {
-    if (grade.includes(g)) return g;
-  }
+function getGradeGroup(grade: string | number | null): string {
+  if (!grade && grade !== 0) return '기타';
+  const g = String(grade).trim();
+  if (g === '3') return '고3';
+  if (g === '2') return '고2';
+  if (g === '1') return '고1';
   return '기타';
 }
 
