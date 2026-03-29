@@ -36,6 +36,7 @@ import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
 import { BrandFooter } from '@/components/layout/BrandFooter';
 import { AttendanceWidget } from '@/components/layout/AttendanceWidget';
+import { FloatingAttendanceWidget } from '@/components/layout/FloatingAttendanceWidget';
 
 interface AppLayoutProps {
   children: ReactNode;
