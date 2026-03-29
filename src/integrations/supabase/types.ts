@@ -2039,9 +2039,11 @@ export type Database = {
       }
       room_assignments: {
         Row: {
-          assigned_date: string
+          assigned_date: string | null
           created_at: string
+          day: string | null
           id: string
+          is_fixed: boolean
           is_routine: boolean
           memo: string | null
           room: string
@@ -2057,9 +2059,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          assigned_date: string
+          assigned_date?: string | null
           created_at?: string
+          day?: string | null
           id?: string
+          is_fixed?: boolean
           is_routine?: boolean
           memo?: string | null
           room: string
@@ -2075,9 +2079,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          assigned_date?: string
+          assigned_date?: string | null
           created_at?: string
+          day?: string | null
           id?: string
+          is_fixed?: boolean
           is_routine?: boolean
           memo?: string | null
           room?: string
