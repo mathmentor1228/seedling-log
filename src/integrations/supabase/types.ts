@@ -2048,9 +2048,12 @@ export type Database = {
           routine_days: Json | null
           slot_end: string
           slot_start: string
-          student_id: string
+          span: number
+          student_id: string | null
+          student_ids: Json | null
+          student_names: Json | null
           subject: string | null
-          teacher_id: string
+          teacher_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2063,9 +2066,12 @@ export type Database = {
           routine_days?: Json | null
           slot_end: string
           slot_start: string
-          student_id: string
+          span?: number
+          student_id?: string | null
+          student_ids?: Json | null
+          student_names?: Json | null
           subject?: string | null
-          teacher_id: string
+          teacher_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2078,9 +2084,12 @@ export type Database = {
           routine_days?: Json | null
           slot_end?: string
           slot_start?: string
-          student_id?: string
+          span?: number
+          student_id?: string | null
+          student_ids?: Json | null
+          student_names?: Json | null
           subject?: string | null
-          teacher_id?: string
+          teacher_id?: string | null
           updated_at?: string
         }
         Relationships: [
