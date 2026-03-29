@@ -386,6 +386,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         </main>
         <BrandFooter />
       </div>
+
+      {/* Floating attendance widget for assistant/admin */}
+      <FloatingAttendanceWidget />
     </div>
   );
 }
