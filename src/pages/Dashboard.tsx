@@ -2900,11 +2900,40 @@ export default function Dashboard() {
                                         <Badge className="bg-violet-100 text-violet-700 border-violet-300 text-[10px] px-1.5 py-0">내신특강</Badge>
                                       )}
                                     </div>
-                                    {slot.startTime !== '99:99' ? (
-                                      <span className="text-sm text-muted-foreground font-medium">{slot.startTime}–{slot.endTime}</span>
-                                    ) : (
-                                      <span className="text-sm text-muted-foreground font-medium">시간 미정</span>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                      {!slot.rows.some((r: any) => r.isExamPrep) && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground gap-1"
+                                          onClick={() => {
+                                            const slotStudents = slot.rows.map((r: any) => {
+                                              const statusKey = `${r.student_id}:${r.class_id}:${r.subject}`;
+                                              const ls = lessonStatusMap[statusKey];
+                                              return {
+                                                id: r.student_id,
+                                                name: r.student_name,
+                                                lessonRecordId: ls?.recordId || null,
+                                              };
+                                            });
+                                            setBatchTestContext({
+                                              students: slotStudents,
+                                              subject: slot.subject,
+                                              className: slot.className,
+                                            });
+                                            setBatchTestModalOpen(true);
+                                          }}
+                                        >
+                                          <TestTube2 className="w-3.5 h-3.5" />
+                                          테스트 일괄
+                                        </Button>
+                                      )}
+                                      {slot.startTime !== '99:99' ? (
+                                        <span className="text-sm text-muted-foreground font-medium">{slot.startTime}–{slot.endTime}</span>
+                                      ) : (
+                                        <span className="text-sm text-muted-foreground font-medium">시간 미정</span>
+                                      )}
+                                    </div>
                                   </div>
                                   {/* Student rows */}
                                   <div className="divide-y divide-border/50">
