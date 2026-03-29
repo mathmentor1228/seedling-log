@@ -1035,7 +1035,7 @@ export function Timetable() {
           />
         ) : (
         <Tabs defaultValue="day" className="space-y-4">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-5">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-6">
             <TabsTrigger value="day" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
               <Calendar className="w-4 h-4 mr-1 hidden sm:inline" />
               요일별
@@ -1055,6 +1055,10 @@ export function Timetable() {
             <TabsTrigger value="create" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
               <Pencil className="w-4 h-4 mr-1 hidden sm:inline" />
               수업 만들기
+            </TabsTrigger>
+            <TabsTrigger value="room" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm xl:min-h-0 xl:whitespace-nowrap">
+              <DoorOpen className="w-4 h-4 mr-1 hidden sm:inline" />
+              강의실 배정
             </TabsTrigger>
           </TabsList>
 
