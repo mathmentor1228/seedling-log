@@ -2037,6 +2037,89 @@ export type Database = {
         }
         Relationships: []
       }
+      room_assignments: {
+        Row: {
+          assigned_date: string
+          created_at: string
+          id: string
+          is_routine: boolean
+          memo: string | null
+          room: string
+          routine_days: Json | null
+          slot_end: string
+          slot_start: string
+          student_id: string
+          subject: string | null
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_date: string
+          created_at?: string
+          id?: string
+          is_routine?: boolean
+          memo?: string | null
+          room: string
+          routine_days?: Json | null
+          slot_end: string
+          slot_start: string
+          student_id: string
+          subject?: string | null
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_date?: string
+          created_at?: string
+          id?: string
+          is_routine?: boolean
+          memo?: string | null
+          room?: string
+          routine_days?: Json | null
+          slot_end?: string
+          slot_start?: string
+          student_id?: string
+          subject?: string | null
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_assignments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_slot_copies: {
+        Row: {
+          copied_by: string
+          created_at: string
+          id: string
+          room: string
+          source_date: string
+          target_date: string
+        }
+        Insert: {
+          copied_by: string
+          created_at?: string
+          id?: string
+          room: string
+          source_date: string
+          target_date: string
+        }
+        Update: {
+          copied_by?: string
+          created_at?: string
+          id?: string
+          room?: string
+          source_date?: string
+          target_date?: string
+        }
+        Relationships: []
+      }
       routine_schedules: {
         Row: {
           assistant_name: string | null
