@@ -16,16 +16,17 @@ export function FloatingAttendanceWidget() {
 
   const effectiveRole = role === 'assistant' || role === 'teacher' || role === 'admin' ? role : null;
 
-  const { entries, allEntries, roomCounts, capacities, loading } = useAttendanceData({
+  const { entries, setEntries, allEntries, setAllEntries, roomCounts, setRoomCounts, capacities, loading, refetch } = useAttendanceData({
     userId: user?.id,
     role: effectiveRole,
     selectedRoom,
   });
 
-  const { handleCheckIn, handleCheckOut, handleCancelCheckIn, handleCancelCheckOut } = useAttendanceActions(
+  const { handleCheckIn, handleCheckOut, handleCancelCheckIn, handleCancelCheckOut, loadingIds } = useAttendanceActions(
     user?.id,
     roomCounts,
-    capacities
+    capacities,
+    { setEntries, setAllEntries, setRoomCounts, refetch }
   );
 
   // Role guard
