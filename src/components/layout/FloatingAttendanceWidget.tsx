@@ -119,6 +119,7 @@ export function FloatingAttendanceWidget() {
         <TeacherView
           entries={allEntries}
           loading={loading}
+          loadingIds={loadingIds}
           teacherName={user?.user_metadata?.full_name || user?.email?.split('@')[0] || ''}
           onCheckIn={handleCheckIn}
           onCheckOut={handleCheckOut}
