@@ -117,8 +117,14 @@ function StatusColumn({ col, students, onAbsenceClick, blinkMap }: {
   onAbsenceClick: (s: StudentCard) => void;
   blinkMap: Map<string, 'orange' | 'red'>;
 }) {
+  const { setNodeRef, isOver } = useDroppable({ id: col.key });
+
   return (
-    <div className={`rounded-xl border ${col.color} p-3 min-h-[200px] flex flex-col`}>
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border ${col.color} p-3 min-h-[200px] flex flex-col transition-colors
+        ${isOver ? 'ring-2 ring-blue-500/50 bg-blue-900/10' : ''}`}
+    >
       <div className="flex items-center gap-2 mb-3">
         <div className={`w-2 h-2 rounded-full ${col.dotColor}`} />
         <h3 className="text-xs font-semibold text-gray-300">{col.label}</h3>
