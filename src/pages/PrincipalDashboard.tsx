@@ -473,7 +473,7 @@ function PrincipalContent() {
 /* ------------------------------------------------------------------ */
 export default function PrincipalDashboard() {
   return (
-    <ProtectedRoute allowedRoles={['admin']}>
+    <ProtectedRoute allowedRoles={['admin']} noLayout>
       <PrincipalContent />
     </ProtectedRoute>
   );
