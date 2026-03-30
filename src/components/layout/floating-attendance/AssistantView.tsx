@@ -158,6 +158,7 @@ export function AssistantView({
               <StudentRow
                 key={`${e.studentId}_${e.roomId}`}
                 entry={e}
+                isLoading={loadingIds.has(e.studentId) || (e.logId ? loadingIds.has(e.logId) : false)}
                 onCheckIn={onCheckIn}
                 onCheckOut={onCheckOut}
                 onCancelCheckIn={onCancelCheckIn}

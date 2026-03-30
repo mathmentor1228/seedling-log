@@ -50,6 +50,7 @@ export function TeacherView({
               key={`${e.studentId}_${e.roomId}`}
               entry={e}
               showRoom
+              isLoading={loadingIds.has(e.studentId) || (e.logId ? loadingIds.has(e.logId) : false)}
               onCheckIn={onCheckIn}
               onCheckOut={onCheckOut}
               onCancelCheckIn={onCancelCheckIn}
