@@ -500,6 +500,7 @@ function TeacherAttendanceView() {
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([]);
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
