@@ -241,7 +241,7 @@ function PrincipalContent() {
       </div>
 
       <PageTransition>
-        <main className="p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
+        <div className="space-y-6">
           {/* STATS */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 animate-stagger">
             <StatCard icon={CheckCircle} label="전체 출석률" value={attendanceRate} sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 출석`} color="green" />
