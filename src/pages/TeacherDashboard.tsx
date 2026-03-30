@@ -18,9 +18,9 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
   DndContext, DragEndEvent, DragStartEvent, DragOverlay,
-  useSensor, useSensors, PointerSensor, useDroppable,
+  useSensor, useSensors, PointerSensor, useDroppable, useDraggable,
+  closestCenter,
 } from '@dnd-kit/core';
-import { useDraggable } from '@dnd-kit/core';
 import {
   LogOut, AlertTriangle, CalendarIcon, Clock, Loader2, GripVertical,
 } from 'lucide-react';
