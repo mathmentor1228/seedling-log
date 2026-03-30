@@ -13,6 +13,7 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: AllowedRole[];
   allowedEmails?: string[];
+  noLayout?: boolean;
 }
 
 const isEmailAllowed = (userEmail: string | undefined, allowedEmails?: string[]) => {
@@ -21,7 +22,7 @@ const isEmailAllowed = (userEmail: string | undefined, allowedEmails?: string[])
   return allowedEmails.some((email) => email.trim().toLowerCase() === normalizedUserEmail);
 };
 
-export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails, noLayout }: ProtectedRouteProps) {
   const { user, loading, role, isTrial, trialExpiresAt, isTrialExpired, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -116,6 +117,10 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
   const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role) || emailAllowed;
   if (!hasAccess) {
     return null;
+  }
+
+  if (noLayout) {
+    return <>{children}</>;
   }
 
   return (
