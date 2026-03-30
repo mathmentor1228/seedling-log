@@ -10,6 +10,7 @@ interface AssistantViewProps {
   roomCounts: Record<string, number>;
   capacities: Record<string, number>;
   loading: boolean;
+  loadingIds: Set<string>;
   onCheckIn: (studentId: string, roomId: string) => void;
   onCheckOut: (logId: string) => void;
   onCancelCheckIn: (logId: string) => void;
