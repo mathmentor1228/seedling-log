@@ -847,6 +847,7 @@ export default function Lessons() {
                 <TabsTrigger value="math-questions" className="relative">
                   📚 수학질문방
                 </TabsTrigger>
+                <TabsTrigger value="math-analytics">📊 질문분석</TabsTrigger>
               </>
             )}
           </TabsList>
