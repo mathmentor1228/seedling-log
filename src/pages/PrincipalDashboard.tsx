@@ -433,7 +433,7 @@ function PrincipalContent() {
 
 export default function PrincipalDashboard() {
   return (
-    <ProtectedRoute allowedRoles={['admin']} noLayout>
+    <ProtectedRoute allowedRoles={['admin']}>
       <PrincipalContent />
     </ProtectedRoute>
   );
