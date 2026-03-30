@@ -39,6 +39,7 @@ import { SelfStudyTab } from '@/components/lessons/SelfStudyTab';
 import { ClinicTab } from '@/components/lessons/ClinicTab';
 import { StudentProfileTab } from '@/components/lessons/StudentProfileTab';
 import MathQuestionBoard from '@/components/lessons/MathQuestionBoard';
+import MathQuestionAnalytics from '@/components/lessons/MathQuestionAnalytics';
 
 interface Teacher {
   id: string;
