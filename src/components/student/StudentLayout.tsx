@@ -150,20 +150,25 @@ const NAV_ITEMS = [
              const isActive = location.pathname === item.path || 
                (item.path !== '/student' && location.pathname.startsWith(item.path));
              
-             return (
-               <Link
-                 key={item.path}
-                 to={item.path}
-                 className={cn(
-                   "flex flex-col items-center justify-center w-16 h-full transition-all",
-                   isActive 
-                     ? 'text-primary' 
-                     : 'text-muted-foreground hover:text-foreground'
-                 )}
-               >
-                 <item.icon className={cn("w-5 h-5", isActive && 'stroke-[2.5px]')} />
-                 <span className={cn("text-[10px] mt-1 font-medium", isActive && "font-semibold")}>{item.label}</span>
-               </Link>
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex flex-col items-center justify-center w-16 h-full transition-all relative",
+                    isActive 
+                      ? 'text-primary' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <item.icon className={cn("w-5 h-5", isActive && 'stroke-[2.5px]')} />
+                  <span className={cn("text-[10px] mt-1 font-medium", isActive && "font-semibold")}>{item.label}</span>
+                  {item.path === '/student/schedule' && newAnswerCount > 0 && (
+                    <span className="absolute top-1 right-2 w-4 h-4 bg-destructive text-destructive-foreground text-[9px] rounded-full flex items-center justify-center font-bold animate-pulse">
+                      {newAnswerCount > 9 ? '9+' : newAnswerCount}
+                    </span>
+                  )}
+                </Link>
              );
            })}
          </div>
