@@ -9,13 +9,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
-  LogOut, CheckCircle, Clock, XCircle, Users, AlertTriangle, Loader2,
+  LogOut, CheckCircle, Clock, XCircle, Users, AlertTriangle, Loader2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import useEmblaCarousel from 'embla-carousel-react';
+import Dashboard from './Dashboard';
+import { cn } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
