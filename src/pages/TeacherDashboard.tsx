@@ -666,6 +666,7 @@ function TeacherAttendanceView() {
     sonnerToast.success(`${student.name} → ${action}`, { duration: 2000 });
   }, [students, today, teacherId]);
 
+  const handleMarkAllPresent = async () => {
     const pendingStudents = students.filter(s => s.status === '미등원' || s.status === '등원');
     if (pendingStudents.length === 0) { toast({ title: '전원 출석 상태입니다', description: '미등원/등원 학생이 없습니다.' }); return; }
     setMarkingAll(true);
