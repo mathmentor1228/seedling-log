@@ -14,7 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { ASSISTANTS, ROOMS } from './constants';
 import { useTeachersList } from './useTeachersList';
-import { Plus, Trash2, Calendar, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Calendar, Loader2, Pencil } from 'lucide-react';
 import { startOfWeek, addDays, format } from 'date-fns';
 
 interface RoutineModalProps {
@@ -35,6 +35,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
 
   // Form
   const [days, setDays] = useState<number[]>([]);
@@ -78,16 +79,30 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
     setSelectedStudents(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
+  function startEditing(routine: any) {
+    setEditingRoutineId(routine.id);
+    setDays([routine.day_of_week]);
+    setTeacherId(routine.teacher_id || '');
+    setSubject(routine.subject || '');
+    setRoom(routine.room || 'general');
+    setStartTime(routine.start_time?.slice(0, 5) || '');
+    setEndTime(routine.end_time?.slice(0, 5) || '');
+    setSelectedStudents(Array.isArray(routine.student_ids) ? routine.student_ids : []);
+    setTemplateContent(routine.template_content || '');
+    setAssistantName(routine.assistant_name || '');
+    setShowForm(true);
+  }
+
   async function handleSaveRoutine() {
     if (days.length === 0 || !teacherId || selectedStudents.length === 0) {
       toast({ title: '요일, 선생님, 학생을 선택해주세요', variant: 'destructive' });
       return;
     }
     setSaving(true);
-    const inserts = days.map(d => ({
+
+    const payload = {
       type,
       teacher_id: teacherId,
-      day_of_week: d,
       start_time: startTime || null,
       end_time: endTime || null,
       student_ids: selectedStudents,
@@ -95,15 +110,35 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
       room,
       template_content: templateContent || null,
       assistant_name: type === 'test' ? (assistantName && assistantName !== 'none' ? assistantName : null) : null,
-    }));
-    const { error } = await supabase.from('routine_schedules').insert(inserts);
-    if (error) {
-      toast({ title: '저장 실패', variant: 'destructive' });
+    };
+
+    if (editingRoutineId) {
+      // Update existing routine
+      const { error } = await supabase
+        .from('routine_schedules')
+        .update({ ...payload, day_of_week: days[0] })
+        .eq('id', editingRoutineId);
+      if (error) {
+        toast({ title: '수정 실패', variant: 'destructive' });
+      } else {
+        toast({ title: '루틴이 수정되었습니다' });
+        setShowForm(false);
+        setEditingRoutineId(null);
+        resetForm();
+        fetchRoutines();
+      }
     } else {
-      toast({ title: '루틴이 저장되었습니다' });
-      setShowForm(false);
-      resetForm();
-      fetchRoutines();
+      // Insert new routines
+      const inserts = days.map(d => ({ ...payload, day_of_week: d }));
+      const { error } = await supabase.from('routine_schedules').insert(inserts);
+      if (error) {
+        toast({ title: '저장 실패', variant: 'destructive' });
+      } else {
+        toast({ title: '루틴이 저장되었습니다' });
+        setShowForm(false);
+        resetForm();
+        fetchRoutines();
+      }
     }
     setSaving(false);
   }
@@ -112,6 +147,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
     setDays([]); setTeacherId(''); setSubject(''); setRoom('general');
     setStartTime(''); setEndTime(''); setSelectedStudents([]);
     setTemplateContent(''); setAssistantName(''); setStudentSearch('');
+    setEditingRoutineId(null);
   }
 
   async function handleDeleteRoutine(id: string) {
@@ -162,52 +198,61 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
 
   async function confirmGenerate() {
     setGenerating(true);
-    const table = type === 'test' ? 'test_records' : type === 'self_study' ? 'self_study_records' : 'clinic_records';
-    const inserts = previewRows.map(r => {
-      if (type === 'test') {
-        return {
-          student_id: r.studentId,
-          teacher_id: r.teacherId,
-          test_date: r.date,
-          start_time: r.startTime,
-          end_time: r.endTime,
-          subject: r.subject || '수학',
-          test_type: 'regular',
-          content: r.templateContent || '',
-          room: r.room,
-          assistant_name: r.assistantName,
-        };
-      } else if (type === 'self_study') {
-        return {
-          student_id: r.studentId,
-          teacher_id: r.teacherId,
-          study_date: r.date,
-          start_time: r.startTime,
-          end_time: r.endTime,
-          subject: r.subject,
-          room: r.room,
-          task_list: [],
-        };
-      } else {
-        return {
-          student_id: r.studentId,
-          teacher_id: r.teacherId,
-          clinic_date: r.date,
-          start_time: r.startTime,
-          end_time: r.endTime,
-          subject: r.subject || '수학',
-          content: r.templateContent || '',
-          room: r.room,
-        };
-      }
-    });
 
-    const { error } = await supabase.from(table).insert(inserts);
-    if (error) {
-      toast({ title: '생성 실패', description: error.message, variant: 'destructive' });
+    if (type === 'test') {
+      // Insert into test_schedules for proper integration
+      const rows = previewRows.map(r => ({
+        student_id: r.studentId,
+        teacher_id: r.teacherId,
+        test_date: r.date,
+        test_time: r.startTime || null,
+        subject: r.subject || '수학',
+        test_type: 'regular',
+        content: r.templateContent || null,
+        title: r.templateContent || null,
+        notes: null,
+      }));
+      const { error } = await supabase.from('test_schedules').insert(rows);
+      if (error) {
+        toast({ title: '생성 실패', description: error.message, variant: 'destructive' });
+      } else {
+        toast({ title: `${previewRows.length}건이 생성되었습니다` });
+        setShowPreview(false);
+      }
     } else {
-      toast({ title: `${previewRows.length}건이 생성되었습니다` });
-      setShowPreview(false);
+      const table = type === 'self_study' ? 'self_study_records' : 'clinic_records';
+      const inserts = previewRows.map(r => {
+        if (type === 'self_study') {
+          return {
+            student_id: r.studentId,
+            teacher_id: r.teacherId,
+            study_date: r.date,
+            start_time: r.startTime,
+            end_time: r.endTime,
+            subject: r.subject,
+            room: r.room,
+            task_list: [],
+          };
+        } else {
+          return {
+            student_id: r.studentId,
+            teacher_id: r.teacherId,
+            clinic_date: r.date,
+            start_time: r.startTime,
+            end_time: r.endTime,
+            subject: r.subject || '수학',
+            content: r.templateContent || '',
+            room: r.room,
+          };
+        }
+      });
+      const { error } = await supabase.from(table).insert(inserts);
+      if (error) {
+        toast({ title: '생성 실패', description: error.message, variant: 'destructive' });
+      } else {
+        toast({ title: `${previewRows.length}건이 생성되었습니다` });
+        setShowPreview(false);
+      }
     }
     setGenerating(false);
   }
@@ -234,20 +279,36 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
             <p className="text-sm text-muted-foreground">등록된 루틴이 없습니다</p>
           ) : routines.map(r => (
             <Card key={r.id}>
-              <CardContent className="p-3 flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline">{DAY_LABELS[r.day_of_week]}요일</Badge>
-                  <span className="text-sm">{(Array.isArray(r.student_ids) ? r.student_ids : []).length}명</span>
-                  {r.subject && <Badge variant="secondary" className="text-xs">{r.subject}</Badge>}
-                  <span className="text-xs text-muted-foreground">{ROOMS.find(rm => rm.value === r.room)?.label}</span>
-                  {r.start_time && <span className="text-xs text-muted-foreground">{r.start_time.slice(0, 5)}~{r.end_time?.slice(0, 5)}</span>}
+              <CardContent className="p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline">{DAY_LABELS[r.day_of_week]}요일</Badge>
+                    <span className="text-sm">{(Array.isArray(r.student_ids) ? r.student_ids : []).length}명</span>
+                    {r.subject && <Badge variant="secondary" className="text-xs">{r.subject}</Badge>}
+                    <span className="text-xs text-muted-foreground">{ROOMS.find(rm => rm.value === r.room)?.label}</span>
+                    {r.start_time && <span className="text-xs text-muted-foreground">{r.start_time.slice(0, 5)}~{r.end_time?.slice(0, 5)}</span>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => startEditing(r)}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <Switch checked={r.is_active} onCheckedChange={v => handleToggleActive(r.id, v)} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteRoutine(r.id)}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={r.is_active} onCheckedChange={v => handleToggleActive(r.id, v)} />
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteRoutine(r.id)}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
+                {/* Show student names */}
+                {Array.isArray(r.student_ids) && r.student_ids.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {r.student_ids.map((sid: string) => studentNameMap[sid] || '?').join(', ')}
+                  </p>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -301,10 +362,12 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
           </Button>
         ) : (
           <div className="space-y-3 border-t pt-3">
-            <h3 className="text-sm font-semibold">새 루틴</h3>
+            <h3 className="text-sm font-semibold">
+              {editingRoutineId ? '루틴 수정' : '새 루틴'}
+            </h3>
 
             <div>
-              <Label>요일 (복수 선택)</Label>
+              <Label>요일 {editingRoutineId ? '(단일)' : '(복수 선택)'}</Label>
               <div className="flex gap-2 mt-1">
                 {DAY_LABELS.map((label, idx) => (
                   <Button
@@ -312,7 +375,13 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
                     type="button"
                     variant={days.includes(idx) ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => toggleDay(idx)}
+                    onClick={() => {
+                      if (editingRoutineId) {
+                        setDays([idx]);
+                      } else {
+                        toggleDay(idx);
+                      }
+                    }}
                     className="w-10"
                   >
                     {label}
@@ -355,7 +424,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
               {type === 'test' && (
                 <div>
                   <Label>담당 조교</Label>
-                  <Select value={assistantName} onValueChange={setAssistantName}>
+                  <Select value={assistantName || 'none'} onValueChange={setAssistantName}>
                     <SelectTrigger><SelectValue placeholder="조교 선택" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">없음</SelectItem>
@@ -397,7 +466,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
 
             <div className="flex gap-2">
               <Button onClick={handleSaveRoutine} disabled={saving}>
-                {saving ? '저장 중...' : '루틴 저장'}
+                {saving ? '저장 중...' : editingRoutineId ? '수정 완료' : '루틴 저장'}
               </Button>
               <Button variant="outline" onClick={() => { setShowForm(false); resetForm(); }}>취소</Button>
             </div>

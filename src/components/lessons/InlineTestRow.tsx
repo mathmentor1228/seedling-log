@@ -104,8 +104,8 @@ export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onU
             className="h-7 text-xs"
           />
         ) : (
-          <span className="text-sm truncate block cursor-pointer hover:text-primary" onClick={startEditing}>
-            {r.content || '-'}
+          <span className={`text-sm truncate block cursor-pointer hover:text-primary ${!r.content ? 'text-orange-500 italic' : ''}`} onClick={startEditing}>
+            {r.content || '(단원기입/제목생성요망)'}
           </span>
         )}
       </TableCell>

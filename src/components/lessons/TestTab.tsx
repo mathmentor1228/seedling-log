@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format, subDays, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
-import { Plus, Settings, CheckCircle2, XCircle, Minus, ChevronDown, ChevronUp, Save, X } from 'lucide-react';
+import { Plus, Settings } from 'lucide-react';
 import { UnifiedRecordModal } from './UnifiedRecordModal';
 import { RoutineModal } from './RoutineModal';
 import { InlineTestRow } from './InlineTestRow';
@@ -17,7 +17,7 @@ import { StudentTestHistory } from './StudentTestHistory';
 
 export interface UnifiedTestRecord {
   id: string;
-  source: 'lesson_record';
+  source: 'lesson_record' | 'test_schedule';
   student_id: string;
   student_name: string;
   teacher_id: string;
@@ -72,21 +72,13 @@ export function TestTab() {
   const fetchRecords = useCallback(async () => {
     setLoading(true);
 
+    // 1. Fetch lesson_records with test data
     let query = supabase
       .from('lesson_records')
       .select(`
-        id,
-        student_id,
-        teacher_id,
-        lesson_date,
-        subject,
-        test_content,
-        test_title,
-        test_result_text,
-        test_result,
-        english_pass_fail,
-        test_assistant,
-        test_name,
+        id, student_id, teacher_id, lesson_date, subject,
+        test_content, test_title, test_result_text, test_result,
+        english_pass_fail, test_assistant, test_name,
         students!inner(name)
       `)
       .not('test_content', 'is', null)
@@ -97,24 +89,40 @@ export function TestTab() {
 
     if (filterSubject !== 'all') query = query.eq('subject', filterSubject as any);
 
-    const { data } = await query;
-    if (!data || data.length === 0) {
-      setRecords([]);
-      setLoading(false);
-      return;
-    }
+    // 2. Fetch test_schedules
+    let schedQuery = supabase
+      .from('test_schedules')
+      .select('*, students!inner(name)')
+      .gte('test_date', startDate)
+      .lte('test_date', endDate)
+      .order('test_date', { ascending: false });
 
-    const teacherIds = [...new Set(data.map((r: any) => r.teacher_id).filter(Boolean))];
+    if (filterSubject !== 'all') schedQuery = schedQuery.eq('subject', filterSubject);
+
+    const [lessonRes, schedRes] = await Promise.all([query, schedQuery]);
+
+    const lessonData = lessonRes.data || [];
+    const schedData = schedRes.data || [];
+
+    // Collect all teacher IDs
+    const allTeacherIds = [
+      ...new Set([
+        ...lessonData.map((r: any) => r.teacher_id),
+        ...schedData.map((r: any) => r.teacher_id),
+      ].filter(Boolean))
+    ];
+
     let teacherMap: Record<string, string> = {};
-    if (teacherIds.length > 0) {
+    if (allTeacherIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, full_name')
-        .in('id', teacherIds);
+        .in('id', allTeacherIds);
       teacherMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name || '알 수 없음']));
     }
 
-    let results: UnifiedTestRecord[] = (data as any[]).map(r => ({
+    // Map lesson_records
+    let results: UnifiedTestRecord[] = (lessonData as any[]).map(r => ({
       id: r.id,
       source: 'lesson_record' as const,
       student_id: r.student_id,
@@ -133,10 +141,38 @@ export function TestTab() {
       test_result: r.test_result,
     }));
 
+    // Map test_schedules - show even without title
+    const schedResults: UnifiedTestRecord[] = (schedData as any[]).map(r => ({
+      id: r.id,
+      source: 'test_schedule' as const,
+      student_id: r.student_id,
+      student_name: r.students?.name || '',
+      teacher_id: r.teacher_id,
+      teacher_name: teacherMap[r.teacher_id] || '알 수 없음',
+      test_date: r.test_date,
+      subject: r.subject,
+      test_type: r.test_type,
+      content: r.content || r.title || '',
+      score: r.result_score || null,
+      passed: r.result_passed,
+      assistant_name: null,
+      room: null,
+      english_pass_fail: null,
+      test_result: r.result_passed === true ? 'pass' : r.result_passed === false ? 'fail' : null,
+    }));
+
+    // Merge, avoiding duplicates (same student + same date + same subject from both sources)
+    const lessonKeys = new Set(results.map(r => `${r.student_id}_${r.test_date}_${r.subject}`));
+    const uniqueScheds = schedResults.filter(r => !lessonKeys.has(`${r.student_id}_${r.test_date}_${r.subject}`));
+    results = [...results, ...uniqueScheds];
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       results = results.filter(r => r.student_name.toLowerCase().includes(q));
     }
+
+    // Sort by date desc
+    results.sort((a, b) => b.test_date.localeCompare(a.test_date));
 
     setRecords(results);
     setLoading(false);
@@ -144,15 +180,12 @@ export function TestTab() {
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
 
-  // Realtime subscription
+  // Realtime subscription for both tables
   useEffect(() => {
     const channel = supabase
       .channel('test-tab-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'lesson_records' },
-        () => { fetchRecords(); }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => fetchRecords())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_schedules' }, () => fetchRecords())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchRecords]);
@@ -167,62 +200,65 @@ export function TestTab() {
       assistant_name?: string | null;
     }
   ) => {
-    // 1. Optimistic local update
-    setRecords(prev => prev.map(r => {
-      if (r.id !== recordId) return r;
-      return { ...r, ...updates };
-    }));
-
-    // 2. Build DB payload
     const rec = records.find(r => r.id === recordId);
     if (!rec) return;
 
-    const subject = rec.subject;
-    let testResult = rec.test_result || 'none';
-    let englishPassFail = rec.english_pass_fail;
-
-    if (updates.passed !== undefined) {
-      if (subject === '영어') {
-        englishPassFail = updates.passed === true ? 'pass' : updates.passed === false ? 'fail' : null;
-        testResult = 'none';
-      } else {
-        testResult = updates.passed === true ? 'pass' : updates.passed === false ? 'fail' : 'none';
-        englishPassFail = null;
-      }
-    }
+    // 1. Optimistic local update
+    setRecords(prev => prev.map(r => r.id !== recordId ? r : { ...r, ...updates }));
 
     try {
-      // Use RPC for test fields
-      const rpcParams: any = {
-        _lesson_id: recordId,
-        _test_result: testResult,
-      };
-      if (updates.content !== undefined) {
-        rpcParams._test_content = updates.content;
-        rpcParams._test_name = updates.content;
-      }
-      if (updates.score !== undefined) {
-        rpcParams._test_result_text = updates.score;
-      }
-      if (updates.assistant_name !== undefined) {
-        rpcParams._test_assistant = updates.assistant_name;
-      }
+      if (rec.source === 'test_schedule') {
+        // Update test_schedules table directly
+        const dbUpdates: any = {};
+        if (updates.content !== undefined) {
+          dbUpdates.content = updates.content;
+          dbUpdates.title = updates.content;
+        }
+        if (updates.score !== undefined) dbUpdates.result_score = updates.score;
+        if (updates.passed !== undefined) dbUpdates.result_passed = updates.passed;
 
-      const { error: rpcError } = await supabase.rpc('update_lesson_test_fields', rpcParams);
-
-      if (rpcError) throw rpcError;
-
-      // If english_pass_fail changed, update directly
-      if (updates.passed !== undefined && subject === '영어') {
-        await supabase
-          .from('lesson_records')
-          .update({ english_pass_fail: englishPassFail })
+        const { error } = await supabase
+          .from('test_schedules')
+          .update(dbUpdates)
           .eq('id', recordId);
+        if (error) throw error;
+      } else {
+        // lesson_record: use RPC
+        const subject = rec.subject;
+        let testResult = rec.test_result || 'none';
+        let englishPassFail = rec.english_pass_fail;
+
+        if (updates.passed !== undefined) {
+          if (subject === '영어') {
+            englishPassFail = updates.passed === true ? 'pass' : updates.passed === false ? 'fail' : null;
+            testResult = 'none';
+          } else {
+            testResult = updates.passed === true ? 'pass' : updates.passed === false ? 'fail' : 'none';
+            englishPassFail = null;
+          }
+        }
+
+        const rpcParams: any = { _lesson_id: recordId, _test_result: testResult };
+        if (updates.content !== undefined) {
+          rpcParams._test_content = updates.content;
+          rpcParams._test_name = updates.content;
+        }
+        if (updates.score !== undefined) rpcParams._test_result_text = updates.score;
+        if (updates.assistant_name !== undefined) rpcParams._test_assistant = updates.assistant_name;
+
+        const { error: rpcError } = await supabase.rpc('update_lesson_test_fields', rpcParams);
+        if (rpcError) throw rpcError;
+
+        if (updates.passed !== undefined && subject === '영어') {
+          await supabase
+            .from('lesson_records')
+            .update({ english_pass_fail: englishPassFail })
+            .eq('id', recordId);
+        }
       }
 
       toast({ title: '저장됨', description: '테스트 기록이 업데이트되었습니다.' });
     } catch (err: any) {
-      // Rollback
       fetchRecords();
       toast({ title: '저장 실패', description: err.message || '다시 시도해주세요.', variant: 'destructive' });
     }
@@ -284,7 +320,6 @@ export function TestTab() {
       {/* Quick date buttons + Filters */}
       <Card>
         <CardContent className="p-3 space-y-2">
-          {/* Quick date row */}
           <div className="flex gap-1.5">
             {([
               { key: 'yesterday', label: '어제' },
