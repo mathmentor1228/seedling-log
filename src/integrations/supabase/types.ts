@@ -2003,6 +2003,44 @@ export type Database = {
         }
         Relationships: []
       }
+      parent_notifications: {
+        Row: {
+          id: string
+          is_read: boolean
+          message: string
+          parent_phone: string
+          student_id: string
+          timestamp: string
+          type: string
+        }
+        Insert: {
+          id?: string
+          is_read?: boolean
+          message: string
+          parent_phone: string
+          student_id: string
+          timestamp?: string
+          type?: string
+        }
+        Update: {
+          id?: string
+          is_read?: boolean
+          message?: string
+          parent_phone?: string
+          student_id?: string
+          timestamp?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_notifications_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parent_portal_visits: {
         Row: {
           id: string
@@ -2025,6 +2063,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "parent_portal_visits_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pattern_alerts: {
+        Row: {
+          created_date: string
+          description: string
+          id: string
+          priority: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          student_id: string | null
+          type: string
+        }
+        Insert: {
+          created_date?: string
+          description: string
+          id?: string
+          priority?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          student_id?: string | null
+          type: string
+        }
+        Update: {
+          created_date?: string
+          description?: string
+          id?: string
+          priority?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          student_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pattern_alerts_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
