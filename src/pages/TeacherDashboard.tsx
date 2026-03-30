@@ -648,7 +648,7 @@ function TeacherAttendanceView() {
 
     // Optimistic update
     setStudents(prev => prev.map(s => s.id === studentId ? { ...s, status: action, statusChangedAt: nowIso } : s));
-    const dbStatus = action === '결석지각' ? '결석' : action;
+    const dbStatus = (action as string) === '결석지각' ? '결석' : action;
     await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
 
     if (action === '입실' || action === '퇴실') {
