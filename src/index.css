@@ -1,10 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Professional Education — Deep Navy + Trust Blue */
+    /* Light theme — kept for non-dashboard pages */
     --background: 210 40% 98%;
     --foreground: 222 47% 11%;
 
@@ -14,8 +16,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Primary: Trust Blue */
-    --primary: 217 91% 60%;
+    --primary: 239 84% 67%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 214 32% 95%;
@@ -27,33 +28,30 @@
     --accent: 210 40% 92%;
     --accent-foreground: 222 47% 11%;
 
-    /* Destructive */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Success */
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning */
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 217 91% 60%;
+    --ring: 239 84% 67%;
 
     --radius: 0.75rem;
 
-    /* Sidebar: Deep Navy */
-    --sidebar-background: 222 47% 17%;
-    --sidebar-foreground: 210 40% 96%;
-    --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 222 47% 17%;
-    --sidebar-accent: 222 40% 24%;
-    --sidebar-accent-foreground: 210 40% 96%;
-    --sidebar-border: 222 40% 24%;
-    --sidebar-ring: 210 40% 96%;
+    /* Sidebar */
+    --sidebar-background: 240 10% 6%;
+    --sidebar-foreground: 240 5% 80%;
+    --sidebar-primary: 239 84% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 6% 12%;
+    --sidebar-accent-foreground: 240 5% 80%;
+    --sidebar-border: 240 6% 14%;
+    --sidebar-ring: 239 84% 67%;
 
     /* Risk colors */
     --risk-low: 142 71% 45%;
@@ -68,7 +66,7 @@
     --score-5: 142 71% 45%;
 
     /* Chart accent colors */
-    --chart-1: 217 91% 60%;
+    --chart-1: 239 84% 67%;
     --chart-2: 142 71% 45%;
     --chart-3: 38 92% 50%;
     --chart-4: 0 84% 60%;
@@ -76,29 +74,30 @@
   }
 
   .dark {
-    --background: 222 47% 4%;
-    --foreground: 210 40% 96%;
+    /* ──── Dark theme: #0A0A0F base ──── */
+    --background: 240 33% 5%;
+    --foreground: 240 5% 90%;
 
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 96%;
+    --card: 240 13% 9%;
+    --card-foreground: 240 5% 90%;
 
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 96%;
+    --popover: 240 13% 9%;
+    --popover-foreground: 240 5% 90%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 4%;
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 222 40% 14%;
-    --secondary-foreground: 210 40% 96%;
+    --secondary: 240 6% 14%;
+    --secondary-foreground: 240 5% 80%;
 
-    --muted: 222 40% 14%;
-    --muted-foreground: 215 16% 56%;
+    --muted: 240 6% 14%;
+    --muted-foreground: 240 5% 55%;
 
-    --accent: 222 40% 18%;
-    --accent-foreground: 210 40% 96%;
+    --accent: 240 6% 18%;
+    --accent-foreground: 240 5% 90%;
 
-    --destructive: 0 63% 45%;
-    --destructive-foreground: 210 40% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
@@ -106,18 +105,18 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 222 40% 16%;
-    --input: 222 40% 16%;
-    --ring: 217 91% 60%;
+    --border: 240 6% 16%;
+    --input: 240 6% 16%;
+    --ring: 239 84% 67%;
 
-    --sidebar-background: 222 47% 3%;
-    --sidebar-foreground: 210 40% 96%;
-    --sidebar-primary: 210 40% 96%;
-    --sidebar-primary-foreground: 222 47% 17%;
-    --sidebar-accent: 222 40% 14%;
-    --sidebar-accent-foreground: 210 40% 96%;
-    --sidebar-border: 222 40% 14%;
-    --sidebar-ring: 210 40% 96%;
+    --sidebar-background: 240 33% 3%;
+    --sidebar-foreground: 240 5% 80%;
+    --sidebar-primary: 239 84% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 6% 12%;
+    --sidebar-accent-foreground: 240 5% 80%;
+    --sidebar-border: 240 6% 12%;
+    --sidebar-ring: 239 84% 67%;
 
     --risk-low: 142 71% 45%;
     --risk-medium: 38 92% 50%;
@@ -129,10 +128,10 @@
     --score-4: 142 60% 45%;
     --score-5: 142 71% 45%;
 
-    --chart-1: 217 91% 60%;
+    --chart-1: 239 84% 67%;
     --chart-2: 142 71% 45%;
     --chart-3: 38 92% 50%;
-    --chart-4: 0 63% 45%;
+    --chart-4: 0 84% 60%;
     --chart-5: 262 60% 55%;
   }
 }
@@ -144,11 +143,10 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
+    font-family: 'Noto Sans KR', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
     letter-spacing: -0.014em;
   }
 
-  /* Typography system — generous, modern */
   h1 {
     @apply text-xl font-bold tracking-tight text-foreground;
   }
@@ -201,36 +199,6 @@
     @apply space-y-8;
   }
 
-  .animate-fade-in {
-    animation: fadeIn 0.3s ease-out;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .animate-slide-up {
-    animation: slideUp 0.35s ease-out;
-  }
-
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
   .text-helper {
     @apply text-xs text-muted-foreground;
   }
@@ -238,6 +206,82 @@
   .text-body {
     @apply text-sm text-foreground/80 leading-relaxed;
   }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ──── Page transition ──── */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-page-enter {
+  animation: pageEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-page-fade {
+  animation: pageFadeIn 0.3s ease-out both;
+}
+
+/* ──── Staggered children ──── */
+.animate-stagger > * {
+  animation: pageEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.animate-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.animate-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.animate-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.animate-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.animate-stagger > *:nth-child(6) { animation-delay: 300ms; }
+
+/* ──── Status color transitions ──── */
+.status-transition {
+  transition: color 300ms ease, background-color 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+}
+
+/* ──── Pulse for urgent alerts ──── */
+@keyframes urgentPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+.animate-urgent-pulse {
+  animation: urgentPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ──── Skeleton shimmer ──── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.08) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 /* KaTeX responsive overflow fix */
@@ -252,7 +296,6 @@
   font-size: 1.15em;
 }
 
-/* Enlarged math for textbook library */
 .math-enlarged .math-renderer .katex {
   font-size: 1.25em;
 }
@@ -303,14 +346,4 @@
 }
 .mr-table tr:nth-child(even) td {
   background: hsl(var(--muted) / 0.25);
-}
-
-@layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
 }

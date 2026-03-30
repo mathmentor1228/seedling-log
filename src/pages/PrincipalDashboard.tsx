@@ -9,46 +9,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
-  LogOut, CheckCircle, Clock, XCircle, Users, AlertTriangle, Loader2, RefreshCw,
+  LogOut, CheckCircle, Clock, XCircle, Users, AlertTriangle, Loader2,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { AnimatedCounter } from '@/components/ui/animated-counter';
+import { PageTransition } from '@/components/ui/page-transition';
+import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 interface PatternAlert {
-  id: string;
-  type: string;
-  description: string;
-  priority: string;
-  created_date: string;
-  resolved: boolean;
-  student_id: string | null;
+  id: string; type: string; description: string; priority: string;
+  created_date: string; resolved: boolean; student_id: string | null;
 }
-
 interface Classroom {
-  id: string;
-  name: string;
-  capacity: number;
-  is_active: boolean;
-  manager_name: string;
+  id: string; name: string; capacity: number; is_active: boolean; manager_name: string;
 }
-
 interface AttendanceLog {
-  id: string;
-  student_id: string | null;
-  student_name: string | null;
-  room_id: string | null;
-  date: string;
-  checked_in_at: string | null;
-  checked_out_at: string | null;
+  id: string; student_id: string | null; student_name: string | null;
+  room_id: string | null; date: string; checked_in_at: string | null; checked_out_at: string | null;
 }
-
-interface HourlyData {
-  hour: string;
-  actual: number;
-  predicted: number;
-}
+interface HourlyData { hour: string; actual: number; predicted: number; }
 
 /* ------------------------------------------------------------------ */
 /*  Live Clock                                                         */
@@ -63,36 +46,51 @@ function LiveClock() {
   const time = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   return (
     <div className="text-right">
-      <p className="text-xs text-gray-400">{fmt}</p>
-      <p className="text-lg font-mono font-bold text-white tabular-nums">{time}</p>
+      <p className="text-xs text-muted-foreground">{fmt}</p>
+      <p className="text-lg font-mono font-bold text-foreground tabular-nums">{time}</p>
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Stat Card                                                          */
+/*  Stat Card with count-up                                            */
 /* ------------------------------------------------------------------ */
 function StatCard({ label, value, sub, color, icon: Icon }: {
-  label: string; value: string; sub?: string; color: string;
+  label: string; value: number; sub?: string; color: 'green' | 'orange' | 'red' | 'blue';
   icon: React.ElementType;
 }) {
-  const colorMap: Record<string, string> = {
-    green: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30 text-emerald-400',
-    orange: 'from-amber-500/20 to-amber-500/5 border-amber-500/30 text-amber-400',
-    red: 'from-red-500/20 to-red-500/5 border-red-500/30 text-red-400',
-    blue: 'from-blue-500/20 to-blue-500/5 border-blue-500/30 text-blue-400',
+  const colorMap = {
+    green: 'border-success/30 shadow-glow-success',
+    orange: 'border-warning/30 shadow-glow-warning',
+    red: 'border-destructive/30 shadow-glow-danger',
+    blue: 'border-primary/30 shadow-glow-primary',
   };
-  const c = colorMap[color] ?? colorMap.blue;
+  const iconBg = {
+    green: 'bg-success/15 text-success',
+    orange: 'bg-warning/15 text-warning',
+    red: 'bg-destructive/15 text-destructive',
+    blue: 'bg-primary/15 text-primary',
+  };
+  const textColor = {
+    green: 'text-success',
+    orange: 'text-warning',
+    red: 'text-destructive',
+    blue: 'text-primary',
+  };
+
   return (
-    <Card className={`bg-gradient-to-br ${c} border backdrop-blur-sm`}>
+    <Card className={`bg-card border ${colorMap[color]} transition-all duration-300 hover:scale-[1.02]`}>
       <CardContent className="p-4 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg[color]}`}>
           <Icon className="w-5 h-5" />
         </div>
         <div>
-          <p className="text-xs text-gray-300">{label}</p>
-          <p className="text-2xl font-bold">{value}</p>
-          {sub && <p className="text-[10px] text-gray-400">{sub}</p>}
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className={`text-2xl font-bold ${textColor[color]}`}>
+            <AnimatedCounter value={value} />
+            {sub?.includes('%') ? '%' : sub?.includes('명') ? '명' : ''}
+          </p>
+          {sub && <p className="text-2xs text-muted-foreground">{sub}</p>}
         </div>
       </CardContent>
     </Card>
@@ -106,15 +104,15 @@ function ClassroomBubble({ name, count, capacity, blink }: {
   name: string; count: number; capacity: number; blink: boolean;
 }) {
   const pct = capacity > 0 ? count / capacity : 0;
-  const bg = pct >= 0.9 ? 'bg-red-500' : pct >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500';
+  const bg = pct >= 0.9 ? 'bg-destructive' : pct >= 0.7 ? 'bg-warning' : 'bg-success';
   return (
     <div
-      className={`w-14 h-14 rounded-full flex flex-col items-center justify-center text-white text-[10px] font-bold shadow-lg
-        ${bg} ${blink ? 'animate-pulse ring-2 ring-red-400' : ''}`}
+      className={`w-14 h-14 rounded-full flex flex-col items-center justify-center text-white text-[10px] font-bold shadow-lg status-transition
+        ${bg} ${blink ? 'animate-urgent-pulse ring-2 ring-destructive' : ''}`}
       title={name}
     >
       <span className="truncate max-w-[44px] leading-tight">{name}</span>
-      <span className="text-[9px] font-mono">{count}/{capacity}</span>
+      <span className="text-[9px] font-mono opacity-80">{count}/{capacity}</span>
     </div>
   );
 }
@@ -123,22 +121,18 @@ function ClassroomBubble({ name, count, capacity, blink }: {
 /*  Main Dashboard Content                                             */
 /* ------------------------------------------------------------------ */
 function PrincipalContent() {
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
 
-  // Data state
   const [alerts, setAlerts] = useState<PatternAlert[]>([]);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [alertTab, setAlertTab] = useState('학생패턴');
-
-  // Modal
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  /* ---------- fetch helpers ---------- */
   const fetchAll = useCallback(async () => {
     const [alertRes, classRes, logRes] = await Promise.all([
       supabase.from('pattern_alerts').select('*').order('created_date', { ascending: false }).limit(50),
@@ -153,7 +147,6 @@ function PrincipalContent() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  /* ---------- real-time ---------- */
   useEffect(() => {
     const ch = supabase
       .channel('principal-dash')
@@ -163,51 +156,33 @@ function PrincipalContent() {
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
 
-  /* ---------- derived stats ---------- */
   const checkedIn = logs.filter(l => l.checked_in_at && !l.checked_out_at);
   const checkedOut = logs.filter(l => l.checked_out_at);
   const totalStudents = logs.length || 1;
   const attendanceRate = Math.round(((checkedIn.length + checkedOut.length) / totalStudents) * 100);
-
-  // Late = checked in 10+ min after first slot (simplified: checked_in_at hour >= 15 and minute >= 10 proxy)
-  const lateCount = logs.filter(l => {
-    if (!l.checked_in_at) return false;
-    const t = new Date(l.checked_in_at);
-    return t.getMinutes() > 10; // simplified heuristic
-  }).length;
-
+  const lateCount = logs.filter(l => l.checked_in_at && new Date(l.checked_in_at).getMinutes() > 10).length;
   const absentCount = logs.filter(l => !l.checked_in_at).length;
-
-  // Room usage
   const totalRoomCap = classrooms.reduce((s, c) => s + c.capacity, 0) || 1;
-  const totalRoomUsed = checkedIn.length;
-  const roomUsage = Math.round((totalRoomUsed / totalRoomCap) * 100);
+  const roomUsage = Math.round((checkedIn.length / totalRoomCap) * 100);
 
-  // Room counts map
   const roomCounts = useMemo(() => {
     const m: Record<string, number> = {};
-    checkedIn.forEach(l => {
-      if (l.room_id) m[l.room_id] = (m[l.room_id] ?? 0) + 1;
-    });
+    checkedIn.forEach(l => { if (l.room_id) m[l.room_id] = (m[l.room_id] ?? 0) + 1; });
     return m;
   }, [checkedIn]);
 
-  // Blink detection: students checked in > 30 min ago still not checked out
   const blinkRooms = useMemo(() => {
     const now = Date.now();
     const rooms = new Set<string>();
     checkedIn.forEach(l => {
-      if (l.checked_in_at && l.room_id) {
-        const diff = (now - new Date(l.checked_in_at).getTime()) / 60000;
-        if (diff >= 30) rooms.add(l.room_id);
-      }
+      if (l.checked_in_at && l.room_id && (now - new Date(l.checked_in_at).getTime()) / 60000 >= 30)
+        rooms.add(l.room_id);
     });
     return rooms;
   }, [checkedIn]);
 
-  /* ---------- hourly chart data ---------- */
   const hourlyData: HourlyData[] = useMemo(() => {
-    const hours = Array.from({ length: 9 }, (_, i) => 14 + i); // 14~22
+    const hours = Array.from({ length: 9 }, (_, i) => 14 + i);
     const counts: Record<number, number> = {};
     logs.forEach(l => {
       if (l.checked_in_at) {
@@ -218,244 +193,232 @@ function PrincipalContent() {
     return hours.map(h => ({
       hour: `${h}:00`,
       actual: counts[h] ?? 0,
-      predicted: Math.round((counts[h] ?? 0) * (0.9 + Math.random() * 0.2)), // placeholder
+      predicted: Math.round((counts[h] ?? 0) * (0.9 + Math.random() * 0.2)),
     }));
   }, [logs]);
 
-  /* ---------- filtered alerts ---------- */
   const filteredAlerts = alerts.filter(a => {
     if (alertTab === '학생패턴') return a.type?.includes('학생') || a.student_id;
     if (alertTab === '강의실패턴') return a.type?.includes('강의실') || a.type?.includes('room');
     return a.type?.includes('트렌드') || a.type?.includes('trend');
   });
 
-  /* ---------- resolve alert ---------- */
   const resolveAlert = async (id: string) => {
     await supabase.from('pattern_alerts').update({ resolved: true, resolved_at: new Date().toISOString() } as any).eq('id', id);
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, resolved: true } : a));
   };
 
-  // Students in selected classroom modal
   const modalStudents = useMemo(() => {
     if (!selectedClassroom) return [];
     return checkedIn.filter(l => l.room_id === selectedClassroom.id);
   }, [selectedClassroom, checkedIn]);
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate('/login');
-  };
+  const handleLogout = async () => { await signOut(); navigate('/login'); };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0A0F' }}>
-        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+      <div className="dark min-h-screen bg-background p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
+        <DashboardSkeleton variant="stats" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <DashboardSkeleton variant="list" count={4} />
+          <DashboardSkeleton variant="chart" />
+        </div>
       </div>
     );
   }
 
   const priorityColor: Record<string, string> = {
-    '높음': 'bg-red-500/20 text-red-400 border-red-500/40',
-    '중간': 'bg-amber-500/20 text-amber-400 border-amber-500/40',
-    '낮음': 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+    '높음': 'bg-destructive/15 text-destructive border-destructive/30',
+    '중간': 'bg-warning/15 text-warning border-warning/30',
+    '낮음': 'bg-primary/15 text-primary border-primary/30',
   };
 
   return (
-    <div className="min-h-screen text-gray-100" style={{ background: '#0A0A0F' }}>
-      {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-30 border-b border-white/5 bg-[#0A0A0F]/80 backdrop-blur-xl px-4 md:px-6 py-3 flex items-center justify-between">
+    <div className="dark min-h-screen bg-background text-foreground">
+      {/* HEADER */}
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl px-4 md:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">S</span>
+          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-glow-primary">
+            <span className="text-primary-foreground font-bold text-sm">S</span>
           </div>
           <div>
-            <h1 className="text-base font-bold text-white">원장 대시보드</h1>
-            <p className="text-[10px] text-gray-500">SeedlingLog</p>
+            <h1 className="text-base font-bold">원장 대시보드</h1>
+            <p className="text-2xs text-muted-foreground">SeedlingLog</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <LiveClock />
-          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white hover:bg-white/10" onClick={handleLogout}>
+          <div className="hidden sm:block"><LiveClock /></div>
+          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-1.5" />
-            로그아웃
+            <span className="hidden sm:inline">로그아웃</span>
           </Button>
         </div>
       </header>
 
-      <main className="p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
-        {/* ===== STATS ROW ===== */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={CheckCircle} label="전체 출석률" value={`${attendanceRate}%`} sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 출석`} color="green" />
-          <StatCard icon={Clock} label="지각" value={`${lateCount}명`} sub="오늘 기준" color="orange" />
-          <StatCard icon={XCircle} label="결석" value={`${absentCount}명`} sub="미등원 학생" color="red" />
-          <StatCard icon={Users} label="자습실 이용률" value={`${roomUsage}%`} sub={`${totalRoomUsed}/${totalRoomCap}석 사용 중`} color="blue" />
-        </div>
-
-        {/* ===== MAIN GRID ===== */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* LEFT: Pattern Alerts */}
-          <Card className="bg-white/[0.03] border-white/10 text-gray-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-white">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                이상 패턴 감지
-                <Badge variant="outline" className="ml-auto text-[10px] border-white/20 text-gray-400">
-                  {alerts.filter(a => !a.resolved).length}건 미해결
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <Tabs value={alertTab} onValueChange={setAlertTab}>
-                <TabsList className="bg-white/5 border border-white/10 mb-3 h-8">
-                  {['학생패턴', '강의실패턴', '트렌드'].map(t => (
-                    <TabsTrigger key={t} value={t} className="text-xs data-[state=active]:bg-white/10 data-[state=active]:text-white text-gray-400">
-                      {t}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                <TabsContent value={alertTab} className="mt-0">
-                  <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-                    {filteredAlerts.length === 0 && (
-                      <p className="text-xs text-gray-500 py-8 text-center">감지된 패턴이 없습니다</p>
-                    )}
-                    {filteredAlerts.map(a => (
-                      <div
-                        key={a.id}
-                        className={`p-3 rounded-lg border ${a.resolved ? 'opacity-40 border-white/5 bg-white/[0.01]' : 'border-white/10 bg-white/[0.03]'}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge className={`text-[10px] px-1.5 py-0 ${priorityColor[a.priority] ?? priorityColor['낮음']}`}>
-                                {a.priority}
-                              </Badge>
-                              <span className="text-[10px] text-gray-500">{a.type}</span>
-                            </div>
-                            <p className="text-xs text-gray-300 leading-relaxed">{a.description}</p>
-                            <p className="text-[10px] text-gray-600 mt-1">
-                              {new Date(a.created_date).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                          {!a.resolved && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-[10px] text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 h-7 px-2 shrink-0"
-                              onClick={() => resolveAlert(a.id)}
-                            >
-                              해결 완료
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          {/* RIGHT: Congestion Prediction Chart */}
-          <Card className="bg-white/[0.03] border-white/10 text-gray-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-white flex items-center gap-2">
-                <BarChart className="w-4 h-4 text-blue-400" />
-                혼잡도 예측
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={hourlyData} barGap={2}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="hour" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
-                  <Tooltip
-                    contentStyle={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#fff', fontSize: 12 }}
-                    labelStyle={{ color: '#9ca3af' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11, color: '#9ca3af' }} />
-                  <Bar dataKey="actual" name="실제 인원" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="predicted" name="예측 인원" fill="#8b5cf6" radius={[4, 4, 0, 0]} opacity={0.6} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* ===== CLASSROOM GRID ===== */}
-        <div>
-          <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-            <Users className="w-4 h-4 text-blue-400" />
-            강의실 현황
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {classrooms.map(cr => {
-              const count = roomCounts[cr.id] ?? 0;
-              const pct = cr.capacity > 0 ? (count / cr.capacity) * 100 : 0;
-              const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
-              return (
-                <Card
-                  key={cr.id}
-                  className="bg-white/[0.03] border-white/10 cursor-pointer hover:bg-white/[0.06] transition-colors"
-                  onClick={() => setSelectedClassroom(cr)}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-semibold text-white truncate">{cr.name}</p>
-                      <span className="text-[10px] text-gray-400 font-mono">{count}/{cr.capacity}</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1.5">{cr.manager_name || '담당 미지정'}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-            {classrooms.length === 0 && (
-              <p className="text-xs text-gray-500 col-span-full text-center py-8">등록된 강의실이 없습니다</p>
-            )}
+      <PageTransition>
+        <main className="p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
+          {/* STATS */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 animate-stagger">
+            <StatCard icon={CheckCircle} label="전체 출석률" value={attendanceRate} sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 출석`} color="green" />
+            <StatCard icon={Clock} label="지각" value={lateCount} sub="오늘 기준" color="orange" />
+            <StatCard icon={XCircle} label="결석" value={absentCount} sub="미등원 학생" color="red" />
+            <StatCard icon={Users} label="자습실 이용률" value={roomUsage} sub={`${checkedIn.length}/${totalRoomCap}석 사용 중`} color="blue" />
           </div>
-        </div>
-      </main>
 
-      {/* ===== FLOATING BUBBLES ===== */}
+          {/* MAIN GRID */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            {/* Pattern Alerts */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-warning" />
+                  이상 패턴 감지
+                  <Badge variant="outline" className="ml-auto text-2xs">
+                    {alerts.filter(a => !a.resolved).length}건 미해결
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <Tabs value={alertTab} onValueChange={setAlertTab}>
+                  <TabsList className="mb-3 h-8">
+                    {['학생패턴', '강의실패턴', '트렌드'].map(t => (
+                      <TabsTrigger key={t} value={t} className="text-xs">{t}</TabsTrigger>
+                    ))}
+                  </TabsList>
+                  <TabsContent value={alertTab} className="mt-0">
+                    <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                      {filteredAlerts.length === 0 && (
+                        <EmptyState icon={<AlertTriangle className="w-6 h-6" />} title="감지된 패턴이 없습니다" description="이상 패턴이 발견되면 여기에 표시됩니다" />
+                      )}
+                      {filteredAlerts.map(a => (
+                        <div
+                          key={a.id}
+                          className={`p-3 rounded-lg border status-transition ${
+                            a.resolved
+                              ? 'opacity-40 border-border bg-card'
+                              : a.priority === '높음'
+                                ? 'border-destructive/20 bg-destructive/5 animate-urgent-pulse'
+                                : 'border-border bg-card'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge className={`text-2xs px-1.5 py-0 ${priorityColor[a.priority] ?? priorityColor['낮음']}`}>
+                                  {a.priority}
+                                </Badge>
+                                <span className="text-2xs text-muted-foreground">{a.type}</span>
+                              </div>
+                              <p className="text-xs text-foreground/80 leading-relaxed">{a.description}</p>
+                              <p className="text-2xs text-muted-foreground mt-1">
+                                {new Date(a.created_date).toLocaleString('ko-KR', { month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                            {!a.resolved && (
+                              <Button size="sm" variant="ghost" className="text-2xs text-success hover:text-success hover:bg-success/10 h-7 px-2 shrink-0" onClick={() => resolveAlert(a.id)}>
+                                해결 완료
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* Chart */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  혼잡도 예측
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={hourlyData} barGap={2}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="hour" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={{ stroke: 'hsl(var(--border))' }} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={{ stroke: 'hsl(var(--border))' }} />
+                    <Tooltip
+                      contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, color: 'hsl(var(--foreground))', fontSize: 12 }}
+                      labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, color: 'hsl(var(--muted-foreground))' }} />
+                    <Bar dataKey="actual" name="실제 인원" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="predicted" name="예측 인원" fill="hsl(var(--chart-5))" radius={[4, 4, 0, 0]} opacity={0.6} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* CLASSROOM GRID */}
+          <div>
+            <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" />
+              강의실 현황
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {classrooms.map(cr => {
+                const count = roomCounts[cr.id] ?? 0;
+                const pct = cr.capacity > 0 ? (count / cr.capacity) * 100 : 0;
+                const barColor = pct >= 90 ? 'bg-destructive' : pct >= 70 ? 'bg-warning' : 'bg-success';
+                return (
+                  <Card key={cr.id} className="cursor-pointer hover:border-primary/30 transition-all duration-200" onClick={() => setSelectedClassroom(cr)}>
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold truncate">{cr.name}</p>
+                        <span className="text-2xs text-muted-foreground font-mono">{count}/{cr.capacity}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                      </div>
+                      <p className="text-2xs text-muted-foreground mt-1.5">{cr.manager_name || '담당 미지정'}</p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              {classrooms.length === 0 && (
+                <div className="col-span-full">
+                  <EmptyState icon={<Users className="w-6 h-6" />} title="등록된 강의실이 없습니다" description="강의실을 추가하면 여기에 표시됩니다" />
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+      </PageTransition>
+
+      {/* FLOATING BUBBLES */}
       <div className="fixed bottom-4 right-4 z-40 flex flex-col gap-2 items-end">
-        {classrooms.slice(0, 6).map(cr => {
-          const count = roomCounts[cr.id] ?? 0;
-          return (
-            <ClassroomBubble
-              key={cr.id}
-              name={cr.name}
-              count={count}
-              capacity={cr.capacity}
-              blink={blinkRooms.has(cr.id)}
-            />
-          );
-        })}
+        {classrooms.slice(0, 6).map(cr => (
+          <ClassroomBubble key={cr.id} name={cr.name} count={roomCounts[cr.id] ?? 0} capacity={cr.capacity} blink={blinkRooms.has(cr.id)} />
+        ))}
       </div>
 
-      {/* ===== CLASSROOM MODAL ===== */}
+      {/* MODAL */}
       <Dialog open={!!selectedClassroom} onOpenChange={() => setSelectedClassroom(null)}>
-        <DialogContent className="bg-[#12121a] border-white/10 text-gray-100 max-w-md">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">{selectedClassroom?.name} — 학생 현황</DialogTitle>
+            <DialogTitle>{selectedClassroom?.name} — 학생 현황</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {modalStudents.length === 0 && (
-              <p className="text-xs text-gray-500 text-center py-6">현재 입실 중인 학생이 없습니다</p>
+              <EmptyState icon={<Users className="w-6 h-6" />} title="현재 입실 중인 학생이 없습니다" />
             )}
             {modalStudents.map(s => {
               const mins = s.checked_in_at ? Math.round((Date.now() - new Date(s.checked_in_at).getTime()) / 60000) : 0;
               return (
-                <div key={s.id} className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.04] border border-white/5">
+                <div key={s.id} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border">
                   <div>
-                    <p className="text-xs font-medium text-white">{s.student_name || '이름 없음'}</p>
-                    <p className="text-[10px] text-gray-500">
+                    <p className="text-xs font-medium">{s.student_name || '이름 없음'}</p>
+                    <p className="text-2xs text-muted-foreground">
                       입실: {s.checked_in_at ? new Date(s.checked_in_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
                     </p>
                   </div>
-                  <Badge className={`text-[10px] ${mins >= 30 ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'}`}>
+                  <Badge className={`text-2xs status-transition ${mins >= 30 ? 'bg-warning/15 text-warning border-warning/30' : 'bg-success/15 text-success border-success/30'}`}>
                     {mins}분 체류
                   </Badge>
                 </div>
@@ -468,9 +431,6 @@ function PrincipalContent() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Page wrapper with auth guard                                       */
-/* ------------------------------------------------------------------ */
 export default function PrincipalDashboard() {
   return (
     <ProtectedRoute allowedRoles={['admin']} noLayout>

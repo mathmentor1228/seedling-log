@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Sprout } from 'lucide-react';
+import { PageTransition } from '@/components/ui/page-transition';
 
 const loginSchema = z.object({
   email: z.string().email('올바른 이메일을 입력해주세요'),
@@ -18,7 +19,6 @@ const signupSchema = loginSchema.extend({
   fullName: z.string().min(2, '이름은 2자 이상이어야 합니다'),
 });
 
-/** Map role to the correct dashboard path */
 function getRoleDashboard(role: string | null): string {
   switch (role) {
     case 'admin': return '/principal';
@@ -71,9 +71,7 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
-    
     setIsSubmitting(true);
 
     try {
@@ -88,10 +86,7 @@ export default function Auth() {
             variant: 'destructive',
           });
         } else {
-          toast({
-            title: '로그인 성공',
-            description: '환영합니다!',
-          });
+          toast({ title: '로그인 성공', description: '환영합니다!' });
         }
       } else {
         const { error } = await signUp(email, password, fullName);
@@ -103,17 +98,10 @@ export default function Auth() {
               variant: 'destructive',
             });
           } else {
-            toast({
-              title: '회원가입 실패',
-              description: error.message,
-              variant: 'destructive',
-            });
+            toast({ title: '회원가입 실패', description: error.message, variant: 'destructive' });
           }
         } else {
-          toast({
-            title: '계정이 생성되었습니다!',
-            description: '관리자에게 역할 배정을 요청해주세요.',
-          });
+          toast({ title: '계정이 생성되었습니다!', description: '관리자에게 역할 배정을 요청해주세요.' });
           setIsLogin(true);
         }
       }
@@ -123,23 +111,22 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm animate-fade-in">
+    <div className="dark min-h-screen flex items-center justify-center bg-background px-4">
+      <PageTransition className="w-full max-w-sm">
+        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-3">
-            <Sprout className="w-6 h-6 text-primary-foreground" />
+          <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-glow-primary">
+            <Sprout className="w-7 h-7 text-primary-foreground" />
           </div>
-          <h1 className="text-lg font-bold text-foreground">SeedlingLog</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">학원 출결 관리 시스템</p>
+          <h1 className="text-xl font-bold text-foreground tracking-tight">SeedlingLog</h1>
+          <p className="text-xs text-muted-foreground mt-1">학원 출결 관리 시스템</p>
         </div>
 
-        <Card>
+        <Card className="border-border/50 shadow-elevated">
           <CardHeader className="pb-4">
             <CardTitle className="text-base">{isLogin ? '로그인' : '회원가입'}</CardTitle>
             <CardDescription className="text-xs">
-              {isLogin 
-                ? '이메일과 비밀번호를 입력하세요' 
-                : '새 계정을 생성합니다'}
+              {isLogin ? '이메일과 비밀번호를 입력하세요' : '새 계정을 생성합니다'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -147,56 +134,26 @@ export default function Auth() {
               {!isLogin && (
                 <div className="space-y-1.5">
                   <Label htmlFor="fullName" className="text-xs">이름</Label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    placeholder="홍길동"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    disabled={isSubmitting}
-                  />
-                  {errors.fullName && (
-                    <p className="text-xs text-destructive">{errors.fullName}</p>
-                  )}
+                  <Input id="fullName" type="text" placeholder="홍길동" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={isSubmitting} />
+                  {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
                 </div>
               )}
               
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-xs">이메일</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                />
-                {errors.email && (
-                  <p className="text-xs text-destructive">{errors.email}</p>
-                )}
+                <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isSubmitting} />
+                {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="password" className="text-xs">비밀번호</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isSubmitting}
-                />
-                {errors.password && (
-                  <p className="text-xs text-destructive">{errors.password}</p>
-                )}
+                <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isSubmitting} />
+                {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
               </div>
 
               <Button type="submit" className="w-full" size="sm" disabled={isSubmitting}>
                 {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isLogin ? '로그인 중...' : '계정 생성 중...'}
-                  </>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{isLogin ? '로그인 중...' : '계정 생성 중...'}</>
                 ) : (
                   isLogin ? '로그인' : '회원가입'
                 )}
@@ -206,20 +163,15 @@ export default function Auth() {
             <div className="mt-4 text-center">
               <button
                 type="button"
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setErrors({});
-                }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => { setIsLogin(!isLogin); setErrors({}); }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-200"
               >
-                {isLogin 
-                  ? '계정이 없으신가요? 회원가입' 
-                  : '이미 계정이 있으신가요? 로그인'}
+                {isLogin ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
               </button>
             </div>
           </CardContent>
         </Card>
-      </div>
+      </PageTransition>
     </div>
   );
 }
