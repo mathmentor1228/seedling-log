@@ -39,7 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { imageCompression } from '@/lib/imageCompression';
+import { compressImage } from '@/lib/imageCompression';
 
 const GRADES = ['고1', '고2', '고3', '중3'] as const;
 const SUBJECTS = [
