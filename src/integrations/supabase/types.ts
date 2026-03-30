@@ -1675,6 +1675,53 @@ export type Database = {
           },
         ]
       }
+      math_answers: {
+        Row: {
+          answer_input_mode: string
+          answer_photo_urls: string[]
+          answer_type: string
+          content: string | null
+          created_at: string
+          id: string
+          is_shared_to_all: boolean
+          question_id: string
+          teacher_id: string
+          video_url: string | null
+        }
+        Insert: {
+          answer_input_mode?: string
+          answer_photo_urls?: string[]
+          answer_type: string
+          content?: string | null
+          created_at?: string
+          id?: string
+          is_shared_to_all?: boolean
+          question_id: string
+          teacher_id: string
+          video_url?: string | null
+        }
+        Update: {
+          answer_input_mode?: string
+          answer_photo_urls?: string[]
+          answer_type?: string
+          content?: string | null
+          created_at?: string
+          id?: string
+          is_shared_to_all?: boolean
+          question_id?: string
+          teacher_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "math_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "math_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       math_concept_quizzes: {
         Row: {
           answer_code: string | null
@@ -1775,6 +1822,78 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      math_questions: {
+        Row: {
+          created_at: string
+          date: string
+          description: string | null
+          grade: string
+          id: string
+          is_shared: boolean
+          photo_problem_url: string
+          photo_solution_url: string
+          shared_from_id: string | null
+          source_text: string
+          status: string
+          student_id: string
+          subject: string
+          teacher_id: string | null
+          title: string
+          view_count: number
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          description?: string | null
+          grade: string
+          id?: string
+          is_shared?: boolean
+          photo_problem_url: string
+          photo_solution_url: string
+          shared_from_id?: string | null
+          source_text: string
+          status?: string
+          student_id: string
+          subject: string
+          teacher_id?: string | null
+          title: string
+          view_count?: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          description?: string | null
+          grade?: string
+          id?: string
+          is_shared?: boolean
+          photo_problem_url?: string
+          photo_solution_url?: string
+          shared_from_id?: string | null
+          source_text?: string
+          status?: string
+          student_id?: string
+          subject?: string
+          teacher_id?: string | null
+          title?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "math_questions_shared_from_id_fkey"
+            columns: ["shared_from_id"]
+            isOneToOne: false
+            referencedRelation: "math_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "math_questions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       math_quiz_assignments: {
         Row: {
@@ -4751,6 +4870,10 @@ export type Database = {
       }
     }
     Functions: {
+      check_math_question_daily_limit: {
+        Args: { _date?: string; _student_id: string }
+        Returns: boolean
+      }
       create_assistant_task: {
         Args: {
           _assignee: string
