@@ -1194,6 +1194,103 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'math_questions_list': {
+        const today = new Date().toISOString().slice(0, 10);
+
+        // Get daily count
+        const { count: dailyCount } = await supabase
+          .from('math_questions')
+          .select('id', { count: 'exact', head: true })
+          .eq('student_id', student_id)
+          .eq('date', today);
+
+        // Get all questions with answers
+        const { data: questions } = await supabase
+          .from('math_questions')
+          .select('*')
+          .eq('student_id', student_id)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        // Get answers for those questions
+        const questionIds = (questions || []).map((q: any) => q.id);
+        let answersMap: Record<string, any[]> = {};
+        if (questionIds.length > 0) {
+          const { data: answers } = await supabase
+            .from('math_answers')
+            .select('*')
+            .in('question_id', questionIds)
+            .order('created_at', { ascending: true });
+
+          for (const a of (answers || [])) {
+            if (!answersMap[a.question_id]) answersMap[a.question_id] = [];
+            answersMap[a.question_id].push(a);
+          }
+        }
+
+        const enriched = (questions || []).map((q: any) => ({
+          ...q,
+          answers: answersMap[q.id] || [],
+        }));
+
+        result = { questions: enriched, daily_count: dailyCount || 0 };
+        break;
+      }
+
+      case 'submit_math_question': {
+        const { title: qTitle, description: qDesc, photo_problem_url, photo_solution_url, grade: qGrade, subject: qSubject, source_text } = params;
+
+        if (!qTitle || !photo_problem_url || !photo_solution_url || !qGrade || !qSubject || !source_text) {
+          return new Response(
+            JSON.stringify({ error: '필수 항목을 모두 입력해주세요' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Daily limit check
+        const today = new Date().toISOString().slice(0, 10);
+        const { count: todayCount } = await supabase
+          .from('math_questions')
+          .select('id', { count: 'exact', head: true })
+          .eq('student_id', student_id)
+          .eq('date', today);
+
+        if ((todayCount || 0) >= 10) {
+          return new Response(
+            JSON.stringify({ error: '오늘 질문 횟수를 모두 사용했어요 (10/10)' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { data: newQ, error: insertErr } = await supabase
+          .from('math_questions')
+          .insert({
+            student_id,
+            title: qTitle,
+            description: qDesc || null,
+            photo_problem_url,
+            photo_solution_url,
+            grade: qGrade,
+            subject: qSubject,
+            source_text,
+            status: '대기중',
+            date: today,
+          })
+          .select('id')
+          .single();
+
+        if (insertErr) {
+          console.error('Insert math question error:', insertErr);
+          return new Response(
+            JSON.stringify({ error: '질문 저장에 실패했어요' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        result = { success: true, question_id: newQ.id };
+        break;
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),
