@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"Pretendard Variable"', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        sans: ['"Noto Sans KR"', '"Pretendard Variable"', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -100,6 +100,10 @@ export default {
         'card': '0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)',
         'card-hover': '0 4px 16px -2px rgb(0 0 0 / 0.1), 0 2px 6px -2px rgb(0 0 0 / 0.05)',
         'elevated': '0 10px 30px -4px rgb(0 0 0 / 0.1), 0 4px 10px -4px rgb(0 0 0 / 0.05)',
+        'glow-primary': '0 0 20px -4px hsl(239 84% 67% / 0.3)',
+        'glow-success': '0 0 20px -4px hsl(142 71% 45% / 0.3)',
+        'glow-warning': '0 0 20px -4px hsl(38 92% 50% / 0.3)',
+        'glow-danger': '0 0 20px -4px hsl(0 84% 60% / 0.3)',
       },
       keyframes: {
         "accordion-down": {
@@ -114,11 +118,16 @@ export default {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "count-up": {
+          from: { opacity: "0", transform: "translateY(8px) scale(0.95)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.3s ease-out",
+        "count-up": "count-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
       },
     },
   },
