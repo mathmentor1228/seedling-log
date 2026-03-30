@@ -413,11 +413,10 @@ function CurrentClassHeader({ slot, attendedCount, totalCount }: {
 
 /* ------------------------------------------------------------------ */
 function TeacherAttendanceView() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const teacherId = user?.id ?? '';
-  const teacherName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '선생님';
 
   const [students, setStudents] = useState<StudentCard[]>([]);
   const [loading, setLoading] = useState(true);
