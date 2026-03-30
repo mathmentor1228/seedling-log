@@ -584,8 +584,6 @@ function TeacherAttendanceView() {
   };
 
   const activeStudent = students.find(s => s.id === activeId);
-  const handleLogout = async () => { await signOut(); navigate('/login'); };
-
   if (loading) {
     return (
       <div className="dark min-h-screen bg-background p-4 md:p-6 space-y-5 max-w-[1600px] mx-auto">
