@@ -1,18 +1,19 @@
  // STUDENT-APP-V1: Mobile-optimized layout for student app
- import { ReactNode, useEffect } from 'react';
+ import { ReactNode, useEffect, useState } from 'react';
  import { useNavigate, useLocation, Link } from 'react-router-dom';
  import { useStudentAuth } from '@/lib/studentAuth';
+ import { supabase } from '@/integrations/supabase/client';
  import { 
    Home, 
    Upload, 
    Star, 
    Calendar, 
-  BookOpen,
-  LogOut,
-  User,
-  Languages,
-  Calculator
-} from 'lucide-react';
+   BookOpen,
+   LogOut,
+   User,
+   Languages,
+   Calculator
+ } from 'lucide-react';
  import { Button } from '@/components/ui/button';
  import {
    DropdownMenu,
