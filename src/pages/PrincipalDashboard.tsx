@@ -121,8 +121,7 @@ function ClassroomBubble({ name, count, capacity, blink }: {
 /*  Main Dashboard Content                                             */
 /* ------------------------------------------------------------------ */
 function PrincipalContent() {
-  const { signOut } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [alerts, setAlerts] = useState<PatternAlert[]>([]);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
