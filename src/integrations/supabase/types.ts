@@ -581,6 +581,36 @@ export type Database = {
           },
         ]
       }
+      congestion_predictions: {
+        Row: {
+          classroom_id: string | null
+          created_at: string
+          day_of_week: number
+          hour: number
+          id: string
+          predicted_count: number
+          prediction_date: string
+        }
+        Insert: {
+          classroom_id?: string | null
+          created_at?: string
+          day_of_week: number
+          hour: number
+          id?: string
+          predicted_count?: number
+          prediction_date: string
+        }
+        Update: {
+          classroom_id?: string | null
+          created_at?: string
+          day_of_week?: number
+          hour?: number
+          id?: string
+          predicted_count?: number
+          prediction_date?: string
+        }
+        Relationships: []
+      }
       curriculum_map: {
         Row: {
           course: string
