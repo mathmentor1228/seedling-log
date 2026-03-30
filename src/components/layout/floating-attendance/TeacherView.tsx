@@ -4,6 +4,7 @@ import { StudentRow } from './StudentRow';
 interface TeacherViewProps {
   entries: StudentEntry[];
   loading: boolean;
+  loadingIds: Set<string>;
   teacherName: string;
   onCheckIn: (studentId: string, roomId: string) => void;
   onCheckOut: (logId: string) => void;
@@ -14,6 +15,7 @@ interface TeacherViewProps {
 export function TeacherView({
   entries,
   loading,
+  loadingIds,
   teacherName,
   onCheckIn,
   onCheckOut,
@@ -48,6 +50,7 @@ export function TeacherView({
               key={`${e.studentId}_${e.roomId}`}
               entry={e}
               showRoom
+              isLoading={loadingIds.has(e.studentId) || (e.logId ? loadingIds.has(e.logId) : false)}
               onCheckIn={onCheckIn}
               onCheckOut={onCheckOut}
               onCancelCheckIn={onCancelCheckIn}

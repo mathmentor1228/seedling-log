@@ -10,6 +10,7 @@ interface AssistantViewProps {
   roomCounts: Record<string, number>;
   capacities: Record<string, number>;
   loading: boolean;
+  loadingIds: Set<string>;
   onCheckIn: (studentId: string, roomId: string) => void;
   onCheckOut: (logId: string) => void;
   onCancelCheckIn: (logId: string) => void;
@@ -23,6 +24,7 @@ export function AssistantView({
   roomCounts,
   capacities,
   loading,
+  loadingIds,
   onCheckIn,
   onCheckOut,
   onCancelCheckIn,
@@ -137,6 +139,7 @@ export function AssistantView({
               <StudentRow
                 key={`${e.studentId}_${e.roomId}`}
                 entry={e}
+                isLoading={loadingIds.has(e.studentId) || (e.logId ? loadingIds.has(e.logId) : false)}
                 onCheckIn={onCheckIn}
                 onCheckOut={onCheckOut}
                 onCancelCheckIn={onCancelCheckIn}
@@ -155,6 +158,7 @@ export function AssistantView({
               <StudentRow
                 key={`${e.studentId}_${e.roomId}`}
                 entry={e}
+                isLoading={loadingIds.has(e.studentId) || (e.logId ? loadingIds.has(e.logId) : false)}
                 onCheckIn={onCheckIn}
                 onCheckOut={onCheckOut}
                 onCancelCheckIn={onCancelCheckIn}
