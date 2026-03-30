@@ -62,8 +62,10 @@ const STATUS_COLUMNS: { key: StatusKey; label: string; emoji: string; borderClas
 const ABSENCE_REASONS = ['질병/몸살', '개인사정', '가족행사', '학교시험', '무단', '직접입력'];
 
 /* ------------------------------------------------------------------ */
-function DraggableStudentCard({ student, onAbsenceClick, blink }: {
+function DraggableStudentCard({ student, onAbsenceClick, blink, onQuickAction, actionLoading, currentSlot }: {
   student: StudentCard; onAbsenceClick: (s: StudentCard) => void; blink: 'orange' | 'red' | null;
+  onQuickAction: (studentId: string, action: StatusKey) => void; actionLoading: Set<string>;
+  currentSlot: ScheduleSlot | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: student.id, data: { student },
@@ -79,34 +81,104 @@ function DraggableStudentCard({ student, onAbsenceClick, blink }: {
       ? 'ring-2 ring-destructive animate-urgent-pulse'
       : '';
 
+  const isLoading = actionLoading.has(student.id);
+
+  // Calculate late status
+  const isLate = useMemo(() => {
+    if (!currentSlot || !student.statusChangedAt || student.status !== '입실') return false;
+    const entryTime = student.statusChangedAt.slice(11, 16);
+    return entryTime > currentSlot.startTime;
+  }, [currentSlot, student.statusChangedAt, student.status]);
+
+  const timeDisplay = student.statusChangedAt && (student.status === '입실' || student.status === '등원' || student.status === '퇴실')
+    ? new Date(student.statusChangedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+    : null;
+
+  const statusLabel = student.status === '입실' ? '입실' : student.status === '퇴실' ? '퇴실' : student.status === '등원' ? '등원' : null;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'p-2.5 rounded-xl bg-card border border-border cursor-grab active:cursor-grabbing',
+        'p-2.5 rounded-xl bg-card border border-border',
         'hover:border-primary/40 hover:shadow-md transition-all duration-200 group',
-        blinkClass
+        blinkClass, isLoading && 'opacity-60 pointer-events-none'
       )}
-      {...attributes}
-      {...listeners}
     >
       <div className="flex items-center gap-2">
-        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 group-hover:text-primary/60 transition-colors" />
+        <div className="cursor-grab active:cursor-grabbing shrink-0" {...attributes} {...listeners}>
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 group-hover:text-primary/60 transition-colors" />
+        </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground truncate">{student.name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-semibold text-foreground truncate">{student.name}</p>
+            {timeDisplay && (
+              <span className={cn(
+                "text-[9px] tabular-nums px-1.5 py-0.5 rounded-full font-medium",
+                isLate ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground"
+              )}>
+                {statusLabel} {timeDisplay}{isLate && ' 지각'}
+              </span>
+            )}
+          </div>
           <p className="text-[10px] text-muted-foreground">{student.school || ''} {student.grade || ''}</p>
         </div>
+      </div>
+
+      {/* Quick action buttons */}
+      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-border/50">
+        {student.status === '미등원' && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '입실'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-success/10 text-success border border-success/30 hover:bg-success/20 font-medium transition-colors">
+              ⏰입실
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '등원'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 font-medium transition-colors">
+              ✅출석
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onAbsenceClick(student); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive/20 font-medium transition-colors">
+              ❌결석
+            </button>
+          </>
+        )}
+        {student.status === '등원' && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '입실'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-success/10 text-success border border-success/30 hover:bg-success/20 font-medium transition-colors">
+              ⏰입실
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onAbsenceClick(student); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive/20 font-medium transition-colors">
+              ❌결석
+            </button>
+          </>
+        )}
+        {student.status === '입실' && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '퇴실'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-muted text-muted-foreground border border-border hover:bg-muted/80 font-medium transition-colors">
+              🏠퇴실
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '결석지각'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-warning/10 text-warning border border-warning/30 hover:bg-warning/20 font-medium transition-colors">
+              🚨무단외출
+            </button>
+          </>
+        )}
+        {student.status === '퇴실' && (
+          <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '입실'); }}
+            className="text-[9px] px-2 py-1 rounded-md bg-success/10 text-success border border-success/30 hover:bg-success/20 font-medium transition-colors">
+            ⏰재입실
+          </button>
+        )}
         {student.status === '결석지각' && (
           <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
             onClick={(e) => { e.stopPropagation(); onAbsenceClick(student); }}>
             처리
           </Button>
-        )}
-        {student.statusChangedAt && (student.status === '입실' || student.status === '등원') && (
-          <span className="text-[9px] text-muted-foreground/60 tabular-nums">
-            {new Date(student.statusChangedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
-          </span>
         )}
       </div>
     </div>
@@ -114,9 +186,11 @@ function DraggableStudentCard({ student, onAbsenceClick, blink }: {
 }
 
 /* ------------------------------------------------------------------ */
-function StatusColumn({ col, students, onAbsenceClick, blinkMap }: {
+function StatusColumn({ col, students, onAbsenceClick, blinkMap, onQuickAction, actionLoading, currentSlot }: {
   col: typeof STATUS_COLUMNS[0]; students: StudentCard[];
   onAbsenceClick: (s: StudentCard) => void; blinkMap: Map<string, 'orange' | 'red'>;
+  onQuickAction: (studentId: string, action: StatusKey) => void; actionLoading: Set<string>;
+  currentSlot: ScheduleSlot | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key });
   return (
@@ -138,7 +212,8 @@ function StatusColumn({ col, students, onAbsenceClick, blinkMap }: {
           <p className="text-[10px] text-muted-foreground text-center py-8 opacity-50">학생 없음</p>
         )}
         {students.map(s => (
-          <DraggableStudentCard key={s.id} student={s} onAbsenceClick={onAbsenceClick} blink={blinkMap.get(s.id) ?? null} />
+          <DraggableStudentCard key={s.id} student={s} onAbsenceClick={onAbsenceClick} blink={blinkMap.get(s.id) ?? null}
+            onQuickAction={onQuickAction} actionLoading={actionLoading} currentSlot={currentSlot} />
         ))}
       </div>
     </div>
@@ -425,6 +500,7 @@ function TeacherAttendanceView() {
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([]);
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -562,6 +638,34 @@ function TeacherAttendanceView() {
     sonnerToast.success(`${student.name} → ${targetStatus}`, { duration: 2000 });
   };
 
+  const handleQuickAction = useCallback(async (studentId: string, action: StatusKey) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    if (action === '결석지각') { setAbsenceTarget(student); return; }
+
+    setActionLoading(prev => new Set(prev).add(studentId));
+    const nowIso = new Date().toISOString();
+
+    // Optimistic update
+    setStudents(prev => prev.map(s => s.id === studentId ? { ...s, status: action, statusChangedAt: nowIso } : s));
+    const dbStatus = (action as string) === '결석지각' ? '결석' : action;
+    await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
+
+    if (action === '입실' || action === '퇴실') {
+      const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
+      if (action === '입실') {
+        if (existing?.length) await supabase.from('attendance_logs').update({ checked_in_at: nowIso }).eq('id', existing[0].id);
+        else await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
+      } else {
+        if (existing?.length) await supabase.from('attendance_logs').update({ checked_out_at: nowIso }).eq('id', existing[0].id);
+        else await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, checked_out_at: nowIso, recorded_by: teacherId });
+      }
+    }
+
+    setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
+    sonnerToast.success(`${student.name} → ${action}`, { duration: 2000 });
+  }, [students, today, teacherId]);
+
   const handleMarkAllPresent = async () => {
     const pendingStudents = students.filter(s => s.status === '미등원' || s.status === '등원');
     if (pendingStudents.length === 0) { toast({ title: '전원 출석 상태입니다', description: '미등원/등원 학생이 없습니다.' }); return; }
@@ -656,7 +760,8 @@ function TeacherAttendanceView() {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
             {STATUS_COLUMNS.map(col => (
-              <StatusColumn key={col.key} col={col} students={grouped[col.key]} onAbsenceClick={s => setAbsenceTarget(s)} blinkMap={blinkMap} />
+              <StatusColumn key={col.key} col={col} students={grouped[col.key]} onAbsenceClick={s => setAbsenceTarget(s)} blinkMap={blinkMap}
+                onQuickAction={handleQuickAction} actionLoading={actionLoading} currentSlot={currentSlot} />
             ))}
           </div>
           <DragOverlay>
