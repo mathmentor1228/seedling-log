@@ -17,11 +17,10 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
-  DndContext, closestCenter, DragEndEvent, DragStartEvent, DragOverlay,
-  useSensor, useSensors, PointerSensor,
+  DndContext, DragEndEvent, DragStartEvent, DragOverlay,
+  useSensor, useSensors, PointerSensor, useDroppable,
 } from '@dnd-kit/core';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useDraggable } from '@dnd-kit/core';
 import {
   LogOut, AlertTriangle, CalendarIcon, Clock, Loader2, GripVertical,
 } from 'lucide-react';
