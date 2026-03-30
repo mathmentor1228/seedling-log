@@ -43,6 +43,7 @@ import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
 import PublicReport from "./pages/PublicReport";
 import ParentPortal from "./pages/ParentPortal";
+import ParentNotifications from "./pages/ParentNotifications";
 import { StudentAuthProvider } from "@/lib/studentAuth";
 import StudentLogin from "./pages/student/StudentLogin";
 import StudentDashboard from "./pages/student/StudentDashboard";
