@@ -5,6 +5,7 @@ interface StudentRowProps {
   readOnly?: boolean;
   showRoom?: boolean;
   showTeacher?: boolean;
+  isLoading?: boolean;
   onCheckIn?: (studentId: string, roomId: string) => void;
   onCheckOut?: (logId: string) => void;
   onCancelCheckIn?: (logId: string) => void;
@@ -16,6 +17,7 @@ export function StudentRow({
   readOnly = false,
   showRoom = false,
   showTeacher = false,
+  isLoading = false,
   onCheckIn,
   onCheckOut,
   onCancelCheckIn,
