@@ -247,6 +247,12 @@ function PrincipalContent() {
 
       <PageTransition>
         <div className="space-y-6">
+          {/* 코멘트/요청 + 원내일정 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <TeamNotesBoard />
+            <AcademyCalendar />
+          </div>
+
           {/* STATS */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 animate-stagger">
             <StatCard icon={CheckCircle} label="전체 출석률" value={attendanceRate} sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 출석`} color="green" />
