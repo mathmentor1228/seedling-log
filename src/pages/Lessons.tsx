@@ -1246,6 +1246,11 @@ export default function Lessons() {
           <MathQuestionBoard />
         </TabsContent>
       )}
+      {(isAdmin || isTeacher) && (
+        <TabsContent value="math-analytics" className="mt-4">
+          <MathQuestionAnalytics />
+        </TabsContent>
+      )}
       </Tabs>
     </div>
   );
