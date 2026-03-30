@@ -4,6 +4,7 @@ import { StudentRow } from './StudentRow';
 interface TeacherViewProps {
   entries: StudentEntry[];
   loading: boolean;
+  loadingIds: Set<string>;
   teacherName: string;
   onCheckIn: (studentId: string, roomId: string) => void;
   onCheckOut: (logId: string) => void;
