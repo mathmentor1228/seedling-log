@@ -22,7 +22,7 @@ const isEmailAllowed = (userEmail: string | undefined, allowedEmails?: string[])
   return allowedEmails.some((email) => email.trim().toLowerCase() === normalizedUserEmail);
 };
 
-export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails, noLayout }: ProtectedRouteProps) {
   const { user, loading, role, isTrial, trialExpiresAt, isTrialExpired, signOut } = useAuth();
   const navigate = useNavigate();
 
