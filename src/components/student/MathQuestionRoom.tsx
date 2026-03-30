@@ -145,7 +145,7 @@ export default function MathQuestionRoom() {
 
   const uploadPhoto = async (file: File, path: string): Promise<string | null> => {
     try {
-      const compressed = await imageCompression(file);
+      const compressed = await compressImage(file);
       const { error } = await supabase.storage
         .from('math-questions')
         .upload(path, compressed, { upsert: true });
