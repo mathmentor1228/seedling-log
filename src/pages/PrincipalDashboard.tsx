@@ -19,6 +19,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import useEmblaCarousel from 'embla-carousel-react';
 import Dashboard from './Dashboard';
 import { cn } from '@/lib/utils';
+import { TeamNotesBoard } from '@/components/TeamNotesBoard';
+import { AcademyCalendar } from '@/components/AcademyCalendar';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
