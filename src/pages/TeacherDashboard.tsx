@@ -186,9 +186,11 @@ function DraggableStudentCard({ student, onAbsenceClick, blink, onQuickAction, a
 }
 
 /* ------------------------------------------------------------------ */
-function StatusColumn({ col, students, onAbsenceClick, blinkMap }: {
+function StatusColumn({ col, students, onAbsenceClick, blinkMap, onQuickAction, actionLoading, currentSlot }: {
   col: typeof STATUS_COLUMNS[0]; students: StudentCard[];
   onAbsenceClick: (s: StudentCard) => void; blinkMap: Map<string, 'orange' | 'red'>;
+  onQuickAction: (studentId: string, action: StatusKey) => void; actionLoading: Set<string>;
+  currentSlot: ScheduleSlot | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key });
   return (
@@ -210,7 +212,8 @@ function StatusColumn({ col, students, onAbsenceClick, blinkMap }: {
           <p className="text-[10px] text-muted-foreground text-center py-8 opacity-50">학생 없음</p>
         )}
         {students.map(s => (
-          <DraggableStudentCard key={s.id} student={s} onAbsenceClick={onAbsenceClick} blink={blinkMap.get(s.id) ?? null} />
+          <DraggableStudentCard key={s.id} student={s} onAbsenceClick={onAbsenceClick} blink={blinkMap.get(s.id) ?? null}
+            onQuickAction={onQuickAction} actionLoading={actionLoading} currentSlot={currentSlot} />
         ))}
       </div>
     </div>
