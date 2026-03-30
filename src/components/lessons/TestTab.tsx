@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,14 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { format, subDays } from 'date-fns';
+import { format, subDays, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
-import { Plus, Settings, CheckCircle2, XCircle, Minus, ChevronDown, ChevronUp } from 'lucide-react';
-import { ROOMS, TEST_TYPES, getRoomLabel, isSpecialRoom } from './constants';
+import { Plus, Settings, CheckCircle2, XCircle, Minus, ChevronDown, ChevronUp, Save, X } from 'lucide-react';
 import { UnifiedRecordModal } from './UnifiedRecordModal';
 import { RoutineModal } from './RoutineModal';
+import { InlineTestRow } from './InlineTestRow';
+import { StudentTestHistory } from './StudentTestHistory';
 
-interface UnifiedTestRecord {
+export interface UnifiedTestRecord {
   id: string;
   source: 'lesson_record';
   student_id: string;
@@ -29,9 +30,12 @@ interface UnifiedTestRecord {
   passed: boolean | null;
   assistant_name: string | null;
   room: string | null;
+  // raw DB fields for editing
+  english_pass_fail: string | null;
+  test_result: string | null;
 }
 
-function derivePassed(english_pass_fail: string | null, test_result: string | null): boolean | null {
+export function derivePassed(english_pass_fail: string | null, test_result: string | null): boolean | null {
   if (english_pass_fail === 'pass') return true;
   if (english_pass_fail === 'fail') return false;
   if (test_result === 'pass') return true;
@@ -43,14 +47,27 @@ export function TestTab() {
   const { toast } = useToast();
   const [records, setRecords] = useState<UnifiedTestRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState(getTodayKST());
+  const today = getTodayKST();
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
   const [filterSubject, setFilterSubject] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [routineOpen, setRoutineOpen] = useState(false);
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [studentHistory, setStudentHistory] = useState<UnifiedTestRecord[]>([]);
+  const [quickDate, setQuickDate] = useState<'yesterday' | 'today' | 'tomorrow'>('today');
+
+  const setQuickDateRange = useCallback((which: 'yesterday' | 'today' | 'tomorrow') => {
+    const base = new Date();
+    let d: string;
+    if (which === 'yesterday') d = format(subDays(base, 1), 'yyyy-MM-dd');
+    else if (which === 'tomorrow') d = format(addDays(base, 1), 'yyyy-MM-dd');
+    else d = getTodayKST();
+    setStartDate(d);
+    setEndDate(d);
+    setQuickDate(which);
+  }, []);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -69,6 +86,7 @@ export function TestTab() {
         test_result,
         english_pass_fail,
         test_assistant,
+        test_name,
         students!inner(name)
       `)
       .not('test_content', 'is', null)
@@ -86,7 +104,6 @@ export function TestTab() {
       return;
     }
 
-    // Fetch teacher names
     const teacherIds = [...new Set(data.map((r: any) => r.teacher_id).filter(Boolean))];
     let teacherMap: Record<string, string> = {};
     if (teacherIds.length > 0) {
@@ -112,6 +129,8 @@ export function TestTab() {
       passed: derivePassed(r.english_pass_fail, r.test_result),
       assistant_name: r.test_assistant || null,
       room: null,
+      english_pass_fail: r.english_pass_fail,
+      test_result: r.test_result,
     }));
 
     if (searchQuery) {
@@ -124,6 +143,90 @@ export function TestTab() {
   }, [startDate, endDate, filterSubject, searchQuery]);
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+  // Realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('test-tab-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'lesson_records' },
+        () => { fetchRecords(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchRecords]);
+
+  // Optimistic inline update
+  const handleInlineUpdate = useCallback(async (
+    recordId: string,
+    updates: {
+      content?: string;
+      score?: string;
+      passed?: boolean | null;
+      assistant_name?: string | null;
+    }
+  ) => {
+    // 1. Optimistic local update
+    setRecords(prev => prev.map(r => {
+      if (r.id !== recordId) return r;
+      return { ...r, ...updates };
+    }));
+
+    // 2. Build DB payload
+    const rec = records.find(r => r.id === recordId);
+    if (!rec) return;
+
+    const subject = rec.subject;
+    let testResult = rec.test_result || 'none';
+    let englishPassFail = rec.english_pass_fail;
+
+    if (updates.passed !== undefined) {
+      if (subject === '영어') {
+        englishPassFail = updates.passed === true ? 'pass' : updates.passed === false ? 'fail' : null;
+        testResult = 'none';
+      } else {
+        testResult = updates.passed === true ? 'pass' : updates.passed === false ? 'fail' : 'none';
+        englishPassFail = null;
+      }
+    }
+
+    try {
+      // Use RPC for test fields
+      const rpcParams: any = {
+        _lesson_id: recordId,
+        _test_result: testResult,
+      };
+      if (updates.content !== undefined) {
+        rpcParams._test_content = updates.content;
+        rpcParams._test_name = updates.content;
+      }
+      if (updates.score !== undefined) {
+        rpcParams._test_result_text = updates.score;
+      }
+      if (updates.assistant_name !== undefined) {
+        rpcParams._test_assistant = updates.assistant_name;
+      }
+
+      const { error: rpcError } = await supabase.rpc('update_lesson_test_fields', rpcParams);
+
+      if (rpcError) throw rpcError;
+
+      // If english_pass_fail changed, update directly
+      if (updates.passed !== undefined && subject === '영어') {
+        await supabase
+          .from('lesson_records')
+          .update({ english_pass_fail: englishPassFail })
+          .eq('id', recordId);
+      }
+
+      toast({ title: '저장됨', description: '테스트 기록이 업데이트되었습니다.' });
+    } catch (err: any) {
+      // Rollback
+      fetchRecords();
+      toast({ title: '저장 실패', description: err.message || '다시 시도해주세요.', variant: 'destructive' });
+    }
+  }, [records, fetchRecords, toast]);
 
   async function loadStudentHistory(studentId: string) {
     if (expandedStudent === studentId) { setExpandedStudent(null); return; }
@@ -156,6 +259,8 @@ export function TestTab() {
       passed: derivePassed(r.english_pass_fail, r.test_result),
       assistant_name: r.test_assistant || null,
       room: null,
+      english_pass_fail: r.english_pass_fail,
+      test_result: r.test_result,
     }));
 
     setStudentHistory(mapped);
@@ -168,25 +273,47 @@ export function TestTab() {
         <h2 className="text-lg font-bold">테스트 관리</h2>
         <div className="flex gap-2">
           <Button onClick={() => setModalOpen(true)} className="gap-1">
-            <Plus className="w-4 h-4" /> 테스트 기록 추가
+            <Plus className="w-4 h-4" /> 기록 추가
           </Button>
           <Button variant="outline" onClick={() => setRoutineOpen(true)} className="gap-1">
-            <Settings className="w-4 h-4" /> 정기 루틴 설정
+            <Settings className="w-4 h-4" /> 루틴 설정
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Quick date buttons + Filters */}
       <Card>
-        <CardContent className="p-3">
+        <CardContent className="p-3 space-y-2">
+          {/* Quick date row */}
+          <div className="flex gap-1.5">
+            {([
+              { key: 'yesterday', label: '어제' },
+              { key: 'today', label: '오늘' },
+              { key: 'tomorrow', label: '내일' },
+            ] as const).map(({ key, label }) => (
+              <Button
+                key={key}
+                size="sm"
+                variant={quickDate === key ? 'default' : 'outline'}
+                onClick={() => setQuickDateRange(key)}
+                className="text-xs px-3"
+              >
+                {label}
+              </Button>
+            ))}
+            <span className="text-xs text-muted-foreground ml-2 self-center">
+              {startDate === endDate ? startDate : `${startDate} ~ ${endDate}`}
+            </span>
+          </div>
+
           <div className="flex flex-wrap gap-2 items-end">
             <div>
               <label className="text-xs text-muted-foreground">시작일</label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-36" />
+              <Input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setQuickDate(undefined as any); }} className="w-36" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">종료일</label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-36" />
+              <Input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setQuickDate(undefined as any); }} className="w-36" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">과목</label>
@@ -216,12 +343,12 @@ export function TestTab() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>날짜</TableHead>
+                  <TableHead className="w-[80px]">날짜</TableHead>
                   <TableHead>학생</TableHead>
                   <TableHead>과목</TableHead>
                   <TableHead>범위/내용</TableHead>
                   <TableHead>결과</TableHead>
-                  <TableHead>통과</TableHead>
+                  <TableHead className="w-[60px]">통과</TableHead>
                   <TableHead>조교</TableHead>
                   <TableHead>담당</TableHead>
                 </TableRow>
@@ -232,36 +359,18 @@ export function TestTab() {
                 ) : records.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">기록이 없습니다</TableCell></TableRow>
                 ) : records.map(r => (
-                  <TableRow key={r.id} className="group">
-                    <TableCell className="text-sm">{r.test_date}</TableCell>
-                    <TableCell>
-                      <button
-                        onClick={() => loadStudentHistory(r.student_id)}
-                        className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
-                      >
-                        {r.student_name}
-                        {expandedStudent === r.student_id
-                          ? <ChevronUp className="w-3 h-3" />
-                          : <ChevronDown className="w-3 h-3" />}
-                      </button>
-                    </TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{r.subject}</Badge></TableCell>
-                    <TableCell className="text-sm max-w-[200px] truncate">{r.content}</TableCell>
-                    <TableCell className="text-sm">{r.score || '-'}</TableCell>
-                    <TableCell>
-                      {r.passed === true && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                      {r.passed === false && <XCircle className="w-4 h-4 text-red-600" />}
-                      {r.passed === null && <Minus className="w-4 h-4 text-muted-foreground" />}
-                    </TableCell>
-                    <TableCell className="text-xs">{r.assistant_name || '-'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{r.teacher_name}</TableCell>
-                  </TableRow>
+                  <InlineTestRow
+                    key={r.id}
+                    record={r}
+                    expandedStudent={expandedStudent}
+                    onToggleHistory={loadStudentHistory}
+                    onUpdate={handleInlineUpdate}
+                  />
                 ))}
               </TableBody>
             </Table>
           </div>
 
-          {/* Expanded student history */}
           {expandedStudent && studentHistory.length > 0 && (
             <div className="border-t p-4 bg-muted/30">
               <StudentTestHistory records={studentHistory} />
@@ -272,47 +381,6 @@ export function TestTab() {
 
       <UnifiedRecordModal open={modalOpen} onOpenChange={setModalOpen} defaultTypes={['test']} onSaved={fetchRecords} />
       <RoutineModal open={routineOpen} onOpenChange={setRoutineOpen} type="test" />
-    </div>
-  );
-}
-
-function StudentTestHistory({ records }: { records: UnifiedTestRecord[] }) {
-  // Group by subject
-  const subjects = [...new Set(records.map(r => r.subject))];
-
-  return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-semibold">학생별 누적 이력</h4>
-      {subjects.map(subj => {
-        const subRecords = records.filter(r => r.subject === subj);
-        const recent5 = subRecords.slice(0, 5);
-        const withResult = subRecords.filter(r => r.passed !== null);
-        const passCount = withResult.filter(r => r.passed === true).length;
-        const passRate = withResult.length > 0 ? Math.round((passCount / withResult.length) * 100) : 0;
-
-        return (
-          <div key={subj} className="space-y-1">
-            <div className="flex items-center gap-3 text-sm">
-              <Badge variant="outline">{subj}</Badge>
-              <span className="text-muted-foreground">통과율: {passRate}% ({passCount}/{withResult.length})</span>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {recent5.map(r => (
-                <div key={r.id} className="text-xs border rounded-md p-2 bg-background">
-                  <div className="font-medium">{r.test_date}</div>
-                  <div className="text-muted-foreground truncate max-w-[150px]">{r.content}</div>
-                  <div className="mt-1 flex items-center gap-1">
-                    {r.passed === true && <Badge variant="secondary" className="text-[10px]">통과</Badge>}
-                    {r.passed === false && <Badge variant="destructive" className="text-[10px]">불통과</Badge>}
-                    {r.passed === null && <Badge variant="outline" className="text-[10px]">미기록</Badge>}
-                    {r.score && <span className="ml-1">{r.score}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
