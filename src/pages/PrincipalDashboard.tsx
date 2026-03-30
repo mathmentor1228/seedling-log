@@ -234,7 +234,7 @@ function PrincipalContent() {
   };
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
+    <div className="space-y-6">
       {/* Sub-header with clock */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-lg font-bold">원장 대시보드</h1>
