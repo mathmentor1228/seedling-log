@@ -43,6 +43,7 @@ import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
 import PublicReport from "./pages/PublicReport";
 import ParentPortal from "./pages/ParentPortal";
+import ParentNotifications from "./pages/ParentNotifications";
 import { StudentAuthProvider } from "@/lib/studentAuth";
 import StudentLogin from "./pages/student/StudentLogin";
 import StudentDashboard from "./pages/student/StudentDashboard";
@@ -67,6 +68,7 @@ const App = () => (
           {/* Public route - NO AuthProvider, accessible without login */}
           <Route path="/report/view" element={<PublicReport />} />
           <Route path="/parent" element={<ParentPortal />} />
+          <Route path="/parent-notify" element={<ParentNotifications />} />
           <Route path="/trial" element={<TrialSignup />} />
           <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
           <Route path="/quiz-print" element={<QuizPrintPage />} />
