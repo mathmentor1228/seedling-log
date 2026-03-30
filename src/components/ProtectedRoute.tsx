@@ -25,9 +25,18 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
   const { user, loading, role, isTrial, trialExpiresAt, isTrialExpired, signOut } = useAuth();
   const navigate = useNavigate();
 
+  const getRoleDashboard = (r: string) => {
+    switch (r) {
+      case 'admin': return '/principal';
+      case 'teacher': return '/teacher';
+      case 'assistant': return '/assistant';
+      default: return '/dashboard';
+    }
+  };
+
   useEffect(() => {
     if (!loading && !user) {
-      navigate('/auth');
+      navigate('/login');
       return;
     }
 
@@ -42,8 +51,7 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
       const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role) || emailAllowed;
       
       if (!hasAccess) {
-        // Users without access get redirected to dashboard (accessible by all roles)
-        navigate('/dashboard', { replace: true });
+        navigate(getRoleDashboard(role), { replace: true });
       }
     }
   }, [user, loading, role, navigate, allowedRoles, allowedEmails]);
