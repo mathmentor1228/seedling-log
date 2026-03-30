@@ -163,5 +163,5 @@ export function useAttendanceData({ userId, role, selectedRoom }: UseAttendanceD
     return () => { supabase.removeChannel(channel); };
   }, [userId, fetchData]);
 
-  return { entries, allEntries, roomCounts, capacities, loading, refetch: fetchData };
+  return { entries, setEntries, allEntries, setAllEntries, roomCounts, setRoomCounts, capacities, loading, refetch: fetchData };
 }
