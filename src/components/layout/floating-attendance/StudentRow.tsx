@@ -86,7 +86,8 @@ export function StudentRow({
         <div className="flex gap-1 flex-shrink-0">
           {isNA && onCheckIn && (
             <button
-              onClick={() => onCheckIn(e.studentId, e.roomId)}
+              onMouseDown={(ev) => ev.stopPropagation()}
+              onClick={(ev) => { ev.stopPropagation(); onCheckIn(e.studentId, e.roomId); }}
               style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, backgroundColor: '#E1F5EE', border: '1px solid #1D9E75', color: '#1D9E75', fontWeight: 600, cursor: 'pointer' }}
             >
               입실
@@ -96,7 +97,8 @@ export function StudentRow({
             <>
               {onCheckOut && (
                 <button
-                  onClick={() => e.logId && onCheckOut(e.logId)}
+                  onMouseDown={(ev) => ev.stopPropagation()}
+                  onClick={(ev) => { ev.stopPropagation(); if (e.logId) onCheckOut(e.logId); }}
                   style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, backgroundColor: '#FCEBEB', border: '1px solid #E24B4A', color: '#E24B4A', fontWeight: 600, cursor: 'pointer' }}
                 >
                   퇴실
@@ -104,7 +106,8 @@ export function StudentRow({
               )}
               {onCancelCheckIn && (
                 <button
-                  onClick={() => e.logId && onCancelCheckIn(e.logId)}
+                  onMouseDown={(ev) => ev.stopPropagation()}
+                  onClick={(ev) => { ev.stopPropagation(); if (e.logId) onCancelCheckIn(e.logId); }}
                   style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
                 >
                   취소
@@ -114,7 +117,8 @@ export function StudentRow({
           )}
           {isOut && onCancelCheckOut && (
             <button
-              onClick={() => e.logId && onCancelCheckOut(e.logId)}
+              onMouseDown={(ev) => ev.stopPropagation()}
+              onClick={(ev) => { ev.stopPropagation(); if (e.logId) onCancelCheckOut(e.logId); }}
               style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
             >
               퇴실취소
