@@ -744,14 +744,13 @@ function TeacherContent() {
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {STATUS_COLUMNS.map(col => (
-              <div key={col.key} id={col.key} data-droppable="true">
-                <StatusColumn
-                  col={col}
-                  students={grouped[col.key]}
-                  onAbsenceClick={s => setAbsenceTarget(s)}
-                  blinkMap={blinkMap}
-                />
-              </div>
+              <StatusColumn
+                key={col.key}
+                col={col}
+                students={grouped[col.key]}
+                onAbsenceClick={s => setAbsenceTarget(s)}
+                blinkMap={blinkMap}
+              />
             ))}
           </div>
 
