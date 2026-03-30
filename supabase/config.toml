@@ -38,3 +38,9 @@ verify_jwt = false
 
 [functions.parent-auto-notify]
 verify_jwt = false
+
+[functions.detect-patterns]
+verify_jwt = false
+
+[functions.congestion-predict]
+verify_jwt = false
