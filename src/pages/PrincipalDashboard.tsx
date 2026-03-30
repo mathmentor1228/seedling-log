@@ -235,25 +235,11 @@ function PrincipalContent() {
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
-      {/* HEADER */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl px-4 md:px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-glow-primary">
-            <span className="text-primary-foreground font-bold text-sm">S</span>
-          </div>
-          <div>
-            <h1 className="text-base font-bold">원장 대시보드</h1>
-            <p className="text-2xs text-muted-foreground">SeedlingLog</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:block"><LiveClock /></div>
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-1.5" />
-            <span className="hidden sm:inline">로그아웃</span>
-          </Button>
-        </div>
-      </header>
+      {/* Sub-header with clock */}
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-lg font-bold">원장 대시보드</h1>
+        <LiveClock />
+      </div>
 
       <PageTransition>
         <main className="p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
