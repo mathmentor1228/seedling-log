@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sprout } from 'lucide-react';
+import { Loader2, GraduationCap } from 'lucide-react';
 import { PageTransition } from '@/components/ui/page-transition';
 
 const loginSchema = z.object({
