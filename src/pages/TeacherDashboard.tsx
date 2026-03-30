@@ -412,7 +412,7 @@ function CurrentClassHeader({ slot, attendedCount, totalCount }: {
 }
 
 /* ------------------------------------------------------------------ */
-function TeacherContent() {
+function TeacherAttendanceView() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
