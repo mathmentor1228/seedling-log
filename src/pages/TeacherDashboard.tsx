@@ -26,7 +26,9 @@ import {
 } from '@dnd-kit/core';
 import {
   LogOut, AlertTriangle, CalendarIcon, Clock, Loader2, GripVertical, Users,
+  CheckCircle2, MapPin, FileText, Bell, Sparkles,
 } from 'lucide-react';
+import { toast as sonnerToast } from 'sonner';
 
 /* ------------------------------------------------------------------ */
 type StatusKey = '미등원' | '등원' | '입실' | '퇴실' | '결석지각';
@@ -37,12 +39,22 @@ interface StudentCard {
   statusChangedAt?: string; parentPhone: string | null;
 }
 
-const STATUS_COLUMNS: { key: StatusKey; label: string; borderClass: string; dotClass: string }[] = [
-  { key: '미등원', label: '미등원', borderClass: 'border-border', dotClass: 'bg-muted-foreground' },
-  { key: '등원', label: '등원', borderClass: 'border-primary/30', dotClass: 'bg-primary' },
-  { key: '입실', label: '입실', borderClass: 'border-success/30', dotClass: 'bg-success' },
-  { key: '퇴실', label: '퇴실', borderClass: 'border-muted-foreground/30', dotClass: 'bg-muted-foreground' },
-  { key: '결석지각', label: '결석·지각', borderClass: 'border-destructive/30', dotClass: 'bg-destructive' },
+interface ScheduleSlot {
+  id: string;
+  className: string;
+  subject: string;
+  startTime: string;
+  endTime: string;
+  classroomName: string | null;
+  studentCount: number;
+}
+
+const STATUS_COLUMNS: { key: StatusKey; label: string; emoji: string; borderClass: string; dotClass: string; bgClass: string }[] = [
+  { key: '미등원', label: '미등원', emoji: '⬜', borderClass: 'border-border', dotClass: 'bg-muted-foreground', bgClass: 'bg-muted/30' },
+  { key: '등원', label: '등원', emoji: '🔵', borderClass: 'border-primary/30', dotClass: 'bg-primary', bgClass: 'bg-primary/5' },
+  { key: '입실', label: '입실', emoji: '✅', borderClass: 'border-success/30', dotClass: 'bg-success', bgClass: 'bg-success/5' },
+  { key: '퇴실', label: '퇴실', emoji: '🏠', borderClass: 'border-muted-foreground/30', dotClass: 'bg-muted-foreground', bgClass: 'bg-muted/20' },
+  { key: '결석지각', label: '결석·지각', emoji: '🚨', borderClass: 'border-destructive/30', dotClass: 'bg-destructive', bgClass: 'bg-destructive/5' },
 ];
 
 const ABSENCE_REASONS = ['질병/몸살', '개인사정', '가족행사', '학교시험', '무단', '직접입력'];
@@ -57,6 +69,7 @@ function DraggableStudentCard({ student, onAbsenceClick, blink }: {
   const style = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.4 : 1,
+    transition: isDragging ? 'none' : 'all 0.2s ease',
   };
   const blinkClass = blink === 'orange'
     ? 'ring-2 ring-warning animate-pulse'
@@ -68,22 +81,30 @@ function DraggableStudentCard({ student, onAbsenceClick, blink }: {
     <div
       ref={setNodeRef}
       style={style}
-      className={`p-2.5 rounded-lg bg-card border border-border cursor-grab active:cursor-grabbing
-        hover:border-primary/30 transition-all duration-200 group ${blinkClass}`}
+      className={cn(
+        'p-2.5 rounded-xl bg-card border border-border cursor-grab active:cursor-grabbing',
+        'hover:border-primary/40 hover:shadow-md transition-all duration-200 group',
+        blinkClass
+      )}
       {...attributes}
       {...listeners}
     >
       <div className="flex items-center gap-2">
-        <GripVertical className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 group-hover:text-primary/60 transition-colors" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-foreground truncate">{student.name}</p>
-          <p className="text-2xs text-muted-foreground">{student.school || ''} {student.grade || ''}</p>
+          <p className="text-[10px] text-muted-foreground">{student.school || ''} {student.grade || ''}</p>
         </div>
         {student.status === '결석지각' && (
-          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-2xs text-destructive hover:bg-destructive/10"
+          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
             onClick={(e) => { e.stopPropagation(); onAbsenceClick(student); }}>
             처리
           </Button>
+        )}
+        {student.statusChangedAt && (student.status === '입실' || student.status === '등원') && (
+          <span className="text-[9px] text-muted-foreground/60 tabular-nums">
+            {new Date(student.statusChangedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+          </span>
         )}
       </div>
     </div>
@@ -99,17 +120,20 @@ function StatusColumn({ col, students, onAbsenceClick, blinkMap }: {
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-xl border ${col.borderClass} bg-card/50 p-3 min-h-[200px] flex flex-col status-transition
-        ${isOver ? 'ring-2 ring-primary/50 bg-primary/5' : ''}`}
+      className={cn(
+        'rounded-2xl border-2 p-3 min-h-[220px] flex flex-col transition-all duration-300',
+        col.borderClass, col.bgClass,
+        isOver && 'ring-2 ring-primary/50 bg-primary/10 scale-[1.01] shadow-lg'
+      )}
     >
-      <div className="flex items-center gap-2 mb-3">
-        <div className={`w-2 h-2 rounded-full ${col.dotClass}`} />
-        <h3 className="text-xs font-semibold text-foreground">{col.label}</h3>
-        <Badge variant="outline" className="ml-auto text-2xs">{students.length}</Badge>
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border/50">
+        <span className="text-sm">{col.emoji}</span>
+        <h3 className="text-xs font-bold text-foreground">{col.label}</h3>
+        <Badge variant="secondary" className="ml-auto text-[10px] font-bold px-2 py-0.5">{students.length}명</Badge>
       </div>
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 space-y-1.5">
         {students.length === 0 && (
-          <p className="text-2xs text-muted-foreground text-center py-6">학생 없음</p>
+          <p className="text-[10px] text-muted-foreground text-center py-8 opacity-50">학생 없음</p>
         )}
         {students.map(s => (
           <DraggableStudentCard key={s.id} student={s} onAbsenceClick={onAbsenceClick} blink={blinkMap.get(s.id) ?? null} />
@@ -125,7 +149,7 @@ function AlertBanner({ orangeAlerts, redAlerts }: { orangeAlerts: string[]; redA
   return (
     <div className="space-y-1.5">
       {orangeAlerts.length > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-warning/10 border border-warning/30 animate-pulse">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-warning/10 border border-warning/30 animate-pulse">
           <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
           <p className="text-xs text-warning">
             <span className="font-semibold">등원 지연:</span> {orangeAlerts.join(', ')} — 수업 시작 후 5분 이상 등원 상태
@@ -133,7 +157,7 @@ function AlertBanner({ orangeAlerts, redAlerts }: { orangeAlerts: string[]; redA
         </div>
       )}
       {redAlerts.length > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-destructive/10 border border-destructive/30 animate-urgent-pulse">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30 animate-urgent-pulse">
           <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
           <p className="text-xs text-destructive">
             <span className="font-semibold">퇴실 지연:</span> {redAlerts.join(', ')} — 수업 종료 후에도 입실 상태
@@ -186,7 +210,7 @@ function AbsenceModal({ student, open, onClose, teacherId }: {
         const makeupInfo = deferMakeup ? '보강 일정은 추후 안내드리겠습니다.' : makeupDate ? `보강 일정: ${format(makeupDate, 'yyyy-MM-dd')} ${makeupTime}` : '보강 일정은 추후 안내드리겠습니다.';
         await supabase.from('parent_notifications').insert({
           parent_phone: student.parentPhone, student_id: student.id,
-          message: `[SeedlingLog] ${student.name} 학생이 ${effectiveReason}(으)로 금일 결석하였습니다. ${makeupInfo}`, type: 'absence',
+          message: `[THE Mentor] ${student.name} 학생이 ${effectiveReason}(으)로 금일 결석하였습니다. ${makeupInfo}`, type: 'absence',
         });
       }
       toast({ title: '✅ 모든 처리 완료!', description: '학부모 알림 발송됨' });
@@ -308,6 +332,84 @@ function LiveClock() {
 }
 
 /* ------------------------------------------------------------------ */
+/* TIME SLOT NAVIGATION */
+function TimeSlotNav({ slots, activeSlot, onSelect }: {
+  slots: ScheduleSlot[]; activeSlot: string | null; onSelect: (id: string) => void;
+}) {
+  const [nowStr, setNowStr] = useState('');
+  useEffect(() => {
+    const update = () => {
+      const n = new Date();
+      setNowStr(`${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`);
+    };
+    update();
+    const t = setInterval(update, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const isCurrent = (start: string, end: string) => nowStr >= start && nowStr <= end;
+
+  if (slots.length === 0) return null;
+
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {slots.map(slot => {
+        const current = isCurrent(slot.startTime, slot.endTime);
+        const active = activeSlot === slot.id;
+        return (
+          <button
+            key={slot.id}
+            onClick={() => onSelect(slot.id)}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 border shrink-0',
+              active
+                ? 'bg-primary text-primary-foreground border-primary shadow-md scale-[1.02]'
+                : current
+                  ? 'bg-primary/15 text-primary border-primary/30 shadow-sm'
+                  : 'bg-card text-muted-foreground border-border hover:border-primary/30 hover:bg-primary/5'
+            )}
+          >
+            {current && <Sparkles className="w-3 h-3" />}
+            <span>{slot.startTime}~{slot.endTime}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* CURRENT CLASS HEADER */
+function CurrentClassHeader({ slot, attendedCount, totalCount }: {
+  slot: ScheduleSlot | null; attendedCount: number; totalCount: number;
+}) {
+  if (!slot) return null;
+  return (
+    <div className="rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-primary" />
+          <span className="text-sm font-bold text-foreground">현재 수업:</span>
+          <span className="text-sm text-foreground">{slot.startTime}~{slot.endTime}</span>
+          <Badge variant="secondary" className="text-[10px]">{slot.subject}</Badge>
+          <span className="text-xs text-muted-foreground">{slot.className}</span>
+        </div>
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          {slot.classroomName && (
+            <span className="flex items-center gap-1">
+              <MapPin className="w-3 h-3" /> {slot.classroomName}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <Users className="w-3 h-3" /> {attendedCount}/{totalCount}명 출석
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 function TeacherContent() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -319,9 +421,44 @@ function TeacherContent() {
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [absenceTarget, setAbsenceTarget] = useState<StudentCard | null>(null);
+  const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([]);
+  const [activeSlot, setActiveSlot] = useState<string | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  // Fetch schedule slots for this teacher today
+  const fetchSchedule = useCallback(async () => {
+    const dow = new Date().getDay(); // 0=Sun
+    const { data: schedules } = await supabase
+      .from('class_schedules')
+      .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
+      .eq('teacher_id', teacherId)
+      .eq('day_of_week', dow)
+      .eq('is_active', true)
+      .order('start_time');
+
+    if (schedules && schedules.length > 0) {
+      const slots: ScheduleSlot[] = schedules.map((s: any) => ({
+        id: s.id,
+        className: s.classes?.name || '',
+        subject: s.classes?.subject || '',
+        startTime: s.start_time?.slice(0, 5) || '',
+        endTime: s.end_time?.slice(0, 5) || '',
+        classroomName: s.classrooms?.name || null,
+        studentCount: 0,
+      }));
+      setScheduleSlots(slots);
+
+      // Auto-select current slot
+      const nowH = new Date().getHours();
+      const nowM = new Date().getMinutes();
+      const nowStr = `${String(nowH).padStart(2, '0')}:${String(nowM).padStart(2, '0')}`;
+      const currentSlot = slots.find(sl => nowStr >= sl.startTime && nowStr <= sl.endTime);
+      setActiveSlot(currentSlot?.id || slots[0]?.id || null);
+    }
+  }, [teacherId]);
 
   const fetchStudents = useCallback(async () => {
     const { data: classes } = await supabase.from('classes').select('id').eq('teacher_id', teacherId);
@@ -354,7 +491,7 @@ function TeacherContent() {
     setLoading(false);
   }, [teacherId, today]);
 
-  useEffect(() => { if (teacherId) fetchStudents(); }, [teacherId, fetchStudents]);
+  useEffect(() => { if (teacherId) { fetchStudents(); fetchSchedule(); } }, [teacherId, fetchStudents, fetchSchedule]);
 
   useEffect(() => {
     if (!teacherId) return;
@@ -386,6 +523,9 @@ function TeacherContent() {
     return m;
   }, [students]);
 
+  const currentSlot = useMemo(() => scheduleSlots.find(s => s.id === activeSlot) || null, [scheduleSlots, activeSlot]);
+  const attendedCount = grouped['입실'].length + grouped['퇴실'].length;
+
   const handleDragStart = (event: DragStartEvent) => { setActiveId(event.active.id as string); };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -401,6 +541,7 @@ function TeacherContent() {
     const student = students.find(s => s.id === studentId);
     if (!student || student.status === targetStatus) return;
 
+    // Optimistic update
     setStudents(prev => prev.map(s => s.id === studentId ? { ...s, status: targetStatus! } : s));
     const dbStatus = targetStatus === '결석지각' ? '결석' : targetStatus;
     await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
@@ -416,7 +557,29 @@ function TeacherContent() {
         else await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, checked_out_at: nowIso, recorded_by: teacherId });
       }
     } else if (targetStatus === '결석지각') { setAbsenceTarget(student); }
-    toast({ title: `${student.name}`, description: `상태: ${targetStatus}` });
+
+    sonnerToast.success(`${student.name} → ${targetStatus}`, { duration: 2000 });
+  };
+
+  const handleMarkAllPresent = async () => {
+    const pendingStudents = students.filter(s => s.status === '미등원' || s.status === '등원');
+    if (pendingStudents.length === 0) { toast({ title: '전원 출석 상태입니다', description: '미등원/등원 학생이 없습니다.' }); return; }
+    setMarkingAll(true);
+    const nowIso = new Date().toISOString();
+
+    // Optimistic
+    setStudents(prev => prev.map(s =>
+      (s.status === '미등원' || s.status === '등원') ? { ...s, status: '입실' as StatusKey, statusChangedAt: nowIso } : s
+    ));
+
+    for (const s of pendingStudents) {
+      await supabase.from('students').update({ status: '입실' } as any).eq('id', s.id);
+      const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', s.id).eq('date', today).limit(1);
+      if (existing?.length) await supabase.from('attendance_logs').update({ checked_in_at: nowIso }).eq('id', existing[0].id);
+      else await supabase.from('attendance_logs').insert({ student_id: s.id, student_name: s.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
+    }
+    setMarkingAll(false);
+    sonnerToast.success(`${pendingStudents.length}명 전체 출석 처리 완료`);
   };
 
   const activeStudent = students.find(s => s.id === activeId);
@@ -440,7 +603,7 @@ function TeacherContent() {
           </div>
           <div>
             <h1 className="text-base font-bold">선생님 대시보드</h1>
-            <p className="text-2xs text-muted-foreground">{teacherName} · SeedlingLog</p>
+            <p className="text-[10px] text-muted-foreground">{teacherName} · THE Mentor</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -452,20 +615,60 @@ function TeacherContent() {
       </header>
 
       <PageTransition>
-        <main className="p-4 md:p-6 space-y-5 max-w-[1600px] mx-auto">
+        <main className="p-4 md:p-6 space-y-4 max-w-[1600px] mx-auto">
+          {/* Current class header */}
+          <CurrentClassHeader slot={currentSlot} attendedCount={attendedCount} totalCount={students.length} />
+
+          {/* Time slot navigation */}
+          {scheduleSlots.length > 0 && (
+            <TimeSlotNav slots={scheduleSlots} activeSlot={activeSlot} onSelect={setActiveSlot} />
+          )}
+
           <AlertBanner orangeAlerts={orangeAlerts} redAlerts={redAlerts} />
 
           {/* Summary counters */}
-          <div className="grid grid-cols-5 gap-2 md:gap-3 animate-stagger">
+          <div className="grid grid-cols-5 gap-2 md:gap-3">
             {STATUS_COLUMNS.map(col => (
-              <Card key={col.key} className={`border ${col.borderClass}`}>
+              <Card key={col.key} className={cn('border-2 transition-all duration-200 hover:shadow-md', col.borderClass)}>
                 <CardContent className="p-3 text-center">
-                  <div className={`w-3 h-3 rounded-full ${col.dotClass} mx-auto mb-1`} />
-                  <p className="text-lg font-bold animate-count-up">{grouped[col.key].length}</p>
-                  <p className="text-2xs text-muted-foreground">{col.label}</p>
+                  <span className="text-lg">{col.emoji}</span>
+                  <p className="text-xl font-extrabold text-foreground mt-1">{grouped[col.key].length}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">{col.label}</p>
                 </CardContent>
               </Card>
             ))}
+          </div>
+
+          {/* Quick actions */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs border-success/30 text-success hover:bg-success/10 hover:border-success/50 transition-all"
+              onClick={handleMarkAllPresent}
+              disabled={markingAll}
+            >
+              {markingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              전체 출석 처리
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 transition-all"
+              onClick={() => navigate('/lessons')}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              출결 보고서 생성
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs border-warning/30 text-warning hover:bg-warning/10 hover:border-warning/50 transition-all"
+              onClick={() => sonnerToast.info('학부모 알림 발송 기능은 출결 보고서에서 이용해주세요')}
+            >
+              <Bell className="w-3.5 h-3.5" />
+              학부모 알림 발송
+            </Button>
           </div>
 
           {students.length === 0 ? (
@@ -479,9 +682,9 @@ function TeacherContent() {
               </div>
               <DragOverlay>
                 {activeStudent && (
-                  <div className="p-2.5 rounded-lg bg-primary/20 border border-primary/50 shadow-xl max-w-[200px]">
-                    <p className="text-xs font-semibold text-foreground">{activeStudent.name}</p>
-                    <p className="text-2xs text-muted-foreground">{activeStudent.school}</p>
+                  <div className="p-3 rounded-xl bg-primary/20 border-2 border-primary/50 shadow-2xl max-w-[200px] backdrop-blur-sm">
+                    <p className="text-xs font-bold text-foreground">{activeStudent.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{activeStudent.school} {activeStudent.grade}</p>
                   </div>
                 )}
               </DragOverlay>
