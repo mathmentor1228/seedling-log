@@ -68,6 +68,7 @@ const App = () => (
           {/* Public route - NO AuthProvider, accessible without login */}
           <Route path="/report/view" element={<PublicReport />} />
           <Route path="/parent" element={<ParentPortal />} />
+          <Route path="/parent-notify" element={<ParentNotifications />} />
           <Route path="/trial" element={<TrialSignup />} />
           <Route path="/vocab-test-view" element={<VocabTestViewPage />} />
           <Route path="/quiz-print" element={<QuizPrintPage />} />
