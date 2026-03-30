@@ -62,8 +62,10 @@ const STATUS_COLUMNS: { key: StatusKey; label: string; emoji: string; borderClas
 const ABSENCE_REASONS = ['질병/몸살', '개인사정', '가족행사', '학교시험', '무단', '직접입력'];
 
 /* ------------------------------------------------------------------ */
-function DraggableStudentCard({ student, onAbsenceClick, blink }: {
+function DraggableStudentCard({ student, onAbsenceClick, blink, onQuickAction, actionLoading, currentSlot }: {
   student: StudentCard; onAbsenceClick: (s: StudentCard) => void; blink: 'orange' | 'red' | null;
+  onQuickAction: (studentId: string, action: StatusKey) => void; actionLoading: Set<string>;
+  currentSlot: ScheduleSlot | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: student.id, data: { student },
@@ -79,34 +81,104 @@ function DraggableStudentCard({ student, onAbsenceClick, blink }: {
       ? 'ring-2 ring-destructive animate-urgent-pulse'
       : '';
 
+  const isLoading = actionLoading.has(student.id);
+
+  // Calculate late status
+  const isLate = useMemo(() => {
+    if (!currentSlot || !student.statusChangedAt || student.status !== '입실') return false;
+    const entryTime = student.statusChangedAt.slice(11, 16);
+    return entryTime > currentSlot.startTime;
+  }, [currentSlot, student.statusChangedAt, student.status]);
+
+  const timeDisplay = student.statusChangedAt && (student.status === '입실' || student.status === '등원' || student.status === '퇴실')
+    ? new Date(student.statusChangedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
+    : null;
+
+  const statusLabel = student.status === '입실' ? '입실' : student.status === '퇴실' ? '퇴실' : student.status === '등원' ? '등원' : null;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'p-2.5 rounded-xl bg-card border border-border cursor-grab active:cursor-grabbing',
+        'p-2.5 rounded-xl bg-card border border-border',
         'hover:border-primary/40 hover:shadow-md transition-all duration-200 group',
-        blinkClass
+        blinkClass, isLoading && 'opacity-60 pointer-events-none'
       )}
-      {...attributes}
-      {...listeners}
     >
       <div className="flex items-center gap-2">
-        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 group-hover:text-primary/60 transition-colors" />
+        <div className="cursor-grab active:cursor-grabbing shrink-0" {...attributes} {...listeners}>
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 group-hover:text-primary/60 transition-colors" />
+        </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground truncate">{student.name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-semibold text-foreground truncate">{student.name}</p>
+            {timeDisplay && (
+              <span className={cn(
+                "text-[9px] tabular-nums px-1.5 py-0.5 rounded-full font-medium",
+                isLate ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground"
+              )}>
+                {statusLabel} {timeDisplay}{isLate && ' 지각'}
+              </span>
+            )}
+          </div>
           <p className="text-[10px] text-muted-foreground">{student.school || ''} {student.grade || ''}</p>
         </div>
+      </div>
+
+      {/* Quick action buttons */}
+      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-border/50">
+        {student.status === '미등원' && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '입실'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-success/10 text-success border border-success/30 hover:bg-success/20 font-medium transition-colors">
+              ⏰입실
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '등원'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 font-medium transition-colors">
+              ✅출석
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onAbsenceClick(student); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive/20 font-medium transition-colors">
+              ❌결석
+            </button>
+          </>
+        )}
+        {student.status === '등원' && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '입실'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-success/10 text-success border border-success/30 hover:bg-success/20 font-medium transition-colors">
+              ⏰입실
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onAbsenceClick(student); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive/20 font-medium transition-colors">
+              ❌결석
+            </button>
+          </>
+        )}
+        {student.status === '입실' && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '퇴실'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-muted text-muted-foreground border border-border hover:bg-muted/80 font-medium transition-colors">
+              🏠퇴실
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '결석지각'); }}
+              className="text-[9px] px-2 py-1 rounded-md bg-warning/10 text-warning border border-warning/30 hover:bg-warning/20 font-medium transition-colors">
+              🚨무단외출
+            </button>
+          </>
+        )}
+        {student.status === '퇴실' && (
+          <button onClick={(e) => { e.stopPropagation(); onQuickAction(student.id, '입실'); }}
+            className="text-[9px] px-2 py-1 rounded-md bg-success/10 text-success border border-success/30 hover:bg-success/20 font-medium transition-colors">
+            ⏰재입실
+          </button>
+        )}
         {student.status === '결석지각' && (
           <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] text-destructive hover:bg-destructive/10"
             onClick={(e) => { e.stopPropagation(); onAbsenceClick(student); }}>
             처리
           </Button>
-        )}
-        {student.statusChangedAt && (student.status === '입실' || student.status === '등원') && (
-          <span className="text-[9px] text-muted-foreground/60 tabular-nums">
-            {new Date(student.statusChangedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
-          </span>
         )}
       </div>
     </div>
