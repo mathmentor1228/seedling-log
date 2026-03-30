@@ -216,7 +216,7 @@ function PrincipalContent() {
 
   if (loading) {
     return (
-      <div className="dark min-h-screen bg-background p-4 md:p-6 space-y-6 max-w-[1400px] mx-auto">
+      <div className="space-y-6">
         <DashboardSkeleton variant="stats" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <DashboardSkeleton variant="list" count={4} />
