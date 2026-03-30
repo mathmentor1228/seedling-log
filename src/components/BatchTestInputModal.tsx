@@ -87,6 +87,7 @@ export function BatchTestInputModal({
     setSaving(true);
     try {
       let successCount = 0;
+      const savedRecordIds: string[] = [];
       
       for (const entry of entries) {
         if (!entry.lesson_record_id) continue;
@@ -94,19 +95,22 @@ export function BatchTestInputModal({
         const { error } = await supabase.rpc('update_lesson_test_fields', {
           _lesson_id: entry.lesson_record_id,
           _test_content: testContent,
+          _test_name: testContent,
           _test_result_text: entry.test_result_text || null,
           _test_result: entry.test_result,
           _test_date: date,
           _test_assistant: testAssistant || null,
         });
 
-        if (!error) successCount++;
+        if (!error) {
+          successCount++;
+          savedRecordIds.push(entry.lesson_record_id);
+        }
       }
 
       // For students without lesson records, update directly if possible
       const noRecordStudents = entries.filter(e => !e.lesson_record_id);
       if (noRecordStudents.length > 0) {
-        // Try to find their lesson records by student_id + date + subject
         const { data: foundRecords } = await supabase
           .from('lesson_records')
           .select('id, student_id')
@@ -123,13 +127,56 @@ export function BatchTestInputModal({
             const { error } = await supabase.rpc('update_lesson_test_fields', {
               _lesson_id: recordId,
               _test_content: testContent,
+              _test_name: testContent,
               _test_result_text: entry.test_result_text || null,
               _test_result: entry.test_result,
               _test_date: date,
               _test_assistant: testAssistant || null,
             });
 
-            if (!error) successCount++;
+            if (!error) {
+              successCount++;
+              savedRecordIds.push(recordId);
+            }
+          }
+        }
+      }
+
+      // BATCH-TEST-SYNC-V1: Sync lesson_types to include '테스트' and english_pass_fail for English
+      if (savedRecordIds.length > 0) {
+        // Fetch current lesson_types for saved records
+        const { data: currentRecords } = await supabase
+          .from('lesson_records')
+          .select('id, lesson_types, student_id')
+          .in('id', savedRecordIds);
+
+        if (currentRecords && currentRecords.length > 0) {
+          for (const rec of currentRecords) {
+            const currentTypes: string[] = (rec.lesson_types as string[]) || [];
+            if (!currentTypes.includes('테스트')) {
+              const updatedTypes = [...currentTypes, '테스트'];
+              // Also set english_pass_fail for English subject
+              const entry = entries.find(e => e.student_id === rec.student_id);
+              const updatePayload: Record<string, any> = {
+                lesson_types: updatedTypes,
+              };
+              if (subject === '영어' && entry) {
+                updatePayload.english_pass_fail = entry.english_pass_fail;
+              }
+              await supabase
+                .from('lesson_records')
+                .update(updatePayload)
+                .eq('id', rec.id);
+            } else if (subject === '영어') {
+              // lesson_types already has '테스트' but still sync english_pass_fail
+              const entry = entries.find(e => e.student_id === rec.student_id);
+              if (entry?.english_pass_fail) {
+                await supabase
+                  .from('lesson_records')
+                  .update({ english_pass_fail: entry.english_pass_fail })
+                  .eq('id', rec.id);
+              }
+            }
           }
         }
       }
