@@ -6,8 +6,8 @@ interface DashboardSkeletonProps {
   className?: string;
 }
 
-function SkeletonBox({ className }: { className?: string }) {
-  return <div className={cn('rounded-lg skeleton-shimmer', className)} />;
+function SkeletonBox({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={cn('rounded-lg skeleton-shimmer', className)} style={style} />;
 }
 
 export function DashboardSkeleton({ variant = 'card', count = 1, className }: DashboardSkeletonProps) {
