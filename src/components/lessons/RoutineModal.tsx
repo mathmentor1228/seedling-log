@@ -94,7 +94,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
       subject: subject || null,
       room,
       template_content: templateContent || null,
-      assistant_name: type === 'test' ? (assistantName || null) : null,
+      assistant_name: type === 'test' ? (assistantName && assistantName !== 'none' ? assistantName : null) : null,
     }));
     const { error } = await supabase.from('routine_schedules').insert(inserts);
     if (error) {
