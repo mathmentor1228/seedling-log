@@ -119,6 +119,10 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
     return null;
   }
 
+  if (noLayout) {
+    return <>{children}</>;
+  }
+
   return (
     <AppLayout>
       {isTrial && trialExpiresAt && (
