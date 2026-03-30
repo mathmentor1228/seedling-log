@@ -15,6 +15,7 @@ interface TeacherViewProps {
 export function TeacherView({
   entries,
   loading,
+  loadingIds,
   teacherName,
   onCheckIn,
   onCheckOut,
