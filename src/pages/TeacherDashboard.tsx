@@ -638,7 +638,34 @@ function TeacherAttendanceView() {
     sonnerToast.success(`${student.name} → ${targetStatus}`, { duration: 2000 });
   };
 
-  const handleMarkAllPresent = async () => {
+  const handleQuickAction = useCallback(async (studentId: string, action: StatusKey) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+    if (action === '결석지각') { setAbsenceTarget(student); return; }
+
+    setActionLoading(prev => new Set(prev).add(studentId));
+    const nowIso = new Date().toISOString();
+
+    // Optimistic update
+    setStudents(prev => prev.map(s => s.id === studentId ? { ...s, status: action, statusChangedAt: nowIso } : s));
+    const dbStatus = action === '결석지각' ? '결석' : action;
+    await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
+
+    if (action === '입실' || action === '퇴실') {
+      const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
+      if (action === '입실') {
+        if (existing?.length) await supabase.from('attendance_logs').update({ checked_in_at: nowIso }).eq('id', existing[0].id);
+        else await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
+      } else {
+        if (existing?.length) await supabase.from('attendance_logs').update({ checked_out_at: nowIso }).eq('id', existing[0].id);
+        else await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, checked_out_at: nowIso, recorded_by: teacherId });
+      }
+    }
+
+    setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
+    sonnerToast.success(`${student.name} → ${action}`, { duration: 2000 });
+  }, [students, today, teacherId]);
+
     const pendingStudents = students.filter(s => s.status === '미등원' || s.status === '등원');
     if (pendingStudents.length === 0) { toast({ title: '전원 출석 상태입니다', description: '미등원/등원 학생이 없습니다.' }); return; }
     setMarkingAll(true);
