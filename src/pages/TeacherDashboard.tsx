@@ -597,113 +597,180 @@ function TeacherContent() {
   }
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl px-4 md:px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shadow-glow-primary">
-            <span className="text-primary-foreground font-bold text-sm">T</span>
-          </div>
-          <div>
-            <h1 className="text-base font-bold">선생님 대시보드</h1>
-            <p className="text-[10px] text-muted-foreground">{teacherName} · THE Mentor</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <LiveClock />
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-1.5" /><span className="hidden sm:inline">로그아웃</span>
-          </Button>
-        </div>
-      </header>
+    <div className="space-y-4">
+      {/* Current class header */}
+      <CurrentClassHeader slot={currentSlot} attendedCount={attendedCount} totalCount={students.length} />
 
-      <PageTransition>
-        <main className="p-4 md:p-6 space-y-4 max-w-[1600px] mx-auto">
-          {/* Current class header */}
-          <CurrentClassHeader slot={currentSlot} attendedCount={attendedCount} totalCount={students.length} />
+      {/* Time slot navigation */}
+      {scheduleSlots.length > 0 && (
+        <TimeSlotNav slots={scheduleSlots} activeSlot={activeSlot} onSelect={setActiveSlot} />
+      )}
 
-          {/* Time slot navigation */}
-          {scheduleSlots.length > 0 && (
-            <TimeSlotNav slots={scheduleSlots} activeSlot={activeSlot} onSelect={setActiveSlot} />
-          )}
+      <AlertBanner orangeAlerts={orangeAlerts} redAlerts={redAlerts} />
 
-          <AlertBanner orangeAlerts={orangeAlerts} redAlerts={redAlerts} />
+      {/* Summary counters */}
+      <div className="grid grid-cols-5 gap-2 md:gap-3">
+        {STATUS_COLUMNS.map(col => (
+          <Card key={col.key} className={cn('border-2 transition-all duration-200 hover:shadow-md', col.borderClass)}>
+            <CardContent className="p-3 text-center">
+              <span className="text-lg">{col.emoji}</span>
+              <p className="text-xl font-extrabold text-foreground mt-1">{grouped[col.key].length}</p>
+              <p className="text-[10px] text-muted-foreground font-medium">{col.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-          {/* Summary counters */}
-          <div className="grid grid-cols-5 gap-2 md:gap-3">
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 text-xs border-success/30 text-success hover:bg-success/10 hover:border-success/50 transition-all"
+          onClick={handleMarkAllPresent}
+          disabled={markingAll}
+        >
+          {markingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+          전체 출석 처리
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 transition-all"
+          onClick={() => navigate('/lessons')}
+        >
+          <FileText className="w-3.5 h-3.5" />
+          출결 보고서 생성
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 text-xs border-warning/30 text-warning hover:bg-warning/10 hover:border-warning/50 transition-all"
+          onClick={() => sonnerToast.info('학부모 알림 발송 기능은 출결 보고서에서 이용해주세요')}
+        >
+          <Bell className="w-3.5 h-3.5" />
+          학부모 알림 발송
+        </Button>
+      </div>
+
+      {students.length === 0 ? (
+        <EmptyState icon={<Users className="w-6 h-6" />} title="배정된 학생이 없습니다" description="수업에 학생이 배정되면 여기에 출결 보드가 표시됩니다" />
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
             {STATUS_COLUMNS.map(col => (
-              <Card key={col.key} className={cn('border-2 transition-all duration-200 hover:shadow-md', col.borderClass)}>
-                <CardContent className="p-3 text-center">
-                  <span className="text-lg">{col.emoji}</span>
-                  <p className="text-xl font-extrabold text-foreground mt-1">{grouped[col.key].length}</p>
-                  <p className="text-[10px] text-muted-foreground font-medium">{col.label}</p>
-                </CardContent>
-              </Card>
+              <StatusColumn key={col.key} col={col} students={grouped[col.key]} onAbsenceClick={s => setAbsenceTarget(s)} blinkMap={blinkMap} />
             ))}
           </div>
-
-          {/* Quick actions */}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs border-success/30 text-success hover:bg-success/10 hover:border-success/50 transition-all"
-              onClick={handleMarkAllPresent}
-              disabled={markingAll}
-            >
-              {markingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              전체 출석 처리
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 transition-all"
-              onClick={() => navigate('/lessons')}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              출결 보고서 생성
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs border-warning/30 text-warning hover:bg-warning/10 hover:border-warning/50 transition-all"
-              onClick={() => sonnerToast.info('학부모 알림 발송 기능은 출결 보고서에서 이용해주세요')}
-            >
-              <Bell className="w-3.5 h-3.5" />
-              학부모 알림 발송
-            </Button>
-          </div>
-
-          {students.length === 0 ? (
-            <EmptyState icon={<Users className="w-6 h-6" />} title="배정된 학생이 없습니다" description="수업에 학생이 배정되면 여기에 출결 보드가 표시됩니다" />
-          ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-                {STATUS_COLUMNS.map(col => (
-                  <StatusColumn key={col.key} col={col} students={grouped[col.key]} onAbsenceClick={s => setAbsenceTarget(s)} blinkMap={blinkMap} />
-                ))}
+          <DragOverlay>
+            {activeStudent && (
+              <div className="p-3 rounded-xl bg-primary/20 border-2 border-primary/50 shadow-2xl max-w-[200px] backdrop-blur-sm">
+                <p className="text-xs font-bold text-foreground">{activeStudent.name}</p>
+                <p className="text-[10px] text-muted-foreground">{activeStudent.school} {activeStudent.grade}</p>
               </div>
-              <DragOverlay>
-                {activeStudent && (
-                  <div className="p-3 rounded-xl bg-primary/20 border-2 border-primary/50 shadow-2xl max-w-[200px] backdrop-blur-sm">
-                    <p className="text-xs font-bold text-foreground">{activeStudent.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{activeStudent.school} {activeStudent.grade}</p>
-                  </div>
-                )}
-              </DragOverlay>
-            </DndContext>
-          )}
-        </main>
-      </PageTransition>
+            )}
+          </DragOverlay>
+        </DndContext>
+      )}
 
       <AbsenceModal student={absenceTarget} open={!!absenceTarget} onClose={() => setAbsenceTarget(null)} teacherId={teacherId} />
     </div>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Swipeable Teacher Wrapper (like PrincipalDashboard)                 */
+/* ------------------------------------------------------------------ */
+const TEACHER_PANELS = ['📋 출결 현황', '📊 수업 관리'];
+
+function SwipeableTeacher() {
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setActiveIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    emblaApi.on('select', onSelect);
+    onSelect();
+    return () => { emblaApi.off('select', onSelect); };
+  }, [emblaApi, onSelect]);
+
+  const scrollTo = (idx: number) => emblaApi?.scrollTo(idx);
+
+  return (
+    <div className="space-y-3">
+      {/* Tab bar */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+          disabled={activeIndex === 0}
+          onClick={() => scrollTo(0)}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+
+        <div className="flex-1 flex justify-center gap-2">
+          {TEACHER_PANELS.map((label, i) => (
+            <button
+              key={i}
+              onClick={() => scrollTo(i)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300",
+                activeIndex === i
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <Button
+          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+          disabled={activeIndex === TEACHER_PANELS.length - 1}
+          onClick={() => scrollTo(1)}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Dot indicators */}
+      <div className="flex justify-center gap-1.5">
+        {TEACHER_PANELS.map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              "h-1.5 rounded-full transition-all duration-300",
+              activeIndex === i ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/30"
+            )}
+          />
+        ))}
+      </div>
+
+      {/* Swipeable panels */}
+      <div className="overflow-hidden" ref={emblaRef}>
+        <div className="flex">
+          <div className="flex-[0_0_100%] min-w-0">
+            <TeacherAttendanceView />
+          </div>
+          <div className="flex-[0_0_100%] min-w-0">
+            <Dashboard />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TeacherDashboard() {
   return (
-    <ProtectedRoute allowedRoles={['teacher']} noLayout>
-      <TeacherContent />
+    <ProtectedRoute allowedRoles={['teacher']}>
+      <SwipeableTeacher />
     </ProtectedRoute>
   );
 }
