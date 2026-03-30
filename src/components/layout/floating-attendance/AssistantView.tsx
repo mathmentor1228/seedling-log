@@ -24,6 +24,7 @@ export function AssistantView({
   roomCounts,
   capacities,
   loading,
+  loadingIds,
   onCheckIn,
   onCheckOut,
   onCancelCheckIn,
