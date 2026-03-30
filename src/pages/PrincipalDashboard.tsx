@@ -213,7 +213,7 @@ function PrincipalContent() {
     return checkedIn.filter(l => l.room_id === selectedClassroom.id);
   }, [selectedClassroom, checkedIn]);
 
-  const handleLogout = async () => { await signOut(); navigate('/login'); };
+  
 
   if (loading) {
     return (
