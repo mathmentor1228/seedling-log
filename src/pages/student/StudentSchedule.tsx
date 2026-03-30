@@ -5,6 +5,7 @@ import { studentApi } from '@/lib/studentApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock } from 'lucide-react';
+import MathQuestionRoom from '@/components/student/MathQuestionRoom';
 
 interface ScheduleItem {
   class_name: string;

@@ -140,4 +140,17 @@ export const studentApi = {
 
   toggleStudyTask: (sessionId: string, taskId: string, completed: boolean) =>
     studentApiCall<{ success: boolean }>('toggle_study_task', { session_id: sessionId, task_id: taskId, completed }),
+
+  // Math Question Room
+  getMathQuestions: () => studentApiCall<{ questions: any[]; daily_count: number }>('math_questions_list'),
+
+  submitMathQuestion: (params: {
+    title: string;
+    description: string | null;
+    photo_problem_url: string;
+    photo_solution_url: string;
+    grade: string;
+    subject: string;
+    source_text: string;
+  }) => studentApiCall<{ success: boolean; question_id: string }>('submit_math_question', params),
 };
