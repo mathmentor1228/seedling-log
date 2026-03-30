@@ -43,12 +43,44 @@ const NAV_ITEMS = [
    const { student, isLoading, logout } = useStudentAuth();
    const navigate = useNavigate();
    const location = useLocation();
+   const [newAnswerCount, setNewAnswerCount] = useState(0);
  
    useEffect(() => {
      if (!isLoading && !student) {
        navigate('/student/login', { replace: true });
      }
    }, [isLoading, student, navigate]);
+
+   // Realtime badge: listen for new answers on student's questions
+   useEffect(() => {
+     if (!student?.id) return;
+
+     const channel = supabase
+       .channel('student-answer-badge')
+       .on(
+         'postgres_changes',
+         {
+           event: 'INSERT',
+           schema: 'public',
+           table: 'math_answers',
+         },
+         () => {
+           setNewAnswerCount(prev => prev + 1);
+         }
+       )
+       .subscribe();
+
+     return () => {
+       supabase.removeChannel(channel);
+     };
+   }, [student?.id]);
+
+   // Clear badge when visiting schedule page
+   useEffect(() => {
+     if (location.pathname === '/student/schedule') {
+       setNewAnswerCount(0);
+     }
+   }, [location.pathname]);
  
    if (isLoading) {
      return (
