@@ -13,6 +13,7 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: AllowedRole[];
   allowedEmails?: string[];
+  noLayout?: boolean;
 }
 
 const isEmailAllowed = (userEmail: string | undefined, allowedEmails?: string[]) => {
