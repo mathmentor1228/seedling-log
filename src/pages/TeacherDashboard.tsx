@@ -759,7 +759,8 @@ function TeacherAttendanceView() {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
             {STATUS_COLUMNS.map(col => (
-              <StatusColumn key={col.key} col={col} students={grouped[col.key]} onAbsenceClick={s => setAbsenceTarget(s)} blinkMap={blinkMap} />
+              <StatusColumn key={col.key} col={col} students={grouped[col.key]} onAbsenceClick={s => setAbsenceTarget(s)} blinkMap={blinkMap}
+                onQuickAction={handleQuickAction} actionLoading={actionLoading} currentSlot={currentSlot} />
             ))}
           </div>
           <DragOverlay>
