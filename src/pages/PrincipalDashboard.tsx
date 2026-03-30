@@ -373,7 +373,7 @@ function PrincipalContent() {
               )}
             </div>
           </div>
-        </main>
+        </div>
       </PageTransition>
 
       {/* FLOATING BUBBLES */}
