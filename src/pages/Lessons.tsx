@@ -841,7 +841,12 @@ export default function Lessons() {
               </>
             )}
             {(isAdmin || isTeacher) && (
-              <TabsTrigger value="student-profile">👤 학생 캐릭터</TabsTrigger>
+              <>
+                <TabsTrigger value="student-profile">👤 학생 캐릭터</TabsTrigger>
+                <TabsTrigger value="math-questions" className="relative">
+                  📚 수학질문방
+                </TabsTrigger>
+              </>
             )}
           </TabsList>
           {canManage && (
