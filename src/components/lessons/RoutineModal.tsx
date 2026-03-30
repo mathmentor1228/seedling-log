@@ -358,7 +358,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
                   <Select value={assistantName} onValueChange={setAssistantName}>
                     <SelectTrigger><SelectValue placeholder="조교 선택" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">없음</SelectItem>
+                      <SelectItem value="none">없음</SelectItem>
                       {ASSISTANTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                     </SelectContent>
                   </Select>
