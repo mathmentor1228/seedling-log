@@ -1,18 +1,19 @@
  // STUDENT-APP-V1: Mobile-optimized layout for student app
- import { ReactNode, useEffect } from 'react';
+ import { ReactNode, useEffect, useState } from 'react';
  import { useNavigate, useLocation, Link } from 'react-router-dom';
  import { useStudentAuth } from '@/lib/studentAuth';
+ import { supabase } from '@/integrations/supabase/client';
  import { 
    Home, 
    Upload, 
    Star, 
    Calendar, 
-  BookOpen,
-  LogOut,
-  User,
-  Languages,
-  Calculator
-} from 'lucide-react';
+   BookOpen,
+   LogOut,
+   User,
+   Languages,
+   Calculator
+ } from 'lucide-react';
  import { Button } from '@/components/ui/button';
  import {
    DropdownMenu,
@@ -42,12 +43,44 @@ const NAV_ITEMS = [
    const { student, isLoading, logout } = useStudentAuth();
    const navigate = useNavigate();
    const location = useLocation();
+   const [newAnswerCount, setNewAnswerCount] = useState(0);
  
    useEffect(() => {
      if (!isLoading && !student) {
        navigate('/student/login', { replace: true });
      }
    }, [isLoading, student, navigate]);
+
+   // Realtime badge: listen for new answers on student's questions
+   useEffect(() => {
+     if (!student?.id) return;
+
+     const channel = supabase
+       .channel('student-answer-badge')
+       .on(
+         'postgres_changes',
+         {
+           event: 'INSERT',
+           schema: 'public',
+           table: 'math_answers',
+         },
+         () => {
+           setNewAnswerCount(prev => prev + 1);
+         }
+       )
+       .subscribe();
+
+     return () => {
+       supabase.removeChannel(channel);
+     };
+   }, [student?.id]);
+
+   // Clear badge when visiting schedule page
+   useEffect(() => {
+     if (location.pathname === '/student/schedule') {
+       setNewAnswerCount(0);
+     }
+   }, [location.pathname]);
  
    if (isLoading) {
      return (
@@ -117,20 +150,25 @@ const NAV_ITEMS = [
              const isActive = location.pathname === item.path || 
                (item.path !== '/student' && location.pathname.startsWith(item.path));
              
-             return (
-               <Link
-                 key={item.path}
-                 to={item.path}
-                 className={cn(
-                   "flex flex-col items-center justify-center w-16 h-full transition-all",
-                   isActive 
-                     ? 'text-primary' 
-                     : 'text-muted-foreground hover:text-foreground'
-                 )}
-               >
-                 <item.icon className={cn("w-5 h-5", isActive && 'stroke-[2.5px]')} />
-                 <span className={cn("text-[10px] mt-1 font-medium", isActive && "font-semibold")}>{item.label}</span>
-               </Link>
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex flex-col items-center justify-center w-16 h-full transition-all relative",
+                    isActive 
+                      ? 'text-primary' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <item.icon className={cn("w-5 h-5", isActive && 'stroke-[2.5px]')} />
+                  <span className={cn("text-[10px] mt-1 font-medium", isActive && "font-semibold")}>{item.label}</span>
+                  {item.path === '/student/schedule' && newAnswerCount > 0 && (
+                    <span className="absolute top-1 right-2 w-4 h-4 bg-destructive text-destructive-foreground text-[9px] rounded-full flex items-center justify-center font-bold animate-pulse">
+                      {newAnswerCount > 9 ? '9+' : newAnswerCount}
+                    </span>
+                  )}
+                </Link>
              );
            })}
          </div>

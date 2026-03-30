@@ -130,6 +130,59 @@ export default function MathQuestionRoom() {
     fetchData();
   }, [fetchData]);
 
+  // REALTIME: Listen for new answers and status changes
+  useEffect(() => {
+    if (!student?.id) return;
+
+    // Listen for answers on this student's questions
+    const questionIds = questions.map(q => q.id);
+
+    const answersChannel = supabase
+      .channel('math-answers-student')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'math_answers',
+        },
+        (payload) => {
+          const newAnswer = payload.new as any;
+          // Check if answer is for one of our questions
+          if (questionIds.includes(newAnswer.question_id)) {
+            toast.success('선생님이 답변해주셨어요! 📚✨', {
+              description: '내 질문함에서 확인해보세요',
+              duration: 5000,
+            });
+            fetchData();
+          }
+        }
+      )
+      .subscribe();
+
+    // Listen for status changes on our questions
+    const questionsChannel = supabase
+      .channel('math-questions-student')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'math_questions',
+          filter: `student_id=eq.${student.id}`,
+        },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(answersChannel);
+      supabase.removeChannel(questionsChannel);
+    };
+  }, [student?.id, questions.length, fetchData]);
+
   const handlePhotoSelect = (type: 'problem' | 'solution') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;

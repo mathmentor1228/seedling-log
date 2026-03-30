@@ -38,6 +38,7 @@ import { TestTab } from '@/components/lessons/TestTab';
 import { SelfStudyTab } from '@/components/lessons/SelfStudyTab';
 import { ClinicTab } from '@/components/lessons/ClinicTab';
 import { StudentProfileTab } from '@/components/lessons/StudentProfileTab';
+import MathQuestionBoard from '@/components/lessons/MathQuestionBoard';
 
 interface Teacher {
   id: string;
@@ -841,7 +842,12 @@ export default function Lessons() {
               </>
             )}
             {(isAdmin || isTeacher) && (
-              <TabsTrigger value="student-profile">👤 학생 캐릭터</TabsTrigger>
+              <>
+                <TabsTrigger value="student-profile">👤 학생 캐릭터</TabsTrigger>
+                <TabsTrigger value="math-questions" className="relative">
+                  📚 수학질문방
+                </TabsTrigger>
+              </>
             )}
           </TabsList>
           {canManage && (
@@ -1231,6 +1237,12 @@ export default function Lessons() {
       {(isAdmin || isTeacher) && (
         <TabsContent value="student-profile" className="mt-4">
           <StudentProfileTab />
+        </TabsContent>
+      )}
+
+      {(isAdmin || isTeacher) && (
+        <TabsContent value="math-questions" className="mt-4">
+          <MathQuestionBoard />
         </TabsContent>
       )}
       </Tabs>
