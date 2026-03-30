@@ -60,14 +60,13 @@ function DraggableStudentCard({ student, onAbsenceClick, blink }: {
   onAbsenceClick: (s: StudentCard) => void;
   blink: 'orange' | 'red' | null;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: student.id,
     data: { student },
   });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.4 : 1,
   };
 
