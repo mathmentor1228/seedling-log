@@ -94,7 +94,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
       subject: subject || null,
       room,
       template_content: templateContent || null,
-      assistant_name: type === 'test' ? (assistantName || null) : null,
+      assistant_name: type === 'test' ? (assistantName && assistantName !== 'none' ? assistantName : null) : null,
     }));
     const { error } = await supabase.from('routine_schedules').insert(inserts);
     if (error) {
@@ -358,7 +358,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
                   <Select value={assistantName} onValueChange={setAssistantName}>
                     <SelectTrigger><SelectValue placeholder="조교 선택" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">없음</SelectItem>
+                      <SelectItem value="none">없음</SelectItem>
                       {ASSISTANTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                     </SelectContent>
                   </Select>
