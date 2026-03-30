@@ -107,6 +107,7 @@ export function FloatingAttendanceWidget() {
           roomCounts={roomCounts}
           capacities={capacities}
           loading={loading}
+          loadingIds={loadingIds}
           onCheckIn={handleCheckIn}
           onCheckOut={handleCheckOut}
           onCancelCheckIn={handleCancelCheckIn}
