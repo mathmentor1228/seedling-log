@@ -39,6 +39,7 @@ import { SelfStudyTab } from '@/components/lessons/SelfStudyTab';
 import { ClinicTab } from '@/components/lessons/ClinicTab';
 import { StudentProfileTab } from '@/components/lessons/StudentProfileTab';
 import MathQuestionBoard from '@/components/lessons/MathQuestionBoard';
+import MathQuestionAnalytics from '@/components/lessons/MathQuestionAnalytics';
 
 interface Teacher {
   id: string;
@@ -847,6 +848,7 @@ export default function Lessons() {
                 <TabsTrigger value="math-questions" className="relative">
                   📚 수학질문방
                 </TabsTrigger>
+                <TabsTrigger value="math-analytics">📊 질문분석</TabsTrigger>
               </>
             )}
           </TabsList>
@@ -1243,6 +1245,11 @@ export default function Lessons() {
       {(isAdmin || isTeacher) && (
         <TabsContent value="math-questions" className="mt-4">
           <MathQuestionBoard />
+        </TabsContent>
+      )}
+      {(isAdmin || isTeacher) && (
+        <TabsContent value="math-analytics" className="mt-4">
+          <MathQuestionAnalytics />
         </TabsContent>
       )}
       </Tabs>
