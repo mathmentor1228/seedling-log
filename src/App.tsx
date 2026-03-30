@@ -2,12 +2,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth";
 import Index from "./pages/Index";
 import VocabTestViewPage from "./pages/VocabTestViewPage";
 import Auth from "./pages/Auth";
 import DashboardPage from "./pages/DashboardPage";
+import PrincipalDashboard from "./pages/PrincipalDashboard";
+import TeacherDashboard from "./pages/TeacherDashboard";
+import AssistantDashboardPage from "./pages/AssistantDashboardPage";
+import ParentDashboardPage from "./pages/ParentDashboardPage";
 import StudentsPage from "./pages/StudentsPage";
 import ClassesPage from "./pages/ClassesPage";
 import LessonsPage from "./pages/LessonsPage";
@@ -73,7 +77,14 @@ const App = () => (
             <AuthProvider>
               <Routes>
                 <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
+                <Route path="/login" element={<Auth />} />
+                <Route path="/auth" element={<Navigate to="/login" replace />} />
+
+                {/* Role-based dashboards */}
+                <Route path="/principal" element={<PrincipalDashboard />} />
+                <Route path="/teacher" element={<TeacherDashboard />} />
+                <Route path="/assistant" element={<AssistantDashboardPage />} />
+                <Route path="/parent-dashboard" element={<ParentDashboardPage />} />
 
                 {/* Student App Routes */}
                 <Route path="/student/login" element={
@@ -117,7 +128,7 @@ const App = () => (
                 <Route path="/admin/users" element={<UserManagementPage />} />
                 <Route path="/timetable" element={<TimetablePage />} />
                 <Route path="/assistant-requests" element={<AssistantRequestsPage />} />
-                <Route path="/assistant" element={<AssistantPage />} />
+                <Route path="/assistant-tasks" element={<AssistantPage />} />
                 <Route path="/stats" element={<StatsPage />} />
                 <Route path="/admin/briefing" element={<AdminBriefingPage />} />
                 <Route path="/admin/report" element={<AdminReportPage />} />
