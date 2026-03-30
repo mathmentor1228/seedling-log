@@ -28,7 +28,7 @@ import {
 } from '@dnd-kit/core';
 import {
   LogOut, AlertTriangle, CalendarIcon, Clock, Loader2, GripVertical, Users,
-  CheckCircle2, MapPin, FileText, Bell, Sparkles,
+  CheckCircle2, MapPin, FileText, Bell, Sparkles, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { toast as sonnerToast } from 'sonner';
 
