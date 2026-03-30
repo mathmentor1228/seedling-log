@@ -85,7 +85,7 @@ export function StudentRow({
         </span>
       </div>
       {!readOnly && (
-        <div className="flex gap-1 flex-shrink-0">
+        <div className="flex gap-1 flex-shrink-0" style={isLoading ? { opacity: 0.6, cursor: 'wait', pointerEvents: 'none' } : undefined}>
           {isNA && onCheckIn && (
             <button
               onMouseDown={(ev) => ev.stopPropagation()}
