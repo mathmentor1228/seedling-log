@@ -7,16 +7,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sprout } from 'lucide-react';
 
 const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  email: z.string().email('올바른 이메일을 입력해주세요'),
+  password: z.string().min(6, '비밀번호는 6자 이상이어야 합니다'),
 });
 
 const signupSchema = loginSchema.extend({
-  fullName: z.string().min(2, 'Name must be at least 2 characters'),
+  fullName: z.string().min(2, '이름은 2자 이상이어야 합니다'),
 });
+
+/** Map role to the correct dashboard path */
+function getRoleDashboard(role: string | null): string {
+  switch (role) {
+    case 'admin': return '/principal';
+    case 'teacher': return '/teacher';
+    case 'assistant': return '/assistant';
+    default: return '/dashboard';
+  }
+}
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -26,16 +36,15 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, user, role } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (user) {
-      // Always redirect to dashboard after login
-      navigate('/dashboard', { replace: true });
+    if (user && role) {
+      navigate(getRoleDashboard(role), { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, role, navigate]);
 
   const validateForm = () => {
     try {
@@ -72,40 +81,38 @@ export default function Auth() {
         const { error } = await signIn(email, password);
         if (error) {
           toast({
-            title: 'Login failed',
+            title: '로그인 실패',
             description: error.message === 'Invalid login credentials' 
-              ? 'Invalid email or password' 
+              ? '이메일 또는 비밀번호가 올바르지 않습니다' 
               : error.message,
             variant: 'destructive',
           });
         } else {
           toast({
-            title: 'Welcome back!',
-            description: 'You have successfully logged in.',
+            title: '로그인 성공',
+            description: '환영합니다!',
           });
-          // Redirect to dashboard after successful login
-          navigate('/dashboard', { replace: true });
         }
       } else {
         const { error } = await signUp(email, password, fullName);
         if (error) {
           if (error.message.includes('already registered')) {
             toast({
-              title: 'Account exists',
-              description: 'This email is already registered. Please log in instead.',
+              title: '이미 등록된 계정',
+              description: '이 이메일은 이미 등록되어 있습니다. 로그인을 시도해주세요.',
               variant: 'destructive',
             });
           } else {
             toast({
-              title: 'Signup failed',
+              title: '회원가입 실패',
               description: error.message,
               variant: 'destructive',
             });
           }
         } else {
           toast({
-            title: 'Account created!',
-            description: 'Please contact your administrator to assign your role.',
+            title: '계정이 생성되었습니다!',
+            description: '관리자에게 역할 배정을 요청해주세요.',
           });
           setIsLogin(true);
         }
@@ -119,18 +126,17 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="flex flex-col items-center mb-8">
-          {/* Logo Mark: Square with "M" */}
-          <div className="w-10 h-10 bg-primary rounded flex items-center justify-center mb-3">
-            <span className="text-primary-foreground font-bold text-lg">M</span>
+          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-3">
+            <Sprout className="w-6 h-6 text-primary-foreground" />
           </div>
-          <h1 className="text-lg font-semibold text-foreground">MENTOR LOG</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">더멘토학원 학습·운영 관리 시스템</p>
+          <h1 className="text-lg font-bold text-foreground">SeedlingLog</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">학원 출결 관리 시스템</p>
         </div>
 
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle>{isLogin ? '로그인' : '회원가입'}</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-base">{isLogin ? '로그인' : '회원가입'}</CardTitle>
+            <CardDescription className="text-xs">
               {isLogin 
                 ? '이메일과 비밀번호를 입력하세요' 
                 : '새 계정을 생성합니다'}
