@@ -43,7 +43,6 @@ export function AttendanceWidget() {
     const today = new Date().toISOString().split('T')[0];
     const dayOfWeek = getDayOfWeek(today);
 
-    // Fetch capacities
     const { data: capData } = await supabase
       .from('room_capacities')
       .select('room_id, capacity, label');
@@ -53,7 +52,6 @@ export function AttendanceWidget() {
     });
     setCapacities(capMap);
 
-    // My classes → my student ids
     const { data: classes } = await supabase
       .from('classes')
       .select('id')
@@ -80,7 +78,6 @@ export function AttendanceWidget() {
       return;
     }
 
-    // Today's assignments for room10, glass — column is "room" not "room_id", "assigned_date" not "date"
     const { data: assigned } = await supabase
       .from('room_assignments')
       .select('student_ids, student_names, room')
@@ -89,7 +86,6 @@ export function AttendanceWidget() {
         `and(is_fixed.eq.true,day.eq.${dayOfWeek}),and(is_fixed.eq.false,assigned_date.eq.${today})`
       );
 
-    // Extract assigned students that are mine
     interface AssignedStudent { studentId: string; studentName: string; roomId: string; }
     const assignedStudents: AssignedStudent[] = [];
     const seenKeys = new Set<string>();
@@ -111,7 +107,6 @@ export function AttendanceWidget() {
       });
     });
 
-    // Today's logs for my students
     const { data: logs } = await supabase
       .from('attendance_logs')
       .select('id, student_id, student_name, room_id, date, checked_in_at, checked_out_at')
@@ -124,7 +119,6 @@ export function AttendanceWidget() {
       logMap.set(`${l.student_id}_${l.room_id}`, { checked_in_at: l.checked_in_at, checked_out_at: l.checked_out_at });
     });
 
-    // Build entries
     const result: StudentEntry[] = assignedStudents.map((s) => {
       const log = logMap.get(`${s.studentId}_${s.roomId}`);
       const roomLabel = ROOMS.find((r) => r.id === s.roomId)?.label ?? s.roomId;
@@ -141,7 +135,6 @@ export function AttendanceWidget() {
     result.sort((a, b) => order[a.status] - order[b.status]);
     setEntries(result);
 
-    // Room counts (全体)
     const { data: allLogs } = await supabase
       .from('attendance_logs')
       .select('room_id')
@@ -175,34 +168,62 @@ export function AttendanceWidget() {
   const checkedIn = entries.filter((e) => e.status === 'checked_in').length;
   const checkedOut = entries.filter((e) => e.status === 'checked_out').length;
 
+  // Per-room breakdown for summary cards
+  const roomBreakdown = (roomId: string) => {
+    const roomEntries = entries.filter((e) => e.roomId === roomId);
+    return {
+      in: roomEntries.filter((e) => e.status === 'checked_in').length,
+      na: roomEntries.filter((e) => e.status === 'not_arrived').length,
+      out: roomEntries.filter((e) => e.status === 'checked_out').length,
+    };
+  };
+
   return (
-    <div className="p-2 space-y-2">
+    <div
+      style={{
+        padding: 10,
+        background: 'rgba(255,255,255,0.08)',
+        border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 12,
+      }}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[13px] font-semibold text-sidebar-foreground">강의실 현황</span>
-        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">실시간</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px', marginBottom: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>강의실 현황</span>
+        <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 99, background: 'rgba(126,255,212,0.15)', color: '#7effd4', fontWeight: 500 }}>실시간</span>
       </div>
 
       {/* Room summary cards */}
-      <div className="grid grid-cols-2 gap-1.5">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
         {ROOMS.map((room) => {
           const count = roomCounts[room.id] ?? 0;
           const cap = capacities[room.id] ?? 8;
           const isFull = count >= cap;
+          const bd = roomBreakdown(room.id);
+          const hasNotArrived = bd.na > 0;
+
           return (
             <div
               key={room.id}
-              className="rounded-md px-2 py-1.5 text-center"
               style={{
-                backgroundColor: isFull ? '#FCEBEB' : room.id === 'room10' ? 'hsl(var(--accent))' : 'hsl(var(--muted))',
+                borderRadius: 8,
+                padding: '8px 10px',
+                textAlign: 'center',
+                background: isFull || hasNotArrived
+                  ? 'rgba(231,76,60,0.25)'
+                  : count > 0
+                  ? 'rgba(29,158,117,0.25)'
+                  : 'rgba(255,255,255,0.08)',
+                border: isFull ? '1px solid rgba(231,76,60,0.6)' : '1px solid transparent',
               }}
             >
-              <div className="text-[10px] text-sidebar-foreground/60">{room.label}</div>
-              <div
-                className="text-sm font-bold"
-                style={{ color: isFull ? '#E24B4A' : 'hsl(var(--sidebar-foreground))' }}
-              >
-                {count} / {cap}
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}>{room.label}</div>
+              <div style={{ fontSize: 16, fontWeight: 500, color: isFull ? '#ffaaaa' : '#7effd4' }}>
+                입실 {count}명
+              </div>
+              <div style={{ fontSize: 10, marginTop: 2, display: 'flex', justifyContent: 'center', gap: 8 }}>
+                <span style={{ color: '#ffaaaa' }}>미입실 {bd.na}</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)' }}>퇴실 {bd.out}</span>
               </div>
             </div>
           );
@@ -211,35 +232,51 @@ export function AttendanceWidget() {
 
       {/* Student list */}
       {loading ? (
-        <div className="text-[11px] text-sidebar-foreground/50 text-center py-2">로딩 중…</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: 8 }}>로딩 중…</div>
       ) : entries.length === 0 ? (
-        <div className="text-[11px] text-sidebar-foreground/50 text-center py-2">배정된 학생 없음</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: 8 }}>배정된 학생 없음</div>
       ) : (
-        <div className="space-y-0.5 max-h-40 overflow-y-auto">
+        <div style={{ maxHeight: 160, overflowY: 'auto' }} className="space-y-0.5">
           {entries.map((e) => {
-            const isNotArrived = e.status === 'not_arrived';
+            const isNA = e.status === 'not_arrived';
             const isIn = e.status === 'checked_in';
             const isOut = e.status === 'checked_out';
             return (
               <div
                 key={`${e.studentId}_${e.roomId}`}
-                className="flex items-center gap-1.5 rounded px-2 py-1"
                 style={{
-                  backgroundColor: isNotArrived ? '#FCEBEB' : isIn ? '#E1F5EE' : 'hsl(var(--muted))',
-                  border: isNotArrived ? '1px solid #E24B4A' : '1px solid transparent',
-                  opacity: isOut ? 0.65 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderRadius: 6,
+                  padding: '5px 8px',
+                  opacity: isOut ? 0.4 : 1,
+                  background: isNA
+                    ? 'rgba(231,76,60,0.15)'
+                    : isIn
+                    ? 'rgba(29,158,117,0.15)'
+                    : 'transparent',
+                  borderLeft: isNA
+                    ? '3px solid #E24B4A'
+                    : isIn
+                    ? '3px solid #1D9E75'
+                    : '3px solid rgba(255,255,255,0.2)',
                 }}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: isNotArrived ? '#E24B4A' : isIn ? '#1D9E75' : '#999' }}
-                />
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-medium" style={{ color: isNotArrived ? '#791F1F' : isIn ? '#085041' : '#666' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: isNA ? '#ffaaaa' : isIn ? '#7effd4' : 'rgba(255,255,255,0.6)',
+                  }}>
                     {e.studentName}
                   </span>
-                  <span className="text-[10px] ml-1" style={{ color: isNotArrived ? '#791F1F' : isIn ? '#085041' : '#999' }}>
-                    {e.roomLabel} · {isNotArrived ? '미입실' : isIn ? `입실 ${e.time}` : `퇴실 ${e.time}`}
+                  <span style={{
+                    fontSize: 10,
+                    marginLeft: 4,
+                    color: isNA ? '#ffaaaa' : isIn ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.4)',
+                  }}>
+                    {e.roomLabel} · {isNA ? '미입실' : isIn ? `입실 ${e.time}` : `퇴실 ${e.time}`}
                   </span>
                 </div>
               </div>
@@ -250,12 +287,12 @@ export function AttendanceWidget() {
 
       {/* Summary bar */}
       {entries.length > 0 && (
-        <div className="flex items-center justify-center gap-2 text-[10px] pt-1">
-          <span style={{ color: '#E24B4A' }}>미입실 {notArrived}</span>
-          <span className="text-sidebar-foreground/30">|</span>
-          <span style={{ color: '#1D9E75' }}>입실 {checkedIn}</span>
-          <span className="text-sidebar-foreground/30">|</span>
-          <span className="text-sidebar-foreground/50">퇴실 {checkedOut}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 10, paddingTop: 6 }}>
+          <span style={{ color: '#ffaaaa', fontWeight: 500 }}>미입실 {notArrived}</span>
+          <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+          <span style={{ color: '#7effd4', fontWeight: 500 }}>입실 {checkedIn}</span>
+          <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+          <span style={{ color: 'rgba(255,255,255,0.5)' }}>퇴실 {checkedOut}</span>
         </div>
       )}
     </div>
