@@ -9,13 +9,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
-  LogOut, CheckCircle, Clock, XCircle, Users, AlertTriangle, Loader2,
+  LogOut, CheckCircle, Clock, XCircle, Users, AlertTriangle, Loader2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import useEmblaCarousel from 'embla-carousel-react';
+import Dashboard from './Dashboard';
+import { cn } from '@/lib/utils';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -416,10 +419,99 @@ function PrincipalContent() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Swipeable Wrapper                                                   */
+/* ------------------------------------------------------------------ */
+const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리'];
+
+function SwipeablePrincipal() {
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setActiveIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    emblaApi.on('select', onSelect);
+    onSelect();
+    return () => { emblaApi.off('select', onSelect); };
+  }, [emblaApi, onSelect]);
+
+  const scrollTo = (idx: number) => emblaApi?.scrollTo(idx);
+
+  return (
+    <div className="space-y-3">
+      {/* Tab bar + arrows */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+          disabled={activeIndex === 0}
+          onClick={() => scrollTo(0)}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+
+        <div className="flex-1 flex justify-center gap-2">
+          {PANEL_LABELS.map((label, i) => (
+            <button
+              key={i}
+              onClick={() => scrollTo(i)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300",
+                activeIndex === i
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <Button
+          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+          disabled={activeIndex === PANEL_LABELS.length - 1}
+          onClick={() => scrollTo(1)}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Dot indicators */}
+      <div className="flex justify-center gap-1.5">
+        {PANEL_LABELS.map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              "h-1.5 rounded-full transition-all duration-300",
+              activeIndex === i ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/30"
+            )}
+          />
+        ))}
+      </div>
+
+      {/* Swipeable panels */}
+      <div className="overflow-hidden" ref={emblaRef}>
+        <div className="flex">
+          <div className="flex-[0_0_100%] min-w-0">
+            <PrincipalContent />
+          </div>
+          <div className="flex-[0_0_100%] min-w-0">
+            <Dashboard />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PrincipalDashboard() {
   return (
     <ProtectedRoute allowedRoles={['admin']}>
-      <PrincipalContent />
+      <SwipeablePrincipal />
     </ProtectedRoute>
   );
 }
