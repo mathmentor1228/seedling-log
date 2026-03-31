@@ -105,6 +105,8 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   // Bulk paste
   const [bulkText, setBulkText] = useState('');
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [pdfParsing, setPdfParsing] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
