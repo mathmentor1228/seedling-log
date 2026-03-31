@@ -898,7 +898,8 @@ function SlotRow({
 
         if (isOccupied) return <div key={room.id} className="bg-background" style={{ height: SLOT_HEIGHT }} />;
         if (assignment) {
-          return <AssignmentBlock key={room.id} assignment={assignment} onRemove={() => onRemove(assignment.id)} />;
+          return <AssignmentBlock key={room.id} assignment={assignment} onRemove={() => onRemove(assignment.id)}
+            onDropAdd={(data) => onDrop(room.id, slot, day, data)} />;
         }
         return (
           <DroppableSlot key={room.id} room={room.id} slot={slot} day={day} onDrop={onDrop}
