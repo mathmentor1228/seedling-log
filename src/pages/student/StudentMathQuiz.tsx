@@ -677,6 +677,8 @@ export default function StudentMathQuiz() {
           })}
         </div>
       )}
+      {/* 수학질문방 */}
+      <MathQuestionRoom />
     </div>
   );
 }
