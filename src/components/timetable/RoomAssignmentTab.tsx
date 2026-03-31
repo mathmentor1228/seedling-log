@@ -330,9 +330,16 @@ export function RoomAssignmentTab() {
   }) {
     const slotEnd = calcSlotEnd(slot, data.durationSlots);
     const currentAssignments = viewMode === 'overview' ? overviewFilteredAssignments : visibleAssignments;
-    const existing = currentAssignments.find(
-      a => a.room === room && a.time_slot === slot && (a.day === day || (!a.is_fixed && a.date && getDayOfWeek(a.date) === day))
-    );
+    const slotMin = slotToMinutes(slot);
+
+    // Find any existing assignment that overlaps with the drop slot (not just exact match)
+    const existing = currentAssignments.find(a => {
+      if (a.room !== room) return false;
+      if (!(a.day === day || (!a.is_fixed && a.date && getDayOfWeek(a.date) === day))) return false;
+      const aStart = slotToMinutes(a.time_slot);
+      const aEnd = aStart + a.span * 30;
+      return slotMin >= aStart && slotMin < aEnd;
+    });
 
     if (existing) {
       const mergedIds = [...new Set([...(existing.student_ids as string[]), ...data.studentIds])];
