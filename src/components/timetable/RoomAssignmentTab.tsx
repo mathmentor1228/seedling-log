@@ -749,10 +749,12 @@ function OverviewGrid({ timeSlots, assignments, day, onRemove, onDrop }: {
   );
 }
 
-function OverviewSlotRow({ slot, assignments, onRemove }: {
+function OverviewSlotRow({ slot, day, assignments, onRemove, onDrop }: {
   slot: string;
+  day: string;
   assignments: Assignment[];
   onRemove: (id: string) => void;
+  onDrop: (room: string, slot: string, day: string, data: any) => void;
 }) {
   return (
     <>
@@ -777,6 +779,7 @@ function OverviewSlotRow({ slot, assignments, onRemove }: {
               key={room.id}
               assignment={assignment}
               onRemove={() => onRemove(assignment.id)}
+              onDropAdd={(data) => onDrop(room.id, slot, day, data)}
             />
           );
         }
