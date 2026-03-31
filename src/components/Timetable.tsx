@@ -874,73 +874,100 @@ export function Timetable() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {/* View Mode Toggle for teachers */}
-          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit mb-4">
-            <button
-              onClick={() => setTeacherViewMode('list')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                teacherViewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <List className="w-3.5 h-3.5" /> 리스트 뷰
-            </button>
-            <button
-              onClick={() => setTeacherViewMode('timeline')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                teacherViewMode === 'timeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" /> 타임라인 뷰
-            </button>
-          </div>
+          <Tabs defaultValue="my-schedule" className="space-y-4">
+            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 bg-transparent p-0">
+              <TabsTrigger value="my-schedule" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm">
+                <Calendar className="w-4 h-4 mr-1 hidden sm:inline" />
+                내 시간표
+              </TabsTrigger>
+              <TabsTrigger value="room" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm">
+                <DoorOpen className="w-4 h-4 mr-1 hidden sm:inline" />
+                강의실 배정
+              </TabsTrigger>
+              <TabsTrigger value="attendance" className="min-h-10 whitespace-normal border border-border bg-muted/40 px-3 text-xs leading-tight sm:text-sm">
+                <LogIn className="w-4 h-4 mr-1 hidden sm:inline" />
+                입퇴실
+              </TabsTrigger>
+            </TabsList>
 
-          {teacherViewMode === 'timeline' ? (
-            <TimetableMatrixView
-              scheduleRows={allRows}
-              classrooms={classrooms}
-              selectedDay={matrixDay}
-              onDayChange={setMatrixDay}
-              mode="timeline"
-              onDataChange={fetchScheduleData}
-            />
-          ) : allRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">등록된 시간표가 없습니다</p>
-          ) : (
-            <div className="space-y-6">
-              {DAYS_OF_WEEK.map(({ value, full }) => {
-                const dayRows = byDay[value];
-                if (!dayRows?.length) return null;
-                const isToday = value === today;
-                return (
-                  <div key={value}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className={cn('text-sm font-semibold', isToday && 'text-primary')}>
-                        {full}
-                      </h3>
-                      {isToday && <Badge className="text-[10px] h-5">오늘</Badge>}
-                    </div>
-                    <div className="space-y-2">
-                      {dayRows.map((row, idx) => (
-                        <SlotCard key={`${row.classId}-${idx}`} row={row} editable />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            <TabsContent value="my-schedule" className="space-y-4">
+              {/* View Mode Toggle for teachers */}
+              <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit">
+                <button
+                  onClick={() => setTeacherViewMode('list')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                    teacherViewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <List className="w-3.5 h-3.5" /> 리스트 뷰
+                </button>
+                <button
+                  onClick={() => setTeacherViewMode('timeline')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                    teacherViewMode === 'timeline' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" /> 타임라인 뷰
+                </button>
+              </div>
+
+              {teacherViewMode === 'timeline' ? (
+                <TimetableMatrixView
+                  scheduleRows={allRows}
+                  classrooms={classrooms}
+                  selectedDay={matrixDay}
+                  onDayChange={setMatrixDay}
+                  mode="timeline"
+                  onDataChange={fetchScheduleData}
+                />
+              ) : allRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">등록된 시간표가 없습니다</p>
+              ) : (
+                <div className="space-y-6">
+                  {DAYS_OF_WEEK.map(({ value, full }) => {
+                    const dayRows = byDay[value];
+                    if (!dayRows?.length) return null;
+                    const isToday = value === today;
+                    return (
+                      <div key={value}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className={cn('text-sm font-semibold', isToday && 'text-primary')}>
+                            {full}
+                          </h3>
+                          {isToday && <Badge className="text-[10px] h-5">오늘</Badge>}
+                        </div>
+                        <div className="space-y-2">
+                          {dayRows.map((row, idx) => (
+                            <SlotCard key={`${row.classId}-${idx}`} row={row} editable />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 수업 만들기 섹션 for teachers */}
+              <div className="mt-6 border-t pt-4">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Pencil className="w-4 h-4" />
+                  수업 만들기
+                </h3>
+                <TeacherScheduleCreator />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="room" className="space-y-4">
+              <RoomAssignmentTab />
+            </TabsContent>
+
+            <TabsContent value="attendance" className="space-y-4">
+              <AttendanceTab />
+            </TabsContent>
+          </Tabs>
         </CardContent>
-
-        {/* 수업 만들기 섹션 for teachers */}
-        <div className="mt-6 border-t pt-4">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Pencil className="w-4 h-4" />
-            수업 만들기
-          </h3>
-          <TeacherScheduleCreator />
-        </div>
 
         {/* Student/Group management dialog for teachers */}
         <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) setEditClassId(null); }}>
