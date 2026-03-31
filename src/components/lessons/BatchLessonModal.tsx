@@ -300,7 +300,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         (activeFields.has('lesson_range') && usePerStudentLessonRange) ||
         (activeFields.has('learning_issues') && usePerStudentNotes) ||
         (activeFields.has('understanding_score') && usePerStudentScore) ||
-        (activeFields.has('homework_status') && usePerStudentHomework);
+        (activeFields.has('homework_status') && usePerStudentHomework) ||
+        (activeFields.has('lesson_types_field') && usePerStudentLessonTypes);
 
       // Build common update payload with only active fields
       const buildPayload = (recordId?: string): Record<string, any> => {
