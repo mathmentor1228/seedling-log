@@ -542,6 +542,7 @@ export function RoomAssignmentTab() {
             assignments={activeAssignments}
             day={currentDay}
             onRemove={handleRemove}
+            onDrop={handleDrop}
           />
         ) : (
           <DayGrid
