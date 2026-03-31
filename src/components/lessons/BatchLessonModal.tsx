@@ -580,6 +580,72 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
               <p className="text-xs font-semibold text-muted-foreground">통일할 항목을 선택하세요 (체크한 항목만 변경됩니다)</p>
 
               <div className="space-y-3">
+                {/* Lesson Types */}
+                <FieldToggleBlock
+                  field="lesson_types_field"
+                  active={activeFields.has('lesson_types_field')}
+                  onToggle={() => toggleField('lesson_types_field')}
+                >
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={usePerStudentLessonTypes}
+                        onCheckedChange={v => setUsePerStudentLessonTypes(v === true)}
+                      />
+                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
+                    </label>
+
+                    {usePerStudentLessonTypes ? (
+                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
+                        {drafts.filter(d => selectedIds.has(d.id)).map(d => {
+                          const studentTypes = perStudentLessonTypes[d.id] ?? batchLessonTypes;
+                          return (
+                            <div key={d.id} className="space-y-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-semibold">{d.student_name}</span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{d.subject}</Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {LESSON_TYPE_OPTIONS.map(opt => (
+                                  <Badge
+                                    key={opt.value}
+                                    variant={studentTypes.includes(opt.value) ? 'default' : 'outline'}
+                                    className="cursor-pointer text-xs"
+                                    onClick={() => {
+                                      const cur = perStudentLessonTypes[d.id] ?? [...batchLessonTypes];
+                                      const next = cur.includes(opt.value) ? cur.filter(v => v !== opt.value) : [...cur, opt.value];
+                                      setPerStudentLessonTypes(prev => ({ ...prev, [d.id]: next.length > 0 ? next : [opt.value] }));
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {LESSON_TYPE_OPTIONS.map(opt => (
+                          <Badge
+                            key={opt.value}
+                            variant={batchLessonTypes.includes(opt.value) ? 'default' : 'outline'}
+                            className="cursor-pointer text-xs"
+                            onClick={() => {
+                              setBatchLessonTypes(prev => 
+                                prev.includes(opt.value) ? (prev.length > 1 ? prev.filter(v => v !== opt.value) : prev) : [...prev, opt.value]
+                              );
+                            }}
+                          >
+                            {opt.label}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </FieldToggleBlock>
+
                 {/* Lesson Range */}
                 <FieldToggleBlock
                   field="lesson_range"
