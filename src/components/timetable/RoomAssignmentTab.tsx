@@ -714,11 +714,12 @@ export function RoomAssignmentTab() {
 // ════════════════════════════════════════════════════════
 // OverviewGrid — 통합현황 뷰
 // ════════════════════════════════════════════════════════
-function OverviewGrid({ timeSlots, assignments, day, onRemove }: {
+function OverviewGrid({ timeSlots, assignments, day, onRemove, onDrop }: {
   timeSlots: string[];
   assignments: Assignment[];
   day: string;
   onRemove: (id: string) => void;
+  onDrop: (room: string, slot: string, day: string, data: any) => void;
 }) {
   return (
     <div className="min-w-[500px]">
