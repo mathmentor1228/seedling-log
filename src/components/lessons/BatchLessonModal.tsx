@@ -168,6 +168,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     setPerStudentHomework({});
     setTestContent('');
     setSubmitAfter(false);
+    setBatchLessonTypes(['정규수업']);
+    setUsePerStudentLessonTypes(false);
+    setPerStudentLessonTypes({});
   }
 
   async function searchDrafts() {
