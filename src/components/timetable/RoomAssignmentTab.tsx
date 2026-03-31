@@ -742,7 +742,7 @@ function OverviewGrid({ timeSlots, assignments, day, onRemove, onDrop }: {
       {/* Body */}
       <div className="grid grid-cols-[60px_1fr_1fr_1fr] gap-px bg-border border border-t-0 rounded-b-lg overflow-hidden">
         {timeSlots.map(slot => (
-          <OverviewSlotRow key={slot} slot={slot} assignments={assignments} onRemove={onRemove} />
+          <OverviewSlotRow key={slot} slot={slot} day={day} assignments={assignments} onRemove={onRemove} onDrop={onDrop} />
         ))}
       </div>
     </div>
