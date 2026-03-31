@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import useEmblaCarousel from 'embla-carousel-react';
+
 import Dashboard from './Dashboard';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -781,88 +781,64 @@ function TeacherAttendanceView() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Swipeable Teacher Wrapper (like PrincipalDashboard)                 */
+/* Side-by-Side Teacher Layout                                         */
 /* ------------------------------------------------------------------ */
-const TEACHER_PANELS = ['📋 출결 현황', '📊 수업 관리'];
+const TEACHER_TABS = ['📊 수업 관리', '📋 출결 현황'] as const;
 
-function SwipeableTeacher() {
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return;
-    setActiveIndex(emblaApi.selectedScrollSnap());
-  }, [emblaApi]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    emblaApi.on('select', onSelect);
-    onSelect();
-    return () => { emblaApi.off('select', onSelect); };
-  }, [emblaApi, onSelect]);
-
-  const scrollTo = (idx: number) => emblaApi?.scrollTo(idx);
+function TeacherSideBySide() {
+  const [mobileTab, setMobileTab] = useState<number>(0);
+  const [attendanceOpen, setAttendanceOpen] = useState(true);
 
   return (
     <div className="space-y-3">
-      {/* Tab bar */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-          disabled={activeIndex === 0}
-          onClick={() => scrollTo(0)}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-
-        <div className="flex-1 flex justify-center gap-2">
-          {TEACHER_PANELS.map((label, i) => (
-            <button
-              key={i}
-              onClick={() => scrollTo(i)}
-              className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300",
-                activeIndex === i
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <Button
-          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-          disabled={activeIndex === TEACHER_PANELS.length - 1}
-          onClick={() => scrollTo(1)}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-      </div>
-
-      {/* Dot indicators */}
-      <div className="flex justify-center gap-1.5">
-        {TEACHER_PANELS.map((_, i) => (
-          <div
+      {/* Mobile tab bar - only visible on small screens */}
+      <div className="flex lg:hidden justify-center gap-2">
+        {TEACHER_TABS.map((label, i) => (
+          <button
             key={i}
+            onClick={() => setMobileTab(i)}
             className={cn(
-              "h-1.5 rounded-full transition-all duration-300",
-              activeIndex === i ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/30"
+              "px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300",
+              mobileTab === i
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-muted/50 text-muted-foreground hover:bg-muted"
             )}
-          />
+          >
+            {label}
+          </button>
         ))}
       </div>
 
-      {/* Swipeable panels */}
-      <div className="overflow-hidden" ref={emblaRef}>
-        <div className="flex">
-          <div className="flex-[0_0_100%] min-w-0">
-            <TeacherAttendanceView />
-          </div>
-          <div className="flex-[0_0_100%] min-w-0">
-            <Dashboard />
-          </div>
+      {/* Desktop: side-by-side | Mobile: tab-switched */}
+      <div className="flex flex-col lg:flex-row gap-4">
+        {/* LEFT: 수업 관리 (Dashboard) - 60% on desktop */}
+        <div className={cn(
+          "lg:w-[60%] min-w-0",
+          mobileTab !== 0 && "hidden lg:block"
+        )}>
+          <Dashboard />
+        </div>
+
+        {/* RIGHT: 출결 현황 (Attendance) - 40% on desktop */}
+        <div className={cn(
+          "lg:w-[40%] min-w-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto",
+          mobileTab !== 1 && "hidden lg:block"
+        )}>
+          <Card className="border-primary/20">
+            <button
+              onClick={() => setAttendanceOpen(prev => !prev)}
+              className="w-full flex items-center justify-between p-4 text-left lg:cursor-default"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">📊</span>
+                <h2 className="text-sm font-bold text-foreground">출결 현황</h2>
+              </div>
+              <LiveClock />
+            </button>
+            <CardContent className="pt-0 px-3 pb-4">
+              <TeacherAttendanceView />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
@@ -872,7 +848,7 @@ function SwipeableTeacher() {
 export default function TeacherDashboard() {
   return (
     <ProtectedRoute allowedRoles={['teacher']}>
-      <SwipeableTeacher />
+      <TeacherSideBySide />
     </ProtectedRoute>
   );
 }
