@@ -343,6 +343,46 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     toast({ title: `${newWords.length}개 단어 불러옴` });
   };
 
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast({ title: 'PDF 파일만 업로드 가능합니다', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: '파일 크기는 10MB 이하여야 합니다', variant: 'destructive' });
+      return;
+    }
+    setPdfParsing(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data, error } = await supabase.functions.invoke('parse-vocab-pdf', {
+        body: formData,
+      });
+      if (error) throw error;
+      if (!data?.words?.length) {
+        toast({ title: '단어를 추출할 수 없습니다', variant: 'destructive' });
+        return;
+      }
+      const newWords: WordItem[] = data.words.map((w: any, i: number) => ({
+        english: w.english,
+        meaning: w.meaning,
+        english_definition: '',
+        sort_order: i,
+      }));
+      setWords(newWords);
+      setShowBulkModal(false);
+      setBulkText('');
+      toast({ title: `PDF에서 ${newWords.length}개 단어 추출 완료` });
+    } catch (err: any) {
+      toast({ title: 'PDF 파싱 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setPdfParsing(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
+    }
+
   const handleNewSet = () => {
     setSelectedSetId(null);
     setSetTitle('');
