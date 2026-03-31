@@ -382,6 +382,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       setPdfParsing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
+  };
 
   const handleNewSet = () => {
     setSelectedSetId(null);
