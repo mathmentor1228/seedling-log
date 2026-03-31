@@ -848,7 +848,7 @@ function TeacherSideBySide() {
 export default function TeacherDashboard() {
   return (
     <ProtectedRoute allowedRoles={['teacher']}>
-      <SwipeableTeacher />
+      <TeacherSideBySide />
     </ProtectedRoute>
   );
 }
