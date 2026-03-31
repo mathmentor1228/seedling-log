@@ -151,8 +151,6 @@ export default function StudentSchedule() {
         </div>
       )}
 
-      {/* 수학질문방 */}
-      <MathQuestionRoom />
     </div>
   );
 }
