@@ -971,7 +971,8 @@ function WeekSlotRow({
 
         if (isOccupied) return <div key={day} className="bg-background" style={{ height: SLOT_HEIGHT }} />;
         if (assignment) {
-          return <AssignmentBlock key={day} assignment={assignment} onRemove={() => onRemove(assignment.id)} compact />;
+          return <AssignmentBlock key={day} assignment={assignment} onRemove={() => onRemove(assignment.id)} compact
+            onDropAdd={(data) => onDrop(room, slot, day, data)} />;
         }
         return (
           <DroppableSlot key={day} room={room} slot={slot} day={day} onDrop={onDrop}
