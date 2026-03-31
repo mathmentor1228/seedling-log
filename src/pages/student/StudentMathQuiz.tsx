@@ -15,6 +15,7 @@ import {
   Lightbulb, MessageCircle
 } from 'lucide-react';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
+import MathQuestionRoom from '@/components/student/MathQuestionRoom';
 import { MathRenderer } from '@/components/math/MathRenderer';
 
 interface Quiz {
@@ -677,6 +678,8 @@ export default function StudentMathQuiz() {
           })}
         </div>
       )}
+      {/* 수학질문방 */}
+      <MathQuestionRoom />
     </div>
   );
 }
