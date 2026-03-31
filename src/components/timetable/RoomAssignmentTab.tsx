@@ -984,8 +984,9 @@ function WeekSlotRow({
 // ════════════════════════════════════════════════════════
 // AssignmentBlock (day/week views — original style)
 // ════════════════════════════════════════════════════════
-function AssignmentBlock({ assignment, onRemove, compact }: {
+function AssignmentBlock({ assignment, onRemove, compact, onDropAdd }: {
   assignment: Assignment; onRemove: () => void; compact?: boolean;
+  onDropAdd?: (data: any) => void;
 }) {
   const heightPx = assignment.span * SLOT_HEIGHT - 2;
   const bgColor = assignment.is_fixed ? 'rgba(159,225,203,0.35)' : 'rgba(250,199,117,0.35)';
@@ -995,7 +996,17 @@ function AssignmentBlock({ assignment, onRemove, compact }: {
 
   return (
     <div style={{ height: heightPx, backgroundColor: bgColor }}
-      className={cn('rounded border px-1.5 py-1 relative group overflow-hidden', borderStyle)}>
+      className={cn('rounded border px-1.5 py-1 relative group overflow-hidden', borderStyle)}
+      onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-primary/40'); }}
+      onDragLeave={e => { e.currentTarget.classList.remove('ring-2', 'ring-primary/40'); }}
+      onDrop={e => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('ring-2', 'ring-primary/40');
+        const raw = e.dataTransfer.getData('application/json');
+        if (!raw || !onDropAdd) return;
+        try { onDropAdd(JSON.parse(raw)); } catch {}
+      }}
+    >
       <div className="flex flex-wrap gap-0.5">
         {(assignment.student_names ?? []).map((name: string, i: number) => (
           <span key={i} className="text-[11px] font-semibold">{name}</span>
