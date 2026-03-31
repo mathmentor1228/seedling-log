@@ -997,13 +997,52 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
       <Dialog open={showBulkModal} onOpenChange={setShowBulkModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>일괄 입력</DialogTitle></DialogHeader>
+          
+          {/* PDF Upload Section */}
+          <div className="border border-dashed border-primary/40 rounded-lg p-4 bg-primary/5 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <FileText className="w-4 h-4 text-primary" />
+              PDF 파일 업로드
+            </div>
+            <p className="text-xs text-muted-foreground">
+              단어 시험지 PDF를 업로드하면 AI가 자동으로 단어를 추출합니다. (답안지 포함 시 더 정확)
+            </p>
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handlePdfUpload}
+              disabled={pdfParsing}
+              className="hidden"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => pdfInputRef.current?.click()}
+              disabled={pdfParsing}
+              className="w-full"
+            >
+              {pdfParsing ? (
+                <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> PDF 분석 중...</>
+              ) : (
+                <><Upload className="w-3.5 h-3.5 mr-1" /> PDF 선택</>
+              )}
+            </Button>
+          </div>
+
+          <div className="relative flex items-center gap-2">
+            <div className="flex-1 border-t border-border" />
+            <span className="text-xs text-muted-foreground px-2">또는 직접 입력</span>
+            <div className="flex-1 border-t border-border" />
+          </div>
+
           <p className="text-xs text-muted-foreground">
             □ 형식, 탭, 쉼표, 공백 구분 모두 지원합니다.
           </p>
-          <Textarea value={bulkText} onChange={e => setBulkText(e.target.value)} placeholder={`□ ever adv. 지금까지\n□ find v. ~을 발견하다\n\n또는\napple\t사과`} rows={12} className="text-sm font-mono" />
+          <Textarea value={bulkText} onChange={e => setBulkText(e.target.value)} placeholder={`□ ever adv. 지금까지\n□ find v. ~을 발견하다\n\n또는\napple\t사과`} rows={10} className="text-sm font-mono" />
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowBulkModal(false)}>취소</Button>
-            <Button size="sm" onClick={handleBulkPaste}><Upload className="w-3.5 h-3.5 mr-1" /> 불러오기</Button>
+            <Button size="sm" onClick={handleBulkPaste} disabled={pdfParsing}><Upload className="w-3.5 h-3.5 mr-1" /> 텍스트 불러오기</Button>
           </div>
         </DialogContent>
       </Dialog>
