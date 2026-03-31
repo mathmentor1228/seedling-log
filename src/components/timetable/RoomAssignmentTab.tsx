@@ -791,7 +791,7 @@ function OverviewSlotRow({ slot, assignments, onRemove }: {
 // ════════════════════════════════════════════════════════
 // OverviewAssignmentBlock — teacher-colored chips
 // ════════════════════════════════════════════════════════
-function OverviewAssignmentBlock({ assignment, onRemove }: { assignment: Assignment; onRemove: () => void }) {
+function OverviewAssignmentBlock({ assignment, onRemove, onDropAdd }: { assignment: Assignment; onRemove: () => void; onDropAdd?: (data: any) => void }) {
   const heightPx = assignment.span * SLOT_HEIGHT - 2;
   const tColor = getTeacherColor(assignment.teacher_name);
   const initial = getTeacherInitial(assignment.teacher_name);
@@ -806,6 +806,15 @@ function OverviewAssignmentBlock({ assignment, onRemove }: { assignment: Assignm
         borderStyle: assignment.is_fixed ? 'solid' : 'dashed',
       }}
       className="rounded border-2 px-1.5 py-1 relative group overflow-hidden"
+      onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-primary/40'); }}
+      onDragLeave={e => { e.currentTarget.classList.remove('ring-2', 'ring-primary/40'); }}
+      onDrop={e => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('ring-2', 'ring-primary/40');
+        const raw = e.dataTransfer.getData('application/json');
+        if (!raw || !onDropAdd) return;
+        try { onDropAdd(JSON.parse(raw)); } catch {}
+      }}
     >
       <div className="flex flex-wrap gap-0.5 items-center">
         {initial && (
