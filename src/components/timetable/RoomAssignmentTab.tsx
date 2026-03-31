@@ -542,6 +542,7 @@ export function RoomAssignmentTab() {
             assignments={activeAssignments}
             day={currentDay}
             onRemove={handleRemove}
+            onDrop={handleDrop}
           />
         ) : (
           <DayGrid
@@ -713,11 +714,12 @@ export function RoomAssignmentTab() {
 // ════════════════════════════════════════════════════════
 // OverviewGrid — 통합현황 뷰
 // ════════════════════════════════════════════════════════
-function OverviewGrid({ timeSlots, assignments, day, onRemove }: {
+function OverviewGrid({ timeSlots, assignments, day, onRemove, onDrop }: {
   timeSlots: string[];
   assignments: Assignment[];
   day: string;
   onRemove: (id: string) => void;
+  onDrop: (room: string, slot: string, day: string, data: any) => void;
 }) {
   return (
     <div className="min-w-[500px]">
@@ -740,17 +742,19 @@ function OverviewGrid({ timeSlots, assignments, day, onRemove }: {
       {/* Body */}
       <div className="grid grid-cols-[60px_1fr_1fr_1fr] gap-px bg-border border border-t-0 rounded-b-lg overflow-hidden">
         {timeSlots.map(slot => (
-          <OverviewSlotRow key={slot} slot={slot} assignments={assignments} onRemove={onRemove} />
+          <OverviewSlotRow key={slot} slot={slot} day={day} assignments={assignments} onRemove={onRemove} onDrop={onDrop} />
         ))}
       </div>
     </div>
   );
 }
 
-function OverviewSlotRow({ slot, assignments, onRemove }: {
+function OverviewSlotRow({ slot, day, assignments, onRemove, onDrop }: {
   slot: string;
+  day: string;
   assignments: Assignment[];
   onRemove: (id: string) => void;
+  onDrop: (room: string, slot: string, day: string, data: any) => void;
 }) {
   return (
     <>
@@ -775,6 +779,7 @@ function OverviewSlotRow({ slot, assignments, onRemove }: {
               key={room.id}
               assignment={assignment}
               onRemove={() => onRemove(assignment.id)}
+              onDropAdd={(data) => onDrop(room.id, slot, day, data)}
             />
           );
         }
@@ -791,7 +796,7 @@ function OverviewSlotRow({ slot, assignments, onRemove }: {
 // ════════════════════════════════════════════════════════
 // OverviewAssignmentBlock — teacher-colored chips
 // ════════════════════════════════════════════════════════
-function OverviewAssignmentBlock({ assignment, onRemove }: { assignment: Assignment; onRemove: () => void }) {
+function OverviewAssignmentBlock({ assignment, onRemove, onDropAdd }: { assignment: Assignment; onRemove: () => void; onDropAdd?: (data: any) => void }) {
   const heightPx = assignment.span * SLOT_HEIGHT - 2;
   const tColor = getTeacherColor(assignment.teacher_name);
   const initial = getTeacherInitial(assignment.teacher_name);
@@ -806,6 +811,15 @@ function OverviewAssignmentBlock({ assignment, onRemove }: { assignment: Assignm
         borderStyle: assignment.is_fixed ? 'solid' : 'dashed',
       }}
       className="rounded border-2 px-1.5 py-1 relative group overflow-hidden"
+      onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-primary/40'); }}
+      onDragLeave={e => { e.currentTarget.classList.remove('ring-2', 'ring-primary/40'); }}
+      onDrop={e => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('ring-2', 'ring-primary/40');
+        const raw = e.dataTransfer.getData('application/json');
+        if (!raw || !onDropAdd) return;
+        try { onDropAdd(JSON.parse(raw)); } catch {}
+      }}
     >
       <div className="flex flex-wrap gap-0.5 items-center">
         {initial && (
@@ -898,7 +912,8 @@ function SlotRow({
 
         if (isOccupied) return <div key={room.id} className="bg-background" style={{ height: SLOT_HEIGHT }} />;
         if (assignment) {
-          return <AssignmentBlock key={room.id} assignment={assignment} onRemove={() => onRemove(assignment.id)} />;
+          return <AssignmentBlock key={room.id} assignment={assignment} onRemove={() => onRemove(assignment.id)}
+            onDropAdd={(data) => onDrop(room.id, slot, day, data)} />;
         }
         return (
           <DroppableSlot key={room.id} room={room.id} slot={slot} day={day} onDrop={onDrop}
@@ -970,7 +985,8 @@ function WeekSlotRow({
 
         if (isOccupied) return <div key={day} className="bg-background" style={{ height: SLOT_HEIGHT }} />;
         if (assignment) {
-          return <AssignmentBlock key={day} assignment={assignment} onRemove={() => onRemove(assignment.id)} compact />;
+          return <AssignmentBlock key={day} assignment={assignment} onRemove={() => onRemove(assignment.id)} compact
+            onDropAdd={(data) => onDrop(room, slot, day, data)} />;
         }
         return (
           <DroppableSlot key={day} room={room} slot={slot} day={day} onDrop={onDrop}
@@ -984,8 +1000,9 @@ function WeekSlotRow({
 // ════════════════════════════════════════════════════════
 // AssignmentBlock (day/week views — original style)
 // ════════════════════════════════════════════════════════
-function AssignmentBlock({ assignment, onRemove, compact }: {
+function AssignmentBlock({ assignment, onRemove, compact, onDropAdd }: {
   assignment: Assignment; onRemove: () => void; compact?: boolean;
+  onDropAdd?: (data: any) => void;
 }) {
   const heightPx = assignment.span * SLOT_HEIGHT - 2;
   const bgColor = assignment.is_fixed ? 'rgba(159,225,203,0.35)' : 'rgba(250,199,117,0.35)';
@@ -995,7 +1012,17 @@ function AssignmentBlock({ assignment, onRemove, compact }: {
 
   return (
     <div style={{ height: heightPx, backgroundColor: bgColor }}
-      className={cn('rounded border px-1.5 py-1 relative group overflow-hidden', borderStyle)}>
+      className={cn('rounded border px-1.5 py-1 relative group overflow-hidden', borderStyle)}
+      onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-primary/40'); }}
+      onDragLeave={e => { e.currentTarget.classList.remove('ring-2', 'ring-primary/40'); }}
+      onDrop={e => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('ring-2', 'ring-primary/40');
+        const raw = e.dataTransfer.getData('application/json');
+        if (!raw || !onDropAdd) return;
+        try { onDropAdd(JSON.parse(raw)); } catch {}
+      }}
+    >
       <div className="flex flex-wrap gap-0.5">
         {(assignment.student_names ?? []).map((name: string, i: number) => (
           <span key={i} className="text-[11px] font-semibold">{name}</span>
