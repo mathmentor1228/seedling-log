@@ -132,6 +132,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const [testContent, setTestContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [submitAfter, setSubmitAfter] = useState(false);
+  const [batchLessonTypes, setBatchLessonTypes] = useState<string[]>(['정규수업']);
+  const [usePerStudentLessonTypes, setUsePerStudentLessonTypes] = useState(false);
+  const [perStudentLessonTypes, setPerStudentLessonTypes] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (open) {
