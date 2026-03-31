@@ -1024,14 +1024,29 @@ function WeekSlotRow({
         style={{ height: SLOT_HEIGHT }}>{slot}</div>
       {DAYS.map(day => {
         const assignment = assignments.find(a => a.room === room && a.time_slot === slot && a.day === day);
-        const isOccupied = !assignment && assignments.some(a => {
+        const parentAssignment = !assignment ? assignments.find(a => {
           if (a.room !== room || a.day !== day || a.span <= 1) return false;
           const aIdx = slotToMinutes(a.time_slot);
           const curIdx = slotToMinutes(slot);
           return curIdx > aIdx && curIdx < aIdx + a.span * 30;
-        });
+        }) : null;
 
-        if (isOccupied) return <div key={day} className="bg-background" style={{ height: SLOT_HEIGHT }} />;
+        if (parentAssignment) {
+          return (
+            <div key={day} className="bg-background relative"
+              style={{ height: SLOT_HEIGHT }}
+              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-primary/30', 'ring-inset'); }}
+              onDragLeave={e => { e.currentTarget.classList.remove('ring-2', 'ring-primary/30', 'ring-inset'); }}
+              onDrop={e => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('ring-2', 'ring-primary/30', 'ring-inset');
+                const raw = e.dataTransfer.getData('application/json');
+                if (!raw) return;
+                try { onDrop(room, parentAssignment.time_slot, day, JSON.parse(raw)); } catch {}
+              }}
+            />
+          );
+        }
         if (assignment) {
           return <AssignmentBlock key={day} assignment={assignment} onRemove={() => onRemove(assignment.id)} compact
             onDropAdd={(data) => onDrop(room, slot, day, data)} />;
