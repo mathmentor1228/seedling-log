@@ -910,14 +910,30 @@ function SlotRow({
         style={{ height: SLOT_HEIGHT }}>{slot}</div>
       {ROOMS.map(room => {
         const assignment = assignments.find(a => a.room === room.id && a.time_slot === slot);
-        const isOccupied = !assignment && assignments.some(a => {
+        const parentAssignment = !assignment ? assignments.find(a => {
           if (a.room !== room.id || a.span <= 1) return false;
           const aIdx = slotToMinutes(a.time_slot);
           const curIdx = slotToMinutes(slot);
           return curIdx > aIdx && curIdx < aIdx + a.span * 30;
-        });
+        }) : null;
 
-        if (isOccupied) return <div key={room.id} className="bg-background" style={{ height: SLOT_HEIGHT }} />;
+        if (parentAssignment) {
+          // Occupied by a multi-span block — render a droppable area that merges into the parent
+          return (
+            <div key={room.id} className="bg-background relative"
+              style={{ height: SLOT_HEIGHT }}
+              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-primary/30', 'ring-inset'); }}
+              onDragLeave={e => { e.currentTarget.classList.remove('ring-2', 'ring-primary/30', 'ring-inset'); }}
+              onDrop={e => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('ring-2', 'ring-primary/30', 'ring-inset');
+                const raw = e.dataTransfer.getData('application/json');
+                if (!raw) return;
+                try { onDrop(room.id, parentAssignment.time_slot, day, JSON.parse(raw)); } catch {}
+              }}
+            />
+          );
+        }
         if (assignment) {
           return <AssignmentBlock key={room.id} assignment={assignment} onRemove={() => onRemove(assignment.id)}
             onDropAdd={(data) => onDrop(room.id, slot, day, data)} />;
