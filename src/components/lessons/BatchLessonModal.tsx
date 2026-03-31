@@ -34,6 +34,15 @@ const SUBJECT_SPECIFIC_ISSUES: Record<SubjectType, string[]> = {
   '국어': ['지문 독해 어려움', '핵심 개념어 정리 미흡', '서술형 논리 부족', '문학 표현 분석 미흡', '시간 배분 문제', '풀이 루틴을 지키지 않음'],
 };
 
+const LESSON_TYPE_OPTIONS = [
+  { value: '정규수업', label: '정규수업' },
+  { value: '보충수업', label: '보충수업' },
+  { value: '시험특강', label: '시험특강' },
+  { value: '방학특강', label: '방학특강' },
+  { value: '공지사항', label: '공지사항' },
+  { value: '휴강', label: '휴강' },
+];
+
 interface DraftRecord {
   id: string;
   student_id: string;
@@ -51,6 +60,7 @@ interface DraftRecord {
   test_name: string | null;
   test_result: string | null;
   test_result_text: string | null;
+  lesson_types: string[] | null;
 }
 
 interface HomeworkItem {
