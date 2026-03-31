@@ -199,8 +199,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isGroupOpen = (group: NavGroup) =>
     openGroups[group.label] !== undefined ? openGroups[group.label] : groupContainsActive(group);
 
-  // Show shared components (TeamNotesBoard, AcademyCalendar) on dashboard route only
-  const isDashboard = location.pathname === '/dashboard';
+  // Show shared components (TeamNotesBoard, AcademyCalendar) on dashboard routes
+  const isDashboard = location.pathname === '/dashboard' || location.pathname === '/teacher';
 
   const renderNavItem = (item: NavItem, indent = false) => {
     const isActive = location.pathname === item.href;
