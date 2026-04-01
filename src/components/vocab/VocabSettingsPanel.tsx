@@ -175,6 +175,8 @@ export function VocabSettingsPanel() {
     setFormTotalDays('');
     setFormNotes('');
     setFormAssignedTeacher('');
+    setFormTimeLimit('');
+    setFormTestLevel(1);
     setEditingId(null);
   };
 
