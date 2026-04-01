@@ -73,6 +73,12 @@ export default function StudentVocab() {
     }
     if (data?.test_level) setTestLevel(data.test_level);
     if (data?.test_time_limit) setTestTimeLimit(data.test_time_limit);
+    setActiveTestAssignment(data?.active_test_assignment || null);
+    if (data?.active_test_assignment?.word_set_ids?.length) {
+      setSelectedSetIds(data.active_test_assignment.word_set_ids);
+      setStudyType('test');
+      setMode(data.active_test_assignment.test_direction === 'kor_to_eng' ? 'kor_to_eng' : 'eng_to_kor');
+    }
     setLoading(false);
   };
 
