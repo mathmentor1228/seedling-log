@@ -149,6 +149,64 @@ export function TextbookLibrary() {
   const [editingChapter, setEditingChapter] = useState<string | null>(null);
   const [editingChapterName, setEditingChapterName] = useState('');
 
+  // Full question editing dialog
+  const [editDialogExample, setEditDialogExample] = useState<TextbookExample | null>(null);
+  const [editQ, setEditQ] = useState('');
+  const [editA, setEditA] = useState('');
+  const [editExp, setEditExp] = useState('');
+  const [editDiff, setEditDiff] = useState('medium');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editFocusField, setEditFocusField] = useState<'q' | 'a' | 'exp'>('q');
+
+  const openEditDialog = (ex: TextbookExample) => {
+    setEditDialogExample(ex);
+    setEditQ(ex.question_text || '');
+    setEditA(ex.answer || '');
+    setEditExp(ex.explanation || '');
+    setEditDiff(ex.difficulty || 'medium');
+    setEditFocusField('q');
+  };
+
+  const insertSymbol = (symbol: string) => {
+    const setter = editFocusField === 'q' ? setEditQ : editFocusField === 'a' ? setEditA : setEditExp;
+    const textarea = document.getElementById(`edit-field-${editFocusField}`) as HTMLTextAreaElement | null;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const current = editFocusField === 'q' ? editQ : editFocusField === 'a' ? editA : editExp;
+      const newVal = current.slice(0, start) + symbol + current.slice(end);
+      setter(newVal);
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const pos = start + symbol.length;
+        textarea.setSelectionRange(pos, pos);
+      });
+    } else {
+      setter(prev => prev + symbol);
+    }
+  };
+
+  const handleSaveEditDialog = async () => {
+    if (!editDialogExample) return;
+    setSavingEdit(true);
+    const { error } = await supabase.from('textbook_examples').update({
+      question_text: editQ.trim(),
+      answer: editA.trim() || null,
+      explanation: editExp.trim() || null,
+      difficulty: editDiff,
+    } as any).eq('id', editDialogExample.id);
+    if (error) { toast({ title: '수정 실패', description: error.message, variant: 'destructive' }); }
+    else {
+      setExamples(prev => prev.map(e => e.id === editDialogExample.id ? {
+        ...e, question_text: editQ.trim(), answer: editA.trim() || null,
+        explanation: editExp.trim() || null, difficulty: editDiff,
+      } : e));
+      toast({ title: '문항이 수정되었습니다' });
+      setEditDialogExample(null);
+    }
+    setSavingEdit(false);
+  };
+
   // Folder management
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [folderSearch, setFolderSearch] = useState('');
@@ -715,6 +773,97 @@ export function TextbookLibrary() {
                   </DialogContent>
                 </Dialog>
 
+                {/* Question Edit Dialog */}
+                <Dialog open={!!editDialogExample} onOpenChange={open => { if (!open) setEditDialogExample(null); }}>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader><DialogTitle>문항 수정</DialogTitle></DialogHeader>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">수학 기호 삽입 (커서 위치에 삽입)</p>
+                        <div className="flex flex-wrap gap-1">
+                          {[
+                            { label: '분수', sym: '$\\frac{a}{b}$' },
+                            { label: '√', sym: '$\\sqrt{}$' },
+                            { label: 'x²', sym: '$x^{2}$' },
+                            { label: 'xₙ', sym: '$x_{n}$' },
+                            { label: '±', sym: '$\\pm$' },
+                            { label: '×', sym: '$\\times$' },
+                            { label: '÷', sym: '$\\div$' },
+                            { label: '≤', sym: '$\\leq$' },
+                            { label: '≥', sym: '$\\geq$' },
+                            { label: '≠', sym: '$\\neq$' },
+                            { label: 'π', sym: '$\\pi$' },
+                            { label: '∞', sym: '$\\infty$' },
+                            { label: '∑', sym: '$\\sum$' },
+                            { label: '∫', sym: '$\\int$' },
+                            { label: 'log', sym: '$\\log$' },
+                            { label: 'sin', sym: '$\\sin$' },
+                            { label: 'cos', sym: '$\\cos$' },
+                            { label: 'tan', sym: '$\\tan$' },
+                            { label: '→', sym: '$\\rightarrow$' },
+                            { label: '∈', sym: '$\\in$' },
+                            { label: '⊂', sym: '$\\subset$' },
+                            { label: '∩', sym: '$\\cap$' },
+                            { label: '∪', sym: '$\\cup$' },
+                            { label: '$...$', sym: '$$' },
+                          ].map(s => (
+                            <Button key={s.label} type="button" size="sm" variant="outline"
+                              className="h-7 px-2 text-xs font-mono"
+                              onClick={() => insertSymbol(s.sym)}>
+                              {s.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs">문제 *</Label>
+                        <Textarea id="edit-field-q" value={editQ} onChange={e => setEditQ(e.target.value)}
+                          onFocus={() => setEditFocusField('q')} rows={5} className="font-mono text-sm" />
+                        {editQ && (
+                          <div className="mt-1 p-2 rounded border bg-muted/30 text-sm">
+                            <p className="text-[10px] text-muted-foreground mb-1">미리보기:</p>
+                            <MathRenderer text={editQ} autoSubBreak />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs">정답</Label>
+                        <Textarea id="edit-field-a" value={editA} onChange={e => setEditA(e.target.value)}
+                          onFocus={() => setEditFocusField('a')} rows={2} className="font-mono text-sm" />
+                        {editA && (
+                          <div className="mt-1 p-2 rounded border bg-muted/30 text-xs">
+                            <MathRenderer text={editA} />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs">해설</Label>
+                        <Textarea id="edit-field-exp" value={editExp} onChange={e => setEditExp(e.target.value)}
+                          onFocus={() => setEditFocusField('exp')} rows={3} className="font-mono text-sm" />
+                        {editExp && (
+                          <div className="mt-1 p-2 rounded border bg-muted/30 text-xs">
+                            <MathRenderer text={editExp} />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs">난이도</Label>
+                        <Select value={editDiff} onValueChange={setEditDiff}>
+                          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="easy">쉬움</SelectItem>
+                            <SelectItem value="medium">보통</SelectItem>
+                            <SelectItem value="hard">어려움</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button onClick={handleSaveEditDialog} disabled={savingEdit || !editQ.trim()} className="w-full">
+                        {savingEdit ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null} 저장
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 {/* Examples list by chapter */}
                 {loadingExamples ? (
                   <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
@@ -777,6 +926,9 @@ export function TextbookLibrary() {
                                   {ex.difficulty && <span className={`text-xs px-1.5 py-0.5 rounded ${difficultyColor[ex.difficulty] || ''}`}>{difficultyLabel[ex.difficulty] || ex.difficulty}</span>}
                                 </div>
                                 <div className="flex items-center gap-0.5 shrink-0">
+                                  <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] gap-0.5" onClick={() => openEditDialog(ex)}>
+                                    <Edit className="w-3 h-3" /> 수정
+                                  </Button>
                                   <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] gap-0.5" onClick={() => handleReExtractExample(ex.id)} disabled={reExtractingId === ex.id}>
                                     {reExtractingId === ex.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCw className="w-3 h-3" />}
                                     재추출
