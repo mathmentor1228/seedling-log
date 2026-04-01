@@ -4517,6 +4517,80 @@ export type Database = {
           },
         ]
       }
+      vocab_test_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          completed_at: string | null
+          correct_count: number | null
+          created_at: string
+          due_date: string | null
+          id: string
+          notes: string | null
+          result_entered_by: string | null
+          score: number | null
+          status: string
+          student_id: string
+          test_direction: string
+          test_level: number
+          test_mode: string
+          test_time_limit: number | null
+          total_questions: number | null
+          updated_at: string
+          word_set_ids: string[]
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          completed_at?: string | null
+          correct_count?: number | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          result_entered_by?: string | null
+          score?: number | null
+          status?: string
+          student_id: string
+          test_direction?: string
+          test_level?: number
+          test_mode?: string
+          test_time_limit?: number | null
+          total_questions?: number | null
+          updated_at?: string
+          word_set_ids?: string[]
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          completed_at?: string | null
+          correct_count?: number | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          result_entered_by?: string | null
+          score?: number | null
+          status?: string
+          student_id?: string
+          test_direction?: string
+          test_level?: number
+          test_mode?: string
+          test_time_limit?: number | null
+          total_questions?: number | null
+          updated_at?: string
+          word_set_ids?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_test_assignments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vocab_test_results: {
         Row: {
           book_name: string

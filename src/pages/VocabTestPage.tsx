@@ -8,7 +8,8 @@ import { VocabDashboard } from '@/components/vocab/VocabDashboard';
 import { VocabTestGenerator } from '@/components/vocab/VocabTestGenerator';
 import { TestScheduleManager } from '@/components/TestScheduleManager';
 import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
-import { BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings, BookOpen, Languages, CalendarDays, ClipboardList } from 'lucide-react';
+import { VocabTestAssignManager } from '@/components/vocab/VocabTestAssignManager';
+import { BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings, BookOpen, Languages, CalendarDays, ClipboardList, Send } from 'lucide-react';
 
 function VocabTestContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -64,6 +65,10 @@ function VocabTestContent() {
             <CalendarDays className="w-3.5 h-3.5" />
             시험 일정
           </TabsTrigger>
+          <TabsTrigger value="test-assign" className="text-xs shrink-0 gap-1">
+            <Send className="w-3.5 h-3.5" />
+            테스트 배정
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
@@ -94,6 +99,10 @@ function VocabTestContent() {
 
         <TabsContent value="test-schedule">
           <TestScheduleManager />
+        </TabsContent>
+
+        <TabsContent value="test-assign">
+          <VocabTestAssignManager />
         </TabsContent>
       </Tabs>
     </div>
