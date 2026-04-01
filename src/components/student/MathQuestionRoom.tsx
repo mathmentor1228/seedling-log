@@ -24,8 +24,24 @@ import {
   MessageCircle,
   Share2,
   ImageIcon,
+  ZoomIn,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { compressImage } from '@/lib/imageCompression';
+import ImageViewerModal from './ImageViewerModal';
 import {
   Sheet,
   SheetContent,
