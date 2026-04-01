@@ -780,7 +780,6 @@ Deno.serve(async (req) => {
       }
 
       case 'vocab_cards': {
-        // Get word sets assigned to this student with words
         const { data: assignmentsData, error: aErr } = await supabase
           .from('student_vocab_assignments')
           .select('word_set_id, required_rounds')
@@ -788,24 +787,51 @@ Deno.serve(async (req) => {
 
         if (aErr) throw aErr;
 
-        const setIds = (assignmentsData || []).map((a: any) => a.word_set_id);
         const roundsMap: Record<string, number> = {};
-        for (const a of (assignmentsData || [])) {
+        const regularSetIds = (assignmentsData || []).map((a: any) => {
           roundsMap[a.word_set_id] = a.required_rounds || 0;
-        }
+          return a.word_set_id;
+        });
+
+        const { data: openTestAssignments } = await supabase
+          .from('vocab_test_assignments')
+          .select('id, word_set_ids, test_level, test_time_limit, test_direction, notes, due_date, assigned_at')
+          .eq('student_id', student_id)
+          .eq('test_mode', 'web')
+          .eq('status', 'in_progress')
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        const activeTestAssignment = openTestAssignments?.[0] || null;
+        const openTestSetIds = activeTestAssignment?.word_set_ids || [];
+        const setIds = [...new Set([...regularSetIds, ...openTestSetIds])];
+
+        // Get completions for this student (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const { data: completionsData } = await supabase
+          .from('vocab_card_completions')
+          .select('id, word_set_ids, correct_count, wrong_count, total_count, mode, completed_at')
+          .eq('student_id', student_id)
+          .gte('completed_at', thirtyDaysAgo.toISOString())
+          .order('completed_at', { ascending: false });
 
         if (setIds.length === 0) {
-          result = { sets: [], completions: [] };
+          result = {
+            sets: [],
+            completions: completionsData || [],
+            test_level: activeTestAssignment?.test_level || 1,
+            test_time_limit: activeTestAssignment?.test_time_limit || null,
+            active_test_assignment: activeTestAssignment,
+          };
           break;
         }
 
-        // Get set info with folder name
         const { data: setsData } = await supabase
           .from('vocab_word_sets')
           .select('id, title, folder_id')
           .in('id', setIds);
 
-        // Get folder names
         const folderIds = (setsData || []).map((s: any) => s.folder_id).filter(Boolean);
         let folderMap: Record<string, string> = {};
         if (folderIds.length > 0) {
@@ -818,22 +844,11 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Get words for each set
         const { data: allWords } = await supabase
           .from('vocab_word_items')
           .select('set_id, english, meaning, english_definition, sort_order')
           .in('set_id', setIds)
           .order('sort_order');
-
-        // Get completions for this student (last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const { data: completionsData } = await supabase
-          .from('vocab_card_completions')
-          .select('id, word_set_ids, correct_count, wrong_count, total_count, mode, completed_at')
-          .eq('student_id', student_id)
-          .gte('completed_at', thirtyDaysAgo.toISOString())
-          .order('completed_at', { ascending: false });
 
         const sets = (setsData || []).map((s: any) => ({
           set_id: s.id,
@@ -847,14 +862,19 @@ Deno.serve(async (req) => {
           })),
         }));
 
-        // Get vocab settings for test level/time limit
         const { data: vocabSettingData } = await supabase
           .from('vocab_settings')
           .select('test_level, test_time_limit')
           .eq('student_id', student_id)
           .maybeSingle();
 
-        result = { sets, completions: completionsData || [], test_level: vocabSettingData?.test_level || 1, test_time_limit: vocabSettingData?.test_time_limit || null };
+        result = {
+          sets,
+          completions: completionsData || [],
+          test_level: activeTestAssignment?.test_level || vocabSettingData?.test_level || 1,
+          test_time_limit: activeTestAssignment?.test_time_limit ?? vocabSettingData?.test_time_limit ?? null,
+          active_test_assignment: activeTestAssignment,
+        };
         break;
       }
 

@@ -45,6 +45,7 @@ export default function StudentVocab() {
   const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
   const [testLevel, setTestLevel] = useState(1);
   const [testTimeLimit, setTestTimeLimit] = useState<number | null>(null);
+  const [activeTestAssignment, setActiveTestAssignment] = useState<any | null>(null);
 
   // Flashcard state
   const [cards, setCards] = useState<VocabWord[]>([]);
@@ -72,6 +73,12 @@ export default function StudentVocab() {
     }
     if (data?.test_level) setTestLevel(data.test_level);
     if (data?.test_time_limit) setTestTimeLimit(data.test_time_limit);
+    setActiveTestAssignment(data?.active_test_assignment || null);
+    if (data?.active_test_assignment?.word_set_ids?.length) {
+      setSelectedSetIds(data.active_test_assignment.word_set_ids);
+      setStudyType('test');
+      setMode(data.active_test_assignment.test_direction === 'kor_to_eng' ? 'kor_to_eng' : 'eng_to_kor');
+    }
     setLoading(false);
   };
 
@@ -245,6 +252,32 @@ export default function StudentVocab() {
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">범위를 선택하고 카드로 단어를 외워보세요</p>
         </div>
+
+        {activeTestAssignment && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="pt-4 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Target className="w-4 h-4 text-primary" />
+                  오픈된 단어 테스트
+                </p>
+                <Badge>{activeTestAssignment.test_mode === 'web' ? '웹 테스트' : '인쇄 테스트'}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                현재 오픈된 범위만 바로 응시할 수 있어요.
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {vocabSets.filter(set => activeTestAssignment.word_set_ids?.includes(set.set_id)).map(set => (
+                  <Badge key={set.set_id} variant="outline" className="text-[10px]">{set.set_title}</Badge>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                <span>Lv.{testLevel}</span>
+                {testTimeLimit && <span>제한시간 {testTimeLimit}초</span>}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Homework progress section */}
         {hasHomework && (

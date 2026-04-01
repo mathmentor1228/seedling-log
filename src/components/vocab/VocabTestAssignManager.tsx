@@ -55,8 +55,8 @@ interface Assignment {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  assigned: { label: '배정됨', color: 'bg-blue-100 text-blue-700' },
-  in_progress: { label: '진행중', color: 'bg-yellow-100 text-yellow-700' },
+  assigned: { label: '예정', color: 'bg-blue-100 text-blue-700' },
+  in_progress: { label: '오픈', color: 'bg-yellow-100 text-yellow-700' },
   completed: { label: '완료', color: 'bg-green-100 text-green-700' },
   expired: { label: '만료', color: 'bg-muted text-muted-foreground' },
 };
@@ -231,7 +231,16 @@ export function VocabTestAssignManager() {
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from('vocab_test_assignments').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
+    const updatePayload: Record<string, any> = {
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (newStatus === 'in_progress') {
+      updatePayload.assigned_at = new Date().toISOString();
+    }
+
+    const { error } = await supabase.from('vocab_test_assignments').update(updatePayload).eq('id', id);
     if (error) { toast.error('상태 변경 실패'); return; }
     loadData();
   };
@@ -507,7 +516,17 @@ export function VocabTestAssignManager() {
                       {format(new Date(a.assigned_at), 'MM/dd', { locale: ko })}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 flex-wrap">
+                        {a.status === 'assigned' && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => handleStatusChange(a.id, 'in_progress')}
+                          >
+                            오픈
+                          </Button>
+                        )}
                         {a.status === 'assigned' && (
                           <Button
                             variant="outline"
@@ -533,7 +552,17 @@ export function VocabTestAssignManager() {
                             결과 입력
                           </Button>
                         )}
-                        {a.status === 'assigned' && (
+                        {a.status === 'in_progress' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => handleStatusChange(a.id, 'assigned')}
+                          >
+                            예정으로
+                          </Button>
+                        )}
+                        {(a.status === 'assigned' || a.status === 'in_progress') && (
                           <Button
                             variant="ghost"
                             size="sm"
