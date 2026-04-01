@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  History, User, FileText, Loader2, Search, BarChart3, ChevronRight,
+  History, User, FileText, Loader2, Search, BarChart3, ChevronRight, Pencil, Check, X,
 } from 'lucide-react';
 
 interface QuizVersion {
@@ -17,6 +17,7 @@ interface QuizVersion {
   version_number: number;
   version_label: string | null;
   answer_code: string | null;
+  title: string | null;
   status: string;
   created_at: string;
   questions: any[];
@@ -56,13 +57,15 @@ export function QuizVersionTracker() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState('');
 
   const fetchAll = async () => {
     setLoading(true);
     const [versionsRes, assignRes, subRes, studentsRes] = await Promise.all([
       supabase
         .from('math_concept_quizzes')
-        .select('id, concept_id, version_number, version_label, answer_code, status, created_at, questions, math_concepts(title, course, grade, subject)')
+        .select('id, concept_id, version_number, version_label, answer_code, title, status, created_at, questions, math_concepts(title, course, grade, subject)')
         .order('created_at', { ascending: false }) as any,
       supabase.from('math_quiz_assignments').select('id, quiz_id, student_id, assigned_at') as any,
       supabase.from('math_quiz_submissions').select('id, quiz_id, student_id, ai_total_score, ai_total_questions, status, submitted_at') as any,
@@ -123,10 +126,25 @@ export function QuizVersionTracker() {
     const q = searchQuery.trim().toLowerCase();
     return versions.filter(v =>
       (v.version_label || '').toLowerCase().includes(q) ||
+      (v.title || '').toLowerCase().includes(q) ||
       (v.math_concepts?.title || '').toLowerCase().includes(q) ||
       (v.answer_code || '').toLowerCase().includes(q),
     );
   }, [versions, searchQuery]);
+
+  const handleSaveTitle = async (quizId: string) => {
+    const { error } = await supabase
+      .from('math_concept_quizzes')
+      .update({ title: editTitleValue.trim() || null } as any)
+      .eq('id', quizId);
+    if (error) {
+      toast({ title: '제목 저장 실패', variant: 'destructive' });
+    } else {
+      setVersions(prev => prev.map(v => v.id === quizId ? { ...v, title: editTitleValue.trim() || null } : v));
+      toast({ title: '제목이 수정되었습니다' });
+    }
+    setEditingTitleId(null);
+  };
 
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>;
@@ -178,7 +196,7 @@ export function QuizVersionTracker() {
                         <Badge variant="outline" className="text-[10px]">{v.math_concepts?.subject || '기타'}</Badge>
                         {v.answer_code && <Badge variant="outline" className="text-[10px] font-mono">{v.answer_code}</Badge>}
                       </div>
-                      <p className="font-medium truncate">{v.math_concepts?.title || '퀴즈'}</p>
+                      <p className="font-medium truncate">{v.title || v.math_concepts?.title || '퀴즈'}</p>
                       <p className="text-xs text-muted-foreground truncate">{v.version_label || ''}</p>
                       <div className="flex gap-2 mt-1">
                         <span className="text-xs text-muted-foreground">{assignCount}명 배포</span>
@@ -197,7 +215,33 @@ export function QuizVersionTracker() {
                 {selectedVersion ? (
                   <div className="space-y-4">
                     <div className="p-4 bg-muted/30 rounded-lg">
-                      <h3 className="font-semibold">{selectedVersion.math_concepts?.title}</h3>
+                      <div className="flex items-center gap-2 mb-1">
+                        {editingTitleId === selectedVersion.id ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <Input
+                              value={editTitleValue}
+                              onChange={e => setEditTitleValue(e.target.value)}
+                              placeholder="퀴즈 제목 입력..."
+                              className="h-8 text-sm flex-1"
+                              autoFocus
+                              onKeyDown={e => { if (e.key === 'Enter') handleSaveTitle(selectedVersion.id); if (e.key === 'Escape') setEditingTitleId(null); }}
+                            />
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleSaveTitle(selectedVersion.id)}>
+                              <Check className="w-3.5 h-3.5 text-green-600" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingTitleId(null)}>
+                              <X className="w-3.5 h-3.5 text-destructive" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <h3 className="font-semibold flex-1">{selectedVersion.title || selectedVersion.math_concepts?.title || '퀴즈'}</h3>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => { setEditingTitleId(selectedVersion.id); setEditTitleValue(selectedVersion.title || selectedVersion.math_concepts?.title || ''); }}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">{selectedVersion.version_label}</p>
                       <div className="flex gap-3 mt-2 text-sm">
                         <span>{(selectedVersion.questions as any[])?.length || 0}문항</span>
@@ -325,7 +369,7 @@ export function QuizVersionTracker() {
                               ? Math.round((sub.ai_total_score / sub.ai_total_questions) * 100) : null;
                             return (
                               <tr key={a.id} className="border-t">
-                                <td className="px-3 py-2">{ver?.math_concepts?.title || '퀴즈'}</td>
+                                <td className="px-3 py-2">{ver?.title || ver?.math_concepts?.title || '퀴즈'}</td>
                                 <td className="px-3 py-2">
                                   <Badge variant="secondary" className="text-xs">V{ver?.version_number || '?'}</Badge>
                                 </td>
