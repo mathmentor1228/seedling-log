@@ -115,6 +115,63 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
   const question = isListening ? '' : (mode === 'eng_to_kor' ? currentWord?.english : currentWord?.meaning);
   const answer = isListening ? currentWord?.meaning : (mode === 'eng_to_kor' ? currentWord?.meaning : currentWord?.english);
 
+  // Generate choices for level mode
+  useEffect(() => {
+    if (isChoiceMode && currentWord && !showResult && !finished) {
+      const correctAnswer = answer;
+      const otherAnswers = words
+        .filter(w => w.english !== currentWord.english)
+        .map(w => mode === 'eng_to_kor' ? w.meaning : w.english)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, choiceCount - 1);
+      const allChoices = [...otherAnswers, correctAnswer].sort(() => Math.random() - 0.5);
+      setChoices(allChoices);
+      setSelectedChoice(null);
+    }
+  }, [currentIdx, isChoiceMode, finished]);
+
+  // Per-question timer
+  useEffect(() => {
+    if (finished || showResult) return;
+    setPerQuestionTimer(perQuestionSeconds);
+    const interval = setInterval(() => {
+      setPerQuestionTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Auto-skip on timeout
+          if (!showResult) {
+            doCheck('', true);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentIdx, finished, perQuestionSeconds]);
+
+  // Global time limit
+  useEffect(() => {
+    if (!testTimeLimit || finished) return;
+    setGlobalTimeLeft(testTimeLimit);
+    const interval = setInterval(() => {
+      setGlobalTimeLeft(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Force finish
+          const correct = results.filter(r => r.status === 'correct').length;
+          const wrong = words.length - correct;
+          setFinished(true);
+          onFinish(correct, wrong, words.length);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [testTimeLimit, finished]);
+
   useEffect(() => {
     if (!showResult && !finished && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 100);
