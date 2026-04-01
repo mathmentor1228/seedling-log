@@ -61,6 +61,7 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
   const [mode, setMode] = useState<GenMode>(isEnglish ? 'english' : 'bank');
 
   // ─── Common ───
+  const [quizTitle, setQuizTitle] = useState('');
   const [randomOrder, setRandomOrder] = useState(true);
   const [includeQR, setIncludeQR] = useState(false);
 
