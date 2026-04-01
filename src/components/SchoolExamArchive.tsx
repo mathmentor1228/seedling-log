@@ -165,6 +165,19 @@ export function SchoolExamArchive() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // Scan exam schedule
+  const [showScanDialog, setShowScanDialog] = useState(false);
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanPreview, setScanPreview] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [scanSchoolName, setScanSchoolName] = useState('');
+  const [scanSchoolLevel, setScanSchoolLevel] = useState('중');
+  const [scanGradeYear, setScanGradeYear] = useState(1);
+  const [scanAcademicYear, setScanAcademicYear] = useState(currentYear);
+  const [scanSemester, setScanSemester] = useState('1학기');
+  const [applyingResult, setApplyingResult] = useState(false);
+
   const loadSchoolList = useCallback(async () => {
     const [studentsRes, archivesRes] = await Promise.all([
       supabase.from('students').select('school').not('school', 'is', null),
