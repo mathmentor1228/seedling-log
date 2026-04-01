@@ -253,6 +253,32 @@ export default function StudentVocab() {
           <p className="text-xs text-muted-foreground mt-0.5">범위를 선택하고 카드로 단어를 외워보세요</p>
         </div>
 
+        {activeTestAssignment && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="pt-4 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Target className="w-4 h-4 text-primary" />
+                  오픈된 단어 테스트
+                </p>
+                <Badge>{activeTestAssignment.test_mode === 'web' ? '웹 테스트' : '인쇄 테스트'}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                현재 오픈된 범위만 바로 응시할 수 있어요.
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {vocabSets.filter(set => activeTestAssignment.word_set_ids?.includes(set.set_id)).map(set => (
+                  <Badge key={set.set_id} variant="outline" className="text-[10px]">{set.set_title}</Badge>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                <span>Lv.{testLevel}</span>
+                {testTimeLimit && <span>제한시간 {testTimeLimit}초</span>}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Homework progress section */}
         {hasHomework && (
           <Card className="border-primary/30 bg-primary/5">
