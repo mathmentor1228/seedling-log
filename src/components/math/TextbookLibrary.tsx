@@ -926,6 +926,9 @@ export function TextbookLibrary() {
                                   {ex.difficulty && <span className={`text-xs px-1.5 py-0.5 rounded ${difficultyColor[ex.difficulty] || ''}`}>{difficultyLabel[ex.difficulty] || ex.difficulty}</span>}
                                 </div>
                                 <div className="flex items-center gap-0.5 shrink-0">
+                                  <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] gap-0.5" onClick={() => openEditDialog(ex)}>
+                                    <Edit className="w-3 h-3" /> 수정
+                                  </Button>
                                   <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] gap-0.5" onClick={() => handleReExtractExample(ex.id)} disabled={reExtractingId === ex.id}>
                                     {reExtractingId === ex.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCw className="w-3 h-3" />}
                                     재추출
