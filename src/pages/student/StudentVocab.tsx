@@ -70,6 +70,8 @@ export default function StudentVocab() {
     if (data?.completions) {
       setCompletions(data.completions);
     }
+    if (data?.test_level) setTestLevel(data.test_level);
+    if (data?.test_time_limit) setTestTimeLimit(data.test_time_limit);
     setLoading(false);
   };
 
