@@ -516,7 +516,17 @@ export function VocabTestAssignManager() {
                       {format(new Date(a.assigned_at), 'MM/dd', { locale: ko })}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 flex-wrap">
+                        {a.status === 'assigned' && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => handleStatusChange(a.id, 'in_progress')}
+                          >
+                            오픈
+                          </Button>
+                        )}
                         {a.status === 'assigned' && (
                           <Button
                             variant="outline"
@@ -542,7 +552,17 @@ export function VocabTestAssignManager() {
                             결과 입력
                           </Button>
                         )}
-                        {a.status === 'assigned' && (
+                        {a.status === 'in_progress' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => handleStatusChange(a.id, 'assigned')}
+                          >
+                            예정으로
+                          </Button>
+                        )}
+                        {(a.status === 'assigned' || a.status === 'in_progress') && (
                           <Button
                             variant="ghost"
                             size="sm"

@@ -104,7 +104,7 @@ export const studentApi = {
 
   getWeeklyReports: () => studentApiCall<{ reports: any[] }>('weekly_reports'),
 
-  getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[]; test_level?: number; test_time_limit?: number | null }>('vocab_cards'),
+  getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[]; test_level?: number; test_time_limit?: number | null; active_test_assignment?: any | null }>('vocab_cards'),
 
   submitVocabCompletion: (wordSetIds: string[], correctCount: number, wrongCount: number, totalCount: number, mode: string) =>
     studentApiCall<{ success: boolean }>('submit_vocab_completion', {
