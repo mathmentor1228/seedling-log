@@ -147,6 +147,10 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
   // Student management dialog
   const [manageStudentsQuiz, setManageStudentsQuiz] = useState<Quiz | null>(null);
 
+  // Title editing
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState('');
+
   const availableQuizzes = quizzes.filter((quiz) => quiz.status === 'draft' || quiz.status === 'published');
 
   const quizSubjectOptions = useMemo(() => {
