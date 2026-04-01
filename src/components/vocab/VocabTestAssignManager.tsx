@@ -99,6 +99,17 @@ export function VocabTestAssignManager() {
   const [resultTotal, setResultTotal] = useState('');
   const [resultNotes, setResultNotes] = useState('');
 
+  // Edit modal
+  const [editModal, setEditModal] = useState<Assignment | null>(null);
+  const [editTestMode, setEditTestMode] = useState<'web' | 'print'>('web');
+  const [editTestLevel, setEditTestLevel] = useState(1);
+  const [editTestTimeLimit, setEditTestTimeLimit] = useState('');
+  const [editTestDirection, setEditTestDirection] = useState('eng_to_kor');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editSelectedSets, setEditSelectedSets] = useState<string[]>([]);
+  const [editExpandedFolders, setEditExpandedFolders] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     loadData();
   }, []);

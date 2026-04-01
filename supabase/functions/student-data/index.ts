@@ -1134,7 +1134,7 @@ Deno.serve(async (req) => {
           .from('vocab_test_assignments')
           .select('*')
           .eq('student_id', student_id)
-          .in('status', ['pending', 'in_progress'])
+          .in('status', ['assigned', 'in_progress'])
           .order('assigned_at', { ascending: false });
 
         let vocabAssignmentsWithSets: any[] = [];
