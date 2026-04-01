@@ -65,7 +65,7 @@ export function QuizVersionTracker() {
     const [versionsRes, assignRes, subRes, studentsRes] = await Promise.all([
       supabase
         .from('math_concept_quizzes')
-        .select('id, concept_id, version_number, version_label, answer_code, status, created_at, questions, math_concepts(title, course, grade, subject)')
+        .select('id, concept_id, version_number, version_label, answer_code, title, status, created_at, questions, math_concepts(title, course, grade, subject)')
         .order('created_at', { ascending: false }) as any,
       supabase.from('math_quiz_assignments').select('id, quiz_id, student_id, assigned_at') as any,
       supabase.from('math_quiz_submissions').select('id, quiz_id, student_id, ai_total_score, ai_total_questions, status, submitted_at') as any,
