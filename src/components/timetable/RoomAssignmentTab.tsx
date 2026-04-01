@@ -330,15 +330,12 @@ export function RoomAssignmentTab() {
   }) {
     const slotEnd = calcSlotEnd(slot, data.durationSlots);
     const currentAssignments = viewMode === 'overview' ? overviewFilteredAssignments : visibleAssignments;
-    const slotMin = slotToMinutes(slot);
 
-    // Find any existing assignment that overlaps with the drop slot (not just exact match)
+    // Only merge when EXACT same start time AND same duration (span)
     const existing = currentAssignments.find(a => {
       if (a.room !== room) return false;
       if (!(a.day === day || (!a.is_fixed && a.date && getDayOfWeek(a.date) === day))) return false;
-      const aStart = slotToMinutes(a.time_slot);
-      const aEnd = aStart + a.span * 30;
-      return slotMin >= aStart && slotMin < aEnd;
+      return a.time_slot === slot && a.span === data.durationSlots;
     });
 
     if (existing) {
@@ -372,6 +369,53 @@ export function RoomAssignmentTab() {
     setSelectedStudentIds(new Set());
     fetchAssignments();
     toast({ title: '배정 완료' });
+  }
+
+  // ── Edit assignment (add/remove students) ──
+  const [editAssignment, setEditAssignment] = useState<Assignment | null>(null);
+  const [editSearch, setEditSearch] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editStudentIds, setEditStudentIds] = useState<string[]>([]);
+  const [editStudentNames, setEditStudentNames] = useState<string[]>([]);
+
+  function openEditModal(assignment: Assignment) {
+    setEditAssignment(assignment);
+    setEditStudentIds([...(assignment.student_ids as string[])]);
+    setEditStudentNames([...(assignment.student_names as string[])]);
+    setEditSearch('');
+  }
+
+  function toggleEditStudent(id: string, name: string) {
+    if (editStudentIds.includes(id)) {
+      setEditStudentIds(prev => prev.filter(x => x !== id));
+      setEditStudentNames(prev => {
+        const idx = editStudentIds.indexOf(id);
+        return prev.filter((_, i) => i !== idx);
+      });
+    } else {
+      setEditStudentIds(prev => [...prev, id]);
+      setEditStudentNames(prev => [...prev, name]);
+    }
+  }
+
+  async function saveEditAssignment() {
+    if (!editAssignment) return;
+    if (editStudentIds.length === 0) {
+      // If no students left, delete the assignment
+      await handleRemove(editAssignment.id);
+      setEditAssignment(null);
+      return;
+    }
+    setEditSaving(true);
+    const { error } = await supabase
+      .from('room_assignments')
+      .update({ student_ids: editStudentIds, student_names: editStudentNames } as any)
+      .eq('id', editAssignment.id);
+    setEditSaving(false);
+    if (error) { toast({ title: '오류', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: '수정 완료' });
+    setEditAssignment(null);
+    fetchAssignments();
   }
 
   // ── Remove handler ──
