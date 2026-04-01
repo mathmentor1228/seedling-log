@@ -847,7 +847,14 @@ Deno.serve(async (req) => {
           })),
         }));
 
-        result = { sets, completions: completionsData || [] };
+        // Get vocab settings for test level/time limit
+        const { data: vocabSettingData } = await supabase
+          .from('vocab_settings')
+          .select('test_level, test_time_limit')
+          .eq('student_id', student_id)
+          .maybeSingle();
+
+        result = { sets, completions: completionsData || [], test_level: vocabSettingData?.test_level || 1, test_time_limit: vocabSettingData?.test_time_limit || null };
         break;
       }
 
