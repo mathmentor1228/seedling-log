@@ -4462,6 +4462,8 @@ export type Database = {
           student_id: string
           teacher_id: string
           test_days: string[]
+          test_level: number | null
+          test_time_limit: number | null
           total_days: number | null
           updated_at: string
         }
@@ -4480,6 +4482,8 @@ export type Database = {
           student_id: string
           teacher_id: string
           test_days?: string[]
+          test_level?: number | null
+          test_time_limit?: number | null
           total_days?: number | null
           updated_at?: string
         }
@@ -4498,6 +4502,8 @@ export type Database = {
           student_id?: string
           teacher_id?: string
           test_days?: string[]
+          test_level?: number | null
+          test_time_limit?: number | null
           total_days?: number | null
           updated_at?: string
         }
