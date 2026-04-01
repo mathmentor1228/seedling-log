@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import {
-  Trash2, Loader2, Search, Users, Check, Plus, CalendarDays, LayoutGrid, Eye, ArrowUp,
+  Trash2, Loader2, Search, Users, Check, Plus, CalendarDays, LayoutGrid, Eye, ArrowUp, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
