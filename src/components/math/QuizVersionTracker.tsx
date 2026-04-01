@@ -215,7 +215,33 @@ export function QuizVersionTracker() {
                 {selectedVersion ? (
                   <div className="space-y-4">
                     <div className="p-4 bg-muted/30 rounded-lg">
-                      <h3 className="font-semibold">{selectedVersion.math_concepts?.title}</h3>
+                      <div className="flex items-center gap-2 mb-1">
+                        {editingTitleId === selectedVersion.id ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <Input
+                              value={editTitleValue}
+                              onChange={e => setEditTitleValue(e.target.value)}
+                              placeholder="퀴즈 제목 입력..."
+                              className="h-8 text-sm flex-1"
+                              autoFocus
+                              onKeyDown={e => { if (e.key === 'Enter') handleSaveTitle(selectedVersion.id); if (e.key === 'Escape') setEditingTitleId(null); }}
+                            />
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleSaveTitle(selectedVersion.id)}>
+                              <Check className="w-3.5 h-3.5 text-green-600" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingTitleId(null)}>
+                              <X className="w-3.5 h-3.5 text-destructive" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <h3 className="font-semibold flex-1">{selectedVersion.title || selectedVersion.math_concepts?.title || '퀴즈'}</h3>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => { setEditingTitleId(selectedVersion.id); setEditTitleValue(selectedVersion.title || selectedVersion.math_concepts?.title || ''); }}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">{selectedVersion.version_label}</p>
                       <div className="flex gap-3 mt-2 text-sm">
                         <span>{(selectedVersion.questions as any[])?.length || 0}문항</span>
