@@ -1108,6 +1108,7 @@ Deno.serve(async (req) => {
         const sessionsList = sessionsData || [];
         
         // Fetch tasks for all sessions
+        let sessionsWithTasks = sessionsList.map((s: any) => ({ ...s, tasks: [] as any[] }));
         if (sessionsList.length > 0) {
           const sessionIds = sessionsList.map((s: any) => s.id);
           const { data: tasksData } = await supabase
@@ -1122,15 +1123,44 @@ Deno.serve(async (req) => {
             taskMap[t.session_id].push(t);
           }
 
-          result = {
-            sessions: sessionsList.map((s: any) => ({
-              ...s,
-              tasks: taskMap[s.id] || [],
-            })),
-          };
-        } else {
-          result = { sessions: [] };
+          sessionsWithTasks = sessionsList.map((s: any) => ({
+            ...s,
+            tasks: taskMap[s.id] || [],
+          }));
         }
+
+        // VOCAB-TEST-ASSIGN-STUDENT-V1: Fetch pending vocab test assignments
+        const { data: vocabAssignments } = await supabase
+          .from('vocab_test_assignments')
+          .select('*')
+          .eq('student_id', student_id)
+          .in('status', ['pending', 'in_progress'])
+          .order('assigned_at', { ascending: false });
+
+        let vocabAssignmentsWithSets: any[] = [];
+        if (vocabAssignments && vocabAssignments.length > 0) {
+          // Gather all unique word_set_ids
+          const allSetIds = [...new Set(vocabAssignments.flatMap((a: any) => a.word_set_ids || []))];
+          const { data: wordSets } = await supabase
+            .from('vocab_word_sets')
+            .select('id, title, round_number')
+            .in('id', allSetIds);
+
+          const setMap: Record<string, any> = {};
+          for (const ws of (wordSets || [])) {
+            setMap[ws.id] = ws;
+          }
+
+          vocabAssignmentsWithSets = vocabAssignments.map((a: any) => ({
+            ...a,
+            word_sets: (a.word_set_ids || []).map((id: string) => setMap[id]).filter(Boolean),
+          }));
+        }
+
+        result = {
+          sessions: sessionsWithTasks,
+          vocab_assignments: vocabAssignmentsWithSets,
+        };
         break;
       }
 

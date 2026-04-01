@@ -5,10 +5,10 @@ import { studentApi } from '@/lib/studentApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
-  ClipboardCheck, Clock, Play, Square, CheckCircle2, Circle, BookOpen, AlertTriangle,
+  ClipboardCheck, Clock, Play, Square, CheckCircle2, Circle, BookOpen, AlertTriangle, Languages, Printer, Monitor,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface SessionTask {
   id: string;
@@ -33,9 +33,25 @@ interface StudySessionInfo {
   tasks: SessionTask[];
 }
 
+interface VocabAssignment {
+  id: string;
+  status: string;
+  test_mode: string; // 'web' | 'print'
+  test_level: number;
+  test_time_limit: number | null;
+  test_direction: string;
+  due_date: string | null;
+  notes: string | null;
+  assigned_at: string;
+  word_set_ids: string[];
+  word_sets: { id: string; title: string; round_number: number }[];
+}
+
 export default function StudentStudySession() {
   const { student } = useStudentAuth();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<StudySessionInfo[]>([]);
+  const [vocabAssignments, setVocabAssignments] = useState<VocabAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState<Record<string, number>>({});
@@ -44,7 +60,10 @@ export default function StudentStudySession() {
     if (!student) return;
     setLoading(true);
     const { data, error } = await studentApi.getStudySessions();
-    if (!error && data) setSessions(data.sessions || []);
+    if (!error && data) {
+      setSessions(data.sessions || []);
+      setVocabAssignments(data.vocab_assignments || []);
+    }
     setLoading(false);
   }, [student]);
 
@@ -122,21 +141,7 @@ export default function StudentStudySession() {
     );
   }
 
-  if (sessions.length === 0) {
-    return (
-      <div className="space-y-4 pb-20">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <ClipboardCheck className="w-6 h-6" /> 자습/테스트
-        </h1>
-        <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            <ClipboardCheck className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>오늘 예정된 자습/테스트가 없습니다.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const hasContent = sessions.length > 0 || vocabAssignments.length > 0;
 
   return (
     <div className="space-y-4 pb-20">
@@ -144,7 +149,81 @@ export default function StudentStudySession() {
         <ClipboardCheck className="w-6 h-6" /> 자습/테스트
       </h1>
 
-      {sessions.map(session => {
+      {/* Vocab Test Assignments */}
+      {vocabAssignments.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold flex items-center gap-1.5 text-primary">
+            <Languages className="w-4 h-4" /> 단어 테스트 배정
+          </h2>
+          {vocabAssignments.map(va => (
+            <Card key={va.id} className="border-primary/30">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {va.test_mode === 'web' ? (
+                      <Badge className="gap-1 text-xs">
+                        <Monitor className="w-3 h-3" /> 웹 테스트
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="gap-1 text-xs">
+                        <Printer className="w-3 h-3" /> 인쇄 테스트
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs">
+                      Lv.{va.test_level}
+                    </Badge>
+                  </div>
+                  {va.due_date && (
+                    <span className="text-xs text-muted-foreground">
+                      마감: {va.due_date}
+                    </span>
+                  )}
+                </div>
+
+                {/* Word sets */}
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground font-medium">범위</p>
+                  <div className="flex flex-wrap gap-1">
+                    {va.word_sets.map(ws => (
+                      <Badge key={ws.id} variant="outline" className="text-xs">
+                        {ws.title}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {va.test_time_limit && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> 제한시간: {va.test_time_limit}초
+                  </p>
+                )}
+
+                {va.notes && (
+                  <p className="text-xs text-muted-foreground bg-muted/30 rounded p-2">{va.notes}</p>
+                )}
+
+                {/* Action */}
+                {va.test_mode === 'web' && (
+                  <Button
+                    className="w-full gap-2"
+                    onClick={() => navigate('/student/vocab')}
+                  >
+                    <Play className="w-4 h-4" /> 단어 테스트 시작하기
+                  </Button>
+                )}
+                {va.test_mode === 'print' && (
+                  <div className="text-center text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
+                    📄 인쇄 시험지를 선생님께 받아 응시하세요
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Study Sessions */}
+      {sessions.length > 0 && sessions.map(session => {
         const completedTasks = session.tasks.filter(t => t.is_completed).length;
         const totalTasks = session.tasks.length;
         const allDone = totalTasks > 0 && completedTasks === totalTasks;
@@ -170,12 +249,10 @@ export default function StudentStudySession() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {/* Supervisor */}
               {session.supervisor_name && (
                 <p className="text-xs text-muted-foreground">담당: {session.supervisor_name}</p>
               )}
 
-              {/* Timer display for in-progress */}
               {isInProgress && (
                 <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 text-center">
                   <p className="text-xs text-muted-foreground mb-1">학습 경과 시간</p>
@@ -183,7 +260,6 @@ export default function StudentStudySession() {
                 </div>
               )}
 
-              {/* Completed time display */}
               {isCompleted && session.actual_start_at && session.actual_end_at && (
                 <div className="bg-muted/50 rounded-lg p-3 text-center">
                   <p className="text-xs text-muted-foreground">학습 기록</p>
@@ -200,7 +276,6 @@ export default function StudentStudySession() {
                 </div>
               )}
 
-              {/* Task checklist */}
               {totalTasks > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -247,14 +322,12 @@ export default function StudentStudySession() {
                 </div>
               )}
 
-              {/* Notes */}
               {session.notes && (
                 <div className="bg-muted/30 rounded-lg p-2.5 text-xs text-muted-foreground">
                   {session.notes}
                 </div>
               )}
 
-              {/* Action buttons */}
               <div className="pt-1">
                 {isScheduled && (
                   <Button
@@ -287,6 +360,15 @@ export default function StudentStudySession() {
           </Card>
         );
       })}
+
+      {!hasContent && (
+        <Card>
+          <CardContent className="p-6 text-center text-muted-foreground">
+            <ClipboardCheck className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p>오늘 예정된 자습/테스트가 없습니다.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
