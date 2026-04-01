@@ -508,6 +508,16 @@ export function VocabTestAssignManager() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        {a.status === 'assigned' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => openEditModal(a)}
+                          >
+                            수정
+                          </Button>
+                        )}
                         {a.test_mode === 'print' && a.status !== 'completed' && (
                           <Button
                             variant="outline"
@@ -531,6 +541,16 @@ export function VocabTestAssignManager() {
                             onClick={() => handleStatusChange(a.id, 'expired')}
                           >
                             만료
+                          </Button>
+                        )}
+                        {a.status === 'assigned' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-[10px] px-2 text-destructive"
+                            onClick={() => handleDelete(a.id)}
+                          >
+                            삭제
                           </Button>
                         )}
                       </div>
