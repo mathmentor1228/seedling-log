@@ -56,6 +56,7 @@ interface Quiz {
   version_label?: string | null;
   answer_code?: string | null;
   creator_name?: string;
+  title?: string | null;
   math_concepts: { title: string; course: string; grade: string; subject: string } | null;
 }
 
