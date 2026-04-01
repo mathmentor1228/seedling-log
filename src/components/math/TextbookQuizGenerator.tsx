@@ -296,10 +296,13 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
       const modeLabels: Record<string, string> = { bank: '문제은행', reprint: '재출제', english: englishMode === 'vocab' ? '단어시험' : englishMode === 'translation' ? '해석시험' : '독해시험' };
       const versionLabel = `${today}_${textbook.title}_${modeLabels[mode] || mode}_V${nextVersion}`;
 
+      const finalTitle = quizTitle.trim() || `${textbook.title} (${modeLabels[mode] || mode})`;
+
       const { data: newQuiz, error: insertErr } = await supabase
         .from('math_concept_quizzes').insert({
           concept_id: conceptId, questions: questions as any, status: 'draft',
           version_number: nextVersion, version_label: versionLabel,
+          title: finalTitle,
         } as any).select('id').single();
       if (insertErr) throw insertErr;
 
