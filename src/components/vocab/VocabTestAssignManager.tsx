@@ -757,6 +757,81 @@ export function VocabTestAssignManager() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Edit Assignment Modal */}
+      <Dialog open={!!editModal} onOpenChange={() => setEditModal(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">배정 수정 — {editModal ? getStudentName(editModal.student_id) : ''}</DialogTitle>
+          </DialogHeader>
+          {editModal && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">단어 세트</Label>
+                <div className="border rounded-md max-h-48 overflow-y-auto p-1.5">
+                  {renderEditFolderTree(null)}
+                </div>
+                {editSelectedSets.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-1">{editSelectedSets.length}개 세트 선택됨</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs mb-1 block">테스트 방식</Label>
+                  <div className="flex gap-2">
+                    <Button type="button" variant={editTestMode === 'web' ? 'default' : 'outline'} size="sm" className="flex-1 gap-1 text-xs h-8" onClick={() => setEditTestMode('web')}>
+                      <Monitor className="w-3.5 h-3.5" /> 웹
+                    </Button>
+                    <Button type="button" variant={editTestMode === 'print' ? 'default' : 'outline'} size="sm" className="flex-1 gap-1 text-xs h-8" onClick={() => setEditTestMode('print')}>
+                      <Printer className="w-3.5 h-3.5" /> 인쇄
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block">출제 방향</Label>
+                  <Select value={editTestDirection} onValueChange={setEditTestDirection}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="eng_to_kor">영→한</SelectItem>
+                      <SelectItem value="kor_to_eng">한→영</SelectItem>
+                      <SelectItem value="mixed">혼합</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {editTestMode === 'web' && (
+                  <>
+                    <div>
+                      <Label className="text-xs mb-1 block">테스트 레벨</Label>
+                      <Select value={String(editTestLevel)} onValueChange={v => setEditTestLevel(Number(v))}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Lv.1 (3지선다)</SelectItem>
+                          <SelectItem value="2">Lv.2 (5지선다)</SelectItem>
+                          <SelectItem value="3">Lv.3 (주관식)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1 block">총 제한시간 (초)</Label>
+                      <Input type="number" value={editTestTimeLimit} onChange={e => setEditTestTimeLimit(e.target.value)} placeholder="미설정 시 무제한" className="h-8 text-xs" />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <Label className="text-xs mb-1 block">마감일</Label>
+                  <Input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">메모</Label>
+                <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="text-xs h-16 resize-none" />
+              </div>
+              <Button onClick={handleEditSave} className="w-full">수정 저장</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
