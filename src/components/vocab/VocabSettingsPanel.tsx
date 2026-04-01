@@ -408,6 +408,31 @@ export function VocabSettingsPanel() {
                 <p className="text-xs text-muted-foreground">스케줄 생성 시 이 DAY를 초과하면 자동으로 중단됩니다</p>
               </div>
 
+              {/* Test Level & Time Limit */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">테스트 레벨</Label>
+                  <Select value={String(formTestLevel)} onValueChange={v => setFormTestLevel(Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Lv.1 (보기3개/4초)</SelectItem>
+                      <SelectItem value="2">Lv.2 (보기5개/4초)</SelectItem>
+                      <SelectItem value="3">Lv.3 (직접입력/6초)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">총 제한시간 (초)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={formTimeLimit}
+                    onChange={e => setFormTimeLimit(e.target.value ? Number(e.target.value) : '')}
+                    placeholder="미입력 시 제한 없음"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs">메모</Label>
                 <Input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="선택 사항" />
