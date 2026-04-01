@@ -89,7 +89,7 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
   return 'wrong';
 }
 
-export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSelfTestProps) {
+export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
@@ -98,9 +98,18 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
   const [finished, setFinished] = useState(false);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'wrong' | 'partial'>('all');
   const [listeningRevealed, setListeningRevealed] = useState(false);
+  const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
+  const [choices, setChoices] = useState<string[]>([]);
+  const [perQuestionTimer, setPerQuestionTimer] = useState(0);
+  const [globalTimeLeft, setGlobalTimeLeft] = useState<number | null>(testTimeLimit || null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isListening = mode === 'listening';
+  const isLevelMode = testLevel >= 1 && testLevel <= 3;
+  const isChoiceMode = isLevelMode && (testLevel === 1 || testLevel === 2);
+  const isTypingLevel = isLevelMode && testLevel === 3;
+  const choiceCount = testLevel === 1 ? 3 : testLevel === 2 ? 5 : 0;
+  const perQuestionSeconds = testLevel === 3 ? 6 : 4;
   const currentWord = words[currentIdx];
   // In listening mode: student hears English, types Korean meaning
   const question = isListening ? '' : (mode === 'eng_to_kor' ? currentWord?.english : currentWord?.meaning);
