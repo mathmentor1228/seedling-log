@@ -403,6 +403,23 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
     window.open(`/quiz-print?quiz_id=${quizId}`, '_blank');
   };
 
+  const handleSaveTitle = async (quizId: string) => {
+    const { error } = await supabase
+      .from('math_concept_quizzes')
+      .update({ title: editTitleValue.trim() || null } as any)
+      .eq('id', quizId);
+    if (error) {
+      toast({ title: '제목 저장 실패', variant: 'destructive' });
+    } else {
+      toast({ title: '제목 수정 완료' });
+      // Update local quiz data
+      const quiz = availableQuizzes.find(q => q.id === quizId);
+      if (quiz) quiz.title = editTitleValue.trim() || null;
+      onQuizDeleted?.(); // refetch
+    }
+    setEditingTitleId(null);
+  };
+
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
