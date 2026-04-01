@@ -775,24 +775,3 @@ function AnswerCard({ answer }: { answer: MathAnswer }) {
     </div>
   );
 }
-              src={url}
-              alt={`답변 사진 ${i + 1}`}
-              className="h-32 rounded-lg border object-contain flex-shrink-0"
-            />
-          ))}
-        </div>
-      )}
-
-      {answer.video_url && (
-        <a
-          href={answer.video_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-        >
-          🎬 영상 해설 보기
-        </a>
-      )}
-    </div>
-  );
-}
