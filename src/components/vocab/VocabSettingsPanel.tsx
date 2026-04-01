@@ -131,6 +131,8 @@ export function VocabSettingsPanel() {
   const [formTotalDays, setFormTotalDays] = useState<number | ''>('');
   const [formNotes, setFormNotes] = useState('');
   const [formAssignedTeacher, setFormAssignedTeacher] = useState('');
+  const [formTimeLimit, setFormTimeLimit] = useState<number | ''>('');
+  const [formTestLevel, setFormTestLevel] = useState(1);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<VocabSetting | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
