@@ -555,9 +555,42 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
                                   />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm leading-tight truncate">
-                                    {q.math_concepts?.title || '퀴즈'}
-                                  </p>
+                                  {editingTitleId === q.id ? (
+                                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                      <Input
+                                        value={editTitleValue}
+                                        onChange={e => setEditTitleValue(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleSaveTitle(q.id); if (e.key === 'Escape') setEditingTitleId(null); }}
+                                        className="h-7 text-sm"
+                                        placeholder="퀴즈 제목 입력..."
+                                        autoFocus
+                                      />
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => handleSaveTitle(q.id)}>
+                                        <Check className="w-3.5 h-3.5 text-green-600" />
+                                      </Button>
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => setEditingTitleId(null)}>
+                                        <X className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1 group/title">
+                                      <p className="font-medium text-sm leading-tight truncate">
+                                        {q.title || q.math_concepts?.title || '퀴즈'}
+                                      </p>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingTitleId(q.id);
+                                          setEditTitleValue(q.title || q.math_concepts?.title || '');
+                                        }}
+                                      >
+                                        <Pencil className="w-3 h-3 text-muted-foreground" />
+                                      </Button>
+                                    </div>
+                                  )}
                                   <div className="flex items-center gap-1 mt-1 flex-wrap">
                                     <Badge variant="secondary" className="text-[10px] h-5">
                                       {q.math_concepts?.subject || '기타'}
