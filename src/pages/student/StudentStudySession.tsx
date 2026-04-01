@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  ClipboardCheck, Clock, Play, Square, CheckCircle2, Circle, BookOpen, AlertTriangle, Languages, Printer, Monitor,
+  ClipboardCheck, Clock, Play, Square, CheckCircle2, Circle, BookOpen, Languages, Printer, Monitor,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -36,7 +36,7 @@ interface StudySessionInfo {
 interface VocabAssignment {
   id: string;
   status: string;
-  test_mode: string; // 'web' | 'print'
+  test_mode: string;
   test_level: number;
   test_time_limit: number | null;
   test_direction: string;
@@ -67,7 +67,33 @@ export default function StudentStudySession() {
     setLoading(false);
   }, [student]);
 
-  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
+  useEffect(() => {
+    if (!student) return;
+
+    const interval = window.setInterval(() => {
+      fetchSessions();
+    }, 5000);
+
+    const handleFocus = () => fetchSessions();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchSessions();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [student, fetchSessions]);
 
   // Timer for in_progress sessions
   useEffect(() => {
@@ -149,80 +175,91 @@ export default function StudentStudySession() {
         <ClipboardCheck className="w-6 h-6" /> 자습/테스트
       </h1>
 
-      {/* Vocab Test Assignments */}
       {vocabAssignments.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold flex items-center gap-1.5 text-primary">
-            <Languages className="w-4 h-4" /> 단어 테스트 배정
+            <Languages className="w-4 h-4" /> 단어 테스트
           </h2>
-          {vocabAssignments.map(va => (
-            <Card key={va.id} className="border-primary/30">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {va.test_mode === 'web' ? (
-                      <Badge className="gap-1 text-xs">
-                        <Monitor className="w-3 h-3" /> 웹 테스트
+          {vocabAssignments.map(va => {
+            const isScheduledAssignment = va.status === 'assigned';
+            const isOpenedAssignment = va.status === 'in_progress';
+
+            return (
+              <Card key={va.id} className={isOpenedAssignment ? 'border-primary/40 bg-primary/5' : 'border-border'}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {va.test_mode === 'web' ? (
+                        <Badge className="gap-1 text-xs">
+                          <Monitor className="w-3 h-3" /> 웹 테스트
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="gap-1 text-xs">
+                          <Printer className="w-3 h-3" /> 인쇄 테스트
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-xs">
+                        Lv.{va.test_level}
                       </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="gap-1 text-xs">
-                        <Printer className="w-3 h-3" /> 인쇄 테스트
+                      <Badge variant={isOpenedAssignment ? 'default' : 'secondary'} className="text-xs">
+                        {isOpenedAssignment ? '오픈' : '예정'}
                       </Badge>
+                    </div>
+                    {va.due_date && (
+                      <span className="text-xs text-muted-foreground">
+                        마감: {va.due_date}
+                      </span>
                     )}
-                    <Badge variant="outline" className="text-xs">
-                      Lv.{va.test_level}
-                    </Badge>
                   </div>
-                  {va.due_date && (
-                    <span className="text-xs text-muted-foreground">
-                      마감: {va.due_date}
-                    </span>
+
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium">범위</p>
+                    <div className="flex flex-wrap gap-1">
+                      {va.word_sets.map(ws => (
+                        <Badge key={ws.id} variant="outline" className="text-xs">
+                          {ws.title}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {va.test_time_limit && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> 제한시간: {va.test_time_limit}초
+                    </p>
                   )}
-                </div>
 
-                {/* Word sets */}
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">범위</p>
-                  <div className="flex flex-wrap gap-1">
-                    {va.word_sets.map(ws => (
-                      <Badge key={ws.id} variant="outline" className="text-xs">
-                        {ws.title}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+                  {va.notes && (
+                    <p className="text-xs text-muted-foreground bg-muted/30 rounded p-2">{va.notes}</p>
+                  )}
 
-                {va.test_time_limit && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> 제한시간: {va.test_time_limit}초
-                  </p>
-                )}
+                  {isScheduledAssignment && (
+                    <div className="text-center text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
+                      ⏳ 선생님/조교가 오픈하면 여기서 바로 볼 수 있어요
+                    </div>
+                  )}
 
-                {va.notes && (
-                  <p className="text-xs text-muted-foreground bg-muted/30 rounded p-2">{va.notes}</p>
-                )}
+                  {isOpenedAssignment && va.test_mode === 'web' && (
+                    <Button
+                      className="w-full gap-2"
+                      onClick={() => navigate('/student/vocab')}
+                    >
+                      <Play className="w-4 h-4" /> 오픈된 단어 보기
+                    </Button>
+                  )}
 
-                {/* Action */}
-                {va.test_mode === 'web' && (
-                  <Button
-                    className="w-full gap-2"
-                    onClick={() => navigate('/student/vocab')}
-                  >
-                    <Play className="w-4 h-4" /> 단어 테스트 시작하기
-                  </Button>
-                )}
-                {va.test_mode === 'print' && (
-                  <div className="text-center text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
-                    📄 인쇄 시험지를 선생님께 받아 응시하세요
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  {isOpenedAssignment && va.test_mode === 'print' && (
+                    <div className="text-center text-xs text-muted-foreground bg-muted/30 rounded-lg p-3">
+                      📄 오픈된 인쇄 시험지를 선생님께 받아 응시하세요
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {/* Study Sessions */}
       {sessions.length > 0 && sessions.map(session => {
         const completedTasks = session.tasks.filter(t => t.is_completed).length;
         const totalTasks = session.tasks.length;

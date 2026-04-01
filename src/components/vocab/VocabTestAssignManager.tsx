@@ -55,8 +55,8 @@ interface Assignment {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  assigned: { label: '배정됨', color: 'bg-blue-100 text-blue-700' },
-  in_progress: { label: '진행중', color: 'bg-yellow-100 text-yellow-700' },
+  assigned: { label: '예정', color: 'bg-blue-100 text-blue-700' },
+  in_progress: { label: '오픈', color: 'bg-yellow-100 text-yellow-700' },
   completed: { label: '완료', color: 'bg-green-100 text-green-700' },
   expired: { label: '만료', color: 'bg-muted text-muted-foreground' },
 };
