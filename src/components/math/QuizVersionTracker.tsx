@@ -57,6 +57,8 @@ export function QuizVersionTracker() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState('');
 
   const fetchAll = async () => {
     setLoading(true);
