@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  History, User, FileText, Loader2, Search, BarChart3, ChevronRight,
+  History, User, FileText, Loader2, Search, BarChart3, ChevronRight, Pencil, Check, X,
 } from 'lucide-react';
 
 interface QuizVersion {
