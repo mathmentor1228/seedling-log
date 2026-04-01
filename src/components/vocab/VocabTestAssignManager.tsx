@@ -231,7 +231,16 @@ export function VocabTestAssignManager() {
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from('vocab_test_assignments').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
+    const updatePayload: Record<string, any> = {
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (newStatus === 'in_progress') {
+      updatePayload.assigned_at = new Date().toISOString();
+    }
+
+    const { error } = await supabase.from('vocab_test_assignments').update(updatePayload).eq('id', id);
     if (error) { toast.error('상태 변경 실패'); return; }
     loadData();
   };
