@@ -407,6 +407,128 @@ export function SchoolExamArchive() {
     }));
   };
 
+  // EXAM-SCAN-V1: Handle exam schedule scan
+  const handleScanFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanFile(file);
+    if (file.type.startsWith('image/')) {
+      setScanPreview(URL.createObjectURL(file));
+    } else {
+      setScanPreview(null);
+    }
+    setScanResult(null);
+  };
+
+  const handleScan = async () => {
+    if (!scanFile || !scanSchoolName.trim()) {
+      toast.error('파일과 학교명을 입력해주세요');
+      return;
+    }
+    setScanning(true);
+    try {
+      // Upload file first to get a URL
+      const ext = scanFile.name.split('.').pop() || 'jpg';
+      const path = `scan_temp/${Date.now()}_scan.${ext}`;
+      const { error: upErr } = await supabase.storage.from('school-exam-materials').upload(path, scanFile);
+      if (upErr) { toast.error('파일 업로드 실패'); return; }
+      const { data: urlData } = await supabase.storage.from('school-exam-materials').createSignedUrl(path, 3600);
+      if (!urlData?.signedUrl) { toast.error('URL 생성 실패'); return; }
+
+      const { data, error } = await supabase.functions.invoke('scan-exam-schedule', {
+        body: {
+          image_url: urlData.signedUrl,
+          school_name: scanSchoolName.trim(),
+          school_level: scanSchoolLevel,
+          grade_year: scanGradeYear,
+          academic_year: scanAcademicYear,
+          semester: scanSemester,
+        },
+      });
+
+      if (error) { toast.error('스캔 실패: ' + error.message); return; }
+      if (data?.error) { toast.error('스캔 실패: ' + data.error); return; }
+
+      setScanResult(data.extracted);
+      toast.success('스캔 완료! 결과를 확인하세요');
+    } catch (err: any) {
+      toast.error('스캔 오류: ' + err.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleApplyScanResult = async () => {
+    if (!scanResult || !scanSchoolName.trim()) return;
+    setApplyingResult(true);
+    try {
+      const subjects = scanResult.subjects || [];
+      const insertRows = subjects.map((s: any) => ({
+        school_name: scanSchoolName.trim(),
+        school_level: scanSchoolLevel,
+        grade_year: scanGradeYear,
+        academic_year: scanAcademicYear,
+        semester: scanSemester,
+        exam_type: scanResult.exam_type || '중간고사',
+        subject: s.subject_name || '기타',
+        exam_scope: s.exam_scope || null,
+        exam_date_start: s.exam_date || scanResult.exam_date_start || null,
+        exam_date_end: scanResult.exam_date_end || s.exam_date || null,
+        status: '자료수집전',
+        notes: scanResult.notes || null,
+        created_by: user?.id,
+        updated_at: new Date().toISOString(),
+      }));
+
+      if (insertRows.length === 0) {
+        toast.error('추출된 과목 데이터가 없습니다');
+        return;
+      }
+
+      // Check for existing entries and update or insert
+      for (const row of insertRows) {
+        const { data: existing } = await (supabase as any)
+          .from('school_exam_archives')
+          .select('id')
+          .eq('school_name', row.school_name)
+          .eq('school_level', row.school_level)
+          .eq('grade_year', row.grade_year)
+          .eq('academic_year', row.academic_year)
+          .eq('semester', row.semester)
+          .eq('exam_type', row.exam_type)
+          .eq('subject', row.subject)
+          .maybeSingle();
+
+        if (existing) {
+          // Update existing
+          await (supabase as any)
+            .from('school_exam_archives')
+            .update({
+              exam_scope: row.exam_scope,
+              exam_date_start: row.exam_date_start,
+              exam_date_end: row.exam_date_end,
+              notes: row.notes,
+              updated_at: row.updated_at,
+            })
+            .eq('id', existing.id);
+        } else {
+          await (supabase as any).from('school_exam_archives').insert(row);
+        }
+      }
+
+      toast.success(`${insertRows.length}개 과목 데이터가 반영되었습니다`);
+      setShowScanDialog(false);
+      setScanFile(null);
+      setScanPreview(null);
+      setScanResult(null);
+      loadArchives();
+    } catch (err: any) {
+      toast.error('반영 실패: ' + err.message);
+    } finally {
+      setApplyingResult(false);
+    }
+  };
+
   // Group archives: school → grade+semester+examType → subjects
   const sortedArchives = [...archives].sort((a, b) => {
     const semOrder = a.semester.localeCompare(b.semester);
