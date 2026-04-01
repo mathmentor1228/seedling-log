@@ -40,6 +40,8 @@ interface VocabSetting {
   total_days: number | null;
   notes: string | null;
   assigned_teacher: string | null;
+  test_time_limit: number | null;
+  test_level: number;
   students?: { name: string; grade: string | null; school: string | null };
 }
 
