@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import {
-  Trash2, Loader2, Search, Users, Check, Plus, CalendarDays, LayoutGrid, Eye, ArrowUp,
+  Trash2, Loader2, Search, Users, Check, Plus, CalendarDays, LayoutGrid, Eye, ArrowUp, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -330,15 +330,12 @@ export function RoomAssignmentTab() {
   }) {
     const slotEnd = calcSlotEnd(slot, data.durationSlots);
     const currentAssignments = viewMode === 'overview' ? overviewFilteredAssignments : visibleAssignments;
-    const slotMin = slotToMinutes(slot);
 
-    // Find any existing assignment that overlaps with the drop slot (not just exact match)
+    // Only merge when EXACT same start time AND same duration (span)
     const existing = currentAssignments.find(a => {
       if (a.room !== room) return false;
       if (!(a.day === day || (!a.is_fixed && a.date && getDayOfWeek(a.date) === day))) return false;
-      const aStart = slotToMinutes(a.time_slot);
-      const aEnd = aStart + a.span * 30;
-      return slotMin >= aStart && slotMin < aEnd;
+      return a.time_slot === slot && a.span === data.durationSlots;
     });
 
     if (existing) {
@@ -372,6 +369,53 @@ export function RoomAssignmentTab() {
     setSelectedStudentIds(new Set());
     fetchAssignments();
     toast({ title: '배정 완료' });
+  }
+
+  // ── Edit assignment (add/remove students) ──
+  const [editAssignment, setEditAssignment] = useState<Assignment | null>(null);
+  const [editSearch, setEditSearch] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editStudentIds, setEditStudentIds] = useState<string[]>([]);
+  const [editStudentNames, setEditStudentNames] = useState<string[]>([]);
+
+  function openEditModal(assignment: Assignment) {
+    setEditAssignment(assignment);
+    setEditStudentIds([...(assignment.student_ids as string[])]);
+    setEditStudentNames([...(assignment.student_names as string[])]);
+    setEditSearch('');
+  }
+
+  function toggleEditStudent(id: string, name: string) {
+    if (editStudentIds.includes(id)) {
+      setEditStudentIds(prev => prev.filter(x => x !== id));
+      setEditStudentNames(prev => {
+        const idx = editStudentIds.indexOf(id);
+        return prev.filter((_, i) => i !== idx);
+      });
+    } else {
+      setEditStudentIds(prev => [...prev, id]);
+      setEditStudentNames(prev => [...prev, name]);
+    }
+  }
+
+  async function saveEditAssignment() {
+    if (!editAssignment) return;
+    if (editStudentIds.length === 0) {
+      // If no students left, delete the assignment
+      await handleRemove(editAssignment.id);
+      setEditAssignment(null);
+      return;
+    }
+    setEditSaving(true);
+    const { error } = await supabase
+      .from('room_assignments')
+      .update({ student_ids: editStudentIds, student_names: editStudentNames } as any)
+      .eq('id', editAssignment.id);
+    setEditSaving(false);
+    if (error) { toast({ title: '오류', description: error.message, variant: 'destructive' }); return; }
+    toast({ title: '수정 완료' });
+    setEditAssignment(null);
+    fetchAssignments();
   }
 
   // ── Remove handler ──
@@ -538,6 +582,7 @@ export function RoomAssignmentTab() {
             assignments={visibleAssignments}
             onDrop={handleDrop}
             onRemove={handleRemove}
+            onEdit={openEditModal}
             selectedStudentIds={selectedStudentIds}
             students={students}
             durationSlots={durationSlots}
@@ -550,6 +595,7 @@ export function RoomAssignmentTab() {
             day={currentDay}
             onRemove={handleRemove}
             onDrop={handleDrop}
+            onEdit={openEditModal}
           />
         ) : (
           <DayGrid
@@ -558,6 +604,7 @@ export function RoomAssignmentTab() {
             day={selectedDay}
             onDrop={handleDrop}
             onRemove={handleRemove}
+            onEdit={openEditModal}
             selectedStudentIds={selectedStudentIds}
             students={students}
             durationSlots={durationSlots}
@@ -714,6 +761,73 @@ export function RoomAssignmentTab() {
         saving={guerrillaSaving}
         onSave={saveGuerrilla}
       />
+
+      {/* ══════ Edit Assignment Modal ══════ */}
+      <Dialog open={!!editAssignment} onOpenChange={(open) => { if (!open) setEditAssignment(null); }}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">배정 수정 — {editAssignment?.time_slot}~{editAssignment?.slot_end}</DialogTitle>
+          </DialogHeader>
+          {editAssignment && (
+            <div className="space-y-4">
+              {/* Current students */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">현재 배정 학생 ({editStudentIds.length}명)</Label>
+                {editStudentIds.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {editStudentIds.map((id, idx) => (
+                      <Badge key={id} variant="secondary" className="text-xs cursor-pointer hover:bg-destructive/20"
+                        onClick={() => toggleEditStudent(id, editStudentNames[idx])}>
+                        {editStudentNames[idx]} ×
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">학생이 없으면 저장 시 배정이 삭제됩니다</p>
+                )}
+              </div>
+
+              {/* Add students */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">학생 추가</Label>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input placeholder="이름 검색" value={editSearch} onChange={e => setEditSearch(e.target.value)}
+                    className="h-8 text-xs pl-7" />
+                </div>
+              </div>
+              <div className="max-h-40 overflow-auto border rounded p-1 space-y-0.5">
+                {students
+                  .filter(s => !editSearch || s.name.includes(editSearch))
+                  .slice(0, 50).map(s => {
+                    const selected = editStudentIds.includes(s.id);
+                    return (
+                      <div key={s.id} className={cn(
+                        'flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer transition-colors',
+                        selected ? 'bg-primary/15 font-semibold' : 'hover:bg-muted'
+                      )} onClick={() => toggleEditStudent(s.id, s.name)}>
+                        <div className={cn('w-3 h-3 rounded-sm border flex items-center justify-center',
+                          selected ? 'bg-primary border-primary' : 'border-muted-foreground/30')}>
+                          {selected && <Check className="w-2 h-2 text-primary-foreground" />}
+                        </div>
+                        {s.name}
+                        {s.grade && <span className="text-muted-foreground">({s.grade})</span>}
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setEditAssignment(null)}>취소</Button>
+                <Button size="sm" onClick={saveEditAssignment} disabled={editSaving}>
+                  {editSaving && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                  {editStudentIds.length === 0 ? '배정 삭제' : '저장'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -721,12 +835,13 @@ export function RoomAssignmentTab() {
 // ════════════════════════════════════════════════════════
 // OverviewGrid — 통합현황 뷰
 // ════════════════════════════════════════════════════════
-function OverviewGrid({ timeSlots, assignments, day, onRemove, onDrop }: {
+function OverviewGrid({ timeSlots, assignments, day, onRemove, onDrop, onEdit }: {
   timeSlots: string[];
   assignments: Assignment[];
   day: string;
   onRemove: (id: string) => void;
   onDrop: (room: string, slot: string, day: string, data: any) => void;
+  onEdit: (a: Assignment) => void;
 }) {
   return (
     <div className="min-w-[500px]">
@@ -749,19 +864,20 @@ function OverviewGrid({ timeSlots, assignments, day, onRemove, onDrop }: {
       {/* Body */}
       <div className="grid grid-cols-[60px_1fr_1fr_1fr] gap-px bg-border border border-t-0 rounded-b-lg overflow-hidden">
         {timeSlots.map(slot => (
-          <OverviewSlotRow key={slot} slot={slot} day={day} assignments={assignments} onRemove={onRemove} onDrop={onDrop} />
+          <OverviewSlotRow key={slot} slot={slot} day={day} assignments={assignments} onRemove={onRemove} onDrop={onDrop} onEdit={onEdit} />
         ))}
       </div>
     </div>
   );
 }
 
-function OverviewSlotRow({ slot, day, assignments, onRemove, onDrop }: {
+function OverviewSlotRow({ slot, day, assignments, onRemove, onDrop, onEdit }: {
   slot: string;
   day: string;
   assignments: Assignment[];
   onRemove: (id: string) => void;
   onDrop: (room: string, slot: string, day: string, data: any) => void;
+  onEdit: (a: Assignment) => void;
 }) {
   return (
     <>
@@ -770,15 +886,17 @@ function OverviewSlotRow({ slot, day, assignments, onRemove, onDrop }: {
         {slot}
       </div>
       {ROOMS.map(room => {
-        const assignment = assignments.find(a => a.room === room.id && a.time_slot === slot);
-        const parentAssignment = !assignment ? assignments.find(a => {
+        // Find ALL assignments starting at this exact slot
+        const slotAssignments = assignments.filter(a => a.room === room.id && a.time_slot === slot);
+        // Check if this slot is covered by a parent multi-span assignment (but only if no assignment starts here)
+        const parentAssignments = slotAssignments.length === 0 ? assignments.filter(a => {
           if (a.room !== room.id || a.span <= 1) return false;
           const aIdx = slotToMinutes(a.time_slot);
           const curIdx = slotToMinutes(slot);
           return curIdx > aIdx && curIdx < aIdx + a.span * 30;
-        }) : null;
+        }) : [];
 
-        if (parentAssignment) {
+        if (parentAssignments.length > 0 && slotAssignments.length === 0) {
           return (
             <div key={room.id} className="bg-background relative"
               style={{ height: SLOT_HEIGHT }}
@@ -789,20 +907,25 @@ function OverviewSlotRow({ slot, day, assignments, onRemove, onDrop }: {
                 e.currentTarget.classList.remove('ring-2', 'ring-primary/30', 'ring-inset');
                 const raw = e.dataTransfer.getData('application/json');
                 if (!raw) return;
-                try { onDrop(room.id, parentAssignment.time_slot, day, JSON.parse(raw)); } catch {}
+                try { onDrop(room.id, slot, day, JSON.parse(raw)); } catch {}
               }}
             />
           );
         }
 
-        if (assignment) {
+        if (slotAssignments.length > 0) {
           return (
-            <OverviewAssignmentBlock
-              key={room.id}
-              assignment={assignment}
-              onRemove={() => onRemove(assignment.id)}
-              onDropAdd={(data) => onDrop(room.id, slot, day, data)}
-            />
+            <div key={room.id} className="space-y-0.5" style={{ minHeight: SLOT_HEIGHT }}>
+              {slotAssignments.map(assignment => (
+                <OverviewAssignmentBlock
+                  key={assignment.id}
+                  assignment={assignment}
+                  onRemove={() => onRemove(assignment.id)}
+                  onEdit={() => onEdit(assignment)}
+                  onDropAdd={(data) => onDrop(room.id, slot, day, data)}
+                />
+              ))}
+            </div>
           );
         }
 
@@ -828,7 +951,7 @@ function OverviewSlotRow({ slot, day, assignments, onRemove, onDrop }: {
 // ════════════════════════════════════════════════════════
 // OverviewAssignmentBlock — teacher-colored chips
 // ════════════════════════════════════════════════════════
-function OverviewAssignmentBlock({ assignment, onRemove, onDropAdd }: { assignment: Assignment; onRemove: () => void; onDropAdd?: (data: any) => void }) {
+function OverviewAssignmentBlock({ assignment, onRemove, onEdit, onDropAdd }: { assignment: Assignment; onRemove: () => void; onEdit: () => void; onDropAdd?: (data: any) => void }) {
   const heightPx = assignment.span * SLOT_HEIGHT - 2;
   const tColor = getTeacherColor(assignment.teacher_name);
   const initial = getTeacherInitial(assignment.teacher_name);
@@ -873,13 +996,16 @@ function OverviewAssignmentBlock({ assignment, onRemove, onDropAdd }: { assignme
       <div className="text-[10px] opacity-50">
         {assignment.time_slot}~{assignment.slot_end}
       </div>
-      <button
-        onClick={onRemove}
-        className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity
-                   bg-background/80 rounded-full p-0.5 hover:bg-destructive/20"
-      >
-        <Trash2 className="w-3 h-3 text-destructive" />
-      </button>
+      <div className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+        <button onClick={onEdit}
+          className="bg-background/80 rounded-full p-0.5 hover:bg-primary/20">
+          <Pencil className="w-3 h-3 text-primary" />
+        </button>
+        <button onClick={onRemove}
+          className="bg-background/80 rounded-full p-0.5 hover:bg-destructive/20">
+          <Trash2 className="w-3 h-3 text-destructive" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -888,7 +1014,7 @@ function OverviewAssignmentBlock({ assignment, onRemove, onDropAdd }: { assignme
 // DayGrid — 요일별 뷰
 // ════════════════════════════════════════════════════════
 function DayGrid({
-  timeSlots, assignments, day, onDrop, onRemove,
+  timeSlots, assignments, day, onDrop, onRemove, onEdit,
   selectedStudentIds, students, durationSlots, selectedSubject,
 }: {
   timeSlots: string[];
@@ -896,6 +1022,7 @@ function DayGrid({
   day: string;
   onDrop: (room: string, slot: string, day: string, data: any) => void;
   onRemove: (id: string) => void;
+  onEdit: (a: Assignment) => void;
   selectedStudentIds: Set<string>;
   students: StudentOption[];
   durationSlots: number;
@@ -911,7 +1038,7 @@ function DayGrid({
       </div>
       <div className="grid grid-cols-[60px_1fr_1fr_1fr] gap-px bg-border border border-t-0 rounded-b-lg overflow-hidden">
         {timeSlots.map(slot => (
-          <SlotRow key={slot} slot={slot} day={day} assignments={assignments} onDrop={onDrop} onRemove={onRemove}
+          <SlotRow key={slot} slot={slot} day={day} assignments={assignments} onDrop={onDrop} onRemove={onRemove} onEdit={onEdit}
             selectedStudentIds={selectedStudentIds} students={students} durationSlots={durationSlots} selectedSubject={selectedSubject} />
         ))}
       </div>
@@ -920,12 +1047,13 @@ function DayGrid({
 }
 
 function SlotRow({
-  slot, day, assignments, onDrop, onRemove,
+  slot, day, assignments, onDrop, onRemove, onEdit,
   selectedStudentIds, students, durationSlots, selectedSubject,
 }: {
   slot: string; day: string; assignments: Assignment[];
   onDrop: (room: string, slot: string, day: string, data: any) => void;
   onRemove: (id: string) => void;
+  onEdit: (a: Assignment) => void;
   selectedStudentIds: Set<string>; students: StudentOption[];
   durationSlots: number; selectedSubject: string;
 }) {
@@ -934,16 +1062,15 @@ function SlotRow({
       <div className="bg-muted/50 p-1.5 text-[11px] text-muted-foreground text-center font-mono flex items-center justify-center"
         style={{ height: SLOT_HEIGHT }}>{slot}</div>
       {ROOMS.map(room => {
-        const assignment = assignments.find(a => a.room === room.id && a.time_slot === slot);
-        const parentAssignment = !assignment ? assignments.find(a => {
+        const slotAssignments = assignments.filter(a => a.room === room.id && a.time_slot === slot);
+        const parentAssignments = slotAssignments.length === 0 ? assignments.filter(a => {
           if (a.room !== room.id || a.span <= 1) return false;
           const aIdx = slotToMinutes(a.time_slot);
           const curIdx = slotToMinutes(slot);
           return curIdx > aIdx && curIdx < aIdx + a.span * 30;
-        }) : null;
+        }) : [];
 
-        if (parentAssignment) {
-          // Occupied by a multi-span block — render a droppable area that merges into the parent
+        if (parentAssignments.length > 0 && slotAssignments.length === 0) {
           return (
             <div key={room.id} className="bg-background relative"
               style={{ height: SLOT_HEIGHT }}
@@ -954,14 +1081,21 @@ function SlotRow({
                 e.currentTarget.classList.remove('ring-2', 'ring-primary/30', 'ring-inset');
                 const raw = e.dataTransfer.getData('application/json');
                 if (!raw) return;
-                try { onDrop(room.id, parentAssignment.time_slot, day, JSON.parse(raw)); } catch {}
+                try { onDrop(room.id, slot, day, JSON.parse(raw)); } catch {}
               }}
             />
           );
         }
-        if (assignment) {
-          return <AssignmentBlock key={room.id} assignment={assignment} onRemove={() => onRemove(assignment.id)}
-            onDropAdd={(data) => onDrop(room.id, slot, day, data)} />;
+        if (slotAssignments.length > 0) {
+          return (
+            <div key={room.id} className="space-y-0.5" style={{ minHeight: SLOT_HEIGHT }}>
+              {slotAssignments.map(a => (
+                <AssignmentBlock key={a.id} assignment={a} onRemove={() => onRemove(a.id)}
+                  onEdit={() => onEdit(a)}
+                  onDropAdd={(data) => onDrop(room.id, slot, day, data)} />
+              ))}
+            </div>
+          );
         }
         return (
           <DroppableSlot key={room.id} room={room.id} slot={slot} day={day} onDrop={onDrop}
@@ -976,12 +1110,13 @@ function SlotRow({
 // WeekGrid — 주간 뷰
 // ════════════════════════════════════════════════════════
 function WeekGrid({
-  timeSlots, assignments, onDrop, onRemove,
+  timeSlots, assignments, onDrop, onRemove, onEdit,
   selectedStudentIds, students, durationSlots, selectedSubject,
 }: {
   timeSlots: string[]; assignments: Assignment[];
   onDrop: (room: string, slot: string, day: string, data: any) => void;
   onRemove: (id: string) => void;
+  onEdit: (a: Assignment) => void;
   selectedStudentIds: Set<string>; students: StudentOption[];
   durationSlots: number; selectedSubject: string;
 }) {
@@ -997,7 +1132,7 @@ function WeekGrid({
               {DAYS.map(d => <div key={d} className="bg-muted p-2 text-xs font-semibold text-center">{d}</div>)}
               {timeSlots.map(slot => (
                 <WeekSlotRow key={slot} slot={slot} room={room.id} assignments={assignments}
-                  onDrop={onDrop} onRemove={onRemove} selectedStudentIds={selectedStudentIds}
+                  onDrop={onDrop} onRemove={onRemove} onEdit={onEdit} selectedStudentIds={selectedStudentIds}
                   students={students} durationSlots={durationSlots} selectedSubject={selectedSubject} />
               ))}
             </div>
@@ -1009,12 +1144,13 @@ function WeekGrid({
 }
 
 function WeekSlotRow({
-  slot, room, assignments, onDrop, onRemove,
+  slot, room, assignments, onDrop, onRemove, onEdit,
   selectedStudentIds, students, durationSlots, selectedSubject,
 }: {
   slot: string; room: string; assignments: Assignment[];
   onDrop: (room: string, slot: string, day: string, data: any) => void;
   onRemove: (id: string) => void;
+  onEdit: (a: Assignment) => void;
   selectedStudentIds: Set<string>; students: StudentOption[];
   durationSlots: number; selectedSubject: string;
 }) {
@@ -1023,15 +1159,15 @@ function WeekSlotRow({
       <div className="bg-muted/50 p-1 text-[11px] text-muted-foreground text-center font-mono flex items-center justify-center"
         style={{ height: SLOT_HEIGHT }}>{slot}</div>
       {DAYS.map(day => {
-        const assignment = assignments.find(a => a.room === room && a.time_slot === slot && a.day === day);
-        const parentAssignment = !assignment ? assignments.find(a => {
+        const slotAssignments = assignments.filter(a => a.room === room && a.time_slot === slot && a.day === day);
+        const parentAssignments = slotAssignments.length === 0 ? assignments.filter(a => {
           if (a.room !== room || a.day !== day || a.span <= 1) return false;
           const aIdx = slotToMinutes(a.time_slot);
           const curIdx = slotToMinutes(slot);
           return curIdx > aIdx && curIdx < aIdx + a.span * 30;
-        }) : null;
+        }) : [];
 
-        if (parentAssignment) {
+        if (parentAssignments.length > 0 && slotAssignments.length === 0) {
           return (
             <div key={day} className="bg-background relative"
               style={{ height: SLOT_HEIGHT }}
@@ -1042,14 +1178,21 @@ function WeekSlotRow({
                 e.currentTarget.classList.remove('ring-2', 'ring-primary/30', 'ring-inset');
                 const raw = e.dataTransfer.getData('application/json');
                 if (!raw) return;
-                try { onDrop(room, parentAssignment.time_slot, day, JSON.parse(raw)); } catch {}
+                try { onDrop(room, slot, day, JSON.parse(raw)); } catch {}
               }}
             />
           );
         }
-        if (assignment) {
-          return <AssignmentBlock key={day} assignment={assignment} onRemove={() => onRemove(assignment.id)} compact
-            onDropAdd={(data) => onDrop(room, slot, day, data)} />;
+        if (slotAssignments.length > 0) {
+          return (
+            <div key={day} className="space-y-0.5" style={{ minHeight: SLOT_HEIGHT }}>
+              {slotAssignments.map(a => (
+                <AssignmentBlock key={a.id} assignment={a} onRemove={() => onRemove(a.id)} compact
+                  onEdit={() => onEdit(a)}
+                  onDropAdd={(data) => onDrop(room, slot, day, data)} />
+              ))}
+            </div>
+          );
         }
         return (
           <DroppableSlot key={day} room={room} slot={slot} day={day} onDrop={onDrop}
@@ -1063,8 +1206,8 @@ function WeekSlotRow({
 // ════════════════════════════════════════════════════════
 // AssignmentBlock (day/week views — original style)
 // ════════════════════════════════════════════════════════
-function AssignmentBlock({ assignment, onRemove, compact, onDropAdd }: {
-  assignment: Assignment; onRemove: () => void; compact?: boolean;
+function AssignmentBlock({ assignment, onRemove, onEdit, compact, onDropAdd }: {
+  assignment: Assignment; onRemove: () => void; onEdit: () => void; compact?: boolean;
   onDropAdd?: (data: any) => void;
 }) {
   const heightPx = assignment.span * SLOT_HEIGHT - 2;
@@ -1097,10 +1240,16 @@ function AssignmentBlock({ assignment, onRemove, compact, onDropAdd }: {
       {!compact && (
         <div className="text-[10px] opacity-50">{assignment.time_slot}~{assignment.slot_end}</div>
       )}
-      <button onClick={onRemove}
-        className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 rounded-full p-0.5 hover:bg-destructive/20">
-        <Trash2 className="w-3 h-3 text-destructive" />
-      </button>
+      <div className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+        <button onClick={onEdit}
+          className="bg-background/80 rounded-full p-0.5 hover:bg-primary/20">
+          <Pencil className="w-3 h-3 text-primary" />
+        </button>
+        <button onClick={onRemove}
+          className="bg-background/80 rounded-full p-0.5 hover:bg-destructive/20">
+          <Trash2 className="w-3 h-3 text-destructive" />
+        </button>
+      </div>
     </div>
   );
 }
