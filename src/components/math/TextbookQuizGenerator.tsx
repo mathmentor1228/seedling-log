@@ -339,12 +339,22 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
           <p className="text-xs text-muted-foreground">
             {[textbook.publisher, textbook.subject, textbook.grade].filter(Boolean).join(' · ')} · {examples.length}문항 보유
           </p>
-          {/* Category breakdown */}
           <div className="flex flex-wrap gap-1 mt-1">
             {Object.entries(engCategoryGroups).map(([cat, items]) => (
               <Badge key={cat} variant="outline" className="text-[10px]">{engCatLabel[cat] || cat} {items.length}</Badge>
             ))}
           </div>
+        </div>
+
+        <div>
+          <Label className="text-xs font-medium mb-1.5 block">퀴즈 제목</Label>
+          <Input
+            value={quizTitle}
+            onChange={e => setQuizTitle(e.target.value)}
+            placeholder={`예: ${textbook.title} 1단원 테스트`}
+            className="h-9"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">비워두면 교재명 기반으로 자동 생성됩니다</p>
         </div>
 
         <Tabs value={mode} onValueChange={v => setMode(v as GenMode)} className="w-full">
