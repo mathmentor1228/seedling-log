@@ -593,6 +593,7 @@ function QuestionCard({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const [viewerSrc, setViewerSrc] = useState<string | null>(null);
   const statusCfg = STATUS_CONFIG[question.status] || STATUS_CONFIG['대기중'];
   const hasAnswer = question.answers && question.answers.length > 0;
   const dateStr = new Date(question.created_at).toLocaleDateString('ko-KR', {
@@ -645,16 +646,28 @@ function QuestionCard({
           {/* Question Details */}
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2">
-              <img
-                src={question.photo_problem_url}
-                alt="문제"
-                className="w-full rounded-lg border object-contain max-h-48"
-              />
-              <img
-                src={question.photo_solution_url}
-                alt="내 풀이"
-                className="w-full rounded-lg border object-contain max-h-48"
-              />
+              <div className="relative group cursor-pointer" onClick={() => setViewerSrc(question.photo_problem_url)}>
+                <img
+                  src={question.photo_problem_url}
+                  alt="문제"
+                  className="w-full rounded-lg border object-contain max-h-48"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
+                  <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                </div>
+                <span className="absolute bottom-1 left-1 text-[9px] bg-black/50 text-white px-1.5 py-0.5 rounded">문제</span>
+              </div>
+              <div className="relative group cursor-pointer" onClick={() => setViewerSrc(question.photo_solution_url)}>
+                <img
+                  src={question.photo_solution_url}
+                  alt="내 풀이"
+                  className="w-full rounded-lg border object-contain max-h-48"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
+                  <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                </div>
+                <span className="absolute bottom-1 left-1 text-[9px] bg-black/50 text-white px-1.5 py-0.5 rounded">내 풀이</span>
+              </div>
             </div>
             <div className="flex gap-1 text-xs text-muted-foreground">
               <Badge variant="outline" className="text-[10px]">{question.grade}</Badge>
@@ -689,6 +702,14 @@ function QuestionCard({
           )}
         </div>
       )}
+
+      {/* Image Viewer Modal */}
+      <ImageViewerModal
+        open={!!viewerSrc}
+        onOpenChange={(v) => { if (!v) setViewerSrc(null); }}
+        src={viewerSrc || ''}
+        alt="수학질문 이미지"
+      />
     </Card>
   );
 }
