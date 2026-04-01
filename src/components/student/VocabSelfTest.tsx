@@ -22,6 +22,8 @@ interface TestResult {
 interface VocabSelfTestProps {
   words: VocabWord[];
   mode: 'eng_to_kor' | 'kor_to_eng' | 'listening';
+  testLevel?: number; // 1=3choices/4s, 2=5choices/4s, 3=typing/6s
+  testTimeLimit?: number | null; // total seconds
   onFinish: (correct: number, wrong: number, total: number) => void;
   onBack: () => void;
 }
