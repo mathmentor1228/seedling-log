@@ -38,19 +38,27 @@ const corsHeaders = {
          );
        }
        
-       // Find student by code
-       const { data: student, error: studentError } = await supabase
-         .from('students')
-         .select('id, name, student_code, grade, school')
-         .eq('student_code', student_code.toUpperCase())
-         .single();
+        // Find student by code
+        const { data: student, error: studentError } = await supabase
+          .from('students')
+          .select('id, name, student_code, grade, school, enrollment_status')
+          .eq('student_code', student_code.toUpperCase())
+          .single();
        
-       if (studentError || !student) {
-         return new Response(
-           JSON.stringify({ error: '학생 코드를 찾을 수 없습니다.' }),
-           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-         );
-       }
+        if (studentError || !student) {
+          return new Response(
+            JSON.stringify({ error: '학생 코드를 찾을 수 없습니다.' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // ENROLLMENT-STATUS-BLOCK-V1: Block withdrawn students
+        if (student.enrollment_status === '퇴원') {
+          return new Response(
+            JSON.stringify({ error: '퇴원 처리된 학생입니다. 학원에 문의해주세요.' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
        
        // Check if student has an account
        const { data: account, error: accountError } = await supabase

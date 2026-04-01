@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.congestion-predict]
 verify_jwt = false
+
+[functions.scan-exam-schedule]
+verify_jwt = false

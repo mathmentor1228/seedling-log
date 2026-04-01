@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
 
     const { data: student, error: studentError } = await supabase
       .from("students")
-      .select("id, name, school, school_level, grade_year, grade")
+      .select("id, name, school, school_level, grade_year, grade, enrollment_status")
       .eq("parent_token", token)
       .single();
 
@@ -82,6 +82,14 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "유효하지 않은 링크입니다." }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ENROLLMENT-STATUS-BLOCK-V1: Block withdrawn students from parent portal
+    if (student.enrollment_status === '퇴원') {
+      return new Response(
+        JSON.stringify({ error: "퇴원 처리된 학생입니다. 학원에 문의해주세요." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, FileUp, Trash2, Download, FileText, Image, File, Pencil, School, ChevronDown, ChevronRight, Paperclip, CalendarDays, Users, BarChart3, ClipboardCheck, Upload, X, LayoutGrid, List } from 'lucide-react';
+import { Plus, FileUp, Trash2, Download, FileText, Image, File, Pencil, School, ChevronDown, ChevronRight, Paperclip, CalendarDays, Users, BarChart3, ClipboardCheck, Upload, X, LayoutGrid, List, ScanLine, Loader2, Camera } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -164,6 +164,19 @@ export function SchoolExamArchive() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Scan exam schedule
+  const [showScanDialog, setShowScanDialog] = useState(false);
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanPreview, setScanPreview] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [scanSchoolName, setScanSchoolName] = useState('');
+  const [scanSchoolLevel, setScanSchoolLevel] = useState('중');
+  const [scanGradeYear, setScanGradeYear] = useState(1);
+  const [scanAcademicYear, setScanAcademicYear] = useState(currentYear);
+  const [scanSemester, setScanSemester] = useState('1학기');
+  const [applyingResult, setApplyingResult] = useState(false);
 
   const loadSchoolList = useCallback(async () => {
     const [studentsRes, archivesRes] = await Promise.all([
@@ -392,6 +405,128 @@ export function SchoolExamArchive() {
         ? p.preparing_teachers.filter(t => t !== name)
         : [...p.preparing_teachers, name],
     }));
+  };
+
+  // EXAM-SCAN-V1: Handle exam schedule scan
+  const handleScanFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanFile(file);
+    if (file.type.startsWith('image/')) {
+      setScanPreview(URL.createObjectURL(file));
+    } else {
+      setScanPreview(null);
+    }
+    setScanResult(null);
+  };
+
+  const handleScan = async () => {
+    if (!scanFile || !scanSchoolName.trim()) {
+      toast.error('파일과 학교명을 입력해주세요');
+      return;
+    }
+    setScanning(true);
+    try {
+      // Upload file first to get a URL
+      const ext = scanFile.name.split('.').pop() || 'jpg';
+      const path = `scan_temp/${Date.now()}_scan.${ext}`;
+      const { error: upErr } = await supabase.storage.from('school-exam-materials').upload(path, scanFile);
+      if (upErr) { toast.error('파일 업로드 실패'); return; }
+      const { data: urlData } = await supabase.storage.from('school-exam-materials').createSignedUrl(path, 3600);
+      if (!urlData?.signedUrl) { toast.error('URL 생성 실패'); return; }
+
+      const { data, error } = await supabase.functions.invoke('scan-exam-schedule', {
+        body: {
+          image_url: urlData.signedUrl,
+          school_name: scanSchoolName.trim(),
+          school_level: scanSchoolLevel,
+          grade_year: scanGradeYear,
+          academic_year: scanAcademicYear,
+          semester: scanSemester,
+        },
+      });
+
+      if (error) { toast.error('스캔 실패: ' + error.message); return; }
+      if (data?.error) { toast.error('스캔 실패: ' + data.error); return; }
+
+      setScanResult(data.extracted);
+      toast.success('스캔 완료! 결과를 확인하세요');
+    } catch (err: any) {
+      toast.error('스캔 오류: ' + err.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleApplyScanResult = async () => {
+    if (!scanResult || !scanSchoolName.trim()) return;
+    setApplyingResult(true);
+    try {
+      const subjects = scanResult.subjects || [];
+      const insertRows = subjects.map((s: any) => ({
+        school_name: scanSchoolName.trim(),
+        school_level: scanSchoolLevel,
+        grade_year: scanGradeYear,
+        academic_year: scanAcademicYear,
+        semester: scanSemester,
+        exam_type: scanResult.exam_type || '중간고사',
+        subject: s.subject_name || '기타',
+        exam_scope: s.exam_scope || null,
+        exam_date_start: s.exam_date || scanResult.exam_date_start || null,
+        exam_date_end: scanResult.exam_date_end || s.exam_date || null,
+        status: '자료수집전',
+        notes: scanResult.notes || null,
+        created_by: user?.id,
+        updated_at: new Date().toISOString(),
+      }));
+
+      if (insertRows.length === 0) {
+        toast.error('추출된 과목 데이터가 없습니다');
+        return;
+      }
+
+      // Check for existing entries and update or insert
+      for (const row of insertRows) {
+        const { data: existing } = await (supabase as any)
+          .from('school_exam_archives')
+          .select('id')
+          .eq('school_name', row.school_name)
+          .eq('school_level', row.school_level)
+          .eq('grade_year', row.grade_year)
+          .eq('academic_year', row.academic_year)
+          .eq('semester', row.semester)
+          .eq('exam_type', row.exam_type)
+          .eq('subject', row.subject)
+          .maybeSingle();
+
+        if (existing) {
+          // Update existing
+          await (supabase as any)
+            .from('school_exam_archives')
+            .update({
+              exam_scope: row.exam_scope,
+              exam_date_start: row.exam_date_start,
+              exam_date_end: row.exam_date_end,
+              notes: row.notes,
+              updated_at: row.updated_at,
+            })
+            .eq('id', existing.id);
+        } else {
+          await (supabase as any).from('school_exam_archives').insert(row);
+        }
+      }
+
+      toast.success(`${insertRows.length}개 과목 데이터가 반영되었습니다`);
+      setShowScanDialog(false);
+      setScanFile(null);
+      setScanPreview(null);
+      setScanResult(null);
+      loadArchives();
+    } catch (err: any) {
+      toast.error('반영 실패: ' + err.message);
+    } finally {
+      setApplyingResult(false);
+    }
   };
 
   // Group archives: school → grade+semester+examType → subjects
@@ -1141,6 +1276,9 @@ export function SchoolExamArchive() {
               시험별
             </button>
           </div>
+          <Button onClick={() => setShowScanDialog(true)} size="sm" variant="outline">
+            <ScanLine className="w-4 h-4 mr-1" /> 📷 스캔
+          </Button>
           <Button onClick={openCreateDialog} size="sm">
             <Plus className="w-4 h-4 mr-1" /> 자료 추가
           </Button>
@@ -1526,6 +1664,157 @@ export function SchoolExamArchive() {
           </div>
         </div>
       )}
+
+      {/* Scan Dialog */}
+      <Dialog open={showScanDialog} onOpenChange={(v) => { if (!v) { setScanFile(null); setScanPreview(null); setScanResult(null); } setShowScanDialog(v); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ScanLine className="w-5 h-5" />
+              시험 일정/범위 스캔
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              시험 일정표, 시험 범위표 사진이나 PDF를 업로드하면 AI가 분석하여 자동으로 자료실에 반영합니다.
+            </p>
+
+            {/* School info */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">학교명 *</Label>
+                <Select value={scanSchoolName || 'custom'} onValueChange={(v) => { if (v !== 'custom') setScanSchoolName(v); }}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="학교 선택" /></SelectTrigger>
+                  <SelectContent>
+                    {schoolList.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    <SelectItem value="custom">직접 입력</SelectItem>
+                  </SelectContent>
+                </Select>
+                {(scanSchoolName === '' || !schoolList.includes(scanSchoolName)) && (
+                  <Input className="h-8 text-xs mt-1" placeholder="학교명 입력" value={scanSchoolName} onChange={e => setScanSchoolName(e.target.value)} />
+                )}
+              </div>
+              <div>
+                <Label className="text-xs">학교급</Label>
+                <Select value={scanSchoolLevel} onValueChange={setScanSchoolLevel}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SCHOOL_LEVELS.map(l => <SelectItem key={l} value={l}>{l}학교</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">학년</Label>
+                <Select value={String(scanGradeYear)} onValueChange={v => setScanGradeYear(parseInt(v))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1,2,3].map(g => <SelectItem key={g} value={String(g)}>{g}학년</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">학년도</Label>
+                <Select value={String(scanAcademicYear)} onValueChange={v => setScanAcademicYear(parseInt(v))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {YEARS.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">학기</Label>
+                <Select value={scanSemester} onValueChange={setScanSemester}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SEMESTERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* File upload */}
+            <div>
+              <Label className="text-xs">파일 업로드 (이미지 또는 PDF)</Label>
+              <div className="mt-1">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleScanFile}
+                  className="text-xs w-full"
+                />
+              </div>
+              {scanPreview && (
+                <img src={scanPreview} alt="미리보기" className="mt-2 max-h-48 rounded-lg border object-contain w-full" />
+              )}
+              {scanFile && !scanPreview && (
+                <div className="mt-2 p-3 bg-muted rounded-lg flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-destructive" />
+                  <span className="text-sm">{scanFile.name}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Scan button */}
+            <Button
+              className="w-full"
+              disabled={!scanFile || !scanSchoolName.trim() || scanning}
+              onClick={handleScan}
+            >
+              {scanning ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> AI 분석 중...</>
+              ) : (
+                <><ScanLine className="w-4 h-4 mr-2" /> 스캔 시작</>
+              )}
+            </Button>
+
+            {/* Scan results */}
+            {scanResult && (
+              <div className="space-y-3 border-t pt-3">
+                <h4 className="text-sm font-bold flex items-center gap-2">
+                  ✅ 추출 결과
+                  <Badge variant="outline" className="text-[10px]">{scanResult.exam_type || '시험'}</Badge>
+                </h4>
+                {scanResult.exam_date_start && (
+                  <p className="text-xs text-muted-foreground">
+                    📅 시험 기간: {scanResult.exam_date_start} ~ {scanResult.exam_date_end || scanResult.exam_date_start}
+                  </p>
+                )}
+                <div className="space-y-2">
+                  {(scanResult.subjects || []).map((s: any, i: number) => (
+                    <div key={i} className="p-2 bg-muted/50 rounded-lg text-sm">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="secondary" className="text-xs">{s.subject_name}</Badge>
+                        {s.exam_date && <span className="text-xs text-muted-foreground">{s.exam_date}</span>}
+                        {s.exam_time && <span className="text-xs text-muted-foreground">{s.exam_time}</span>}
+                      </div>
+                      {s.exam_scope && (
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{s.exam_scope}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {scanResult.notes && (
+                  <p className="text-xs text-muted-foreground bg-muted p-2 rounded">📝 {scanResult.notes}</p>
+                )}
+
+                <Button
+                  className="w-full"
+                  onClick={handleApplyScanResult}
+                  disabled={applyingResult}
+                >
+                  {applyingResult ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> 반영 중...</>
+                  ) : (
+                    <><ClipboardCheck className="w-4 h-4 mr-2" /> 자료실에 반영하기</>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

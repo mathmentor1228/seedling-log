@@ -24,6 +24,7 @@ import {
   MessageCircle,
   Share2,
   ImageIcon,
+  ZoomIn,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -40,6 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { compressImage } from '@/lib/imageCompression';
+import ImageViewerModal from './ImageViewerModal';
 
 const GRADES = ['고1', '고2', '고3', '중3'] as const;
 const SUBJECTS = [
@@ -591,6 +593,7 @@ function QuestionCard({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const [viewerSrc, setViewerSrc] = useState<string | null>(null);
   const statusCfg = STATUS_CONFIG[question.status] || STATUS_CONFIG['대기중'];
   const hasAnswer = question.answers && question.answers.length > 0;
   const dateStr = new Date(question.created_at).toLocaleDateString('ko-KR', {
@@ -643,16 +646,28 @@ function QuestionCard({
           {/* Question Details */}
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2">
-              <img
-                src={question.photo_problem_url}
-                alt="문제"
-                className="w-full rounded-lg border object-contain max-h-48"
-              />
-              <img
-                src={question.photo_solution_url}
-                alt="내 풀이"
-                className="w-full rounded-lg border object-contain max-h-48"
-              />
+              <div className="relative group cursor-pointer" onClick={() => setViewerSrc(question.photo_problem_url)}>
+                <img
+                  src={question.photo_problem_url}
+                  alt="문제"
+                  className="w-full rounded-lg border object-contain max-h-48"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
+                  <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                </div>
+                <span className="absolute bottom-1 left-1 text-[9px] bg-black/50 text-white px-1.5 py-0.5 rounded">문제</span>
+              </div>
+              <div className="relative group cursor-pointer" onClick={() => setViewerSrc(question.photo_solution_url)}>
+                <img
+                  src={question.photo_solution_url}
+                  alt="내 풀이"
+                  className="w-full rounded-lg border object-contain max-h-48"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
+                  <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                </div>
+                <span className="absolute bottom-1 left-1 text-[9px] bg-black/50 text-white px-1.5 py-0.5 rounded">내 풀이</span>
+              </div>
             </div>
             <div className="flex gap-1 text-xs text-muted-foreground">
               <Badge variant="outline" className="text-[10px]">{question.grade}</Badge>
@@ -687,11 +702,20 @@ function QuestionCard({
           )}
         </div>
       )}
+
+      {/* Image Viewer Modal */}
+      <ImageViewerModal
+        open={!!viewerSrc}
+        onOpenChange={(v) => { if (!v) setViewerSrc(null); }}
+        src={viewerSrc || ''}
+        alt="수학질문 이미지"
+      />
     </Card>
   );
 }
 
 function AnswerCard({ answer }: { answer: MathAnswer }) {
+  const [viewerSrc, setViewerSrc] = useState<string | null>(null);
   const typeColors: Record<string, string> = {
     '힌트': 'bg-blue-500/10 text-blue-600',
     '전체해설': 'bg-green-500/10 text-green-600',
@@ -717,12 +741,16 @@ function AnswerCard({ answer }: { answer: MathAnswer }) {
       {answer.answer_photo_urls?.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {answer.answer_photo_urls.map((url, i) => (
-            <img
-              key={i}
-              src={url}
-              alt={`답변 사진 ${i + 1}`}
-              className="h-32 rounded-lg border object-contain flex-shrink-0"
-            />
+            <div key={i} className="relative group cursor-pointer flex-shrink-0" onClick={() => setViewerSrc(url)}>
+              <img
+                src={url}
+                alt={`답변 사진 ${i + 1}`}
+                className="h-32 rounded-lg border object-contain"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-lg flex items-center justify-center">
+                <ZoomIn className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -737,6 +765,13 @@ function AnswerCard({ answer }: { answer: MathAnswer }) {
           🎬 영상 해설 보기
         </a>
       )}
+
+      <ImageViewerModal
+        open={!!viewerSrc}
+        onOpenChange={(v) => { if (!v) setViewerSrc(null); }}
+        src={viewerSrc || ''}
+        alt="답변 이미지"
+      />
     </div>
   );
 }
