@@ -227,6 +227,8 @@ export function VocabSettingsPanel() {
       notes: formNotes || null,
       is_active: true,
       assigned_teacher: formAssignedTeacher,
+      test_time_limit: formTimeLimit ? Number(formTimeLimit) : null,
+      test_level: formTestLevel,
     };
 
     let error;
