@@ -758,6 +758,73 @@ export function RoomAssignmentTab() {
         saving={guerrillaSaving}
         onSave={saveGuerrilla}
       />
+
+      {/* ══════ Edit Assignment Modal ══════ */}
+      <Dialog open={!!editAssignment} onOpenChange={(open) => { if (!open) setEditAssignment(null); }}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">배정 수정 — {editAssignment?.time_slot}~{editAssignment?.slot_end}</DialogTitle>
+          </DialogHeader>
+          {editAssignment && (
+            <div className="space-y-4">
+              {/* Current students */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">현재 배정 학생 ({editStudentIds.length}명)</Label>
+                {editStudentIds.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {editStudentIds.map((id, idx) => (
+                      <Badge key={id} variant="secondary" className="text-xs cursor-pointer hover:bg-destructive/20"
+                        onClick={() => toggleEditStudent(id, editStudentNames[idx])}>
+                        {editStudentNames[idx]} ×
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">학생이 없으면 저장 시 배정이 삭제됩니다</p>
+                )}
+              </div>
+
+              {/* Add students */}
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">학생 추가</Label>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input placeholder="이름 검색" value={editSearch} onChange={e => setEditSearch(e.target.value)}
+                    className="h-8 text-xs pl-7" />
+                </div>
+              </div>
+              <div className="max-h-40 overflow-auto border rounded p-1 space-y-0.5">
+                {students
+                  .filter(s => !editSearch || s.name.includes(editSearch))
+                  .slice(0, 50).map(s => {
+                    const selected = editStudentIds.includes(s.id);
+                    return (
+                      <div key={s.id} className={cn(
+                        'flex items-center gap-2 px-2 py-1 rounded text-xs cursor-pointer transition-colors',
+                        selected ? 'bg-primary/15 font-semibold' : 'hover:bg-muted'
+                      )} onClick={() => toggleEditStudent(s.id, s.name)}>
+                        <div className={cn('w-3 h-3 rounded-sm border flex items-center justify-center',
+                          selected ? 'bg-primary border-primary' : 'border-muted-foreground/30')}>
+                          {selected && <Check className="w-2 h-2 text-primary-foreground" />}
+                        </div>
+                        {s.name}
+                        {s.grade && <span className="text-muted-foreground">({s.grade})</span>}
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" size="sm" onClick={() => setEditAssignment(null)}>취소</Button>
+                <Button size="sm" onClick={saveEditAssignment} disabled={editSaving}>
+                  {editSaving && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                  {editStudentIds.length === 0 ? '배정 삭제' : '저장'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
