@@ -582,6 +582,7 @@ export function RoomAssignmentTab() {
             assignments={visibleAssignments}
             onDrop={handleDrop}
             onRemove={handleRemove}
+            onEdit={openEditModal}
             selectedStudentIds={selectedStudentIds}
             students={students}
             durationSlots={durationSlots}
@@ -594,6 +595,7 @@ export function RoomAssignmentTab() {
             day={currentDay}
             onRemove={handleRemove}
             onDrop={handleDrop}
+            onEdit={openEditModal}
           />
         ) : (
           <DayGrid
@@ -602,6 +604,7 @@ export function RoomAssignmentTab() {
             day={selectedDay}
             onDrop={handleDrop}
             onRemove={handleRemove}
+            onEdit={openEditModal}
             selectedStudentIds={selectedStudentIds}
             students={students}
             durationSlots={durationSlots}
