@@ -94,6 +94,7 @@ export function TextbookQuizGenerator({ open, onOpenChange, textbook, examples }
 
   useEffect(() => {
     if (open) {
+      setQuizTitle('');
       setSelectedChapters([]);
       setPageFrom('');
       setPageTo('');
