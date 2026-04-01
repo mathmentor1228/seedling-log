@@ -332,27 +332,63 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
             </>
           )}
 
+          {/* Per-question timer */}
+          {!showResult && (
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <div className={`text-sm font-mono font-bold px-2 py-0.5 rounded ${perQuestionTimer <= 2 ? 'text-red-500 animate-pulse' : 'text-muted-foreground'}`}>
+                ⏱ {perQuestionTimer}s
+              </div>
+              {globalTimeLeft !== null && (
+                <div className={`text-xs font-mono px-2 py-0.5 rounded ${globalTimeLeft <= 30 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                  전체 {Math.floor(globalTimeLeft / 60)}:{String(globalTimeLeft % 60).padStart(2, '0')}
+                </div>
+              )}
+            </div>
+          )}
+
           {!showResult ? (
             <div className="px-4 space-y-3">
-              <Input
-                ref={inputRef}
-                value={userAnswer}
-                onChange={e => setUserAnswer(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={isListening ? '한글 뜻 입력...' : (mode === 'eng_to_kor' ? '한글 뜻 입력...' : 'Type in English...')}
-                className="text-center text-lg"
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-              />
-              <div className="flex gap-2">
-                <Button onClick={skipAnswer} variant="outline" className="flex-1 text-muted-foreground">
-                  <HelpCircle className="w-4 h-4 mr-1" /> 모르겠다
-                </Button>
-                <Button onClick={checkAnswer} disabled={userAnswer.trim() === ''} className="flex-1">
-                  확인
-                </Button>
-              </div>
+              {isChoiceMode ? (
+                <div className={`grid gap-2 ${choiceCount >= 5 ? 'grid-cols-1' : 'grid-cols-1'}`}>
+                  {choices.map((choice, idx) => (
+                    <Button
+                      key={idx}
+                      variant={selectedChoice === choice ? 'default' : 'outline'}
+                      className="w-full text-left justify-start py-3 h-auto whitespace-normal"
+                      onClick={() => {
+                        setSelectedChoice(choice);
+                        setUserAnswer(choice);
+                        doCheck(choice, false);
+                      }}
+                    >
+                      <span className="mr-2 font-bold text-muted-foreground">{idx + 1}.</span>
+                      {choice}
+                    </Button>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <Input
+                    ref={inputRef}
+                    value={userAnswer}
+                    onChange={e => setUserAnswer(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={isListening ? '한글 뜻 입력...' : (mode === 'eng_to_kor' ? '한글 뜻 입력...' : 'Type in English...')}
+                    className="text-center text-lg"
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                  />
+                  <div className="flex gap-2">
+                    <Button onClick={skipAnswer} variant="outline" className="flex-1 text-muted-foreground">
+                      <HelpCircle className="w-4 h-4 mr-1" /> 모르겠다
+                    </Button>
+                    <Button onClick={checkAnswer} disabled={userAnswer.trim() === ''} className="flex-1">
+                      확인
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="px-4 space-y-3">
