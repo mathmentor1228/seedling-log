@@ -236,6 +236,97 @@ export function VocabTestAssignManager() {
     loadData();
   };
 
+  const openEditModal = (a: Assignment) => {
+    setEditModal(a);
+    setEditTestMode(a.test_mode as 'web' | 'print');
+    setEditTestLevel(a.test_level);
+    setEditTestTimeLimit(a.test_time_limit ? String(a.test_time_limit) : '');
+    setEditTestDirection(a.test_direction);
+    setEditDueDate(a.due_date || '');
+    setEditNotes(a.notes || '');
+    setEditSelectedSets([...a.word_set_ids]);
+    setEditExpandedFolders(new Set());
+  };
+
+  const handleEditSave = async () => {
+    if (!editModal) return;
+    if (editSelectedSets.length === 0) { toast.error('단어 세트를 선택해주세요'); return; }
+    const { error } = await supabase
+      .from('vocab_test_assignments')
+      .update({
+        word_set_ids: editSelectedSets,
+        test_mode: editTestMode,
+        test_level: editTestLevel,
+        test_time_limit: editTestTimeLimit ? parseInt(editTestTimeLimit) : null,
+        test_direction: editTestDirection,
+        due_date: editDueDate || null,
+        notes: editNotes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', editModal.id);
+    if (error) { toast.error('수정 실패: ' + error.message); return; }
+    toast.success('배정 수정 완료');
+    setEditModal(null);
+    loadData();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('이 배정을 삭제하시겠습니까?')) return;
+    const { error } = await supabase.from('vocab_test_assignments').delete().eq('id', id);
+    if (error) { toast.error('삭제 실패'); return; }
+    toast.success('삭제 완료');
+    loadData();
+  };
+
+  const toggleEditFolder = (folderId: string) => {
+    setEditExpandedFolders(prev => {
+      const next = new Set(prev);
+      next.has(folderId) ? next.delete(folderId) : next.add(folderId);
+      return next;
+    });
+  };
+
+  const renderEditFolderTree = (parentId: string | null, depth = 0) => {
+    const foldersAtLevel = parentId ? getChildFolders(parentId) : rootFolders;
+    const setsAtLevel = parentId ? getSetsInFolder(parentId) : rootSets;
+    return (
+      <>
+        {foldersAtLevel.map(folder => {
+          const isExpanded = editExpandedFolders.has(folder.id);
+          const folderSets = getSetsInFolder(folder.id);
+          const allSelected = folderSets.length > 0 && folderSets.every(s => editSelectedSets.includes(s.id));
+          return (
+            <div key={folder.id} style={{ marginLeft: depth * 16 }}>
+              <div className="flex items-center gap-2 py-1.5 px-2 hover:bg-muted/50 rounded cursor-pointer" onClick={() => toggleEditFolder(folder.id)}>
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+                <Folder className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-sm font-medium">{folder.name}</span>
+                {folderSets.length > 0 && (
+                  <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] ml-auto" onClick={(e) => {
+                    e.stopPropagation();
+                    if (allSelected) setEditSelectedSets(prev => prev.filter(id => !folderSets.some(s => s.id === id)));
+                    else setEditSelectedSets(prev => [...new Set([...prev, ...folderSets.map(s => s.id)])]);
+                  }}>
+                    {allSelected ? '전체 해제' : '전체 선택'}
+                  </Button>
+                )}
+              </div>
+              {isExpanded && renderEditFolderTree(folder.id, depth + 1)}
+            </div>
+          );
+        })}
+        {setsAtLevel.map(ws => (
+          <div key={ws.id} className={cn("flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-muted/50", editSelectedSets.includes(ws.id) && "bg-primary/10")}
+            style={{ marginLeft: (depth + 1) * 16 }}
+            onClick={() => setEditSelectedSets(prev => prev.includes(ws.id) ? prev.filter(id => id !== ws.id) : [...prev, ws.id])}>
+            <Checkbox checked={editSelectedSets.includes(ws.id)} className="pointer-events-none" />
+            <span className="text-xs">{ws.title}</span>
+          </div>
+        ))}
+      </>
+    );
+  };
+
   const filteredAssignments = assignments.filter(a => {
     if (filterStatus !== 'all' && a.status !== filterStatus) return false;
     if (filterStudent && !getStudentName(a.student_id).includes(filterStudent)) return false;
