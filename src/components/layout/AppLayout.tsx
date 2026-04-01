@@ -31,6 +31,8 @@ import {
   Brain
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
