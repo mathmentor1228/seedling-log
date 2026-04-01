@@ -38,12 +38,12 @@ const corsHeaders = {
          );
        }
        
-       // Find student by code
-       const { data: student, error: studentError } = await supabase
-         .from('students')
-         .select('id, name, student_code, grade, school')
-         .eq('student_code', student_code.toUpperCase())
-         .single();
+        // Find student by code
+        const { data: student, error: studentError } = await supabase
+          .from('students')
+          .select('id, name, student_code, grade, school, enrollment_status')
+          .eq('student_code', student_code.toUpperCase())
+          .single();
        
        if (studentError || !student) {
          return new Response(
