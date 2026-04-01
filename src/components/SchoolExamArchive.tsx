@@ -1276,6 +1276,9 @@ export function SchoolExamArchive() {
               시험별
             </button>
           </div>
+          <Button onClick={() => setShowScanDialog(true)} size="sm" variant="outline">
+            <ScanLine className="w-4 h-4 mr-1" /> 📷 스캔
+          </Button>
           <Button onClick={openCreateDialog} size="sm">
             <Plus className="w-4 h-4 mr-1" /> 자료 추가
           </Button>
