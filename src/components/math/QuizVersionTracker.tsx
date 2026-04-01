@@ -126,10 +126,25 @@ export function QuizVersionTracker() {
     const q = searchQuery.trim().toLowerCase();
     return versions.filter(v =>
       (v.version_label || '').toLowerCase().includes(q) ||
+      (v.title || '').toLowerCase().includes(q) ||
       (v.math_concepts?.title || '').toLowerCase().includes(q) ||
       (v.answer_code || '').toLowerCase().includes(q),
     );
   }, [versions, searchQuery]);
+
+  const handleSaveTitle = async (quizId: string) => {
+    const { error } = await supabase
+      .from('math_concept_quizzes')
+      .update({ title: editTitleValue.trim() || null } as any)
+      .eq('id', quizId);
+    if (error) {
+      toast({ title: '제목 저장 실패', variant: 'destructive' });
+    } else {
+      setVersions(prev => prev.map(v => v.id === quizId ? { ...v, title: editTitleValue.trim() || null } : v));
+      toast({ title: '제목이 수정되었습니다' });
+    }
+    setEditingTitleId(null);
+  };
 
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>;
