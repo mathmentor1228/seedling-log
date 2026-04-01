@@ -100,6 +100,10 @@ function VocabTestContent() {
         <TabsContent value="test-schedule">
           <TestScheduleManager />
         </TabsContent>
+
+        <TabsContent value="test-assign">
+          <VocabTestAssignManager />
+        </TabsContent>
       </Tabs>
     </div>
   );
