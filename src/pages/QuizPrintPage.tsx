@@ -1330,48 +1330,71 @@ export default function QuizPrintPage() {
         }
 
         /* ══════════════════════════════════════════════════
-           English: Reading — passage with proper typography
+           English: Reading — single-column, high readability
            ══════════════════════════════════════════════════ */
         .qp-reading-page .qp-reading-list {
           flex: 1;
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 6px;
         }
         .qp-reading-item {
           break-inside: avoid;
           page-break-inside: avoid;
-        }
-        .qp-reading-header {
+          border: 1.5px solid #e2e8f0;
+          border-radius: 6px;
+          padding: 10px 14px 8px;
+          background: #fff;
+          flex: 1;
           display: flex;
-          align-items: flex-start;
-          gap: 6px;
-          margin-bottom: 4px;
+          flex-direction: column;
+        }
+        .qp-reading-num-bar {
+          margin-bottom: 6px;
+          flex-shrink: 0;
+        }
+        .qp-reading-num {
+          font-size: 22px;
+          font-weight: 800;
+          color: #3b82f6;
+          line-height: 1;
         }
         .qp-reading-passage {
-          font-size: 10.5pt;
-          line-height: 1.6;
+          font-size: 11.5pt;
+          line-height: 2;
           color: #1e293b;
-          padding: 8px 12px;
+          padding: 10px 14px;
           background: #f8fafc;
           border: 1px solid #e2e8f0;
-          border-radius: 4px;
-          margin-left: 34px;
-          margin-bottom: 6px;
+          border-radius: 5px;
+          margin-bottom: 8px;
           white-space: pre-wrap;
+          word-break: break-word;
+          font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
         }
-        .qp-reading-question {
-          font-size: 11.5px;
-          line-height: 1.6;
+        .qp-reading-question-text {
+          font-size: 11pt;
+          line-height: 2;
           color: #1e293b;
-          margin-left: 34px;
           font-weight: 500;
           white-space: pre-wrap;
+          word-break: break-word;
+          margin-bottom: 4px;
+        }
+        .qp-reading-workspace {
+          position: relative;
+          margin-top: auto;
+        }
+        .qp-reading-lines {
+          padding: 2px 4px;
+        }
+        .qp-reading-lines .qp-line {
+          border-bottom: 1px solid #d4d8dd;
+          height: 9mm;
         }
         .qp-reading-answer {
-          margin-left: 34px;
-          margin-top: 4px;
-          padding: 4px 8px;
+          margin-top: 6px;
+          padding: 6px 10px;
           background: #eff6ff;
           border-radius: 4px;
           font-size: 11px;
