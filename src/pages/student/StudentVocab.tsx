@@ -45,6 +45,7 @@ export default function StudentVocab() {
   const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
   const [testLevel, setTestLevel] = useState(1);
   const [testTimeLimit, setTestTimeLimit] = useState<number | null>(null);
+  const [activeTestAssignment, setActiveTestAssignment] = useState<any | null>(null);
 
   // Flashcard state
   const [cards, setCards] = useState<VocabWord[]>([]);
