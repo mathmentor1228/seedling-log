@@ -99,6 +99,17 @@ export function VocabTestAssignManager() {
   const [resultTotal, setResultTotal] = useState('');
   const [resultNotes, setResultNotes] = useState('');
 
+  // Edit modal
+  const [editModal, setEditModal] = useState<Assignment | null>(null);
+  const [editTestMode, setEditTestMode] = useState<'web' | 'print'>('web');
+  const [editTestLevel, setEditTestLevel] = useState(1);
+  const [editTestTimeLimit, setEditTestTimeLimit] = useState('');
+  const [editTestDirection, setEditTestDirection] = useState('eng_to_kor');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editSelectedSets, setEditSelectedSets] = useState<string[]>([]);
+  const [editExpandedFolders, setEditExpandedFolders] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     loadData();
   }, []);
@@ -223,6 +234,97 @@ export function VocabTestAssignManager() {
     const { error } = await supabase.from('vocab_test_assignments').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) { toast.error('상태 변경 실패'); return; }
     loadData();
+  };
+
+  const openEditModal = (a: Assignment) => {
+    setEditModal(a);
+    setEditTestMode(a.test_mode as 'web' | 'print');
+    setEditTestLevel(a.test_level);
+    setEditTestTimeLimit(a.test_time_limit ? String(a.test_time_limit) : '');
+    setEditTestDirection(a.test_direction);
+    setEditDueDate(a.due_date || '');
+    setEditNotes(a.notes || '');
+    setEditSelectedSets([...a.word_set_ids]);
+    setEditExpandedFolders(new Set());
+  };
+
+  const handleEditSave = async () => {
+    if (!editModal) return;
+    if (editSelectedSets.length === 0) { toast.error('단어 세트를 선택해주세요'); return; }
+    const { error } = await supabase
+      .from('vocab_test_assignments')
+      .update({
+        word_set_ids: editSelectedSets,
+        test_mode: editTestMode,
+        test_level: editTestLevel,
+        test_time_limit: editTestTimeLimit ? parseInt(editTestTimeLimit) : null,
+        test_direction: editTestDirection,
+        due_date: editDueDate || null,
+        notes: editNotes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', editModal.id);
+    if (error) { toast.error('수정 실패: ' + error.message); return; }
+    toast.success('배정 수정 완료');
+    setEditModal(null);
+    loadData();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('이 배정을 삭제하시겠습니까?')) return;
+    const { error } = await supabase.from('vocab_test_assignments').delete().eq('id', id);
+    if (error) { toast.error('삭제 실패'); return; }
+    toast.success('삭제 완료');
+    loadData();
+  };
+
+  const toggleEditFolder = (folderId: string) => {
+    setEditExpandedFolders(prev => {
+      const next = new Set(prev);
+      next.has(folderId) ? next.delete(folderId) : next.add(folderId);
+      return next;
+    });
+  };
+
+  const renderEditFolderTree = (parentId: string | null, depth = 0) => {
+    const foldersAtLevel = parentId ? getChildFolders(parentId) : rootFolders;
+    const setsAtLevel = parentId ? getSetsInFolder(parentId) : rootSets;
+    return (
+      <>
+        {foldersAtLevel.map(folder => {
+          const isExpanded = editExpandedFolders.has(folder.id);
+          const folderSets = getSetsInFolder(folder.id);
+          const allSelected = folderSets.length > 0 && folderSets.every(s => editSelectedSets.includes(s.id));
+          return (
+            <div key={folder.id} style={{ marginLeft: depth * 16 }}>
+              <div className="flex items-center gap-2 py-1.5 px-2 hover:bg-muted/50 rounded cursor-pointer" onClick={() => toggleEditFolder(folder.id)}>
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+                <Folder className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-sm font-medium">{folder.name}</span>
+                {folderSets.length > 0 && (
+                  <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] ml-auto" onClick={(e) => {
+                    e.stopPropagation();
+                    if (allSelected) setEditSelectedSets(prev => prev.filter(id => !folderSets.some(s => s.id === id)));
+                    else setEditSelectedSets(prev => [...new Set([...prev, ...folderSets.map(s => s.id)])]);
+                  }}>
+                    {allSelected ? '전체 해제' : '전체 선택'}
+                  </Button>
+                )}
+              </div>
+              {isExpanded && renderEditFolderTree(folder.id, depth + 1)}
+            </div>
+          );
+        })}
+        {setsAtLevel.map(ws => (
+          <div key={ws.id} className={cn("flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-muted/50", editSelectedSets.includes(ws.id) && "bg-primary/10")}
+            style={{ marginLeft: (depth + 1) * 16 }}
+            onClick={() => setEditSelectedSets(prev => prev.includes(ws.id) ? prev.filter(id => id !== ws.id) : [...prev, ws.id])}>
+            <Checkbox checked={editSelectedSets.includes(ws.id)} className="pointer-events-none" />
+            <span className="text-xs">{ws.title}</span>
+          </div>
+        ))}
+      </>
+    );
   };
 
   const filteredAssignments = assignments.filter(a => {
@@ -406,6 +508,16 @@ export function VocabTestAssignManager() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        {a.status === 'assigned' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => openEditModal(a)}
+                          >
+                            수정
+                          </Button>
+                        )}
                         {a.test_mode === 'print' && a.status !== 'completed' && (
                           <Button
                             variant="outline"
@@ -429,6 +541,16 @@ export function VocabTestAssignManager() {
                             onClick={() => handleStatusChange(a.id, 'expired')}
                           >
                             만료
+                          </Button>
+                        )}
+                        {a.status === 'assigned' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-[10px] px-2 text-destructive"
+                            onClick={() => handleDelete(a.id)}
+                          >
+                            삭제
                           </Button>
                         )}
                       </div>
@@ -631,6 +753,81 @@ export function VocabTestAssignManager() {
                 />
               </div>
               <Button onClick={handleResultSave} className="w-full">결과 저장</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Assignment Modal */}
+      <Dialog open={!!editModal} onOpenChange={() => setEditModal(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">배정 수정 — {editModal ? getStudentName(editModal.student_id) : ''}</DialogTitle>
+          </DialogHeader>
+          {editModal && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">단어 세트</Label>
+                <div className="border rounded-md max-h-48 overflow-y-auto p-1.5">
+                  {renderEditFolderTree(null)}
+                </div>
+                {editSelectedSets.length > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-1">{editSelectedSets.length}개 세트 선택됨</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs mb-1 block">테스트 방식</Label>
+                  <div className="flex gap-2">
+                    <Button type="button" variant={editTestMode === 'web' ? 'default' : 'outline'} size="sm" className="flex-1 gap-1 text-xs h-8" onClick={() => setEditTestMode('web')}>
+                      <Monitor className="w-3.5 h-3.5" /> 웹
+                    </Button>
+                    <Button type="button" variant={editTestMode === 'print' ? 'default' : 'outline'} size="sm" className="flex-1 gap-1 text-xs h-8" onClick={() => setEditTestMode('print')}>
+                      <Printer className="w-3.5 h-3.5" /> 인쇄
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs mb-1 block">출제 방향</Label>
+                  <Select value={editTestDirection} onValueChange={setEditTestDirection}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="eng_to_kor">영→한</SelectItem>
+                      <SelectItem value="kor_to_eng">한→영</SelectItem>
+                      <SelectItem value="mixed">혼합</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {editTestMode === 'web' && (
+                  <>
+                    <div>
+                      <Label className="text-xs mb-1 block">테스트 레벨</Label>
+                      <Select value={String(editTestLevel)} onValueChange={v => setEditTestLevel(Number(v))}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Lv.1 (3지선다)</SelectItem>
+                          <SelectItem value="2">Lv.2 (5지선다)</SelectItem>
+                          <SelectItem value="3">Lv.3 (주관식)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs mb-1 block">총 제한시간 (초)</Label>
+                      <Input type="number" value={editTestTimeLimit} onChange={e => setEditTestTimeLimit(e.target.value)} placeholder="미설정 시 무제한" className="h-8 text-xs" />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <Label className="text-xs mb-1 block">마감일</Label>
+                  <Input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">메모</Label>
+                <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="text-xs h-16 resize-none" />
+              </div>
+              <Button onClick={handleEditSave} className="w-full">수정 저장</Button>
             </div>
           )}
         </DialogContent>
