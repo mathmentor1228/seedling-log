@@ -43,6 +43,8 @@ export default function StudentVocab() {
   const [vocabSets, setVocabSets] = useState<VocabSetInfo[]>([]);
   const [completions, setCompletions] = useState<VocabCompletion[]>([]);
   const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
+  const [testLevel, setTestLevel] = useState(1);
+  const [testTimeLimit, setTestTimeLimit] = useState<number | null>(null);
 
   // Flashcard state
   const [cards, setCards] = useState<VocabWord[]>([]);
@@ -68,6 +70,8 @@ export default function StudentVocab() {
     if (data?.completions) {
       setCompletions(data.completions);
     }
+    if (data?.test_level) setTestLevel(data.test_level);
+    if (data?.test_time_limit) setTestTimeLimit(data.test_time_limit);
     setLoading(false);
   };
 
@@ -468,6 +472,8 @@ export default function StudentVocab() {
       <VocabSelfTest
         words={cards}
         mode={studyType === 'listening' ? 'listening' : mode}
+        testLevel={testLevel}
+        testTimeLimit={testTimeLimit}
         onFinish={async (correct, wrong, total) => {
           const { error } = await studentApi.submitVocabCompletion(
             selectedSetIds, correct, wrong, total, mode + '_test'

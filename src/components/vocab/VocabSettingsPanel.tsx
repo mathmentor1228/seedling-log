@@ -40,6 +40,8 @@ interface VocabSetting {
   total_days: number | null;
   notes: string | null;
   assigned_teacher: string | null;
+  test_time_limit: number | null;
+  test_level: number;
   students?: { name: string; grade: string | null; school: string | null };
 }
 
@@ -129,6 +131,8 @@ export function VocabSettingsPanel() {
   const [formTotalDays, setFormTotalDays] = useState<number | ''>('');
   const [formNotes, setFormNotes] = useState('');
   const [formAssignedTeacher, setFormAssignedTeacher] = useState('');
+  const [formTimeLimit, setFormTimeLimit] = useState<number | ''>('');
+  const [formTestLevel, setFormTestLevel] = useState(1);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<VocabSetting | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -171,6 +175,8 @@ export function VocabSettingsPanel() {
     setFormTotalDays('');
     setFormNotes('');
     setFormAssignedTeacher('');
+    setFormTimeLimit('');
+    setFormTestLevel(1);
     setEditingId(null);
   };
 
@@ -189,6 +195,8 @@ export function VocabSettingsPanel() {
     setFormTotalDays(s.total_days || '');
     setFormNotes(s.notes || '');
     setFormAssignedTeacher(s.assigned_teacher || '');
+    setFormTimeLimit(s.test_time_limit || '');
+    setFormTestLevel(s.test_level || 1);
     setDialogOpen(true);
   };
 
@@ -219,6 +227,8 @@ export function VocabSettingsPanel() {
       notes: formNotes || null,
       is_active: true,
       assigned_teacher: formAssignedTeacher,
+      test_time_limit: formTimeLimit ? Number(formTimeLimit) : null,
+      test_level: formTestLevel,
     };
 
     let error;
@@ -396,6 +406,31 @@ export function VocabSettingsPanel() {
                   placeholder="미입력 시 제한 없음"
                 />
                 <p className="text-xs text-muted-foreground">스케줄 생성 시 이 DAY를 초과하면 자동으로 중단됩니다</p>
+              </div>
+
+              {/* Test Level & Time Limit */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">테스트 레벨</Label>
+                  <Select value={String(formTestLevel)} onValueChange={v => setFormTestLevel(Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Lv.1 (보기3개/4초)</SelectItem>
+                      <SelectItem value="2">Lv.2 (보기5개/4초)</SelectItem>
+                      <SelectItem value="3">Lv.3 (직접입력/6초)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">총 제한시간 (초)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={formTimeLimit}
+                    onChange={e => setFormTimeLimit(e.target.value ? Number(e.target.value) : '')}
+                    placeholder="미입력 시 제한 없음"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1.5">

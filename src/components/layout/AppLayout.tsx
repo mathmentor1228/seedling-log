@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,8 @@ import {
   Brain
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
@@ -156,6 +158,27 @@ export function AppLayout({ children }: AppLayoutProps) {
     await signOut();
     navigate('/auth');
   };
+
+  // Global textbook order notifications
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('global-textbook-orders')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'textbook_orders' }, (payload) => {
+        const newOrder = payload.new as any;
+        if (role === 'admin' && newOrder.requested_by !== user.id) {
+          toast.info(`📋 ${newOrder.requested_by_name || '선생님'}이 "${newOrder.textbook_name}" 교재를 신청했습니다`, { duration: 8000 });
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'textbook_orders' }, (payload) => {
+        const updated = payload.new as any;
+        if (updated.status === '입고완료' && updated.requested_by === user.id) {
+          toast.success(`📦 "${updated.textbook_name}" 교재가 입고 완료되었습니다!`, { duration: 8000 });
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, role]);
 
   const toggleGroup = (label: string) => {
     setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));

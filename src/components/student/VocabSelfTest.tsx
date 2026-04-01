@@ -22,6 +22,8 @@ interface TestResult {
 interface VocabSelfTestProps {
   words: VocabWord[];
   mode: 'eng_to_kor' | 'kor_to_eng' | 'listening';
+  testLevel?: number; // 1=3choices/4s, 2=5choices/4s, 3=typing/6s
+  testTimeLimit?: number | null; // total seconds
   onFinish: (correct: number, wrong: number, total: number) => void;
   onBack: () => void;
 }
@@ -87,7 +89,7 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
   return 'wrong';
 }
 
-export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSelfTestProps) {
+export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
@@ -96,13 +98,79 @@ export default function VocabSelfTest({ words, mode, onFinish, onBack }: VocabSe
   const [finished, setFinished] = useState(false);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'wrong' | 'partial'>('all');
   const [listeningRevealed, setListeningRevealed] = useState(false);
+  const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
+  const [choices, setChoices] = useState<string[]>([]);
+  const [perQuestionTimer, setPerQuestionTimer] = useState(0);
+  const [globalTimeLeft, setGlobalTimeLeft] = useState<number | null>(testTimeLimit || null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isListening = mode === 'listening';
+  const isLevelMode = testLevel >= 1 && testLevel <= 3;
+  const isChoiceMode = isLevelMode && (testLevel === 1 || testLevel === 2);
+  const isTypingLevel = isLevelMode && testLevel === 3;
+  const choiceCount = testLevel === 1 ? 3 : testLevel === 2 ? 5 : 0;
+  const perQuestionSeconds = testLevel === 3 ? 6 : 4;
   const currentWord = words[currentIdx];
   // In listening mode: student hears English, types Korean meaning
   const question = isListening ? '' : (mode === 'eng_to_kor' ? currentWord?.english : currentWord?.meaning);
   const answer = isListening ? currentWord?.meaning : (mode === 'eng_to_kor' ? currentWord?.meaning : currentWord?.english);
+
+  // Generate choices for level mode
+  useEffect(() => {
+    if (isChoiceMode && currentWord && !showResult && !finished) {
+      const correctAnswer = answer;
+      const otherAnswers = words
+        .filter(w => w.english !== currentWord.english)
+        .map(w => mode === 'eng_to_kor' ? w.meaning : w.english)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, choiceCount - 1);
+      const allChoices = [...otherAnswers, correctAnswer].sort(() => Math.random() - 0.5);
+      setChoices(allChoices);
+      setSelectedChoice(null);
+    }
+  }, [currentIdx, isChoiceMode, finished]);
+
+  // Per-question timer
+  useEffect(() => {
+    if (finished || showResult) return;
+    setPerQuestionTimer(perQuestionSeconds);
+    const interval = setInterval(() => {
+      setPerQuestionTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Auto-skip on timeout
+          if (!showResult) {
+            doCheck('', true);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentIdx, finished, perQuestionSeconds]);
+
+  // Global time limit
+  useEffect(() => {
+    if (!testTimeLimit || finished) return;
+    setGlobalTimeLeft(testTimeLimit);
+    const interval = setInterval(() => {
+      setGlobalTimeLeft(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Force finish
+          const correct = results.filter(r => r.status === 'correct').length;
+          const wrong = words.length - correct;
+          setFinished(true);
+          onFinish(correct, wrong, words.length);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [testTimeLimit, finished]);
 
   useEffect(() => {
     if (!showResult && !finished && inputRef.current) {

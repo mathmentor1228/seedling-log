@@ -16,7 +16,7 @@ import {
 import {
   Users, FolderPlus, Send, Trash2, Loader2, CheckCircle2, Search,
   ArrowUpDown, Eye, User, Printer, X, CheckSquare, Square,
-  ChevronDown, ChevronUp, UserPlus, UserMinus, Link2, Copy,
+  ChevronDown, ChevronUp, UserPlus, UserMinus, Link2, Copy, Pencil, Check,
 } from 'lucide-react';
 import { MathRenderer } from './MathRenderer';
 import { useNavigate } from 'react-router-dom';
@@ -56,6 +56,7 @@ interface Quiz {
   version_label?: string | null;
   answer_code?: string | null;
   creator_name?: string;
+  title?: string | null;
   math_concepts: { title: string; course: string; grade: string; subject: string } | null;
 }
 
@@ -145,6 +146,10 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
 
   // Student management dialog
   const [manageStudentsQuiz, setManageStudentsQuiz] = useState<Quiz | null>(null);
+
+  // Title editing
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState('');
 
   const availableQuizzes = quizzes.filter((quiz) => quiz.status === 'draft' || quiz.status === 'published');
 
@@ -398,6 +403,23 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
     window.open(`/quiz-print?quiz_id=${quizId}`, '_blank');
   };
 
+  const handleSaveTitle = async (quizId: string) => {
+    const { error } = await supabase
+      .from('math_concept_quizzes')
+      .update({ title: editTitleValue.trim() || null } as any)
+      .eq('id', quizId);
+    if (error) {
+      toast({ title: '제목 저장 실패', variant: 'destructive' });
+    } else {
+      toast({ title: '제목 수정 완료' });
+      // Update local quiz data
+      const quiz = availableQuizzes.find(q => q.id === quizId);
+      if (quiz) quiz.title = editTitleValue.trim() || null;
+      onQuizDeleted?.(); // refetch
+    }
+    setEditingTitleId(null);
+  };
+
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
@@ -533,9 +555,42 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
                                   />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm leading-tight truncate">
-                                    {q.math_concepts?.title || '퀴즈'}
-                                  </p>
+                                  {editingTitleId === q.id ? (
+                                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                      <Input
+                                        value={editTitleValue}
+                                        onChange={e => setEditTitleValue(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleSaveTitle(q.id); if (e.key === 'Escape') setEditingTitleId(null); }}
+                                        className="h-7 text-sm"
+                                        placeholder="퀴즈 제목 입력..."
+                                        autoFocus
+                                      />
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => handleSaveTitle(q.id)}>
+                                        <Check className="w-3.5 h-3.5 text-green-600" />
+                                      </Button>
+                                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => setEditingTitleId(null)}>
+                                        <X className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1 group/title">
+                                      <p className="font-medium text-sm leading-tight truncate">
+                                        {q.title || q.math_concepts?.title || '퀴즈'}
+                                      </p>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingTitleId(q.id);
+                                          setEditTitleValue(q.title || q.math_concepts?.title || '');
+                                        }}
+                                      >
+                                        <Pencil className="w-3 h-3 text-muted-foreground" />
+                                      </Button>
+                                    </div>
+                                  )}
                                   <div className="flex items-center gap-1 mt-1 flex-wrap">
                                     <Badge variant="secondary" className="text-[10px] h-5">
                                       {q.math_concepts?.subject || '기타'}
