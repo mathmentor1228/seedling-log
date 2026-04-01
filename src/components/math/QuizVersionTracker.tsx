@@ -369,7 +369,7 @@ export function QuizVersionTracker() {
                               ? Math.round((sub.ai_total_score / sub.ai_total_questions) * 100) : null;
                             return (
                               <tr key={a.id} className="border-t">
-                                <td className="px-3 py-2">{ver?.math_concepts?.title || '퀴즈'}</td>
+                                <td className="px-3 py-2">{ver?.title || ver?.math_concepts?.title || '퀴즈'}</td>
                                 <td className="px-3 py-2">
                                   <Badge variant="secondary" className="text-xs">V{ver?.version_number || '?'}</Badge>
                                 </td>
