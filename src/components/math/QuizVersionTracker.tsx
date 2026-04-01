@@ -196,7 +196,7 @@ export function QuizVersionTracker() {
                         <Badge variant="outline" className="text-[10px]">{v.math_concepts?.subject || '기타'}</Badge>
                         {v.answer_code && <Badge variant="outline" className="text-[10px] font-mono">{v.answer_code}</Badge>}
                       </div>
-                      <p className="font-medium truncate">{v.math_concepts?.title || '퀴즈'}</p>
+                      <p className="font-medium truncate">{v.title || v.math_concepts?.title || '퀴즈'}</p>
                       <p className="text-xs text-muted-foreground truncate">{v.version_label || ''}</p>
                       <div className="flex gap-2 mt-1">
                         <span className="text-xs text-muted-foreground">{assignCount}명 배포</span>
