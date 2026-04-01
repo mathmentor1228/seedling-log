@@ -195,6 +195,8 @@ export function VocabSettingsPanel() {
     setFormTotalDays(s.total_days || '');
     setFormNotes(s.notes || '');
     setFormAssignedTeacher(s.assigned_teacher || '');
+    setFormTimeLimit(s.test_time_limit || '');
+    setFormTestLevel(s.test_level || 1);
     setDialogOpen(true);
   };
 
