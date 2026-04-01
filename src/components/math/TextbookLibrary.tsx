@@ -149,6 +149,64 @@ export function TextbookLibrary() {
   const [editingChapter, setEditingChapter] = useState<string | null>(null);
   const [editingChapterName, setEditingChapterName] = useState('');
 
+  // Full question editing dialog
+  const [editDialogExample, setEditDialogExample] = useState<TextbookExample | null>(null);
+  const [editQ, setEditQ] = useState('');
+  const [editA, setEditA] = useState('');
+  const [editExp, setEditExp] = useState('');
+  const [editDiff, setEditDiff] = useState('medium');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editFocusField, setEditFocusField] = useState<'q' | 'a' | 'exp'>('q');
+
+  const openEditDialog = (ex: TextbookExample) => {
+    setEditDialogExample(ex);
+    setEditQ(ex.question_text || '');
+    setEditA(ex.answer || '');
+    setEditExp(ex.explanation || '');
+    setEditDiff(ex.difficulty || 'medium');
+    setEditFocusField('q');
+  };
+
+  const insertSymbol = (symbol: string) => {
+    const setter = editFocusField === 'q' ? setEditQ : editFocusField === 'a' ? setEditA : setEditExp;
+    const textarea = document.getElementById(`edit-field-${editFocusField}`) as HTMLTextAreaElement | null;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const current = editFocusField === 'q' ? editQ : editFocusField === 'a' ? editA : editExp;
+      const newVal = current.slice(0, start) + symbol + current.slice(end);
+      setter(newVal);
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const pos = start + symbol.length;
+        textarea.setSelectionRange(pos, pos);
+      });
+    } else {
+      setter(prev => prev + symbol);
+    }
+  };
+
+  const handleSaveEditDialog = async () => {
+    if (!editDialogExample) return;
+    setSavingEdit(true);
+    const { error } = await supabase.from('textbook_examples').update({
+      question_text: editQ.trim(),
+      answer: editA.trim() || null,
+      explanation: editExp.trim() || null,
+      difficulty: editDiff,
+    } as any).eq('id', editDialogExample.id);
+    if (error) { toast({ title: '수정 실패', description: error.message, variant: 'destructive' }); }
+    else {
+      setExamples(prev => prev.map(e => e.id === editDialogExample.id ? {
+        ...e, question_text: editQ.trim(), answer: editA.trim() || null,
+        explanation: editExp.trim() || null, difficulty: editDiff,
+      } : e));
+      toast({ title: '문항이 수정되었습니다' });
+      setEditDialogExample(null);
+    }
+    setSavingEdit(false);
+  };
+
   // Folder management
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [folderSearch, setFolderSearch] = useState('');
