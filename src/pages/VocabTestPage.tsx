@@ -65,6 +65,10 @@ function VocabTestContent() {
             <CalendarDays className="w-3.5 h-3.5" />
             시험 일정
           </TabsTrigger>
+          <TabsTrigger value="test-assign" className="text-xs shrink-0 gap-1">
+            <Send className="w-3.5 h-3.5" />
+            테스트 배정
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
