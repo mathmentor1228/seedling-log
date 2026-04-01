@@ -42,20 +42,6 @@ import {
 } from '@/components/ui/select';
 import { compressImage } from '@/lib/imageCompression';
 import ImageViewerModal from './ImageViewerModal';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { compressImage } from '@/lib/imageCompression';
 
 const GRADES = ['고1', '고2', '고3', '중3'] as const;
 const SUBJECTS = [
