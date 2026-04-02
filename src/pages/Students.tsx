@@ -743,6 +743,19 @@ export default function Students() {
                       <TableCell className="text-muted-foreground">
                         {student.student_phone || student.phone || '-'}
                       </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const t = tuitionSummary[student.id];
+                          if (!t || t.courses === 0) return <span className="text-xs text-muted-foreground">-</span>;
+                          return (
+                            <div className="text-xs">
+                              <span className="font-medium">{t.monthlyFee.toLocaleString()}원</span>
+                              <span className="text-muted-foreground">/{t.courses}과목</span>
+                              {t.unpaid > 0 && <Badge variant="destructive" className="ml-1 text-[9px] px-1 py-0">{t.unpaid}미납</Badge>}
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {format(new Date(student.created_at), 'MMM d, yyyy')}
                       </TableCell>
