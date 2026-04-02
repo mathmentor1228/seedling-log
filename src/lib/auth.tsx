@@ -9,6 +9,7 @@ interface AuthContextType {
   session: Session | null;
   role: AppRole | null;
   assignedSubject: string | null;
+  fullName: string | null;
   loading: boolean;
   isTrial: boolean;
   trialExpiresAt: string | null;
