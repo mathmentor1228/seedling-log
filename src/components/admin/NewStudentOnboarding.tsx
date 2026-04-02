@@ -179,6 +179,7 @@ export function NewStudentOnboarding() {
   const completedCount = students.filter(s =>
     CHECKLIST_ITEMS.every(item => isChecked(s.id, item.key))
   ).length;
+  const incompleteCount = students.length - completedCount;
 
   return (
     <Card className="border-primary/15 shadow-sm">
