@@ -878,7 +878,15 @@ export default function Students() {
             </Tabs>
           )}
         </DialogContent>
-      </Dialog>
+      {isAdmin(role) && (
+        <BulkEditStudents
+          open={bulkEditOpen}
+          onOpenChange={setBulkEditOpen}
+          selectedStudentIds={Array.from(selectedIds)}
+          studentNames={Object.fromEntries(students.map(s => [s.id, s.name]))}
+          onUpdated={() => { fetchStudents(); setSelectedIds(new Set()); setBulkEditOpen(false); }}
+        />
+      )}
     </div>
   );
 }
