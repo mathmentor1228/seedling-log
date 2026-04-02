@@ -61,6 +61,8 @@ interface DraftRecord {
   test_result: string | null;
   test_result_text: string | null;
   lesson_types: string[] | null;
+  learning_issues: string[] | null;
+  learning_issues_note: string | null;
 }
 
 interface HomeworkItem {
@@ -178,7 +180,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     try {
       const { data, error } = await supabase
         .from('lesson_records')
-        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, test_content, test_name, test_result, test_result_text, lesson_types, students!inner(name, grade)')
+        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, test_content, test_name, test_result, test_result_text, lesson_types, learning_issues, learning_issues_note, students!inner(name, grade)')
         .eq('lesson_date', searchDate)
         .eq('teacher_id', user!.id)
         .order('submitted', { ascending: true });
@@ -203,6 +205,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         test_result: r.test_result,
         test_result_text: r.test_result_text,
         lesson_types: r.lesson_types,
+        learning_issues: r.learning_issues,
+        learning_issues_note: r.learning_issues_note,
       }));
       setDrafts(records);
       setSelectedIds(new Set());
@@ -281,7 +285,32 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       setNextLessonGoal(first.next_lesson_goal || '');
       // Pre-fill test content from existing data
       setTestContent(first.test_content || first.test_name || '');
+      setBatchLessonTypes(first.lesson_types?.length ? first.lesson_types : ['정규수업']);
+      // Pre-fill learning issues from first record
+      if (first.learning_issues?.length) setLearningIssues(first.learning_issues);
+      if (first.learning_issues_note) setLearningIssuesNote(first.learning_issues_note);
     }
+
+    // Pre-fill per-student data from each selected draft's existing values
+    const selectedDrafts = drafts.filter(d => selectedIds.has(d.id));
+    const perRange: Record<string, string> = {};
+    const perScore: Record<string, number> = {};
+    const perHw: Record<string, string> = {};
+    const perTypes: Record<string, string[]> = {};
+    const perIssueNote: Record<string, string> = {};
+    for (const d of selectedDrafts) {
+      if (d.lesson_range) perRange[d.id] = d.lesson_range;
+      if (d.understanding_score != null) perScore[d.id] = d.understanding_score;
+      if (d.homework_status) perHw[d.id] = d.homework_status;
+      if (d.lesson_types?.length) perTypes[d.id] = d.lesson_types;
+      if (d.learning_issues_note) perIssueNote[d.id] = d.learning_issues_note;
+    }
+    setPerStudentLessonRange(perRange);
+    setPerStudentScore(perScore);
+    setPerStudentHomework(perHw);
+    setPerStudentLessonTypes(perTypes);
+    setPerStudentIssuesNote(perIssueNote);
+
     setStep('edit');
   }
 

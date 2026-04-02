@@ -37,7 +37,6 @@ import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
 import { BrandFooter } from '@/components/layout/BrandFooter';
-import { AttendanceWidget } from '@/components/layout/AttendanceWidget';
 import { FloatingAttendanceWidget } from '@/components/layout/FloatingAttendanceWidget';
 
 interface AppLayoutProps {
@@ -331,9 +330,6 @@ export function AppLayout({ children }: AppLayoutProps) {
               return renderNavItem(entry as NavItem);
             })}
           </nav>
-
-          {/* Attendance widget for teachers */}
-          {!sidebarCollapsed && <AttendanceWidget />}
 
           {/* Collapse toggle (desktop only) */}
           <div className="hidden lg:flex justify-center py-2 border-t border-sidebar-border">
