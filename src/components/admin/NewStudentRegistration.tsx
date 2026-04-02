@@ -335,7 +335,7 @@ ${studentPageUrl}
                 <Select value={String(gradeYear)} onValueChange={v => setGradeYear(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {(schoolLevel === '초' ? GRADE_YEARS : GRADE_YEARS.slice(0, 3)).map(g =>
+                    {getGradeYearsForLevel(schoolLevel).map(g =>
                       <SelectItem key={g} value={String(g)}>{g}학년</SelectItem>
                     )}
                   </SelectContent>
