@@ -17,6 +17,7 @@ import { format, isAfter, startOfDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
+import { SUBJECTS, SCHOOL_LEVELS, TEACHERS, getGradeYearsForLevel, STUDENT_STATUSES } from '@/lib/constants';
 
 interface NewStudentRegistrationProps {
   open: boolean;
@@ -24,20 +25,6 @@ interface NewStudentRegistrationProps {
   userName: string;
   onCreated: () => void;
 }
-
-const SUBJECTS = ['수학', '영어', '국어'];
-const SCHOOL_LEVELS = ['초', '중', '고'];
-const GRADE_YEARS = [1, 2, 3, 4, 5, 6];
-
-const TEACHERS = [
-  { name: '최윤기', room: '4층 2강의실' },
-  { name: '조준희', room: '4층 4강의실' },
-  { name: '서미정', room: '4층 5강의실' },
-  { name: '이나연', room: '3층 6강의실' },
-  { name: '정선호', room: '3층 7강의실' },
-  { name: '김민희', room: '3층 8강의실' },
-  { name: '황은지(원장)', room: '3층 9강의실' },
-];
 
 export function NewStudentRegistration({ open, onOpenChange, userName, onCreated }: NewStudentRegistrationProps) {
   const { user } = useAuth();
