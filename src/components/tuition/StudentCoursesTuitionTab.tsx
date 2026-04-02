@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,14 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, CalendarIcon, BookOpen, Receipt, Loader2 } from 'lucide-react';
+import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent } from 'lucide-react';
 import { format } from 'date-fns';
-import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -22,32 +19,47 @@ interface Props {
   studentName: string;
 }
 
+interface CoursePolicy {
+  id: string;
+  course_name: string;
+  subject: string;
+  grade_target: string;
+  monthly_fee: number;
+}
+
+const MULTI_SUBJECT_DISCOUNT: Record<number, number> = {
+  1: 0,
+  2: 50000,
+  3: 80000,
+  4: 100000,
+};
+const SIBLING_DISCOUNT = 10000;
+
 export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const [courses, setCourses] = useState<any[]>([]);
   const [billings, setBillings] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
-  const [coursePolicies, setCoursePolicies] = useState<any[]>([]);
+  const [coursePolicies, setCoursePolicies] = useState<CoursePolicy[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [siblingCount, setSiblingCount] = useState(0);
 
-  // Add course form
   const [showAddCourse, setShowAddCourse] = useState(false);
-  const [formCourseId, setFormCourseId] = useState('');
-  const [formTeacherId, setFormTeacherId] = useState('');
-  const [formEnrollDate, setFormEnrollDate] = useState<Date>(new Date());
-  const [formNotes, setFormNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // View state
+  // Quick-add state
+  const [selectedPolicyId, setSelectedPolicyId] = useState('');
+  const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [enrollDate, setEnrollDate] = useState<Date>(new Date());
+  const [showCustomDate, setShowCustomDate] = useState(false);
+
   const [view, setView] = useState<'courses' | 'billing'>('courses');
 
-  useEffect(() => {
-    loadAll();
-  }, [studentId]);
+  useEffect(() => { loadAll(); }, [studentId]);
 
   const loadAll = async () => {
     setLoading(true);
-    const [coursesRes, billingsRes, paymentsRes, policiesRes, teachersRes] = await Promise.all([
+    const [coursesRes, billingsRes, paymentsRes, policiesRes, teachersRes, studentRes] = await Promise.all([
       supabase.from('student_courses')
         .select('*, course_policies(course_name, subject, grade_target, monthly_fee)')
         .eq('student_id', studentId)
@@ -64,38 +76,77 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
         .limit(20),
       supabase.from('course_policies')
         .select('id, course_name, subject, grade_target, monthly_fee')
-        .order('course_name'),
+        .order('subject, grade_target'),
       supabase.from('profiles')
         .select('id, full_name')
         .not('full_name', 'is', null)
         .order('full_name'),
+      supabase.from('students')
+        .select('sibling_group_id')
+        .eq('id', studentId)
+        .single(),
     ]);
+
     setCourses((coursesRes.data || []) as any);
     setBillings((billingsRes.data || []) as any);
     setPayments((paymentsRes.data || []) as any);
-    setCoursePolicies((policiesRes.data || []) as any);
+    setCoursePolicies((policiesRes.data || []) as CoursePolicy[]);
     setTeachers((teachersRes.data || []) as any);
+
+    // Check sibling count
+    const sibGroupId = (studentRes.data as any)?.sibling_group_id;
+    if (sibGroupId) {
+      const { count } = await supabase
+        .from('students')
+        .select('id', { count: 'exact', head: true })
+        .eq('sibling_group_id', sibGroupId)
+        .neq('enrollment_status', '퇴원');
+      setSiblingCount(count && count > 1 ? count : 0);
+    } else {
+      setSiblingCount(0);
+    }
+
     setLoading(false);
   };
 
+  // Group policies by subject
+  const policiesBySubject = useMemo(() => {
+    const map: Record<string, CoursePolicy[]> = {};
+    coursePolicies.forEach(cp => {
+      if (!map[cp.subject]) map[cp.subject] = [];
+      map[cp.subject].push(cp);
+    });
+    return map;
+  }, [coursePolicies]);
+
+  // Discount calculation
+  const activeCourses = courses.filter(c => c.is_active);
+  const uniqueSubjects = new Set(activeCourses.map(c => (c as any).course_policies?.subject).filter(Boolean));
+  const subjectCount = uniqueSubjects.size;
+  const multiSubjectDiscount = MULTI_SUBJECT_DISCOUNT[Math.min(subjectCount, 4)] || (subjectCount > 4 ? 100000 : 0);
+  const siblingDiscount = siblingCount > 1 ? SIBLING_DISCOUNT : 0;
+
+  const monthlyGross = activeCourses.reduce((sum, c) => sum + (Number((c as any).course_policies?.monthly_fee) || 0), 0);
+  const totalDiscount = multiSubjectDiscount + siblingDiscount;
+  const monthlyNet = Math.max(0, monthlyGross - totalDiscount);
+
+  const unpaidCount = billings.filter(b => b.status === 'pending' || b.status === 'overdue').length;
+
   const handleAddCourse = async () => {
-    if (!formCourseId) { toast.error('과정을 선택해주세요'); return; }
+    if (!selectedPolicyId) { toast.error('과정을 선택해주세요'); return; }
     setSaving(true);
     try {
       const { error } = await supabase.from('student_courses').insert({
         student_id: studentId,
-        course_policy_id: formCourseId,
-        teacher_id: formTeacherId || null,
-        enrollment_date: format(formEnrollDate, 'yyyy-MM-dd'),
+        course_policy_id: selectedPolicyId,
+        teacher_id: selectedTeacherId || null,
+        enrollment_date: format(enrollDate, 'yyyy-MM-dd'),
         is_active: true,
-        notes: formNotes || null,
       } as any);
       if (error) throw error;
       toast.success('수강과정 추가 완료');
-      setShowAddCourse(false);
-      setFormCourseId('');
-      setFormTeacherId('');
-      setFormNotes('');
+      setSelectedPolicyId('');
+      setSelectedTeacherId('');
       loadAll();
     } catch (err: any) {
       toast.error(err.message || '추가 실패');
@@ -105,12 +156,9 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   };
 
   const toggleCourseActive = async (courseId: string, currentActive: boolean) => {
-    const { error } = await supabase
-      .from('student_courses')
-      .update({ is_active: !currentActive } as any)
-      .eq('id', courseId);
+    const { error } = await supabase.from('student_courses').update({ is_active: !currentActive } as any).eq('id', courseId);
     if (error) { toast.error('변경 실패'); return; }
-    toast.success(currentActive ? '수강 비활성' : '수강 활성');
+    toast.success(currentActive ? '수강 종료' : '수강 재개');
     loadAll();
   };
 
@@ -122,39 +170,39 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
     loadAll();
   };
 
-  const monthlyTotal = courses
-    .filter(c => c.is_active)
-    .reduce((sum, c) => sum + (Number((c as any).course_policies?.monthly_fee) || 0), 0);
-
-  const unpaidCount = billings.filter(b => b.status === 'pending' || b.status === 'overdue').length;
-
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
   return (
     <div className="space-y-4">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">수강과정</p>
-            <p className="text-lg font-bold">{courses.filter(c => c.is_active).length}개</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">월 수강료</p>
-            <p className="text-lg font-bold">{monthlyTotal.toLocaleString()}원</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">미납</p>
-            <p className={cn("text-lg font-bold", unpaidCount > 0 ? "text-red-600" : "")}>{unpaidCount}건</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Card><CardContent className="p-3">
+          <p className="text-xs text-muted-foreground">수강과정</p>
+          <p className="text-lg font-bold">{activeCourses.length}개</p>
+          <p className="text-[10px] text-muted-foreground">{subjectCount}과목</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-3">
+          <p className="text-xs text-muted-foreground">월 수강료</p>
+          <p className="text-lg font-bold">{monthlyNet.toLocaleString()}원</p>
+          {totalDiscount > 0 && (
+            <p className="text-[10px] text-green-600">-{totalDiscount.toLocaleString()}원 할인</p>
+          )}
+        </CardContent></Card>
+        <Card><CardContent className="p-3">
+          <p className="text-xs text-muted-foreground flex items-center gap-1"><Percent className="w-3 h-3" />할인 내역</p>
+          <div className="text-xs mt-0.5 space-y-0.5">
+            {multiSubjectDiscount > 0 && <p className="text-green-600">{subjectCount}과목: -{multiSubjectDiscount.toLocaleString()}</p>}
+            {siblingDiscount > 0 && <p className="text-green-600 flex items-center gap-0.5"><Users className="w-3 h-3" />형제: -{siblingDiscount.toLocaleString()}</p>}
+            {totalDiscount === 0 && <p className="text-muted-foreground">없음</p>}
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-3">
+          <p className="text-xs text-muted-foreground">미납</p>
+          <p className={cn("text-lg font-bold", unpaidCount > 0 ? "text-destructive" : "")}>{unpaidCount}건</p>
+        </CardContent></Card>
       </div>
 
-      {/* Toggle */}
+      {/* View toggle */}
       <div className="flex gap-2">
         <Button size="sm" variant={view === 'courses' ? 'default' : 'outline'} onClick={() => setView('courses')} className="gap-1">
           <BookOpen className="w-3.5 h-3.5" />수강과정
@@ -190,17 +238,14 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
                             </Badge>
                           </div>
                           <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
-                            <span>{cp?.subject}</span>
-                            <span>·</span>
-                            <span>{cp?.grade_target}</span>
-                            <span>·</span>
+                            <span>{cp?.subject}</span><span>·</span>
+                            <span>{cp?.grade_target}</span><span>·</span>
                             <span>{Number(cp?.monthly_fee || 0).toLocaleString()}원/월</span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             시작: {c.enrollment_date}
                             {c.end_date && ` → 종료: ${c.end_date}`}
                           </div>
-                          {c.notes && <p className="text-xs text-muted-foreground mt-1">{c.notes}</p>}
                         </div>
                         <div className="flex gap-1">
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
@@ -223,121 +268,177 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
       )}
 
       {view === 'billing' && (
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium text-muted-foreground">청구/납부 이력</h4>
-          {billings.length === 0 && payments.length === 0 ? (
-            <p className="text-center text-muted-foreground py-6 text-sm">청구/납부 이력이 없습니다</p>
-          ) : (
-            <>
-              {billings.length > 0 && (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>청구월</TableHead>
-                      <TableHead className="text-right">금액</TableHead>
-                      <TableHead>상태</TableHead>
-                      <TableHead>납부기한</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {billings.map(b => (
-                      <TableRow key={b.id}>
-                        <TableCell>{b.billing_month}</TableCell>
-                        <TableCell className="text-right">{Number(b.final_amount).toLocaleString()}원</TableCell>
-                        <TableCell>
-                          <Badge variant={b.status === 'paid' ? 'default' : b.status === 'overdue' ? 'destructive' : 'secondary'}>
-                            {b.status === 'paid' ? '완료' : b.status === 'overdue' ? '미납' : '대기'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">{b.due_date}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-
-              {payments.length > 0 && (
-                <>
-                  <h4 className="text-sm font-medium text-muted-foreground mt-4">납부 기록</h4>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>납부일</TableHead>
-                        <TableHead className="text-right">금액</TableHead>
-                        <TableHead>방법</TableHead>
-                        <TableHead>메모</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {payments.map(p => (
-                        <TableRow key={p.id}>
-                          <TableCell>{p.paid_date}</TableCell>
-                          <TableCell className="text-right font-medium">{Number(p.amount).toLocaleString()}원</TableCell>
-                          <TableCell>{p.payment_method}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{p.memo || '-'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </>
-              )}
-            </>
-          )}
-        </div>
+        <BillingView billings={billings} payments={payments} />
       )}
 
-      {/* Add course dialog */}
+      {/* Add course sheet - button-based UI */}
       <Sheet open={showAddCourse} onOpenChange={setShowAddCourse}>
-        <SheetContent side="right" className="w-[360px] sm:w-[400px]">
-          <SheetHeader><SheetTitle>수강과정 추가 - {studentName}</SheetTitle></SheetHeader>
-          <div className="space-y-3 mt-4">
+        <SheetContent side="right" className="w-[380px] sm:w-[440px] overflow-y-auto">
+          <SheetHeader><SheetTitle>수강과정 추가 — {studentName}</SheetTitle></SheetHeader>
+          <div className="space-y-5 mt-4">
+            {/* Step 1: Pick course by subject buttons */}
             <div>
-              <Label className="text-sm">과정 *</Label>
-              <Select value={formCourseId} onValueChange={setFormCourseId}>
-                <SelectTrigger><SelectValue placeholder="과정 선택" /></SelectTrigger>
-                <SelectContent>
-                  {coursePolicies.map(cp => (
-                    <SelectItem key={cp.id} value={cp.id}>
-                      {cp.course_name} ({cp.subject} · {Number(cp.monthly_fee).toLocaleString()}원)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-sm font-semibold">① 과정 선택</Label>
+              <div className="mt-2 space-y-3">
+                {Object.entries(policiesBySubject).map(([subject, policies]) => (
+                  <div key={subject}>
+                    <p className="text-xs text-muted-foreground mb-1.5">{subject}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {policies.map(cp => (
+                        <Button
+                          key={cp.id}
+                          size="sm"
+                          variant={selectedPolicyId === cp.id ? 'default' : 'outline'}
+                          className={cn("h-8 text-xs", selectedPolicyId === cp.id && "ring-2 ring-primary")}
+                          onClick={() => setSelectedPolicyId(cp.id)}
+                        >
+                          {cp.course_name}
+                          <span className="ml-1 opacity-60">{(cp.monthly_fee / 10000).toFixed(0)}만</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
+
+            {/* Step 2: Pick teacher by buttons */}
             <div>
-              <Label className="text-sm">담당 선생님</Label>
-              <Select value={formTeacherId || 'none'} onValueChange={v => setFormTeacherId(v === 'none' ? '' : v)}>
-                <SelectTrigger><SelectValue placeholder="선택 (선택사항)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">미배정</SelectItem>
-                  {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-sm">시작일</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-8 w-full justify-start text-left text-sm">
-                    <CalendarIcon className="mr-2 h-3.5 w-3.5" />
-                    {format(formEnrollDate, 'yyyy-MM-dd')}
+              <Label className="text-sm font-semibold">② 담당 선생님</Label>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <Button
+                  size="sm"
+                  variant={!selectedTeacherId ? 'default' : 'outline'}
+                  className="h-8 text-xs"
+                  onClick={() => setSelectedTeacherId('')}
+                >
+                  미배정
+                </Button>
+                {teachers.map(t => (
+                  <Button
+                    key={t.id}
+                    size="sm"
+                    variant={selectedTeacherId === t.id ? 'default' : 'outline'}
+                    className={cn("h-8 text-xs", selectedTeacherId === t.id && "ring-2 ring-primary")}
+                    onClick={() => setSelectedTeacherId(t.id)}
+                  >
+                    {t.full_name}
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={formEnrollDate} onSelect={d => d && setFormEnrollDate(d)} className="p-3 pointer-events-auto" />
-                </PopoverContent>
-              </Popover>
+                ))}
+              </div>
             </div>
+
+            {/* Step 3: Enrollment date */}
             <div>
-              <Label className="text-sm">메모</Label>
-              <Textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} rows={2} />
+              <Label className="text-sm font-semibold">③ 수업 시작일</Label>
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={format(enrollDate, 'yyyy-MM-dd')}
+                  className="h-8 text-sm w-[140px]"
+                />
+                {!showCustomDate && (
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setShowCustomDate(true)}>
+                    <CalendarIcon className="w-3.5 h-3.5 mr-1" />날짜 변경
+                  </Button>
+                )}
+              </div>
+              {showCustomDate && (
+                <div className="mt-2">
+                  <Calendar
+                    mode="single"
+                    selected={enrollDate}
+                    onSelect={d => { if (d) setEnrollDate(d); setShowCustomDate(false); }}
+                    className="rounded-md border pointer-events-auto"
+                  />
+                </div>
+              )}
             </div>
-            <Button onClick={handleAddCourse} disabled={saving} className="w-full">
+
+            {/* Preview */}
+            {selectedPolicyId && (
+              <Card className="bg-muted/50">
+                <CardContent className="p-3 text-sm">
+                  <p className="font-medium">
+                    {coursePolicies.find(cp => cp.id === selectedPolicyId)?.course_name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(Number(coursePolicies.find(cp => cp.id === selectedPolicyId)?.monthly_fee || 0)).toLocaleString()}원/월
+                    · {format(enrollDate, 'yyyy-MM-dd')} 시작
+                    {selectedTeacherId ? ` · ${teachers.find(t => t.id === selectedTeacherId)?.full_name}` : ''}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            <Button onClick={handleAddCourse} disabled={saving || !selectedPolicyId} className="w-full">
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}추가
             </Button>
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  );
+}
+
+function BillingView({ billings, payments }: { billings: any[]; payments: any[] }) {
+  if (billings.length === 0 && payments.length === 0) {
+    return <p className="text-center text-muted-foreground py-6 text-sm">청구/납부 이력이 없습니다</p>;
+  }
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-medium text-muted-foreground">청구/납부 이력</h4>
+      {billings.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>청구월</TableHead>
+              <TableHead className="text-right">금액</TableHead>
+              <TableHead>상태</TableHead>
+              <TableHead>납부기한</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {billings.map(b => (
+              <TableRow key={b.id}>
+                <TableCell>{b.billing_month}</TableCell>
+                <TableCell className="text-right">{Number(b.final_amount).toLocaleString()}원</TableCell>
+                <TableCell>
+                  <Badge variant={b.status === 'paid' ? 'default' : b.status === 'overdue' ? 'destructive' : 'secondary'}>
+                    {b.status === 'paid' ? '완료' : b.status === 'overdue' ? '미납' : '대기'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-xs">{b.due_date}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+      {payments.length > 0 && (
+        <>
+          <h4 className="text-sm font-medium text-muted-foreground mt-4">납부 기록</h4>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>납부일</TableHead>
+                <TableHead className="text-right">금액</TableHead>
+                <TableHead>방법</TableHead>
+                <TableHead>메모</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {payments.map(p => (
+                <TableRow key={p.id}>
+                  <TableCell>{p.paid_date}</TableCell>
+                  <TableCell className="text-right font-medium">{Number(p.amount).toLocaleString()}원</TableCell>
+                  <TableCell>{p.payment_method}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{p.memo || '-'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
+      )}
     </div>
   );
 }
