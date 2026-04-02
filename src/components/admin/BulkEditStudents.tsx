@@ -16,7 +16,7 @@ import { Loader2, CalendarIcon, Users, BookOpen, Settings } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { STUDENT_STATUSES, ENROLLMENT_STATUSES } from '@/lib/constants';
+import { STUDENT_STATUSES } from '@/lib/constants';
 
 interface BulkEditStudentsProps {
   open: boolean;
@@ -86,7 +86,7 @@ export function BulkEditStudents({ open, onOpenChange, selectedStudentIds, stude
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [courseStartDate, setCourseStartDate] = useState<Date | undefined>();
-  const [courseStatus, setCourseStatus] = useState('활성');
+  const [courseIsActive, setCourseIsActive] = useState(true);
 
   useEffect(() => {
     if (open) {
@@ -153,8 +153,8 @@ export function BulkEditStudents({ open, onOpenChange, selectedStudentIds, stude
         student_id: sid,
         course_policy_id: selectedCourseId,
         teacher_id: selectedTeacherId || null,
-        start_date: format(courseStartDate, 'yyyy-MM-dd'),
-        status: courseStatus,
+        enrollment_date: format(courseStartDate, 'yyyy-MM-dd'),
+        is_active: courseIsActive,
       }));
 
       const { error } = await supabase.from('student_courses').upsert(inserts as any, { onConflict: 'student_id,course_policy_id' });
@@ -339,15 +339,10 @@ export function BulkEditStudents({ open, onOpenChange, selectedStudentIds, stude
               </Popover>
             </div>
 
-            {/* Status */}
-            <div>
-              <Label className="text-sm">수강상태</Label>
-              <Select value={courseStatus} onValueChange={setCourseStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ENROLLMENT_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            {/* Active */}
+            <div className="flex items-center gap-2">
+              <Checkbox checked={courseIsActive} onCheckedChange={(v) => setCourseIsActive(!!v)} />
+              <Label className="text-sm">수강 활성</Label>
             </div>
 
             <Button onClick={handleAssignCourse} disabled={saving} className="w-full">
