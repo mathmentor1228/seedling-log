@@ -38,8 +38,10 @@ import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentCsvImport from '@/components/StudentCsvImport';
 import StudentPinManager from '@/components/StudentPinManager';
+import { BulkEditStudents } from '@/components/admin/BulkEditStudents';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1, STUDENT-PIN-MANAGER-V1
 interface Student {
