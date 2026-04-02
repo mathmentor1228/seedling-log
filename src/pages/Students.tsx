@@ -75,6 +75,8 @@ export default function Students() {
   const [statusFilter, setStatusFilter] = useState<string>('재학');
   const [schoolLevelFilter, setSchoolLevelFilter] = useState<string>('all');
   const [gradeYearFilter, setGradeYearFilter] = useState<string>('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
     name: '',
