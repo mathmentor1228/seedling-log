@@ -117,7 +117,7 @@ export function VocabTestAssignManager() {
   const loadData = async () => {
     setLoading(true);
     const [studentsRes, setsRes, foldersRes, assignRes] = await Promise.all([
-      supabase.from('students').select('id, name, grade').in('enrollment_status', ['재원', '재원예정']).order('name'),
+      supabase.from('students').select('id, name, grade').in('enrollment_status', ['재학']).order('name'),
       supabase.from('vocab_word_sets').select('id, title, round_number, folder_id').order('round_number'),
       supabase.from('vocab_folders').select('id, name, parent_id').order('sort_order'),
       supabase.from('vocab_test_assignments').select('*').order('assigned_at', { ascending: false }).limit(200),

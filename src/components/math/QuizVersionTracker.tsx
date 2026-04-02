@@ -69,7 +69,7 @@ export function QuizVersionTracker() {
         .order('created_at', { ascending: false }) as any,
       supabase.from('math_quiz_assignments').select('id, quiz_id, student_id, assigned_at') as any,
       supabase.from('math_quiz_submissions').select('id, quiz_id, student_id, ai_total_score, ai_total_questions, status, submitted_at') as any,
-      supabase.from('students').select('id, name, grade').in('enrollment_status', ['재원', '재원예정']) as any,
+      supabase.from('students').select('id, name, grade').in('enrollment_status', ['재학']) as any,
     ]);
 
     if (versionsRes.data) setVersions(versionsRes.data);

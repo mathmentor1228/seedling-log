@@ -30,7 +30,7 @@ export function UnvisitedParentsList() {
     const { data: allStudents } = await supabase
       .from('students')
       .select('id, name, grade, parent_name, parent_phone, parent_token')
-      .in('enrollment_status', ['재원', '재원예정'])
+      .in('enrollment_status', ['재학'])
       .not('parent_token', 'is', null);
 
     if (!allStudents || allStudents.length === 0) {

@@ -219,7 +219,7 @@ export function MathQuizAssignManager({ quizzes, onQuizDeleted }: Props) {
     setLoading(true);
     const [studentsRes, groupsRes, assignRes] = await Promise.all([
       supabase.from('students').select('id, name, school_level, grade_year, grade, enrollment_status')
-        .in('enrollment_status', ['재원', '재원예정']) as any,
+        .in('enrollment_status', ['재학']) as any,
       supabase.from('math_student_groups').select('id, name, created_at, math_student_group_members(student_id)') as any,
       supabase.from('math_quiz_assignments').select('id, quiz_id, student_id, assigned_at') as any,
     ]);

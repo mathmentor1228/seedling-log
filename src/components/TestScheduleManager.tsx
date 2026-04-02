@@ -109,7 +109,7 @@ export function TestScheduleManager() {
       setTeachers(teacherData || []);
 
       // Get teacher's students
-      let studentQuery = supabase.from('students').select('id, name, grade, school').in('enrollment_status', ['재원', '재원예정']).order('name');
+      let studentQuery = supabase.from('students').select('id, name, grade, school').in('enrollment_status', ['재학']).order('name');
       
       // If teacher (not admin), filter to own students
       if (role === 'teacher') {
