@@ -26,6 +26,7 @@ import AdminBriefingPage from "./pages/AdminBriefingPage";
 import AdminReportPage from "./pages/AdminReportPage";
 import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
 import AdminOfficePage from "./pages/AdminOfficePage";
+import TuitionPage from "./pages/TuitionPage";
 import TextbookPage from "./pages/TextbookPage";
 import ReportStatusPage from "./pages/ReportStatusPage";
 import VocabTestPage from "./pages/VocabTestPage";
@@ -136,6 +137,7 @@ const App = () => (
                 <Route path="/admin/report" element={<AdminReportPage />} />
                 <Route path="/admin/daily" element={<AdminDailyOpsPage />} />
                 <Route path="/admin/office" element={<AdminOfficePage />} />
+                <Route path="/admin/tuition" element={<TuitionPage />} />
                 <Route path="/textbooks" element={<TextbookPage />} />
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
