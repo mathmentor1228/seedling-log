@@ -57,13 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { role: selectedRole, trialExpiresAt: expires };
   };
 
-  const fetchAssignedSubject = async (userId: string) => {
+  const fetchProfile = async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('assigned_subject')
+      .select('assigned_subject, full_name')
       .eq('id', userId)
       .single();
-    return (data as any)?.assigned_subject || null;
+    return { assignedSubject: (data as any)?.assigned_subject || null, fullName: (data as any)?.full_name || null };
   };
 
   useEffect(() => {
