@@ -39,6 +39,7 @@ import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapp
 import StudentCsvImport from '@/components/StudentCsvImport';
 import StudentPinManager from '@/components/StudentPinManager';
 import { BulkEditStudents } from '@/components/admin/BulkEditStudents';
+import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTuitionTab';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
 import { Checkbox } from '@/components/ui/checkbox';
