@@ -38,8 +38,10 @@ import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentCsvImport from '@/components/StudentCsvImport';
 import StudentPinManager from '@/components/StudentPinManager';
+import { BulkEditStudents } from '@/components/admin/BulkEditStudents';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1, STUDENT-PIN-MANAGER-V1
 interface Student {
@@ -73,6 +75,8 @@ export default function Students() {
   const [statusFilter, setStatusFilter] = useState<string>('재학');
   const [schoolLevelFilter, setSchoolLevelFilter] = useState<string>('all');
   const [gradeYearFilter, setGradeYearFilter] = useState<string>('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
     name: '',
@@ -603,6 +607,11 @@ export default function Students() {
                   ))}
                 </SelectContent>
               </Select>
+              {isAdmin(role) && selectedIds.size > 0 && (
+                <Button size="sm" className="h-7 text-xs" onClick={() => setBulkEditOpen(true)}>
+                  일괄 편집 ({selectedIds.size}명)
+                </Button>
+              )}
               <span className="ml-auto text-xs text-muted-foreground">
                 {filteredStudents.length}명
               </span>
@@ -620,25 +629,53 @@ export default function Students() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>학생코드</TableHead>
-                    <TableHead>상태</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>School</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Added</TableHead>
-                    <TableHead className="w-[120px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredStudents.map((student) => (
-                    <TableRow 
-                      key={student.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setDetailStudent(student)}
-                    >
-                      <TableCell className="font-medium">{student.name}</TableCell>
+                   <TableRow>
+                     {isAdmin(role) && (
+                       <TableHead className="w-10">
+                         <Checkbox
+                           checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.has(s.id))}
+                           onCheckedChange={(checked) => {
+                             if (checked) {
+                               setSelectedIds(new Set(filteredStudents.map(s => s.id)));
+                             } else {
+                               setSelectedIds(new Set());
+                             }
+                           }}
+                         />
+                       </TableHead>
+                     )}
+                     <TableHead>Name</TableHead>
+                     <TableHead>학생코드</TableHead>
+                     <TableHead>상태</TableHead>
+                     <TableHead>Grade</TableHead>
+                     <TableHead>School</TableHead>
+                     <TableHead>Phone</TableHead>
+                     <TableHead>Added</TableHead>
+                     <TableHead className="w-[120px]">Actions</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   {filteredStudents.map((student) => (
+                     <TableRow 
+                       key={student.id}
+                       className="cursor-pointer hover:bg-muted/50"
+                       onClick={() => setDetailStudent(student)}
+                     >
+                       {isAdmin(role) && (
+                         <TableCell onClick={e => e.stopPropagation()}>
+                           <Checkbox
+                             checked={selectedIds.has(student.id)}
+                             onCheckedChange={(checked) => {
+                               setSelectedIds(prev => {
+                                 const next = new Set(prev);
+                                 if (checked) next.add(student.id); else next.delete(student.id);
+                                 return next;
+                               });
+                             }}
+                           />
+                         </TableCell>
+                       )}
+                       <TableCell className="font-medium">{student.name}</TableCell>
                       <TableCell>
                         {student.student_code ? (
                           <code className="bg-muted px-2 py-0.5 rounded text-xs font-mono">
@@ -842,6 +879,15 @@ export default function Students() {
           )}
         </DialogContent>
       </Dialog>
+      {isAdmin(role) && (
+        <BulkEditStudents
+          open={bulkEditOpen}
+          onOpenChange={setBulkEditOpen}
+          selectedStudentIds={Array.from(selectedIds)}
+          studentNames={Object.fromEntries(students.map(s => [s.id, s.name]))}
+          onUpdated={() => { fetchStudents(); setSelectedIds(new Set()); setBulkEditOpen(false); }}
+        />
+      )}
     </div>
   );
 }
