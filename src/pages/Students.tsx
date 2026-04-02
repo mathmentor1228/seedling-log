@@ -681,6 +681,12 @@ export default function Students() {
                        </TableHead>
                      )}
                      <TableHead>Name</TableHead>
+                     <TableHead
+                       className="cursor-pointer select-none"
+                       onClick={() => setSortByDueDay(!sortByDueDay)}
+                     >
+                       납부일 {sortByDueDay ? '▲' : ''}
+                     </TableHead>
                      <TableHead>학생코드</TableHead>
                      <TableHead>상태</TableHead>
                      <TableHead>Grade</TableHead>
