@@ -718,7 +718,14 @@ export default function Students() {
                            />
                          </TableCell>
                        )}
-                       <TableCell className="font-medium">{student.name}</TableCell>
+                        <TableCell className="font-medium">{student.name}</TableCell>
+                        <TableCell>
+                          {student.payment_due_day ? (
+                            <Badge variant="outline" className="text-xs font-mono">{student.payment_due_day}일</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
                       <TableCell>
                         {student.student_code ? (
                           <code className="bg-muted px-2 py-0.5 rounded text-xs font-mono">
