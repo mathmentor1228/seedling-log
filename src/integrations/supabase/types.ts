@@ -2981,10 +2981,10 @@ export type Database = {
           course_policy_id: string
           created_at: string
           end_date: string | null
+          enrollment_date: string
           id: string
+          is_active: boolean
           notes: string | null
-          start_date: string
-          status: string
           student_id: string
           teacher_id: string | null
           updated_at: string
@@ -2993,10 +2993,10 @@ export type Database = {
           course_policy_id: string
           created_at?: string
           end_date?: string | null
+          enrollment_date: string
           id?: string
+          is_active?: boolean
           notes?: string | null
-          start_date: string
-          status?: string
           student_id: string
           teacher_id?: string | null
           updated_at?: string
@@ -3005,10 +3005,10 @@ export type Database = {
           course_policy_id?: string
           created_at?: string
           end_date?: string | null
+          enrollment_date?: string
           id?: string
+          is_active?: boolean
           notes?: string | null
-          start_date?: string
-          status?: string
           student_id?: string
           teacher_id?: string | null
           updated_at?: string
