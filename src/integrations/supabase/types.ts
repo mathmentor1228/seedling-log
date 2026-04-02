@@ -2964,6 +2964,138 @@ export type Database = {
           },
         ]
       }
+      school_files: {
+        Row: {
+          ai_extracted_data: Json | null
+          ai_extraction_status: string | null
+          created_at: string | null
+          created_by: string | null
+          extracted_count: number | null
+          file_name: string
+          file_type: string
+          file_url: string
+          id: string
+          school_name: string
+          subject_filter: string | null
+        }
+        Insert: {
+          ai_extracted_data?: Json | null
+          ai_extraction_status?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          extracted_count?: number | null
+          file_name: string
+          file_type: string
+          file_url: string
+          id?: string
+          school_name: string
+          subject_filter?: string | null
+        }
+        Update: {
+          ai_extracted_data?: Json | null
+          ai_extraction_status?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          extracted_count?: number | null
+          file_name?: string
+          file_type?: string
+          file_url?: string
+          id?: string
+          school_name?: string
+          subject_filter?: string | null
+        }
+        Relationships: []
+      }
+      school_schedules: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          grade: number | null
+          id: string
+          is_ai_extracted: boolean | null
+          schedule_type: string
+          school_name: string
+          source_file_url: string | null
+          start_date: string | null
+          subject: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          grade?: number | null
+          id?: string
+          is_ai_extracted?: boolean | null
+          schedule_type?: string
+          school_name: string
+          source_file_url?: string | null
+          start_date?: string | null
+          subject?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          grade?: number | null
+          id?: string
+          is_ai_extracted?: boolean | null
+          schedule_type?: string
+          school_name?: string
+          source_file_url?: string | null
+          start_date?: string | null
+          subject?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
+      school_textbooks: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          grade: number | null
+          id: string
+          is_ai_extracted: boolean | null
+          publisher: string | null
+          school_name: string
+          source_file_url: string | null
+          subject: string
+          textbook_name: string | null
+          year: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          grade?: number | null
+          id?: string
+          is_ai_extracted?: boolean | null
+          publisher?: string | null
+          school_name: string
+          source_file_url?: string | null
+          subject: string
+          textbook_name?: string | null
+          year?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          grade?: number | null
+          id?: string
+          is_ai_extracted?: boolean | null
+          publisher?: string | null
+          school_name?: string
+          source_file_url?: string | null
+          subject?: string
+          textbook_name?: string | null
+          year?: number | null
+        }
+        Relationships: []
+      }
       self_study_records: {
         Row: {
           assistant_attendance: boolean | null

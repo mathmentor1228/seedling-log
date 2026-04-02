@@ -92,7 +92,7 @@ export function NewStudentOnboarding() {
   const [students, setStudents] = useState<NewStudent[]>([]);
   const [checks, setChecks] = useState<OnboardingCheck[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [userName, setUserName] = useState('');
 
   const fetchData = useCallback(async () => {
@@ -179,6 +179,7 @@ export function NewStudentOnboarding() {
   const completedCount = students.filter(s =>
     CHECKLIST_ITEMS.every(item => isChecked(s.id, item.key))
   ).length;
+  const incompleteCount = students.length - completedCount;
 
   return (
     <Card className="border-primary/15 shadow-sm">
@@ -201,9 +202,9 @@ export function NewStudentOnboarding() {
                     <CheckCircle2 className="w-3 h-3" /> 완료
                   </Badge>
                 )}
-                {completedCount < students.length && (
-                  <Badge variant="secondary" className="text-[10px] font-medium">
-                    {completedCount}/{students.length}
+                {incompleteCount > 0 && (
+                  <Badge variant="destructive" className="text-[10px] font-bold min-w-[20px] justify-center">
+                    {incompleteCount}
                   </Badge>
                 )}
                 <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
