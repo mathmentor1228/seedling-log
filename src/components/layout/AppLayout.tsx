@@ -37,7 +37,7 @@ import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
 import { BrandFooter } from '@/components/layout/BrandFooter';
-import { AttendanceWidget } from '@/components/layout/AttendanceWidget';
+import { BrandFooter } from '@/components/layout/BrandFooter';
 import { FloatingAttendanceWidget } from '@/components/layout/FloatingAttendanceWidget';
 
 interface AppLayoutProps {
