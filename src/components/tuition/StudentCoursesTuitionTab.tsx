@@ -306,10 +306,10 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
             </div>
             <div>
               <Label className="text-sm">담당 선생님</Label>
-              <Select value={formTeacherId} onValueChange={setFormTeacherId}>
+              <Select value={formTeacherId || 'none'} onValueChange={v => setFormTeacherId(v === 'none' ? '' : v)}>
                 <SelectTrigger><SelectValue placeholder="선택 (선택사항)" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">미배정</SelectItem>
+                  <SelectItem value="none">미배정</SelectItem>
                   {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}
                 </SelectContent>
               </Select>
