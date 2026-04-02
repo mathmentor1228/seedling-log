@@ -92,7 +92,7 @@ export function NewStudentOnboarding() {
   const [students, setStudents] = useState<NewStudent[]>([]);
   const [checks, setChecks] = useState<OnboardingCheck[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [userName, setUserName] = useState('');
 
   const fetchData = useCallback(async () => {
