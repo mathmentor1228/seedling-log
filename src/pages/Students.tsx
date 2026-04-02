@@ -685,6 +685,7 @@ export default function Students() {
                      <TableHead>Phone</TableHead>
                      <TableHead>수강료</TableHead>
                      <TableHead>Added</TableHead>
+                     <TableHead className="w-[120px]">Actions</TableHead>
                    </TableRow>
                  </TableHeader>
                  <TableBody>
