@@ -81,7 +81,7 @@ const TEACHER_MULTI_SUBJECT_MAP: Record<string, string[]> = {
   '정선호': ['수학'],
 };
 
-const getNavStructure = (assignedSubject: string | null, role: string | null, userEmail: string | null): NavEntry[] => {
+const getNavStructure = (assignedSubject: string | null, role: string | null, userEmail: string | null, fullName: string | null): NavEntry[] => {
   const allSubjects = [
     { label: '수학', href: '/materials/math', icon: <FolderOpen className="w-4 h-4" /> },
     { label: '영어', href: '/materials/english', icon: <FolderOpen className="w-4 h-4" /> },
@@ -89,13 +89,30 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     { label: '과학', href: '/materials/science', icon: <FolderOpen className="w-4 h-4" /> },
   ];
 
-  // Admin sees all subjects; teacher sees only assigned subject; assistant sees all
-  const visibleSubjects = (role === 'admin' || role === 'assistant')
-    ? allSubjects
-    : allSubjects.filter(s => {
-        if (!assignedSubject) return false;
-        return s.href === `/materials/${SUBJECT_KEY_MAP[assignedSubject] || ''}`;
-      });
+  // Admin/assistant sees all subjects
+  // Teacher: check multi-subject map first, then fallback to assigned_subject
+  let visibleSubjects = allSubjects;
+  if (role === 'teacher') {
+    // Find matching subjects from teacher name map
+    const matchedSubjects: string[] = [];
+    if (fullName) {
+      for (const [nameKey, subjects] of Object.entries(TEACHER_MULTI_SUBJECT_MAP)) {
+        if (fullName.includes(nameKey)) {
+          matchedSubjects.push(...subjects);
+        }
+      }
+    }
+    // Fallback to assignedSubject if no name match
+    if (matchedSubjects.length === 0 && assignedSubject) {
+      matchedSubjects.push(assignedSubject);
+    }
+    const uniqueSubjects = [...new Set(matchedSubjects)];
+    visibleSubjects = allSubjects.filter(s => 
+      uniqueSubjects.some(sub => s.href === `/materials/${SUBJECT_KEY_MAP[sub] || ''}`)
+    );
+  } else if (role !== 'admin' && role !== 'assistant') {
+    visibleSubjects = [];
+  }
 
   const materialGroup: NavEntry[] = visibleSubjects.length > 0
     ? [{
