@@ -90,7 +90,7 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
 
     const today = startOfDay(new Date());
     const start = startOfDay(startDate);
-    const enrollmentStatus = isAfter(start, today) ? '재원예정' : '재원';
+    const enrollmentStatus = isAfter(start, today) ? '재학' : '재학';
     const normalizedParentPhone = normalizePhone(parentPhone);
     const normalizedStudentPhone = normalizePhone(studentPhone);
 
@@ -224,9 +224,9 @@ export function NewStudentRegistration({ open, onOpenChange, userName, onCreated
     }
 
     toast.success(
-      enrollmentStatus === '재원예정'
-        ? `${studentName} 학생이 '재원예정'으로 등록되었습니다`
-        : `${studentName} 학생이 '재원'으로 등록되었습니다`
+      enrollmentStatus === '재학'
+        ? `${studentName} 학생이 '재학'으로 등록되었습니다`
+        : `${studentName} 학생이 '재학'으로 등록되었습니다`
     );
 
     setCreated(true);
@@ -411,7 +411,7 @@ ${studentPageUrl}
               </Popover>
               {startDate && (
                 <Badge variant={isAfter(startOfDay(startDate), startOfDay(new Date())) ? 'secondary' : 'default'} className="mt-1.5">
-                  {isAfter(startOfDay(startDate), startOfDay(new Date())) ? '재원예정' : '재원'}
+                  {isAfter(startOfDay(startDate), startOfDay(new Date())) ? '재학' : '재학'}
                 </Badge>
               )}
             </div>
@@ -463,7 +463,7 @@ ${studentPageUrl}
                 <p>수강과목: {subjectsText} / 담당: {assigneeText}</p>
                 <p>시작일: {startDate ? format(startDate, 'yyyy-MM-dd') : '-'}</p>
                 <p>등록상태: <Badge variant={isAfter(startOfDay(startDate!), startOfDay(new Date())) ? 'secondary' : 'default'} className="ml-1">
-                  {isAfter(startOfDay(startDate!), startOfDay(new Date())) ? '재원예정' : '재원'}
+                  {isAfter(startOfDay(startDate!), startOfDay(new Date())) ? '재학' : '재학'}
                 </Badge></p>
               </div>
             </Card>

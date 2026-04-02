@@ -70,7 +70,7 @@ export default function Students() {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   // Filters
-  const [statusFilter, setStatusFilter] = useState<string>('재원');
+  const [statusFilter, setStatusFilter] = useState<string>('재학');
   const [schoolLevelFilter, setSchoolLevelFilter] = useState<string>('all');
   const [gradeYearFilter, setGradeYearFilter] = useState<string>('all');
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
@@ -81,7 +81,7 @@ export default function Students() {
     grade: '',
     school_level: '',
     grade_year: '',
-    enrollment_status: '재원',
+    enrollment_status: '재학',
     notes: '',
     school: '',
     parent_phone: '',
@@ -172,7 +172,7 @@ export default function Students() {
         grade: formData.grade.trim() || null,
         school_level: formData.school_level || null,
         grade_year: formData.grade_year ? parseInt(formData.grade_year) : null,
-        enrollment_status: formData.enrollment_status || '재원',
+        enrollment_status: formData.enrollment_status || '재학',
         notes: formData.notes.trim() || null,
         school: formData.school.trim() || null,
         parent_phone: normalizedParentPhone || null,
@@ -232,7 +232,7 @@ export default function Students() {
       grade: '',
       school_level: '',
       grade_year: '',
-      enrollment_status: '재원',
+      enrollment_status: '재학',
       notes: '',
       school: '',
       parent_phone: '',
@@ -250,7 +250,7 @@ export default function Students() {
       grade: student.grade || '',
       school_level: student.school_level || '',
       grade_year: student.grade_year?.toString() || '',
-      enrollment_status: student.enrollment_status || '재원',
+      enrollment_status: student.enrollment_status || '재학',
       notes: student.notes || '',
       school: student.school || '',
       parent_phone: student.parent_phone || '',
@@ -567,7 +567,7 @@ export default function Students() {
             {/* Filters row */}
             <div className="flex items-center gap-2 flex-wrap">
               {/* Status filter chips */}
-              {['재원', '휴원', '퇴원', 'all'].map((s) => (
+              {['재학', '휴학', '퇴원', 'all'].map((s) => (
                 <Button
                   key={s}
                   variant={statusFilter === s ? 'default' : 'outline'}
@@ -651,18 +651,18 @@ export default function Students() {
                       <TableCell>
                         <Badge
                           variant={
-                            student.enrollment_status === '재원' ? 'default' :
-                            student.enrollment_status === '휴원' ? 'secondary' : 'outline'
+                            student.enrollment_status === '재학' ? 'default' :
+                            student.enrollment_status === '휴학' ? 'secondary' : 'outline'
                           }
                           className={
                             student.enrollment_status === '퇴원'
                               ? 'text-muted-foreground border-muted-foreground/30'
-                              : student.enrollment_status === '휴원'
+                              : student.enrollment_status === '휴학'
                               ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
                               : ''
                           }
                         >
-                          {student.enrollment_status || '재원'}
+                          {student.enrollment_status || '재학'}
                         </Badge>
                       </TableCell>
                       <TableCell>{student.grade || '-'}</TableCell>
