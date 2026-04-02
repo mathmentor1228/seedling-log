@@ -61,6 +61,8 @@ interface DraftRecord {
   test_result: string | null;
   test_result_text: string | null;
   lesson_types: string[] | null;
+  learning_issues: string[] | null;
+  learning_issues_note: string | null;
 }
 
 interface HomeworkItem {
