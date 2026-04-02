@@ -281,7 +281,28 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       setNextLessonGoal(first.next_lesson_goal || '');
       // Pre-fill test content from existing data
       setTestContent(first.test_content || first.test_name || '');
+      setBatchLessonTypes(first.lesson_types?.length ? first.lesson_types : ['정규수업']);
     }
+
+    // Pre-fill per-student data from each selected draft's existing values
+    const selectedDrafts = drafts.filter(d => selectedIds.has(d.id));
+    const perRange: Record<string, string> = {};
+    const perScore: Record<string, number> = {};
+    const perHw: Record<string, string> = {};
+    const perTypes: Record<string, string[]> = {};
+    const perIssueNote: Record<string, string> = {};
+    for (const d of selectedDrafts) {
+      if (d.lesson_range) perRange[d.id] = d.lesson_range;
+      if (d.understanding_score != null) perScore[d.id] = d.understanding_score;
+      if (d.homework_status) perHw[d.id] = d.homework_status;
+      if (d.lesson_types?.length) perTypes[d.id] = d.lesson_types;
+    }
+    setPerStudentLessonRange(perRange);
+    setPerStudentScore(perScore);
+    setPerStudentHomework(perHw);
+    setPerStudentLessonTypes(perTypes);
+    setPerStudentIssuesNote(perIssueNote);
+
     setStep('edit');
   }
 
