@@ -611,6 +611,39 @@ export type Database = {
         }
         Relationships: []
       }
+      course_policies: {
+        Row: {
+          course_name: string
+          created_at: string
+          description: string | null
+          grade_target: string
+          id: string
+          monthly_fee: number
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          course_name: string
+          created_at?: string
+          description?: string | null
+          grade_target: string
+          id?: string
+          monthly_fee: number
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          course_name?: string
+          created_at?: string
+          description?: string | null
+          grade_target?: string
+          id?: string
+          monthly_fee?: number
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       curriculum_map: {
         Row: {
           course: string
