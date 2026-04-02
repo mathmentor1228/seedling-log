@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -287,10 +287,10 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
       )}
 
       {/* Add course dialog */}
-      <Dialog open={showAddCourse} onOpenChange={setShowAddCourse}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>수강과정 추가 - {studentName}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
+      <Sheet open={showAddCourse} onOpenChange={setShowAddCourse}>
+        <SheetContent side="right" className="w-[360px] sm:w-[400px]">
+          <SheetHeader><SheetTitle>수강과정 추가 - {studentName}</SheetTitle></SheetHeader>
+          <div className="space-y-3 mt-4">
             <div>
               <Label className="text-sm">과정 *</Label>
               <Select value={formCourseId} onValueChange={setFormCourseId}>
@@ -336,8 +336,8 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}추가
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
