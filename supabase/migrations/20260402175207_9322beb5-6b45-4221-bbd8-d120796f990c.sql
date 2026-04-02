@@ -1,0 +1,6 @@
+ALTER TABLE public.students
+  ADD COLUMN IF NOT EXISTS registration_date DATE,
+  ADD COLUMN IF NOT EXISTS sibling_group_id INTEGER,
+  ADD COLUMN IF NOT EXISTS payment_due_day INTEGER NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS emergency_contact TEXT,
+  ADD COLUMN IF NOT EXISTS tuition_memo TEXT;
