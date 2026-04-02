@@ -153,7 +153,7 @@ export function VocabSettingsPanel() {
       supabase
         .from('students')
         .select('id, name, grade, school')
-        .in('enrollment_status', ['재원', '재원예정'])
+        .in('enrollment_status', ['재학'])
         .order('name'),
     ]);
 

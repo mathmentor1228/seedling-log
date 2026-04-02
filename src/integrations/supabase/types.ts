@@ -3178,6 +3178,7 @@ export type Database = {
       }
       students: {
         Row: {
+          course_status: string
           created_at: string
           email: string | null
           enrollment_status: string
@@ -3200,6 +3201,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          course_status?: string
           created_at?: string
           email?: string | null
           enrollment_status?: string
@@ -3222,6 +3224,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          course_status?: string
           created_at?: string
           email?: string | null
           enrollment_status?: string

@@ -12,7 +12,7 @@ export type GradeTarget = (typeof GRADE_TARGETS)[number];
 export const STUDENT_STATUSES = ['재학', '휴학', '퇴원'] as const;
 export type StudentStatus = (typeof STUDENT_STATUSES)[number];
 
-/** Active student statuses (used for roster filtering — excludes 퇴원) */
+/** Active student statuses (used for roster filtering — excludes 퇴원/휴학) */
 export const ACTIVE_STUDENT_STATUSES: StudentStatus[] = ['재학'];
 
 /** Option Set 4: Enrollment Status (수강상태) */

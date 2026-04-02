@@ -55,7 +55,7 @@ export default function HomeworkStatsSection() {
     if (hwErr) { console.error(hwErr); setLoading(false); return; }
 
     // Fetch students and teachers
-    const { data: students } = await supabase.from('students').select('id, name, grade').in('enrollment_status', ['재원', '재원예정']);
+    const { data: students } = await supabase.from('students').select('id, name, grade').in('enrollment_status', ['재학']);
     const { data: profiles } = await supabase.from('profiles').select('id, full_name');
 
     const studentMap = new Map((students || []).map(s => [s.id, s]));

@@ -124,7 +124,7 @@ export function UnifiedRecordModal({
     const { data } = await supabase
       .from('students')
       .select('id, name')
-      .eq('enrollment_status', '재원')
+      .eq('enrollment_status', '재학')
       .order('name');
     setStudents(data || []);
   }
