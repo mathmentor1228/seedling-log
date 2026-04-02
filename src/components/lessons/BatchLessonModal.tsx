@@ -205,6 +205,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         test_result: r.test_result,
         test_result_text: r.test_result_text,
         lesson_types: r.lesson_types,
+        learning_issues: r.learning_issues,
+        learning_issues_note: r.learning_issues_note,
       }));
       setDrafts(records);
       setSelectedIds(new Set());
