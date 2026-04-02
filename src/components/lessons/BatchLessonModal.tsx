@@ -286,6 +286,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       // Pre-fill test content from existing data
       setTestContent(first.test_content || first.test_name || '');
       setBatchLessonTypes(first.lesson_types?.length ? first.lesson_types : ['정규수업']);
+      // Pre-fill learning issues from first record
+      if (first.learning_issues?.length) setLearningIssues(first.learning_issues);
+      if (first.learning_issues_note) setLearningIssuesNote(first.learning_issues_note);
     }
 
     // Pre-fill per-student data from each selected draft's existing values
@@ -300,6 +303,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       if (d.understanding_score != null) perScore[d.id] = d.understanding_score;
       if (d.homework_status) perHw[d.id] = d.homework_status;
       if (d.lesson_types?.length) perTypes[d.id] = d.lesson_types;
+      if (d.learning_issues_note) perIssueNote[d.id] = d.learning_issues_note;
     }
     setPerStudentLessonRange(perRange);
     setPerStudentScore(perScore);
