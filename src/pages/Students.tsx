@@ -775,21 +775,26 @@ export default function Students() {
           
           {detailStudent && (
             <Tabs defaultValue="info" className="mt-4">
-              <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-4' : 'grid-cols-2'}`}>
+              <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-5' : 'grid-cols-2'}`}>
                 <TabsTrigger value="info">기본정보</TabsTrigger>
+                {isAdmin(role) && (
+                  <TabsTrigger value="tuition" className="gap-1">
+                    <Wallet className="w-3.5 h-3.5" />수강/수강료
+                  </TabsTrigger>
+                )}
                 {(isAdmin(role) || isTeacher(role)) && (
                   <TabsTrigger value="slots">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    수업 슬롯
+                    <Calendar className="w-4 h-4 mr-1" />
+                    슬롯
                   </TabsTrigger>
                 )}
                 {isAdmin(role) && (
-                  <TabsTrigger value="subject-teachers">과목별 담당</TabsTrigger>
+                  <TabsTrigger value="subject-teachers">과목담당</TabsTrigger>
                 )}
                 {isAdmin(role) && (
                   <TabsTrigger value="pin-manager">
-                    <Key className="w-4 h-4 mr-2" />
-                    앱 계정
+                    <Key className="w-3.5 h-3.5 mr-1" />
+                    앱계정
                   </TabsTrigger>
                 )}
               </TabsList>
