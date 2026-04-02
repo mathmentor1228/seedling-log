@@ -683,8 +683,8 @@ export default function Students() {
                      <TableHead>Grade</TableHead>
                      <TableHead>School</TableHead>
                      <TableHead>Phone</TableHead>
+                     <TableHead>수강료</TableHead>
                      <TableHead>Added</TableHead>
-                     <TableHead className="w-[120px]">Actions</TableHead>
                    </TableRow>
                  </TableHeader>
                  <TableBody>
