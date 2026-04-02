@@ -26,6 +26,7 @@ import AdminBriefingPage from "./pages/AdminBriefingPage";
 import AdminReportPage from "./pages/AdminReportPage";
 import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
 import AdminOfficePage from "./pages/AdminOfficePage";
+import TuitionPage from "./pages/TuitionPage";
 import TextbookPage from "./pages/TextbookPage";
 import ReportStatusPage from "./pages/ReportStatusPage";
 import VocabTestPage from "./pages/VocabTestPage";
