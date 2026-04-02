@@ -60,6 +60,7 @@ interface Student {
   parent_name: string | null;
   student_phone: string | null;
   student_code: string | null;
+  payment_due_day: number | null;
   created_at: string;
 }
 
@@ -78,6 +79,7 @@ export default function Students() {
   const [gradeYearFilter, setGradeYearFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [sortByDueDay, setSortByDueDay] = useState(true);
   const [tuitionSummary, setTuitionSummary] = useState<Record<string, { courses: number; monthlyFee: number; unpaid: number }>>({});
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
@@ -357,7 +359,6 @@ export default function Students() {
   };
 
   const filteredStudents = students.filter((student) => {
-    // Text search - includes name, email, grade, school, phone numbers
     const q = searchQuery.toLowerCase().replace(/\D/g, '') || searchQuery.toLowerCase();
     const qRaw = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery || 
@@ -370,14 +371,16 @@ export default function Students() {
       (student.student_phone && normalizePhone(student.student_phone).includes(q)) ||
       (student.student_code?.toLowerCase().includes(qRaw));
     if (!matchesSearch) return false;
-
-    // School level filter
     if (schoolLevelFilter !== 'all' && student.school_level !== schoolLevelFilter) return false;
-
-    // Grade year filter
     if (gradeYearFilter !== 'all' && student.grade_year?.toString() !== gradeYearFilter) return false;
-
     return true;
+  }).sort((a, b) => {
+    if (sortByDueDay) {
+      const da = a.payment_due_day ?? 99;
+      const db = b.payment_due_day ?? 99;
+      if (da !== db) return da - db;
+    }
+    return a.name.localeCompare(b.name, 'ko');
   });
 
   if (loading) {
@@ -678,6 +681,12 @@ export default function Students() {
                        </TableHead>
                      )}
                      <TableHead>Name</TableHead>
+                     <TableHead
+                       className="cursor-pointer select-none"
+                       onClick={() => setSortByDueDay(!sortByDueDay)}
+                     >
+                       납부일 {sortByDueDay ? '▲' : ''}
+                     </TableHead>
                      <TableHead>학생코드</TableHead>
                      <TableHead>상태</TableHead>
                      <TableHead>Grade</TableHead>
@@ -709,7 +718,14 @@ export default function Students() {
                            />
                          </TableCell>
                        )}
-                       <TableCell className="font-medium">{student.name}</TableCell>
+                        <TableCell className="font-medium">{student.name}</TableCell>
+                        <TableCell>
+                          {student.payment_due_day ? (
+                            <Badge variant="outline" className="text-xs font-mono">{student.payment_due_day}일</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
                       <TableCell>
                         {student.student_code ? (
                           <code className="bg-muted px-2 py-0.5 rounded text-xs font-mono">
