@@ -359,7 +359,6 @@ export default function Students() {
   };
 
   const filteredStudents = students.filter((student) => {
-    // Text search - includes name, email, grade, school, phone numbers
     const q = searchQuery.toLowerCase().replace(/\D/g, '') || searchQuery.toLowerCase();
     const qRaw = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery || 
@@ -372,14 +371,16 @@ export default function Students() {
       (student.student_phone && normalizePhone(student.student_phone).includes(q)) ||
       (student.student_code?.toLowerCase().includes(qRaw));
     if (!matchesSearch) return false;
-
-    // School level filter
     if (schoolLevelFilter !== 'all' && student.school_level !== schoolLevelFilter) return false;
-
-    // Grade year filter
     if (gradeYearFilter !== 'all' && student.grade_year?.toString() !== gradeYearFilter) return false;
-
     return true;
+  }).sort((a, b) => {
+    if (sortByDueDay) {
+      const da = a.payment_due_day ?? 99;
+      const db = b.payment_due_day ?? 99;
+      if (da !== db) return da - db;
+    }
+    return a.name.localeCompare(b.name, 'ko');
   });
 
   if (loading) {
