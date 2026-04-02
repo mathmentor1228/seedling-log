@@ -139,14 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setRole(null);
     setTrialExpiresAt(null);
-    setAssignedSubject(null);
+      setAssignedSubject(null);
+      setFullName(null);
   };
 
   const isTrial = !!trialExpiresAt;
   const isTrialExpired = isTrial && new Date(trialExpiresAt) < new Date();
 
   return (
-    <AuthContext.Provider value={{ user, session, role, assignedSubject, loading, isTrial, trialExpiresAt, isTrialExpired, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, role, assignedSubject, fullName, loading, isTrial, trialExpiresAt, isTrialExpired, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
