@@ -1,12 +1,12 @@
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { SchoolExamArchive } from '@/components/SchoolExamArchive';
+import { SchoolExamArchiveNew } from '@/components/exam-archive/SchoolExamArchiveNew';
 
 export default function SchoolExamArchivePage() {
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
       <AppLayout>
-        <SchoolExamArchive />
+        <SchoolExamArchiveNew />
       </AppLayout>
     </ProtectedRoute>
   );
