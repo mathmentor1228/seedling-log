@@ -339,15 +339,10 @@ export function BulkEditStudents({ open, onOpenChange, selectedStudentIds, stude
               </Popover>
             </div>
 
-            {/* Status */}
-            <div>
-              <Label className="text-sm">수강상태</Label>
-              <Select value={courseStatus} onValueChange={setCourseStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ENROLLMENT_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            {/* Active */}
+            <div className="flex items-center gap-2">
+              <Checkbox checked={courseIsActive} onCheckedChange={(v) => setCourseIsActive(!!v)} />
+              <Label className="text-sm">수강 활성</Label>
             </div>
 
             <Button onClick={handleAssignCourse} disabled={saving} className="w-full">
