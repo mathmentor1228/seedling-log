@@ -86,7 +86,7 @@ export function BulkEditStudents({ open, onOpenChange, selectedStudentIds, stude
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [courseStartDate, setCourseStartDate] = useState<Date | undefined>();
-  const [courseStatus, setCourseStatus] = useState('활성');
+  const [courseIsActive, setCourseIsActive] = useState(true);
 
   useEffect(() => {
     if (open) {
