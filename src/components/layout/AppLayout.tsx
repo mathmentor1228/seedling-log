@@ -71,6 +71,16 @@ const SUBJECT_KEY_MAP: Record<string, string> = {
   '과학': 'science',
 };
 
+// Teacher name → list of subjects they can access
+const TEACHER_MULTI_SUBJECT_MAP: Record<string, string[]> = {
+  '최윤기': ['수학', '과학'],
+  '민희': ['영어'],
+  '미정': ['영어'],
+  '준희': ['국어'],
+  '이나연': ['수학'],
+  '정선호': ['수학'],
+};
+
 const getNavStructure = (assignedSubject: string | null, role: string | null, userEmail: string | null): NavEntry[] => {
   const allSubjects = [
     { label: '수학', href: '/materials/math', icon: <FolderOpen className="w-4 h-4" /> },
