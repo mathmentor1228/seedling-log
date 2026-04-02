@@ -855,7 +855,15 @@ export default function Students() {
                 )}
               </TabsContent>
               
-              {(isAdmin(role) || isTeacher(role)) && (
+              {isAdmin(role) && (
+                <TabsContent value="tuition" className="mt-4">
+                  <StudentCoursesTuitionTab
+                    studentId={detailStudent.id}
+                    studentName={detailStudent.name}
+                  />
+                </TabsContent>
+              )}
+              
                 <TabsContent value="slots" className="mt-4">
                   <StudentSlotAssignment
                     studentId={detailStudent.id}
