@@ -202,9 +202,9 @@ export function NewStudentOnboarding() {
                     <CheckCircle2 className="w-3 h-3" /> 완료
                   </Badge>
                 )}
-                {completedCount < students.length && (
-                  <Badge variant="secondary" className="text-[10px] font-medium">
-                    {completedCount}/{students.length}
+                {incompleteCount > 0 && (
+                  <Badge variant="destructive" className="text-[10px] font-bold min-w-[20px] justify-center">
+                    {incompleteCount}
                   </Badge>
                 )}
                 <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
