@@ -74,13 +74,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (session?.user) {
           setTimeout(() => {
-            Promise.all([
+          Promise.all([
               fetchUserRole(session.user.id),
-              fetchAssignedSubject(session.user.id),
-            ]).then(([result, subject]) => {
+              fetchProfile(session.user.id),
+            ]).then(([result, profile]) => {
               setRole(result.role);
               setTrialExpiresAt(result.trialExpiresAt);
-              setAssignedSubject(subject);
+              setAssignedSubject(profile.assignedSubject);
+              setFullName(profile.fullName);
             });
           }, 0);
         } else {
