@@ -878,6 +878,7 @@ export default function Students() {
             </Tabs>
           )}
         </DialogContent>
+      </Dialog>
       {isAdmin(role) && (
         <BulkEditStudents
           open={bulkEditOpen}
