@@ -607,6 +607,11 @@ export default function Students() {
                   ))}
                 </SelectContent>
               </Select>
+              {isAdmin(role) && selectedIds.size > 0 && (
+                <Button size="sm" className="h-7 text-xs" onClick={() => setBulkEditOpen(true)}>
+                  일괄 편집 ({selectedIds.size}명)
+                </Button>
+              )}
               <span className="ml-auto text-xs text-muted-foreground">
                 {filteredStudents.length}명
               </span>
