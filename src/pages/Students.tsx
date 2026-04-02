@@ -629,25 +629,53 @@ export default function Students() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>학생코드</TableHead>
-                    <TableHead>상태</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>School</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Added</TableHead>
-                    <TableHead className="w-[120px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredStudents.map((student) => (
-                    <TableRow 
-                      key={student.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setDetailStudent(student)}
-                    >
-                      <TableCell className="font-medium">{student.name}</TableCell>
+                   <TableRow>
+                     {isAdmin(role) && (
+                       <TableHead className="w-10">
+                         <Checkbox
+                           checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.has(s.id))}
+                           onCheckedChange={(checked) => {
+                             if (checked) {
+                               setSelectedIds(new Set(filteredStudents.map(s => s.id)));
+                             } else {
+                               setSelectedIds(new Set());
+                             }
+                           }}
+                         />
+                       </TableHead>
+                     )}
+                     <TableHead>Name</TableHead>
+                     <TableHead>학생코드</TableHead>
+                     <TableHead>상태</TableHead>
+                     <TableHead>Grade</TableHead>
+                     <TableHead>School</TableHead>
+                     <TableHead>Phone</TableHead>
+                     <TableHead>Added</TableHead>
+                     <TableHead className="w-[120px]">Actions</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   {filteredStudents.map((student) => (
+                     <TableRow 
+                       key={student.id}
+                       className="cursor-pointer hover:bg-muted/50"
+                       onClick={() => setDetailStudent(student)}
+                     >
+                       {isAdmin(role) && (
+                         <TableCell onClick={e => e.stopPropagation()}>
+                           <Checkbox
+                             checked={selectedIds.has(student.id)}
+                             onCheckedChange={(checked) => {
+                               setSelectedIds(prev => {
+                                 const next = new Set(prev);
+                                 if (checked) next.add(student.id); else next.delete(student.id);
+                                 return next;
+                               });
+                             }}
+                           />
+                         </TableCell>
+                       )}
+                       <TableCell className="font-medium">{student.name}</TableCell>
                       <TableCell>
                         {student.student_code ? (
                           <code className="bg-muted px-2 py-0.5 rounded text-xs font-mono">
