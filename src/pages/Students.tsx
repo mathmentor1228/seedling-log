@@ -30,7 +30,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet } from 'lucide-react';
 import { format } from 'date-fns';
 import { NewStudentOnboarding } from '@/components/admin/NewStudentOnboarding';
 import { UnvisitedParentsList } from '@/components/admin/UnvisitedParentsList';
@@ -39,6 +39,7 @@ import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapp
 import StudentCsvImport from '@/components/StudentCsvImport';
 import StudentPinManager from '@/components/StudentPinManager';
 import { BulkEditStudents } from '@/components/admin/BulkEditStudents';
+import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTuitionTab';
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -77,6 +78,7 @@ export default function Students() {
   const [gradeYearFilter, setGradeYearFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [tuitionSummary, setTuitionSummary] = useState<Record<string, { courses: number; monthlyFee: number; unpaid: number }>>({});
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
     name: '',
@@ -97,6 +99,10 @@ export default function Students() {
   useEffect(() => {
     fetchStudents();
   }, [statusFilter]);
+
+  useEffect(() => {
+    if (students.length > 0) fetchTuitionSummary();
+  }, [students]);
 
   async function fetchStudents() {
     try {
@@ -123,6 +129,33 @@ export default function Students() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function fetchTuitionSummary() {
+    const studentIds = students.map(s => s.id);
+    const [coursesRes, billingsRes] = await Promise.all([
+      supabase.from('student_courses')
+        .select('student_id, is_active, course_policies(monthly_fee)')
+        .in('student_id', studentIds),
+      supabase.from('billing_schedules')
+        .select('student_id, status')
+        .in('student_id', studentIds)
+        .in('status', ['pending', 'overdue']),
+    ]);
+
+    const summary: Record<string, { courses: number; monthlyFee: number; unpaid: number }> = {};
+    for (const c of (coursesRes.data || [])) {
+      if (!summary[c.student_id]) summary[c.student_id] = { courses: 0, monthlyFee: 0, unpaid: 0 };
+      if (c.is_active) {
+        summary[c.student_id].courses++;
+        summary[c.student_id].monthlyFee += Number((c as any).course_policies?.monthly_fee || 0);
+      }
+    }
+    for (const b of (billingsRes.data || [])) {
+      if (!summary[b.student_id]) summary[b.student_id] = { courses: 0, monthlyFee: 0, unpaid: 0 };
+      summary[b.student_id].unpaid++;
+    }
+    setTuitionSummary(summary);
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -650,6 +683,7 @@ export default function Students() {
                      <TableHead>Grade</TableHead>
                      <TableHead>School</TableHead>
                      <TableHead>Phone</TableHead>
+                     <TableHead>수강료</TableHead>
                      <TableHead>Added</TableHead>
                      <TableHead className="w-[120px]">Actions</TableHead>
                    </TableRow>
@@ -708,6 +742,19 @@ export default function Students() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {student.student_phone || student.phone || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const t = tuitionSummary[student.id];
+                          if (!t || t.courses === 0) return <span className="text-xs text-muted-foreground">-</span>;
+                          return (
+                            <div className="text-xs">
+                              <span className="font-medium">{t.monthlyFee.toLocaleString()}원</span>
+                              <span className="text-muted-foreground">/{t.courses}과목</span>
+                              {t.unpaid > 0 && <Badge variant="destructive" className="ml-1 text-[9px] px-1 py-0">{t.unpaid}미납</Badge>}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {format(new Date(student.created_at), 'MMM d, yyyy')}
@@ -774,21 +821,26 @@ export default function Students() {
           
           {detailStudent && (
             <Tabs defaultValue="info" className="mt-4">
-              <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-4' : 'grid-cols-2'}`}>
+              <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-5' : 'grid-cols-2'}`}>
                 <TabsTrigger value="info">기본정보</TabsTrigger>
+                {isAdmin(role) && (
+                  <TabsTrigger value="tuition" className="gap-1">
+                    <Wallet className="w-3.5 h-3.5" />수강/수강료
+                  </TabsTrigger>
+                )}
                 {(isAdmin(role) || isTeacher(role)) && (
                   <TabsTrigger value="slots">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    수업 슬롯
+                    <Calendar className="w-4 h-4 mr-1" />
+                    슬롯
                   </TabsTrigger>
                 )}
                 {isAdmin(role) && (
-                  <TabsTrigger value="subject-teachers">과목별 담당</TabsTrigger>
+                  <TabsTrigger value="subject-teachers">과목담당</TabsTrigger>
                 )}
                 {isAdmin(role) && (
                   <TabsTrigger value="pin-manager">
-                    <Key className="w-4 h-4 mr-2" />
-                    앱 계정
+                    <Key className="w-3.5 h-3.5 mr-1" />
+                    앱계정
                   </TabsTrigger>
                 )}
               </TabsList>
@@ -848,6 +900,15 @@ export default function Students() {
                   </div>
                 )}
               </TabsContent>
+              
+              {isAdmin(role) && (
+                <TabsContent value="tuition" className="mt-4">
+                  <StudentCoursesTuitionTab
+                    studentId={detailStudent.id}
+                    studentName={detailStudent.name}
+                  />
+                </TabsContent>
+              )}
               
               {(isAdmin(role) || isTeacher(role)) && (
                 <TabsContent value="slots" className="mt-4">
