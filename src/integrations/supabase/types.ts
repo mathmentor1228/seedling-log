@@ -3214,6 +3214,7 @@ export type Database = {
           course_status: string
           created_at: string
           email: string | null
+          emergency_contact: string | null
           enrollment_status: string
           followup_2w_done_subjects: string[]
           grade: string | null
@@ -3224,19 +3225,24 @@ export type Database = {
           parent_name: string | null
           parent_phone: string | null
           parent_token: string | null
+          payment_due_day: number
           phone: string | null
+          registration_date: string | null
           school: string | null
           school_level: string | null
+          sibling_group_id: number | null
           status: string | null
           student_code: string | null
           student_phone: string | null
           total_points: number | null
+          tuition_memo: string | null
           updated_at: string
         }
         Insert: {
           course_status?: string
           created_at?: string
           email?: string | null
+          emergency_contact?: string | null
           enrollment_status?: string
           followup_2w_done_subjects?: string[]
           grade?: string | null
@@ -3247,19 +3253,24 @@ export type Database = {
           parent_name?: string | null
           parent_phone?: string | null
           parent_token?: string | null
+          payment_due_day?: number
           phone?: string | null
+          registration_date?: string | null
           school?: string | null
           school_level?: string | null
+          sibling_group_id?: number | null
           status?: string | null
           student_code?: string | null
           student_phone?: string | null
           total_points?: number | null
+          tuition_memo?: string | null
           updated_at?: string
         }
         Update: {
           course_status?: string
           created_at?: string
           email?: string | null
+          emergency_contact?: string | null
           enrollment_status?: string
           followup_2w_done_subjects?: string[]
           grade?: string | null
@@ -3270,13 +3281,17 @@ export type Database = {
           parent_name?: string | null
           parent_phone?: string | null
           parent_token?: string | null
+          payment_due_day?: number
           phone?: string | null
+          registration_date?: string | null
           school?: string | null
           school_level?: string | null
+          sibling_group_id?: number | null
           status?: string | null
           student_code?: string | null
           student_phone?: string | null
           total_points?: number | null
+          tuition_memo?: string | null
           updated_at?: string
         }
         Relationships: []
