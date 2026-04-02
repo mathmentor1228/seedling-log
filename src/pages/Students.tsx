@@ -100,6 +100,10 @@ export default function Students() {
     fetchStudents();
   }, [statusFilter]);
 
+  useEffect(() => {
+    if (students.length > 0) fetchTuitionSummary();
+  }, [students]);
+
   async function fetchStudents() {
     try {
       let query = supabase
@@ -125,6 +129,33 @@ export default function Students() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function fetchTuitionSummary() {
+    const studentIds = students.map(s => s.id);
+    const [coursesRes, billingsRes] = await Promise.all([
+      supabase.from('student_courses')
+        .select('student_id, is_active, course_policies(monthly_fee)')
+        .in('student_id', studentIds),
+      supabase.from('billing_schedules')
+        .select('student_id, status')
+        .in('student_id', studentIds)
+        .in('status', ['pending', 'overdue']),
+    ]);
+
+    const summary: Record<string, { courses: number; monthlyFee: number; unpaid: number }> = {};
+    for (const c of (coursesRes.data || [])) {
+      if (!summary[c.student_id]) summary[c.student_id] = { courses: 0, monthlyFee: 0, unpaid: 0 };
+      if (c.is_active) {
+        summary[c.student_id].courses++;
+        summary[c.student_id].monthlyFee += Number((c as any).course_policies?.monthly_fee || 0);
+      }
+    }
+    for (const b of (billingsRes.data || [])) {
+      if (!summary[b.student_id]) summary[b.student_id] = { courses: 0, monthlyFee: 0, unpaid: 0 };
+      summary[b.student_id].unpaid++;
+    }
+    setTuitionSummary(summary);
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
