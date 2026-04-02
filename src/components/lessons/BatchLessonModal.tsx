@@ -102,41 +102,52 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Step state
   const [step, setStep] = useState<'search' | 'edit'>('search');
-
-  // Search state
   const [searchDate, setSearchDate] = useState(getTodayKST());
   const [drafts, setDrafts] = useState<DraftRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Edit state - which fields to apply
+  // Edit state
   const [activeFields, setActiveFields] = useState<Set<EditableField>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [submitAfter, setSubmitAfter] = useState(false);
+
+  // Batch values (shared)
+  const [batchLessonTypes, setBatchLessonTypes] = useState<string[]>(['정규수업']);
   const [lessonRange, setLessonRange] = useState('');
-  const [usePerStudentLessonRange, setUsePerStudentLessonRange] = useState(false);
-  const [perStudentLessonRange, setPerStudentLessonRange] = useState<Record<string, string>>({});
   const [understandingScore, setUnderstandingScore] = useState<number>(3);
   const [homeworkStatus, setHomeworkStatus] = useState('none_assigned');
+  const [learningIssues, setLearningIssues] = useState<string[]>([]);
+  const [learningIssuesNote, setLearningIssuesNote] = useState('');
+  const [testContent, setTestContent] = useState('');
   const [notes, setNotes] = useState('');
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
-  const [usePerStudentHomeworkItems, setUsePerStudentHomeworkItems] = useState(false);
-  const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
-  const [learningIssues, setLearningIssues] = useState<string[]>([]);
-  const [learningIssuesNote, setLearningIssuesNote] = useState('');
-  const [perStudentIssuesNote, setPerStudentIssuesNote] = useState<Record<string, string>>({});
-  const [usePerStudentNotes, setUsePerStudentNotes] = useState(false);
-  const [usePerStudentScore, setUsePerStudentScore] = useState(false);
-  const [perStudentScore, setPerStudentScore] = useState<Record<string, number>>({});
-  const [usePerStudentHomework, setUsePerStudentHomework] = useState(false);
-  const [perStudentHomework, setPerStudentHomework] = useState<Record<string, string>>({});
-  const [testContent, setTestContent] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [submitAfter, setSubmitAfter] = useState(false);
-  const [batchLessonTypes, setBatchLessonTypes] = useState<string[]>(['정규수업']);
+
+  // Per-student toggles
   const [usePerStudentLessonTypes, setUsePerStudentLessonTypes] = useState(false);
+  const [usePerStudentLessonRange, setUsePerStudentLessonRange] = useState(false);
+  const [usePerStudentScore, setUsePerStudentScore] = useState(false);
+  const [usePerStudentHomework, setUsePerStudentHomework] = useState(false);
+  const [usePerStudentIssuesNote, setUsePerStudentIssuesNote] = useState(false);
+  const [usePerStudentIssuesTags, setUsePerStudentIssuesTags] = useState(false);
+  const [usePerStudentTest, setUsePerStudentTest] = useState(false);
+  const [usePerStudentMemo, setUsePerStudentMemo] = useState(false);
+  const [usePerStudentNextGoal, setUsePerStudentNextGoal] = useState(false);
+  const [usePerStudentHomeworkItems, setUsePerStudentHomeworkItems] = useState(false);
+
+  // Per-student values
   const [perStudentLessonTypes, setPerStudentLessonTypes] = useState<Record<string, string[]>>({});
+  const [perStudentLessonRange, setPerStudentLessonRange] = useState<Record<string, string>>({});
+  const [perStudentScore, setPerStudentScore] = useState<Record<string, number>>({});
+  const [perStudentHomework, setPerStudentHomework] = useState<Record<string, string>>({});
+  const [perStudentIssuesNote, setPerStudentIssuesNote] = useState<Record<string, string>>({});
+  const [perStudentIssuesTags, setPerStudentIssuesTags] = useState<Record<string, string[]>>({});
+  const [perStudentTest, setPerStudentTest] = useState<Record<string, string>>({});
+  const [perStudentMemo, setPerStudentMemo] = useState<Record<string, string>>({});
+  const [perStudentNextGoal, setPerStudentNextGoal] = useState<Record<string, string>>({});
+  const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
 
   useEffect(() => {
     if (open) {
@@ -150,29 +161,39 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
 
   function resetEditState() {
     setActiveFields(new Set());
+    setBatchLessonTypes(['정규수업']);
     setLessonRange('');
-    setUsePerStudentLessonRange(false);
-    setPerStudentLessonRange({});
     setUnderstandingScore(3);
     setHomeworkStatus('none_assigned');
+    setLearningIssues([]);
+    setLearningIssuesNote('');
+    setTestContent('');
     setNotes('');
     setNextLessonGoal('');
     setHomeworkItems([]);
-    setUsePerStudentHomeworkItems(false);
-    setPerStudentHomeworkItems({});
-    setLearningIssues([]);
-    setLearningIssuesNote('');
-    setPerStudentIssuesNote({});
-    setUsePerStudentNotes(false);
-    setUsePerStudentScore(false);
-    setPerStudentScore({});
-    setUsePerStudentHomework(false);
-    setPerStudentHomework({});
-    setTestContent('');
     setSubmitAfter(false);
-    setBatchLessonTypes(['정규수업']);
+    // Reset all per-student toggles
     setUsePerStudentLessonTypes(false);
+    setUsePerStudentLessonRange(false);
+    setUsePerStudentScore(false);
+    setUsePerStudentHomework(false);
+    setUsePerStudentIssuesNote(false);
+    setUsePerStudentIssuesTags(false);
+    setUsePerStudentTest(false);
+    setUsePerStudentMemo(false);
+    setUsePerStudentNextGoal(false);
+    setUsePerStudentHomeworkItems(false);
+    // Reset all per-student values
     setPerStudentLessonTypes({});
+    setPerStudentLessonRange({});
+    setPerStudentScore({});
+    setPerStudentHomework({});
+    setPerStudentIssuesNote({});
+    setPerStudentIssuesTags({});
+    setPerStudentTest({});
+    setPerStudentMemo({});
+    setPerStudentNextGoal({});
+    setPerStudentHomeworkItems({});
   }
 
   async function searchDrafts() {
@@ -269,47 +290,85 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   const draftOnly = useMemo(() => drafts.filter(d => !d.submitted), [drafts]);
   const submittedOnly = useMemo(() => drafts.filter(d => d.submitted), [drafts]);
 
-  function goToEdit() {
+  async function goToEdit() {
     if (selectedIds.size === 0) {
       toast({ title: '수정할 일지를 선택해주세요', variant: 'destructive' });
       return;
     }
     resetEditState();
-    // Pre-fill from the first selected record for convenience
-    const first = drafts.find(d => selectedIds.has(d.id));
+
+    const selectedDrafts = drafts.filter(d => selectedIds.has(d.id));
+    const first = selectedDrafts[0];
+
+    // Pre-fill batch values from first record
     if (first) {
       setLessonRange(first.lesson_range || '');
       setUnderstandingScore(first.understanding_score ?? 3);
       setHomeworkStatus(first.homework_status || 'none_assigned');
       setNotes(first.notes || '');
       setNextLessonGoal(first.next_lesson_goal || '');
-      // Pre-fill test content from existing data
       setTestContent(first.test_content || first.test_name || '');
       setBatchLessonTypes(first.lesson_types?.length ? first.lesson_types : ['정규수업']);
-      // Pre-fill learning issues from first record
       if (first.learning_issues?.length) setLearningIssues(first.learning_issues);
       if (first.learning_issues_note) setLearningIssuesNote(first.learning_issues_note);
     }
 
-    // Pre-fill per-student data from each selected draft's existing values
-    const selectedDrafts = drafts.filter(d => selectedIds.has(d.id));
+    // Pre-fill ALL per-student data from each draft
     const perRange: Record<string, string> = {};
     const perScore: Record<string, number> = {};
     const perHw: Record<string, string> = {};
     const perTypes: Record<string, string[]> = {};
     const perIssueNote: Record<string, string> = {};
+    const perIssueTags: Record<string, string[]> = {};
+    const perTest: Record<string, string> = {};
+    const perMemo: Record<string, string> = {};
+    const perGoal: Record<string, string> = {};
+
     for (const d of selectedDrafts) {
       if (d.lesson_range) perRange[d.id] = d.lesson_range;
       if (d.understanding_score != null) perScore[d.id] = d.understanding_score;
       if (d.homework_status) perHw[d.id] = d.homework_status;
       if (d.lesson_types?.length) perTypes[d.id] = d.lesson_types;
       if (d.learning_issues_note) perIssueNote[d.id] = d.learning_issues_note;
+      if (d.learning_issues?.length) perIssueTags[d.id] = d.learning_issues;
+      if (d.test_content || d.test_name) perTest[d.id] = d.test_content || d.test_name || '';
+      if (d.notes) perMemo[d.id] = d.notes;
+      if (d.next_lesson_goal) perGoal[d.id] = d.next_lesson_goal;
     }
     setPerStudentLessonRange(perRange);
     setPerStudentScore(perScore);
     setPerStudentHomework(perHw);
     setPerStudentLessonTypes(perTypes);
     setPerStudentIssuesNote(perIssueNote);
+    setPerStudentIssuesTags(perIssueTags);
+    setPerStudentTest(perTest);
+    setPerStudentMemo(perMemo);
+    setPerStudentNextGoal(perGoal);
+
+    // Load existing homework_assignments for selected records
+    try {
+      const recordIds = selectedDrafts.map(d => d.id);
+      const { data: hwData } = await supabase
+        .from('homework_assignments')
+        .select('id, lesson_record_id, content, homework_type')
+        .in('lesson_record_id', recordIds);
+
+      if (hwData && hwData.length > 0) {
+        const perHwItems: Record<string, HomeworkItem[]> = {};
+        for (const hw of hwData) {
+          if (!hw.lesson_record_id) continue;
+          if (!perHwItems[hw.lesson_record_id]) perHwItems[hw.lesson_record_id] = [];
+          perHwItems[hw.lesson_record_id].push({
+            tempId: hw.id, // use real id as tempId for existing
+            content: hw.content || '',
+            homework_type: hw.homework_type || 'daily',
+          });
+        }
+        setPerStudentHomeworkItems(perHwItems);
+      }
+    } catch (e) {
+      console.error('Failed to load homework assignments:', e);
+    }
 
     setStep('edit');
   }
@@ -324,62 +383,76 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
       const ids = Array.from(selectedIds);
       const now = new Date().toISOString();
 
-      // Check if we need per-student updates
-      const needsPerStudent = 
+      const needsPerStudent =
         (activeFields.has('lesson_range') && usePerStudentLessonRange) ||
-        (activeFields.has('learning_issues') && usePerStudentNotes) ||
+        (activeFields.has('learning_issues') && (usePerStudentIssuesNote || usePerStudentIssuesTags)) ||
         (activeFields.has('understanding_score') && usePerStudentScore) ||
         (activeFields.has('homework_status') && usePerStudentHomework) ||
-        (activeFields.has('lesson_types_field') && usePerStudentLessonTypes);
+        (activeFields.has('lesson_types_field') && usePerStudentLessonTypes) ||
+        (activeFields.has('test_fields') && usePerStudentTest) ||
+        (activeFields.has('notes') && usePerStudentMemo) ||
+        (activeFields.has('next_lesson_goal') && usePerStudentNextGoal);
 
-      // Build common update payload with only active fields
       const buildPayload = (recordId?: string): Record<string, any> => {
-        const updatePayload: Record<string, any> = { updated_at: now };
+        const p: Record<string, any> = { updated_at: now };
         if (activeFields.has('lesson_types_field')) {
-          updatePayload.lesson_types = (usePerStudentLessonTypes && recordId)
+          p.lesson_types = (usePerStudentLessonTypes && recordId)
             ? (perStudentLessonTypes[recordId] ?? batchLessonTypes)
             : batchLessonTypes;
         }
         if (activeFields.has('lesson_range')) {
-          updatePayload.lesson_range = (usePerStudentLessonRange && recordId)
+          p.lesson_range = (usePerStudentLessonRange && recordId)
             ? (perStudentLessonRange[recordId] ?? lessonRange).trim()
             : lessonRange.trim();
         }
         if (activeFields.has('understanding_score')) {
-          updatePayload.understanding_score = (usePerStudentScore && recordId)
+          p.understanding_score = (usePerStudentScore && recordId)
             ? (perStudentScore[recordId] ?? understandingScore)
             : understandingScore;
         }
         if (activeFields.has('homework_status')) {
-          updatePayload.homework_status = (usePerStudentHomework && recordId)
+          p.homework_status = (usePerStudentHomework && recordId)
             ? (perStudentHomework[recordId] || homeworkStatus)
             : homeworkStatus;
         }
-        if (activeFields.has('notes')) updatePayload.notes = notes.trim() || null;
-        if (activeFields.has('next_lesson_goal')) updatePayload.next_lesson_goal = nextLessonGoal.trim() || null;
+        if (activeFields.has('notes')) {
+          const val = (usePerStudentMemo && recordId)
+            ? (perStudentMemo[recordId] ?? notes)
+            : notes;
+          p.notes = val.trim() || null;
+        }
+        if (activeFields.has('next_lesson_goal')) {
+          const val = (usePerStudentNextGoal && recordId)
+            ? (perStudentNextGoal[recordId] ?? nextLessonGoal)
+            : nextLessonGoal;
+          p.next_lesson_goal = val.trim() || null;
+        }
         if (activeFields.has('learning_issues')) {
-          updatePayload.learning_issues = learningIssues;
-          if (usePerStudentNotes && recordId) {
-            updatePayload.learning_issues_note = (perStudentIssuesNote[recordId] || '').trim() || null;
+          p.learning_issues = (usePerStudentIssuesTags && recordId)
+            ? (perStudentIssuesTags[recordId] ?? learningIssues)
+            : learningIssues;
+          if (usePerStudentIssuesNote && recordId) {
+            p.learning_issues_note = (perStudentIssuesNote[recordId] || '').trim() || null;
           } else {
-            updatePayload.learning_issues_note = learningIssuesNote.trim() || null;
+            p.learning_issues_note = learningIssuesNote.trim() || null;
           }
         }
         if (activeFields.has('test_fields')) {
-          const unified = testContent.trim() || null;
-          updatePayload.test_content = unified;
-          updatePayload.test_name = unified;
-          updatePayload.test_title = unified;
+          const unified = (usePerStudentTest && recordId)
+            ? (perStudentTest[recordId] ?? testContent).trim() || null
+            : testContent.trim() || null;
+          p.test_content = unified;
+          p.test_name = unified;
+          p.test_title = unified;
         }
         if (submitAfter) {
-          updatePayload.submitted = true;
-          updatePayload.submitted_at = now;
+          p.submitted = true;
+          p.submitted_at = now;
         }
-        return updatePayload;
+        return p;
       };
 
       if (needsPerStudent) {
-        // Update each record individually for per-student values
         for (const id of ids) {
           const payload = buildPayload(id);
           const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
@@ -394,8 +467,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         if (updateError) throw updateError;
       }
 
-      // BATCH-HW-SYNC-V1: When homework_status is set to completed/partial/not_done,
-      // also update the linked homework_assignments.check_status
+      // Homework status sync
       if (activeFields.has('homework_status')) {
         const statusToResult: Record<string, string> = {
           completed: 'completed',
@@ -407,16 +479,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
           const record = drafts.find(d => d.id === id);
           if (!record) continue;
 
-          const effectiveStatus = (usePerStudentHomework)
+          const effectiveStatus = usePerStudentHomework
             ? (perStudentHomework[id] || homeworkStatus)
             : homeworkStatus;
 
           if (effectiveStatus === 'none_assigned') continue;
-
           const resultValue = statusToResult[effectiveStatus] || 'completed';
 
-          // Update all unchecked homework_assignments linked to this lesson record
-          const { error: hwSyncErr } = await supabase
+          await supabase
             .from('homework_assignments')
             .update({
               check_status: 'checked',
@@ -427,10 +497,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
             .eq('lesson_record_id', id)
             .eq('check_status', 'unchecked');
 
-          if (hwSyncErr) console.error('hw sync error:', hwSyncErr);
-
-          // Also update unchecked homework assigned before this lesson date for same student+subject
-          const { error: hwPrevErr } = await supabase
+          await supabase
             .from('homework_assignments')
             .update({
               check_status: 'checked',
@@ -442,12 +509,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
             .eq('subject', record.subject as any)
             .eq('check_status', 'unchecked')
             .lt('assigned_date', searchDate);
-
-          if (hwPrevErr) console.error('hw prev sync error:', hwPrevErr);
         }
       }
 
-      // Handle homework assignment if toggled
+      // Homework assignment creation
       if (activeFields.has('homework_items')) {
         const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
         const hwAssignments = selectedRecords.flatMap(record => {
@@ -491,6 +556,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
     }
   }
 
+  const selectedDraftsList = useMemo(() => drafts.filter(d => selectedIds.has(d.id)), [drafts, selectedIds]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
@@ -509,7 +576,6 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
         <div className="overflow-y-auto flex-1 px-5 pb-5 pt-4 space-y-4">
           {step === 'search' ? (
             <>
-              {/* Date search */}
               <div className="flex items-end gap-2">
                 <div className="flex-1 space-y-1">
                   <Label className="text-xs text-muted-foreground">수업일 검색</Label>
@@ -521,24 +587,17 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                 </Button>
               </div>
 
-              {/* Results */}
               {drafts.length > 0 && (
                 <div className="space-y-3">
-                  {/* Draft records */}
                   {draftOnly.length > 0 && (
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-muted-foreground">📝 임시저장 ({draftOnly.length})</span>
                         <div className="flex gap-1">
-                          <Button
-                            variant="ghost" size="sm" className="h-6 text-xs px-2"
-                            onClick={() => setSelectedIds(new Set(draftOnly.map(d => d.id)))}
-                          >
+                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedIds(new Set(draftOnly.map(d => d.id)))}>
                             <CheckSquare className="w-3 h-3 mr-1" />전체선택
                           </Button>
-                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedIds(new Set())}>
-                            해제
-                          </Button>
+                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedIds(new Set())}>해제</Button>
                         </div>
                       </div>
                       <div className="border rounded-lg overflow-hidden divide-y divide-border">
@@ -560,7 +619,6 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                     </div>
                   )}
 
-                  {/* Submitted records */}
                   {submittedOnly.length > 0 && (
                     <div className="space-y-1">
                       <span className="text-xs font-semibold text-muted-foreground">✅ 제출완료 ({submittedOnly.length})</span>
@@ -593,14 +651,13 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
               )}
             </>
           ) : (
-            /* Step 2: Edit */
             <>
               <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 mb-2">
                 <p className="text-sm font-medium">
                   📋 선택된 학생 <strong>{selectedIds.size}명</strong>의 일지를 수정합니다.
                 </p>
                 <div className="flex flex-wrap gap-1 mt-2">
-                  {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                  {selectedDraftsList.map(d => (
                     <Badge key={d.id} variant="secondary" className="text-xs">{d.student_name} ({d.subject})</Badge>
                   ))}
                 </div>
@@ -610,30 +667,15 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
 
               <div className="space-y-3">
                 {/* Lesson Types */}
-                <FieldToggleBlock
-                  field="lesson_types_field"
-                  active={activeFields.has('lesson_types_field')}
-                  onToggle={() => toggleField('lesson_types_field')}
-                >
+                <FieldToggleBlock field="lesson_types_field" active={activeFields.has('lesson_types_field')} onToggle={() => toggleField('lesson_types_field')}>
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox
-                        checked={usePerStudentLessonTypes}
-                        onCheckedChange={v => setUsePerStudentLessonTypes(v === true)}
-                      />
-                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
-                    </label>
-
+                    <PerStudentToggle checked={usePerStudentLessonTypes} onChange={setUsePerStudentLessonTypes} />
                     {usePerStudentLessonTypes ? (
-                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
-                        {drafts.filter(d => selectedIds.has(d.id)).map(d => {
+                      <PerStudentContainer>
+                        {selectedDraftsList.map(d => {
                           const studentTypes = perStudentLessonTypes[d.id] ?? batchLessonTypes;
                           return (
-                            <div key={d.id} className="space-y-1.5">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-semibold">{d.student_name}</span>
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{d.subject}</Badge>
-                              </div>
+                            <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
                               <div className="flex flex-wrap gap-1">
                                 {LESSON_TYPE_OPTIONS.map(opt => (
                                   <Badge
@@ -650,10 +692,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                                   </Badge>
                                 ))}
                               </div>
-                            </div>
+                            </StudentBlock>
                           );
                         })}
-                      </div>
+                      </PerStudentContainer>
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
                         {LESSON_TYPE_OPTIONS.map(opt => (
@@ -662,7 +704,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                             variant={batchLessonTypes.includes(opt.value) ? 'default' : 'outline'}
                             className="cursor-pointer text-xs"
                             onClick={() => {
-                              setBatchLessonTypes(prev => 
+                              setBatchLessonTypes(prev =>
                                 prev.includes(opt.value) ? (prev.length > 1 ? prev.filter(v => v !== opt.value) : prev) : [...prev, opt.value]
                               );
                             }}
@@ -676,66 +718,35 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                 </FieldToggleBlock>
 
                 {/* Lesson Range */}
-                <FieldToggleBlock
-                  field="lesson_range"
-                  active={activeFields.has('lesson_range')}
-                  onToggle={() => toggleField('lesson_range')}
-                >
+                <FieldToggleBlock field="lesson_range" active={activeFields.has('lesson_range')} onToggle={() => toggleField('lesson_range')}>
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      <Checkbox
-                        checked={usePerStudentLessonRange}
-                        onCheckedChange={v => setUsePerStudentLessonRange(v === true)}
-                      />
-                      <span className="text-xs font-medium text-muted-foreground cursor-pointer" onClick={() => setUsePerStudentLessonRange(prev => !prev)}>학생별 개별 입력</span>
-                    </div>
-
+                    <PerStudentToggle checked={usePerStudentLessonRange} onChange={setUsePerStudentLessonRange} />
                     {usePerStudentLessonRange ? (
-                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
-                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
-                          <div key={d.id} className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-semibold">{d.student_name}</span>
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{d.subject}</Badge>
-                            </div>
+                      <PerStudentContainer>
+                        {selectedDraftsList.map(d => (
+                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
                             <Textarea
                               value={perStudentLessonRange[d.id] ?? ''}
                               onChange={e => setPerStudentLessonRange(prev => ({ ...prev, [d.id]: e.target.value }))}
                               placeholder={`${d.student_name} 수업 내용...`}
                               className="min-h-[50px] resize-none text-sm"
                             />
-                          </div>
+                          </StudentBlock>
                         ))}
-                      </div>
+                      </PerStudentContainer>
                     ) : (
-                      <Textarea
-                        value={lessonRange}
-                        onChange={e => setLessonRange(e.target.value)}
-                        placeholder="예: 미적분 - 도함수의 활용 (증가·감소, 극값)"
-                        className="min-h-[60px] resize-none"
-                      />
+                      <Textarea value={lessonRange} onChange={e => setLessonRange(e.target.value)} placeholder="예: 미적분 - 도함수의 활용" className="min-h-[60px] resize-none" />
                     )}
                   </div>
                 </FieldToggleBlock>
 
                 {/* Understanding Score */}
-                <FieldToggleBlock
-                  field="understanding_score"
-                  active={activeFields.has('understanding_score')}
-                  onToggle={() => toggleField('understanding_score')}
-                >
+                <FieldToggleBlock field="understanding_score" active={activeFields.has('understanding_score')} onToggle={() => toggleField('understanding_score')}>
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <Checkbox
-                        checked={usePerStudentScore}
-                        onCheckedChange={v => setUsePerStudentScore(v === true)}
-                      />
-                      <span className="text-xs font-medium text-muted-foreground">학생별 개별 입력</span>
-                    </label>
-
+                    <PerStudentToggle checked={usePerStudentScore} onChange={setUsePerStudentScore} />
                     {usePerStudentScore ? (
-                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
-                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
+                      <PerStudentContainer>
+                        {selectedDraftsList.map(d => (
                           <div key={d.id} className="flex items-center gap-2">
                             <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
                             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
@@ -752,7 +763,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </PerStudentContainer>
                     ) : (
                       <div className="flex items-center gap-1">
                         {[1, 2, 3, 4, 5].map(score => (
@@ -770,33 +781,17 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                 </FieldToggleBlock>
 
                 {/* Homework Status */}
-                <FieldToggleBlock
-                  field="homework_status"
-                  active={activeFields.has('homework_status')}
-                  onToggle={() => toggleField('homework_status')}
-                >
+                <FieldToggleBlock field="homework_status" active={activeFields.has('homework_status')} onToggle={() => toggleField('homework_status')}>
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      <Checkbox
-                        checked={usePerStudentHomework}
-                        onCheckedChange={v => setUsePerStudentHomework(v === true)}
-                      />
-                      <span className="text-xs font-medium text-muted-foreground cursor-pointer" onClick={() => setUsePerStudentHomework(prev => !prev)}>학생별 개별 입력</span>
-                    </div>
-
+                    <PerStudentToggle checked={usePerStudentHomework} onChange={setUsePerStudentHomework} />
                     {usePerStudentHomework ? (
-                      <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
-                        {drafts.filter(d => selectedIds.has(d.id)).map(d => (
-                          <div key={d.id} className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <PerStudentContainer>
+                        {selectedDraftsList.map(d => (
+                          <div key={d.id} className="flex items-center gap-2">
                             <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
                             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
-                            <Select
-                              value={perStudentHomework[d.id] || homeworkStatus}
-                              onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}
-                            >
-                              <SelectTrigger className="h-8 w-28 text-xs ml-auto">
-                                <SelectValue />
-                              </SelectTrigger>
+                            <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
+                              <SelectTrigger className="h-8 w-28 text-xs ml-auto"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 {HOMEWORK_STATUS_OPTIONS.map(opt => (
                                   <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
@@ -805,12 +800,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                             </Select>
                           </div>
                         ))}
-                      </div>
+                      </PerStudentContainer>
                     ) : (
                       <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {HOMEWORK_STATUS_OPTIONS.map(opt => (
                             <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
@@ -822,15 +815,10 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                 </FieldToggleBlock>
 
                 {/* Learning Issues */}
-                <FieldToggleBlock
-                  field="learning_issues"
-                  active={activeFields.has('learning_issues')}
-                  onToggle={() => toggleField('learning_issues')}
-                >
-                   <div className="space-y-2">
+                <FieldToggleBlock field="learning_issues" active={activeFields.has('learning_issues')} onToggle={() => toggleField('learning_issues')}>
+                  <div className="space-y-2">
                     {(() => {
-                      const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
-                      const subjects = [...new Set(selectedRecords.map(d => d.subject))];
+                      const subjects = [...new Set(selectedDraftsList.map(d => d.subject))];
                       const allIssues = new Set<string>();
                       subjects.forEach(s => {
                         const issues = SUBJECT_SPECIFIC_ISSUES[s as SubjectType];
@@ -838,47 +826,68 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                       });
                       return (
                         <>
-                          <div className="flex flex-wrap gap-1.5">
-                            {[...allIssues].map(issue => (
-                              <Badge
-                                key={issue}
-                                variant={learningIssues.includes(issue) ? 'default' : 'outline'}
-                                className="cursor-pointer text-xs"
-                                onClick={() => setLearningIssues(prev => 
-                                  prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
-                                )}
-                              >
-                                {issue}
-                              </Badge>
-                            ))}
-                          </div>
+                          {/* Issue tags */}
+                          <PerStudentToggle label="학생별 개별 태그" checked={usePerStudentIssuesTags} onChange={setUsePerStudentIssuesTags} />
+                          {usePerStudentIssuesTags ? (
+                            <PerStudentContainer>
+                              {selectedDraftsList.map(d => {
+                                const subjectIssues = SUBJECT_SPECIFIC_ISSUES[d.subject as SubjectType] || [];
+                                const studentTags = perStudentIssuesTags[d.id] ?? [];
+                                return (
+                                  <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                                    <div className="flex flex-wrap gap-1">
+                                      {subjectIssues.map(issue => (
+                                        <Badge
+                                          key={issue}
+                                          variant={studentTags.includes(issue) ? 'default' : 'outline'}
+                                          className="cursor-pointer text-xs"
+                                          onClick={() => {
+                                            setPerStudentIssuesTags(prev => {
+                                              const cur = prev[d.id] ?? [];
+                                              return { ...prev, [d.id]: cur.includes(issue) ? cur.filter(i => i !== issue) : [...cur, issue] };
+                                            });
+                                          }}
+                                        >
+                                          {issue}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </StudentBlock>
+                                );
+                              })}
+                            </PerStudentContainer>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {[...allIssues].map(issue => (
+                                <Badge
+                                  key={issue}
+                                  variant={learningIssues.includes(issue) ? 'default' : 'outline'}
+                                  className="cursor-pointer text-xs"
+                                  onClick={() => setLearningIssues(prev =>
+                                    prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
+                                  )}
+                                >
+                                  {issue}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
 
-                          {/* Toggle: shared vs per-student notes */}
-                          <label className="flex items-center gap-2 cursor-pointer mt-1">
-                            <Checkbox
-                              checked={usePerStudentNotes}
-                              onCheckedChange={v => setUsePerStudentNotes(v === true)}
-                            />
-                            <span className="text-xs font-medium text-muted-foreground">학생별 개별 상세 입력</span>
-                          </label>
-
-                          {usePerStudentNotes ? (
-                            <div className="space-y-2 border rounded-lg p-2 bg-muted/20">
-                              {selectedRecords.map(d => (
-                                <div key={d.id} className="space-y-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-semibold">{d.student_name}</span>
-                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{d.subject}</Badge>
-                                  </div>
+                          {/* Issue detail note */}
+                          <PerStudentToggle label="학생별 개별 상세" checked={usePerStudentIssuesNote} onChange={setUsePerStudentIssuesNote} />
+                          {usePerStudentIssuesNote ? (
+                            <PerStudentContainer>
+                              {selectedDraftsList.map(d => (
+                                <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
                                   <Textarea
                                     value={perStudentIssuesNote[d.id] || ''}
                                     onChange={e => setPerStudentIssuesNote(prev => ({ ...prev, [d.id]: e.target.value }))}
                                     placeholder={`${d.student_name} 학습 상황 상세...`}
                                     className="min-h-[40px] resize-none text-sm"
                                   />
-                                </div>
+                                </StudentBlock>
                               ))}
-                            </div>
+                            </PerStudentContainer>
                           ) : (
                             <Textarea
                               value={learningIssuesNote}
@@ -894,123 +903,130 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
                 </FieldToggleBlock>
 
                 {/* Test Fields */}
-                <FieldToggleBlock
-                  field="test_fields"
-                  active={activeFields.has('test_fields')}
-                  onToggle={() => toggleField('test_fields')}
-                >
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">테스트내용 및 범위 <span className="text-destructive">*</span></Label>
-                    <Input
-                      value={testContent}
-                      onChange={e => setTestContent(e.target.value)}
-                      placeholder="예: 중2 1단원 단원평가, 영단어 Day1~5 쪽지시험..."
-                      className="h-8 text-sm"
-                    />
+                <FieldToggleBlock field="test_fields" active={activeFields.has('test_fields')} onToggle={() => toggleField('test_fields')}>
+                  <div className="space-y-2">
+                    <PerStudentToggle checked={usePerStudentTest} onChange={setUsePerStudentTest} />
+                    {usePerStudentTest ? (
+                      <PerStudentContainer>
+                        {selectedDraftsList.map(d => (
+                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                            <Input
+                              value={perStudentTest[d.id] ?? ''}
+                              onChange={e => setPerStudentTest(prev => ({ ...prev, [d.id]: e.target.value }))}
+                              placeholder="테스트내용 및 범위..."
+                              className="h-8 text-sm"
+                            />
+                          </StudentBlock>
+                        ))}
+                      </PerStudentContainer>
+                    ) : (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">테스트내용 및 범위</Label>
+                        <Input
+                          value={testContent}
+                          onChange={e => setTestContent(e.target.value)}
+                          placeholder="예: 중2 1단원 단원평가, 영단어 Day1~5 쪽지시험..."
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                    )}
                   </div>
                 </FieldToggleBlock>
 
                 {/* Notes */}
-                <FieldToggleBlock
-                  field="notes"
-                  active={activeFields.has('notes')}
-                  onToggle={() => toggleField('notes')}
-                >
-                  <Textarea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="수업 중 특이사항..."
-                    className="min-h-[50px] resize-none"
-                  />
+                <FieldToggleBlock field="notes" active={activeFields.has('notes')} onToggle={() => toggleField('notes')}>
+                  <div className="space-y-2">
+                    <PerStudentToggle checked={usePerStudentMemo} onChange={setUsePerStudentMemo} />
+                    {usePerStudentMemo ? (
+                      <PerStudentContainer>
+                        {selectedDraftsList.map(d => (
+                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                            <Textarea
+                              value={perStudentMemo[d.id] ?? ''}
+                              onChange={e => setPerStudentMemo(prev => ({ ...prev, [d.id]: e.target.value }))}
+                              placeholder={`${d.student_name} 메모...`}
+                              className="min-h-[40px] resize-none text-sm"
+                            />
+                          </StudentBlock>
+                        ))}
+                      </PerStudentContainer>
+                    ) : (
+                      <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="수업 중 특이사항..." className="min-h-[50px] resize-none" />
+                    )}
+                  </div>
                 </FieldToggleBlock>
 
                 {/* Next Lesson Goal */}
-                <FieldToggleBlock
-                  field="next_lesson_goal"
-                  active={activeFields.has('next_lesson_goal')}
-                  onToggle={() => toggleField('next_lesson_goal')}
-                >
-                  <Input
-                    value={nextLessonGoal}
-                    onChange={e => setNextLessonGoal(e.target.value)}
-                    placeholder="다음 시간 진도 계획..."
-                    className="h-9"
-                  />
+                <FieldToggleBlock field="next_lesson_goal" active={activeFields.has('next_lesson_goal')} onToggle={() => toggleField('next_lesson_goal')}>
+                  <div className="space-y-2">
+                    <PerStudentToggle checked={usePerStudentNextGoal} onChange={setUsePerStudentNextGoal} />
+                    {usePerStudentNextGoal ? (
+                      <PerStudentContainer>
+                        {selectedDraftsList.map(d => (
+                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                            <Input
+                              value={perStudentNextGoal[d.id] ?? ''}
+                              onChange={e => setPerStudentNextGoal(prev => ({ ...prev, [d.id]: e.target.value }))}
+                              placeholder="다음 시간 진도 계획..."
+                              className="h-8 text-sm"
+                            />
+                          </StudentBlock>
+                        ))}
+                      </PerStudentContainer>
+                    ) : (
+                      <Input value={nextLessonGoal} onChange={e => setNextLessonGoal(e.target.value)} placeholder="다음 시간 진도 계획..." className="h-9" />
+                    )}
+                  </div>
                 </FieldToggleBlock>
 
                 {/* Homework Items */}
-                <FieldToggleBlock
-                  field="homework_items"
-                  active={activeFields.has('homework_items')}
-                  onToggle={() => toggleField('homework_items')}
-                >
+                <FieldToggleBlock field="homework_items" active={activeFields.has('homework_items')} onToggle={() => toggleField('homework_items')}>
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      <Checkbox
-                        checked={usePerStudentHomeworkItems}
-                        onCheckedChange={v => setUsePerStudentHomeworkItems(v === true)}
-                      />
-                      <span
-                        className="text-xs font-medium text-muted-foreground cursor-pointer"
-                        onClick={() => setUsePerStudentHomeworkItems(prev => !prev)}
-                      >
-                        학생별 개별 입력
-                      </span>
-                    </div>
-
+                    <PerStudentToggle checked={usePerStudentHomeworkItems} onChange={setUsePerStudentHomeworkItems} />
                     {usePerStudentHomeworkItems ? (
-                      <div className="space-y-3 border rounded-lg p-2 bg-muted/20">
-                        {drafts.filter(d => selectedIds.has(d.id)).map(d => {
-                          const studentHomeworkItems = perStudentHomeworkItems[d.id] || [];
+                      <PerStudentContainer>
+                        {selectedDraftsList.map(d => {
+                          const studentHwItems = perStudentHomeworkItems[d.id] || [];
                           return (
                             <div key={d.id} className="space-y-2 rounded-lg border bg-background p-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
                               </div>
-
-                              {studentHomeworkItems.length === 0 ? (
-                                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework(d.id)}>
-                                  <Plus className="w-3 h-3" /> 숙제 추가
-                                </Button>
-                              ) : (
-                                <>
-                                  {studentHomeworkItems.map((hw, idx) => (
-                                    <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
-                                      <div className="flex-1 space-y-1.5">
-                                        <div className="flex items-center gap-2">
-                                          <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
-                                          <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v, d.id)}>
-                                            <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="daily">일일</SelectItem>
-                                              <SelectItem value="regular">정기</SelectItem>
-                                              <SelectItem value="weekly">주간</SelectItem>
-                                              <SelectItem value="long_term">장기</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                        <Input
-                                          value={hw.content}
-                                          onChange={e => updateHomework(hw.tempId, 'content', e.target.value, d.id)}
-                                          placeholder="숙제 내용을 입력하세요"
-                                          className="h-8 text-sm"
-                                        />
-                                      </div>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId, d.id)}>
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </Button>
+                              {studentHwItems.map((hw, idx) => (
+                                <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
+                                  <div className="flex-1 space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
+                                      <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v, d.id)}>
+                                        <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="daily">일일</SelectItem>
+                                          <SelectItem value="regular">정기</SelectItem>
+                                          <SelectItem value="weekly">주간</SelectItem>
+                                          <SelectItem value="long_term">장기</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                     </div>
-                                  ))}
-                                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework(d.id)}>
-                                    <Plus className="w-3 h-3" /> 숙제 추가
+                                    <Input
+                                      value={hw.content}
+                                      onChange={e => updateHomework(hw.tempId, 'content', e.target.value, d.id)}
+                                      placeholder="숙제 내용을 입력하세요"
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId, d.id)}>
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </Button>
-                                </>
-                              )}
+                                </div>
+                              ))}
+                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework(d.id)}>
+                                <Plus className="w-3 h-3" /> 숙제 추가
+                              </Button>
                             </div>
                           );
                         })}
-                      </div>
+                      </PerStudentContainer>
                     ) : (
                       <div className="space-y-2">
                         {homeworkItems.length === 0 ? (
@@ -1096,18 +1112,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonMod
   );
 }
 
-/* ── Sub-component: toggle-able field block ── */
-function FieldToggleBlock({
-  field,
-  active,
-  onToggle,
-  children,
-}: {
-  field: EditableField;
-  active: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
+/* ── Sub-components ── */
+
+function FieldToggleBlock({ field, active, onToggle, children }: { field: EditableField; active: boolean; onToggle: () => void; children: React.ReactNode }) {
   return (
     <div className={`rounded-lg border p-3 transition-colors ${active ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20 opacity-60'}`}>
       <div className="flex items-center gap-2 cursor-pointer mb-2" onClick={onToggle}>
@@ -1116,6 +1123,31 @@ function FieldToggleBlock({
         {active && <Badge className="text-[10px] ml-auto bg-primary/10 text-primary border-0">적용됨</Badge>}
       </div>
       {active && <div className="mt-1" onClick={e => e.stopPropagation()}>{children}</div>}
+    </div>
+  );
+}
+
+function PerStudentToggle({ checked, onChange, label = '학생별 개별 입력' }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" onClick={e => e.stopPropagation()}>
+      <Checkbox checked={checked} onCheckedChange={v => onChange(v === true)} />
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    </label>
+  );
+}
+
+function PerStudentContainer({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-2 border rounded-lg p-2 bg-muted/20">{children}</div>;
+}
+
+function StudentBlock({ name, subject, children }: { name: string; subject: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs font-semibold">{name}</span>
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{subject}</Badge>
+      </div>
+      {children}
     </div>
   );
 }
