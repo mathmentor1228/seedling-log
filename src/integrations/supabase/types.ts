@@ -328,6 +328,69 @@ export type Database = {
           },
         ]
       }
+      billing_schedules: {
+        Row: {
+          base_amount: number
+          billing_month: string
+          created_at: string
+          discount_amount: number
+          due_date: string
+          final_amount: number
+          id: string
+          late_fee: number
+          memo: string | null
+          status: string
+          student_course_id: string | null
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          base_amount?: number
+          billing_month: string
+          created_at?: string
+          discount_amount?: number
+          due_date: string
+          final_amount?: number
+          id?: string
+          late_fee?: number
+          memo?: string | null
+          status?: string
+          student_course_id?: string | null
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          base_amount?: number
+          billing_month?: string
+          created_at?: string
+          discount_amount?: number
+          due_date?: string
+          final_amount?: number
+          id?: string
+          late_fee?: number
+          memo?: string | null
+          status?: string
+          student_course_id?: string | null
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_schedules_student_course_id_fkey"
+            columns: ["student_course_id"]
+            isOneToOne: false
+            referencedRelation: "student_courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_schedules_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_schedules: {
         Row: {
           class_id: string
@@ -2289,6 +2352,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pattern_alerts_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_records: {
+        Row: {
+          amount: number
+          billing_schedule_id: string | null
+          created_at: string
+          id: string
+          memo: string | null
+          paid_date: string
+          payment_method: string
+          receipt_number: string | null
+          recorded_by: string | null
+          student_id: string
+        }
+        Insert: {
+          amount: number
+          billing_schedule_id?: string | null
+          created_at?: string
+          id?: string
+          memo?: string | null
+          paid_date: string
+          payment_method?: string
+          receipt_number?: string | null
+          recorded_by?: string | null
+          student_id: string
+        }
+        Update: {
+          amount?: number
+          billing_schedule_id?: string | null
+          created_at?: string
+          id?: string
+          memo?: string | null
+          paid_date?: string
+          payment_method?: string
+          receipt_number?: string | null
+          recorded_by?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_records_billing_schedule_id_fkey"
+            columns: ["billing_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "billing_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_records_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
