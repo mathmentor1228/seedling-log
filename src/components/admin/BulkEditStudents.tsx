@@ -153,8 +153,8 @@ export function BulkEditStudents({ open, onOpenChange, selectedStudentIds, stude
         student_id: sid,
         course_policy_id: selectedCourseId,
         teacher_id: selectedTeacherId || null,
-        start_date: format(courseStartDate, 'yyyy-MM-dd'),
-        status: courseStatus,
+        enrollment_date: format(courseStartDate, 'yyyy-MM-dd'),
+        is_active: courseIsActive,
       }));
 
       const { error } = await supabase.from('student_courses').upsert(inserts as any, { onConflict: 'student_id,course_policy_id' });
