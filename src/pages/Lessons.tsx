@@ -294,21 +294,21 @@ export default function Lessons() {
   }, [searchParams, loading, students, classes]);
 
   function openModal(context: LessonFormContext | null, existingId: string | null, mode: 'view' | 'edit', forceNew: boolean = false) {
-    setModalContext(context);
-    setModalExistingRecordId(existingId);
-    setModalMode(mode);
-    setModalForceNewRecord(forceNew);
-    setIsModalOpen(true);
+    if (existingId) {
+      navigate(`/lessons/record/${existingId}?mode=${mode}`);
+    } else {
+      const params = new URLSearchParams();
+      if (context?.student_id) params.set('student_id', context.student_id);
+      if (context?.class_id) params.set('class_id', context.class_id);
+      if (context?.subject) params.set('subject', context.subject);
+      if (context?.lesson_date) params.set('lesson_date', context.lesson_date);
+      params.set('mode', mode);
+      navigate(`/lessons/record/new?${params.toString()}`);
+    }
   }
 
   function handleModalClose(open: boolean) {
-    if (!open) {
-      setIsModalOpen(false);
-      setModalContext(null);
-      setModalExistingRecordId(null);
-      setModalForceNewRecord(false);
-      fetchLessons(); // Refresh list after closing
-    }
+    if (!open) fetchLessons();
   }
 
   function handleModalSaved() {
