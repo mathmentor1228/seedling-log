@@ -77,16 +77,18 @@ export function TestTab() {
     setLoading(true);
 
     // 1. Fetch lesson_records with test data
+    // Fetch lesson_records that have test data in slot 1 OR slot 2
     let query = supabase
       .from('lesson_records')
       .select(`
         id, student_id, teacher_id, lesson_date, subject,
         test_content, test_title, test_result_text, test_result,
         english_pass_fail, test_assistant, test_name,
+        test_content_2, test_name_2, test_result_text_2, test_result_2,
+        english_pass_fail_2, test_assistant_2, test_date_2,
         students!inner(name)
       `)
-      .not('test_content', 'is', null)
-      .neq('test_content', '')
+      .or('test_content.neq.,test_content_2.neq.')
       .gte('lesson_date', startDate)
       .lte('lesson_date', endDate)
       .order('lesson_date', { ascending: false });
