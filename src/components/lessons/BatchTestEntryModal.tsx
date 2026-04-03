@@ -142,6 +142,7 @@ export function BatchTestEntryModal({
       setTestContent('');
       setTestAssistant('');
       setTeacherId(isAssistant ? '' : (user?.id || ''));
+      setTestSlot(1);
       setEntries([]);
       if (defaultSubject) fetchStudents(defaultSubject);
     }
