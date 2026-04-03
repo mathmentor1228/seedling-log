@@ -1,6 +1,6 @@
 // BATCH-TEST-ENTRY-V2: Standalone batch test input with subject-based student filtering + school/grade grouping
 // Supports assistant role with teacher selector, creates lesson_records if needed
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,10 +11,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
-import { CheckCircle2, XCircle, Minus, Loader2, Users } from 'lucide-react';
+import { CheckCircle2, XCircle, Minus, Loader2, Users, Search } from 'lucide-react';
 import { ASSISTANTS } from './constants';
 import { useTeachersList } from './useTeachersList';
 import { getTodayKST } from '@/lib/utils';
+import { fetchStudentsByIds, fetchTeacherStudentIds, getStudentGroupLabel, groupStudentsByGrade } from './studentSelection';
 
 interface StudentEntry {
   student_id: string;
