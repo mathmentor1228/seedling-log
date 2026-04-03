@@ -54,7 +54,8 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
     setUploading(true);
     try {
       const ext = file.name.split('.').pop() || 'bin';
-      const path = `${schoolName}/${Date.now()}.${ext}`;
+      const safeName = encodeURIComponent(schoolName);
+      const path = `${safeName}/${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from('school-documents').upload(path, file);
       if (uploadErr) throw uploadErr;
 
