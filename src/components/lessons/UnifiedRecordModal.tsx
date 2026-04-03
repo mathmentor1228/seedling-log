@@ -171,6 +171,7 @@ export function UnifiedRecordModal({
     setStudyTasks(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
   }
 
+  const groupedStudents = useMemo(() => groupStudentsByGrade(students), [students]);
   const selectedStudentName = students.find(s => s.id === selectedStudentId)?.name || '';
 
   async function handleSave() {
