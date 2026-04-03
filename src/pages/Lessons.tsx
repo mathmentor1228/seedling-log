@@ -861,26 +861,8 @@ export default function Lessons() {
         <TabsContent value="lessons" className="space-y-6">
 
       {/* LessonModal - only render when open to prevent backdrop blocking clicks */}
-      {isModalOpen && (
-        <LessonModal
-          open={isModalOpen}
-          onOpenChange={handleModalClose}
-          context={modalContext}
-          existingRecordId={modalExistingRecordId}
-          onSaved={handleModalSaved}
-          initialMode={modalMode}
-          forceNewRecord={modalForceNewRecord}
-        />
-      )}
 
-      {/* BATCH-LESSON-V1: Batch lesson entry modal */}
-      {isBatchModalOpen && (
-        <BatchLessonModal
-          open={isBatchModalOpen}
-          onOpenChange={setIsBatchModalOpen}
-          onSaved={handleModalSaved}
-        />
-      )}
+
 
       {/* 오늘 수업 Section */}
       {(isTeacher || isAdmin || isAssistant) && (
