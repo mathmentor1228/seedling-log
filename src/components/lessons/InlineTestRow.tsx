@@ -16,7 +16,7 @@ interface Props {
     score?: string;
     passed?: boolean | null;
     assistant_name?: string | null;
-  }) => Promise<void>;
+  }, testSlot?: number) => Promise<void>;
 }
 
 export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onUpdate }: Props) {

@@ -284,7 +284,7 @@ export function TestTab() {
         const { error: rpcError } = await supabase.rpc('update_lesson_test_fields', rpcParams);
         if (rpcError) throw rpcError;
 
-        if (updates.passed !== undefined && subject === '영어') {
+        if (updates.passed !== undefined && subject === '영어' && rec.test_slot === 1) {
           await supabase
             .from('lesson_records')
             .update({ english_pass_fail: englishPassFail })
