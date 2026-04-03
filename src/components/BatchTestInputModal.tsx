@@ -29,7 +29,7 @@ interface BatchTestInputModalProps {
   onSaved?: () => void;
 }
 
-const ASSISTANTS = ['다인조교', '유빈조교'];
+const ASSISTANTS = ['은서조교', '유빈조교'];
 
 export function BatchTestInputModal({
   open, onOpenChange, students, subject, className, date, onSaved,
