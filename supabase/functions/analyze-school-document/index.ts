@@ -11,6 +11,68 @@ function isImageDataUrl(url: string): boolean {
   );
 }
 
+function isPdfSource(
+  url: string,
+  fileMimeType?: string | null,
+  fileName?: string | null,
+): boolean {
+  if (isPdfDataUrl(url)) return true;
+
+  const normalizedMimeType = (fileMimeType || "").toLowerCase();
+  const normalizedUrl = url.toLowerCase();
+  const normalizedFileName = (fileName || "").toLowerCase();
+
+  return (
+    normalizedMimeType === "application/pdf" ||
+    normalizedUrl.includes(".pdf") ||
+    normalizedFileName.endsWith(".pdf")
+  );
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+}
+
+async function resolveAiFileUrl(
+  sourceUrl: string,
+  fileMimeType?: string | null,
+  fileName?: string | null,
+): Promise<string> {
+  if (!isPdfSource(sourceUrl, fileMimeType, fileName)) {
+    return sourceUrl;
+  }
+
+  if (isPdfDataUrl(sourceUrl)) {
+    return sourceUrl;
+  }
+
+  const fileResponse = await fetch(sourceUrl);
+  if (!fileResponse.ok) {
+    throw new Error(`PDF 파일을 불러오지 못했습니다. (${fileResponse.status})`);
+  }
+
+  const pdfBuffer = await fileResponse.arrayBuffer();
+  if (!pdfBuffer.byteLength) {
+    throw new Error("PDF 파일이 비어 있습니다.");
+  }
+
+  const mimeType =
+    fileResponse.headers.get("content-type")?.split(";")[0] ||
+    fileMimeType ||
+    "application/pdf";
+
+  return `data:${mimeType};base64,${arrayBufferToBase64(pdfBuffer)}`;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -31,7 +93,7 @@ serve(async (req) => {
       );
     }
 
-    const { fileUrl, fileDataUrl, fileType, subjectFilter, schoolName } = await req.json();
+    const { fileUrl, fileDataUrl, fileType, subjectFilter, schoolName, fileName, fileMimeType } = await req.json();
     const sourceUrl =
       typeof fileDataUrl === "string" && fileDataUrl.startsWith("data:")
         ? fileDataUrl
@@ -131,15 +193,17 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
       );
     }
 
-    // Build messages — Gemini supports inline_data for PDFs via data URLs
+    const aiFileUrl = await resolveAiFileUrl(sourceUrl, fileMimeType, fileName);
+
+    // Build messages — PDF data URLs are translated by the gateway to Gemini inlineData
     let contentParts: any[];
-    if (isPdfDataUrl(sourceUrl)) {
+    if (isPdfDataUrl(aiFileUrl)) {
       // For PDF data URLs: extract base64 and send as inline_data part
       // The gateway translates this to Gemini's inlineData format
-      const commaIdx = sourceUrl.indexOf(",");
-      const mimeMatch = sourceUrl.match(/^data:([^;]+)/);
+      const commaIdx = aiFileUrl.indexOf(",");
+      const mimeMatch = aiFileUrl.match(/^data:([^;]+)/);
       const mimeType = mimeMatch ? mimeMatch[1] : "application/pdf";
-      const base64Data = sourceUrl.substring(commaIdx + 1);
+      const base64Data = aiFileUrl.substring(commaIdx + 1);
       contentParts = [
         {
           type: "image_url",
@@ -149,7 +213,7 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
       ];
     } else {
       contentParts = [
-        { type: "image_url", image_url: { url: sourceUrl } },
+        { type: "image_url", image_url: { url: aiFileUrl } },
         { type: "text", text: extractionPrompt },
       ];
     }
