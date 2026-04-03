@@ -192,6 +192,7 @@ export function TestTab() {
       room: null,
       english_pass_fail: null,
       test_result: r.result_passed === true ? 'pass' : r.result_passed === false ? 'fail' : null,
+      test_slot: 1,
     }));
 
     // Merge, avoiding duplicates (same student + same date + same subject from both sources)
