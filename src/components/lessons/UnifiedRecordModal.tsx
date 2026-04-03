@@ -51,7 +51,8 @@ export function UnifiedRecordModal({
   defaultStudentId,
   defaultTypes = [],
 }: UnifiedRecordModalProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isAssistant = checkIsAssistant(role);
   const { toast } = useToast();
   const { teachers } = useTeachersList();
   const [students, setStudents] = useState<StudentOption[]>([]);
