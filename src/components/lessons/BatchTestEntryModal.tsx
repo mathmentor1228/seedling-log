@@ -408,8 +408,10 @@ export function BatchTestEntryModal({
             </div>
           ) : !subject ? (
             <div className="text-center py-8 text-muted-foreground text-sm">과목을 선택해주세요</div>
-          ) : entries.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">해당 과목 수강 학생이 없습니다</div>
+          ) : isAssistant && !teacherId ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">선생님을 먼저 선택해주세요</div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">조건에 맞는 학생이 없습니다</div>
           ) : (
             <div className="space-y-3">
               {grouped.map(([groupKey, students]) => (
