@@ -127,25 +127,52 @@ export function TestTab() {
       teacherMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name || '알 수 없음']));
     }
 
-    // Map lesson_records
-    let results: UnifiedTestRecord[] = (lessonData as any[]).map(r => ({
-      id: r.id,
-      source: 'lesson_record' as const,
-      student_id: r.student_id,
-      student_name: r.students?.name || '',
-      teacher_id: r.teacher_id,
-      teacher_name: teacherMap[r.teacher_id] || '알 수 없음',
-      test_date: r.lesson_date,
-      subject: r.subject,
-      test_type: null,
-      content: r.test_content || r.test_title || '',
-      score: r.test_result_text || null,
-      passed: derivePassed(r.english_pass_fail, r.test_result),
-      assistant_name: r.test_assistant || null,
-      room: null,
-      english_pass_fail: r.english_pass_fail,
-      test_result: r.test_result,
-    }));
+    // Map lesson_records - slot 1
+    let results: UnifiedTestRecord[] = (lessonData as any[])
+      .filter(r => r.test_content && r.test_content !== '')
+      .map(r => ({
+        id: r.id,
+        source: 'lesson_record' as const,
+        student_id: r.student_id,
+        student_name: r.students?.name || '',
+        teacher_id: r.teacher_id,
+        teacher_name: teacherMap[r.teacher_id] || '알 수 없음',
+        test_date: r.lesson_date,
+        subject: r.subject,
+        test_type: null,
+        content: r.test_content || r.test_title || '',
+        score: r.test_result_text || null,
+        passed: derivePassed(r.english_pass_fail, r.test_result),
+        assistant_name: r.test_assistant || null,
+        room: null,
+        english_pass_fail: r.english_pass_fail,
+        test_result: r.test_result,
+        test_slot: 1,
+      }));
+
+    // Map lesson_records - slot 2
+    const slot2Results: UnifiedTestRecord[] = (lessonData as any[])
+      .filter(r => r.test_content_2 && r.test_content_2 !== '')
+      .map(r => ({
+        id: r.id,
+        source: 'lesson_record' as const,
+        student_id: r.student_id,
+        student_name: r.students?.name || '',
+        teacher_id: r.teacher_id,
+        teacher_name: teacherMap[r.teacher_id] || '알 수 없음',
+        test_date: r.test_date_2 || r.lesson_date,
+        subject: r.subject,
+        test_type: null,
+        content: r.test_content_2 || r.test_name_2 || '',
+        score: r.test_result_text_2 || null,
+        passed: derivePassed(r.english_pass_fail_2, r.test_result_2),
+        assistant_name: r.test_assistant_2 || null,
+        room: null,
+        english_pass_fail: r.english_pass_fail_2,
+        test_result: r.test_result_2,
+        test_slot: 2,
+      }));
+    results = [...results, ...slot2Results];
 
     // Map test_schedules - show even without title
     const schedResults: UnifiedTestRecord[] = (schedData as any[]).map(r => ({
