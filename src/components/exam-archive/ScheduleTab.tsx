@@ -53,9 +53,8 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
     if (!file) { toast.error('파일을 선택해주세요'); return; }
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop() || 'bin';
-      const safeName = encodeURIComponent(schoolName);
-      const path = `${safeName}/${Date.now()}.${ext}`;
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+      const path = `exam-archive/${Date.now()}-${crypto.randomUUID()}.${ext}`;
       const { error: uploadErr } = await supabase.storage.from('school-documents').upload(path, file);
       if (uploadErr) throw uploadErr;
 
