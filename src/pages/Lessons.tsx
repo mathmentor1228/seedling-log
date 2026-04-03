@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth, isAssistant as checkIsAssistant, isTeacher as checkIsTeacher, isAdmin as checkIsAdmin, canManageLessons } from '@/lib/auth';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,9 +29,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Edit2, Trash2, FileEdit, GraduationCap, Calendar, AlertTriangle, Filter, X, ChevronLeft, ChevronRight, Eye, Users } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
-import { LessonModal } from '@/components/lessons/LessonModal';
-import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
+import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
 import { TestTab } from '@/components/lessons/TestTab';
@@ -190,6 +189,7 @@ const HOMEWORK_STATUS = [
 export default function Lessons() {
   const { user, role } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [lessons, setLessons] = useState<LessonRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -213,14 +213,7 @@ export default function Lessons() {
   
   const { toast } = useToast();
   
-  // Modal state - uses LessonModal with LessonRecordForm
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalContext, setModalContext] = useState<LessonFormContext | null>(null);
-  const [modalExistingRecordId, setModalExistingRecordId] = useState<string | null>(null);
-  const [modalMode, setModalMode] = useState<'view' | 'edit'>('edit');
-  // PREFILL-FIX-V5: Track if opening for new record creation
-  const [modalForceNewRecord, setModalForceNewRecord] = useState(false);
-  // BATCH-LESSON-V1: Batch lesson entry modal
+  // BATCH-LESSON-V1: Batch lesson entry modal (kept as modal since it's simpler)
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
@@ -300,21 +293,21 @@ export default function Lessons() {
   }, [searchParams, loading, students, classes]);
 
   function openModal(context: LessonFormContext | null, existingId: string | null, mode: 'view' | 'edit', forceNew: boolean = false) {
-    setModalContext(context);
-    setModalExistingRecordId(existingId);
-    setModalMode(mode);
-    setModalForceNewRecord(forceNew);
-    setIsModalOpen(true);
+    if (existingId) {
+      navigate(`/lessons/record/${existingId}?mode=${mode}`);
+    } else {
+      const params = new URLSearchParams();
+      if (context?.student_id) params.set('student_id', context.student_id);
+      if (context?.class_id) params.set('class_id', context.class_id);
+      if (context?.subject) params.set('subject', context.subject);
+      if (context?.lesson_date) params.set('lesson_date', context.lesson_date);
+      params.set('mode', mode);
+      navigate(`/lessons/record/new?${params.toString()}`);
+    }
   }
 
   function handleModalClose(open: boolean) {
-    if (!open) {
-      setIsModalOpen(false);
-      setModalContext(null);
-      setModalExistingRecordId(null);
-      setModalForceNewRecord(false);
-      fetchLessons(); // Refresh list after closing
-    }
+    if (!open) fetchLessons();
   }
 
   function handleModalSaved() {
@@ -866,20 +859,7 @@ export default function Lessons() {
 
         <TabsContent value="lessons" className="space-y-6">
 
-      {/* LessonModal - only render when open to prevent backdrop blocking clicks */}
-      {isModalOpen && (
-        <LessonModal
-          open={isModalOpen}
-          onOpenChange={handleModalClose}
-          context={modalContext}
-          existingRecordId={modalExistingRecordId}
-          onSaved={handleModalSaved}
-          initialMode={modalMode}
-          forceNewRecord={modalForceNewRecord}
-        />
-      )}
-
-      {/* BATCH-LESSON-V1: Batch lesson entry modal */}
+      {/* Batch lesson modal (kept as modal - lightweight) */}
       {isBatchModalOpen && (
         <BatchLessonModal
           open={isBatchModalOpen}
@@ -887,6 +867,7 @@ export default function Lessons() {
           onSaved={handleModalSaved}
         />
       )}
+
 
       {/* 오늘 수업 Section */}
       {(isTeacher || isAdmin || isAssistant) && (
