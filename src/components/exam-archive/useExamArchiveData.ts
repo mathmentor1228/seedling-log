@@ -3,6 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 import type { SchoolInfo, Schedule, Textbook, SchoolFile } from './types';
 import { differenceInDays, parseISO } from 'date-fns';
 
+// Normalize school names (merge variants like 신길초 / 신길초등학교)
+const SCHOOL_NAME_MAP: Record<string, string> = {
+  '신길초등학교': '신길초',
+};
+
+function normalizeSchoolName(name: string): string {
+  return SCHOOL_NAME_MAP[name] || name;
+}
+
 export function useExamArchiveData() {
   const [schools, setSchools] = useState<SchoolInfo[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
