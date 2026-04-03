@@ -98,12 +98,12 @@ export function BatchTestEntryModal({
       setDate(defaultDate || getTodayKST());
       setTestContent('');
       setTestAssistant('');
-      setTeacherId(isAssistant ? '' : (user?.id || ''));
+      setTeacherId('');
       setTestSlot(1);
+      setSearchQuery('');
       setEntries([]);
-      if (defaultSubject) fetchStudents(defaultSubject);
     }
-  }, [open, defaultSubject, defaultDate, fetchStudents, isAssistant, user?.id]);
+  }, [open, defaultSubject, defaultDate]);
 
   function toggleResult(idx: number) {
     setEntries(prev => prev.map((e, i) => {
