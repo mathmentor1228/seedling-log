@@ -251,8 +251,18 @@ export function BatchTestEntryModal({
     }
   }
 
+  const filteredEntries = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return entries;
+    return entries.filter((entry) =>
+      entry.student_name.toLowerCase().includes(q) ||
+      entry.school_name.toLowerCase().includes(q) ||
+      `${entry.school_level}${entry.grade_year ?? ''}`.toLowerCase().includes(q)
+    );
+  }, [entries, searchQuery]);
+
   const selectedCount = entries.filter(e => e.selected).length;
-  const grouped = groupStudents(entries);
+  const grouped = groupStudentsByGrade(filteredEntries);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
