@@ -25,7 +25,7 @@ export function sortStudents<T extends Pick<StudentListItem, 'name' | 'school_le
   });
 }
 
-export function groupStudentsByGrade<T extends Pick<StudentListItem, 'name' | 'school_level' | 'grade_year'>>(students: T[]) {
+export function groupStudentsByGrade<T extends { name: string; school_level: string | null; grade_year: number | null }>(students: T[]) {
   const groups = new Map<string, T[]>();
 
   for (const student of sortStudents(students)) {

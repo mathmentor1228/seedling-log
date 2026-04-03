@@ -262,7 +262,7 @@ export function BatchTestEntryModal({
   }, [entries, searchQuery]);
 
   const selectedCount = entries.filter(e => e.selected).length;
-  const grouped = groupStudentsByGrade(filteredEntries);
+  const grouped = groupStudentsByGrade<StudentEntry>(filteredEntries);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
