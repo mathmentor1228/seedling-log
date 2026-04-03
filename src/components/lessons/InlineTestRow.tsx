@@ -60,7 +60,7 @@ export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onU
     if (assistant !== (r.assistant_name || '')) updates.assistant_name = assistant || null;
 
     if (Object.keys(updates).length > 0) {
-      await onUpdate(r.id, updates);
+      await onUpdate(r.id, updates, r.test_slot);
     }
     setSaving(false);
     setEditing(false);
