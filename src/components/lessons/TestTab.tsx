@@ -232,9 +232,10 @@ export function TestTab() {
       score?: string;
       passed?: boolean | null;
       assistant_name?: string | null;
-    }
+    },
+    testSlot: number = 1
   ) => {
-    const rec = records.find(r => r.id === recordId);
+    const rec = records.find(r => r.id === recordId && r.test_slot === testSlot);
     if (!rec) return;
 
     // 1. Optimistic local update
