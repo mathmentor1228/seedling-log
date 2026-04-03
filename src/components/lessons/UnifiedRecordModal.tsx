@@ -102,14 +102,13 @@ export function UnifiedRecordModal({
 
   useEffect(() => {
     if (open) {
-      fetchStudents();
       resetForm();
       if (defaultDate) setSelectedDate(defaultDate);
       if (defaultStudentId) setSelectedStudentId(defaultStudentId);
       if (defaultTypes.length > 0) setSelectedTypes(new Set(defaultTypes));
-      if (user) setSelectedTeacherId(user.id);
+      setStudents([]);
     }
-  }, [open]);
+  }, [open, defaultDate, defaultStudentId, defaultTypes]);
 
   function resetForm() {
     setSelectedStudentId('');
@@ -125,14 +124,31 @@ export function UnifiedRecordModal({
     setClinicContent(''); setClinicNextMemo(''); setClinicTeacherNote('');
   }
 
-  async function fetchStudents() {
-    const { data } = await supabase
-      .from('students')
-      .select('id, name')
-      .eq('enrollment_status', '재학')
-      .order('name');
-    setStudents(data || []);
-  }
+  useEffect(() => {
+    const activeSubject = selectedTypes.has('test') ? testSubject : '';
+    if (!open) return;
+    if (!activeSubject) {
+      setStudents([]);
+      return;
+    }
+
+    const effectiveTeacherId = isAssistant ? selectedTeacherId : (selectedTeacherId || user?.id || '');
+    if (!effectiveTeacherId) {
+      setStudents([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const studentIds = await fetchTeacherStudentIds(effectiveTeacherId, activeSubject);
+        const rows = await fetchStudentsByIds(studentIds);
+        setStudents(rows);
+      } catch (error) {
+        console.error('학생 목록 로딩 실패:', error);
+        setStudents([]);
+      }
+    })();
+  }, [open, isAssistant, selectedTeacherId, selectedTypes, testSubject, user?.id]);
 
   function toggleType(type: RecordType) {
     setSelectedTypes(prev => {
