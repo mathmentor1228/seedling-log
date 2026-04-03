@@ -20,6 +20,7 @@ import { fetchStudentsByIds, fetchTeacherStudentIds, getStudentGroupLabel, group
 interface StudentEntry {
   student_id: string;
   student_name: string;
+  name: string;
   school_name: string;
   school_level: string;
   grade_year: number | null;
