@@ -56,45 +56,24 @@ export function BatchTestEntryModal({
   const [testSlot, setTestSlot] = useState<1 | 2>(1);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch students for the selected subject
-  const fetchStudents = useCallback(async (subj: string) => {
-    if (!subj) { setEntries([]); return; }
+  const fetchStudents = useCallback(async (subj: string, selectedTeacherId?: string) => {
+    if (!subj) {
+      setEntries([]);
+      return;
+    }
+
+    const effectiveTeacherId = isAssistant ? (selectedTeacherId || teacherId) : (user?.id || selectedTeacherId || '');
+    if (!effectiveTeacherId) {
+      setEntries([]);
+      return;
+    }
+
     setLoading(true);
     try {
-      let studentIds: string[] | null = null;
+      const studentIds = await fetchTeacherStudentIds(effectiveTeacherId, subj);
+      const students = await fetchStudentsByIds(studentIds);
 
-      // Assistants see ALL enrolled students (not filtered by class enrollment)
-      if (!isAssistant) {
-        const { data: classes } = await supabase
-          .from('classes')
-          .select('id')
-          .eq('subject', subj as any);
-
-        if (!classes || classes.length === 0) { setEntries([]); setLoading(false); return; }
-
-        const classIds = classes.map(c => c.id);
-        const { data: classStudents } = await supabase
-          .from('class_students')
-          .select('student_id')
-          .in('class_id', classIds);
-
-        if (!classStudents || classStudents.length === 0) { setEntries([]); setLoading(false); return; }
-        studentIds = [...new Set(classStudents.map(cs => cs.student_id))];
-      }
-
-      let query = supabase
-        .from('students')
-        .select('id, name, school, school_level, grade_year')
-        .eq('enrollment_status', '재학')
-        .order('name');
-
-      if (studentIds) {
-        query = query.in('id', studentIds);
-      }
-
-      const { data: students } = await query;
-
-      setEntries((students || []).map(s => ({
+      setEntries(students.map((s) => ({
         student_id: s.id,
         student_name: s.name,
         school_name: s.school || '',
@@ -104,12 +83,14 @@ export function BatchTestEntryModal({
         test_result_text: '',
         test_result: 'none',
       })));
-    } catch {
+    } catch (error) {
+      console.error('학생 목록 로딩 실패:', error);
+      setEntries([]);
       toast({ title: '학생 목록 로딩 실패', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  }, [toast, isAssistant]);
+  }, [toast, isAssistant, teacherId, user?.id]);
 
   useEffect(() => {
     if (open) {
