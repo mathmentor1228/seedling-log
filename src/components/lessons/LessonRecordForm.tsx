@@ -400,16 +400,6 @@ export function LessonRecordForm({
   const [isSavingSupplementary, setIsSavingSupplementary] = useState(false);
 
   // CLASS-SCHEDULE-PICKER-V1: Schedule-based class selection
-  interface ClassScheduleInfo {
-    class_id: string;
-    class_name: string;
-    subject: string;
-    teacher_id: string;
-    teacher_name: string;
-    start_time: string;
-    end_time: string;
-    day_of_week: number;
-  }
   const [classSchedules, setClassSchedules] = useState<ClassScheduleInfo[]>([]);
   const [classPickerTeacherId, setClassPickerTeacherId] = useState<string>('');
 
