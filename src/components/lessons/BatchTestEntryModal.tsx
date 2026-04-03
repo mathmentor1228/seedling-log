@@ -340,6 +340,34 @@ export function BatchTestEntryModal({
             </div>
           )}
 
+          {/* Test slot selector */}
+          <div className="space-y-1">
+            <Label className="text-xs">테스트 슬롯</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={testSlot === 1 ? 'default' : 'outline'}
+                onClick={() => setTestSlot(1)}
+                className="text-xs flex-1"
+              >
+                테스트 1
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={testSlot === 2 ? 'default' : 'outline'}
+                onClick={() => setTestSlot(2)}
+                className="text-xs flex-1"
+              >
+                테스트 2
+              </Button>
+            </div>
+            {testSlot === 2 && (
+              <p className="text-[10px] text-muted-foreground">같은 날 두 번째 테스트를 기록합니다</p>
+            )}
+          </div>
+
           {/* Test content + assistant */}
           <div className="space-y-2">
             <Label className="text-xs">테스트 내용/범위 <span className="text-destructive">*</span></Label>
