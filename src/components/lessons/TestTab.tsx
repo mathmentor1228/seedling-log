@@ -88,7 +88,7 @@ export function TestTab() {
         english_pass_fail_2, test_assistant_2, test_date_2,
         students!inner(name)
       `)
-      .or('test_content.neq.,test_content_2.neq.')
+      .or('and(test_content.not.is.null,test_content.neq.),and(test_content_2.not.is.null,test_content_2.neq.)')
       .gte('lesson_date', startDate)
       .lte('lesson_date', endDate)
       .order('lesson_date', { ascending: false });
