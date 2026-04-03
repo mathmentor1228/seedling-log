@@ -190,6 +190,7 @@ const HOMEWORK_STATUS = [
 export default function Lessons() {
   const { user, role } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [lessons, setLessons] = useState<LessonRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -213,14 +214,7 @@ export default function Lessons() {
   
   const { toast } = useToast();
   
-  // Modal state - uses LessonModal with LessonRecordForm
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalContext, setModalContext] = useState<LessonFormContext | null>(null);
-  const [modalExistingRecordId, setModalExistingRecordId] = useState<string | null>(null);
-  const [modalMode, setModalMode] = useState<'view' | 'edit'>('edit');
-  // PREFILL-FIX-V5: Track if opening for new record creation
-  const [modalForceNewRecord, setModalForceNewRecord] = useState(false);
-  // BATCH-LESSON-V1: Batch lesson entry modal
+  // BATCH-LESSON-V1: Batch lesson entry modal (kept as modal since it's simpler)
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
