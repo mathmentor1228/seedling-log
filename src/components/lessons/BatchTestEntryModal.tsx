@@ -63,7 +63,7 @@ export function BatchTestEntryModal({
       return;
     }
 
-    const effectiveTeacherId = isAssistant ? (selectedTeacherId || teacherId) : (user?.id || selectedTeacherId || '');
+    const effectiveTeacherId = isAssistant ? (selectedTeacherId || teacherId) : (user?.id || '');
     if (!effectiveTeacherId) {
       setEntries([]);
       return;
@@ -77,6 +77,7 @@ export function BatchTestEntryModal({
       setEntries(students.map((s) => ({
         student_id: s.id,
         student_name: s.name,
+        name: s.name,
         school_name: s.school || '',
         school_level: s.school_level || '',
         grade_year: s.grade_year,
@@ -91,7 +92,7 @@ export function BatchTestEntryModal({
     } finally {
       setLoading(false);
     }
-  }, [toast, isAssistant, teacherId, user?.id]);
+  }, [isAssistant, teacherId, toast, user?.id]);
 
   useEffect(() => {
     if (open) {
