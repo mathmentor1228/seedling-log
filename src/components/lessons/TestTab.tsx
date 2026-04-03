@@ -54,6 +54,7 @@ export function TestTab() {
   const [filterSubject, setFilterSubject] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [routineOpen, setRoutineOpen] = useState(false);
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [studentHistory, setStudentHistory] = useState<UnifiedTestRecord[]>([]);
