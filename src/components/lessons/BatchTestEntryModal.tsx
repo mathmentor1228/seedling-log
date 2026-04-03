@@ -84,28 +84,38 @@ export function BatchTestEntryModal({
     if (!subj) { setEntries([]); return; }
     setLoading(true);
     try {
-      const { data: classes } = await supabase
-        .from('classes')
-        .select('id')
-        .eq('subject', subj as any);
+      let studentIds: string[] | null = null;
 
-      if (!classes || classes.length === 0) { setEntries([]); setLoading(false); return; }
+      // Assistants see ALL enrolled students (not filtered by class enrollment)
+      if (!isAssistant) {
+        const { data: classes } = await supabase
+          .from('classes')
+          .select('id')
+          .eq('subject', subj as any);
 
-      const classIds = classes.map(c => c.id);
-      const { data: classStudents } = await supabase
-        .from('class_students')
-        .select('student_id')
-        .in('class_id', classIds);
+        if (!classes || classes.length === 0) { setEntries([]); setLoading(false); return; }
 
-      if (!classStudents || classStudents.length === 0) { setEntries([]); setLoading(false); return; }
+        const classIds = classes.map(c => c.id);
+        const { data: classStudents } = await supabase
+          .from('class_students')
+          .select('student_id')
+          .in('class_id', classIds);
 
-      const studentIds = [...new Set(classStudents.map(cs => cs.student_id))];
-      const { data: students } = await supabase
+        if (!classStudents || classStudents.length === 0) { setEntries([]); setLoading(false); return; }
+        studentIds = [...new Set(classStudents.map(cs => cs.student_id))];
+      }
+
+      let query = supabase
         .from('students')
         .select('id, name, school, school_level, grade_year')
-        .in('id', studentIds)
         .eq('enrollment_status', '재학')
         .order('name');
+
+      if (studentIds) {
+        query = query.in('id', studentIds);
+      }
+
+      const { data: students } = await query;
 
       setEntries((students || []).map(s => ({
         student_id: s.id,
@@ -122,7 +132,7 @@ export function BatchTestEntryModal({
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, isAssistant]);
 
   useEffect(() => {
     if (open) {
