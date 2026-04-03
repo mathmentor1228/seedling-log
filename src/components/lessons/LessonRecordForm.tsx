@@ -1620,27 +1620,71 @@ export function LessonRecordForm({
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground">클래스:</span>
             {canSelectStudentClass ? (
-              <Select
-                value={formData.class_id || '_placeholder_'}
-                onValueChange={(value) => {
-                  if (value !== '_placeholder_') {
-                    setFormData({ ...formData, class_id: value });
-                  }
-                }}
-              >
-                <SelectTrigger className="w-[180px] h-8">
-                  <SelectValue placeholder="클래스 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_placeholder_" disabled>클래스 선택</SelectItem>
-                  {classes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.subject})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Teacher filter for schedule-based picker */}
+                <Select
+                  value={classPickerTeacherId || '_all_'}
+                  onValueChange={(v) => setClassPickerTeacherId(v === '_all_' ? '' : v)}
+                >
+                  <SelectTrigger className="w-[120px] h-8 text-xs">
+                    <SelectValue placeholder="선생님" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_all_">전체 선생님</SelectItem>
+                    {scheduleTeachers.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Schedule-based class selection */}
+                <Select
+                  value={formData.class_id || '_placeholder_'}
+                  onValueChange={(value) => {
+                    if (value === '_no_class_') {
+                      setFormData({ ...formData, class_id: '' });
+                    } else if (value !== '_placeholder_') {
+                      const sched = filteredSchedules.find(s => s.class_id === value);
+                      const cls = classes.find(c => c.id === value);
+                      setFormData({ ...formData, class_id: value, subject: sched?.subject || cls?.subject || formData.subject });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-[220px] h-8 text-xs">
+                    <SelectValue placeholder="시간대/클래스 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_placeholder_" disabled>시간대/클래스 선택</SelectItem>
+                    <SelectItem value="_no_class_" className="text-muted-foreground">⏱ 시간 미지정 (선생님 일지만)</SelectItem>
+                    {filteredSchedules.length > 0 ? (
+                      filteredSchedules.map((s, i) => {
+                        const tName = teachers?.find(t => t.id === s.teacher_id)?.name || '';
+                        return (
+                          <SelectItem key={`${s.class_id}-${i}`} value={s.class_id}>
+                            {s.start_time}~{s.end_time} · {s.class_name} ({s.subject}){tName && !classPickerTeacherId ? ` - ${tName}` : ''}
+                          </SelectItem>
+                        );
+                      })
+                    ) : (
+                      <SelectItem value="_none_" disabled className="text-xs text-muted-foreground">
+                        {selectedDayOfWeek >= 0 ? '해당 요일에 배정된 수업 없음' : '날짜를 선택하세요'}
+                      </SelectItem>
+                    )}
+                    {/* Fallback: all classes not in schedule */}
+                    {classes.filter(c => !filteredSchedules.some(s => s.class_id === c.id)).length > 0 && (
+                      <>
+                        <SelectItem value="_divider_" disabled className="text-[10px] text-muted-foreground border-t mt-1 pt-1">── 기타 클래스 ──</SelectItem>
+                        {classes.filter(c => !filteredSchedules.some(s => s.class_id === c.id)).map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.name} ({c.subject})</SelectItem>
+                        ))}
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             ) : (
               <span className="font-medium">{className}</span>
             )}
