@@ -280,6 +280,18 @@ function shouldDisableUnderstandingScore(lessonTypes: string[], attendanceStatus
   if (attendanceStatus.some(s => ABSENCE_STATUSES.includes(s))) return true;
   return false;
 }
+
+interface ClassScheduleInfo {
+  class_id: string;
+  class_name: string;
+  subject: string;
+  teacher_id: string;
+  teacher_name: string;
+  start_time: string;
+  end_time: string;
+  day_of_week: number;
+}
+
 export function LessonRecordForm({
   initialContext,
   existingRecordId,
