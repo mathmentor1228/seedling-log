@@ -31,11 +31,12 @@ export function useExamArchiveData() {
       supabase.from('students').select('id, school').eq('enrollment_status', '재학'),
     ]);
 
-    const allSchedules = (schedulesRes.data || []) as Schedule[];
-    const allTextbooks = (textbooksRes.data || []) as Textbook[];
-    const allFiles = (filesRes.data || []) as SchoolFile[];
-    const allArchives = (archivesRes.data || []) as any[];
-    const students = (studentsRes.data || []) as any[];
+    // Normalize school names in all data
+    const allSchedules = (schedulesRes.data || []).map((s: any) => ({ ...s, school_name: normalizeSchoolName(s.school_name) })) as Schedule[];
+    const allTextbooks = (textbooksRes.data || []).map((t: any) => ({ ...t, school_name: normalizeSchoolName(t.school_name) })) as Textbook[];
+    const allFiles = (filesRes.data || []).map((f: any) => ({ ...f, school_name: normalizeSchoolName(f.school_name) })) as SchoolFile[];
+    const allArchives = (archivesRes.data || []).map((a: any) => ({ ...a, school_name: normalizeSchoolName(a.school_name) })) as any[];
+    const students = (studentsRes.data || []).map((s: any) => ({ ...s, school: s.school ? normalizeSchoolName(s.school) : s.school })) as any[];
 
     setSchedules(allSchedules);
     setTextbooks(allTextbooks);
