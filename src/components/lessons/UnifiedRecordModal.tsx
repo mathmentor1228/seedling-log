@@ -330,6 +330,7 @@ export function UnifiedRecordModal({
                     role="combobox"
                     aria-expanded={studentPopoverOpen}
                     className="w-full justify-between font-normal"
+                    disabled={selectedTypes.has('test') && isAssistant && (!selectedTeacherId || !testSubject)}
                   >
                     {selectedStudentName || '학생 선택...'}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -340,25 +341,33 @@ export function UnifiedRecordModal({
                     <CommandInput placeholder="학생 검색..." />
                     <CommandList>
                       <CommandEmpty>학생을 찾을 수 없습니다</CommandEmpty>
-                      <CommandGroup>
-                        {students.map(s => (
-                          <CommandItem
-                            key={s.id}
-                            value={s.name}
-                            onSelect={() => {
-                              setSelectedStudentId(s.id);
-                              setStudentPopoverOpen(false);
-                            }}
-                          >
-                            <Check className={cn('mr-2 h-4 w-4', selectedStudentId === s.id ? 'opacity-100' : 'opacity-0')} />
-                            {s.name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      {groupedStudents.map(([groupKey, group]) => (
+                        <CommandGroup key={groupKey} heading={getStudentGroupLabel(groupKey)}>
+                          {group.map((s) => (
+                            <CommandItem
+                              key={s.id}
+                              value={`${s.name} ${s.school || ''} ${s.school_level || ''} ${s.grade_year || ''}`}
+                              onSelect={() => {
+                                setSelectedStudentId(s.id);
+                                setStudentPopoverOpen(false);
+                              }}
+                            >
+                              <Check className={cn('mr-2 h-4 w-4', selectedStudentId === s.id ? 'opacity-100' : 'opacity-0')} />
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span>{s.name}</span>
+                                {s.school && <span className="text-xs text-muted-foreground truncate">{s.school}</span>}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ))}
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
+              {selectedTypes.has('test') && isAssistant && (!selectedTeacherId || !testSubject) && (
+                <p className="mt-1 text-xs text-muted-foreground">선생님과 과목을 먼저 선택해주세요</p>
+              )}
             </div>
 
             <div>
