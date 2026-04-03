@@ -54,6 +54,7 @@ export function BatchTestEntryModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testSlot, setTestSlot] = useState<1 | 2>(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch students for the selected subject
   const fetchStudents = useCallback(async (subj: string) => {
