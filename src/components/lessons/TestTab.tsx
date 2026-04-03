@@ -273,7 +273,7 @@ export function TestTab() {
           }
         }
 
-        const rpcParams: any = { _lesson_id: recordId, _test_result: testResult };
+        const rpcParams: any = { _lesson_id: recordId, _test_result: testResult, _test_slot: rec.test_slot };
         if (updates.content !== undefined) {
           rpcParams._test_content = updates.content;
           rpcParams._test_name = updates.content;
