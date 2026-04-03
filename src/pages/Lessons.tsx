@@ -859,8 +859,14 @@ export default function Lessons() {
 
         <TabsContent value="lessons" className="space-y-6">
 
-      {/* LessonModal - only render when open to prevent backdrop blocking clicks */}
-
+      {/* Batch lesson modal (kept as modal - lightweight) */}
+      {isBatchModalOpen && (
+        <BatchLessonModal
+          open={isBatchModalOpen}
+          onOpenChange={setIsBatchModalOpen}
+          onSaved={handleModalSaved}
+        />
+      )}
 
 
       {/* 오늘 수업 Section */}
