@@ -34,6 +34,8 @@ export interface UnifiedTestRecord {
   // raw DB fields for editing
   english_pass_fail: string | null;
   test_result: string | null;
+  // Test slot (1 or 2)
+  test_slot: number;
 }
 
 export function derivePassed(english_pass_fail: string | null, test_result: string | null): boolean | null {
@@ -75,16 +77,18 @@ export function TestTab() {
     setLoading(true);
 
     // 1. Fetch lesson_records with test data
+    // Fetch lesson_records that have test data in slot 1 OR slot 2
     let query = supabase
       .from('lesson_records')
       .select(`
         id, student_id, teacher_id, lesson_date, subject,
         test_content, test_title, test_result_text, test_result,
         english_pass_fail, test_assistant, test_name,
+        test_content_2, test_name_2, test_result_text_2, test_result_2,
+        english_pass_fail_2, test_assistant_2, test_date_2,
         students!inner(name)
       `)
-      .not('test_content', 'is', null)
-      .neq('test_content', '')
+      .or('and(test_content.not.is.null,test_content.neq.),and(test_content_2.not.is.null,test_content_2.neq.)')
       .gte('lesson_date', startDate)
       .lte('lesson_date', endDate)
       .order('lesson_date', { ascending: false });
@@ -123,25 +127,52 @@ export function TestTab() {
       teacherMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name || '알 수 없음']));
     }
 
-    // Map lesson_records
-    let results: UnifiedTestRecord[] = (lessonData as any[]).map(r => ({
-      id: r.id,
-      source: 'lesson_record' as const,
-      student_id: r.student_id,
-      student_name: r.students?.name || '',
-      teacher_id: r.teacher_id,
-      teacher_name: teacherMap[r.teacher_id] || '알 수 없음',
-      test_date: r.lesson_date,
-      subject: r.subject,
-      test_type: null,
-      content: r.test_content || r.test_title || '',
-      score: r.test_result_text || null,
-      passed: derivePassed(r.english_pass_fail, r.test_result),
-      assistant_name: r.test_assistant || null,
-      room: null,
-      english_pass_fail: r.english_pass_fail,
-      test_result: r.test_result,
-    }));
+    // Map lesson_records - slot 1
+    let results: UnifiedTestRecord[] = (lessonData as any[])
+      .filter(r => r.test_content && r.test_content !== '')
+      .map(r => ({
+        id: r.id,
+        source: 'lesson_record' as const,
+        student_id: r.student_id,
+        student_name: r.students?.name || '',
+        teacher_id: r.teacher_id,
+        teacher_name: teacherMap[r.teacher_id] || '알 수 없음',
+        test_date: r.lesson_date,
+        subject: r.subject,
+        test_type: null,
+        content: r.test_content || r.test_title || '',
+        score: r.test_result_text || null,
+        passed: derivePassed(r.english_pass_fail, r.test_result),
+        assistant_name: r.test_assistant || null,
+        room: null,
+        english_pass_fail: r.english_pass_fail,
+        test_result: r.test_result,
+        test_slot: 1,
+      }));
+
+    // Map lesson_records - slot 2
+    const slot2Results: UnifiedTestRecord[] = (lessonData as any[])
+      .filter(r => r.test_content_2 && r.test_content_2 !== '')
+      .map(r => ({
+        id: r.id,
+        source: 'lesson_record' as const,
+        student_id: r.student_id,
+        student_name: r.students?.name || '',
+        teacher_id: r.teacher_id,
+        teacher_name: teacherMap[r.teacher_id] || '알 수 없음',
+        test_date: r.test_date_2 || r.lesson_date,
+        subject: r.subject,
+        test_type: null,
+        content: r.test_content_2 || r.test_name_2 || '',
+        score: r.test_result_text_2 || null,
+        passed: derivePassed(r.english_pass_fail_2, r.test_result_2),
+        assistant_name: r.test_assistant_2 || null,
+        room: null,
+        english_pass_fail: r.english_pass_fail_2,
+        test_result: r.test_result_2,
+        test_slot: 2,
+      }));
+    results = [...results, ...slot2Results];
 
     // Map test_schedules - show even without title
     const schedResults: UnifiedTestRecord[] = (schedData as any[]).map(r => ({
@@ -161,6 +192,7 @@ export function TestTab() {
       room: null,
       english_pass_fail: null,
       test_result: r.result_passed === true ? 'pass' : r.result_passed === false ? 'fail' : null,
+      test_slot: 1,
     }));
 
     // Merge, avoiding duplicates (same student + same date + same subject from both sources)
@@ -200,13 +232,14 @@ export function TestTab() {
       score?: string;
       passed?: boolean | null;
       assistant_name?: string | null;
-    }
+    },
+    testSlot: number = 1
   ) => {
-    const rec = records.find(r => r.id === recordId);
+    const rec = records.find(r => r.id === recordId && r.test_slot === testSlot);
     if (!rec) return;
 
     // 1. Optimistic local update
-    setRecords(prev => prev.map(r => r.id !== recordId ? r : { ...r, ...updates }));
+    setRecords(prev => prev.map(r => (r.id !== recordId || r.test_slot !== testSlot) ? r : { ...r, ...updates }));
 
     try {
       if (rec.source === 'test_schedule') {
@@ -240,7 +273,7 @@ export function TestTab() {
           }
         }
 
-        const rpcParams: any = { _lesson_id: recordId, _test_result: testResult };
+        const rpcParams: any = { _lesson_id: recordId, _test_result: testResult, _test_slot: rec.test_slot };
         if (updates.content !== undefined) {
           rpcParams._test_content = updates.content;
           rpcParams._test_name = updates.content;
@@ -251,7 +284,7 @@ export function TestTab() {
         const { error: rpcError } = await supabase.rpc('update_lesson_test_fields', rpcParams);
         if (rpcError) throw rpcError;
 
-        if (updates.passed !== undefined && subject === '영어') {
+        if (updates.passed !== undefined && subject === '영어' && rec.test_slot === 1) {
           await supabase
             .from('lesson_records')
             .update({ english_pass_fail: englishPassFail })
@@ -299,6 +332,7 @@ export function TestTab() {
       room: null,
       english_pass_fail: r.english_pass_fail,
       test_result: r.test_result,
+      test_slot: 1,
     }));
 
     setStudentHistory(mapped);

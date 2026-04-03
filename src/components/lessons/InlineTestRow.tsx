@@ -16,7 +16,7 @@ interface Props {
     score?: string;
     passed?: boolean | null;
     assistant_name?: string | null;
-  }) => Promise<void>;
+  }, testSlot?: number) => Promise<void>;
 }
 
 export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onUpdate }: Props) {
@@ -60,7 +60,7 @@ export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onU
     if (assistant !== (r.assistant_name || '')) updates.assistant_name = assistant || null;
 
     if (Object.keys(updates).length > 0) {
-      await onUpdate(r.id, updates);
+      await onUpdate(r.id, updates, r.test_slot);
     }
     setSaving(false);
     setEditing(false);
@@ -91,7 +91,7 @@ export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onU
             : <ChevronDown className="w-3 h-3" />}
         </button>
       </TableCell>
-      <TableCell><Badge variant="outline" className="text-xs">{r.subject}</Badge></TableCell>
+      <TableCell><Badge variant="outline" className="text-xs">{r.subject}{r.test_slot === 2 ? ' ②' : ''}</Badge></TableCell>
 
       {/* Content - inline editable */}
       <TableCell className="max-w-[200px]">
@@ -153,6 +153,7 @@ export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onU
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">없음</SelectItem>
+              <SelectItem value="은서조교">은서조교</SelectItem>
               <SelectItem value="다인조교">다인조교</SelectItem>
               <SelectItem value="유빈조교">유빈조교</SelectItem>
             </SelectContent>
