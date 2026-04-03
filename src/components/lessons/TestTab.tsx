@@ -420,6 +420,13 @@ export function TestTab() {
       </Card>
 
       <UnifiedRecordModal open={modalOpen} onOpenChange={setModalOpen} defaultTypes={['test']} onSaved={fetchRecords} />
+      <BatchTestEntryModal
+        open={batchOpen}
+        onOpenChange={setBatchOpen}
+        defaultSubject={filterSubject !== 'all' ? filterSubject : undefined}
+        defaultDate={startDate}
+        onSaved={fetchRecords}
+      />
       <RoutineModal open={routineOpen} onOpenChange={setRoutineOpen} type="test" />
     </div>
   );
