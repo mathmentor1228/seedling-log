@@ -1,4 +1,5 @@
-// BATCH-TEST-ENTRY-V1: Standalone batch test input with subject-based student filtering + school/grade grouping
+// BATCH-TEST-ENTRY-V2: Standalone batch test input with subject-based student filtering + school/grade grouping
+// Supports assistant role with teacher selector, creates lesson_records if needed
 import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -9,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { CheckCircle2, XCircle, Minus, ClipboardEdit, Loader2, Users } from 'lucide-react';
+import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
+import { CheckCircle2, XCircle, Minus, Loader2, Users } from 'lucide-react';
 import { ASSISTANTS } from './constants';
+import { useTeachersList } from './useTeachersList';
 import { getTodayKST } from '@/lib/utils';
 
 interface StudentEntry {
@@ -44,7 +47,6 @@ function groupStudents(students: StudentEntry[]) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(s);
   }
-  // Sort groups by school level then grade
   return [...groups.entries()].sort(([a], [b]) => {
     const levelA = SCHOOL_LEVEL_ORDER[a[0]] ?? 99;
     const levelB = SCHOOL_LEVEL_ORDER[b[0]] ?? 99;
@@ -65,10 +67,14 @@ export function BatchTestEntryModal({
   open, onOpenChange, defaultSubject, defaultDate, onSaved,
 }: BatchTestEntryModalProps) {
   const { toast } = useToast();
+  const { user, role } = useAuth();
+  const isAssistant = checkIsAssistant(role);
+  const { teachers } = useTeachersList();
   const [subject, setSubject] = useState(defaultSubject || '');
   const [date, setDate] = useState(defaultDate || getTodayKST());
   const [testContent, setTestContent] = useState('');
   const [testAssistant, setTestAssistant] = useState('');
+  const [teacherId, setTeacherId] = useState('');
   const [entries, setEntries] = useState<StudentEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -78,7 +84,6 @@ export function BatchTestEntryModal({
     if (!subj) { setEntries([]); return; }
     setLoading(true);
     try {
-      // Get classes for this subject
       const { data: classes } = await supabase
         .from('classes')
         .select('id')
@@ -87,8 +92,6 @@ export function BatchTestEntryModal({
       if (!classes || classes.length === 0) { setEntries([]); setLoading(false); return; }
 
       const classIds = classes.map(c => c.id);
-
-      // Get students in those classes
       const { data: classStudents } = await supabase
         .from('class_students')
         .select('student_id')
@@ -97,8 +100,6 @@ export function BatchTestEntryModal({
       if (!classStudents || classStudents.length === 0) { setEntries([]); setLoading(false); return; }
 
       const studentIds = [...new Set(classStudents.map(cs => cs.student_id))];
-
-      // Fetch student details
       const { data: students } = await supabase
         .from('students')
         .select('id, name, school, school_level, grade_year')
@@ -129,10 +130,11 @@ export function BatchTestEntryModal({
       setDate(defaultDate || getTodayKST());
       setTestContent('');
       setTestAssistant('');
+      setTeacherId(isAssistant ? '' : (user?.id || ''));
       setEntries([]);
       if (defaultSubject) fetchStudents(defaultSubject);
     }
-  }, [open, defaultSubject, defaultDate, fetchStudents]);
+  }, [open, defaultSubject, defaultDate, fetchStudents, isAssistant, user?.id]);
 
   function toggleResult(idx: number) {
     setEntries(prev => prev.map((e, i) => {
@@ -165,6 +167,12 @@ export function BatchTestEntryModal({
       return;
     }
 
+    const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
+    if (!effectiveTeacherId) {
+      toast({ title: '담당 선생님을 선택해주세요', variant: 'destructive' });
+      return;
+    }
+
     setSaving(true);
     try {
       // Find existing lesson records for these students on this date/subject
@@ -176,16 +184,47 @@ export function BatchTestEntryModal({
         .in('student_id', selected.map(s => s.student_id));
 
       const recordMap = new Map((existingRecords || []).map(r => [r.student_id, r.id]));
+
+      // Create lesson records for students that don't have one
+      const missingStudents = selected.filter(e => !recordMap.has(e.student_id));
+      if (missingStudents.length > 0) {
+        const newRecords = missingStudents.map(s => ({
+          student_id: s.student_id,
+          teacher_id: effectiveTeacherId,
+          lesson_date: date,
+          subject: subject as any,
+          lesson_types: ['테스트'] as string[],
+          understanding_score: 0,
+          homework_status: 'none',
+          lesson_range: '테스트',
+          submitted: true,
+          submitted_at: new Date().toISOString(),
+          test_content: testContent,
+          test_name: testContent,
+          test_date: date,
+          test_assistant: testAssistant || null,
+        }));
+
+        const { data: inserted, error: insertError } = await supabase
+          .from('lesson_records')
+          .insert(newRecords)
+          .select('id, student_id');
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+        } else if (inserted) {
+          for (const rec of inserted) {
+            recordMap.set(rec.student_id, rec.id);
+          }
+        }
+      }
+
       let successCount = 0;
       const savedRecordIds: string[] = [];
 
       for (const entry of selected) {
         const recordId = recordMap.get(entry.student_id);
-        if (!recordId) continue; // Skip students without lesson records
-
-        const englishPassFail = subject === '영어'
-          ? (entry.test_result === 'pass' ? 'pass' : entry.test_result === 'fail' ? 'fail' : null)
-          : null;
+        if (!recordId) continue;
 
         const { error } = await supabase.rpc('update_lesson_test_fields', {
           _lesson_id: recordId,
@@ -203,7 +242,7 @@ export function BatchTestEntryModal({
         }
       }
 
-      // Sync lesson_types to include '테스트' and english_pass_fail
+      // Sync lesson_types and english_pass_fail
       if (savedRecordIds.length > 0) {
         const { data: currentRecords } = await supabase
           .from('lesson_records')
@@ -229,12 +268,10 @@ export function BatchTestEntryModal({
         }
       }
 
-      const noRecordCount = selected.filter(e => !recordMap.has(e.student_id)).length;
-      const desc = noRecordCount > 0
-        ? `${successCount}명 저장 완료 (${noRecordCount}명은 해당일 수업일지가 없어 건너뜀)`
-        : `${successCount}명의 테스트 결과를 저장했습니다.`;
-
-      toast({ title: '일괄 저장 완료', description: desc });
+      toast({
+        title: '일괄 저장 완료',
+        description: `${successCount}명의 테스트 결과를 저장했습니다.`,
+      });
       onOpenChange(false);
       onSaved?.();
     } catch (err: any) {
@@ -274,6 +311,21 @@ export function BatchTestEntryModal({
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
           </div>
+
+          {/* Teacher selector for assistants */}
+          {isAssistant && (
+            <div className="space-y-1">
+              <Label className="text-xs">담당 선생님 <span className="text-destructive">*</span></Label>
+              <Select value={teacherId} onValueChange={setTeacherId}>
+                <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                <SelectContent>
+                  {teachers.map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Test content + assistant */}
           <div className="space-y-2">
@@ -387,7 +439,7 @@ export function BatchTestEntryModal({
 
         <DialogFooter className="pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
-          <Button onClick={handleSave} disabled={saving || !testContent.trim() || !subject || selectedCount === 0}>
+          <Button onClick={handleSave} disabled={saving || !testContent.trim() || !subject || selectedCount === 0 || (isAssistant && !teacherId)}>
             {saving ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> 저장 중...</> : `${selectedCount}명 일괄 저장`}
           </Button>
         </DialogFooter>
