@@ -399,7 +399,70 @@ export function LessonRecordForm({
   const [supplementTime, setSupplementTime] = useState('');
   const [isSavingSupplementary, setIsSavingSupplementary] = useState(false);
 
-  // Test fields state
+  // CLASS-SCHEDULE-PICKER-V1: Schedule-based class selection
+  interface ClassScheduleInfo {
+    class_id: string;
+    class_name: string;
+    subject: string;
+    teacher_id: string;
+    teacher_name: string;
+    start_time: string;
+    end_time: string;
+    day_of_week: number;
+  }
+  const [classSchedules, setClassSchedules] = useState<ClassScheduleInfo[]>([]);
+  const [classPickerTeacherId, setClassPickerTeacherId] = useState<string>('');
+
+  // Fetch class schedules for the picker
+  useEffect(() => {
+    if (!canManage) return;
+    (async () => {
+      const { data } = await supabase
+        .from('class_schedules')
+        .select('class_id, day_of_week, start_time, end_time, teacher_id, classes!inner(name, subject)')
+        .eq('is_active', true)
+        .order('start_time');
+      if (data) {
+        const mapped: ClassScheduleInfo[] = (data as any[]).map(d => ({
+          class_id: d.class_id,
+          class_name: d.classes?.name || '',
+          subject: d.classes?.subject || '',
+          teacher_id: d.teacher_id,
+          teacher_name: '',
+          start_time: d.start_time?.slice(0, 5) || '',
+          end_time: d.end_time?.slice(0, 5) || '',
+          day_of_week: d.day_of_week,
+        }));
+        // Fill teacher names from teachers prop
+        setClassSchedules(mapped);
+      }
+    })();
+  }, [canManage]);
+
+  // Get day of week from selected date
+  const selectedDayOfWeek = useMemo(() => {
+    if (!formData.lesson_date) return -1;
+    return new Date(formData.lesson_date + 'T00:00:00').getDay();
+  }, [formData.lesson_date]);
+
+  // Filter schedules for picker
+  const filteredSchedules = useMemo(() => {
+    let filtered = classSchedules.filter(s => s.day_of_week === selectedDayOfWeek);
+    if (classPickerTeacherId) {
+      filtered = filtered.filter(s => s.teacher_id === classPickerTeacherId);
+    }
+    return filtered;
+  }, [classSchedules, selectedDayOfWeek, classPickerTeacherId]);
+
+  // Unique teachers from schedules
+  const scheduleTeachers = useMemo(() => {
+    const teacherIds = [...new Set(classSchedules.map(s => s.teacher_id))];
+    return teacherIds.map(id => {
+      const t = teachers?.find(t => t.id === id);
+      return { id, name: t?.name || '알 수 없음' };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [classSchedules, teachers]);
+
   // WRITE-PERSIST-FIX-V1: Added test_content as required field
   const [testFormData, setTestFormData] = useState({
     test_name: '', // Unified: saves to test_name, test_content, test_title
