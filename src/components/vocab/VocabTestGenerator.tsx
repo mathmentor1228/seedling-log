@@ -91,6 +91,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [engToKorPercent, setEngToKorPercent] = useState(50);
   const [questionCount, setQuestionCount] = useState(20);
   const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
+  const [totalWordCount, setTotalWordCount] = useState(0);
   const [generated, setGenerated] = useState<GeneratedQuestion[]>([]);
   const [showAnswers, setShowAnswers] = useState(false);
   const [testTitle, setTestTitle] = useState('');
