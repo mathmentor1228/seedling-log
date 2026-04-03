@@ -1,6 +1,6 @@
 // BATCH-TEST-ENTRY-V2: Standalone batch test input with subject-based student filtering + school/grade grouping
 // Supports assistant role with teacher selector, creates lesson_records if needed
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,14 +11,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
-import { CheckCircle2, XCircle, Minus, Loader2, Users } from 'lucide-react';
+import { CheckCircle2, XCircle, Minus, Loader2, Users, Search } from 'lucide-react';
 import { ASSISTANTS } from './constants';
 import { useTeachersList } from './useTeachersList';
 import { getTodayKST } from '@/lib/utils';
+import { fetchStudentsByIds, fetchTeacherStudentIds, getStudentGroupLabel, groupStudentsByGrade } from './studentSelection';
 
 interface StudentEntry {
   student_id: string;
   student_name: string;
+  name: string;
   school_name: string;
   school_level: string;
   grade_year: number | null;
@@ -36,32 +38,6 @@ interface BatchTestEntryModalProps {
 }
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
-const SCHOOL_LEVEL_ORDER: Record<string, number> = { '초': 0, '중': 1, '고': 2 };
-
-function groupStudents(students: StudentEntry[]) {
-  const groups = new Map<string, StudentEntry[]>();
-  for (const s of students) {
-    const level = s.school_level || '기타';
-    const grade = s.grade_year ?? 0;
-    const key = `${level}${grade}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(s);
-  }
-  return [...groups.entries()].sort(([a], [b]) => {
-    const levelA = SCHOOL_LEVEL_ORDER[a[0]] ?? 99;
-    const levelB = SCHOOL_LEVEL_ORDER[b[0]] ?? 99;
-    if (levelA !== levelB) return levelA - levelB;
-    return a.localeCompare(b);
-  });
-}
-
-function getGroupLabel(key: string) {
-  if (key === '기타0') return '미분류';
-  const level = key[0];
-  const grade = key.slice(1);
-  const levelName = level === '초' ? '초등' : level === '중' ? '중등' : level === '고' ? '고등' : level;
-  return `${levelName} ${grade}학년`;
-}
 
 export function BatchTestEntryModal({
   open, onOpenChange, defaultSubject, defaultDate, onSaved,
@@ -79,48 +55,29 @@ export function BatchTestEntryModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testSlot, setTestSlot] = useState<1 | 2>(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch students for the selected subject
-  const fetchStudents = useCallback(async (subj: string) => {
-    if (!subj) { setEntries([]); return; }
+  const fetchStudents = useCallback(async (subj: string, selectedTeacherId?: string) => {
+    if (!subj) {
+      setEntries([]);
+      return;
+    }
+
+    const effectiveTeacherId = isAssistant ? (selectedTeacherId || teacherId) : (user?.id || '');
+    if (!effectiveTeacherId) {
+      setEntries([]);
+      return;
+    }
+
     setLoading(true);
     try {
-      let studentIds: string[] | null = null;
+      const studentIds = await fetchTeacherStudentIds(effectiveTeacherId, subj);
+      const students = await fetchStudentsByIds(studentIds);
 
-      // Assistants see ALL enrolled students (not filtered by class enrollment)
-      if (!isAssistant) {
-        const { data: classes } = await supabase
-          .from('classes')
-          .select('id')
-          .eq('subject', subj as any);
-
-        if (!classes || classes.length === 0) { setEntries([]); setLoading(false); return; }
-
-        const classIds = classes.map(c => c.id);
-        const { data: classStudents } = await supabase
-          .from('class_students')
-          .select('student_id')
-          .in('class_id', classIds);
-
-        if (!classStudents || classStudents.length === 0) { setEntries([]); setLoading(false); return; }
-        studentIds = [...new Set(classStudents.map(cs => cs.student_id))];
-      }
-
-      let query = supabase
-        .from('students')
-        .select('id, name, school, school_level, grade_year')
-        .eq('enrollment_status', '재학')
-        .order('name');
-
-      if (studentIds) {
-        query = query.in('id', studentIds);
-      }
-
-      const { data: students } = await query;
-
-      setEntries((students || []).map(s => ({
+      setEntries(students.map((s) => ({
         student_id: s.id,
         student_name: s.name,
+        name: s.name,
         school_name: s.school || '',
         school_level: s.school_level || '',
         grade_year: s.grade_year,
@@ -128,12 +85,14 @@ export function BatchTestEntryModal({
         test_result_text: '',
         test_result: 'none',
       })));
-    } catch {
+    } catch (error) {
+      console.error('학생 목록 로딩 실패:', error);
+      setEntries([]);
       toast({ title: '학생 목록 로딩 실패', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  }, [toast, isAssistant]);
+  }, [isAssistant, teacherId, toast, user?.id]);
 
   useEffect(() => {
     if (open) {
@@ -141,12 +100,21 @@ export function BatchTestEntryModal({
       setDate(defaultDate || getTodayKST());
       setTestContent('');
       setTestAssistant('');
-      setTeacherId(isAssistant ? '' : (user?.id || ''));
+      setTeacherId('');
       setTestSlot(1);
+      setSearchQuery('');
       setEntries([]);
-      if (defaultSubject) fetchStudents(defaultSubject);
     }
-  }, [open, defaultSubject, defaultDate, fetchStudents, isAssistant, user?.id]);
+  }, [open, defaultSubject, defaultDate]);
+
+  useEffect(() => {
+    if (!open || !subject) return;
+    if (isAssistant && !teacherId) {
+      setEntries([]);
+      return;
+    }
+    void fetchStudents(subject, teacherId);
+  }, [open, subject, teacherId, isAssistant, fetchStudents]);
 
   function toggleResult(idx: number) {
     setEntries(prev => prev.map((e, i) => {
@@ -294,8 +262,18 @@ export function BatchTestEntryModal({
     }
   }
 
+  const filteredEntries = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return entries;
+    return entries.filter((entry) =>
+      entry.student_name.toLowerCase().includes(q) ||
+      entry.school_name.toLowerCase().includes(q) ||
+      `${entry.school_level}${entry.grade_year ?? ''}`.toLowerCase().includes(q)
+    );
+  }, [entries, searchQuery]);
+
   const selectedCount = entries.filter(e => e.selected).length;
-  const grouped = groupStudents(entries);
+  const grouped = groupStudentsByGrade<StudentEntry>(filteredEntries);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -312,7 +290,7 @@ export function BatchTestEntryModal({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">과목 <span className="text-destructive">*</span></Label>
-              <Select value={subject} onValueChange={v => { setSubject(v); fetchStudents(v); }}>
+              <Select value={subject} onValueChange={setSubject}>
                 <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
                 <SelectContent>
                   {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -389,6 +367,21 @@ export function BatchTestEntryModal({
             </Select>
           </div>
 
+          {subject && (
+            <div className="space-y-2">
+              <Label className="text-xs">학생 검색</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="이름/학교/학년 검색"
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Bulk actions */}
           {entries.length > 0 && (
             <div className="flex items-center justify-between gap-2">
@@ -415,15 +408,17 @@ export function BatchTestEntryModal({
             </div>
           ) : !subject ? (
             <div className="text-center py-8 text-muted-foreground text-sm">과목을 선택해주세요</div>
-          ) : entries.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">해당 과목 수강 학생이 없습니다</div>
+          ) : isAssistant && !teacherId ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">선생님을 먼저 선택해주세요</div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">조건에 맞는 학생이 없습니다</div>
           ) : (
             <div className="space-y-3">
               {grouped.map(([groupKey, students]) => (
                 <div key={groupKey}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <Badge variant="secondary" className="text-[11px] font-medium">
-                      {getGroupLabel(groupKey)}
+                      {getStudentGroupLabel(groupKey)}
                     </Badge>
                     <span className="text-[11px] text-muted-foreground">{students.length}명</span>
                   </div>

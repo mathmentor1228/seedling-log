@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface TeacherOption {
@@ -12,18 +12,39 @@ export function useTeachersList() {
 
   useEffect(() => {
     (async () => {
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'teacher');
-      const ids = (roleData || []).map(r => r.user_id);
-      if (ids.length === 0) { setTeachers([]); setLoading(false); return; }
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', ids);
-      setTeachers((profiles || []).map(p => ({ id: p.id, full_name: p.full_name || '알 수 없음' })));
-      setLoading(false);
+      try {
+        const [{ data: classes }, { data: subjectTeachers }, { data: lessons }] = await Promise.all([
+          supabase.from('classes').select('teacher_id').not('teacher_id', 'is', null),
+          supabase.from('student_subject_teachers').select('teacher_id'),
+          supabase.from('lesson_records').select('teacher_id').not('teacher_id', 'is', null),
+        ]);
+
+        const teacherIds = [...new Set([
+          ...(classes || []).map((row) => row.teacher_id).filter(Boolean),
+          ...(subjectTeachers || []).map((row) => row.teacher_id).filter(Boolean),
+          ...(lessons || []).map((row) => row.teacher_id).filter(Boolean),
+        ])] as string[];
+
+        if (teacherIds.length === 0) {
+          setTeachers([]);
+          setLoading(false);
+          return;
+        }
+
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .eq('is_active', true)
+          .in('id', teacherIds)
+          .order('full_name');
+
+        setTeachers((profiles || []).map((profile) => ({
+          id: profile.id,
+          full_name: profile.full_name || '알 수 없음',
+        })));
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 

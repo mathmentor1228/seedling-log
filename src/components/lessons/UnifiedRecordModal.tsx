@@ -10,12 +10,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/lib/auth';
+import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { getTodayKST } from '@/lib/utils';
 import { ASSISTANTS, ROOMS, SUBJECTS, TEST_TYPES, isSpecialRoom } from './constants';
 import { useTeachersList } from './useTeachersList';
 import { Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchStudentsByIds, fetchTeacherStudentIds, getStudentGroupLabel, groupStudentsByGrade } from './studentSelection';
 
 interface UnifiedRecordModalProps {
   open: boolean;
@@ -29,6 +30,9 @@ interface UnifiedRecordModalProps {
 interface StudentOption {
   id: string;
   name: string;
+  school: string | null;
+  school_level: string | null;
+  grade_year: number | null;
 }
 
 interface StudyTask {
@@ -47,7 +51,8 @@ export function UnifiedRecordModal({
   defaultStudentId,
   defaultTypes = [],
 }: UnifiedRecordModalProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isAssistant = checkIsAssistant(role);
   const { toast } = useToast();
   const { teachers } = useTeachersList();
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -97,14 +102,13 @@ export function UnifiedRecordModal({
 
   useEffect(() => {
     if (open) {
-      fetchStudents();
       resetForm();
       if (defaultDate) setSelectedDate(defaultDate);
       if (defaultStudentId) setSelectedStudentId(defaultStudentId);
       if (defaultTypes.length > 0) setSelectedTypes(new Set(defaultTypes));
-      if (user) setSelectedTeacherId(user.id);
+      setStudents([]);
     }
-  }, [open]);
+  }, [open, defaultDate, defaultStudentId, defaultTypes]);
 
   function resetForm() {
     setSelectedStudentId('');
@@ -120,14 +124,31 @@ export function UnifiedRecordModal({
     setClinicContent(''); setClinicNextMemo(''); setClinicTeacherNote('');
   }
 
-  async function fetchStudents() {
-    const { data } = await supabase
-      .from('students')
-      .select('id, name')
-      .eq('enrollment_status', '재학')
-      .order('name');
-    setStudents(data || []);
-  }
+  useEffect(() => {
+    const activeSubject = selectedTypes.has('test') ? testSubject : '';
+    if (!open) return;
+    if (!activeSubject) {
+      setStudents([]);
+      return;
+    }
+
+    const effectiveTeacherId = isAssistant ? selectedTeacherId : (selectedTeacherId || user?.id || '');
+    if (!effectiveTeacherId) {
+      setStudents([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const studentIds = await fetchTeacherStudentIds(effectiveTeacherId, activeSubject);
+        const rows = await fetchStudentsByIds(studentIds);
+        setStudents(rows);
+      } catch (error) {
+        console.error('학생 목록 로딩 실패:', error);
+        setStudents([]);
+      }
+    })();
+  }, [open, isAssistant, selectedTeacherId, selectedTypes, testSubject, user?.id]);
 
   function toggleType(type: RecordType) {
     setSelectedTypes(prev => {
@@ -150,6 +171,7 @@ export function UnifiedRecordModal({
     setStudyTasks(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
   }
 
+  const groupedStudents = useMemo(() => groupStudentsByGrade(students), [students]);
   const selectedStudentName = students.find(s => s.id === selectedStudentId)?.name || '';
 
   async function handleSave() {
@@ -172,7 +194,7 @@ export function UnifiedRecordModal({
 
     setSaving(true);
     try {
-      const teacherId = selectedTeacherId || user?.id;
+      const teacherId = selectedTeacherId || (!isAssistant ? user?.id : undefined);
 
       // Upsert lesson_record for linking
       async function upsertLessonRecord(types: string[], subject: string): Promise<string | null> {
@@ -308,6 +330,7 @@ export function UnifiedRecordModal({
                     role="combobox"
                     aria-expanded={studentPopoverOpen}
                     className="w-full justify-between font-normal"
+                    disabled={selectedTypes.has('test') && isAssistant && (!selectedTeacherId || !testSubject)}
                   >
                     {selectedStudentName || '학생 선택...'}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -318,25 +341,33 @@ export function UnifiedRecordModal({
                     <CommandInput placeholder="학생 검색..." />
                     <CommandList>
                       <CommandEmpty>학생을 찾을 수 없습니다</CommandEmpty>
-                      <CommandGroup>
-                        {students.map(s => (
-                          <CommandItem
-                            key={s.id}
-                            value={s.name}
-                            onSelect={() => {
-                              setSelectedStudentId(s.id);
-                              setStudentPopoverOpen(false);
-                            }}
-                          >
-                            <Check className={cn('mr-2 h-4 w-4', selectedStudentId === s.id ? 'opacity-100' : 'opacity-0')} />
-                            {s.name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      {groupedStudents.map(([groupKey, group]) => (
+                        <CommandGroup key={groupKey} heading={getStudentGroupLabel(groupKey)}>
+                          {group.map((s) => (
+                            <CommandItem
+                              key={s.id}
+                              value={`${s.name} ${s.school || ''} ${s.school_level || ''} ${s.grade_year || ''}`}
+                              onSelect={() => {
+                                setSelectedStudentId(s.id);
+                                setStudentPopoverOpen(false);
+                              }}
+                            >
+                              <Check className={cn('mr-2 h-4 w-4', selectedStudentId === s.id ? 'opacity-100' : 'opacity-0')} />
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span>{s.name}</span>
+                                {s.school && <span className="text-xs text-muted-foreground truncate">{s.school}</span>}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ))}
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
+              {selectedTypes.has('test') && isAssistant && (!selectedTeacherId || !testSubject) && (
+                <p className="mt-1 text-xs text-muted-foreground">선생님과 과목을 먼저 선택해주세요</p>
+              )}
             </div>
 
             <div>
