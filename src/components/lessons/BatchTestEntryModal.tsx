@@ -1,5 +1,4 @@
-// BATCH-TEST-ENTRY-V2: Standalone batch test input with subject-based student filtering + school/grade grouping
-// Supports assistant role with teacher selector, creates lesson_records if needed
+// BATCH-TEST-ENTRY-V3: Enhanced with time slot selection + improved design
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,10 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
-import { CheckCircle2, XCircle, Minus, Loader2, Users, Search } from 'lucide-react';
+import { CheckCircle2, XCircle, Minus, Loader2, Users, Search, Clock, UserCheck } from 'lucide-react';
 import { ASSISTANTS } from './constants';
 import { useTeachersList } from './useTeachersList';
 import { getTodayKST } from '@/lib/utils';
@@ -37,6 +37,13 @@ interface BatchTestEntryModalProps {
   onSaved?: () => void;
 }
 
+interface TimeSlotOption {
+  id: string;
+  label: string;
+  class_id: string;
+  class_name: string;
+}
+
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 
 export function BatchTestEntryModal({
@@ -51,23 +58,41 @@ export function BatchTestEntryModal({
   const [testContent, setTestContent] = useState('');
   const [testAssistant, setTestAssistant] = useState('');
   const [teacherId, setTeacherId] = useState('');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState('미정');
+  const [timeSlots, setTimeSlots] = useState<TimeSlotOption[]>([]);
   const [entries, setEntries] = useState<StudentEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testSlot, setTestSlot] = useState<1 | 2>(1);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchStudents = useCallback(async (subj: string, selectedTeacherId?: string) => {
-    if (!subj) {
-      setEntries([]);
-      return;
-    }
+  // Fetch time slots for selected teacher + date
+  const fetchTimeSlots = useCallback(async (tid: string, d: string) => {
+    if (!tid || !d) { setTimeSlots([]); return; }
+    const dateObj = new Date(d + 'T12:00:00');
+    const dayOfWeek = dateObj.getDay();
 
+    const { data } = await supabase
+      .from('class_schedules')
+      .select('id, start_time, end_time, class_id, classes!inner(name, subject)')
+      .eq('teacher_id', tid)
+      .eq('day_of_week', dayOfWeek)
+      .eq('is_active', true)
+      .order('start_time');
+
+    const slots: TimeSlotOption[] = ((data || []) as any[]).map(s => ({
+      id: s.id,
+      label: `${s.start_time?.slice(0, 5)}~${s.end_time?.slice(0, 5)} · ${s.classes?.name || ''}`,
+      class_id: s.class_id,
+      class_name: s.classes?.name || '',
+    }));
+    setTimeSlots(slots);
+  }, []);
+
+  const fetchStudents = useCallback(async (subj: string, selectedTeacherId?: string) => {
+    if (!subj) { setEntries([]); return; }
     const effectiveTeacherId = isAssistant ? (selectedTeacherId || teacherId) : (user?.id || '');
-    if (!effectiveTeacherId) {
-      setEntries([]);
-      return;
-    }
+    if (!effectiveTeacherId) { setEntries([]); return; }
 
     setLoading(true);
     try {
@@ -101,18 +126,25 @@ export function BatchTestEntryModal({
       setTestContent('');
       setTestAssistant('');
       setTeacherId('');
+      setSelectedTimeSlot('미정');
+      setTimeSlots([]);
       setTestSlot(1);
       setSearchQuery('');
       setEntries([]);
     }
   }, [open, defaultSubject, defaultDate]);
 
+  // When teacher or date changes, fetch time slots
+  useEffect(() => {
+    if (!open) return;
+    const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
+    fetchTimeSlots(effectiveTeacherId, date);
+  }, [open, teacherId, date, isAssistant, user?.id, fetchTimeSlots]);
+
+  // When teacher + subject selected, fetch students
   useEffect(() => {
     if (!open || !subject) return;
-    if (isAssistant && !teacherId) {
-      setEntries([]);
-      return;
-    }
+    if (isAssistant && !teacherId) { setEntries([]); return; }
     void fetchStudents(subject, teacherId);
   }, [open, subject, teacherId, isAssistant, fetchStudents]);
 
@@ -139,23 +171,18 @@ export function BatchTestEntryModal({
   async function handleSave() {
     const selected = entries.filter(e => e.selected);
     if (!testContent.trim()) {
-      toast({ title: '테스트 내용을 입력해주세요', variant: 'destructive' });
-      return;
+      toast({ title: '테스트 내용을 입력해주세요', variant: 'destructive' }); return;
     }
     if (selected.length === 0) {
-      toast({ title: '학생을 선택해주세요', variant: 'destructive' });
-      return;
+      toast({ title: '학생을 선택해주세요', variant: 'destructive' }); return;
     }
-
     const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
     if (!effectiveTeacherId) {
-      toast({ title: '담당 선생님을 선택해주세요', variant: 'destructive' });
-      return;
+      toast({ title: '담당 선생님을 선택해주세요', variant: 'destructive' }); return;
     }
 
     setSaving(true);
     try {
-      // Find existing lesson records for these students on this date/subject
       const { data: existingRecords } = await supabase
         .from('lesson_records')
         .select('id, student_id')
@@ -165,7 +192,6 @@ export function BatchTestEntryModal({
 
       const recordMap = new Map((existingRecords || []).map(r => [r.student_id, r.id]));
 
-      // Create lesson records for students that don't have one
       const missingStudents = selected.filter(e => !recordMap.has(e.student_id));
       if (missingStudents.length > 0) {
         const newRecords = missingStudents.map(s => ({
@@ -186,16 +212,10 @@ export function BatchTestEntryModal({
         }));
 
         const { data: inserted, error: insertError } = await supabase
-          .from('lesson_records')
-          .insert(newRecords)
-          .select('id, student_id');
-
-        if (insertError) {
-          console.error('Insert error:', insertError);
-        } else if (inserted) {
-          for (const rec of inserted) {
-            recordMap.set(rec.student_id, rec.id);
-          }
+          .from('lesson_records').insert(newRecords).select('id, student_id');
+        if (insertError) console.error('Insert error:', insertError);
+        else if (inserted) {
+          for (const rec of inserted) recordMap.set(rec.student_id, rec.id);
         }
       }
 
@@ -205,7 +225,6 @@ export function BatchTestEntryModal({
       for (const entry of selected) {
         const recordId = recordMap.get(entry.student_id);
         if (!recordId) continue;
-
         const { error } = await supabase.rpc('update_lesson_test_fields', {
           _lesson_id: recordId,
           _test_content: testContent,
@@ -216,29 +235,18 @@ export function BatchTestEntryModal({
           _test_assistant: testAssistant || null,
           _test_slot: testSlot,
         });
-
-        if (!error) {
-          successCount++;
-          savedRecordIds.push(recordId);
-        }
+        if (!error) { successCount++; savedRecordIds.push(recordId); }
       }
 
-      // Sync lesson_types and english_pass_fail
       if (savedRecordIds.length > 0) {
         const { data: currentRecords } = await supabase
-          .from('lesson_records')
-          .select('id, lesson_types, student_id')
-          .in('id', savedRecordIds);
-
+          .from('lesson_records').select('id, lesson_types, student_id').in('id', savedRecordIds);
         if (currentRecords) {
           for (const rec of currentRecords) {
             const currentTypes: string[] = (rec.lesson_types as string[]) || [];
             const entry = selected.find(e => e.student_id === rec.student_id);
             const updatePayload: Record<string, any> = {};
-
-            if (!currentTypes.includes('테스트')) {
-              updatePayload.lesson_types = [...currentTypes, '테스트'];
-            }
+            if (!currentTypes.includes('테스트')) updatePayload.lesson_types = [...currentTypes, '테스트'];
             if (subject === '영어' && entry) {
               updatePayload.english_pass_fail = entry.test_result === 'pass' ? 'pass' : entry.test_result === 'fail' ? 'fail' : null;
             }
@@ -249,10 +257,7 @@ export function BatchTestEntryModal({
         }
       }
 
-      toast({
-        title: '일괄 저장 완료',
-        description: `${successCount}명의 테스트 결과를 저장했습니다.`,
-      });
+      toast({ title: '일괄 저장 완료', description: `${successCount}명의 테스트 결과를 저장했습니다.` });
       onOpenChange(false);
       onSaved?.();
     } catch (err: any) {
@@ -274,210 +279,201 @@ export function BatchTestEntryModal({
 
   const selectedCount = entries.filter(e => e.selected).length;
   const grouped = groupStudentsByGrade<StudentEntry>(filteredEntries);
+  const selectedTeacherName = teachers.find(t => t.id === teacherId)?.full_name || '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b bg-primary/5">
+          <DialogTitle className="flex items-center gap-2 text-base">
             <Users className="w-5 h-5 text-primary" />
             테스트 일괄 입력
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 overflow-y-auto flex-1">
-          {/* Subject + Date */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">과목 <span className="text-destructive">*</span></Label>
-              <Select value={subject} onValueChange={setSubject}>
-                <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
-                <SelectContent>
-                  {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">날짜</Label>
-              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
-            </div>
-          </div>
-
-          {/* Teacher selector for assistants */}
-          {isAssistant && (
-            <div className="space-y-1">
-              <Label className="text-xs">담당 선생님 <span className="text-destructive">*</span></Label>
-              <Select value={teacherId} onValueChange={setTeacherId}>
-                <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
-                <SelectContent>
-                  {teachers.map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Test slot selector */}
-          <div className="space-y-1">
-            <Label className="text-xs">테스트 슬롯</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={testSlot === 1 ? 'default' : 'outline'}
-                onClick={() => setTestSlot(1)}
-                className="text-xs flex-1"
-              >
-                테스트 1
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={testSlot === 2 ? 'default' : 'outline'}
-                onClick={() => setTestSlot(2)}
-                className="text-xs flex-1"
-              >
-                테스트 2
-              </Button>
-            </div>
-            {testSlot === 2 && (
-              <p className="text-[10px] text-muted-foreground">같은 날 두 번째 테스트를 기록합니다</p>
-            )}
-          </div>
-
-          {/* Test content + assistant */}
-          <div className="space-y-2">
-            <Label className="text-xs">테스트 내용/범위 <span className="text-destructive">*</span></Label>
-            <Input
-              value={testContent}
-              onChange={e => setTestContent(e.target.value)}
-              placeholder="예: 단원평가 3단원, 영단어 Day 5"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">조교</Label>
-            <Select value={testAssistant} onValueChange={setTestAssistant}>
-              <SelectTrigger><SelectValue placeholder="선택 (선택사항)" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none_selected">선택 안함</SelectItem>
-                {ASSISTANTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {subject && (
-            <div className="space-y-2">
-              <Label className="text-xs">학생 검색</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="이름/학교/학년 검색"
-                  className="pl-8 h-8 text-xs"
-                />
+        <div className="space-y-4 overflow-y-auto flex-1 px-5 py-4">
+          {/* Step 1: Teacher + Date + Time */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-3 space-y-3">
+              <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5" /> 1단계: 담당선생님 · 날짜 · 타임
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs">담당 선생님 <span className="text-destructive">*</span></Label>
+                  <Select value={teacherId || (isAssistant ? '' : user?.id || '')} onValueChange={(v) => { setTeacherId(v); setSelectedTimeSlot('미정'); }}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {teachers.map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">수업 날짜</Label>
+                  <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-9" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> 타임</Label>
+                  <Select value={selectedTimeSlot} onValueChange={setSelectedTimeSlot}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="미정">미정 (시간 없음)</SelectItem>
+                      {timeSlots.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-          )}
+            </CardContent>
+          </Card>
 
-          {/* Bulk actions */}
-          {entries.length > 0 && (
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={selectedCount === entries.length}
-                  onCheckedChange={checked => selectAll(!!checked)}
-                />
-                <span className="text-xs text-muted-foreground">
-                  전체 선택 ({selectedCount}/{entries.length})
-                </span>
-              </div>
-              <Button variant="outline" size="sm" className="text-xs gap-1" onClick={setAllPass}>
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                선택 전체 통과
-              </Button>
-            </div>
-          )}
-
-          {/* Student list grouped by school/grade */}
-          {loading ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" /> 학생 목록 로딩 중...
-            </div>
-          ) : !subject ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">과목을 선택해주세요</div>
-          ) : isAssistant && !teacherId ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">선생님을 먼저 선택해주세요</div>
-          ) : filteredEntries.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">조건에 맞는 학생이 없습니다</div>
-          ) : (
-            <div className="space-y-3">
-              {grouped.map(([groupKey, students]) => (
-                <div key={groupKey}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Badge variant="secondary" className="text-[11px] font-medium">
-                      {getStudentGroupLabel(groupKey)}
-                    </Badge>
-                    <span className="text-[11px] text-muted-foreground">{students.length}명</span>
-                  </div>
-                  <div className="space-y-1">
-                    {students.map(entry => {
-                      const idx = entries.findIndex(e => e.student_id === entry.student_id);
-                      return (
-                        <div key={entry.student_id} className="flex items-center gap-2 p-2 rounded-lg border bg-muted/20">
-                          <Checkbox
-                            checked={entry.selected}
-                            onCheckedChange={() => toggleSelect(idx)}
-                            className="shrink-0"
-                          />
-                          <span className="text-sm font-medium min-w-[52px] truncate">{entry.student_name}</span>
-                          {entry.school_name && (
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[60px]">{entry.school_name}</span>
-                          )}
-
-                          {/* Pass/Fail toggle */}
-                          <button type="button" onClick={() => toggleResult(idx)} className="shrink-0 ml-auto">
-                            {entry.test_result === 'pass' && (
-                              <Badge className="bg-green-500/15 text-green-700 border-green-500/30 text-xs cursor-pointer hover:bg-green-500/25">
-                                <CheckCircle2 className="w-3 h-3 mr-0.5" /> 통과
-                              </Badge>
-                            )}
-                            {entry.test_result === 'fail' && (
-                              <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-xs cursor-pointer hover:bg-red-500/25">
-                                <XCircle className="w-3 h-3 mr-0.5" /> 불통과
-                              </Badge>
-                            )}
-                            {entry.test_result === 'none' && (
-                              <Badge variant="outline" className="text-xs cursor-pointer hover:bg-muted">
-                                <Minus className="w-3 h-3 mr-0.5" /> 미입력
-                              </Badge>
-                            )}
-                          </button>
-
-                          {/* Score input */}
-                          <Input
-                            value={entry.test_result_text}
-                            onChange={e => setEntries(prev => prev.map((en, i) => i === idx ? { ...en, test_result_text: e.target.value } : en))}
-                            placeholder="점수"
-                            className="h-7 text-xs w-20 shrink-0"
-                          />
-                        </div>
-                      );
-                    })}
+          {/* Step 2: Subject + Test Details */}
+          <Card className="border-muted">
+            <CardContent className="p-3 space-y-3">
+              <p className="text-xs font-semibold text-foreground">2단계: 과목 · 테스트 정보</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">과목 <span className="text-destructive">*</span></Label>
+                  <Select value={subject} onValueChange={setSubject}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="과목 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">테스트 슬롯</Label>
+                  <div className="flex gap-1">
+                    <Button type="button" size="sm" variant={testSlot === 1 ? 'default' : 'outline'} onClick={() => setTestSlot(1)} className="text-xs flex-1 h-9">① 테스트 1</Button>
+                    <Button type="button" size="sm" variant={testSlot === 2 ? 'default' : 'outline'} onClick={() => setTestSlot(2)} className="text-xs flex-1 h-9">② 테스트 2</Button>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">테스트 내용/범위 <span className="text-destructive">*</span></Label>
+                <Input value={testContent} onChange={e => setTestContent(e.target.value)} placeholder="예: 단원평가 3단원, 영단어 Day 5" className="h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">조교</Label>
+                <Select value={testAssistant} onValueChange={setTestAssistant}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="선택 (선택사항)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none_selected">선택 안함</SelectItem>
+                    {ASSISTANTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 3: Students */}
+          {(teacherId || !isAssistant) && subject && (
+            <Card className="border-muted">
+              <CardContent className="p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-foreground">3단계: 학생 선택 · 결과 입력</p>
+                  {selectedTeacherName && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {selectedTeacherName} 선생님
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="이름/학교/학년 검색" className="pl-8 h-8 text-xs" />
+                </div>
+
+                {/* Bulk actions */}
+                {entries.length > 0 && (
+                  <div className="flex items-center justify-between gap-2 py-1 border-b pb-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox checked={selectedCount === entries.length} onCheckedChange={checked => selectAll(!!checked)} />
+                      <span className="text-xs text-muted-foreground">전체 ({selectedCount}/{entries.length})</span>
+                    </label>
+                    <Button variant="outline" size="sm" className="text-xs gap-1 h-7" onClick={setAllPass}>
+                      <CheckCircle2 className="w-3 h-3 text-green-600" /> 선택 전체 통과
+                    </Button>
+                  </div>
+                )}
+
+                {/* Student list */}
+                {loading ? (
+                  <div className="flex items-center justify-center py-6 text-muted-foreground">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> 학생 로딩 중...
+                  </div>
+                ) : filteredEntries.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-xs">
+                    {isAssistant && !teacherId ? '선생님을 먼저 선택해주세요' : '조건에 맞는 학생이 없습니다'}
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                    {grouped.map(([groupKey, students]) => (
+                      <div key={groupKey}>
+                        <div className="flex items-center gap-2 mb-1 sticky top-0 bg-background py-0.5 z-10">
+                          <Badge variant="secondary" className="text-[10px] font-medium">{getStudentGroupLabel(groupKey)}</Badge>
+                          <span className="text-[10px] text-muted-foreground">{students.length}명</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          {students.map(entry => {
+                            const idx = entries.findIndex(e => e.student_id === entry.student_id);
+                            return (
+                              <div key={entry.student_id} className={`flex items-center gap-2 p-1.5 rounded-lg border transition-colors ${entry.selected ? 'bg-primary/5 border-primary/20' : 'bg-muted/20 border-transparent'}`}>
+                                <Checkbox checked={entry.selected} onCheckedChange={() => toggleSelect(idx)} className="shrink-0" />
+                                <span className="text-xs font-medium min-w-[48px] truncate">{entry.student_name}</span>
+                                {entry.school_name && <span className="text-[10px] text-muted-foreground truncate max-w-[50px]">{entry.school_name}</span>}
+                                <button type="button" onClick={() => toggleResult(idx)} className="shrink-0 ml-auto">
+                                  {entry.test_result === 'pass' && (
+                                    <Badge className="bg-green-500/15 text-green-700 border-green-500/30 text-[10px] cursor-pointer hover:bg-green-500/25 px-1.5">
+                                      <CheckCircle2 className="w-3 h-3 mr-0.5" /> 통과
+                                    </Badge>
+                                  )}
+                                  {entry.test_result === 'fail' && (
+                                    <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px] cursor-pointer hover:bg-red-500/25 px-1.5">
+                                      <XCircle className="w-3 h-3 mr-0.5" /> 불합
+                                    </Badge>
+                                  )}
+                                  {entry.test_result === 'none' && (
+                                    <Badge variant="outline" className="text-[10px] cursor-pointer hover:bg-accent px-1.5">
+                                      <Minus className="w-3 h-3 mr-0.5" /> 미정
+                                    </Badge>
+                                  )}
+                                </button>
+                                <Input
+                                  value={entry.test_result_text}
+                                  onChange={e => setEntries(prev => prev.map((en, i) => i === idx ? { ...en, test_result_text: e.target.value } : en))}
+                                  placeholder="점수"
+                                  className="w-16 h-7 text-xs"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        <DialogFooter className="pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
-          <Button onClick={handleSave} disabled={saving || !testContent.trim() || !subject || selectedCount === 0 || (isAssistant && !teacherId)}>
-            {saving ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> 저장 중...</> : `${selectedCount}명 일괄 저장`}
-          </Button>
+        <DialogFooter className="px-5 py-3 border-t bg-muted/30">
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xs text-muted-foreground">
+              {selectedCount > 0 ? `${selectedCount}명 선택됨` : '학생을 선택해주세요'}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>취소</Button>
+              <Button onClick={handleSave} disabled={saving || selectedCount === 0 || !testContent.trim()}>
+                {saving ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> 저장 중...</> : `${selectedCount}명 저장`}
+              </Button>
+            </div>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
