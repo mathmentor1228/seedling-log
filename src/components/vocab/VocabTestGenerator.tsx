@@ -91,6 +91,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [engToKorPercent, setEngToKorPercent] = useState(50);
   const [questionCount, setQuestionCount] = useState(20);
   const [selectedSetIds, setSelectedSetIds] = useState<string[]>([]);
+  const [totalWordCount, setTotalWordCount] = useState(0);
   const [generated, setGenerated] = useState<GeneratedQuestion[]>([]);
   const [showAnswers, setShowAnswers] = useState(false);
   const [testTitle, setTestTitle] = useState('');
@@ -110,6 +111,21 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
 
   const printRef = useRef<HTMLDivElement>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
+
+  // Fetch total word count when selected sets change
+  useEffect(() => {
+    if (selectedSetIds.length === 0) {
+      setTotalWordCount(0);
+      return;
+    }
+    (async () => {
+      const { count } = await supabase
+        .from('vocab_word_items')
+        .select('id', { count: 'exact', head: true })
+        .in('set_id', selectedSetIds);
+      setTotalWordCount(count ?? 0);
+    })();
+  }, [selectedSetIds]);
 
   useEffect(() => {
     loadFolders();
@@ -874,7 +890,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                   </div>
                 </div>
                 {selectedSetIds.length > 0 && (
-                  <p className="text-xs text-muted-foreground">선택된 회차: {selectedSetIds.length}개</p>
+                  <p className="text-xs text-muted-foreground">선택된 회차: {selectedSetIds.length}개 · 총 단어: <span className="font-semibold text-foreground">{totalWordCount}개</span></p>
                 )}
                 <Button onClick={handleGenerate} className="w-full" disabled={selectedSetIds.length === 0}>
                   <Shuffle className="w-4 h-4 mr-1.5" /> 시험 출제하기
