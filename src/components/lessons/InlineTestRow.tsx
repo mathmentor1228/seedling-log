@@ -91,7 +91,7 @@ export function InlineTestRow({ record: r, expandedStudent, onToggleHistory, onU
             : <ChevronDown className="w-3 h-3" />}
         </button>
       </TableCell>
-      <TableCell><Badge variant="outline" className="text-xs">{r.subject}</Badge></TableCell>
+      <TableCell><Badge variant="outline" className="text-xs">{r.subject}{r.test_slot === 2 ? ' ②' : ''}</Badge></TableCell>
 
       {/* Content - inline editable */}
       <TableCell className="max-w-[200px]">
