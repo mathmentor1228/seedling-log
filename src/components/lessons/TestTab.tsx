@@ -239,7 +239,7 @@ export function TestTab() {
     if (!rec) return;
 
     // 1. Optimistic local update
-    setRecords(prev => prev.map(r => r.id !== recordId ? r : { ...r, ...updates }));
+    setRecords(prev => prev.map(r => (r.id !== recordId || r.test_slot !== testSlot) ? r : { ...r, ...updates }));
 
     try {
       if (rec.source === 'test_schedule') {
