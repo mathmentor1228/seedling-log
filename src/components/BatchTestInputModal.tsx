@@ -38,6 +38,7 @@ export function BatchTestInputModal({
   const [saving, setSaving] = useState(false);
   const [testContent, setTestContent] = useState('');
   const [testAssistant, setTestAssistant] = useState('');
+  const [testSlot, setTestSlot] = useState<1 | 2>(1);
   const [entries, setEntries] = useState<StudentTestEntry[]>([]);
 
   useEffect(() => {
