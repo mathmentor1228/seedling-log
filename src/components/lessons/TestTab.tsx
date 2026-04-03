@@ -34,6 +34,8 @@ export interface UnifiedTestRecord {
   // raw DB fields for editing
   english_pass_fail: string | null;
   test_result: string | null;
+  // Test slot (1 or 2)
+  test_slot: number;
 }
 
 export function derivePassed(english_pass_fail: string | null, test_result: string | null): boolean | null {
