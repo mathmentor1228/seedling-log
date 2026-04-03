@@ -290,7 +290,7 @@ export function BatchTestEntryModal({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">과목 <span className="text-destructive">*</span></Label>
-              <Select value={subject} onValueChange={v => { setSubject(v); fetchStudents(v); }}>
+              <Select value={subject} onValueChange={setSubject}>
                 <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
                 <SelectContent>
                   {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
