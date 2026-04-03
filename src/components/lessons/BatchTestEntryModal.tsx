@@ -37,32 +37,6 @@ interface BatchTestEntryModalProps {
 }
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
-const SCHOOL_LEVEL_ORDER: Record<string, number> = { '초': 0, '중': 1, '고': 2 };
-
-function groupStudents(students: StudentEntry[]) {
-  const groups = new Map<string, StudentEntry[]>();
-  for (const s of students) {
-    const level = s.school_level || '기타';
-    const grade = s.grade_year ?? 0;
-    const key = `${level}${grade}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(s);
-  }
-  return [...groups.entries()].sort(([a], [b]) => {
-    const levelA = SCHOOL_LEVEL_ORDER[a[0]] ?? 99;
-    const levelB = SCHOOL_LEVEL_ORDER[b[0]] ?? 99;
-    if (levelA !== levelB) return levelA - levelB;
-    return a.localeCompare(b);
-  });
-}
-
-function getGroupLabel(key: string) {
-  if (key === '기타0') return '미분류';
-  const level = key[0];
-  const grade = key.slice(1);
-  const levelName = level === '초' ? '초등' : level === '중' ? '중등' : level === '고' ? '고등' : level;
-  return `${levelName} ${grade}학년`;
-}
 
 export function BatchTestEntryModal({
   open, onOpenChange, defaultSubject, defaultDate, onSaved,
