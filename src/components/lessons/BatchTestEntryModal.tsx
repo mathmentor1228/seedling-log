@@ -101,7 +101,7 @@ export function BatchTestEntryModal({
       // Fetch student details
       const { data: students } = await supabase
         .from('students')
-        .select('id, name, school_name, school_level, grade_year')
+        .select('id, name, school, school_level, grade_year')
         .in('id', studentIds)
         .eq('enrollment_status', '재학')
         .order('name');
@@ -109,7 +109,7 @@ export function BatchTestEntryModal({
       setEntries((students || []).map(s => ({
         student_id: s.id,
         student_name: s.name,
-        school_name: s.school_name || '',
+        school_name: s.school || '',
         school_level: s.school_level || '',
         grade_year: s.grade_year,
         selected: true,
