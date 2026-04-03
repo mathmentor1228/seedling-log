@@ -194,7 +194,7 @@ export function UnifiedRecordModal({
 
     setSaving(true);
     try {
-      const teacherId = selectedTeacherId || user?.id;
+      const teacherId = selectedTeacherId || (!isAssistant ? user?.id : undefined);
 
       // Upsert lesson_record for linking
       async function upsertLessonRecord(types: string[], subject: string): Promise<string | null> {
