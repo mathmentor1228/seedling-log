@@ -53,6 +53,7 @@ export function BatchTestInputModal({
       })));
       setTestContent('');
       setTestAssistant('');
+      setTestSlot(1);
     }
   }, [open, students]);
 
