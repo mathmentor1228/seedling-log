@@ -331,6 +331,7 @@ export function TestTab() {
       room: null,
       english_pass_fail: r.english_pass_fail,
       test_result: r.test_result,
+      test_slot: 1,
     }));
 
     setStudentHistory(mapped);
