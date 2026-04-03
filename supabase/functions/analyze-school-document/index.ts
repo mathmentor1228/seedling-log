@@ -20,11 +20,15 @@ serve(async (req) => {
       );
     }
 
-    const { fileUrl, fileType, subjectFilter, schoolName } = await req.json();
+    const { fileUrl, fileDataUrl, fileType, subjectFilter, schoolName } = await req.json();
+    const sourceUrl =
+      typeof fileDataUrl === "string" && fileDataUrl.startsWith("data:")
+        ? fileDataUrl
+        : fileUrl;
 
-    if (!fileUrl || !fileType || !schoolName) {
+    if (!sourceUrl || !fileType || !schoolName) {
       return new Response(
-        JSON.stringify({ error: "fileUrl, fileType, schoolName are required" }),
+        JSON.stringify({ error: "fileType, schoolName, and a valid file source are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -43,7 +47,13 @@ serve(async (req) => {
 다음은 ${schoolName} 학사일정 문서입니다.
 ${subjectInstruction}
 
-아래 JSON 형식으로 시험일정과 주요일정을 추출해주세요:
+아래 원칙을 꼭 지켜서 학사일정의 '개괄적이고 중요한 일정'만 추출해주세요:
+- 시험기간, 방학, 개학/종업식, 재량휴업일, 소풍, 현장체험학습, 체육대회, 축제 같은 주요 일정은 빠뜨리지 마세요.
+- 같은 의미의 세부 안내문, 반복 문구, 준비물 안내, 행정 문구는 제외하세요.
+- 모든 학교 공통 성격의 모의고사(전국연합, 학력평가, 교육청 모의고사)는 반드시 일정으로 추출하세요.
+- 날짜가 범위이면 start_date와 end_date를 모두 채우고, 하루 일정이면 같은 날짜를 넣어주세요.
+
+아래 JSON 형식으로 반환해주세요:
 {
   "schedules": [
     {
@@ -117,7 +127,7 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
         content: [
           {
             type: "image_url",
-            image_url: { url: fileUrl },
+            image_url: { url: sourceUrl },
           },
           {
             type: "text",

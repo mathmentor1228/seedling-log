@@ -14,7 +14,8 @@ import { Upload, Plus, Trash2, Loader2, ScanLine } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { useAuth } from '@/lib/auth';
 import type { Schedule } from './types';
-import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS, FILE_TYPE_LABELS } from './types';
+import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS } from './types';
+import { buildSchoolCalendarScheduleRow, fileToDataUrl, isGlobalMockExam } from './scheduleUploadUtils';
 
 interface Props {
   schoolName: string;
@@ -53,46 +54,24 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
     if (!file) { toast.error('파일을 선택해주세요'); return; }
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-      const path = `exam-archive/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-      const { error: uploadErr } = await supabase.storage.from('school-documents').upload(path, file);
-      if (uploadErr) throw uploadErr;
-
-      const { data: urlData } = supabase.storage.from('school-documents').getPublicUrl(path);
-      const fileUrl = urlData.publicUrl;
-
-      // Insert file record
-      await supabase.from('school_files').insert({
-        school_name: schoolName,
-        file_type: fileType,
-        file_name: file.name,
-        file_url: fileUrl,
-        subject_filter: subjectFilter,
-        ai_extraction_status: 'processing',
-        created_by: user?.id,
-      } as any);
+      const fileDataUrl = await fileToDataUrl(file);
 
       setUploading(false);
       setAnalyzing(true);
 
-      // Call AI analysis
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-school-document`,
-        {
-          method: 'POST',
-          headers: {
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ fileUrl, fileType, subjectFilter, schoolName }),
-        }
-      );
+      const { data: result, error } = await supabase.functions.invoke('analyze-school-document', {
+        body: {
+          fileDataUrl,
+          fileName: file.name,
+          fileMimeType: file.type || null,
+          fileType,
+          subjectFilter,
+          schoolName,
+        },
+      });
 
-      const result = await res.json();
-
-      if (!res.ok || result.error) {
-        toast.error(result.error || 'AI 분석 실패');
+      if (error || result?.error) {
+        toast.error(error?.message || result?.error || 'AI 분석 실패');
         setAnalyzing(false);
         return;
       }
@@ -111,7 +90,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
       setSelectedItems(new Set(items.map((_, i) => i)));
       toast.success(`${items.length}개 항목이 추출되었습니다`);
     } catch (err: any) {
-      toast.error(err.message || '업로드 실패');
+      toast.error(err.message || '문서 분석 실패');
     } finally {
       setUploading(false);
       setAnalyzing(false);
@@ -125,20 +104,17 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
       const selected = extractedData.filter((_, i) => selectedItems.has(i));
 
       if (fileType === 'school_calendar') {
-        const rows = selected.map((s: any) => ({
-          school_name: schoolName,
-          schedule_type: s.schedule_type || 'other',
-          title: s.title,
-          start_date: s.start_date || null,
-          end_date: s.end_date || null,
-          grade: s.grade || null,
-          subject: s.subject || null,
-          description: s.description || null,
-          is_ai_extracted: true,
-          created_by: user?.id,
-        }));
+        const rows = selected
+          .map((s: any) => buildSchoolCalendarScheduleRow(s, schoolName, user?.id))
+          .filter((row): row is NonNullable<typeof row> => Boolean(row));
+
+        const globalMockExamCount = selected.filter((item: any) => isGlobalMockExam(item)).length;
         const { error } = await supabase.from('school_schedules').insert(rows as any);
         if (error) throw error;
+
+        if (globalMockExamCount > 0) {
+          toast.success(`모의고사 ${globalMockExamCount}개는 전체일정으로 분리 저장되었습니다`);
+        }
       } else if (fileType === 'textbook_list') {
         const rows = selected.map((t: any) => ({
           school_name: schoolName,
@@ -266,7 +242,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                     className="w-full gap-2"
                   >
                     {(uploading || analyzing) && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {uploading ? '업로드 중...' : analyzing ? 'AI가 문서를 분석 중입니다...' : (
+                    {uploading ? '파일 준비 중...' : analyzing ? 'AI가 문서를 분석 중입니다...' : (
                       <><ScanLine className="w-4 h-4" /> AI로 자동 분석</>
                     )}
                   </Button>

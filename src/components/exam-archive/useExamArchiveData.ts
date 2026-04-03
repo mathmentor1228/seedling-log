@@ -54,7 +54,14 @@ export function useExamArchiveData() {
     students.forEach(s => { if (s.school) schoolSet.add(s.school); });
 
     const today = new Date();
-    const schoolInfos: SchoolInfo[] = Array.from(schoolSet).filter(Boolean).sort().map(name => {
+    const schoolInfos: SchoolInfo[] = Array.from(schoolSet)
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a === '전체일정') return -1;
+        if (b === '전체일정') return 1;
+        return a.localeCompare(b, 'ko');
+      })
+      .map(name => {
       const studentCount = students.filter(s => s.school === name).length;
 
       // Determine school level
@@ -72,13 +79,13 @@ export function useExamArchiveData() {
         .filter(e => e.daysLeft >= 0)
         .sort((a, b) => a.daysLeft - b.daysLeft);
 
-      return {
-        name,
-        level,
-        studentCount,
-        nextExam: upcomingExams[0] || null,
-      };
-    });
+        return {
+          name,
+          level,
+          studentCount,
+          nextExam: upcomingExams[0] || null,
+        };
+      });
 
     setSchools(schoolInfos);
     if (!selectedSchool && schoolInfos.length > 0) {
