@@ -309,9 +309,12 @@ export function TestTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-bold">테스트 관리</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={() => setModalOpen(true)} className="gap-1">
             <Plus className="w-4 h-4" /> 기록 추가
+          </Button>
+          <Button variant="secondary" onClick={() => setBatchOpen(true)} className="gap-1">
+            <Users className="w-4 h-4" /> 일괄 입력
           </Button>
           <Button variant="outline" onClick={() => setRoutineOpen(true)} className="gap-1">
             <Settings className="w-4 h-4" /> 루틴 설정
