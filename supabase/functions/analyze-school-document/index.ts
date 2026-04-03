@@ -1,5 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+function isPdfDataUrl(url: string): boolean {
+  return url.startsWith("data:application/pdf");
+}
+
+function isImageDataUrl(url: string): boolean {
+  return (
+    url.startsWith("data:image/") ||
+    url.startsWith("data:application/octet-stream")
+  );
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -120,22 +131,30 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
       );
     }
 
-    // Use Lovable AI Gateway with vision capability
-    const messages: any[] = [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image_url",
-            image_url: { url: sourceUrl },
-          },
-          {
-            type: "text",
-            text: extractionPrompt,
-          },
-        ],
-      },
-    ];
+    // Build messages — Gemini supports inline_data for PDFs via data URLs
+    let contentParts: any[];
+    if (isPdfDataUrl(sourceUrl)) {
+      // For PDF data URLs: extract base64 and send as inline_data part
+      // The gateway translates this to Gemini's inlineData format
+      const commaIdx = sourceUrl.indexOf(",");
+      const mimeMatch = sourceUrl.match(/^data:([^;]+)/);
+      const mimeType = mimeMatch ? mimeMatch[1] : "application/pdf";
+      const base64Data = sourceUrl.substring(commaIdx + 1);
+      contentParts = [
+        {
+          type: "image_url",
+          image_url: { url: `data:${mimeType};base64,${base64Data}` },
+        },
+        { type: "text", text: extractionPrompt },
+      ];
+    } else {
+      contentParts = [
+        { type: "image_url", image_url: { url: sourceUrl } },
+        { type: "text", text: extractionPrompt },
+      ];
+    }
+
+    const messages: any[] = [{ role: "user", content: contentParts }];
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -146,7 +165,7 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-2.5-flash",   
           messages,
           max_tokens: 4096,
         }),
@@ -157,6 +176,12 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
       const errText = await response.text();
       console.error("AI gateway error:", response.status, errText);
 
+      if (response.status === 413 || errText.includes("too large")) {
+        return new Response(
+          JSON.stringify({ error: "파일이 너무 큽니다. 5MB 이하의 파일을 사용해주세요." }),
+          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "AI 요청 한도 초과. 잠시 후 다시 시도해주세요." }),
