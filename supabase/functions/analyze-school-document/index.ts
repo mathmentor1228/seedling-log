@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 function isPdfDataUrl(url: string): boolean {
   return url.startsWith("data:application/pdf");
@@ -42,6 +43,69 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+function extractStorageObjectLocation(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    const prefixes = [
+      "/storage/v1/object/public/",
+      "/storage/v1/object/authenticated/",
+      "/storage/v1/object/sign/",
+      "/storage/v1/object/",
+    ];
+
+    const matchedPrefix = prefixes.find((prefix) =>
+      parsedUrl.pathname.startsWith(prefix),
+    );
+
+    if (!matchedPrefix) return null;
+
+    const remainder = parsedUrl.pathname.slice(matchedPrefix.length);
+    const [bucket, ...pathParts] = remainder.split("/");
+    const objectPath = pathParts.join("/");
+
+    if (!bucket || !objectPath) return null;
+
+    return {
+      bucket: decodeURIComponent(bucket),
+      objectPath: decodeURIComponent(objectPath),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchStoragePdfAsDataUrl(
+  sourceUrl: string,
+  fileMimeType?: string | null,
+): Promise<string | null> {
+  const location = extractStorageObjectLocation(sourceUrl);
+  if (!location) return null;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("스토리지 접근 설정이 누락되었습니다.");
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const { data, error } = await supabase.storage
+    .from(location.bucket)
+    .download(location.objectPath);
+
+  if (error || !data) {
+    throw new Error(error?.message || "스토리지 PDF 다운로드 실패");
+  }
+
+  const pdfBuffer = await data.arrayBuffer();
+  if (!pdfBuffer.byteLength) {
+    throw new Error("PDF 파일이 비어 있습니다.");
+  }
+
+  const mimeType = data.type || fileMimeType || "application/pdf";
+  return `data:${mimeType};base64,${arrayBufferToBase64(pdfBuffer)}`;
+}
+
 async function resolveAiFileUrl(
   sourceUrl: string,
   fileMimeType?: string | null,
@@ -57,6 +121,11 @@ async function resolveAiFileUrl(
 
   const fileResponse = await fetch(sourceUrl);
   if (!fileResponse.ok) {
+    const storagePdfDataUrl = await fetchStoragePdfAsDataUrl(sourceUrl, fileMimeType);
+    if (storagePdfDataUrl) {
+      return storagePdfDataUrl;
+    }
+
     throw new Error(`PDF 파일을 불러오지 못했습니다. (${fileResponse.status})`);
   }
 
