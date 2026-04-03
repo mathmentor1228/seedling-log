@@ -112,6 +112,21 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const printRef = useRef<HTMLDivElement>(null);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
+  // Fetch total word count when selected sets change
+  useEffect(() => {
+    if (selectedSetIds.length === 0) {
+      setTotalWordCount(0);
+      return;
+    }
+    (async () => {
+      const { count } = await supabase
+        .from('vocab_word_items')
+        .select('id', { count: 'exact', head: true })
+        .in('set_id', selectedSetIds);
+      setTotalWordCount(count ?? 0);
+    })();
+  }, [selectedSetIds]);
+
   useEffect(() => {
     loadFolders();
     loadSets();
