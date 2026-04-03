@@ -390,7 +390,7 @@ export function BatchTestEntryModal({
                 <div key={groupKey}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <Badge variant="secondary" className="text-[11px] font-medium">
-                      {getGroupLabel(groupKey)}
+                      {getStudentGroupLabel(groupKey)}
                     </Badge>
                     <span className="text-[11px] text-muted-foreground">{students.length}명</span>
                   </div>
