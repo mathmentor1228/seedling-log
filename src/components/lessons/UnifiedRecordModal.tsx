@@ -30,6 +30,9 @@ interface UnifiedRecordModalProps {
 interface StudentOption {
   id: string;
   name: string;
+  school: string | null;
+  school_level: string | null;
+  grade_year: number | null;
 }
 
 interface StudyTask {
