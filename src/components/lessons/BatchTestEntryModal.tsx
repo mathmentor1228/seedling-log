@@ -107,6 +107,15 @@ export function BatchTestEntryModal({
     }
   }, [open, defaultSubject, defaultDate]);
 
+  useEffect(() => {
+    if (!open || !subject) return;
+    if (isAssistant && !teacherId) {
+      setEntries([]);
+      return;
+    }
+    void fetchStudents(subject, teacherId);
+  }, [open, subject, teacherId, isAssistant, fetchStudents]);
+
   function toggleResult(idx: number) {
     setEntries(prev => prev.map((e, i) => {
       if (i !== idx) return e;
