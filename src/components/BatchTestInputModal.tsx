@@ -135,6 +135,7 @@ export function BatchTestInputModal({
               _test_result: entry.test_result,
               _test_date: date,
               _test_assistant: testAssistant || null,
+              _test_slot: testSlot,
             });
 
             if (!error) {
