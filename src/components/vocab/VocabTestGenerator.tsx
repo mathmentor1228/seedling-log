@@ -890,7 +890,8 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                   </div>
                 </div>
                 {selectedSetIds.length > 0 && (
-                  <p className="text-xs text-muted-foreground">선택된 회차: {selectedSetIds.length}개</p>
+                  <p className="text-xs text-muted-foreground">선택된 회차: {selectedSetIds.length}개 · 총 단어: <span className="font-semibold text-foreground">{totalWordCount}개</span></p>
+                )}
                 )}
                 <Button onClick={handleGenerate} className="w-full" disabled={selectedSetIds.length === 0}>
                   <Shuffle className="w-4 h-4 mr-1.5" /> 시험 출제하기
