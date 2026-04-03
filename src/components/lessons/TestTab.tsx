@@ -9,11 +9,12 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format, subDays, addDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
-import { Plus, Settings } from 'lucide-react';
+import { Plus, Settings, Users } from 'lucide-react';
 import { UnifiedRecordModal } from './UnifiedRecordModal';
 import { RoutineModal } from './RoutineModal';
 import { InlineTestRow } from './InlineTestRow';
 import { StudentTestHistory } from './StudentTestHistory';
+import { BatchTestEntryModal } from './BatchTestEntryModal';
 
 export interface UnifiedTestRecord {
   id: string;
