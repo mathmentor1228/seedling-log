@@ -31,6 +31,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
+import { NewLessonEntryDialog } from '@/components/lessons/NewLessonEntryDialog';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
 import { TestTab } from '@/components/lessons/TestTab';
