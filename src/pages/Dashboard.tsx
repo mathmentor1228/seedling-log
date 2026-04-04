@@ -2051,6 +2051,43 @@ export default function Dashboard() {
 
       setSupplementaryLessons(lessons);
 
+      // SUPPLEMENT-LESSON-V3: Merge into todaySlots for teacher view
+      if (isTeacher(role) && lessons.length > 0) {
+        const mySupps = lessons.filter(sl => sl.teacher_id === user.id);
+        if (mySupps.length > 0) {
+          // Group by class_id+subject+start_time to create slots
+          const slotMap = new Map<string, TodaySlot>();
+          mySupps.forEach(sl => {
+            const key = `supp-${sl.class_id || 'no-class'}-${sl.subject}-${sl.start_time || 'notime'}`;
+            if (!slotMap.has(key)) {
+              slotMap.set(key, {
+                id: key,
+                class_id: sl.class_id || '',
+                class_name: sl.class_name ? `🔄 ${sl.class_name} (보충)` : `🔄 보충수업 (${sl.subject})`,
+                subject: sl.subject,
+                start_time: sl.start_time ? `${sl.start_time}:00` : '99:00:00',
+                end_time: sl.start_time ? `${sl.start_time}:00` : '99:00:00',
+                students: [],
+              });
+            }
+            slotMap.get(key)!.students.push({
+              id: sl.student_id,
+              name: sl.student_name,
+              lessonRecordId: sl.id,
+              lessonSubmitted: sl.submitted,
+            });
+          });
+
+          const suppSlots = Array.from(slotMap.values());
+          setTodaySlots(prev => {
+            const filtered = prev.filter(s => !s.id.startsWith('supp-'));
+            const merged = [...filtered, ...suppSlots];
+            merged.sort((a, b) => a.start_time.localeCompare(b.start_time));
+            return merged;
+          });
+        }
+      }
+
       // SUPPLEMENT-LESSON-V2: Merge into adminRosterData if admin
       if (isAdmin(role) && lessons.length > 0) {
         setAdminRosterData(prev => {
