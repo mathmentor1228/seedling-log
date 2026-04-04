@@ -313,6 +313,33 @@ export function ArchiveTab({ schoolName, archives, onRefetch }: Props) {
               </div>
             </div>
 
+            {/* 세부 과정명 (고등에서만 표시) */}
+            {form.school_level === '고' && (
+              <div>
+                <Label className="text-xs">세부 과정명</Label>
+                <div className="flex gap-2">
+                  <Select value={form.course_name || 'custom'} onValueChange={v => F('course_name', v === 'custom' ? '' : v)}>
+                    <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="과정 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="custom">직접 입력</SelectItem>
+                      {(form.subject.startsWith('수학') ? MATH_COURSES :
+                        form.subject.startsWith('영어') ? ENGLISH_COURSES :
+                        form.subject.startsWith('국어') ? OTHER_COURSES : [...MATH_COURSES, ...ENGLISH_COURSES, ...OTHER_COURSES]
+                      ).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {(!form.course_name || !([...MATH_COURSES, ...ENGLISH_COURSES, ...OTHER_COURSES].includes(form.course_name))) && (
+                    <Input
+                      value={form.course_name}
+                      onChange={e => F('course_name', e.target.value)}
+                      placeholder="예: 공통수학1, 미적분I"
+                      className="h-8 text-xs flex-1"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Row 2: 연도, 학기, 시험유형 */}
             <div className="grid grid-cols-3 gap-2">
               <div>
