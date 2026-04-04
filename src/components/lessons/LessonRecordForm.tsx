@@ -2510,9 +2510,24 @@ export function LessonRecordForm({
 
       {/* Test section */}
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 bg-purple-500/8 border-b border-border/50">
-          <ClipboardCheck className="w-4 h-4 text-purple-600" />
-          <span className="text-sm font-semibold text-purple-700">오늘 테스트</span>
+        <div className="flex items-center justify-between gap-2 px-4 py-3 bg-purple-500/8 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="w-4 h-4 text-purple-600" />
+            <span className="text-sm font-semibold text-purple-700">오늘 테스트</span>
+          </div>
+          {!isViewMode && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={syncTestFromDb}
+              disabled={isSyncingTest}
+              className="h-7 text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50"
+            >
+              <RefreshCw className={`w-3 h-3 ${isSyncingTest ? 'animate-spin' : ''}`} />
+              테스트 연동
+            </Button>
+          )}
         </div>
         <div className="p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
