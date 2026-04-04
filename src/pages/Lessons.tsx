@@ -31,6 +31,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
+import { NewLessonEntryDialog } from '@/components/lessons/NewLessonEntryDialog';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
 import { TestTab } from '@/components/lessons/TestTab';
@@ -215,6 +216,7 @@ export default function Lessons() {
   
   // BATCH-LESSON-V1: Batch lesson entry modal (kept as modal since it's simpler)
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isNewEntryDialogOpen, setIsNewEntryDialogOpen] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
@@ -850,7 +852,7 @@ export default function Lessons() {
               <Button onClick={() => setIsBatchModalOpen(true)} size="sm" variant="outline" className="gap-1.5">
                 <Users className="w-4 h-4" />일괄 작성
               </Button>
-              <Button onClick={handleOpenNewForm} size="sm" className="gap-1.5">
+              <Button onClick={() => setIsNewEntryDialogOpen(true)} size="sm" className="gap-1.5">
                 <Plus className="w-4 h-4" />수업기록 생성
               </Button>
             </div>
@@ -867,6 +869,15 @@ export default function Lessons() {
           onSaved={handleModalSaved}
         />
       )}
+
+      {/* New lesson entry dialog (individual/batch choice) */}
+      <NewLessonEntryDialog
+        open={isNewEntryDialogOpen}
+        onOpenChange={setIsNewEntryDialogOpen}
+        onIndividual={handleOpenNewForm}
+        onBatchCreate={() => { fetchLessons(); }}
+      />
+
 
 
       {/* 오늘 수업 Section */}
