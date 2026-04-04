@@ -302,7 +302,7 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",   
           messages,
-          max_tokens: 4096,
+          max_tokens: 16384,
         }),
       }
     );
