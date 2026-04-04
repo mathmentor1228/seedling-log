@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2, Camera, Mic, Star, X, ChevronLeft, ChevronRight, ArrowRight, PackageX, Frown } from 'lucide-react';
+import { Plus, Save, Send, FileEdit, CheckCircle2, Clock, AlertCircle, HelpCircle, XCircle, ClipboardCheck, ClipboardList, Calendar, Loader2, Camera, Mic, Star, X, ChevronLeft, ChevronRight, ArrowRight, PackageX, Frown, RefreshCw } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -476,6 +476,81 @@ export function LessonRecordForm({
     test_assistant: '',
   });
   const [isSavingTestFields, setIsSavingTestFields] = useState(false);
+  const [isSyncingTest, setIsSyncingTest] = useState(false);
+
+  // TEST-SYNC-V1: Sync test data from DB (entered via Test tab) into this form
+  const syncTestFromDb = useCallback(async () => {
+    if (!existingRecordId) {
+      toast({ title: '동기화 불가', description: '저장된 일지가 없습니다. 먼저 임시저장 해주세요.', variant: 'destructive' });
+      return;
+    }
+    setIsSyncingTest(true);
+    try {
+      const { data: record } = await supabase
+        .from('lesson_records')
+        .select('test_name, test_content, test_result_text, test_result, test_notes, test_date, test_time, test_assistant, lesson_date, student_id, subject')
+        .eq('id', existingRecordId)
+        .maybeSingle();
+
+      if (!record) {
+        toast({ title: '레코드를 찾을 수 없습니다', variant: 'destructive' });
+        return;
+      }
+
+      const dbTestName = record.test_name || (record as any).test_content || '';
+      const dbResultText = record.test_result_text || '';
+      const dbResult = (record.test_result as 'pass' | 'fail' | 'none') || 'none';
+
+      // If DB has test data, use it
+      if (dbTestName.trim() || dbResultText.trim()) {
+        setTestFormData({
+          test_name: dbTestName,
+          test_result_text: dbResultText,
+          test_result: dbResult,
+          test_notes: record.test_notes || '',
+          test_date: record.test_date || record.lesson_date || '',
+          test_time: record.test_time || '',
+          test_assistant: record.test_assistant || '',
+        });
+        toast({ title: '테스트 데이터 연동 완료', description: '테스트 탭에서 입력된 결과가 반영되었습니다.' });
+        return;
+      }
+
+      // Fallback: check test_schedules
+      const { data: testSched } = await supabase
+        .from('test_schedules')
+        .select('content, result_score, result_passed, test_type, test_time, notes')
+        .eq('student_id', record.student_id)
+        .eq('subject', record.subject)
+        .eq('test_date', record.lesson_date)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (testSched && (testSched.content?.trim() || testSched.result_score?.trim() || testSched.result_passed != null)) {
+        const resultText = testSched.result_score ||
+          (testSched.result_passed != null ? (testSched.result_passed ? '통과' : '불통과') : '');
+        const testResult = testSched.result_passed != null
+          ? (testSched.result_passed ? 'pass' as const : 'fail' as const)
+          : 'none' as const;
+        setTestFormData(prev => ({
+          ...prev,
+          test_name: testSched.content || '',
+          test_result_text: resultText,
+          test_result: testResult,
+          test_notes: testSched.notes || prev.test_notes,
+          test_time: testSched.test_time || prev.test_time,
+        }));
+        toast({ title: '테스트 데이터 연동 완료', description: '테스트 스케줄에서 결과가 반영되었습니다.' });
+      } else {
+        toast({ title: '연동할 테스트 데이터 없음', description: '이 날짜/과목에 입력된 테스트 기록이 없습니다.' });
+      }
+    } catch (err: any) {
+      toast({ title: '연동 실패', description: err.message || '다시 시도해주세요.', variant: 'destructive' });
+    } finally {
+      setIsSyncingTest(false);
+    }
+  }, [existingRecordId, toast]);
 
   // Override state
   const [prevHomeworkOverrideEditing, setPrevHomeworkOverrideEditing] = useState(false);
@@ -2435,9 +2510,24 @@ export function LessonRecordForm({
 
       {/* Test section */}
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 bg-purple-500/8 border-b border-border/50">
-          <ClipboardCheck className="w-4 h-4 text-purple-600" />
-          <span className="text-sm font-semibold text-purple-700">오늘 테스트</span>
+        <div className="flex items-center justify-between gap-2 px-4 py-3 bg-purple-500/8 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="w-4 h-4 text-purple-600" />
+            <span className="text-sm font-semibold text-purple-700">오늘 테스트</span>
+          </div>
+          {!isViewMode && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={syncTestFromDb}
+              disabled={isSyncingTest}
+              className="h-7 text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50"
+            >
+              <RefreshCw className={`w-3 h-3 ${isSyncingTest ? 'animate-spin' : ''}`} />
+              테스트 연동
+            </Button>
+          )}
         </div>
         <div className="p-4 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
