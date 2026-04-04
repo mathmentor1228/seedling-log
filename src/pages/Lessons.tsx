@@ -216,6 +216,7 @@ export default function Lessons() {
   
   // BATCH-LESSON-V1: Batch lesson entry modal (kept as modal since it's simpler)
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isNewEntryDialogOpen, setIsNewEntryDialogOpen] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
