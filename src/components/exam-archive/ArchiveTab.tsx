@@ -123,6 +123,7 @@ export function ArchiveTab({ schoolName, archives, onRefetch }: Props) {
       school_level: form.school_level,
       grade_year: form.grade_year,
       subject: form.subject,
+      course_name: form.course_name || null,
       academic_year: form.academic_year,
       semester: form.semester,
       exam_type: form.exam_type,
