@@ -138,7 +138,7 @@ export function NewLessonEntryDialog({ open, onOpenChange, onIndividual, onBatch
           lesson_range: '',
           homework_status: 'none_assigned',
           submitted: false,
-          understanding_score: 0,
+          understanding_score: null,
         }));
 
         const { error } = await supabase.from('lesson_records').insert(records);
