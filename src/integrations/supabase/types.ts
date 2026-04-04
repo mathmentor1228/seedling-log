@@ -2858,6 +2858,7 @@ export type Database = {
         Row: {
           academic_year: number
           academy_prep_notes: string | null
+          course_name: string | null
           created_at: string
           created_by: string | null
           difficulty_level: string | null
@@ -2885,6 +2886,7 @@ export type Database = {
         Insert: {
           academic_year?: number
           academy_prep_notes?: string | null
+          course_name?: string | null
           created_at?: string
           created_by?: string | null
           difficulty_level?: string | null
@@ -2912,6 +2914,7 @@ export type Database = {
         Update: {
           academic_year?: number
           academy_prep_notes?: string | null
+          course_name?: string | null
           created_at?: string
           created_by?: string | null
           difficulty_level?: string | null
@@ -3077,6 +3080,8 @@ export type Database = {
       }
       school_textbooks: {
         Row: {
+          author: string | null
+          course_name: string | null
           created_at: string | null
           created_by: string | null
           grade: number | null
@@ -3090,6 +3095,8 @@ export type Database = {
           year: number | null
         }
         Insert: {
+          author?: string | null
+          course_name?: string | null
           created_at?: string | null
           created_by?: string | null
           grade?: number | null
@@ -3103,6 +3110,8 @@ export type Database = {
           year?: number | null
         }
         Update: {
+          author?: string | null
+          course_name?: string | null
           created_at?: string | null
           created_by?: string | null
           grade?: number | null

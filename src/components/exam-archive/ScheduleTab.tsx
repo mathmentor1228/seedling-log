@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Upload, Plus, Trash2, Loader2, ScanLine } from 'lucide-react';
+import { Upload, Plus, Trash2, Loader2, ScanLine, Pencil } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { useAuth } from '@/lib/auth';
 import type { Schedule } from './types';
@@ -28,6 +29,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
   const schoolSchedules = schedules.filter(s => s.school_name === schoolName);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [examScanOpen, setExamScanOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [fileType, setFileType] = useState('school_calendar');
   const [subjectFilter, setSubjectFilter] = useState('all');
@@ -36,6 +38,11 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
   const [extractedData, setExtractedData] = useState<any[] | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [savingExtracted, setSavingExtracted] = useState(false);
+
+  // Exam scan state
+  const [examFile, setExamFile] = useState<File | null>(null);
+  const [examScanning, setExamScanning] = useState(false);
+  const [examResult, setExamResult] = useState<any | null>(null);
 
   // Manual add form
   const [manualForm, setManualForm] = useState({
@@ -49,6 +56,14 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
   });
 
   const today = new Date();
+
+  // --- Inline edit extracted data ---
+  const updateExtractedItem = (index: number, field: string, value: any) => {
+    if (!extractedData) return;
+    const updated = [...extractedData];
+    updated[index] = { ...updated[index], [field]: value };
+    setExtractedData(updated);
+  };
 
   const handleUploadAndAnalyze = async () => {
     if (!file) { toast.error('파일을 선택해주세요'); return; }
@@ -76,7 +91,6 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
         return;
       }
 
-      // Parse extracted items based on file type
       let items: any[] = [];
       if (fileType === 'school_calendar' && result.data?.schedules) {
         items = result.data.schedules;
@@ -122,6 +136,8 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
           subject: t.subject,
           publisher: t.publisher || null,
           textbook_name: t.textbook_name || null,
+          author: t.author || null,
+          course_name: t.course_name || null,
           is_ai_extracted: true,
           created_by: user?.id,
         }));
@@ -148,6 +164,74 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
       setExtractedData(null);
       setFile(null);
       setUploadOpen(false);
+      onRefetch();
+    } catch (err: any) {
+      toast.error(err.message || '저장 실패');
+    } finally {
+      setSavingExtracted(false);
+    }
+  };
+
+  // --- Exam scope scan ---
+  const handleExamScan = async () => {
+    if (!examFile) { toast.error('파일을 선택해주세요'); return; }
+    setExamScanning(true);
+    try {
+      const imageDataUrl = await fileToDataUrl(examFile);
+
+      const { data: result, error } = await supabase.functions.invoke('scan-exam-schedule', {
+        body: {
+          image_url: imageDataUrl,
+          school_name: schoolName,
+        },
+      });
+
+      if (error || result?.error) {
+        toast.error(error?.message || result?.error || 'AI 분석 실패');
+        return;
+      }
+
+      setExamResult(result.extracted || {});
+      toast.success('시험 범위/일정 추출 완료');
+    } catch (err: any) {
+      toast.error(err.message || '분석 실패');
+    } finally {
+      setExamScanning(false);
+    }
+  };
+
+  const updateExamSubject = (index: number, field: string, value: string) => {
+    if (!examResult?.subjects) return;
+    const updated = { ...examResult };
+    updated.subjects = [...updated.subjects];
+    updated.subjects[index] = { ...updated.subjects[index], [field]: value };
+    setExamResult(updated);
+  };
+
+  const handleSaveExamResult = async () => {
+    if (!examResult?.subjects?.length) return;
+    setSavingExtracted(true);
+    try {
+      // Save as school_schedules for each subject
+      const rows = examResult.subjects.map((s: any) => ({
+        school_name: schoolName,
+        schedule_type: 'exam',
+        title: `${examResult.exam_type || '시험'} - ${s.subject_name}`,
+        start_date: s.exam_date || examResult.exam_date_start || null,
+        end_date: s.exam_date || examResult.exam_date_end || null,
+        subject: s.subject_name || null,
+        description: s.exam_scope || null,
+        is_ai_extracted: true,
+        created_by: user?.id,
+      }));
+
+      const { error } = await supabase.from('school_schedules').insert(rows as any);
+      if (error) throw error;
+
+      toast.success(`${rows.length}개 과목 시험 일정 저장 완료`);
+      setExamResult(null);
+      setExamFile(null);
+      setExamScanOpen(false);
       onRefetch();
     } catch (err: any) {
       toast.error(err.message || '저장 실패');
@@ -184,21 +268,20 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
 
   const getDday = (dateStr: string | null) => {
     if (!dateStr) return null;
-    const d = differenceInDays(parseISO(dateStr), today);
-    return d;
+    return differenceInDays(parseISO(dateStr), today);
   };
 
   return (
     <div className="space-y-4">
-      {/* Upload + Manual buttons */}
-      <div className="flex gap-2">
-        <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+      {/* Upload + Exam Scan + Manual buttons */}
+      <div className="flex gap-2 flex-wrap">
+        <Dialog open={uploadOpen} onOpenChange={v => { setUploadOpen(v); if (!v) { setExtractedData(null); setFile(null); } }}>
           <DialogTrigger asChild>
             <Button className="gap-1.5 bg-orange-500 hover:bg-orange-600 text-white">
               <Upload className="w-4 h-4" /> 파일 업로드
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>파일 업로드 & AI 분석</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-2">
               {!extractedData ? (
@@ -249,8 +332,8 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                 </>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm font-medium">추출된 데이터 ({extractedData.length}개)</p>
-                  <div className="max-h-[300px] overflow-y-auto border rounded-lg">
+                  <p className="text-sm font-medium">추출된 데이터 ({extractedData.length}개) — 클릭하여 수정 가능</p>
+                  <div className="max-h-[400px] overflow-y-auto border rounded-lg">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -260,9 +343,9 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                               onCheckedChange={c => setSelectedItems(c ? new Set(extractedData!.map((_, i) => i)) : new Set())}
                             />
                           </TableHead>
-                          {fileType === 'school_calendar' && <><TableHead>유형</TableHead><TableHead>제목</TableHead><TableHead>날짜</TableHead></>}
-                          {fileType === 'textbook_list' && <><TableHead>학년</TableHead><TableHead>과목</TableHead><TableHead>출판사</TableHead></>}
-                          {fileType === 'evaluation_plan' && <><TableHead>과목</TableHead><TableHead>시험유형</TableHead><TableHead>범위</TableHead></>}
+                          {fileType === 'school_calendar' && <><TableHead>유형</TableHead><TableHead>제목</TableHead><TableHead>시작일</TableHead><TableHead>종료일</TableHead></>}
+                          {fileType === 'textbook_list' && <><TableHead>학년</TableHead><TableHead>과목</TableHead><TableHead>과정명</TableHead><TableHead>출판사</TableHead><TableHead>교과서명</TableHead><TableHead>저자</TableHead></>}
+                          {fileType === 'evaluation_plan' && <><TableHead>과목</TableHead><TableHead>시험유형</TableHead><TableHead>범위</TableHead><TableHead>비율</TableHead></>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -280,23 +363,77 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                             </TableCell>
                             {fileType === 'school_calendar' && (
                               <>
-                                <TableCell className="text-xs">{SCHEDULE_TYPE_LABELS[item.schedule_type] || item.schedule_type}</TableCell>
-                                <TableCell className="text-xs font-medium">{item.title}</TableCell>
-                                <TableCell className="text-xs">{item.start_date || '-'}</TableCell>
+                                <TableCell>
+                                  <Select value={item.schedule_type || 'other'} onValueChange={v => updateExtractedItem(i, 'schedule_type', v)}>
+                                    <SelectTrigger className="h-7 text-[11px] w-[80px]"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      {Object.entries(SCHEDULE_TYPE_LABELS).map(([k, v]) => (
+                                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    value={item.title || ''}
+                                    onChange={e => updateExtractedItem(i, 'title', e.target.value)}
+                                    className="h-7 text-[11px] min-w-[120px]"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="date"
+                                    value={item.start_date || ''}
+                                    onChange={e => updateExtractedItem(i, 'start_date', e.target.value)}
+                                    className="h-7 text-[11px] w-[130px]"
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="date"
+                                    value={item.end_date || ''}
+                                    onChange={e => updateExtractedItem(i, 'end_date', e.target.value)}
+                                    className="h-7 text-[11px] w-[130px]"
+                                  />
+                                </TableCell>
                               </>
                             )}
                             {fileType === 'textbook_list' && (
                               <>
-                                <TableCell className="text-xs">{item.grade}학년</TableCell>
-                                <TableCell className="text-xs font-medium">{item.subject}</TableCell>
-                                <TableCell className="text-xs">{item.publisher}</TableCell>
+                                <TableCell>
+                                  <Input value={item.grade ?? ''} onChange={e => updateExtractedItem(i, 'grade', e.target.value ? parseInt(e.target.value) : null)} className="h-7 text-[11px] w-[50px]" />
+                                </TableCell>
+                                <TableCell>
+                                  <Input value={item.subject || ''} onChange={e => updateExtractedItem(i, 'subject', e.target.value)} className="h-7 text-[11px] min-w-[60px]" />
+                                </TableCell>
+                                <TableCell>
+                                  <Input value={item.course_name || ''} onChange={e => updateExtractedItem(i, 'course_name', e.target.value)} className="h-7 text-[11px] min-w-[80px]" placeholder="과정명" />
+                                </TableCell>
+                                <TableCell>
+                                  <Input value={item.publisher || ''} onChange={e => updateExtractedItem(i, 'publisher', e.target.value)} className="h-7 text-[11px] min-w-[60px]" />
+                                </TableCell>
+                                <TableCell>
+                                  <Input value={item.textbook_name || ''} onChange={e => updateExtractedItem(i, 'textbook_name', e.target.value)} className="h-7 text-[11px] min-w-[80px]" />
+                                </TableCell>
+                                <TableCell>
+                                  <Input value={item.author || ''} onChange={e => updateExtractedItem(i, 'author', e.target.value)} className="h-7 text-[11px] min-w-[60px]" placeholder="저자명" />
+                                </TableCell>
                               </>
                             )}
                             {fileType === 'evaluation_plan' && (
                               <>
-                                <TableCell className="text-xs font-medium">{item.subject}</TableCell>
-                                <TableCell className="text-xs">{item.exam_type}</TableCell>
-                                <TableCell className="text-xs truncate max-w-[150px]">{item.exam_range}</TableCell>
+                                <TableCell>
+                                  <Input value={item.subject || ''} onChange={e => updateExtractedItem(i, 'subject', e.target.value)} className="h-7 text-[11px] min-w-[60px]" />
+                                </TableCell>
+                                <TableCell>
+                                  <Input value={item.exam_type || ''} onChange={e => updateExtractedItem(i, 'exam_type', e.target.value)} className="h-7 text-[11px] min-w-[70px]" />
+                                </TableCell>
+                                <TableCell>
+                                  <Input value={item.exam_range || ''} onChange={e => updateExtractedItem(i, 'exam_range', e.target.value)} className="h-7 text-[11px] min-w-[120px]" />
+                                </TableCell>
+                                <TableCell>
+                                  <Input value={item.evaluation_ratio || ''} onChange={e => updateExtractedItem(i, 'evaluation_ratio', e.target.value)} className="h-7 text-[11px] min-w-[80px]" />
+                                </TableCell>
                               </>
                             )}
                           </TableRow>
@@ -311,6 +448,150 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                     <Button size="sm" onClick={handleSaveExtracted} disabled={savingExtracted || selectedItems.size === 0} className="flex-1 gap-1">
                       {savingExtracted && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                       선택 항목 저장 ({selectedItems.size}개)
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Exam scope scan */}
+        <Dialog open={examScanOpen} onOpenChange={v => { setExamScanOpen(v); if (!v) { setExamResult(null); setExamFile(null); } }}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="gap-1.5">
+              <ScanLine className="w-4 h-4" /> 시험범위 스캔
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>시험범위/일정 AI 스캔</DialogTitle></DialogHeader>
+            <div className="space-y-4 mt-2">
+              {!examResult ? (
+                <>
+                  <p className="text-xs text-muted-foreground">시험범위표나 시험일정표 이미지/PDF를 업로드하면 AI가 자동으로 과목별 시험 일정과 범위를 추출합니다.</p>
+                  <div>
+                    <Label className="text-sm">파일 선택 (이미지 / PDF)</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={e => setExamFile(e.target.files?.[0] || null)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleExamScan}
+                    disabled={!examFile || examScanning}
+                    className="w-full gap-2"
+                  >
+                    {examScanning && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {examScanning ? 'AI 분석 중...' : <><ScanLine className="w-4 h-4" /> 시험범위 추출</>}
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  {/* General info */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs">시험 유형</Label>
+                      <Input
+                        value={examResult.exam_type || ''}
+                        onChange={e => setExamResult((p: any) => ({ ...p, exam_type: e.target.value }))}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">시험 시작일</Label>
+                      <Input
+                        type="date"
+                        value={examResult.exam_date_start || ''}
+                        onChange={e => setExamResult((p: any) => ({ ...p, exam_date_start: e.target.value }))}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">시험 종료일</Label>
+                      <Input
+                        type="date"
+                        value={examResult.exam_date_end || ''}
+                        onChange={e => setExamResult((p: any) => ({ ...p, exam_date_end: e.target.value }))}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Subjects */}
+                  <div>
+                    <p className="text-sm font-medium mb-2">과목별 시험 정보 ({examResult.subjects?.length || 0}개) — 수정 가능</p>
+                    <div className="max-h-[350px] overflow-y-auto border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>과목명</TableHead>
+                            <TableHead>시험일</TableHead>
+                            <TableHead>시간</TableHead>
+                            <TableHead>시험범위</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(examResult.subjects || []).map((subj: any, i: number) => (
+                            <TableRow key={i}>
+                              <TableCell>
+                                <Input
+                                  value={subj.subject_name || ''}
+                                  onChange={e => updateExamSubject(i, 'subject_name', e.target.value)}
+                                  className="h-7 text-[11px] min-w-[70px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="date"
+                                  value={subj.exam_date || ''}
+                                  onChange={e => updateExamSubject(i, 'exam_date', e.target.value)}
+                                  className="h-7 text-[11px] w-[130px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="time"
+                                  value={subj.exam_time || ''}
+                                  onChange={e => updateExamSubject(i, 'exam_time', e.target.value)}
+                                  className="h-7 text-[11px] w-[100px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Textarea
+                                  value={subj.exam_scope || ''}
+                                  onChange={e => updateExamSubject(i, 'exam_scope', e.target.value)}
+                                  className="text-[11px] min-h-[32px] min-w-[150px]"
+                                  rows={1}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+
+                  {examResult.notes && (
+                    <div>
+                      <Label className="text-xs">참고사항</Label>
+                      <Textarea
+                        value={examResult.notes}
+                        onChange={e => setExamResult((p: any) => ({ ...p, notes: e.target.value }))}
+                        className="text-xs min-h-[40px]"
+                        rows={2}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setExamResult(null); setExamFile(null); }}>
+                      다시 스캔
+                    </Button>
+                    <Button size="sm" onClick={handleSaveExamResult} disabled={savingExtracted} className="flex-1 gap-1">
+                      {savingExtracted && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      일정으로 저장
                     </Button>
                   </div>
                 </div>

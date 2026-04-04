@@ -222,9 +222,11 @@ ${subjectInstruction}
   "textbooks": [
     {
       "grade": 학년(숫자),
-      "subject": "과목명",
+      "subject": "과목명 (예: 수학, 영어, 국어 등 대분류)",
+      "course_name": "세부 과정명 (예: 공통수학1, 대수, 미적분I, 영어I 등. 고등학교에서만 해당, 중등은 null)",
       "publisher": "출판사",
-      "textbook_name": "교과서명"
+      "textbook_name": "교과서명",
+      "author": "저자명 (문서에 있으면 추출, 없으면 null)"
     }
   ]
 }
