@@ -219,6 +219,7 @@ export function ArchiveTab({ schoolName, archives, onRefetch }: Props) {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <Badge variant="outline" className="text-[10px]">{a.grade_year}학년</Badge>
                     <Badge variant="secondary" className="text-[10px]">{a.subject}</Badge>
+                    {a.course_name && <Badge variant="outline" className="text-[10px] text-muted-foreground">{a.course_name}</Badge>}
                     <Badge className="text-[10px] bg-primary/10 text-primary border-0">{a.exam_type}</Badge>
                     {a.status && getStatusBadge(a.status)}
                   </div>
