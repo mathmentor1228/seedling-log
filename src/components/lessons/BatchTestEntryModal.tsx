@@ -370,7 +370,7 @@ export function BatchTestEntryModal({
           </Card>
 
           {/* Step 3: Students */}
-          {(teacherId || !isAssistant) && subject && (
+          {((isAssistant ? teacherId : user?.id) && subject) && (
             <Card className="border-muted">
               <CardContent className="p-3 space-y-3">
                 <div className="flex items-center justify-between">
