@@ -35,10 +35,15 @@ const STATUS_OPTIONS = [
   { value: '시험분석완료', label: '분석완료', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' },
 ];
 
+const MATH_COURSES = ['공통수학1', '공통수학2', '대수', '미적분I', '미적분II', '확률과통계', '기하'];
+const ENGLISH_COURSES = ['영어I', '영어II', '영어회화', '영어독해와작문'];
+const OTHER_COURSES = ['국어I', '국어II', '문학', '독서', '화법과작문', '언어와매체'];
+
 const DEFAULT_FORM = {
   school_level: '중',
   grade_year: 1,
   subject: '수학',
+  course_name: '',
   academic_year: currentYear,
   semester: '1학기',
   exam_type: '중간고사',
