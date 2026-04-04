@@ -870,6 +870,15 @@ export default function Lessons() {
         />
       )}
 
+      {/* New lesson entry dialog (individual/batch choice) */}
+      <NewLessonEntryDialog
+        open={isNewEntryDialogOpen}
+        onOpenChange={setIsNewEntryDialogOpen}
+        onIndividual={handleOpenNewForm}
+        onBatchCreate={() => { fetchLessons(); }}
+      />
+
+
 
       {/* 오늘 수업 Section */}
       {(isTeacher || isAdmin || isAssistant) && (
