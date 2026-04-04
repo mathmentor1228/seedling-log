@@ -296,10 +296,10 @@ export function BatchTestEntryModal({
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="p-3 space-y-3">
               <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                <UserCheck className="w-3.5 h-3.5" /> 1단계: 담당선생님 · 날짜 · 타임
+                <UserCheck className="w-3.5 h-3.5" /> 1단계: 담당선생님 · 과목 · 날짜 · 타임
               </p>
               <div className="grid grid-cols-2 gap-2">
-                <div className="col-span-2 space-y-1">
+                <div className="space-y-1">
                   <Label className="text-xs">담당 선생님 <span className="text-destructive">*</span></Label>
                   <Select value={teacherId || (isAssistant ? '' : user?.id || '')} onValueChange={(v) => { setTeacherId(v); setSelectedTimeSlot('미정'); }}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="선생님 선택" /></SelectTrigger>
@@ -307,6 +307,15 @@ export function BatchTestEntryModal({
                       {teachers.map(t => (
                         <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">과목 <span className="text-destructive">*</span></Label>
+                  <Select value={subject} onValueChange={setSubject}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="과목 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -330,19 +339,14 @@ export function BatchTestEntryModal({
             </CardContent>
           </Card>
 
-          {/* Step 2: Subject + Test Details */}
+          {/* Step 2: Test Details */}
           <Card className="border-muted">
             <CardContent className="p-3 space-y-3">
-              <p className="text-xs font-semibold text-foreground">2단계: 과목 · 테스트 정보</p>
+              <p className="text-xs font-semibold text-foreground">2단계: 테스트 정보</p>
               <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">과목 <span className="text-destructive">*</span></Label>
-                  <Select value={subject} onValueChange={setSubject}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="과목 선택" /></SelectTrigger>
-                    <SelectContent>
-                      {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs">테스트 내용/범위 <span className="text-destructive">*</span></Label>
+                  <Input value={testContent} onChange={e => setTestContent(e.target.value)} placeholder="예: 단원평가 3단원, 영단어 Day 5" className="h-9" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">테스트 슬롯</Label>
@@ -351,26 +355,22 @@ export function BatchTestEntryModal({
                     <Button type="button" size="sm" variant={testSlot === 2 ? 'default' : 'outline'} onClick={() => setTestSlot(2)} className="text-xs flex-1 h-9">② 테스트 2</Button>
                   </div>
                 </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">테스트 내용/범위 <span className="text-destructive">*</span></Label>
-                <Input value={testContent} onChange={e => setTestContent(e.target.value)} placeholder="예: 단원평가 3단원, 영단어 Day 5" className="h-9" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">조교</Label>
-                <Select value={testAssistant} onValueChange={setTestAssistant}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="선택 (선택사항)" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none_selected">선택 안함</SelectItem>
-                    {ASSISTANTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1">
+                  <Label className="text-xs">조교</Label>
+                  <Select value={testAssistant} onValueChange={setTestAssistant}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="선택 (선택사항)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none_selected">선택 안함</SelectItem>
+                      {ASSISTANTS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Step 3: Students */}
-          {(teacherId || !isAssistant) && subject && (
+          {((isAssistant ? teacherId : user?.id) && subject) && (
             <Card className="border-muted">
               <CardContent className="p-3 space-y-3">
                 <div className="flex items-center justify-between">
