@@ -96,6 +96,7 @@ export function ArchiveTab({ schoolName, archives, onRefetch }: Props) {
       school_level: a.school_level || '중',
       grade_year: a.grade_year || 1,
       subject: a.subject || '수학',
+      course_name: a.course_name || '',
       academic_year: a.academic_year || currentYear,
       semester: a.semester || '1학기',
       exam_type: a.exam_type || '중간고사',
