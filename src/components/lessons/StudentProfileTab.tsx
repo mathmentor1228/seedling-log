@@ -72,8 +72,6 @@ export function StudentProfileTab() {
   const isTeacherRole = checkIsTeacher(role);
 
   const [viewMode, setViewMode] = useState<'individual' | 'cohort'>('individual');
-  const isAdmin = checkIsAdmin(role);
-  const isTeacherRole = checkIsTeacher(role);
 
   const [students, setStudents] = useState<StudentBasic[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
