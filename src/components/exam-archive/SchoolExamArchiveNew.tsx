@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CalendarDays, BookOpen, FileText, Compass } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { SCHOOL_LEVEL_LABELS } from './types';
 import { useExamArchiveData } from './useExamArchiveData';
