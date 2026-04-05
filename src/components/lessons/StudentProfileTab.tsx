@@ -342,63 +342,7 @@ function StudentDetail({ student }: { student: StudentBasic }) {
   );
 }
 
-// ─── Tab 1: Overview ────────────────────────────────────────
-function OverviewSection({ student, data }: { student: StudentBasic; data: any }) {
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <div><span className="text-muted-foreground text-xs">이름</span><p className="font-semibold">{student.name}</p></div>
-            <div><span className="text-muted-foreground text-xs">학년</span><p className="font-semibold">{student.grade || '-'}</p></div>
-            <div><span className="text-muted-foreground text-xs">학교</span><p className="font-semibold">{student.school || '-'}</p></div>
-            <div><span className="text-muted-foreground text-xs">등원 시작일</span><p className="font-semibold">{student.created_at ? format(parseISO(student.created_at), 'yyyy.MM.dd') : '-'}</p></div>
-          </div>
-          {Object.keys(data.subjectTeacherMap).length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {Object.entries(data.subjectTeacherMap).map(([subj, teacher]) => (
-                <Badge key={subj} variant="secondary" className="text-xs">{subj}: {teacher as string}</Badge>
-              ))}
-            </div>
-          )}
-          {data.scheduleList.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs text-muted-foreground mb-1">수업 시간표</p>
-              <div className="flex flex-wrap gap-2">
-                {data.scheduleList.map((s: any, i: number) => (
-                  <Badge key={i} variant="outline" className="text-xs">
-                    {s.day} {s.start}~{s.end} {s.subject}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard title="이번 달 수업" value={`${data.monthCounts.lessons}회`} icon={<BookOpen className="w-5 h-5" />} iconColor="primary" />
-        <StatCard title="이번 달 테스트" value={`${data.monthCounts.tests}회`} icon={<TestTube className="w-5 h-5" />} iconColor="warning" />
-        <StatCard title="이번 달 자습" value={`${data.monthCounts.selfStudy}회`} icon={<Clock className="w-5 h-5" />} iconColor="success" />
-        <StatCard title="이번 달 클리닉" value={`${data.monthCounts.clinic}회`} icon={<Stethoscope className="w-5 h-5" />} iconColor="destructive" />
-      </div>
-
-      {data.unconfirmedNotes.length > 0 && (
-        <Alert className="border-destructive/50 bg-destructive/5">
-          <AlertCircle className="w-4 h-4" />
-          <AlertDescription>
-            미확인 클리닉 특이사항이 <strong>{data.unconfirmedNotes.length}건</strong> 있습니다
-            <ul className="mt-2 space-y-1 text-xs">
-              {data.unconfirmedNotes.slice(0, 3).map((n: any) => (
-                <li key={n.id}>• {n.clinic_date} {n.subject}: {n.teacher_note}</li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      )}
-    </div>
-  );
-}
 
 // ─── Tab 2: Lessons ─────────────────────────────────────────
 function LessonsSection({ lessons }: { lessons: any[] }) {
