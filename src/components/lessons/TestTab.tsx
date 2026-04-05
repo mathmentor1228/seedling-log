@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format, subDays, addDays } from 'date-fns';
@@ -15,6 +16,7 @@ import { RoutineModal } from './RoutineModal';
 import { InlineTestRow } from './InlineTestRow';
 import { StudentTestHistory } from './StudentTestHistory';
 import { BatchTestEntryModal } from './BatchTestEntryModal';
+import { useTeachersList } from './useTeachersList';
 
 export interface UnifiedTestRecord {
   id: string;
@@ -31,11 +33,12 @@ export interface UnifiedTestRecord {
   passed: boolean | null;
   assistant_name: string | null;
   room: string | null;
-  // raw DB fields for editing
   english_pass_fail: string | null;
   test_result: string | null;
-  // Test slot (1 or 2)
   test_slot: number;
+  // Grade info for sorting/filtering
+  school_level: string | null;
+  grade_year: number | null;
 }
 
 export function derivePassed(english_pass_fail: string | null, test_result: string | null): boolean | null {
@@ -46,14 +49,36 @@ export function derivePassed(english_pass_fail: string | null, test_result: stri
   return null;
 }
 
+const SCHOOL_LEVEL_ORDER: Record<string, number> = { '초': 0, '중': 1, '고': 2 };
+const collator = new Intl.Collator('ko');
+
+function sortByGrade(a: UnifiedTestRecord, b: UnifiedTestRecord) {
+  const levelA = SCHOOL_LEVEL_ORDER[a.school_level || ''] ?? 99;
+  const levelB = SCHOOL_LEVEL_ORDER[b.school_level || ''] ?? 99;
+  if (levelA !== levelB) return levelA - levelB;
+  const gradeA = a.grade_year ?? 99;
+  const gradeB = b.grade_year ?? 99;
+  if (gradeA !== gradeB) return gradeA - gradeB;
+  return collator.compare(a.student_name, b.student_name);
+}
+
+function getGradeGroupLabel(record: UnifiedTestRecord) {
+  if (!record.school_level) return '미분류';
+  const levelName = record.school_level === '초' ? '초등' : record.school_level === '중' ? '중등' : record.school_level === '고' ? '고등' : record.school_level;
+  return `${levelName} ${record.grade_year ?? '?'}학년`;
+}
+
 export function TestTab() {
   const { toast } = useToast();
+  const { teachers } = useTeachersList();
   const [records, setRecords] = useState<UnifiedTestRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const today = getTodayKST();
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [filterSubject, setFilterSubject] = useState('all');
+  const [filterTeacher, setFilterTeacher] = useState('all');
+  const [filterGrade, setFilterGrade] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
@@ -76,8 +101,6 @@ export function TestTab() {
   const fetchRecords = useCallback(async () => {
     setLoading(true);
 
-    // 1. Fetch lesson_records with test data
-    // Fetch lesson_records that have test data in slot 1 OR slot 2
     let query = supabase
       .from('lesson_records')
       .select(`
@@ -86,7 +109,7 @@ export function TestTab() {
         english_pass_fail, test_assistant, test_name,
         test_content_2, test_name_2, test_result_text_2, test_result_2,
         english_pass_fail_2, test_assistant_2, test_date_2,
-        students!inner(name)
+        students!inner(name, school_level, grade_year)
       `)
       .or('and(test_content.not.is.null,test_content.neq.),and(test_content_2.not.is.null,test_content_2.neq.)')
       .gte('lesson_date', startDate)
@@ -95,10 +118,9 @@ export function TestTab() {
 
     if (filterSubject !== 'all') query = query.eq('subject', filterSubject as any);
 
-    // 2. Fetch test_schedules
     let schedQuery = supabase
       .from('test_schedules')
-      .select('*, students!inner(name)')
+      .select('*, students!inner(name, school_level, grade_year)')
       .gte('test_date', startDate)
       .lte('test_date', endDate)
       .order('test_date', { ascending: false });
@@ -110,7 +132,6 @@ export function TestTab() {
     const lessonData = lessonRes.data || [];
     const schedData = schedRes.data || [];
 
-    // Collect all teacher IDs
     const allTeacherIds = [
       ...new Set([
         ...lessonData.map((r: any) => r.teacher_id),
@@ -148,6 +169,8 @@ export function TestTab() {
         english_pass_fail: r.english_pass_fail,
         test_result: r.test_result,
         test_slot: 1,
+        school_level: r.students?.school_level || null,
+        grade_year: r.students?.grade_year ?? null,
       }));
 
     // Map lesson_records - slot 2
@@ -171,10 +194,12 @@ export function TestTab() {
         english_pass_fail: r.english_pass_fail_2,
         test_result: r.test_result_2,
         test_slot: 2,
+        school_level: r.students?.school_level || null,
+        grade_year: r.students?.grade_year ?? null,
       }));
     results = [...results, ...slot2Results];
 
-    // Map test_schedules - show even without title
+    // Map test_schedules
     const schedResults: UnifiedTestRecord[] = (schedData as any[]).map(r => ({
       id: r.id,
       source: 'test_schedule' as const,
@@ -193,6 +218,8 @@ export function TestTab() {
       english_pass_fail: null,
       test_result: r.result_passed === true ? 'pass' : r.result_passed === false ? 'fail' : null,
       test_slot: 1,
+      school_level: r.students?.school_level || null,
+      grade_year: r.students?.grade_year ?? null,
     }));
 
     // Merge, avoiding duplicates (same student + same date + same subject from both sources)
@@ -205,8 +232,8 @@ export function TestTab() {
       results = results.filter(r => r.student_name.toLowerCase().includes(q));
     }
 
-    // Sort by date desc
-    results.sort((a, b) => b.test_date.localeCompare(a.test_date));
+    // Sort by grade (school_level → grade_year → name)
+    results.sort(sortByGrade);
 
     setRecords(results);
     setLoading(false);
@@ -214,7 +241,6 @@ export function TestTab() {
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
 
-  // Realtime subscription for both tables
   useEffect(() => {
     const channel = supabase
       .channel('test-tab-realtime')
@@ -224,7 +250,29 @@ export function TestTab() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchRecords]);
 
-  // Optimistic inline update
+  // Filtered records by teacher and grade
+  const filteredRecords = useMemo(() => {
+    let r = records;
+    if (filterTeacher !== 'all') {
+      r = r.filter(rec => rec.teacher_id === filterTeacher);
+    }
+    if (filterGrade !== 'all') {
+      r = r.filter(rec => rec.school_level === filterGrade);
+    }
+    return r;
+  }, [records, filterTeacher, filterGrade]);
+
+  // Group by grade for display
+  const groupedRecords = useMemo(() => {
+    const groups = new Map<string, UnifiedTestRecord[]>();
+    for (const rec of filteredRecords) {
+      const key = getGradeGroupLabel(rec);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(rec);
+    }
+    return [...groups.entries()];
+  }, [filteredRecords]);
+
   const handleInlineUpdate = useCallback(async (
     recordId: string,
     updates: {
@@ -238,12 +286,10 @@ export function TestTab() {
     const rec = records.find(r => r.id === recordId && r.test_slot === testSlot);
     if (!rec) return;
 
-    // 1. Optimistic local update
     setRecords(prev => prev.map(r => (r.id !== recordId || r.test_slot !== testSlot) ? r : { ...r, ...updates }));
 
     try {
       if (rec.source === 'test_schedule') {
-        // Update test_schedules table directly
         const dbUpdates: any = {};
         if (updates.content !== undefined) {
           dbUpdates.content = updates.content;
@@ -258,7 +304,6 @@ export function TestTab() {
           .eq('id', recordId);
         if (error) throw error;
       } else {
-        // lesson_record: use RPC
         const subject = rec.subject;
         let testResult = rec.test_result || 'none';
         let englishPassFail = rec.english_pass_fail;
@@ -307,7 +352,7 @@ export function TestTab() {
       .select(`
         id, student_id, teacher_id, lesson_date, subject,
         test_content, test_title, test_result_text, test_result,
-        english_pass_fail, test_assistant, students!inner(name)
+        english_pass_fail, test_assistant, students!inner(name, school_level, grade_year)
       `)
       .eq('student_id', studentId)
       .not('test_content', 'is', null)
@@ -333,6 +378,8 @@ export function TestTab() {
       english_pass_fail: r.english_pass_fail,
       test_result: r.test_result,
       test_slot: 1,
+      school_level: r.students?.school_level || null,
+      grade_year: r.students?.grade_year ?? null,
     }));
 
     setStudentHistory(mapped);
@@ -403,12 +450,42 @@ export function TestTab() {
               </Select>
             </div>
             <div>
+              <label className="text-xs text-muted-foreground">선생님</label>
+              <Select value={filterTeacher} onValueChange={setFilterTeacher}>
+                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {teachers.map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <label className="text-xs text-muted-foreground">학생 검색</label>
               <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="이름..." className="w-32" />
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Grade-level tabs */}
+      <Tabs value={filterGrade} onValueChange={setFilterGrade}>
+        <TabsList>
+          <TabsTrigger value="all">
+            전체 <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0">{records.filter(r => filterTeacher === 'all' || r.teacher_id === filterTeacher).length}</Badge>
+          </TabsTrigger>
+          {(['초', '중', '고'] as const).map(level => {
+            const label = level === '초' ? '초등' : level === '중' ? '중등' : '고등';
+            const count = records.filter(r => r.school_level === level && (filterTeacher === 'all' || r.teacher_id === filterTeacher)).length;
+            return (
+              <TabsTrigger key={level} value={level}>
+                {label} <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0">{count}</Badge>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </Tabs>
 
       {/* Table */}
       <Card>
@@ -430,16 +507,26 @@ export function TestTab() {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">로딩 중...</TableCell></TableRow>
-                ) : records.length === 0 ? (
+                ) : filteredRecords.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">기록이 없습니다</TableCell></TableRow>
-                ) : records.map(r => (
-                  <InlineTestRow
-                    key={r.id}
-                    record={r}
-                    expandedStudent={expandedStudent}
-                    onToggleHistory={loadStudentHistory}
-                    onUpdate={handleInlineUpdate}
-                  />
+                ) : groupedRecords.map(([groupLabel, groupRecords]) => (
+                  <>
+                    <TableRow key={`group-${groupLabel}`} className="bg-muted/50">
+                      <TableCell colSpan={8} className="py-1.5 px-3">
+                        <span className="text-xs font-semibold text-muted-foreground">{groupLabel}</span>
+                        <Badge variant="outline" className="ml-2 text-xs px-1.5 py-0">{groupRecords.length}</Badge>
+                      </TableCell>
+                    </TableRow>
+                    {groupRecords.map(r => (
+                      <InlineTestRow
+                        key={`${r.id}-${r.test_slot}`}
+                        record={r}
+                        expandedStudent={expandedStudent}
+                        onToggleHistory={loadStudentHistory}
+                        onUpdate={handleInlineUpdate}
+                      />
+                    ))}
+                  </>
                 ))}
               </TableBody>
             </Table>
