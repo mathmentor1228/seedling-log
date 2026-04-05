@@ -650,60 +650,146 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
         </Dialog>
       </div>
 
-      {/* Schedule list */}
+      {/* Schedule list - grouped by type with better readability */}
       {schoolSchedules.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">등록된 일정이 없습니다</p>
       ) : (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>유형</TableHead>
-                <TableHead>제목</TableHead>
-                <TableHead>날짜</TableHead>
-                <TableHead>학년</TableHead>
-                <TableHead>과목</TableHead>
-                <TableHead>D-day</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {schoolSchedules.map(s => {
-                const dday = getDday(s.start_date);
-                return (
-                  <TableRow key={s.id}>
-                    <TableCell>
-                      <Badge className={cn("text-[10px] border", SCHEDULE_TYPE_COLORS[s.schedule_type] || SCHEDULE_TYPE_COLORS.other)}>
-                        {SCHEDULE_TYPE_LABELS[s.schedule_type] || s.schedule_type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs font-medium">{s.title}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {s.start_date ? format(parseISO(s.start_date), 'MM/dd') : '-'}
-                      {s.end_date && s.end_date !== s.start_date ? ` ~ ${format(parseISO(s.end_date), 'MM/dd')}` : ''}
-                    </TableCell>
-                    <TableCell className="text-xs">{s.grade ? `${s.grade}학년` : '-'}</TableCell>
-                    <TableCell className="text-xs">{s.subject || '-'}</TableCell>
-                    <TableCell>
-                      {dday !== null && (
-                        <span className={cn(
-                          "text-xs font-bold",
-                          dday < 0 ? "text-muted-foreground" : dday <= 30 ? "text-destructive" : dday <= 60 ? "text-orange-500" : "text-muted-foreground"
+        <div className="space-y-6">
+          {/* Upcoming exams highlight */}
+          {(() => {
+            const upcomingExams = schoolSchedules
+              .filter(s => s.schedule_type === 'exam' && s.start_date && getDday(s.start_date)! >= 0)
+              .sort((a, b) => getDday(a.start_date)! - getDday(b.start_date)!);
+            if (upcomingExams.length === 0) return null;
+            return (
+              <div className="rounded-xl border-2 border-destructive/20 bg-destructive/5 p-4 space-y-2">
+                <h3 className="text-sm font-bold text-destructive flex items-center gap-1.5">
+                  🔥 다가오는 시험
+                </h3>
+                <div className="space-y-2">
+                  {upcomingExams.map(s => {
+                    const dday = getDday(s.start_date)!;
+                    return (
+                      <div key={s.id} className="flex items-center gap-3 bg-background rounded-lg px-3 py-2 border">
+                        <Badge className={cn(
+                          "text-xs font-bold px-2.5 py-0.5 min-w-[52px] justify-center shadow-sm",
+                          dday === 0 ? "bg-destructive text-destructive-foreground" :
+                          dday <= 7 ? "bg-destructive/90 text-destructive-foreground" :
+                          dday <= 14 ? "bg-orange-500 text-white" :
+                          "bg-amber-500 text-white"
                         )}>
-                          {dday < 0 ? '종료' : `D-${dday}`}
+                          {dday === 0 ? 'D-Day' : `D-${dday}`}
+                        </Badge>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium">{s.title}</span>
+                          {s.grade && <span className="text-xs text-muted-foreground ml-2">{s.grade}학년</span>}
+                          {s.subject && <span className="text-xs text-muted-foreground ml-1">· {s.subject}</span>}
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {s.start_date ? format(parseISO(s.start_date), 'MM/dd') : ''}
+                          {s.end_date && s.end_date !== s.start_date ? ` ~ ${format(parseISO(s.end_date), 'MM/dd')}` : ''}
                         </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete(s.id)}>
-                        <Trash2 className="w-3 h-3 text-muted-foreground" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* All schedules grouped by type */}
+          {(['exam', 'performance', 'holiday', 'event', 'other'] as const).map(type => {
+            const items = schoolSchedules.filter(s => s.schedule_type === type);
+            if (items.length === 0) return null;
+            return (
+              <div key={type} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge className={cn("text-xs border", SCHEDULE_TYPE_COLORS[type])}>
+                    {SCHEDULE_TYPE_LABELS[type]}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">{items.length}건</span>
+                  <div className="flex-1 border-t border-dashed" />
+                </div>
+                <div className="grid gap-1.5">
+                  {items
+                    .sort((a, b) => {
+                      if (!a.start_date && !b.start_date) return 0;
+                      if (!a.start_date) return 1;
+                      if (!b.start_date) return -1;
+                      return b.start_date.localeCompare(a.start_date);
+                    })
+                    .map(s => {
+                    const dday = getDday(s.start_date);
+                    const isFuture = dday !== null && dday >= 0;
+                    const isPast = dday !== null && dday < 0;
+                    return (
+                      <div
+                        key={s.id}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 border transition-colors group",
+                          isFuture ? "bg-background border-border" : "bg-muted/30 border-transparent"
+                        )}
+                      >
+                        {/* Date column */}
+                        <div className="w-[80px] shrink-0 text-center">
+                          {s.start_date ? (
+                            <div>
+                              <div className={cn("text-xs font-medium", isPast && "text-muted-foreground")}>
+                                {format(parseISO(s.start_date), 'MM/dd')}
+                              </div>
+                              {s.end_date && s.end_date !== s.start_date && (
+                                <div className="text-[10px] text-muted-foreground">
+                                  ~{format(parseISO(s.end_date), 'MM/dd')}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">날짜 미정</span>
+                          )}
+                        </div>
+
+                        {/* Title + meta */}
+                        <div className="flex-1 min-w-0">
+                          <span className={cn("text-sm", isPast ? "text-muted-foreground" : "font-medium")}>{s.title}</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {s.grade && <span className="text-[10px] text-muted-foreground">{s.grade}학년</span>}
+                            {s.subject && <span className="text-[10px] text-muted-foreground">· {s.subject}</span>}
+                            {s.description && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">· {s.description}</span>}
+                          </div>
+                        </div>
+
+                        {/* D-day */}
+                        <div className="w-[60px] text-right shrink-0">
+                          {dday !== null && (
+                            <span className={cn(
+                              "text-xs font-bold",
+                              dday === 0 ? "text-destructive" :
+                              dday > 0 && dday <= 14 ? "text-destructive" :
+                              dday > 0 && dday <= 30 ? "text-orange-500" :
+                              dday > 0 ? "text-blue-500" :
+                              "text-muted-foreground"
+                            )}>
+                              {dday === 0 ? 'D-Day' : dday > 0 ? `D-${dday}` : `D+${Math.abs(dday)}`}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Delete */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          onClick={() => handleDelete(s.id)}
+                        >
+                          <Trash2 className="w-3 h-3 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

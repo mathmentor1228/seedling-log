@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { Plus, Search, School, Users } from 'lucide-react';
+import { Plus, Search, School, Users, CalendarClock } from 'lucide-react';
 import type { SchoolInfo } from './types';
 import { SCHOOL_LEVEL_LABELS } from './types';
 
@@ -15,6 +15,12 @@ interface Props {
   selectedSchool: string | null;
   onSelectSchool: (name: string) => void;
   onAddSchool: (name: string, level: string) => void;
+}
+
+function getDdayDisplay(daysLeft: number) {
+  if (daysLeft === 0) return { label: 'D-Day', color: 'bg-destructive text-destructive-foreground' };
+  if (daysLeft > 0) return { label: `D-${daysLeft}`, color: daysLeft <= 7 ? 'bg-destructive/90 text-destructive-foreground' : daysLeft <= 14 ? 'bg-orange-500 text-white' : daysLeft <= 30 ? 'bg-amber-500 text-white' : 'bg-blue-500/80 text-white' };
+  return { label: `D+${Math.abs(daysLeft)}`, color: 'bg-muted text-muted-foreground' };
 }
 
 export function SchoolSidebar({ schools, selectedSchool, onSelectSchool, onAddSchool }: Props) {
@@ -34,11 +40,11 @@ export function SchoolSidebar({ schools, selectedSchool, onSelectSchool, onAddSc
   };
 
   return (
-    <div className="w-[240px] border-r bg-muted/20 flex flex-col h-full shrink-0">
+    <div className="w-[260px] border-r bg-muted/10 flex flex-col h-full shrink-0">
       <div className="p-3 border-b space-y-2">
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="w-full gap-1 text-xs">
+            <Button size="sm" className="w-full gap-1.5 text-xs">
               <Plus className="w-3.5 h-3.5" /> 학교 추가
             </Button>
           </DialogTrigger>
@@ -70,51 +76,54 @@ export function SchoolSidebar({ schools, selectedSchool, onSelectSchool, onAddSc
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="학교 검색..."
-            className="h-7 text-xs pl-8"
+            className="h-8 text-xs pl-8"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {filtered.map(school => (
-          <div
-            key={school.name}
-            onClick={() => onSelectSchool(school.name)}
-            className={cn(
-              "rounded-lg p-2.5 cursor-pointer transition-all text-xs",
-              selectedSchool === school.name
-                ? "bg-primary/10 border border-primary/20 shadow-sm"
-                : "hover:bg-muted/50 border border-transparent"
-            )}
-          >
-            <div className="flex items-center gap-1.5 mb-1">
-              <School className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <span className="font-medium truncate">{school.name}</span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">
-                {SCHOOL_LEVEL_LABELS[school.level] || school.level}
-              </Badge>
-              {school.studentCount > 0 && (
-                <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
-                  <Users className="w-2.5 h-2.5" />{school.studentCount}명
-                </span>
+        {filtered.map(school => {
+          const isSelected = selectedSchool === school.name;
+          const ddayInfo = school.nextExam ? getDdayDisplay(school.nextExam.daysLeft) : null;
+
+          return (
+            <div
+              key={school.name}
+              onClick={() => onSelectSchool(school.name)}
+              className={cn(
+                "rounded-lg p-3 cursor-pointer transition-all",
+                isSelected
+                  ? "bg-primary/10 border-2 border-primary/30 shadow-sm"
+                  : "hover:bg-muted/60 border-2 border-transparent"
+              )}
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <School className={cn("w-4 h-4 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
+                <span className={cn("font-semibold text-sm truncate", isSelected && "text-primary")}>{school.name}</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap ml-6">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-[18px]">
+                  {SCHOOL_LEVEL_LABELS[school.level] || school.level}
+                </Badge>
+                {school.studentCount > 0 && (
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                    <Users className="w-3 h-3" />{school.studentCount}명
+                  </span>
+                )}
+              </div>
+              {ddayInfo && school.nextExam && (
+                <div className="ml-6 mt-2 flex items-center gap-1.5">
+                  <Badge className={cn("text-[10px] font-bold px-1.5 py-0 h-[18px] shadow-sm", ddayInfo.color)}>
+                    {ddayInfo.label}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                    {school.nextExam.title}
+                  </span>
+                </div>
               )}
             </div>
-            {school.nextExam && (
-              <div className={cn(
-                "mt-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded",
-                school.nextExam.daysLeft <= 14
-                  ? "bg-destructive/10 text-destructive"
-                  : school.nextExam.daysLeft <= 30
-                  ? "bg-orange-500/10 text-orange-600"
-                  : "bg-muted text-muted-foreground"
-              )}>
-                {school.nextExam.title} D-{school.nextExam.daysLeft}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
         {filtered.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-4">학교 없음</p>
         )}
