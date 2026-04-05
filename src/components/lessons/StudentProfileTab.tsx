@@ -17,13 +17,15 @@ import { format, subMonths, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import { getTodayKST } from '@/lib/utils';
 import {
   BookOpen, TestTube, Clock, Stethoscope, Search, User,
-  ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Target, MessageSquare
+  ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Target, MessageSquare, Users
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   Legend, ResponsiveContainer
 } from 'recharts';
 import { SUBJECTS } from './constants';
+import { StudentProfileOverview } from './StudentProfileOverview';
+import { CohortAnalytics } from './CohortAnalytics';
 
 // ─── Types ──────────────────────────────────────────────────
 interface StudentBasic {
