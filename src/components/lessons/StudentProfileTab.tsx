@@ -17,13 +17,15 @@ import { format, subMonths, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import { getTodayKST } from '@/lib/utils';
 import {
   BookOpen, TestTube, Clock, Stethoscope, Search, User,
-  ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Target, MessageSquare
+  ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Target, MessageSquare, Users
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   Legend, ResponsiveContainer
 } from 'recharts';
 import { SUBJECTS } from './constants';
+import { StudentProfileOverview } from './StudentProfileOverview';
+import { CohortAnalytics } from './CohortAnalytics';
 
 // ─── Types ──────────────────────────────────────────────────
 interface StudentBasic {
@@ -68,6 +70,8 @@ export function StudentProfileTab() {
   const { user, role } = useAuth();
   const isAdmin = checkIsAdmin(role);
   const isTeacherRole = checkIsTeacher(role);
+
+  const [viewMode, setViewMode] = useState<'individual' | 'cohort'>('individual');
 
   const [students, setStudents] = useState<StudentBasic[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,70 +118,101 @@ export function StudentProfileTab() {
 
   const selectedStudent = students.find(s => s.id === selectedId) || null;
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      {/* Left: Student list */}
-      <div className="lg:col-span-1">
-        <Card className="h-full">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">학생 목록</CardTitle>
-            <div className="relative mt-2">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="이름 검색..."
-                className="pl-8 h-9"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[calc(100vh-280px)]">
-              {loadingList ? (
-                <div className="p-3 space-y-2">
-                  {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-                </div>
-              ) : filteredStudents.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">학생이 없습니다</p>
-              ) : (
-                <div className="p-1">
-                  {filteredStudents.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelectedId(s.id)}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                        selectedId === s.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted'
-                      }`}
-                    >
-                      <span className="font-medium">{s.name}</span>
-                      {s.grade && (
-                        <span className={`ml-2 text-xs ${selectedId === s.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                          {s.grade}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
+  if (viewMode === 'cohort') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className="cursor-pointer text-xs"
+            onClick={() => setViewMode('individual')}
+          >
+            ← 개별 학생 보기
+          </Badge>
+          <h2 className="text-sm font-semibold flex items-center gap-1.5">
+            <Users className="w-4 h-4" /> 학년별/과목별 학습 추이 분석
+          </h2>
+        </div>
+        <CohortAnalytics />
       </div>
+    );
+  }
 
-      {/* Right: Detail */}
-      <div className="lg:col-span-3">
-        {!selectedStudent ? (
-          <Card className="h-full flex items-center justify-center min-h-[400px]">
-            <div className="text-center text-muted-foreground">
-              <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">학생을 선택해주세요</p>
-            </div>
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Badge
+          variant="secondary"
+          className="cursor-pointer text-xs gap-1"
+          onClick={() => setViewMode('cohort')}
+        >
+          <Users className="w-3.5 h-3.5" /> 학년별/과목별 분석 보기 →
+        </Badge>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left: Student list */}
+        <div className="lg:col-span-1">
+          <Card className="h-full">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">학생 목록</CardTitle>
+              <div className="relative mt-2">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="이름 검색..."
+                  className="pl-8 h-9"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="h-[calc(100vh-280px)]">
+                {loadingList ? (
+                  <div className="p-3 space-y-2">
+                    {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : filteredStudents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">학생이 없습니다</p>
+                ) : (
+                  <div className="p-1">
+                    {filteredStudents.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedId(s.id)}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                          selectedId === s.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'hover:bg-muted'
+                        }`}
+                      >
+                        <span className="font-medium">{s.name}</span>
+                        {s.grade && (
+                          <span className={`ml-2 text-xs ${selectedId === s.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                            {s.grade}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
           </Card>
-        ) : (
-          <StudentDetail student={selectedStudent} />
-        )}
+        </div>
+
+        {/* Right: Detail */}
+        <div className="lg:col-span-3">
+          {!selectedStudent ? (
+            <Card className="h-full flex items-center justify-center min-h-[400px]">
+              <div className="text-center text-muted-foreground">
+                <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">학생을 선택해주세요</p>
+              </div>
+            </Card>
+          ) : (
+            <StudentDetail student={selectedStudent} />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -281,7 +316,7 @@ function StudentDetail({ student }: { student: StudentBasic }) {
           </TabsList>
 
           <TabsContent value="overview">
-            <OverviewSection student={student} data={data} />
+            <StudentProfileOverview student={student} data={data} />
           </TabsContent>
           <TabsContent value="lessons">
             <LessonsSection lessons={data.lessons} />
@@ -307,63 +342,7 @@ function StudentDetail({ student }: { student: StudentBasic }) {
   );
 }
 
-// ─── Tab 1: Overview ────────────────────────────────────────
-function OverviewSection({ student, data }: { student: StudentBasic; data: any }) {
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <div><span className="text-muted-foreground text-xs">이름</span><p className="font-semibold">{student.name}</p></div>
-            <div><span className="text-muted-foreground text-xs">학년</span><p className="font-semibold">{student.grade || '-'}</p></div>
-            <div><span className="text-muted-foreground text-xs">학교</span><p className="font-semibold">{student.school || '-'}</p></div>
-            <div><span className="text-muted-foreground text-xs">등원 시작일</span><p className="font-semibold">{student.created_at ? format(parseISO(student.created_at), 'yyyy.MM.dd') : '-'}</p></div>
-          </div>
-          {Object.keys(data.subjectTeacherMap).length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {Object.entries(data.subjectTeacherMap).map(([subj, teacher]) => (
-                <Badge key={subj} variant="secondary" className="text-xs">{subj}: {teacher as string}</Badge>
-              ))}
-            </div>
-          )}
-          {data.scheduleList.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs text-muted-foreground mb-1">수업 시간표</p>
-              <div className="flex flex-wrap gap-2">
-                {data.scheduleList.map((s: any, i: number) => (
-                  <Badge key={i} variant="outline" className="text-xs">
-                    {s.day} {s.start}~{s.end} {s.subject}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard title="이번 달 수업" value={`${data.monthCounts.lessons}회`} icon={<BookOpen className="w-5 h-5" />} iconColor="primary" />
-        <StatCard title="이번 달 테스트" value={`${data.monthCounts.tests}회`} icon={<TestTube className="w-5 h-5" />} iconColor="warning" />
-        <StatCard title="이번 달 자습" value={`${data.monthCounts.selfStudy}회`} icon={<Clock className="w-5 h-5" />} iconColor="success" />
-        <StatCard title="이번 달 클리닉" value={`${data.monthCounts.clinic}회`} icon={<Stethoscope className="w-5 h-5" />} iconColor="destructive" />
-      </div>
-
-      {data.unconfirmedNotes.length > 0 && (
-        <Alert className="border-destructive/50 bg-destructive/5">
-          <AlertCircle className="w-4 h-4" />
-          <AlertDescription>
-            미확인 클리닉 특이사항이 <strong>{data.unconfirmedNotes.length}건</strong> 있습니다
-            <ul className="mt-2 space-y-1 text-xs">
-              {data.unconfirmedNotes.slice(0, 3).map((n: any) => (
-                <li key={n.id}>• {n.clinic_date} {n.subject}: {n.teacher_note}</li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      )}
-    </div>
-  );
-}
 
 // ─── Tab 2: Lessons ─────────────────────────────────────────
 function LessonsSection({ lessons }: { lessons: any[] }) {
