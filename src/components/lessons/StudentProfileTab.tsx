@@ -118,70 +118,101 @@ export function StudentProfileTab() {
 
   const selectedStudent = students.find(s => s.id === selectedId) || null;
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      {/* Left: Student list */}
-      <div className="lg:col-span-1">
-        <Card className="h-full">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">학생 목록</CardTitle>
-            <div className="relative mt-2">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="이름 검색..."
-                className="pl-8 h-9"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[calc(100vh-280px)]">
-              {loadingList ? (
-                <div className="p-3 space-y-2">
-                  {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-                </div>
-              ) : filteredStudents.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">학생이 없습니다</p>
-              ) : (
-                <div className="p-1">
-                  {filteredStudents.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelectedId(s.id)}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                        selectedId === s.id
-                          ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted'
-                      }`}
-                    >
-                      <span className="font-medium">{s.name}</span>
-                      {s.grade && (
-                        <span className={`ml-2 text-xs ${selectedId === s.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                          {s.grade}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
+  if (viewMode === 'cohort') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className="cursor-pointer text-xs"
+            onClick={() => setViewMode('individual')}
+          >
+            ← 개별 학생 보기
+          </Badge>
+          <h2 className="text-sm font-semibold flex items-center gap-1.5">
+            <Users className="w-4 h-4" /> 학년별/과목별 학습 추이 분석
+          </h2>
+        </div>
+        <CohortAnalytics />
       </div>
+    );
+  }
 
-      {/* Right: Detail */}
-      <div className="lg:col-span-3">
-        {!selectedStudent ? (
-          <Card className="h-full flex items-center justify-center min-h-[400px]">
-            <div className="text-center text-muted-foreground">
-              <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">학생을 선택해주세요</p>
-            </div>
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Badge
+          variant="secondary"
+          className="cursor-pointer text-xs gap-1"
+          onClick={() => setViewMode('cohort')}
+        >
+          <Users className="w-3.5 h-3.5" /> 학년별/과목별 분석 보기 →
+        </Badge>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left: Student list */}
+        <div className="lg:col-span-1">
+          <Card className="h-full">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">학생 목록</CardTitle>
+              <div className="relative mt-2">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="이름 검색..."
+                  className="pl-8 h-9"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="h-[calc(100vh-280px)]">
+                {loadingList ? (
+                  <div className="p-3 space-y-2">
+                    {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : filteredStudents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">학생이 없습니다</p>
+                ) : (
+                  <div className="p-1">
+                    {filteredStudents.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedId(s.id)}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                          selectedId === s.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'hover:bg-muted'
+                        }`}
+                      >
+                        <span className="font-medium">{s.name}</span>
+                        {s.grade && (
+                          <span className={`ml-2 text-xs ${selectedId === s.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                            {s.grade}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
           </Card>
-        ) : (
-          <StudentDetail student={selectedStudent} />
-        )}
+        </div>
+
+        {/* Right: Detail */}
+        <div className="lg:col-span-3">
+          {!selectedStudent ? (
+            <Card className="h-full flex items-center justify-center min-h-[400px]">
+              <div className="text-center text-muted-foreground">
+                <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">학생을 선택해주세요</p>
+              </div>
+            </Card>
+          ) : (
+            <StudentDetail student={selectedStudent} />
+          )}
+        </div>
       </div>
     </div>
   );
