@@ -72,18 +72,31 @@ export function useExamArchiveData() {
       else if (name.includes('고등') || name.includes('고')) level = 'high';
       else if (name.includes('초등') || name.includes('초')) level = 'elementary';
 
-      // Find next exam
-      const upcomingExams = allSchedules
+      // Find next exam (future first, then most recent past if none)
+      const examSchedules = allSchedules
         .filter(s => s.school_name === name && s.schedule_type === 'exam' && s.start_date)
-        .map(s => ({ title: s.title, daysLeft: differenceInDays(parseISO(s.start_date!), today) }))
+        .map(s => ({ title: s.title, daysLeft: differenceInDays(parseISO(s.start_date!), today) }));
+
+      const upcomingExams = examSchedules
         .filter(e => e.daysLeft >= 0)
         .sort((a, b) => a.daysLeft - b.daysLeft);
+
+      // If no upcoming exams, show the most recent past exam
+      let nextExam = upcomingExams[0] || null;
+      if (!nextExam) {
+        const pastExams = examSchedules
+          .filter(e => e.daysLeft < 0)
+          .sort((a, b) => b.daysLeft - a.daysLeft); // most recent first (closest to 0)
+        if (pastExams.length > 0) {
+          nextExam = pastExams[0];
+        }
+      }
 
         return {
           name,
           level,
           studentCount,
-          nextExam: upcomingExams[0] || null,
+          nextExam,
         };
       });
 
