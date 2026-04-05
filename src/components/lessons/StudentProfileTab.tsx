@@ -316,7 +316,7 @@ function StudentDetail({ student }: { student: StudentBasic }) {
           </TabsList>
 
           <TabsContent value="overview">
-            <OverviewSection student={student} data={data} />
+            <StudentProfileOverview student={student} data={data} />
           </TabsContent>
           <TabsContent value="lessons">
             <LessonsSection lessons={data.lessons} />
