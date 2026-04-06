@@ -48,34 +48,15 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallbackDenylist: [/^\/storage/],
-        runtimeCaching: [
-          {
-            // Cache Supabase API calls (but NOT storage/image URLs)
-            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-api-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24,
-              },
-            },
-          },
-          {
-            // Cache Supabase edge function calls
-            urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-functions-cache',
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60,
-              },
-            },
-          },
-        ],
+        // Only precache the app shell - NOT all JS bundles
+        globPatterns: ['**/*.{ico,png,svg,woff2}'],
+        // Skip waiting so new SW activates immediately
+        skipWaiting: true,
+        clientsClaim: true,
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/storage/, /^\/report\//, /^\/parent/, /^\/trial/, /^\/quiz-/],
+        // No runtime caching - let the browser handle API freshness
+        runtimeCaching: [],
       },
     }),
   ].filter(Boolean),
