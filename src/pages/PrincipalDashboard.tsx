@@ -21,6 +21,7 @@ import Dashboard from './Dashboard';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
+import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
