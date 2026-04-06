@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, getTodayKST } from '@/lib/utils';
 import { Upload, Plus, Trash2, Loader2, ScanLine, Pencil } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { useAuth } from '@/lib/auth';
@@ -55,7 +55,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
     description: '',
   });
 
-  const today = new Date();
+  const today = parseISO(getTodayKST());
 
   // --- Inline edit extracted data ---
   const updateExtractedItem = (index: number, field: string, value: any) => {
