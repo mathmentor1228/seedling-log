@@ -21,6 +21,7 @@ import Dashboard from './Dashboard';
 import { cn } from '@/lib/utils';
 import { TeamNotesBoard } from '@/components/TeamNotesBoard';
 import { AcademyCalendar } from '@/components/AcademyCalendar';
+import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -430,7 +431,7 @@ function PrincipalContent() {
 /* ------------------------------------------------------------------ */
 /*  Swipeable Wrapper                                                   */
 /* ------------------------------------------------------------------ */
-const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리'];
+const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리', '✅ 출석 체크'];
 
 function SwipeablePrincipal() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
@@ -457,7 +458,7 @@ function SwipeablePrincipal() {
         <Button
           variant="ghost" size="icon" className="h-8 w-8 shrink-0"
           disabled={activeIndex === 0}
-          onClick={() => scrollTo(0)}
+          onClick={() => scrollTo(activeIndex - 1)}
         >
           <ChevronLeft className="w-4 h-4" />
         </Button>
@@ -482,7 +483,7 @@ function SwipeablePrincipal() {
         <Button
           variant="ghost" size="icon" className="h-8 w-8 shrink-0"
           disabled={activeIndex === PANEL_LABELS.length - 1}
-          onClick={() => scrollTo(1)}
+          onClick={() => scrollTo(activeIndex + 1)}
         >
           <ChevronRight className="w-4 h-4" />
         </Button>
@@ -509,6 +510,20 @@ function SwipeablePrincipal() {
           </div>
           <div className="flex-[0_0_100%] min-w-0">
             <Dashboard />
+          </div>
+          <div className="flex-[0_0_100%] min-w-0 p-2">
+            <Card className="border-primary/20">
+              <div className="flex items-center justify-between p-4 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">✅</span>
+                  <h2 className="text-sm font-bold text-foreground">출석 체크</h2>
+                </div>
+                <LiveClock />
+              </div>
+              <CardContent className="pt-0 px-3 pb-4">
+                <TeacherAttendanceView />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

@@ -78,7 +78,7 @@ interface DragDirectoryEntry extends DragFileSystemEntry {
   createReader: () => DragDirectoryReader;
 }
 
-interface DragDataTransferItem extends DataTransferItem {
+interface DragDataTransferItem {
   webkitGetAsEntry?: () => DragFileSystemEntry | null;
 }
 
