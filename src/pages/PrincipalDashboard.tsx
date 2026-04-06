@@ -431,7 +431,7 @@ function PrincipalContent() {
 /* ------------------------------------------------------------------ */
 /*  Swipeable Wrapper                                                   */
 /* ------------------------------------------------------------------ */
-const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리', '✅ 출석 체크'];
+const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리'];
 
 function SwipeablePrincipal() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
