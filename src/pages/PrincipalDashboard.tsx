@@ -431,7 +431,7 @@ function PrincipalContent() {
 /* ------------------------------------------------------------------ */
 /*  Swipeable Wrapper                                                   */
 /* ------------------------------------------------------------------ */
-const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리', '✅ 출석 체크'];
+const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리'];
 
 function SwipeablePrincipal() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
@@ -508,22 +508,22 @@ function SwipeablePrincipal() {
           <div className="flex-[0_0_100%] min-w-0">
             <PrincipalContent />
           </div>
-          <div className="flex-[0_0_100%] min-w-0">
+          <div className="flex-[0_0_100%] min-w-0 space-y-4">
             <Dashboard />
-          </div>
-          <div className="flex-[0_0_100%] min-w-0 p-2">
-            <Card className="border-primary/20">
-              <div className="flex items-center justify-between p-4 pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">✅</span>
-                  <h2 className="text-sm font-bold text-foreground">출석 체크</h2>
+            <div className="p-2">
+              <Card className="border-primary/20">
+                <div className="flex items-center justify-between p-4 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">✅</span>
+                    <h2 className="text-sm font-bold text-foreground">출석 체크</h2>
+                  </div>
+                  <LiveClock />
                 </div>
-                <LiveClock />
-              </div>
-              <CardContent className="pt-0 px-3 pb-4">
-                <TeacherAttendanceView />
-              </CardContent>
-            </Card>
+                <CardContent className="pt-0 px-3 pb-4">
+                  <TeacherAttendanceView />
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
