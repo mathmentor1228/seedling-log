@@ -41,6 +41,7 @@ import QuizBulkUploadPage from "./pages/QuizBulkUploadPage";
 import QuizLookupPage from "./pages/QuizLookupPage";
 import NotFound from "./pages/NotFound";
 import LessonRecordPage from "./pages/LessonRecordPage";
+import BatchLessonEntryPage from "./pages/BatchLessonEntryPage";
 import TrialSignup from "./pages/TrialSignup";
 import SubjectMaterialPage from "./pages/SubjectMaterialPage";
 import PublicReport from "./pages/PublicReport";
@@ -127,6 +128,7 @@ const App = () => (
                 <Route path="/students" element={<StudentsPage />} />
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/lessons" element={<LessonsPage />} />
+                <Route path="/lessons/batch" element={<BatchLessonEntryPage />} />
                 <Route path="/lessons/record/new" element={<LessonRecordPage />} />
                 <Route path="/lessons/record/:recordId" element={<LessonRecordPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
