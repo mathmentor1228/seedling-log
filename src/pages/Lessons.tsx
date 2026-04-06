@@ -30,7 +30,6 @@ import { Plus, Edit2, Trash2, FileEdit, GraduationCap, Calendar, AlertTriangle, 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getTodayKST } from '@/lib/utils';
 import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
-import { BatchLessonModal } from '@/components/lessons/BatchLessonModal';
 import { NewLessonEntryDialog } from '@/components/lessons/NewLessonEntryDialog';
 import DailyHomeworkChecklist from '@/components/DailyHomeworkChecklist';
 import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
@@ -214,8 +213,6 @@ export default function Lessons() {
   
   const { toast } = useToast();
   
-  // BATCH-LESSON-V1: Batch lesson entry modal (kept as modal since it's simpler)
-  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isNewEntryDialogOpen, setIsNewEntryDialogOpen] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
@@ -312,8 +309,16 @@ export default function Lessons() {
     if (!open) fetchLessons();
   }
 
-  function handleModalSaved() {
-    fetchLessons();
+  function openBatchLessonWindow() {
+    const popup = window.open('/lessons/batch', '_blank', 'noopener,noreferrer');
+
+    if (!popup) {
+      toast({
+        title: '새 창을 열 수 없습니다',
+        description: '브라우저 팝업 차단을 해제한 뒤 다시 시도해주세요.',
+        variant: 'destructive',
+      });
+    }
   }
 
   async function fetchLessons() {
@@ -849,7 +854,7 @@ export default function Lessons() {
           </TabsList>
           {canManage && (
             <div className="flex gap-2">
-              <Button onClick={() => setIsBatchModalOpen(true)} size="sm" variant="outline" className="gap-1.5">
+              <Button onClick={openBatchLessonWindow} size="sm" variant="outline" className="gap-1.5">
                 <Users className="w-4 h-4" />일괄 작성
               </Button>
               <Button onClick={() => setIsNewEntryDialogOpen(true)} size="sm" className="gap-1.5">
@@ -860,15 +865,6 @@ export default function Lessons() {
         </div>
 
         <TabsContent value="lessons" className="space-y-6">
-
-      {/* Batch lesson modal (kept as modal - lightweight) */}
-      {isBatchModalOpen && (
-        <BatchLessonModal
-          open={isBatchModalOpen}
-          onOpenChange={setIsBatchModalOpen}
-          onSaved={handleModalSaved}
-        />
-      )}
 
       {/* New lesson entry dialog (individual/batch choice) */}
       <NewLessonEntryDialog

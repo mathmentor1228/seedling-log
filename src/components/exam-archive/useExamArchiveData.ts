@@ -2,14 +2,66 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { SchoolInfo, Schedule, Textbook, SchoolFile } from './types';
 import { differenceInDays, parseISO } from 'date-fns';
+import { getTodayKST } from '@/lib/utils';
 
 // Normalize school names (merge variants like 신길초 / 신길초등학교)
 const SCHOOL_NAME_MAP: Record<string, string> = {
   '신길초등학교': '신길초',
 };
 
+const SCHOOL_SUFFIX_RULES = [
+  { suffix: '초등학교', replacement: '초' },
+  { suffix: '중학교', replacement: '중' },
+  { suffix: '고등학교', replacement: '고' },
+];
+
 function normalizeSchoolName(name: string): string {
-  return SCHOOL_NAME_MAP[name] || name;
+  const compactName = name.trim().replace(/\s+/g, '');
+  if (!compactName) return compactName;
+  if (SCHOOL_NAME_MAP[compactName]) return SCHOOL_NAME_MAP[compactName];
+
+  const suffixRule = SCHOOL_SUFFIX_RULES.find(({ suffix }) => compactName.endsWith(suffix));
+  if (suffixRule) {
+    return `${compactName.slice(0, -suffixRule.suffix.length)}${suffixRule.replacement}`;
+  }
+
+  return compactName;
+}
+
+function getSchoolAliases(name: string) {
+  const normalized = normalizeSchoolName(name);
+  const aliases = new Set<string>([normalized]);
+
+  if (normalized.endsWith('초')) aliases.add(`${normalized.slice(0, -1)}초등학교`);
+  if (normalized.endsWith('중')) aliases.add(`${normalized.slice(0, -1)}중학교`);
+  if (normalized.endsWith('고')) aliases.add(`${normalized.slice(0, -1)}고등학교`);
+
+  return Array.from(aliases).map((alias) => alias.replace(/\s+/g, ''));
+}
+
+function matchesSchoolTitle(title: string, schoolName: string) {
+  const compactTitle = title.replace(/\s+/g, '');
+  return getSchoolAliases(schoolName).some((alias) => compactTitle.includes(alias));
+}
+
+function buildEventSchedule(event: any, schoolName: string): Schedule {
+  const startDate = event.start_at ? event.start_at.split('T')[0] : null;
+  const endDate = event.end_at ? event.end_at.split('T')[0] : startDate;
+
+  return {
+    id: `academy-event-${event.id}-${schoolName}`,
+    school_name: schoolName,
+    schedule_type: 'exam',
+    title: event.title,
+    start_date: startDate,
+    end_date: endDate,
+    grade: null,
+    subject: null,
+    description: null,
+    source_file_url: null,
+    is_ai_extracted: false,
+    created_at: event.start_at,
+  };
 }
 
 export function useExamArchiveData() {
@@ -40,11 +92,6 @@ export function useExamArchiveData() {
     const students = (studentsRes.data || []).map((s: any) => ({ ...s, school: s.school ? normalizeSchoolName(s.school) : s.school })) as any[];
     const allEvents = (eventsRes.data || []) as any[];
 
-    setSchedules(allSchedules);
-    setTextbooks(allTextbooks);
-    setFiles(allFiles);
-    setArchives(allArchives);
-
     // Build school list from all sources
     const schoolSet = new Set<string>();
     allSchedules.forEach(s => schoolSet.add(s.school_name));
@@ -55,8 +102,35 @@ export function useExamArchiveData() {
     // Also add schools from students
     students.forEach(s => { if (s.school) schoolSet.add(s.school); });
 
-    const today = new Date();
-    const schoolInfos: SchoolInfo[] = Array.from(schoolSet)
+    const schoolNames = Array.from(schoolSet).filter(Boolean);
+    const eventSchedules = schoolNames.flatMap((schoolName) =>
+      allEvents
+        .filter((event) => event.title && matchesSchoolTitle(event.title, schoolName))
+        .map((event) => buildEventSchedule(event, schoolName))
+    );
+
+    const mergedSchedules = Array.from(
+      new Map(
+        [...allSchedules, ...eventSchedules].map((schedule) => [
+          [
+            schedule.school_name,
+            schedule.schedule_type,
+            schedule.start_date || '',
+            schedule.end_date || '',
+            schedule.title,
+          ].join('|'),
+          schedule,
+        ])
+      ).values()
+    ).sort((a, b) => (a.start_date || '9999-12-31').localeCompare(b.start_date || '9999-12-31'));
+
+    setSchedules(mergedSchedules);
+    setTextbooks(allTextbooks);
+    setFiles(allFiles);
+    setArchives(allArchives);
+
+    const today = parseISO(getTodayKST());
+    const schoolInfos: SchoolInfo[] = schoolNames
       .filter(Boolean)
       .sort((a, b) => {
         if (a === '전체일정') return -1;
@@ -75,19 +149,11 @@ export function useExamArchiveData() {
       else if (name.includes('초등') || name.includes('초')) level = 'elementary';
 
       // Collect exam D-day from BOTH school_schedules AND academy_events
-      const examSchedules = allSchedules
+      const examSchedules = mergedSchedules
         .filter(s => s.school_name === name && s.schedule_type === 'exam' && s.start_date)
         .map(s => ({ title: s.title, daysLeft: differenceInDays(parseISO(s.start_date!), today) }));
 
-      // Also check academy_events whose title contains this school name
-      const eventExams = allEvents
-        .filter((e: any) => e.title && e.title.includes(name))
-        .map((e: any) => {
-          const startDate = e.start_at.split('T')[0];
-          return { title: e.title, daysLeft: differenceInDays(parseISO(startDate), today) };
-        });
-
-      const allExamEntries = [...examSchedules, ...eventExams];
+      const allExamEntries = examSchedules;
 
       const upcomingExams = allExamEntries
         .filter(e => e.daysLeft >= 0)
@@ -119,7 +185,7 @@ export function useExamArchiveData() {
     setLoading(false);
   }, [selectedSchool]);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   return {
     schools,

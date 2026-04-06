@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
@@ -57,6 +58,28 @@ interface MaterialLink {
   description: string | null;
   sort_order: number;
   created_at: string;
+}
+
+interface DragFileSystemEntry {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+}
+
+interface DragFileEntry extends DragFileSystemEntry {
+  file: (success: (file: File) => void, error?: (err: DOMException) => void) => void;
+}
+
+interface DragDirectoryReader {
+  readEntries: (success: (entries: DragFileSystemEntry[]) => void, error?: (err: DOMException) => void) => void;
+}
+
+interface DragDirectoryEntry extends DragFileSystemEntry {
+  createReader: () => DragDirectoryReader;
+}
+
+interface DragDataTransferItem extends DataTransferItem {
+  webkitGetAsEntry?: () => DragFileSystemEntry | null;
 }
 
 function formatFileSize(bytes: number | null): string {
@@ -107,6 +130,7 @@ export default function SubjectMaterialPage() {
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkDesc, setNewLinkDesc] = useState('');
   const [creatingLink, setCreatingLink] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -238,8 +262,20 @@ export default function SubjectMaterialPage() {
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || []);
+  const getSignedFileUrl = useCallback(async (file: MaterialFile) => {
+    const { data, error } = await supabase.storage
+      .from('materials')
+      .createSignedUrl(file.storage_path, 300);
+
+    if (error || !data?.signedUrl) {
+      toast({ title: '파일 링크 생성 실패', variant: 'destructive' });
+      return null;
+    }
+
+    return data.signedUrl;
+  }, [toast]);
+
+  const uploadFiles = useCallback(async (selectedFiles: File[]) => {
     if (!selectedFiles.length || !subject) return;
     if (fileInputRef.current) fileInputRef.current.value = '';
 
@@ -253,7 +289,7 @@ export default function SubjectMaterialPage() {
     }
 
     const validFiles = selectedFiles.filter(f => f.size <= MAX_FILE_SIZE);
-    if (!validFiles.length) { return; }
+    if (!validFiles.length) return;
 
     setUploading(true);
     let successCount = 0;
@@ -291,21 +327,86 @@ export default function SubjectMaterialPage() {
       toast({ title: `${successCount}개 파일이 업로드되었습니다` });
       loadContents();
     }
+
     setUploading(false);
+  }, [currentFolderId, loadContents, subject, toast]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await uploadFiles(Array.from(e.target.files || []));
   };
 
-  const handleDownload = async (file: MaterialFile) => {
-    const { data, error } = await supabase.storage
-      .from('materials')
-      .createSignedUrl(file.storage_path, 300);
+  const readDirectoryEntries = useCallback(async (reader: DragDirectoryReader): Promise<DragFileSystemEntry[]> => {
+    const entries: DragFileSystemEntry[] = [];
 
-    if (error || !data?.signedUrl) {
-      toast({ title: '다운로드 링크 생성 실패', variant: 'destructive' });
+    while (true) {
+      const batch = await new Promise<DragFileSystemEntry[]>((resolve, reject) => {
+        reader.readEntries(resolve, reject);
+      });
+
+      if (!batch.length) break;
+      entries.push(...batch);
+    }
+
+    return entries;
+  }, []);
+
+  const collectDroppedFiles = useCallback(async (entry: DragFileSystemEntry): Promise<File[]> => {
+    if (entry.isFile) {
+      const file = await new Promise<File>((resolve, reject) => {
+        (entry as DragFileEntry).file(resolve, reject);
+      });
+
+      return [file];
+    }
+
+    if (entry.isDirectory) {
+      const nestedEntries = await readDirectoryEntries((entry as DragDirectoryEntry).createReader());
+      const nestedFiles = await Promise.all(nestedEntries.map(collectDroppedFiles));
+      return nestedFiles.flat();
+    }
+
+    return [];
+  }, [readDirectoryEntries]);
+
+  const extractDroppedFiles = useCallback(async (dataTransfer: DataTransfer) => {
+    const items = Array.from(dataTransfer.items || []);
+    const entries = items
+      .map((item) => (item as DragDataTransferItem).webkitGetAsEntry?.() || null)
+      .filter((entry): entry is DragFileSystemEntry => Boolean(entry));
+
+    if (entries.length > 0) {
+      const nestedFiles = await Promise.all(entries.map(collectDroppedFiles));
+      return nestedFiles.flat();
+    }
+
+    return Array.from(dataTransfer.files || []);
+  }, [collectDroppedFiles]);
+
+  const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragActive(false);
+
+    const droppedFiles = await extractDroppedFiles(e.dataTransfer);
+    if (!droppedFiles.length) {
+      toast({ title: '업로드할 파일을 찾지 못했습니다', variant: 'destructive' });
       return;
     }
 
+    await uploadFiles(droppedFiles);
+  }, [extractDroppedFiles, toast, uploadFiles]);
+
+  const handleOpenFile = useCallback(async (file: MaterialFile) => {
+    const signedUrl = await getSignedFileUrl(file);
+    if (!signedUrl) return;
+    window.open(signedUrl, '_blank', 'noopener,noreferrer');
+  }, [getSignedFileUrl]);
+
+  const handleDownload = async (file: MaterialFile) => {
+    const signedUrl = await getSignedFileUrl(file);
+    if (!signedUrl) return;
+
     const a = document.createElement('a');
-    a.href = data.signedUrl;
+    a.href = signedUrl;
     a.download = file.original_name;
     a.target = '_blank';
     a.click();
@@ -380,6 +481,33 @@ export default function SubjectMaterialPage() {
           <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
             <span>직접 업로드는 <strong className="text-foreground">10MB 이하</strong>만 가능합니다. 그 이상의 파일은 <strong className="text-foreground">OneDrive / Google Drive 링크</strong>로 등록해주세요.</span>
+          </div>
+
+          <div
+            className={cn(
+              'rounded-lg border border-dashed px-4 py-4 transition-colors',
+              isDragActive ? 'border-primary bg-primary/5' : 'border-border bg-muted/20'
+            )}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragActive(true);
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setIsDragActive(false);
+            }}
+            onDrop={handleDrop}
+          >
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">PDF 여러 개나 폴더째 드래그해서 바로 업로드할 수 있어요.</p>
+                <p className="text-xs text-muted-foreground">현재 폴더 기준으로 업로드되고, PDF 클릭 시 현재 화면은 유지한 채 새 탭에서 열립니다.</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-1.5">
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                파일 선택
+              </Button>
+            </div>
           </div>
 
           {/* Breadcrumb */}
@@ -491,14 +619,27 @@ export default function SubjectMaterialPage() {
                 ))}
 
                 {/* Files */}
-                {files.map((file) => (
+                {files.map((file) => {
+                  const isPdf = file.mime_type?.includes('pdf') || file.original_name.toLowerCase().endsWith('.pdf');
+
+                  return (
                   <div
                     key={file.id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors group"
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-3 transition-colors group',
+                      isPdf ? 'hover:bg-accent/50 cursor-pointer' : 'hover:bg-accent/30'
+                    )}
+                    onClick={() => {
+                      if (isPdf) {
+                        void handleOpenFile(file);
+                      }
+                    }}
                   >
                     {getFileIcon(file.mime_type)}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{file.original_name}</p>
+                      <p className={cn('text-sm font-medium truncate', isPdf && 'hover:underline')}>
+                        {file.original_name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {formatFileSize(file.file_size)}
                         {' · '}
@@ -506,11 +647,27 @@ export default function SubjectMaterialPage() {
                       </p>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 sm:opacity-100">
+                      {isPdf && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleOpenFile(file);
+                          }}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
-                        onClick={() => handleDownload(file)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDownload(file);
+                        }}
                       >
                         <Download className="w-3.5 h-3.5" />
                       </Button>
@@ -518,13 +675,16 @@ export default function SubjectMaterialPage() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-destructive"
-                        onClick={() => setDeleteTarget({ type: 'file', id: file.id, name: file.original_name })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget({ type: 'file', id: file.id, name: file.original_name });
+                        }}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
