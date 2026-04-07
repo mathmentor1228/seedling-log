@@ -128,6 +128,7 @@ export function SchoolExamArchiveNew() {
                   <ScheduleTab
                     schoolName={selectedSchool}
                     schedules={schedules}
+                    archives={archives}
                     onRefetch={refetch}
                   />
                 </TabsContent>

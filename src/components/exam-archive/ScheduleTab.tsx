@@ -22,12 +22,16 @@ import { ExamTimetableGrid } from './ExamTimetableGrid';
 interface Props {
   schoolName: string;
   schedules: Schedule[];
+  archives: any[];
   onRefetch: () => void;
 }
 
-export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
+export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Props) {
   const { user } = useAuth();
   const schoolSchedules = schedules.filter(s => s.school_name === schoolName);
+  const visibleSchedules = schoolSchedules.filter(
+    (schedule) => schedule.schedule_type !== 'exam' || !schedule.start_date || getDday(schedule.start_date) === null || getDday(schedule.start_date)! >= -120
+  );
   const [uploadOpen, setUploadOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [examScanOpen, setExamScanOpen] = useState(false);
@@ -832,13 +836,13 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
       </div>
 
       {/* Schedule list - grouped by type with better readability */}
-      {schoolSchedules.length === 0 ? (
+      {visibleSchedules.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">등록된 일정이 없습니다</p>
       ) : (
         <div className="space-y-6">
           {/* Upcoming exams highlight */}
           {(() => {
-            const upcomingExams = schoolSchedules
+            const upcomingExams = visibleSchedules
               .filter(s => s.schedule_type === 'exam' && s.start_date && getDday(s.start_date)! >= 0)
               .sort((a, b) => getDday(a.start_date)! - getDday(b.start_date)!);
             if (upcomingExams.length === 0) return null;
@@ -879,11 +883,14 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
           })()}
 
           {/* Exam timetable grid - date×grade view */}
-          <ExamTimetableGrid schedules={schoolSchedules} />
+          <ExamTimetableGrid
+            schedules={visibleSchedules}
+            archives={archives.filter((archive) => archive.school_name === schoolName)}
+          />
 
           {/* All schedules grouped by type */}
           {(['exam', 'performance', 'holiday', 'event', 'other'] as const).map(type => {
-            const items = schoolSchedules.filter(s => s.schedule_type === type);
+            const items = visibleSchedules.filter(s => s.schedule_type === type);
             if (items.length === 0) return null;
             return (
               <div key={type} className="space-y-2">
@@ -935,11 +942,15 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                         {/* Title + meta */}
                         <div className="flex-1 min-w-0">
                           <span className={cn("text-sm", isPast ? "text-muted-foreground" : "font-medium")}>{s.title}</span>
-                          <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                             {s.grade && <span className="text-[10px] text-muted-foreground">{s.grade}학년</span>}
                             {s.subject && <span className="text-[10px] text-muted-foreground">· {s.subject}</span>}
-                            {s.description && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">· {s.description}</span>}
                           </div>
+                          {s.description && (
+                            <p className="mt-1 text-[10px] leading-4 text-muted-foreground whitespace-pre-wrap break-words">
+                              {s.description}
+                            </p>
+                          )}
                         </div>
 
                         {/* D-day */}

@@ -4,12 +4,23 @@ import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Schedule } from './types';
 
+interface ArchiveSummary {
+  grade_year: number | null;
+  subject: string | null;
+  course_name: string | null;
+  exam_type: string | null;
+  exam_scope: string | null;
+  exam_date_start: string | null;
+  exam_date_end: string | null;
+}
+
 interface Props {
   schedules: Schedule[];
+  archives?: ArchiveSummary[];
 }
 
 /** Group exam schedules into a date×grade timetable grid */
-export function ExamTimetableGrid({ schedules }: Props) {
+export function ExamTimetableGrid({ schedules, archives = [] }: Props) {
   // Only show exam-type schedules that have dates and subjects
   const examItems = schedules.filter(
     s => s.schedule_type === 'exam' && s.start_date && s.subject
@@ -44,6 +55,65 @@ export function ExamTimetableGrid({ schedules }: Props) {
 
   function getSubjectsForDate(date: string): Schedule[] {
     return dateMap.get(date) || [];
+  }
+
+  function normalizeSubjectBase(value: string | null | undefined) {
+    const subject = (value || '').trim();
+    if (/^공통수학|^수학|^대수|^미적분|^확률|^기하/i.test(subject)) return '수학';
+    if (/^공통영어|^영어/i.test(subject)) return '영어';
+    if (/^공통국어|^국어|^문학|^독서|^화법/i.test(subject)) return '국어';
+    if (/^통합과학|^과학|^물리|^화학|^생명|^지구/i.test(subject)) return '과학';
+    if (/^통합사회|^사회|^한국지리|^세계지리|^경제/i.test(subject)) return '사회';
+    if (/^한국사/i.test(subject)) return '한국사';
+    return subject;
+  }
+
+  function normalizeCourseKey(value: string | null | undefined) {
+    return (value || '')
+      .replace(/\s+/g, '')
+      .replace(/Ⅰ/g, '1')
+      .replace(/Ⅱ/g, '2')
+      .replace(/Ⅲ/g, '3')
+      .replace(/Ⅳ/g, '4')
+      .toLowerCase();
+  }
+
+  function normalizeExamType(value: string | null | undefined) {
+    const text = value || '';
+    if (/1차지필|중간/i.test(text)) return '중간고사';
+    if (/2차지필|기말/i.test(text)) return '기말고사';
+    return null;
+  }
+
+  function isMatchingExamWindow(schedule: Schedule, archive: ArchiveSummary) {
+    if (!schedule.start_date || !archive.exam_date_start) return true;
+
+    const scheduleEnd = schedule.end_date || schedule.start_date;
+    const archiveEnd = archive.exam_date_end || archive.exam_date_start;
+
+    return schedule.start_date === archive.exam_date_start || scheduleEnd === archiveEnd;
+  }
+
+  function getResolvedScope(schedule: Schedule) {
+    const baseSubject = normalizeSubjectBase(schedule.subject);
+    const courseKey = normalizeCourseKey(schedule.subject);
+    const examType = normalizeExamType(schedule.title);
+
+    const candidates = archives.filter((archive) => {
+      if (schedule.grade && archive.grade_year && archive.grade_year !== schedule.grade) return false;
+      if (normalizeSubjectBase(archive.subject) !== baseSubject) return false;
+      if (examType && archive.exam_type && archive.exam_type !== examType) return false;
+      return isMatchingExamWindow(schedule, archive);
+    });
+
+    const matchedArchive =
+      candidates.find((archive) => normalizeCourseKey(archive.course_name) === courseKey) ||
+      candidates.find((archive) => normalizeCourseKey(archive.subject) === courseKey) ||
+      candidates.find((archive) => Boolean(archive.exam_scope));
+
+    return [schedule.description, matchedArchive?.exam_scope]
+      .filter((value): value is string => Boolean(value))
+      .sort((a, b) => b.length - a.length)[0] || null;
   }
 
   const DAY_COLORS: Record<string, string> = {
@@ -127,19 +197,20 @@ export function ExamTimetableGrid({ schedules }: Props) {
                     {grades.map(g => {
                       const subjects = getSubjectsForDateAndGrade(date, g);
                       const subj = subjects[rowIdx];
+                      const scopeText = subj ? getResolvedScope(subj) : null;
                       return (
-                        <td key={g} className="px-2 py-1.5 text-center border-r border-border/20 last:border-r-0">
+                        <td key={g} className="px-2 py-1.5 text-center align-top border-r border-border/20 last:border-r-0">
                           {subj ? (
-                            <div className="space-y-0.5">
+                            <div className="space-y-1 text-left">
                               <span className={cn(
-                                "inline-block px-2 py-0.5 rounded-md text-xs font-medium",
+                                "inline-block rounded-md px-2 py-0.5 text-xs font-medium",
                                 subjectColorMap.get(subj.subject!) || 'bg-muted text-muted-foreground'
                               )}>
                                 {subj.subject}
                               </span>
-                              {subj.description && (
-                                <div className="text-[10px] text-muted-foreground truncate max-w-[140px] mx-auto" title={subj.description}>
-                                  {subj.description}
+                              {scopeText && (
+                                <div className="text-[10px] leading-4 text-muted-foreground whitespace-pre-wrap break-words" title={scopeText}>
+                                  {scopeText}
                                 </div>
                               )}
                             </div>
