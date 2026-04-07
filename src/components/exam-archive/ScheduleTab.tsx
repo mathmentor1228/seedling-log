@@ -159,6 +159,53 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
         }));
         const { error } = await supabase.from('school_schedules').insert(rows as any);
         if (error) throw error;
+
+        // Also update/create matching school_exam_archives for evaluation plans
+        const currentYear = new Date().getFullYear();
+        const schoolLevel = schoolName.includes('초') ? '초' : schoolName.includes('중') ? '중' : '고';
+        for (const e of selected) {
+          if (!e.subject || !e.grade) continue;
+          const baseSubject = normalizeSubjectForArchive(e.subject);
+          const examType = normalizeExamType(e.exam_type);
+          const semester = e.semester ? `${e.semester}학기` : '1학기';
+
+          const { data: existing } = await (supabase as any)
+            .from('school_exam_archives')
+            .select('id')
+            .eq('school_name', schoolName)
+            .eq('grade_year', e.grade)
+            .eq('academic_year', currentYear)
+            .eq('subject', baseSubject)
+            .eq('exam_type', examType)
+            .eq('semester', semester);
+
+          if (existing && existing.length > 0) {
+            const updates: any = { updated_at: new Date().toISOString() };
+            if (e.exam_range) updates.exam_scope = e.exam_range;
+            if (e.evaluation_ratio) updates.grade_ratio = e.evaluation_ratio;
+            if (e.performance_detail) updates.performance_assessment_info = e.performance_detail;
+            if (e.exam_start_date) updates.exam_date_start = e.exam_start_date;
+            if (e.exam_end_date) updates.exam_date_end = e.exam_end_date;
+            await (supabase as any).from('school_exam_archives').update(updates).eq('id', existing[0].id);
+          } else {
+            await (supabase as any).from('school_exam_archives').insert({
+              school_name: schoolName,
+              school_level: schoolLevel,
+              grade_year: e.grade,
+              subject: baseSubject,
+              academic_year: currentYear,
+              semester,
+              exam_type: examType,
+              exam_scope: e.exam_range || null,
+              grade_ratio: e.evaluation_ratio || null,
+              performance_assessment_info: e.performance_detail || null,
+              exam_date_start: e.exam_start_date || null,
+              exam_date_end: e.exam_end_date || null,
+              status: '자료수집완료',
+              created_by: user?.id,
+            });
+          }
+        }
       }
 
       toast.success(`${selectedItems.size}개 항목이 저장되었습니다`);
