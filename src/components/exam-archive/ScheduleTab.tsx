@@ -529,6 +529,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                         <TableHeader>
                           <TableRow>
                             <TableHead>과목명</TableHead>
+                            <TableHead>학년</TableHead>
                             <TableHead>시험일</TableHead>
                             <TableHead>시간</TableHead>
                             <TableHead>시험범위</TableHead>
@@ -542,6 +543,17 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                                   value={subj.subject_name || ''}
                                   onChange={e => updateExamSubject(i, 'subject_name', e.target.value)}
                                   className="h-7 text-[11px] min-w-[70px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={6}
+                                  value={subj.grade || ''}
+                                  onChange={e => updateExamSubject(i, 'grade', e.target.value ? parseInt(e.target.value) : null)}
+                                  className="h-7 text-[11px] w-[50px]"
+                                  placeholder="학년"
                                 />
                               </TableCell>
                               <TableCell>
