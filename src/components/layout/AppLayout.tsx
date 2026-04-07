@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { getDefaultDashboardPath, useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
@@ -83,6 +83,7 @@ const TEACHER_MULTI_SUBJECT_MAP: Record<string, string[]> = {
 };
 
 const getNavStructure = (assignedSubject: string | null, role: string | null, userEmail: string | null, fullName: string | null): NavEntry[] => {
+  const dashboardHref = getDefaultDashboardPath(role);
   const allSubjects = [
     { label: '수학', href: '/materials/math', icon: <FolderOpen className="w-4 h-4" /> },
     { label: '영어', href: '/materials/english', icon: <FolderOpen className="w-4 h-4" /> },
@@ -123,7 +124,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
     : [];
 
   return [
-    { label: '대시보드', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { label: '대시보드', href: dashboardHref, icon: <LayoutDashboard className="w-4 h-4" /> },
     { label: '시간표', href: '/timetable', icon: <Calendar className="w-4 h-4" /> },
     {
       label: '수업',

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { getDefaultDashboardPath, useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Loader2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,15 +26,6 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
   const { user, loading, role, isTrial, trialExpiresAt, isTrialExpired, signOut } = useAuth();
   const navigate = useNavigate();
 
-  const getRoleDashboard = (r: string) => {
-    switch (r) {
-      case 'admin': return '/principal';
-      case 'teacher': return '/teacher';
-      case 'assistant': return '/assistant';
-      default: return '/dashboard';
-    }
-  };
-
   useEffect(() => {
     if (!loading && !user) {
       navigate('/login');
@@ -52,7 +43,7 @@ export function ProtectedRoute({ children, allowedRoles = ['any'], allowedEmails
       const hasAccess = allowedRoles.includes('any') || allowedRoles.includes(role) || emailAllowed;
       
       if (!hasAccess) {
-        navigate(getRoleDashboard(role), { replace: true });
+        navigate(getDefaultDashboardPath(role), { replace: true });
       }
     }
   }, [user, loading, role, navigate, allowedRoles, allowedEmails]);
