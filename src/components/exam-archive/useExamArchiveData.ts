@@ -64,6 +64,8 @@ function buildEventSchedule(event: any, schoolName: string): Schedule {
   };
 }
 
+const RECENT_PAST_EXAM_DAYS = 120;
+
 export function useExamArchiveData() {
   const [schools, setSchools] = useState<SchoolInfo[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -153,7 +155,7 @@ export function useExamArchiveData() {
         .filter(s => s.school_name === name && s.schedule_type === 'exam' && s.start_date)
         .map(s => ({ title: s.title, daysLeft: differenceInDays(parseISO(s.start_date!), today) }));
 
-      const allExamEntries = examSchedules;
+      const allExamEntries = examSchedules.filter((entry) => entry.daysLeft >= -RECENT_PAST_EXAM_DAYS);
 
       const upcomingExams = allExamEntries
         .filter(e => e.daysLeft >= 0)

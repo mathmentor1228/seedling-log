@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -76,13 +76,27 @@ export function ArchiveTab({ schoolName, archives, onRefetch }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...DEFAULT_FORM });
 
-  const schoolArchives = archives.filter(a => {
-    if (a.school_name !== schoolName) return false;
-    if (yearFilter !== 'all' && a.academic_year?.toString() !== yearFilter) return false;
-    if (semFilter !== 'all' && a.semester !== semFilter) return false;
-    if (examTypeFilter !== 'all' && a.exam_type !== examTypeFilter) return false;
-    return true;
-  });
+  const schoolArchives = useMemo(() => (
+    archives
+      .filter(a => {
+        if (a.school_name !== schoolName) return false;
+        if (yearFilter !== 'all' && a.academic_year?.toString() !== yearFilter) return false;
+        if (semFilter !== 'all' && a.semester !== semFilter) return false;
+        if (examTypeFilter !== 'all' && a.exam_type !== examTypeFilter) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const yearDiff = (b.academic_year || 0) - (a.academic_year || 0);
+        if (yearDiff !== 0) return yearDiff;
+        const semesterDiff = (a.semester || '').localeCompare(b.semester || '', 'ko');
+        if (semesterDiff !== 0) return semesterDiff;
+        const gradeDiff = (a.grade_year || 0) - (b.grade_year || 0);
+        if (gradeDiff !== 0) return gradeDiff;
+        const dateDiff = (a.exam_date_start || '9999-12-31').localeCompare(b.exam_date_start || '9999-12-31');
+        if (dateDiff !== 0) return dateDiff;
+        return (a.subject || '').localeCompare(b.subject || '', 'ko');
+      })
+  ), [archives, examTypeFilter, schoolName, semFilter, yearFilter]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -246,7 +260,7 @@ export function ArchiveTab({ schoolName, archives, onRefetch }: Props) {
                 )}
 
                 {a.exam_scope && (
-                  <p className="text-xs text-muted-foreground truncate">📝 범위: {a.exam_scope}</p>
+                  <p className="text-xs leading-5 text-muted-foreground whitespace-pre-wrap break-words">📝 범위: {a.exam_scope}</p>
                 )}
 
                 {a.grade_ratio && (
@@ -254,7 +268,7 @@ export function ArchiveTab({ schoolName, archives, onRefetch }: Props) {
                 )}
 
                 {a.performance_assessment_info && (
-                  <p className="text-xs text-muted-foreground truncate">📋 수행평가: {a.performance_assessment_info}</p>
+                  <p className="text-xs leading-5 text-muted-foreground whitespace-pre-wrap break-words">📋 수행평가: {a.performance_assessment_info}</p>
                 )}
 
                 {/* Quick status change */}
