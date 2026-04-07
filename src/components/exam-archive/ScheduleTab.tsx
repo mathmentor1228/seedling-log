@@ -698,6 +698,9 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
             );
           })()}
 
+          {/* Exam timetable grid - date×grade view */}
+          <ExamTimetableGrid schedules={schoolSchedules} />
+
           {/* All schedules grouped by type */}
           {(['exam', 'performance', 'holiday', 'event', 'other'] as const).map(type => {
             const items = schoolSchedules.filter(s => s.schedule_type === type);
