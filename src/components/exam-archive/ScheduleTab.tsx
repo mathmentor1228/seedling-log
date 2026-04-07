@@ -230,7 +230,53 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
       const { error } = await supabase.from('school_schedules').insert(rows as any);
       if (error) throw error;
 
-      toast.success(`${rows.length}개 과목 시험 일정 저장 완료`);
+      // Also match and update school_exam_archives with exam_scope per subject
+      let matchedCount = 0;
+      const currentYear = new Date().getFullYear();
+      for (const subj of examResult.subjects) {
+        if (!subj.subject_name || !subj.exam_scope) continue;
+        const grade = subj.grade ? parseInt(String(subj.grade)) : null;
+        if (!grade) continue;
+
+        // Try to find matching archive record
+        let query = (supabase as any)
+          .from('school_exam_archives')
+          .select('id, exam_scope')
+          .eq('school_name', schoolName)
+          .eq('grade_year', grade)
+          .eq('academic_year', currentYear);
+
+        // Match subject name loosely (수학, 영어, 국어, 과학 등)
+        const baseSubject = subj.subject_name.replace(/[IⅠⅡ12ⅰⅱ]+$/, '').trim();
+        query = query.ilike('subject', `%${baseSubject}%`);
+
+        // Match exam type if available
+        if (examResult.exam_type) {
+          query = query.eq('exam_type', examResult.exam_type);
+        }
+
+        const { data: matchedArchives } = await query;
+        if (matchedArchives && matchedArchives.length > 0) {
+          for (const archive of matchedArchives) {
+            const updatePayload: any = {
+              exam_scope: subj.exam_scope,
+              updated_at: new Date().toISOString(),
+            };
+            // Also update exam dates if available
+            if (examResult.exam_date_start) updatePayload.exam_date_start = examResult.exam_date_start;
+            if (examResult.exam_date_end) updatePayload.exam_date_end = examResult.exam_date_end;
+
+            await (supabase as any)
+              .from('school_exam_archives')
+              .update(updatePayload)
+              .eq('id', archive.id);
+            matchedCount++;
+          }
+        }
+      }
+
+      const archiveMsg = matchedCount > 0 ? ` / 내신자료 ${matchedCount}개 과목에 시험범위 반영` : '';
+      toast.success(`${rows.length}개 과목 시험 일정 저장 완료${archiveMsg}`);
       setExamResult(null);
       setExamFile(null);
       setExamScanOpen(false);
