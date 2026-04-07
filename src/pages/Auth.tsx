@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { useAuth } from '@/lib/auth';
+import { getDefaultDashboardPath, useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,15 +19,6 @@ const signupSchema = loginSchema.extend({
   fullName: z.string().min(2, '이름은 2자 이상이어야 합니다'),
 });
 
-function getRoleDashboard(role: string | null): string {
-  switch (role) {
-    case 'admin': return '/principal';
-    case 'teacher': return '/teacher';
-    case 'assistant': return '/assistant';
-    default: return '/dashboard';
-  }
-}
-
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -42,7 +33,7 @@ export default function Auth() {
 
   useEffect(() => {
     if (user && role) {
-      navigate(getRoleDashboard(role), { replace: true });
+      navigate(getDefaultDashboardPath(role), { replace: true });
     }
   }, [user, role, navigate]);
 

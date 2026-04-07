@@ -2,7 +2,20 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
-type AppRole = 'admin' | 'teacher' | 'assistant';
+export type AppRole = 'admin' | 'teacher' | 'assistant';
+
+export function getDefaultDashboardPath(role: AppRole | string | null | undefined): string {
+  switch (role) {
+    case 'admin':
+      return '/principal';
+    case 'teacher':
+      return '/teacher';
+    case 'assistant':
+      return '/assistant';
+    default:
+      return '/dashboard';
+  }
+}
 
 interface AuthContextType {
   user: User | null;

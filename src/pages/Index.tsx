@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { getDefaultDashboardPath, useAuth } from '@/lib/auth';
 import { Loader2 } from 'lucide-react';
 
 export default function Index() {
@@ -13,9 +13,8 @@ export default function Index() {
       return;
     }
 
-    // Redirect ALL roles to /dashboard after login
     if (!loading && user && role) {
-      navigate('/dashboard');
+      navigate(getDefaultDashboardPath(role), { replace: true });
     }
   }, [user, loading, role, navigate]);
 
