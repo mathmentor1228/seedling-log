@@ -209,15 +209,67 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
     setExamResult(updated);
   };
 
+  // Normalize AI-extracted subject names to base archive subjects
+  const normalizeSubjectForArchive = (name: string): string => {
+    const n = name.trim();
+    if (/^공통수학|^수학|^대수|^미적분|^확률|^기하/i.test(n)) return '수학';
+    if (/^공통영어|^영어/i.test(n)) return '영어';
+    if (/^공통국어|^국어|^문학|^독서|^화법/i.test(n)) return '국어';
+    if (/^통합과학|^과학|^물리|^화학|^생명|^지구/i.test(n)) return '과학';
+    if (/^통합사회|^사회|^한국지리|^세계지리|^경제/i.test(n)) return '사회';
+    if (/^한국사/i.test(n)) return '한국사';
+    return n;
+  };
+
+  // Derive course_name for high school subjects (e.g. 공통수학I → 공통수학1)
+  const deriveCourseNameFromSubject = (rawName: string, baseSubject: string): string | null => {
+    if (rawName === baseSubject) return null; // No specific course
+    return rawName.trim();
+  };
+
+  // Normalize exam_type from AI output
+  const normalizeExamType = (raw: string | null): string => {
+    if (!raw) return '중간고사';
+    if (/1차지필|1차 정기|중간/i.test(raw)) return '중간고사';
+    if (/2차지필|2차 정기|기말/i.test(raw)) return '기말고사';
+    return raw;
+  };
+
   const handleSaveExamResult = async () => {
     if (!examResult?.subjects?.length) return;
     setSavingExtracted(true);
     try {
-      // Save as school_schedules for each subject
+      const currentYear = new Date().getFullYear();
+      const examType = normalizeExamType(examResult.exam_type);
+
+      // 1. Deduplicate school_schedules: delete old AI-extracted exams for same school+grade+subject+exam_type
+      const uniqueGradeSubjects = new Map<string, { grade: number; subject: string }>();
+      for (const s of examResult.subjects) {
+        const grade = s.grade ? parseInt(String(s.grade)) : null;
+        if (!grade || !s.subject_name) continue;
+        const key = `${grade}-${s.subject_name}`;
+        if (!uniqueGradeSubjects.has(key)) {
+          uniqueGradeSubjects.set(key, { grade, subject: s.subject_name });
+        }
+      }
+
+      // Delete existing AI-extracted schedules for same school/grade/subject to prevent duplicates
+      for (const { grade, subject } of uniqueGradeSubjects.values()) {
+        await supabase
+          .from('school_schedules')
+          .delete()
+          .eq('school_name', schoolName)
+          .eq('schedule_type', 'exam')
+          .eq('is_ai_extracted', true)
+          .eq('grade', grade)
+          .eq('subject', subject);
+      }
+
+      // 2. Insert fresh schedule rows
       const rows = examResult.subjects.map((s: any) => ({
         school_name: schoolName,
         schedule_type: 'exam',
-        title: `${examResult.exam_type || '시험'} - ${s.subject_name}`,
+        title: `${examType} - ${s.subject_name}`,
         start_date: s.exam_date || examResult.exam_date_start || null,
         end_date: s.exam_date || examResult.exam_date_end || null,
         grade: s.grade ? parseInt(String(s.grade)) || null : null,
@@ -230,53 +282,75 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
       const { error } = await supabase.from('school_schedules').insert(rows as any);
       if (error) throw error;
 
-      // Also match and update school_exam_archives with exam_scope per subject
+      // 3. Match or create school_exam_archives entries per subject
       let matchedCount = 0;
-      const currentYear = new Date().getFullYear();
+      let createdCount = 0;
+
+      // Determine school_level from school name
+      const schoolLevel = schoolName.includes('초') ? '초' : schoolName.includes('중') ? '중' : '고';
+
       for (const subj of examResult.subjects) {
-        if (!subj.subject_name || !subj.exam_scope) continue;
+        if (!subj.subject_name) continue;
         const grade = subj.grade ? parseInt(String(subj.grade)) : null;
         if (!grade) continue;
 
-        // Try to find matching archive record
-        let query = (supabase as any)
+        const baseSubject = normalizeSubjectForArchive(subj.subject_name);
+        const courseName = deriveCourseNameFromSubject(subj.subject_name, baseSubject);
+
+        // Try to find existing archive record
+        const { data: matchedArchives } = await (supabase as any)
           .from('school_exam_archives')
-          .select('id, exam_scope')
+          .select('id')
           .eq('school_name', schoolName)
           .eq('grade_year', grade)
-          .eq('academic_year', currentYear);
+          .eq('academic_year', currentYear)
+          .eq('subject', baseSubject)
+          .eq('exam_type', examType)
+          .eq('semester', '1학기'); // Default to current semester
 
-        // Match subject name loosely (수학, 영어, 국어, 과학 등)
-        const baseSubject = subj.subject_name.replace(/[IⅠⅡ12ⅰⅱ]+$/, '').trim();
-        query = query.ilike('subject', `%${baseSubject}%`);
-
-        // Match exam type if available
-        if (examResult.exam_type) {
-          query = query.eq('exam_type', examResult.exam_type);
-        }
-
-        const { data: matchedArchives } = await query;
         if (matchedArchives && matchedArchives.length > 0) {
-          for (const archive of matchedArchives) {
-            const updatePayload: any = {
-              exam_scope: subj.exam_scope,
-              updated_at: new Date().toISOString(),
-            };
-            // Also update exam dates if available
-            if (examResult.exam_date_start) updatePayload.exam_date_start = examResult.exam_date_start;
-            if (examResult.exam_date_end) updatePayload.exam_date_end = examResult.exam_date_end;
+          // Update existing archive(s)
+          const updatePayload: any = {
+            updated_at: new Date().toISOString(),
+          };
+          if (subj.exam_scope) updatePayload.exam_scope = subj.exam_scope;
+          if (courseName) updatePayload.course_name = courseName;
+          if (examResult.exam_date_start) updatePayload.exam_date_start = examResult.exam_date_start;
+          if (examResult.exam_date_end) updatePayload.exam_date_end = examResult.exam_date_end;
 
+          for (const archive of matchedArchives) {
             await (supabase as any)
               .from('school_exam_archives')
               .update(updatePayload)
               .eq('id', archive.id);
             matchedCount++;
           }
+        } else {
+          // Create new archive entry
+          const newArchive = {
+            school_name: schoolName,
+            school_level: schoolLevel,
+            grade_year: grade,
+            subject: baseSubject,
+            course_name: courseName || null,
+            academic_year: currentYear,
+            semester: '1학기',
+            exam_type: examType,
+            exam_scope: subj.exam_scope || null,
+            exam_date_start: examResult.exam_date_start || null,
+            exam_date_end: examResult.exam_date_end || null,
+            status: '자료수집완료',
+            created_by: user?.id,
+          };
+          await (supabase as any).from('school_exam_archives').insert(newArchive);
+          createdCount++;
         }
       }
 
-      const archiveMsg = matchedCount > 0 ? ` / 내신자료 ${matchedCount}개 과목에 시험범위 반영` : '';
-      toast.success(`${rows.length}개 과목 시험 일정 저장 완료${archiveMsg}`);
+      const msgs: string[] = [`${rows.length}개 과목 시험 일정 저장`];
+      if (matchedCount > 0) msgs.push(`내신자료 ${matchedCount}건 업데이트`);
+      if (createdCount > 0) msgs.push(`내신자료 ${createdCount}건 신규 생성`);
+      toast.success(msgs.join(' / '));
       setExamResult(null);
       setExamFile(null);
       setExamScanOpen(false);
