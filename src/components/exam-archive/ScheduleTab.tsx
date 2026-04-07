@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/auth';
 import type { Schedule } from './types';
 import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS } from './types';
 import { buildSchoolCalendarScheduleRow, fileToDataUrl, isGlobalMockExam } from './scheduleUploadUtils';
+import { ExamTimetableGrid } from './ExamTimetableGrid';
 
 interface Props {
   schoolName: string;
