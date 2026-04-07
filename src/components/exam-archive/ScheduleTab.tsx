@@ -220,6 +220,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
         title: `${examResult.exam_type || '시험'} - ${s.subject_name}`,
         start_date: s.exam_date || examResult.exam_date_start || null,
         end_date: s.exam_date || examResult.exam_date_end || null,
+        grade: s.grade || null,
         subject: s.subject_name || null,
         description: s.exam_scope || null,
         is_ai_extracted: true,
