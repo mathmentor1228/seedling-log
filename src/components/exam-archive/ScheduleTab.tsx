@@ -551,7 +551,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                                   min={1}
                                   max={6}
                                   value={subj.grade || ''}
-                                  onChange={e => updateExamSubject(i, 'grade', e.target.value ? parseInt(e.target.value) : null)}
+                                  onChange={e => updateExamSubject(i, 'grade', e.target.value)}
                                   className="h-7 text-[11px] w-[50px]"
                                   placeholder="학년"
                                 />
