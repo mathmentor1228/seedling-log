@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/auth';
 import type { Schedule } from './types';
 import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS } from './types';
 import { buildSchoolCalendarScheduleRow, fileToDataUrl, isGlobalMockExam } from './scheduleUploadUtils';
+import { ExamTimetableGrid } from './ExamTimetableGrid';
 
 interface Props {
   schoolName: string;
@@ -219,6 +220,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
         title: `${examResult.exam_type || '시험'} - ${s.subject_name}`,
         start_date: s.exam_date || examResult.exam_date_start || null,
         end_date: s.exam_date || examResult.exam_date_end || null,
+        grade: s.grade ? parseInt(String(s.grade)) || null : null,
         subject: s.subject_name || null,
         description: s.exam_scope || null,
         is_ai_extracted: true,
@@ -527,6 +529,7 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                         <TableHeader>
                           <TableRow>
                             <TableHead>과목명</TableHead>
+                            <TableHead>학년</TableHead>
                             <TableHead>시험일</TableHead>
                             <TableHead>시간</TableHead>
                             <TableHead>시험범위</TableHead>
@@ -540,6 +543,17 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
                                   value={subj.subject_name || ''}
                                   onChange={e => updateExamSubject(i, 'subject_name', e.target.value)}
                                   className="h-7 text-[11px] min-w-[70px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={6}
+                                  value={subj.grade || ''}
+                                  onChange={e => updateExamSubject(i, 'grade', e.target.value)}
+                                  className="h-7 text-[11px] w-[50px]"
+                                  placeholder="학년"
                                 />
                               </TableCell>
                               <TableCell>
@@ -696,6 +710,9 @@ export function ScheduleTab({ schoolName, schedules, onRefetch }: Props) {
               </div>
             );
           })()}
+
+          {/* Exam timetable grid - date×grade view */}
+          <ExamTimetableGrid schedules={schoolSchedules} />
 
           {/* All schedules grouped by type */}
           {(['exam', 'performance', 'holiday', 'event', 'other'] as const).map(type => {
