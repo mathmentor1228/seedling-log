@@ -515,18 +515,7 @@ function SwipeablePrincipal() {
           <div className="flex-[0_0_100%] min-w-0 space-y-4">
             <Dashboard />
             <div className="p-2">
-              <Card className="border-primary/20">
-                <div className="flex items-center justify-between p-4 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">✅</span>
-                    <h2 className="text-sm font-bold text-foreground">출석 체크</h2>
-                  </div>
-                  <LiveClock />
-                </div>
-                <CardContent className="pt-0 px-3 pb-4">
-                  <TeacherAttendanceView />
-                </CardContent>
-              </Card>
+              <AttendanceCardSafe />
             </div>
           </div>
         </div>
