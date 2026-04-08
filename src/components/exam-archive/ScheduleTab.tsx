@@ -518,7 +518,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
                               onCheckedChange={c => setSelectedItems(c ? new Set(extractedData!.map((_, i) => i)) : new Set())}
                             />
                           </TableHead>
-                          {fileType === 'school_calendar' && <><TableHead>유형</TableHead><TableHead>제목</TableHead><TableHead>시작일</TableHead><TableHead>종료일</TableHead></>}
+                          {(fileType === 'school_calendar' || fileType === 'other') && <><TableHead>유형</TableHead><TableHead>제목</TableHead><TableHead>시작일</TableHead><TableHead>종료일</TableHead></>}
                           {fileType === 'textbook_list' && <><TableHead>학년</TableHead><TableHead>과목</TableHead><TableHead>과정명</TableHead><TableHead>출판사</TableHead><TableHead>교과서명</TableHead><TableHead>저자</TableHead></>}
                           {fileType === 'evaluation_plan' && <><TableHead>과목</TableHead><TableHead>시험유형</TableHead><TableHead>범위</TableHead><TableHead>비율</TableHead></>}
                         </TableRow>
