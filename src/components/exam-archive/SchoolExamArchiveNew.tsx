@@ -44,6 +44,14 @@ class ExamArchiveErrorBoundary extends Component<{ children: ReactNode }, { hasE
 }
 
 export function SchoolExamArchiveNew() {
+  return (
+    <ExamArchiveErrorBoundary>
+      <SchoolExamArchiveInner />
+    </ExamArchiveErrorBoundary>
+  );
+}
+
+function SchoolExamArchiveInner() {
   const { user } = useAuth();
   const {
     schools,
