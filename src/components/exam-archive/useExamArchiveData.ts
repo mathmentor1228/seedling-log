@@ -190,6 +190,7 @@ export function useExamArchiveData() {
     } finally {
       setLoading(false);
     }
+  }, [selectedSchool]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
