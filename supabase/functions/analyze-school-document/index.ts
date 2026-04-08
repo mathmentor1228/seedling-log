@@ -257,6 +257,31 @@ ${subjectInstruction}
 JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
     }
 
+    if (fileType === "other") {
+      extractionPrompt = `
+다음은 ${schoolName} 관련 학교 문서입니다.
+${subjectInstruction}
+
+이 문서에서 학사/시험/평가/교과서/행사 관련 정보를 자동으로 판별하여 추출해주세요.
+가능한 모든 일정, 시험범위, 교과서 정보, 평가 정보를 포함해주세요.
+
+아래 JSON 형식으로 반환해주세요:
+{
+  "schedules": [
+    {
+      "schedule_type": "exam|performance|holiday|event|other",
+      "title": "일정명",
+      "start_date": "YYYY-MM-DD 또는 null",
+      "end_date": "YYYY-MM-DD 또는 null",
+      "grade": 학년(숫자 또는 null),
+      "subject": "과목명 또는 null",
+      "description": "상세내용"
+    }
+  ]
+}
+일정이 없으면 빈 배열을 반환해주세요. JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
+    }
+
     if (!extractionPrompt) {
       return new Response(
         JSON.stringify({ error: "Unsupported file type for AI analysis" }),
