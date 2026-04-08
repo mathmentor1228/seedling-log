@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Component, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
@@ -139,14 +139,18 @@ function PrincipalContent() {
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const fetchAll = useCallback(async () => {
-    const [alertRes, classRes, logRes] = await Promise.all([
-      supabase.from('pattern_alerts').select('*').order('created_date', { ascending: false }).limit(50),
-      supabase.from('classrooms').select('*').eq('is_active', true).order('sort_order'),
-      supabase.from('attendance_logs').select('*').eq('date', today),
-    ]);
-    if (alertRes.data) setAlerts(alertRes.data as PatternAlert[]);
-    if (classRes.data) setClassrooms(classRes.data as Classroom[]);
-    if (logRes.data) setLogs(logRes.data as AttendanceLog[]);
+    try {
+      const [alertRes, classRes, logRes] = await Promise.all([
+        supabase.from('pattern_alerts').select('*').order('created_date', { ascending: false }).limit(50),
+        supabase.from('classrooms').select('*').eq('is_active', true).order('sort_order'),
+        supabase.from('attendance_logs').select('*').eq('date', today),
+      ]);
+      if (alertRes.data) setAlerts(alertRes.data as PatternAlert[]);
+      if (classRes.data) setClassrooms(classRes.data as Classroom[]);
+      if (logRes.data) setLogs(logRes.data as AttendanceLog[]);
+    } catch (err) {
+      console.error('PrincipalContent fetchAll error:', err);
+    }
     setLoading(false);
   }, [today]);
 
@@ -155,8 +159,8 @@ function PrincipalContent() {
   useEffect(() => {
     const ch = supabase
       .channel('principal-dash')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => fetchAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pattern_alerts' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchAll().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pattern_alerts' }, () => { fetchAll().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
@@ -433,6 +437,43 @@ function PrincipalContent() {
 /* ------------------------------------------------------------------ */
 const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리'];
 
+/* Error boundary for attendance card */
+class AttendanceErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err: Error) { console.error('AttendanceCard crash:', err); }
+  render() {
+    if (this.state.hasError) return (
+      <Card className="border-destructive/20">
+        <CardContent className="p-4 text-center">
+          <p className="text-sm text-muted-foreground">출결 데이터 로딩 오류</p>
+          <Button size="sm" variant="outline" className="mt-2" onClick={() => this.setState({ hasError: false })}>다시 시도</Button>
+        </CardContent>
+      </Card>
+    );
+    return this.props.children;
+  }
+}
+
+function AttendanceCardSafe() {
+  return (
+    <AttendanceErrorBoundary>
+      <Card className="border-primary/20">
+        <div className="flex items-center justify-between p-4 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base">✅</span>
+            <h2 className="text-sm font-bold text-foreground">출석 체크</h2>
+          </div>
+          <LiveClock />
+        </div>
+        <CardContent className="pt-0 px-3 pb-4">
+          <TeacherAttendanceView />
+        </CardContent>
+      </Card>
+    </AttendanceErrorBoundary>
+  );
+}
+
 function SwipeablePrincipal() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
   const [activeIndex, setActiveIndex] = useState(0);
@@ -511,18 +552,7 @@ function SwipeablePrincipal() {
           <div className="flex-[0_0_100%] min-w-0 space-y-4">
             <Dashboard />
             <div className="p-2">
-              <Card className="border-primary/20">
-                <div className="flex items-center justify-between p-4 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">✅</span>
-                    <h2 className="text-sm font-bold text-foreground">출석 체크</h2>
-                  </div>
-                  <LiveClock />
-                </div>
-                <CardContent className="pt-0 px-3 pb-4">
-                  <TeacherAttendanceView />
-                </CardContent>
-              </Card>
+              <AttendanceCardSafe />
             </div>
           </div>
         </div>

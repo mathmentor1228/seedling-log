@@ -114,71 +114,81 @@ export function TeacherAttendanceView() {
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const fetchSchedule = useCallback(async () => {
-    const dow = new Date().getDay();
-    const { data: schedules } = await supabase
-      .from('class_schedules')
-      .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
-      .eq('teacher_id', teacherId)
-      .eq('day_of_week', dow)
-      .eq('is_active', true)
-      .order('start_time');
+    try {
+      const dow = new Date().getDay();
+      const { data: schedules } = await supabase
+        .from('class_schedules')
+        .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
+        .eq('teacher_id', teacherId)
+        .eq('day_of_week', dow)
+        .eq('is_active', true)
+        .order('start_time');
 
-    if (!schedules || schedules.length === 0) { setSlots([]); setLoading(false); return; }
+      if (!schedules || schedules.length === 0) { setSlots([]); setLoading(false); return; }
 
-    const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
-      id: s.id,
-      classId: s.class_id,
-      className: s.classes?.name || '',
-      subject: s.classes?.subject || '',
-      startTime: s.start_time?.slice(0, 5) || '',
-      endTime: s.end_time?.slice(0, 5) || '',
-      classroomName: s.classrooms?.name || null,
-    }));
-    setSlots(parsed);
+      const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
+        id: s.id,
+        classId: s.class_id,
+        className: s.classes?.name || '',
+        subject: s.classes?.subject || '',
+        startTime: s.start_time?.slice(0, 5) || '',
+        endTime: s.end_time?.slice(0, 5) || '',
+        classroomName: s.classrooms?.name || null,
+      }));
+      setSlots(parsed);
 
-    const n = new Date();
-    const nowStr = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
-    const current = parsed.find(sl => nowStr >= sl.startTime && nowStr <= sl.endTime);
-    setActiveSlotId(current?.id || parsed[0]?.id || null);
+      const n = new Date();
+      const nowStr = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+      const current = parsed.find(sl => nowStr >= sl.startTime && nowStr <= sl.endTime);
+      setActiveSlotId(current?.id || parsed[0]?.id || null);
+    } catch (err) {
+      console.error('fetchSchedule error:', err);
+      setLoading(false);
+    }
   }, [teacherId]);
 
   const fetchStudents = useCallback(async () => {
-    if (slots.length === 0) return;
+    try {
+      if (slots.length === 0) return;
 
-    const classIds = [...new Set(slots.map(s => s.classId))];
-    const { data: cs } = await supabase.from('class_students').select('student_id, class_id').in('class_id', classIds);
-    if (!cs || cs.length === 0) { setStudentMap({}); setLoading(false); return; }
+      const classIds = [...new Set(slots.map(s => s.classId))];
+      const { data: cs } = await supabase.from('class_students').select('student_id, class_id').in('class_id', classIds);
+      if (!cs || cs.length === 0) { setStudentMap({}); setLoading(false); return; }
 
-    const allStudentIds = [...new Set(cs.map(r => r.student_id))];
-    const [studentRes, logRes] = await Promise.all([
-      supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
-      supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
-    ]);
+      const allStudentIds = [...new Set(cs.map(r => r.student_id))];
+      const [studentRes, logRes] = await Promise.all([
+        supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
+        supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
+      ]);
 
-    const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
-    (logRes.data ?? []).forEach(l => { if (l.student_id) logMap.set(l.student_id, l); });
+      const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
+      (logRes.data ?? []).forEach(l => { if (l.student_id) logMap.set(l.student_id, l); });
 
-    const studentData = new Map<string, StudentAttendance>();
-    (studentRes.data ?? []).forEach(s => {
-      const log = logMap.get(s.id);
-      let status: AttendanceStatus = '미등원';
-      if (s.status === '결석') status = '결석';
-      else if (s.status === '지각') status = '지각';
-      else if (log?.checked_in_at) status = '등원';
-      else if (s.status === '등원') status = '등원';
-      studentData.set(s.id, { id: s.id, name: s.name, school: s.school, grade: s.grade, status, checkedInAt: log?.checked_in_at });
-    });
+      const studentData = new Map<string, StudentAttendance>();
+      (studentRes.data ?? []).forEach(s => {
+        const log = logMap.get(s.id);
+        let status: AttendanceStatus = '미등원';
+        if (s.status === '결석') status = '결석';
+        else if (s.status === '지각') status = '지각';
+        else if (log?.checked_in_at) status = '등원';
+        else if (s.status === '등원') status = '등원';
+        studentData.set(s.id, { id: s.id, name: s.name, school: s.school, grade: s.grade, status, checkedInAt: log?.checked_in_at });
+      });
 
-    const map: Record<string, StudentAttendance[]> = {};
-    slots.forEach(slot => {
-      const classStudentIds = cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
-      map[slot.id] = classStudentIds
-        .map(sid => studentData.get(sid))
-        .filter((s): s is StudentAttendance => !!s)
-        .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-    });
-    setStudentMap(map);
-    setLoading(false);
+      const map: Record<string, StudentAttendance[]> = {};
+      slots.forEach(slot => {
+        const classStudentIds = cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
+        map[slot.id] = classStudentIds
+          .map(sid => studentData.get(sid))
+          .filter((s): s is StudentAttendance => !!s)
+          .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      });
+      setStudentMap(map);
+      setLoading(false);
+    } catch (err) {
+      console.error('fetchStudents error:', err);
+      setLoading(false);
+    }
   }, [slots, today]);
 
   useEffect(() => { if (teacherId) fetchSchedule(); }, [teacherId, fetchSchedule]);
@@ -187,8 +197,8 @@ export function TeacherAttendanceView() {
   useEffect(() => {
     if (!teacherId) return;
     const ch = supabase.channel('teacher-att-shared')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => fetchStudents())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => fetchStudents())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchStudents().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchStudents().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [teacherId, fetchStudents]);
@@ -214,36 +224,42 @@ export function TeacherAttendanceView() {
   }, []);
 
   const handleStatusChange = useCallback(async (studentId: string, newStatus: AttendanceStatus) => {
-    const student = activeStudents.find(s => s.id === studentId);
-    if (!student || student.status === newStatus) return;
+    try {
+      const student = activeStudents.find(s => s.id === studentId);
+      if (!student || student.status === newStatus) return;
 
-    setActionLoading(prev => new Set(prev).add(studentId));
-    const nowIso = new Date().toISOString();
+      setActionLoading(prev => new Set(prev).add(studentId));
+      const nowIso = new Date().toISOString();
 
-    setStudentMap(prev => {
-      const updated = { ...prev };
-      Object.keys(updated).forEach(slotId => {
-        updated[slotId] = updated[slotId].map(s =>
-          s.id === studentId ? { ...s, status: newStatus, checkedInAt: newStatus === '등원' ? nowIso : s.checkedInAt } : s
-        );
+      setStudentMap(prev => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(slotId => {
+          updated[slotId] = updated[slotId].map(s =>
+            s.id === studentId ? { ...s, status: newStatus, checkedInAt: newStatus === '등원' ? nowIso : s.checkedInAt } : s
+          );
+        });
+        return updated;
       });
-      return updated;
-    });
 
-    const dbStatus = newStatus === '미등원' ? '미등원' : newStatus;
-    await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
+      const dbStatus = newStatus === '미등원' ? '미등원' : newStatus;
+      await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
 
-    if (newStatus === '등원') {
-      const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
-      if (existing?.length) {
-        await supabase.from('attendance_logs').update({ checked_in_at: nowIso }).eq('id', existing[0].id);
-      } else {
-        await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
+      if (newStatus === '등원') {
+        const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
+        if (existing?.length) {
+          await supabase.from('attendance_logs').update({ checked_in_at: nowIso }).eq('id', existing[0].id);
+        } else {
+          await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
+        }
       }
-    }
 
-    setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
-    sonnerToast.success(`${student.name} → ${newStatus}`, { duration: 1500 });
+      setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
+      sonnerToast.success(`${student.name} → ${newStatus}`, { duration: 1500 });
+    } catch (err) {
+      console.error('handleStatusChange error:', err);
+      setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
+      sonnerToast.error('출결 처리 중 오류가 발생했습니다');
+    }
   }, [activeStudents, today, teacherId]);
 
   const handleMarkAllPresent = async () => {
