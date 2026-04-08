@@ -1,7 +1,8 @@
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CalendarDays, BookOpen, FileText, Compass } from 'lucide-react';
+import { Loader2, CalendarDays, BookOpen, FileText, Compass, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -12,6 +13,35 @@ import { ScheduleTab } from './ScheduleTab';
 import { TextbookTab } from './TextbookTab';
 import { ArchiveTab } from './ArchiveTab';
 import { GuideTab } from './GuideTab';
+import { Button } from '@/components/ui/button';
+
+class ExamArchiveErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ExamArchive Error:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          <AlertTriangle className="w-10 h-10 text-destructive" />
+          <p className="text-sm text-muted-foreground">내신 자료실 로딩 중 오류가 발생했습니다.</p>
+          <p className="text-xs text-muted-foreground">{this.state.error?.message}</p>
+          <Button variant="outline" size="sm" onClick={() => { this.setState({ hasError: false, error: null }); }}>
+            다시 시도
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export function SchoolExamArchiveNew() {
   const { user } = useAuth();
