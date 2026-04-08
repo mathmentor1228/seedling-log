@@ -103,6 +103,8 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
         items = result.data.textbooks;
       } else if (fileType === 'evaluation_plan' && result.data?.evaluations) {
         items = result.data.evaluations;
+      } else if (fileType === 'other' && result.data?.schedules) {
+        items = result.data.schedules;
       }
 
       setExtractedData(items);
