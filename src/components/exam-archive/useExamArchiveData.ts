@@ -77,6 +77,7 @@ export function useExamArchiveData() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    try {
     const [schedulesRes, textbooksRes, filesRes, archivesRes, studentsRes, eventsRes] = await Promise.all([
       supabase.from('school_schedules').select('*').order('start_date', { ascending: true }),
       supabase.from('school_textbooks').select('*').order('grade'),
@@ -184,7 +185,11 @@ export function useExamArchiveData() {
     if (!selectedSchool && schoolInfos.length > 0) {
       setSelectedSchool(schoolInfos[0].name);
     }
-    setLoading(false);
+    } catch (err) {
+      console.error('useExamArchiveData fetchAll error:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [selectedSchool]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);

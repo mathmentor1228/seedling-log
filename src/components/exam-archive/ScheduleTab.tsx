@@ -103,6 +103,8 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
         items = result.data.textbooks;
       } else if (fileType === 'evaluation_plan' && result.data?.evaluations) {
         items = result.data.evaluations;
+      } else if (fileType === 'other' && result.data?.schedules) {
+        items = result.data.schedules;
       }
 
       setExtractedData(items);
@@ -122,7 +124,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
     try {
       const selected = extractedData.filter((_, i) => selectedItems.has(i));
 
-      if (fileType === 'school_calendar') {
+      if (fileType === 'school_calendar' || fileType === 'other') {
         const rows = selected
           .map((s: any) => buildSchoolCalendarScheduleRow(s, schoolName, user?.id))
           .filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -516,7 +518,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
                               onCheckedChange={c => setSelectedItems(c ? new Set(extractedData!.map((_, i) => i)) : new Set())}
                             />
                           </TableHead>
-                          {fileType === 'school_calendar' && <><TableHead>유형</TableHead><TableHead>제목</TableHead><TableHead>시작일</TableHead><TableHead>종료일</TableHead></>}
+                          {(fileType === 'school_calendar' || fileType === 'other') && <><TableHead>유형</TableHead><TableHead>제목</TableHead><TableHead>시작일</TableHead><TableHead>종료일</TableHead></>}
                           {fileType === 'textbook_list' && <><TableHead>학년</TableHead><TableHead>과목</TableHead><TableHead>과정명</TableHead><TableHead>출판사</TableHead><TableHead>교과서명</TableHead><TableHead>저자</TableHead></>}
                           {fileType === 'evaluation_plan' && <><TableHead>과목</TableHead><TableHead>시험유형</TableHead><TableHead>범위</TableHead><TableHead>비율</TableHead></>}
                         </TableRow>
@@ -534,7 +536,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
                                 }}
                               />
                             </TableCell>
-                            {fileType === 'school_calendar' && (
+                            {(fileType === 'school_calendar' || fileType === 'other') && (
                               <>
                                 <TableCell>
                                   <Select value={item.schedule_type || 'other'} onValueChange={v => updateExtractedItem(i, 'schedule_type', v)}>
