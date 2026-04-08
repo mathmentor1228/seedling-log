@@ -536,7 +536,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
                                 }}
                               />
                             </TableCell>
-                            {fileType === 'school_calendar' && (
+                            {(fileType === 'school_calendar' || fileType === 'other') && (
                               <>
                                 <TableCell>
                                   <Select value={item.schedule_type || 'other'} onValueChange={v => updateExtractedItem(i, 'schedule_type', v)}>
