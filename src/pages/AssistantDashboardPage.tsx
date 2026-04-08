@@ -1,16 +1,24 @@
+import { useState } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { ClipboardList, Users, Calendar, BookCheck, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import AssistantDashboard from '@/components/AssistantDashboard';
+import { cn } from '@/lib/utils';
 
-function AssistantContent() {
+const TABS = [
+  { key: 'dashboard', label: '📋 대시보드' },
+  { key: 'menu', label: '🗂️ 바로가기' },
+] as const;
+
+function QuickMenu() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '조교';
 
   const menuItems = [
-    { icon: ClipboardList, label: '업무 목록', desc: '오늘의 할 일', path: '/assistant', color: 'text-emerald-600 bg-emerald-50' },
+    { icon: ClipboardList, label: '업무 목록', desc: '오늘의 할 일', path: '/assistant-tasks', color: 'text-emerald-600 bg-emerald-50' },
     { icon: Bell, label: '요청 사항', desc: '선생님 요청', path: '/assistant-requests', color: 'text-violet-600 bg-violet-50' },
     { icon: Users, label: '출결 관리', desc: '입퇴실 체크', path: '/timetable?tab=attendance', color: 'text-blue-600 bg-blue-50' },
     { icon: Calendar, label: '시간표', desc: '오늘의 시간표', path: '/timetable', color: 'text-amber-600 bg-amber-50' },
@@ -21,7 +29,7 @@ function AssistantContent() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">안녕하세요, {displayName}님 👋</h1>
-        <p className="text-sm text-muted-foreground mt-1">조교 대시보드 · 오늘의 업무를 확인하세요</p>
+        <p className="text-sm text-muted-foreground mt-1">바로가기 메뉴 · 자주 사용하는 기능에 빠르게 접근하세요</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -43,6 +51,34 @@ function AssistantContent() {
           </Card>
         ))}
       </div>
+    </div>
+  );
+}
+
+function AssistantContent() {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'menu'>('dashboard');
+
+  return (
+    <div className="space-y-3">
+      {/* Tab switcher */}
+      <div className="flex gap-2 justify-center">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              "px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300",
+              activeTab === tab.key
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-muted/50 text-muted-foreground hover:bg-muted"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'dashboard' ? <AssistantDashboard /> : <QuickMenu />}
     </div>
   );
 }
