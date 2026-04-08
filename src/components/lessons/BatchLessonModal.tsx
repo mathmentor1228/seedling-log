@@ -100,7 +100,7 @@ const FIELD_LABELS: Record<EditableField, string> = {
   homework_items: '숙제 배정',
 };
 
-export function BatchLessonModal({ open, onOpenChange, onSaved }: BatchLessonModalProps) {
+export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = false }: BatchLessonModalProps) {
   const { user } = useAuth();
   const { toast } = useToast();
 
