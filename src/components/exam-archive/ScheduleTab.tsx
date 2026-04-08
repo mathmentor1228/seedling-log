@@ -28,6 +28,13 @@ interface Props {
 
 export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Props) {
   const { user } = useAuth();
+  const today = parseISO(getTodayKST());
+
+  const getDday = (dateStr: string | null) => {
+    if (!dateStr) return null;
+    return differenceInDays(parseISO(dateStr), today);
+  };
+
   const schoolSchedules = schedules.filter(s => s.school_name === schoolName);
   const visibleSchedules = schoolSchedules.filter(
     (schedule) => schedule.schedule_type !== 'exam' || !schedule.start_date || getDday(schedule.start_date) === null || getDday(schedule.start_date)! >= -120
@@ -60,7 +67,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
     description: '',
   });
 
-  const today = parseISO(getTodayKST());
+  // today is declared above
 
   // --- Inline edit extracted data ---
   const updateExtractedItem = (index: number, field: string, value: any) => {
@@ -441,10 +448,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
     onRefetch();
   };
 
-  const getDday = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    return differenceInDays(parseISO(dateStr), today);
-  };
+  // getDday is declared at the top of the component
 
   return (
     <div className="space-y-4">
