@@ -67,7 +67,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
     description: '',
   });
 
-  const today = parseISO(getTodayKST());
+  // today is declared above
 
   // --- Inline edit extracted data ---
   const updateExtractedItem = (index: number, field: string, value: any) => {
