@@ -159,8 +159,8 @@ function PrincipalContent() {
   useEffect(() => {
     const ch = supabase
       .channel('principal-dash')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => fetchAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pattern_alerts' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchAll().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pattern_alerts' }, () => { fetchAll().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
