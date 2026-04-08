@@ -449,6 +449,8 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
   };
 
   // getDday is declared at the top of the component
+
+  return (
     <div className="space-y-4">
       {/* Upload + Exam Scan + Manual buttons */}
       <div className="flex gap-2 flex-wrap">
