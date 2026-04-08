@@ -114,6 +114,7 @@ export function TeacherAttendanceView() {
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const fetchSchedule = useCallback(async () => {
+    try {
     const dow = new Date().getDay();
     const { data: schedules } = await supabase
       .from('class_schedules')
