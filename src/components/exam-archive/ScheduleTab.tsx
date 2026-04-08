@@ -448,12 +448,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
     onRefetch();
   };
 
-  const getDday = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    return differenceInDays(parseISO(dateStr), today);
-  };
-
-  return (
+  // getDday is declared at the top of the component
     <div className="space-y-4">
       {/* Upload + Exam Scan + Manual buttons */}
       <div className="flex gap-2 flex-wrap">
