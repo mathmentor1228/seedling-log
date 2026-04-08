@@ -185,8 +185,11 @@ export function useExamArchiveData() {
     if (!selectedSchool && schoolInfos.length > 0) {
       setSelectedSchool(schoolInfos[0].name);
     }
-    setLoading(false);
-  }, [selectedSchool]);
+    } catch (err) {
+      console.error('useExamArchiveData fetchAll error:', err);
+    } finally {
+      setLoading(false);
+    }
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
