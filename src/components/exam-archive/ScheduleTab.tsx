@@ -124,7 +124,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
     try {
       const selected = extractedData.filter((_, i) => selectedItems.has(i));
 
-      if (fileType === 'school_calendar') {
+      if (fileType === 'school_calendar' || fileType === 'other') {
         const rows = selected
           .map((s: any) => buildSchoolCalendarScheduleRow(s, schoolName, user?.id))
           .filter((row): row is NonNullable<typeof row> => Boolean(row));
