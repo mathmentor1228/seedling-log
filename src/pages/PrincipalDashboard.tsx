@@ -139,14 +139,18 @@ function PrincipalContent() {
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const fetchAll = useCallback(async () => {
-    const [alertRes, classRes, logRes] = await Promise.all([
-      supabase.from('pattern_alerts').select('*').order('created_date', { ascending: false }).limit(50),
-      supabase.from('classrooms').select('*').eq('is_active', true).order('sort_order'),
-      supabase.from('attendance_logs').select('*').eq('date', today),
-    ]);
-    if (alertRes.data) setAlerts(alertRes.data as PatternAlert[]);
-    if (classRes.data) setClassrooms(classRes.data as Classroom[]);
-    if (logRes.data) setLogs(logRes.data as AttendanceLog[]);
+    try {
+      const [alertRes, classRes, logRes] = await Promise.all([
+        supabase.from('pattern_alerts').select('*').order('created_date', { ascending: false }).limit(50),
+        supabase.from('classrooms').select('*').eq('is_active', true).order('sort_order'),
+        supabase.from('attendance_logs').select('*').eq('date', today),
+      ]);
+      if (alertRes.data) setAlerts(alertRes.data as PatternAlert[]);
+      if (classRes.data) setClassrooms(classRes.data as Classroom[]);
+      if (logRes.data) setLogs(logRes.data as AttendanceLog[]);
+    } catch (err) {
+      console.error('PrincipalContent fetchAll error:', err);
+    }
     setLoading(false);
   }, [today]);
 
