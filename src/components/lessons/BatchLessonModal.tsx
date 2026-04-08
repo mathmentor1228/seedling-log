@@ -75,6 +75,8 @@ interface BatchLessonModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: () => void;
+  /** When true, renders as a standalone full page instead of a dialog */
+  standalone?: boolean;
 }
 
 const HOMEWORK_STATUS_OPTIONS = [
