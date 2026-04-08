@@ -560,6 +560,592 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
   const selectedDraftsList = useMemo(() => drafts.filter(d => selectedIds.has(d.id)), [drafts, selectedIds]);
 
+  async function handleBulkDraftSave() {
+    if (selectedIds.size === 0) return;
+    setSaving(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const now = new Date().toISOString();
+
+      for (const id of ids) {
+        const payload: Record<string, any> = { updated_at: now, submitted: false };
+
+        // Save per-student or shared values for ALL fields
+        const range = usePerStudentLessonRange ? (perStudentLessonRange[id] ?? lessonRange) : lessonRange;
+        if (range.trim()) payload.lesson_range = range.trim();
+
+        const score = usePerStudentScore ? (perStudentScore[id] ?? understandingScore) : understandingScore;
+        payload.understanding_score = score;
+
+        const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
+        payload.homework_status = hw;
+
+        const types = usePerStudentLessonTypes ? (perStudentLessonTypes[id] ?? batchLessonTypes) : batchLessonTypes;
+        payload.lesson_types = types;
+
+        const memo = usePerStudentMemo ? (perStudentMemo[id] ?? notes) : notes;
+        if (memo.trim()) payload.notes = memo.trim();
+
+        const goal = usePerStudentNextGoal ? (perStudentNextGoal[id] ?? nextLessonGoal) : nextLessonGoal;
+        if (goal.trim()) payload.next_lesson_goal = goal.trim();
+
+        const issues = usePerStudentIssuesTags ? (perStudentIssuesTags[id] ?? learningIssues) : learningIssues;
+        if (issues.length > 0) payload.learning_issues = issues;
+
+        const issueNote = usePerStudentIssuesNote ? (perStudentIssuesNote[id] ?? learningIssuesNote) : learningIssuesNote;
+        if (issueNote.trim()) payload.learning_issues_note = issueNote.trim();
+
+        const test = usePerStudentTest ? (perStudentTest[id] ?? testContent) : testContent;
+        if (test.trim()) {
+          payload.test_content = test.trim();
+          payload.test_name = test.trim();
+        }
+
+        const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
+        if (error) throw error;
+      }
+
+      toast({
+        title: '전체 임시저장 완료',
+        description: `${ids.length}명의 일지가 임시저장되었습니다.`,
+      });
+
+      // Refresh the list
+      await searchDrafts();
+      setStep('search');
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '임시저장 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const headerContent = (
+    <div className="px-6 pt-5 pb-3 border-b border-border/60 shrink-0 bg-primary/5">
+      <div className="text-base font-bold tracking-tight flex items-center gap-2">
+        <Users className="w-5 h-5 text-primary" />
+        {step === 'search' ? '일괄 수정 — 일지 검색' : '일괄 수정 — 항목 선택'}
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">
+        {step === 'search'
+          ? '날짜를 선택하고 수정할 학생 일지를 골라주세요.'
+          : '통일할 항목만 체크하고 값을 입력하세요. 체크하지 않은 항목은 기존 값이 유지됩니다.'}
+      </p>
+    </div>
+  );
+
+  const bodyContent = (
+    <div className="overflow-y-auto flex-1 px-5 pb-5 pt-4 space-y-4">
+      {step === 'search' ? (
+        <>
+          <div className="flex items-end gap-2">
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs text-muted-foreground">수업일 검색</Label>
+              <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9" />
+            </div>
+            <Button size="sm" onClick={searchDrafts} disabled={loading} className="h-9 gap-1.5">
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              검색
+            </Button>
+          </div>
+
+          {drafts.length > 0 && (
+            <div className="space-y-3">
+              {draftOnly.length > 0 && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground">📝 임시저장 ({draftOnly.length})</span>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedIds(new Set(draftOnly.map(d => d.id)))}>
+                        <CheckSquare className="w-3 h-3 mr-1" />전체선택
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedIds(new Set())}>해제</Button>
+                    </div>
+                  </div>
+                  <div className="border rounded-lg overflow-hidden divide-y divide-border">
+                    {draftOnly.map(d => (
+                      <label key={d.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 cursor-pointer transition-colors">
+                        <Checkbox checked={selectedIds.has(d.id)} onCheckedChange={() => toggleDraft(d.id)} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{d.student_name}</span>
+                            {d.student_grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{d.student_grade}</Badge>}
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{d.lesson_range || '(내용 없음)'}</p>
+                        </div>
+                        {d.understanding_score && <ScoreBadge score={d.understanding_score} />}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {submittedOnly.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-xs font-semibold text-muted-foreground">✅ 제출완료 ({submittedOnly.length})</span>
+                  <div className="border rounded-lg overflow-hidden divide-y divide-border opacity-60">
+                    {submittedOnly.map(d => (
+                      <div key={d.id} className="flex items-center gap-3 px-3 py-2.5">
+                        <Checkbox disabled checked={false} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{d.student_name}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{d.lesson_range || '(내용 없음)'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">제출 완료된 일지는 일괄 수정 대상에서 제외됩니다.</p>
+                </div>
+              )}
+
+              {draftOnly.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">해당 날짜에 임시저장된 일지가 없습니다.</p>
+              )}
+            </div>
+          )}
+
+          {!loading && drafts.length === 0 && searchDate && (
+            <p className="text-sm text-muted-foreground text-center py-8">검색 버튼을 눌러 해당 날짜의 일지를 불러오세요.</p>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 mb-2">
+            <p className="text-sm font-medium">
+              📋 선택된 학생 <strong>{selectedIds.size}명</strong>의 일지를 수정합니다.
+            </p>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {selectedDraftsList.map(d => (
+                <Badge key={d.id} variant="secondary" className="text-xs">{d.student_name} ({d.subject})</Badge>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-xs font-semibold text-muted-foreground">통일할 항목을 선택하세요 (체크한 항목만 변경됩니다)</p>
+
+          <div className="space-y-3">
+            {/* Lesson Types */}
+            <FieldToggleBlock field="lesson_types_field" active={activeFields.has('lesson_types_field')} onToggle={() => toggleField('lesson_types_field')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentLessonTypes} onChange={setUsePerStudentLessonTypes} />
+                {usePerStudentLessonTypes ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => {
+                      const studentTypes = perStudentLessonTypes[d.id] ?? batchLessonTypes;
+                      return (
+                        <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                          <div className="flex flex-wrap gap-1">
+                            {LESSON_TYPE_OPTIONS.map(opt => (
+                              <Badge
+                                key={opt.value}
+                                variant={studentTypes.includes(opt.value) ? 'default' : 'outline'}
+                                className="cursor-pointer text-xs"
+                                onClick={() => {
+                                  const cur = perStudentLessonTypes[d.id] ?? [...batchLessonTypes];
+                                  const next = cur.includes(opt.value) ? cur.filter(v => v !== opt.value) : [...cur, opt.value];
+                                  setPerStudentLessonTypes(prev => ({ ...prev, [d.id]: next.length > 0 ? next : [opt.value] }));
+                                }}
+                              >
+                                {opt.label}
+                              </Badge>
+                            ))}
+                          </div>
+                        </StudentBlock>
+                      );
+                    })}
+                  </PerStudentContainer>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {LESSON_TYPE_OPTIONS.map(opt => (
+                      <Badge
+                        key={opt.value}
+                        variant={batchLessonTypes.includes(opt.value) ? 'default' : 'outline'}
+                        className="cursor-pointer text-xs"
+                        onClick={() => {
+                          setBatchLessonTypes(prev =>
+                            prev.includes(opt.value)
+                              ? prev.filter(v => v !== opt.value).length > 0 ? prev.filter(v => v !== opt.value) : [opt.value]
+                              : [...prev, opt.value]
+                          );
+                        }}
+                      >
+                        {opt.label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Lesson Range */}
+            <FieldToggleBlock field="lesson_range" active={activeFields.has('lesson_range')} onToggle={() => toggleField('lesson_range')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentLessonRange} onChange={setUsePerStudentLessonRange} />
+                {usePerStudentLessonRange ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        <Textarea
+                          value={perStudentLessonRange[d.id] ?? lessonRange}
+                          onChange={e => setPerStudentLessonRange(prev => ({ ...prev, [d.id]: e.target.value }))}
+                          className="text-sm min-h-[60px]"
+                          placeholder="수업 내용"
+                        />
+                      </StudentBlock>
+                    ))}
+                  </PerStudentContainer>
+                ) : (
+                  <Textarea value={lessonRange} onChange={e => setLessonRange(e.target.value)} className="text-sm min-h-[60px]" placeholder="수업 내용 (공통)" />
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Understanding Score */}
+            <FieldToggleBlock field="understanding_score" active={activeFields.has('understanding_score')} onToggle={() => toggleField('understanding_score')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentScore} onChange={setUsePerStudentScore} />
+                {usePerStudentScore ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        <div className="flex gap-1.5">
+                          {[1, 2, 3, 4, 5].map(s => (
+                            <Button
+                              key={s}
+                              variant={(perStudentScore[d.id] ?? understandingScore) === s ? 'default' : 'outline'}
+                              size="sm"
+                              className="h-7 w-7 p-0 text-xs"
+                              onClick={() => setPerStudentScore(prev => ({ ...prev, [d.id]: s }))}
+                            >
+                              {s}
+                            </Button>
+                          ))}
+                        </div>
+                      </StudentBlock>
+                    ))}
+                  </PerStudentContainer>
+                ) : (
+                  <div className="flex gap-1.5">
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <Button key={s} variant={understandingScore === s ? 'default' : 'outline'} size="sm" className="h-7 w-7 p-0 text-xs" onClick={() => setUnderstandingScore(s)}>
+                        {s}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Homework Status */}
+            <FieldToggleBlock field="homework_status" active={activeFields.has('homework_status')} onToggle={() => toggleField('homework_status')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentHomework} onChange={setUsePerStudentHomework} />
+                {usePerStudentHomework ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </StudentBlock>
+                    ))}
+                  </PerStudentContainer>
+                ) : (
+                  <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Learning Issues */}
+            <FieldToggleBlock field="learning_issues" active={activeFields.has('learning_issues')} onToggle={() => toggleField('learning_issues')}>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">학습 이슈 태그</Label>
+                  <PerStudentToggle checked={usePerStudentIssuesTags} onChange={setUsePerStudentIssuesTags} label="학생별 개별 태그" />
+                  {usePerStudentIssuesTags ? (
+                    <PerStudentContainer>
+                      {selectedDraftsList.map(d => {
+                        const subjectIssues = SUBJECT_SPECIFIC_ISSUES[d.subject as SubjectType] || SUBJECT_SPECIFIC_ISSUES['수학'];
+                        const studentTags = perStudentIssuesTags[d.id] ?? learningIssues;
+                        return (
+                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                            <div className="flex flex-wrap gap-1">
+                              {subjectIssues.map(issue => (
+                                <Badge
+                                  key={issue}
+                                  variant={studentTags.includes(issue) ? 'default' : 'outline'}
+                                  className="cursor-pointer text-xs"
+                                  onClick={() => {
+                                    const cur = perStudentIssuesTags[d.id] ?? [...learningIssues];
+                                    const next = cur.includes(issue) ? cur.filter(i => i !== issue) : [...cur, issue];
+                                    setPerStudentIssuesTags(prev => ({ ...prev, [d.id]: next }));
+                                  }}
+                                >
+                                  {issue}
+                                </Badge>
+                              ))}
+                            </div>
+                          </StudentBlock>
+                        );
+                      })}
+                    </PerStudentContainer>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {(SUBJECT_SPECIFIC_ISSUES[(selectedDraftsList[0]?.subject as SubjectType)] || SUBJECT_SPECIFIC_ISSUES['수학']).map(issue => (
+                        <Badge
+                          key={issue}
+                          variant={learningIssues.includes(issue) ? 'default' : 'outline'}
+                          className="cursor-pointer text-xs"
+                          onClick={() => setLearningIssues(prev => prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue])}
+                        >
+                          {issue}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">이슈 상세 메모</Label>
+                  <PerStudentToggle checked={usePerStudentIssuesNote} onChange={setUsePerStudentIssuesNote} label="학생별 개별 메모" />
+                  {usePerStudentIssuesNote ? (
+                    <PerStudentContainer>
+                      {selectedDraftsList.map(d => (
+                        <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                          <Textarea
+                            value={perStudentIssuesNote[d.id] ?? learningIssuesNote}
+                            onChange={e => setPerStudentIssuesNote(prev => ({ ...prev, [d.id]: e.target.value }))}
+                            className="text-sm min-h-[50px]"
+                            placeholder="학습 이슈 상세"
+                          />
+                        </StudentBlock>
+                      ))}
+                    </PerStudentContainer>
+                  ) : (
+                    <Textarea value={learningIssuesNote} onChange={e => setLearningIssuesNote(e.target.value)} className="text-sm min-h-[50px]" placeholder="학습 이슈 상세 (공통)" />
+                  )}
+                </div>
+              </div>
+            </FieldToggleBlock>
+
+            {/* Test Fields */}
+            <FieldToggleBlock field="test_fields" active={activeFields.has('test_fields')} onToggle={() => toggleField('test_fields')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentTest} onChange={setUsePerStudentTest} />
+                {usePerStudentTest ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        <Input
+                          value={perStudentTest[d.id] ?? testContent}
+                          onChange={e => setPerStudentTest(prev => ({ ...prev, [d.id]: e.target.value }))}
+                          className="h-8 text-sm"
+                          placeholder="테스트 내용"
+                        />
+                      </StudentBlock>
+                    ))}
+                  </PerStudentContainer>
+                ) : (
+                  <Input value={testContent} onChange={e => setTestContent(e.target.value)} className="h-8 text-sm" placeholder="테스트 내용 (공통)" />
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Notes / Memo */}
+            <FieldToggleBlock field="notes" active={activeFields.has('notes')} onToggle={() => toggleField('notes')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentMemo} onChange={setUsePerStudentMemo} />
+                {usePerStudentMemo ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        <Textarea
+                          value={perStudentMemo[d.id] ?? notes}
+                          onChange={e => setPerStudentMemo(prev => ({ ...prev, [d.id]: e.target.value }))}
+                          className="text-sm min-h-[50px]"
+                          placeholder="메모"
+                        />
+                      </StudentBlock>
+                    ))}
+                  </PerStudentContainer>
+                ) : (
+                  <Textarea value={notes} onChange={e => setNotes(e.target.value)} className="text-sm min-h-[50px]" placeholder="비고 / 메모 (공통)" />
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Next Lesson Goal */}
+            <FieldToggleBlock field="next_lesson_goal" active={activeFields.has('next_lesson_goal')} onToggle={() => toggleField('next_lesson_goal')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentNextGoal} onChange={setUsePerStudentNextGoal} />
+                {usePerStudentNextGoal ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        <Textarea
+                          value={perStudentNextGoal[d.id] ?? nextLessonGoal}
+                          onChange={e => setPerStudentNextGoal(prev => ({ ...prev, [d.id]: e.target.value }))}
+                          className="text-sm min-h-[50px]"
+                          placeholder="다음 수업 목표"
+                        />
+                      </StudentBlock>
+                    ))}
+                  </PerStudentContainer>
+                ) : (
+                  <Textarea value={nextLessonGoal} onChange={e => setNextLessonGoal(e.target.value)} className="text-sm min-h-[50px]" placeholder="다음 수업 목표 (공통)" />
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Homework Items */}
+            <FieldToggleBlock field="homework_items" active={activeFields.has('homework_items')} onToggle={() => toggleField('homework_items')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentHomeworkItems} onChange={setUsePerStudentHomeworkItems} />
+                {usePerStudentHomeworkItems ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => {
+                      const items = perStudentHomeworkItems[d.id] || [];
+                      return (
+                        <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                          <div className="space-y-1.5">
+                            {items.map(hw => (
+                              <div key={hw.tempId} className="flex items-center gap-2">
+                                <Input
+                                  value={hw.content}
+                                  onChange={e => updateHomework(hw.tempId, 'content', e.target.value, d.id)}
+                                  className="h-7 text-xs flex-1"
+                                  placeholder="숙제 내용"
+                                />
+                                <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v, d.id)}>
+                                  <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="daily">매일</SelectItem>
+                                    <SelectItem value="weekly">주간</SelectItem>
+                                    <SelectItem value="long_term">장기</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeHomework(hw.tempId, d.id)}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Button variant="outline" size="sm" className="h-6 text-xs gap-1" onClick={() => addHomework(d.id)}>
+                              <Plus className="w-3 h-3" />추가
+                            </Button>
+                          </div>
+                        </StudentBlock>
+                      );
+                    })}
+                  </PerStudentContainer>
+                ) : (
+                  <div className="space-y-1.5">
+                    {homeworkItems.map(hw => (
+                      <div key={hw.tempId} className="flex items-center gap-2">
+                        <Input
+                          value={hw.content}
+                          onChange={e => updateHomework(hw.tempId, 'content', e.target.value)}
+                          className="h-7 text-xs flex-1"
+                          placeholder="숙제 내용"
+                        />
+                        <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
+                          <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="daily">매일</SelectItem>
+                            <SelectItem value="weekly">주간</SelectItem>
+                            <SelectItem value="long_term">장기</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeHomework(hw.tempId)}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button variant="outline" size="sm" className="h-6 text-xs gap-1" onClick={() => addHomework()}>
+                      <Plus className="w-3 h-3" />추가
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </FieldToggleBlock>
+          </div>
+
+          {/* Submit toggle */}
+          <label className="flex items-center gap-2 mt-2 p-3 rounded-lg border border-dashed cursor-pointer hover:bg-accent/30 transition-colors">
+            <Checkbox checked={submitAfter} onCheckedChange={v => setSubmitAfter(v === true)} />
+            <span className="text-sm font-medium">수정 후 바로 제출하기</span>
+          </label>
+        </>
+      )}
+    </div>
+  );
+
+  const footerContent = (
+    <div className="px-5 py-3 border-t bg-muted/30 flex items-center justify-between gap-2 shrink-0">
+      {step === 'search' ? (
+        <>
+          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+            {standalone ? '닫기' : '취소'}
+          </Button>
+          <Button size="sm" onClick={goToEdit} disabled={selectedIds.size === 0} className="gap-1.5">
+            <ArrowRight className="w-3.5 h-3.5" />
+            다음: 항목 선택 ({selectedIds.size}명)
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button variant="ghost" size="sm" onClick={() => setStep('search')}>← 돌아가기</Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkDraftSave}
+              disabled={saving || selectedIds.size === 0}
+              className="gap-1.5"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              전체 임시저장
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleApply}
+              disabled={saving || activeFields.size === 0}
+              className="gap-1.5"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              일괄 적용 ({selectedIds.size}명, {activeFields.size}개 항목)
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  // Standalone full-page mode (no Dialog wrapper)
+  if (standalone) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="max-w-2xl mx-auto w-full flex flex-col flex-1 border-x border-border/40">
+          {headerContent}
+          {bodyContent}
+          {footerContent}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
@@ -574,543 +1160,50 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
               : '통일할 항목만 체크하고 값을 입력하세요. 체크하지 않은 항목은 기존 값이 유지됩니다.'}
           </p>
         </DialogHeader>
-
-        <div className="overflow-y-auto flex-1 px-5 pb-5 pt-4 space-y-4">
-          {step === 'search' ? (
-            <>
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs text-muted-foreground">수업일 검색</Label>
-                  <Input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} className="h-9" />
-                </div>
-                <Button size="sm" onClick={searchDrafts} disabled={loading} className="h-9 gap-1.5">
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                  검색
-                </Button>
-              </div>
-
-              {drafts.length > 0 && (
-                <div className="space-y-3">
-                  {draftOnly.length > 0 && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground">📝 임시저장 ({draftOnly.length})</span>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedIds(new Set(draftOnly.map(d => d.id)))}>
-                            <CheckSquare className="w-3 h-3 mr-1" />전체선택
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setSelectedIds(new Set())}>해제</Button>
-                        </div>
-                      </div>
-                      <div className="border rounded-lg overflow-hidden divide-y divide-border">
-                        {draftOnly.map(d => (
-                          <label key={d.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 cursor-pointer transition-colors">
-                            <Checkbox checked={selectedIds.has(d.id)} onCheckedChange={() => toggleDraft(d.id)} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">{d.student_name}</span>
-                                {d.student_grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{d.student_grade}</Badge>}
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">{d.lesson_range || '(내용 없음)'}</p>
-                            </div>
-                            {d.understanding_score && <ScoreBadge score={d.understanding_score} />}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {submittedOnly.length > 0 && (
-                    <div className="space-y-1">
-                      <span className="text-xs font-semibold text-muted-foreground">✅ 제출완료 ({submittedOnly.length})</span>
-                      <div className="border rounded-lg overflow-hidden divide-y divide-border opacity-60">
-                        {submittedOnly.map(d => (
-                          <div key={d.id} className="flex items-center gap-3 px-3 py-2.5">
-                            <Checkbox disabled checked={false} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">{d.student_name}</span>
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">{d.lesson_range || '(내용 없음)'}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">제출 완료된 일지는 일괄 수정 대상에서 제외됩니다.</p>
-                    </div>
-                  )}
-
-                  {draftOnly.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">해당 날짜에 임시저장된 일지가 없습니다.</p>
-                  )}
-                </div>
-              )}
-
-              {!loading && drafts.length === 0 && searchDate && (
-                <p className="text-sm text-muted-foreground text-center py-8">검색 버튼을 눌러 해당 날짜의 일지를 불러오세요.</p>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 mb-2">
-                <p className="text-sm font-medium">
-                  📋 선택된 학생 <strong>{selectedIds.size}명</strong>의 일지를 수정합니다.
-                </p>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {selectedDraftsList.map(d => (
-                    <Badge key={d.id} variant="secondary" className="text-xs">{d.student_name} ({d.subject})</Badge>
-                  ))}
-                </div>
-              </div>
-
-              <p className="text-xs font-semibold text-muted-foreground">통일할 항목을 선택하세요 (체크한 항목만 변경됩니다)</p>
-
-              <div className="space-y-3">
-                {/* Lesson Types */}
-                <FieldToggleBlock field="lesson_types_field" active={activeFields.has('lesson_types_field')} onToggle={() => toggleField('lesson_types_field')}>
-                  <div className="space-y-2">
-                    <PerStudentToggle checked={usePerStudentLessonTypes} onChange={setUsePerStudentLessonTypes} />
-                    {usePerStudentLessonTypes ? (
-                      <PerStudentContainer>
-                        {selectedDraftsList.map(d => {
-                          const studentTypes = perStudentLessonTypes[d.id] ?? batchLessonTypes;
-                          return (
-                            <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                              <div className="flex flex-wrap gap-1">
-                                {LESSON_TYPE_OPTIONS.map(opt => (
-                                  <Badge
-                                    key={opt.value}
-                                    variant={studentTypes.includes(opt.value) ? 'default' : 'outline'}
-                                    className="cursor-pointer text-xs"
-                                    onClick={() => {
-                                      const cur = perStudentLessonTypes[d.id] ?? [...batchLessonTypes];
-                                      const next = cur.includes(opt.value) ? cur.filter(v => v !== opt.value) : [...cur, opt.value];
-                                      setPerStudentLessonTypes(prev => ({ ...prev, [d.id]: next.length > 0 ? next : [opt.value] }));
-                                    }}
-                                  >
-                                    {opt.label}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </StudentBlock>
-                          );
-                        })}
-                      </PerStudentContainer>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {LESSON_TYPE_OPTIONS.map(opt => (
-                          <Badge
-                            key={opt.value}
-                            variant={batchLessonTypes.includes(opt.value) ? 'default' : 'outline'}
-                            className="cursor-pointer text-xs"
-                            onClick={() => {
-                              setBatchLessonTypes(prev =>
-                                prev.includes(opt.value) ? (prev.length > 1 ? prev.filter(v => v !== opt.value) : prev) : [...prev, opt.value]
-                              );
-                            }}
-                          >
-                            {opt.label}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </FieldToggleBlock>
-
-                {/* Lesson Range */}
-                <FieldToggleBlock field="lesson_range" active={activeFields.has('lesson_range')} onToggle={() => toggleField('lesson_range')}>
-                  <div className="space-y-2">
-                    <PerStudentToggle checked={usePerStudentLessonRange} onChange={setUsePerStudentLessonRange} />
-                    {usePerStudentLessonRange ? (
-                      <PerStudentContainer>
-                        {selectedDraftsList.map(d => (
-                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                            <Textarea
-                              value={perStudentLessonRange[d.id] ?? ''}
-                              onChange={e => setPerStudentLessonRange(prev => ({ ...prev, [d.id]: e.target.value }))}
-                              placeholder={`${d.student_name} 수업 내용...`}
-                              className="min-h-[50px] resize-none text-sm"
-                            />
-                          </StudentBlock>
-                        ))}
-                      </PerStudentContainer>
-                    ) : (
-                      <Textarea value={lessonRange} onChange={e => setLessonRange(e.target.value)} placeholder="예: 미적분 - 도함수의 활용" className="min-h-[60px] resize-none" />
-                    )}
-                  </div>
-                </FieldToggleBlock>
-
-                {/* Understanding Score */}
-                <FieldToggleBlock field="understanding_score" active={activeFields.has('understanding_score')} onToggle={() => toggleField('understanding_score')}>
-                  <div className="space-y-2">
-                    <PerStudentToggle checked={usePerStudentScore} onChange={setUsePerStudentScore} />
-                    {usePerStudentScore ? (
-                      <PerStudentContainer>
-                        {selectedDraftsList.map(d => (
-                          <div key={d.id} className="flex items-center gap-2">
-                            <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
-                            <div className="flex items-center gap-0.5 ml-auto">
-                              {[1, 2, 3, 4, 5].map(score => (
-                                <button
-                                  key={score}
-                                  onClick={() => setPerStudentScore(prev => ({ ...prev, [d.id]: score }))}
-                                  className={`transition-transform hover:scale-110 ${(perStudentScore[d.id] ?? 3) === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
-                                >
-                                  <ScoreBadge score={score} />
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </PerStudentContainer>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map(score => (
-                          <button
-                            key={score}
-                            onClick={() => setUnderstandingScore(score)}
-                            className={`transition-transform hover:scale-110 ${understandingScore === score ? 'ring-2 ring-primary ring-offset-1 rounded-full' : 'opacity-40'}`}
-                          >
-                            <ScoreBadge score={score} />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </FieldToggleBlock>
-
-                {/* Homework Status */}
-                <FieldToggleBlock field="homework_status" active={activeFields.has('homework_status')} onToggle={() => toggleField('homework_status')}>
-                  <div className="space-y-2">
-                    <PerStudentToggle checked={usePerStudentHomework} onChange={setUsePerStudentHomework} />
-                    {usePerStudentHomework ? (
-                      <PerStudentContainer>
-                        {selectedDraftsList.map(d => (
-                          <div key={d.id} className="flex items-center gap-2">
-                            <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
-                            <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
-                              <SelectTrigger className="h-8 w-28 text-xs ml-auto"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {HOMEWORK_STATUS_OPTIONS.map(opt => (
-                                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        ))}
-                      </PerStudentContainer>
-                    ) : (
-                      <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {HOMEWORK_STATUS_OPTIONS.map(opt => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                </FieldToggleBlock>
-
-                {/* Learning Issues */}
-                <FieldToggleBlock field="learning_issues" active={activeFields.has('learning_issues')} onToggle={() => toggleField('learning_issues')}>
-                  <div className="space-y-2">
-                    {(() => {
-                      const subjects = [...new Set(selectedDraftsList.map(d => d.subject))];
-                      const allIssues = new Set<string>();
-                      subjects.forEach(s => {
-                        const issues = SUBJECT_SPECIFIC_ISSUES[s as SubjectType];
-                        if (issues) issues.forEach(i => allIssues.add(i));
-                      });
-                      return (
-                        <>
-                          {/* Issue tags */}
-                          <PerStudentToggle label="학생별 개별 태그" checked={usePerStudentIssuesTags} onChange={setUsePerStudentIssuesTags} />
-                          {usePerStudentIssuesTags ? (
-                            <PerStudentContainer>
-                              {selectedDraftsList.map(d => {
-                                const subjectIssues = SUBJECT_SPECIFIC_ISSUES[d.subject as SubjectType] || [];
-                                const studentTags = perStudentIssuesTags[d.id] ?? [];
-                                return (
-                                  <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                                    <div className="flex flex-wrap gap-1">
-                                      {subjectIssues.map(issue => (
-                                        <Badge
-                                          key={issue}
-                                          variant={studentTags.includes(issue) ? 'default' : 'outline'}
-                                          className="cursor-pointer text-xs"
-                                          onClick={() => {
-                                            setPerStudentIssuesTags(prev => {
-                                              const cur = prev[d.id] ?? [];
-                                              return { ...prev, [d.id]: cur.includes(issue) ? cur.filter(i => i !== issue) : [...cur, issue] };
-                                            });
-                                          }}
-                                        >
-                                          {issue}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  </StudentBlock>
-                                );
-                              })}
-                            </PerStudentContainer>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {[...allIssues].map(issue => (
-                                <Badge
-                                  key={issue}
-                                  variant={learningIssues.includes(issue) ? 'default' : 'outline'}
-                                  className="cursor-pointer text-xs"
-                                  onClick={() => setLearningIssues(prev =>
-                                    prev.includes(issue) ? prev.filter(i => i !== issue) : [...prev, issue]
-                                  )}
-                                >
-                                  {issue}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Issue detail note */}
-                          <PerStudentToggle label="학생별 개별 상세" checked={usePerStudentIssuesNote} onChange={setUsePerStudentIssuesNote} />
-                          {usePerStudentIssuesNote ? (
-                            <PerStudentContainer>
-                              {selectedDraftsList.map(d => (
-                                <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                                  <Textarea
-                                    value={perStudentIssuesNote[d.id] || ''}
-                                    onChange={e => setPerStudentIssuesNote(prev => ({ ...prev, [d.id]: e.target.value }))}
-                                    placeholder={`${d.student_name} 학습 상황 상세...`}
-                                    className="min-h-[40px] resize-none text-sm"
-                                  />
-                                </StudentBlock>
-                              ))}
-                            </PerStudentContainer>
-                          ) : (
-                            <Textarea
-                              value={learningIssuesNote}
-                              onChange={e => setLearningIssuesNote(e.target.value)}
-                              placeholder="학습 상황 상세 (리포트 근거)..."
-                              className="min-h-[50px] resize-none"
-                            />
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </FieldToggleBlock>
-
-                {/* Test Fields */}
-                <FieldToggleBlock field="test_fields" active={activeFields.has('test_fields')} onToggle={() => toggleField('test_fields')}>
-                  <div className="space-y-2">
-                    <PerStudentToggle checked={usePerStudentTest} onChange={setUsePerStudentTest} />
-                    {usePerStudentTest ? (
-                      <PerStudentContainer>
-                        {selectedDraftsList.map(d => (
-                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                            <Input
-                              value={perStudentTest[d.id] ?? ''}
-                              onChange={e => setPerStudentTest(prev => ({ ...prev, [d.id]: e.target.value }))}
-                              placeholder="테스트내용 및 범위..."
-                              className="h-8 text-sm"
-                            />
-                          </StudentBlock>
-                        ))}
-                      </PerStudentContainer>
-                    ) : (
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">테스트내용 및 범위</Label>
-                        <Input
-                          value={testContent}
-                          onChange={e => setTestContent(e.target.value)}
-                          placeholder="예: 중2 1단원 단원평가, 영단어 Day1~5 쪽지시험..."
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </FieldToggleBlock>
-
-                {/* Notes */}
-                <FieldToggleBlock field="notes" active={activeFields.has('notes')} onToggle={() => toggleField('notes')}>
-                  <div className="space-y-2">
-                    <PerStudentToggle checked={usePerStudentMemo} onChange={setUsePerStudentMemo} />
-                    {usePerStudentMemo ? (
-                      <PerStudentContainer>
-                        {selectedDraftsList.map(d => (
-                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                            <Textarea
-                              value={perStudentMemo[d.id] ?? ''}
-                              onChange={e => setPerStudentMemo(prev => ({ ...prev, [d.id]: e.target.value }))}
-                              placeholder={`${d.student_name} 메모...`}
-                              className="min-h-[40px] resize-none text-sm"
-                            />
-                          </StudentBlock>
-                        ))}
-                      </PerStudentContainer>
-                    ) : (
-                      <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="수업 중 특이사항..." className="min-h-[50px] resize-none" />
-                    )}
-                  </div>
-                </FieldToggleBlock>
-
-                {/* Next Lesson Goal */}
-                <FieldToggleBlock field="next_lesson_goal" active={activeFields.has('next_lesson_goal')} onToggle={() => toggleField('next_lesson_goal')}>
-                  <div className="space-y-2">
-                    <PerStudentToggle checked={usePerStudentNextGoal} onChange={setUsePerStudentNextGoal} />
-                    {usePerStudentNextGoal ? (
-                      <PerStudentContainer>
-                        {selectedDraftsList.map(d => (
-                          <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                            <Input
-                              value={perStudentNextGoal[d.id] ?? ''}
-                              onChange={e => setPerStudentNextGoal(prev => ({ ...prev, [d.id]: e.target.value }))}
-                              placeholder="다음 시간 진도 계획..."
-                              className="h-8 text-sm"
-                            />
-                          </StudentBlock>
-                        ))}
-                      </PerStudentContainer>
-                    ) : (
-                      <Input value={nextLessonGoal} onChange={e => setNextLessonGoal(e.target.value)} placeholder="다음 시간 진도 계획..." className="h-9" />
-                    )}
-                  </div>
-                </FieldToggleBlock>
-
-                {/* Homework Items */}
-                <FieldToggleBlock field="homework_items" active={activeFields.has('homework_items')} onToggle={() => toggleField('homework_items')}>
-                  <div className="space-y-3">
-                    <PerStudentToggle checked={usePerStudentHomeworkItems} onChange={setUsePerStudentHomeworkItems} />
-                    {usePerStudentHomeworkItems ? (
-                      <PerStudentContainer>
-                        {selectedDraftsList.map(d => {
-                          const studentHwItems = perStudentHomeworkItems[d.id] || [];
-                          return (
-                            <div key={d.id} className="space-y-2 rounded-lg border bg-background p-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold min-w-[60px]">{d.student_name}</span>
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
-                              </div>
-                              {studentHwItems.map((hw, idx) => (
-                                <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
-                                  <div className="flex-1 space-y-1.5">
-                                    <div className="flex items-center gap-2">
-                                      <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
-                                      <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v, d.id)}>
-                                        <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="daily">일일</SelectItem>
-                                          <SelectItem value="regular">정기</SelectItem>
-                                          <SelectItem value="weekly">주간</SelectItem>
-                                          <SelectItem value="long_term">장기</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <Input
-                                      value={hw.content}
-                                      onChange={e => updateHomework(hw.tempId, 'content', e.target.value, d.id)}
-                                      placeholder="숙제 내용을 입력하세요"
-                                      className="h-8 text-sm"
-                                    />
-                                  </div>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId, d.id)}>
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                </div>
-                              ))}
-                              <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework(d.id)}>
-                                <Plus className="w-3 h-3" /> 숙제 추가
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </PerStudentContainer>
-                    ) : (
-                      <div className="space-y-2">
-                        {homeworkItems.length === 0 ? (
-                          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework()}>
-                            <Plus className="w-3 h-3" /> 숙제 추가
-                          </Button>
-                        ) : (
-                          <>
-                            {homeworkItems.map((hw, idx) => (
-                              <div key={hw.tempId} className="flex items-start gap-2 p-2.5 rounded-lg border bg-muted/30">
-                                <div className="flex-1 space-y-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant="secondary" className="text-[10px]">숙제 {idx + 1}</Badge>
-                                    <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
-                                      <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="daily">일일</SelectItem>
-                                        <SelectItem value="regular">정기</SelectItem>
-                                        <SelectItem value="weekly">주간</SelectItem>
-                                        <SelectItem value="long_term">장기</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <Input
-                                    value={hw.content}
-                                    onChange={e => updateHomework(hw.tempId, 'content', e.target.value)}
-                                    placeholder="숙제 내용을 입력하세요"
-                                    className="h-8 text-sm"
-                                  />
-                                </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removeHomework(hw.tempId)}>
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            ))}
-                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addHomework()}>
-                              <Plus className="w-3 h-3" /> 숙제 추가
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </FieldToggleBlock>
-              </div>
-
-              {/* Submit toggle */}
-              <label className="flex items-center gap-2 mt-2 p-3 rounded-lg border border-dashed cursor-pointer hover:bg-accent/30 transition-colors">
-                <Checkbox checked={submitAfter} onCheckedChange={v => setSubmitAfter(v === true)} />
-                <span className="text-sm font-medium">수정 후 바로 제출하기</span>
-              </label>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-3 border-t bg-muted/30 flex items-center justify-between gap-2 shrink-0">
-          {step === 'search' ? (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>취소</Button>
-              <Button size="sm" onClick={goToEdit} disabled={selectedIds.size === 0} className="gap-1.5">
-                <ArrowRight className="w-3.5 h-3.5" />
-                다음: 항목 선택 ({selectedIds.size}명)
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setStep('search')}>← 돌아가기</Button>
-              <Button
-                size="sm"
-                onClick={handleApply}
-                disabled={saving || activeFields.size === 0}
-                className="gap-1.5"
-              >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                일괄 적용 ({selectedIds.size}명, {activeFields.size}개 항목)
-              </Button>
-            </>
-          )}
-        </div>
+        {bodyContent}
+        {footerContent}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ── Sub-components ── */
+
+function FieldToggleBlock({ field, active, onToggle, children }: { field: EditableField; active: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div className={`rounded-lg border p-3 transition-colors ${active ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20 opacity-60'}`}>
+      <div className="flex items-center gap-2 cursor-pointer mb-2" onClick={onToggle}>
+        <Checkbox checked={active} onCheckedChange={onToggle} />
+        <span className="text-sm font-semibold">{FIELD_LABELS[field]}</span>
+        {active && <Badge className="text-[10px] ml-auto bg-primary/10 text-primary border-0">적용됨</Badge>}
+      </div>
+      {active && <div className="mt-1" onClick={e => e.stopPropagation()}>{children}</div>}
+    </div>
+  );
+}
+
+function PerStudentToggle({ checked, onChange, label = '학생별 개별 입력' }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" onClick={e => e.stopPropagation()}>
+      <Checkbox checked={checked} onCheckedChange={v => onChange(v === true)} />
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    </label>
+  );
+}
+
+function PerStudentContainer({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-2 border rounded-lg p-2 bg-muted/20">{children}</div>;
+}
+
+function StudentBlock({ name, subject, children }: { name: string; subject: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs font-semibold">{name}</span>
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{subject}</Badge>
+      </div>
+      {children}
+    </div>
   );
 }
 
