@@ -421,6 +421,7 @@ export function TextbookOrderTab() {
           <div>
             <label className="text-sm font-medium text-foreground">단가 (원) *</label>
             <Input type="number" min="0" value={p} onChange={e => setP(e.target.value)} placeholder="정가 입력" />
+            <p className="text-[11px] text-destructive mt-1 font-medium">※ 반드시 "정가"로 입력해주세요</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
