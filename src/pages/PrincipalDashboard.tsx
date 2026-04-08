@@ -437,6 +437,43 @@ function PrincipalContent() {
 /* ------------------------------------------------------------------ */
 const PANEL_LABELS = ['📊 원장 현황', '📋 수업 관리'];
 
+/* Error boundary for attendance card */
+class AttendanceErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err: Error) { console.error('AttendanceCard crash:', err); }
+  render() {
+    if (this.state.hasError) return (
+      <Card className="border-destructive/20">
+        <CardContent className="p-4 text-center">
+          <p className="text-sm text-muted-foreground">출결 데이터 로딩 오류</p>
+          <Button size="sm" variant="outline" className="mt-2" onClick={() => this.setState({ hasError: false })}>다시 시도</Button>
+        </CardContent>
+      </Card>
+    );
+    return this.props.children;
+  }
+}
+
+function AttendanceCardSafe() {
+  return (
+    <AttendanceErrorBoundary>
+      <Card className="border-primary/20">
+        <div className="flex items-center justify-between p-4 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base">✅</span>
+            <h2 className="text-sm font-bold text-foreground">출석 체크</h2>
+          </div>
+          <LiveClock />
+        </div>
+        <CardContent className="pt-0 px-3 pb-4">
+          <TeacherAttendanceView />
+        </CardContent>
+      </Card>
+    </AttendanceErrorBoundary>
+  );
+}
+
 function SwipeablePrincipal() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
   const [activeIndex, setActiveIndex] = useState(0);
