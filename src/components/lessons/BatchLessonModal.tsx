@@ -1097,6 +1097,29 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                 )}
               </div>
             </FieldToggleBlock>
+
+            {/* Parent Direct Message */}
+            <FieldToggleBlock field="parent_direct_message" active={activeFields.has('parent_direct_message')} onToggle={() => toggleField('parent_direct_message')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentParentMsg} onChange={setUsePerStudentParentMsg} />
+                {usePerStudentParentMsg ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        <Textarea
+                          value={perStudentParentMsg[d.id] ?? parentDirectMessage}
+                          onChange={e => setPerStudentParentMsg(prev => ({ ...prev, [d.id]: e.target.value }))}
+                          className="text-sm min-h-[60px]"
+                          placeholder="학부모에게 전달할 메시지를 입력하세요"
+                        />
+                      </StudentBlock>
+                    ))}
+                  </PerStudentContainer>
+                ) : (
+                  <Textarea value={parentDirectMessage} onChange={e => setParentDirectMessage(e.target.value)} className="text-sm min-h-[60px]" placeholder="학부모 직접전달 메시지 (전체 공통)" />
+                )}
+              </div>
+            </FieldToggleBlock>
           </div>
 
           {/* Submit toggle */}
