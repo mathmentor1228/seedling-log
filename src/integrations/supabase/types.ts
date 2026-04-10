@@ -4614,8 +4614,11 @@ export type Database = {
           completed_at: string
           correct_count: number
           id: string
+          is_self_test: boolean
           mode: string
+          notified_teacher_id: string | null
           student_id: string
+          test_source: string
           total_count: number
           word_set_ids: string[]
           wrong_count: number
@@ -4624,8 +4627,11 @@ export type Database = {
           completed_at?: string
           correct_count?: number
           id?: string
+          is_self_test?: boolean
           mode?: string
+          notified_teacher_id?: string | null
           student_id: string
+          test_source?: string
           total_count?: number
           word_set_ids?: string[]
           wrong_count?: number
@@ -4634,8 +4640,11 @@ export type Database = {
           completed_at?: string
           correct_count?: number
           id?: string
+          is_self_test?: boolean
           mode?: string
+          notified_teacher_id?: string | null
           student_id?: string
+          test_source?: string
           total_count?: number
           word_set_ids?: string[]
           wrong_count?: number
