@@ -5,7 +5,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target, PenLine, Headphones, Globe } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RotateCcw, Eye, ChevronLeft, ChevronRight, Shuffle, Check, X, BookOpen, Volume2, Target, PenLine, Headphones, Globe, Zap, Settings2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
@@ -52,11 +54,14 @@ export default function StudentVocab() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [mode, setMode] = useState<'eng_to_kor' | 'kor_to_eng'>('eng_to_kor');
-  const [studyType, setStudyType] = useState<'flashcard' | 'test' | 'listening' | 'eng_eng_mc' | 'eng_eng_typing'>('flashcard');
+  const [studyType, setStudyType] = useState<'flashcard' | 'test' | 'listening' | 'eng_eng_mc' | 'eng_eng_typing' | 'self_test'>('flashcard');
   const [started, setStarted] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // Self-test settings
+  const [selfTestWordCount, setSelfTestWordCount] = useState(20);
+  const [selfTestLevel, setSelfTestLevel] = useState(2);
 
   useEffect(() => {
     loadVocabSets();
@@ -105,15 +110,20 @@ export default function StudentVocab() {
       .flatMap(s => s.words);
     if (allWords.length === 0) return;
 
-    const shuffled = [...allWords];
+    let shuffled = [...allWords];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
 
+    // For self-test, limit to selfTestWordCount
+    if (studyType === 'self_test') {
+      shuffled = shuffled.slice(0, Math.min(selfTestWordCount, shuffled.length));
+    }
+
     setCards(shuffled);
     
-    if (studyType === 'test' || studyType === 'listening' || studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing') {
+    if (studyType === 'test' || studyType === 'listening' || studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing' || studyType === 'self_test') {
       setTestMode(true);
       setStarted(true);
       return;
@@ -375,7 +385,7 @@ export default function StudentVocab() {
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">학습 방법</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant={studyType === 'flashcard' ? 'default' : 'outline'}
                     size="sm"
@@ -399,6 +409,14 @@ export default function StudentVocab() {
                     className="w-full"
                   >
                     <Headphones className="w-3.5 h-3.5 mr-1" /> 듣기
+                  </Button>
+                  <Button
+                    variant={studyType === 'self_test' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStudyType('self_test')}
+                    className="w-full"
+                  >
+                    <Zap className="w-3.5 h-3.5 mr-1" /> 셀프 테스트
                   </Button>
                 </div>
                 {/* English-English test modes */}
@@ -427,6 +445,47 @@ export default function StudentVocab() {
                 )}
               </div>
 
+              {/* Self-test settings */}
+              {studyType === 'self_test' && (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardContent className="pt-3 pb-3 space-y-3">
+                    <p className="text-xs font-medium flex items-center gap-1.5">
+                      <Settings2 className="w-3.5 h-3.5 text-primary" />
+                      셀프 테스트 설정
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">단어 수</Label>
+                        <Input
+                          type="number"
+                          min={5}
+                          max={100}
+                          value={selfTestWordCount}
+                          onChange={e => setSelfTestWordCount(Math.max(5, Math.min(100, Number(e.target.value) || 20)))}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">난이도</Label>
+                        <Select value={String(selfTestLevel)} onValueChange={v => setSelfTestLevel(Number(v))}>
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">Lv.1 (3지선다)</SelectItem>
+                            <SelectItem value="2">Lv.2 (5지선다)</SelectItem>
+                            <SelectItem value="3">Lv.3 (주관식)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      ⚡ 셀프 테스트 결과는 담당 선생님에게 자동 보고되며, 수업일지에도 기록됩니다.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
               <Button
                 onClick={startFlashcards}
                 disabled={selectedSetIds.length === 0}
@@ -434,11 +493,12 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                {studyType === 'test' ? '테스트 시작'
+                {studyType === 'self_test' ? `셀프 테스트 시작 (${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0))}단어)`
+                  : studyType === 'test' ? '테스트 시작'
                   : studyType === 'listening' ? '듣기 테스트 시작'
                   : studyType === 'eng_eng_mc' ? '영영 객관식 시작'
                   : studyType === 'eng_eng_typing' ? '영영 주관식 시작'
-                  : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
+                  : '카드 시작'} {studyType !== 'self_test' ? `(${vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)` : ''}
               </Button>
             </div>
           </>
@@ -479,7 +539,7 @@ export default function StudentVocab() {
         onFinish={async (correct, wrong, total) => {
           const modeStr = studyType === 'eng_eng_mc' ? 'eng_eng_mc' : 'eng_eng_typing';
           const { error } = await studentApi.submitVocabCompletion(
-            selectedSetIds, correct, wrong, total, modeStr
+            selectedSetIds, correct, wrong, total, modeStr, false, 'assigned'
           );
           if (!error) {
             toast({ title: '테스트 기록 저장 완료! ✅' });
@@ -499,7 +559,37 @@ export default function StudentVocab() {
     );
   }
 
-  // Test mode view (existing Korean test)
+  // Self-test mode (student-initiated random test)
+  if (testMode && studyType === 'self_test') {
+    return (
+      <VocabSelfTest
+        words={cards}
+        mode={mode}
+        testLevel={selfTestLevel}
+        testTimeLimit={null}
+        onFinish={async (correct, wrong, total) => {
+          const { error } = await studentApi.submitVocabCompletion(
+            selectedSetIds, correct, wrong, total, mode + '_self_test', true, 'self'
+          );
+          if (!error) {
+            toast({ title: '셀프 테스트 기록 저장 완료! ✅', description: '담당 선생님에게 결과가 자동 전달됩니다.' });
+            setCompletions(prev => [{
+              id: crypto.randomUUID(),
+              word_set_ids: selectedSetIds,
+              correct_count: correct,
+              wrong_count: wrong,
+              total_count: total,
+              mode: mode + '_self_test',
+              completed_at: new Date().toISOString(),
+            }, ...prev]);
+          }
+        }}
+        onBack={() => { setStarted(false); setTestMode(false); }}
+      />
+    );
+  }
+
+  // Test mode view (existing Korean test - teacher assigned)
   if (testMode) {
     return (
       <VocabSelfTest
@@ -509,7 +599,7 @@ export default function StudentVocab() {
         testTimeLimit={testTimeLimit}
         onFinish={async (correct, wrong, total) => {
           const { error } = await studentApi.submitVocabCompletion(
-            selectedSetIds, correct, wrong, total, mode + '_test'
+            selectedSetIds, correct, wrong, total, mode + '_test', false, 'assigned'
           );
           if (!error) {
             toast({ title: '테스트 기록 저장 완료! ✅' });

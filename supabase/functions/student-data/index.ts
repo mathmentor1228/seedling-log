@@ -879,13 +879,24 @@ Deno.serve(async (req) => {
       }
 
       case 'submit_vocab_completion': {
-        const { word_set_ids, correct_count, wrong_count, total_count, mode } = params;
+        const { word_set_ids, correct_count, wrong_count, total_count, mode, is_self_test, test_source } = params;
         if (!word_set_ids || !Array.isArray(word_set_ids)) {
           return new Response(
             JSON.stringify({ error: 'Missing word_set_ids' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+
+        // Find the student's English teacher for notification
+        let teacherId: string | null = null;
+        const { data: teacherLink } = await supabase
+          .from('student_subject_teachers')
+          .select('teacher_id')
+          .eq('student_id', student_id)
+          .eq('subject', '영어')
+          .limit(1)
+          .maybeSingle();
+        teacherId = teacherLink?.teacher_id || null;
 
         const { error: insertErr } = await supabase
           .from('vocab_card_completions')
@@ -896,9 +907,89 @@ Deno.serve(async (req) => {
             wrong_count: wrong_count || 0,
             total_count: total_count || 0,
             mode: mode || 'eng_to_kor',
+            is_self_test: is_self_test || false,
+            test_source: test_source || 'assigned',
+            notified_teacher_id: teacherId,
           });
 
         if (insertErr) throw insertErr;
+
+        // Get student name for notification
+        const { data: studentData } = await supabase
+          .from('students')
+          .select('name')
+          .eq('id', student_id)
+          .maybeSingle();
+        const studentName = studentData?.name || '학생';
+
+        // Send notification to teacher
+        if (teacherId) {
+          const scorePercent = total_count > 0 ? Math.round(((correct_count || 0) / total_count) * 100) : 0;
+          const sourceLabel = (is_self_test || test_source === 'self') ? '셀프' : '배정';
+          const notifTitle = `📝 ${studentName} 단어 테스트 완료 (${sourceLabel})`;
+          const notifMessage = `${correct_count}/${total_count} (${scorePercent}%) | 모드: ${mode || 'eng_to_kor'}`;
+
+          await supabase.from('teacher_notifications').insert({
+            teacher_id: teacherId,
+            student_id,
+            notification_type: 'vocab_test_result',
+            title: notifTitle,
+            message: notifMessage,
+            metadata: {
+              correct_count: correct_count || 0,
+              wrong_count: wrong_count || 0,
+              total_count: total_count || 0,
+              score_percent: scorePercent,
+              mode,
+              is_self_test: is_self_test || false,
+              test_source: test_source || 'assigned',
+              word_set_ids,
+            },
+          });
+        }
+
+        // Auto-sync to lesson_records: find today's English lesson record and update test fields
+        const todayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const { data: todayLesson } = await supabase
+          .from('lesson_records')
+          .select('id, test_content, test_result_text, test_content_2, test_result_text_2')
+          .eq('student_id', student_id)
+          .eq('lesson_date', todayKST)
+          .eq('subject', '영어')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (todayLesson) {
+          const scorePercent = total_count > 0 ? Math.round(((correct_count || 0) / total_count) * 100) : 0;
+          const passed = scorePercent >= 80;
+          const sourceLabel = (is_self_test || test_source === 'self') ? '[셀프]' : '';
+          const testResultText = `${correct_count}/${total_count} (${scorePercent}%)`;
+
+          // Use slot 1 if empty, otherwise slot 2
+          if (!todayLesson.test_content && !todayLesson.test_result_text) {
+            await supabase.from('lesson_records').update({
+              test_content: `${sourceLabel}단어테스트`,
+              test_name: `${sourceLabel}단어테스트`,
+              test_result_text: testResultText,
+              test_result: passed ? 'pass' : 'fail',
+              test_date: todayKST,
+              english_pass_fail: passed ? 'pass' : 'fail',
+              updated_at: new Date().toISOString(),
+            }).eq('id', todayLesson.id);
+          } else if (!todayLesson.test_content_2 && !todayLesson.test_result_text_2) {
+            await supabase.from('lesson_records').update({
+              test_content_2: `${sourceLabel}단어테스트`,
+              test_name_2: `${sourceLabel}단어테스트`,
+              test_result_text_2: testResultText,
+              test_result_2: passed ? 'pass' : 'fail',
+              test_date_2: todayKST,
+              english_pass_fail_2: passed ? 'pass' : 'fail',
+              updated_at: new Date().toISOString(),
+            }).eq('id', todayLesson.id);
+          }
+        }
+
         result = { success: true };
         break;
       }
