@@ -86,7 +86,7 @@ const HOMEWORK_STATUS_OPTIONS = [
   { value: 'none_assigned', label: '없음' },
 ];
 
-type EditableField = 'lesson_types_field' | 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields';
+type EditableField = 'lesson_types_field' | 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields' | 'parent_direct_message';
 
 const FIELD_LABELS: Record<EditableField, string> = {
   lesson_types_field: '수업 종류',
@@ -98,6 +98,7 @@ const FIELD_LABELS: Record<EditableField, string> = {
   notes: '비고 / 메모',
   next_lesson_goal: '다음 수업 목표',
   homework_items: '숙제 배정',
+  parent_direct_message: '📩 학부모 직접전달 메시지',
 };
 
 export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = false }: BatchLessonModalProps) {
