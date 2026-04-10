@@ -191,6 +191,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setNextLessonGoal('');
     setHomeworkItems([]);
     setParentDirectMessage('');
+    setAttendanceStatus(['출석']);
     setSubmitAfter(false);
     // Reset all per-student toggles
     setUsePerStudentLessonTypes(false);
@@ -204,6 +205,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setUsePerStudentNextGoal(false);
     setUsePerStudentHomeworkItems(false);
     setUsePerStudentParentMsg(false);
+    setUsePerStudentAttendance(false);
     // Reset all per-student values
     setPerStudentLessonTypes({});
     setPerStudentLessonRange({});
@@ -216,6 +218,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentNextGoal({});
     setPerStudentHomeworkItems({});
     setPerStudentParentMsg({});
+    setPerStudentAttendance({});
   }
 
   async function searchDrafts() {
