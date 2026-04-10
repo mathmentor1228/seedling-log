@@ -153,6 +153,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentMemo, setPerStudentMemo] = useState<Record<string, string>>({});
   const [perStudentNextGoal, setPerStudentNextGoal] = useState<Record<string, string>>({});
   const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
+  const [perStudentParentMsg, setPerStudentParentMsg] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
