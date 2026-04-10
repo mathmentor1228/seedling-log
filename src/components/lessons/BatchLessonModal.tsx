@@ -63,6 +63,7 @@ interface DraftRecord {
   lesson_types: string[] | null;
   learning_issues: string[] | null;
   learning_issues_note: string | null;
+  attendance_status: string[] | null;
 }
 
 interface HomeworkItem {
@@ -86,10 +87,20 @@ const HOMEWORK_STATUS_OPTIONS = [
   { value: 'none_assigned', label: '없음' },
 ];
 
-type EditableField = 'lesson_types_field' | 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields' | 'parent_direct_message';
+const ATTENDANCE_STATUS_OPTIONS = [
+  { value: '출석', label: '출석' },
+  { value: '지각', label: '지각' },
+  { value: '조퇴', label: '조퇴' },
+  { value: '인정결석', label: '인정결석' },
+  { value: '무단결석', label: '무단결석' },
+  { value: '보충불가', label: '보충불가' },
+];
+
+type EditableField = 'lesson_types_field' | 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields' | 'parent_direct_message' | 'attendance_status';
 
 const FIELD_LABELS: Record<EditableField, string> = {
   lesson_types_field: '수업 종류',
+  attendance_status: '📋 출결 상태',
   lesson_range: '수업 내용',
   understanding_score: '이해도',
   homework_status: '숙제 상태',
@@ -128,6 +139,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
   const [parentDirectMessage, setParentDirectMessage] = useState('');
+  const [attendanceStatus, setAttendanceStatus] = useState<string[]>(['출석']);
 
   // Per-student toggles
   const [usePerStudentLessonTypes, setUsePerStudentLessonTypes] = useState(false);
@@ -141,6 +153,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [usePerStudentNextGoal, setUsePerStudentNextGoal] = useState(false);
   const [usePerStudentHomeworkItems, setUsePerStudentHomeworkItems] = useState(false);
   const [usePerStudentParentMsg, setUsePerStudentParentMsg] = useState(false);
+  const [usePerStudentAttendance, setUsePerStudentAttendance] = useState(false);
 
   // Per-student values
   const [perStudentLessonTypes, setPerStudentLessonTypes] = useState<Record<string, string[]>>({});
@@ -154,6 +167,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentNextGoal, setPerStudentNextGoal] = useState<Record<string, string>>({});
   const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
   const [perStudentParentMsg, setPerStudentParentMsg] = useState<Record<string, string>>({});
+  const [perStudentAttendance, setPerStudentAttendance] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (open) {
@@ -178,6 +192,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setNextLessonGoal('');
     setHomeworkItems([]);
     setParentDirectMessage('');
+    setAttendanceStatus(['출석']);
     setSubmitAfter(false);
     // Reset all per-student toggles
     setUsePerStudentLessonTypes(false);
@@ -191,6 +206,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setUsePerStudentNextGoal(false);
     setUsePerStudentHomeworkItems(false);
     setUsePerStudentParentMsg(false);
+    setUsePerStudentAttendance(false);
     // Reset all per-student values
     setPerStudentLessonTypes({});
     setPerStudentLessonRange({});
@@ -203,6 +219,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentNextGoal({});
     setPerStudentHomeworkItems({});
     setPerStudentParentMsg({});
+    setPerStudentAttendance({});
   }
 
   async function searchDrafts() {
@@ -210,7 +227,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     try {
       const { data, error } = await supabase
         .from('lesson_records')
-        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, test_content, test_name, test_result, test_result_text, lesson_types, learning_issues, learning_issues_note, students!inner(name, grade)')
+        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, test_content, test_name, test_result, test_result_text, lesson_types, learning_issues, learning_issues_note, attendance_status, students!inner(name, grade)')
         .eq('lesson_date', searchDate)
         .eq('teacher_id', user!.id)
         .order('submitted', { ascending: true });
@@ -237,6 +254,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         lesson_types: r.lesson_types,
         learning_issues: r.learning_issues,
         learning_issues_note: r.learning_issues_note,
+        attendance_status: r.attendance_status,
       }));
       setDrafts(records);
       setSelectedIds(new Set());
@@ -332,6 +350,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     const perTest: Record<string, string> = {};
     const perMemo: Record<string, string> = {};
     const perGoal: Record<string, string> = {};
+    const perAtt: Record<string, string[]> = {};
 
     for (const d of selectedDrafts) {
       if (d.lesson_range) perRange[d.id] = d.lesson_range;
@@ -343,6 +362,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       if (d.test_content || d.test_name) perTest[d.id] = d.test_content || d.test_name || '';
       if (d.notes) perMemo[d.id] = d.notes;
       if (d.next_lesson_goal) perGoal[d.id] = d.next_lesson_goal;
+      if (d.attendance_status?.length) perAtt[d.id] = d.attendance_status;
     }
     setPerStudentLessonRange(perRange);
     setPerStudentScore(perScore);
@@ -353,6 +373,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentTest(perTest);
     setPerStudentMemo(perMemo);
     setPerStudentNextGoal(perGoal);
+    setPerStudentAttendance(perAtt);
 
     // Load existing homework_assignments for selected records
     try {
@@ -401,7 +422,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         (activeFields.has('test_fields') && usePerStudentTest) ||
         (activeFields.has('notes') && usePerStudentMemo) ||
         (activeFields.has('next_lesson_goal') && usePerStudentNextGoal) ||
-        (activeFields.has('parent_direct_message') && usePerStudentParentMsg);
+        (activeFields.has('parent_direct_message') && usePerStudentParentMsg) ||
+        (activeFields.has('attendance_status') && usePerStudentAttendance);
 
       const buildPayload = (recordId?: string): Record<string, any> => {
         const p: Record<string, any> = { updated_at: now };
@@ -460,6 +482,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             ? (perStudentParentMsg[recordId] ?? parentDirectMessage)
             : parentDirectMessage;
           p.parent_direct_message = val.trim() || null;
+        }
+        if (activeFields.has('attendance_status')) {
+          p.attendance_status = (usePerStudentAttendance && recordId)
+            ? (perStudentAttendance[recordId] ?? attendanceStatus)
+            : attendanceStatus;
         }
         if (submitAfter) {
           p.submitted = true;
@@ -617,6 +644,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
         const pMsg = usePerStudentParentMsg ? (perStudentParentMsg[id] ?? parentDirectMessage) : parentDirectMessage;
         if (pMsg.trim()) payload.parent_direct_message = pMsg.trim();
+
+        const att = usePerStudentAttendance ? (perStudentAttendance[id] ?? attendanceStatus) : attendanceStatus;
+        if (att.length > 0) payload.attendance_status = att;
 
         const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
         if (error) throw error;
@@ -789,6 +819,68 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                               ? prev.filter(v => v !== opt.value).length > 0 ? prev.filter(v => v !== opt.value) : [opt.value]
                               : [...prev, opt.value]
                           );
+                        }}
+                      >
+                        {opt.label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Attendance Status */}
+            <FieldToggleBlock field="attendance_status" active={activeFields.has('attendance_status')} onToggle={() => toggleField('attendance_status')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentAttendance} onChange={setUsePerStudentAttendance} />
+                {usePerStudentAttendance ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => {
+                      const studentAtt = perStudentAttendance[d.id] ?? attendanceStatus;
+                      return (
+                        <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                          <div className="flex flex-wrap gap-1">
+                            {ATTENDANCE_STATUS_OPTIONS.map(opt => (
+                              <Badge
+                                key={opt.value}
+                                variant={studentAtt.includes(opt.value) ? 'default' : 'outline'}
+                                className={`cursor-pointer text-xs ${studentAtt.includes(opt.value) && opt.value !== '출석' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' : ''}`}
+                                onClick={() => {
+                                  const cur = perStudentAttendance[d.id] ?? [...attendanceStatus];
+                                  if (opt.value === '출석') {
+                                    setPerStudentAttendance(prev => ({ ...prev, [d.id]: ['출석'] }));
+                                  } else {
+                                    const without출석 = cur.filter(v => v !== '출석');
+                                    const next = without출석.includes(opt.value) ? without출석.filter(v => v !== opt.value) : [...without출석, opt.value];
+                                    setPerStudentAttendance(prev => ({ ...prev, [d.id]: next.length > 0 ? next : ['출석'] }));
+                                  }
+                                }}
+                              >
+                                {opt.label}
+                              </Badge>
+                            ))}
+                          </div>
+                        </StudentBlock>
+                      );
+                    })}
+                  </PerStudentContainer>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {ATTENDANCE_STATUS_OPTIONS.map(opt => (
+                      <Badge
+                        key={opt.value}
+                        variant={attendanceStatus.includes(opt.value) ? 'default' : 'outline'}
+                        className={`cursor-pointer text-xs ${attendanceStatus.includes(opt.value) && opt.value !== '출석' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' : ''}`}
+                        onClick={() => {
+                          if (opt.value === '출석') {
+                            setAttendanceStatus(['출석']);
+                          } else {
+                            setAttendanceStatus(prev => {
+                              const without출석 = prev.filter(v => v !== '출석');
+                              const next = without출석.includes(opt.value) ? without출석.filter(v => v !== opt.value) : [...without출석, opt.value];
+                              return next.length > 0 ? next : ['출석'];
+                            });
+                          }
                         }}
                       >
                         {opt.label}
