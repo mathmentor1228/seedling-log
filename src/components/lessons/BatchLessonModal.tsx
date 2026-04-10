@@ -177,6 +177,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setNotes('');
     setNextLessonGoal('');
     setHomeworkItems([]);
+    setParentDirectMessage('');
     setSubmitAfter(false);
     // Reset all per-student toggles
     setUsePerStudentLessonTypes(false);
