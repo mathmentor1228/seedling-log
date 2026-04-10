@@ -127,6 +127,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [notes, setNotes] = useState('');
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
+  const [parentDirectMessage, setParentDirectMessage] = useState('');
 
   // Per-student toggles
   const [usePerStudentLessonTypes, setUsePerStudentLessonTypes] = useState(false);
