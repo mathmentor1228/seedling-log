@@ -350,6 +350,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     const perTest: Record<string, string> = {};
     const perMemo: Record<string, string> = {};
     const perGoal: Record<string, string> = {};
+    const perAtt: Record<string, string[]> = {};
 
     for (const d of selectedDrafts) {
       if (d.lesson_range) perRange[d.id] = d.lesson_range;
@@ -361,6 +362,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       if (d.test_content || d.test_name) perTest[d.id] = d.test_content || d.test_name || '';
       if (d.notes) perMemo[d.id] = d.notes;
       if (d.next_lesson_goal) perGoal[d.id] = d.next_lesson_goal;
+      if (d.attendance_status?.length) perAtt[d.id] = d.attendance_status;
     }
     setPerStudentLessonRange(perRange);
     setPerStudentScore(perScore);
@@ -371,6 +373,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentTest(perTest);
     setPerStudentMemo(perMemo);
     setPerStudentNextGoal(perGoal);
+    setPerStudentAttendance(perAtt);
 
     // Load existing homework_assignments for selected records
     try {
