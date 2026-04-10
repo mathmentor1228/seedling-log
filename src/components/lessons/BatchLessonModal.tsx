@@ -618,6 +618,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         const pMsg = usePerStudentParentMsg ? (perStudentParentMsg[id] ?? parentDirectMessage) : parentDirectMessage;
         if (pMsg.trim()) payload.parent_direct_message = pMsg.trim();
 
+        const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
         if (error) throw error;
       }
 
