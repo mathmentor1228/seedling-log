@@ -209,6 +209,28 @@ export function AppLayout({ children }: AppLayoutProps) {
     return () => { supabase.removeChannel(channel); };
   }, [user, role]);
 
+  // Teacher notifications (vocab test results, etc.)
+  useEffect(() => {
+    if (!user || role === 'admin') return;
+    const channel = supabase
+      .channel('teacher-notifications-' + user.id)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'teacher_notifications',
+        filter: `teacher_id=eq.${user.id}`,
+      }, (payload) => {
+        const notif = payload.new as any;
+        if (notif.notification_type === 'vocab_test_result') {
+          toast.info(notif.title, { description: notif.message, duration: 10000 });
+        } else {
+          toast.info(notif.title, { duration: 6000 });
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, role]);
+
   const toggleGroup = (label: string) => {
     setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
   };
