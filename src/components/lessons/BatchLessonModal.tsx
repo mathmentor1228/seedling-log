@@ -483,6 +483,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             : parentDirectMessage;
           p.parent_direct_message = val.trim() || null;
         }
+        if (activeFields.has('attendance_status')) {
+          p.attendance_status = (usePerStudentAttendance && recordId)
+            ? (perStudentAttendance[recordId] ?? attendanceStatus)
+            : attendanceStatus;
+        }
         if (submitAfter) {
           p.submitted = true;
           p.submitted_at = now;
