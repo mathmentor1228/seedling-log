@@ -385,7 +385,7 @@ export default function StudentVocab() {
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">학습 방법</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     variant={studyType === 'flashcard' ? 'default' : 'outline'}
                     size="sm"
@@ -409,6 +409,14 @@ export default function StudentVocab() {
                     className="w-full"
                   >
                     <Headphones className="w-3.5 h-3.5 mr-1" /> 듣기
+                  </Button>
+                  <Button
+                    variant={studyType === 'self_test' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStudyType('self_test')}
+                    className="w-full"
+                  >
+                    <Zap className="w-3.5 h-3.5 mr-1" /> 셀프 테스트
                   </Button>
                 </div>
                 {/* English-English test modes */}
@@ -437,6 +445,47 @@ export default function StudentVocab() {
                 )}
               </div>
 
+              {/* Self-test settings */}
+              {studyType === 'self_test' && (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardContent className="pt-3 pb-3 space-y-3">
+                    <p className="text-xs font-medium flex items-center gap-1.5">
+                      <Settings2 className="w-3.5 h-3.5 text-primary" />
+                      셀프 테스트 설정
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">단어 수</Label>
+                        <Input
+                          type="number"
+                          min={5}
+                          max={100}
+                          value={selfTestWordCount}
+                          onChange={e => setSelfTestWordCount(Math.max(5, Math.min(100, Number(e.target.value) || 20)))}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">난이도</Label>
+                        <Select value={String(selfTestLevel)} onValueChange={v => setSelfTestLevel(Number(v))}>
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">Lv.1 (3지선다)</SelectItem>
+                            <SelectItem value="2">Lv.2 (5지선다)</SelectItem>
+                            <SelectItem value="3">Lv.3 (주관식)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      ⚡ 셀프 테스트 결과는 담당 선생님에게 자동 보고되며, 수업일지에도 기록됩니다.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
               <Button
                 onClick={startFlashcards}
                 disabled={selectedSetIds.length === 0}
@@ -444,11 +493,12 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                {studyType === 'test' ? '테스트 시작'
+                {studyType === 'self_test' ? `셀프 테스트 시작 (${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0))}단어)`
+                  : studyType === 'test' ? '테스트 시작'
                   : studyType === 'listening' ? '듣기 테스트 시작'
                   : studyType === 'eng_eng_mc' ? '영영 객관식 시작'
                   : studyType === 'eng_eng_typing' ? '영영 주관식 시작'
-                  : '카드 시작'} ({vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)
+                  : '카드 시작'} {studyType !== 'self_test' ? `(${vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)}단어)` : ''}
               </Button>
             </div>
           </>
