@@ -400,7 +400,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         (activeFields.has('lesson_types_field') && usePerStudentLessonTypes) ||
         (activeFields.has('test_fields') && usePerStudentTest) ||
         (activeFields.has('notes') && usePerStudentMemo) ||
-        (activeFields.has('next_lesson_goal') && usePerStudentNextGoal);
+        (activeFields.has('next_lesson_goal') && usePerStudentNextGoal) ||
+        (activeFields.has('parent_direct_message') && usePerStudentParentMsg);
 
       const buildPayload = (recordId?: string): Record<string, any> => {
         const p: Record<string, any> = { updated_at: now };
