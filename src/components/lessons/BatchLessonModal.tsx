@@ -140,6 +140,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [usePerStudentMemo, setUsePerStudentMemo] = useState(false);
   const [usePerStudentNextGoal, setUsePerStudentNextGoal] = useState(false);
   const [usePerStudentHomeworkItems, setUsePerStudentHomeworkItems] = useState(false);
+  const [usePerStudentParentMsg, setUsePerStudentParentMsg] = useState(false);
 
   // Per-student values
   const [perStudentLessonTypes, setPerStudentLessonTypes] = useState<Record<string, string[]>>({});
