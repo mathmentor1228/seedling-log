@@ -86,7 +86,7 @@ const HOMEWORK_STATUS_OPTIONS = [
   { value: 'none_assigned', label: '없음' },
 ];
 
-type EditableField = 'lesson_types_field' | 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields';
+type EditableField = 'lesson_types_field' | 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields' | 'parent_direct_message';
 
 const FIELD_LABELS: Record<EditableField, string> = {
   lesson_types_field: '수업 종류',
@@ -98,6 +98,7 @@ const FIELD_LABELS: Record<EditableField, string> = {
   notes: '비고 / 메모',
   next_lesson_goal: '다음 수업 목표',
   homework_items: '숙제 배정',
+  parent_direct_message: '📩 학부모 직접전달 메시지',
 };
 
 export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = false }: BatchLessonModalProps) {
@@ -126,6 +127,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [notes, setNotes] = useState('');
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
+  const [parentDirectMessage, setParentDirectMessage] = useState('');
 
   // Per-student toggles
   const [usePerStudentLessonTypes, setUsePerStudentLessonTypes] = useState(false);
@@ -138,6 +140,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [usePerStudentMemo, setUsePerStudentMemo] = useState(false);
   const [usePerStudentNextGoal, setUsePerStudentNextGoal] = useState(false);
   const [usePerStudentHomeworkItems, setUsePerStudentHomeworkItems] = useState(false);
+  const [usePerStudentParentMsg, setUsePerStudentParentMsg] = useState(false);
 
   // Per-student values
   const [perStudentLessonTypes, setPerStudentLessonTypes] = useState<Record<string, string[]>>({});
@@ -150,6 +153,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentMemo, setPerStudentMemo] = useState<Record<string, string>>({});
   const [perStudentNextGoal, setPerStudentNextGoal] = useState<Record<string, string>>({});
   const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
+  const [perStudentParentMsg, setPerStudentParentMsg] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
@@ -173,6 +177,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setNotes('');
     setNextLessonGoal('');
     setHomeworkItems([]);
+    setParentDirectMessage('');
     setSubmitAfter(false);
     // Reset all per-student toggles
     setUsePerStudentLessonTypes(false);
@@ -185,6 +190,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setUsePerStudentMemo(false);
     setUsePerStudentNextGoal(false);
     setUsePerStudentHomeworkItems(false);
+    setUsePerStudentParentMsg(false);
     // Reset all per-student values
     setPerStudentLessonTypes({});
     setPerStudentLessonRange({});
@@ -196,6 +202,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentMemo({});
     setPerStudentNextGoal({});
     setPerStudentHomeworkItems({});
+    setPerStudentParentMsg({});
   }
 
   async function searchDrafts() {
@@ -393,7 +400,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         (activeFields.has('lesson_types_field') && usePerStudentLessonTypes) ||
         (activeFields.has('test_fields') && usePerStudentTest) ||
         (activeFields.has('notes') && usePerStudentMemo) ||
-        (activeFields.has('next_lesson_goal') && usePerStudentNextGoal);
+        (activeFields.has('next_lesson_goal') && usePerStudentNextGoal) ||
+        (activeFields.has('parent_direct_message') && usePerStudentParentMsg);
 
       const buildPayload = (recordId?: string): Record<string, any> => {
         const p: Record<string, any> = { updated_at: now };
@@ -446,6 +454,12 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           p.test_content = unified;
           p.test_name = unified;
           p.test_title = unified;
+        }
+        if (activeFields.has('parent_direct_message')) {
+          const val = (usePerStudentParentMsg && recordId)
+            ? (perStudentParentMsg[recordId] ?? parentDirectMessage)
+            : parentDirectMessage;
+          p.parent_direct_message = val.trim() || null;
         }
         if (submitAfter) {
           p.submitted = true;
@@ -600,6 +614,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           payload.test_content = test.trim();
           payload.test_name = test.trim();
         }
+
+        const pMsg = usePerStudentParentMsg ? (perStudentParentMsg[id] ?? parentDirectMessage) : parentDirectMessage;
+        if (pMsg.trim()) payload.parent_direct_message = pMsg.trim();
 
         const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
         if (error) throw error;
@@ -1077,6 +1094,29 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                       <Plus className="w-3 h-3" />추가
                     </Button>
                   </div>
+                )}
+              </div>
+            </FieldToggleBlock>
+
+            {/* Parent Direct Message */}
+            <FieldToggleBlock field="parent_direct_message" active={activeFields.has('parent_direct_message')} onToggle={() => toggleField('parent_direct_message')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentParentMsg} onChange={setUsePerStudentParentMsg} />
+                {usePerStudentParentMsg ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        <Textarea
+                          value={perStudentParentMsg[d.id] ?? parentDirectMessage}
+                          onChange={e => setPerStudentParentMsg(prev => ({ ...prev, [d.id]: e.target.value }))}
+                          className="text-sm min-h-[60px]"
+                          placeholder="학부모에게 전달할 메시지를 입력하세요"
+                        />
+                      </StudentBlock>
+                    ))}
+                  </PerStudentContainer>
+                ) : (
+                  <Textarea value={parentDirectMessage} onChange={e => setParentDirectMessage(e.target.value)} className="text-sm min-h-[60px]" placeholder="학부모 직접전달 메시지 (전체 공통)" />
                 )}
               </div>
             </FieldToggleBlock>
