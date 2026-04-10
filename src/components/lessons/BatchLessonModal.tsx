@@ -190,6 +190,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setUsePerStudentMemo(false);
     setUsePerStudentNextGoal(false);
     setUsePerStudentHomeworkItems(false);
+    setUsePerStudentParentMsg(false);
     // Reset all per-student values
     setPerStudentLessonTypes({});
     setPerStudentLessonRange({});
@@ -201,6 +202,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentMemo({});
     setPerStudentNextGoal({});
     setPerStudentHomeworkItems({});
+    setPerStudentParentMsg({});
   }
 
   async function searchDrafts() {
