@@ -1523,6 +1523,7 @@ export type Database = {
           lesson_types: string[] | null
           next_lesson_goal: string | null
           notes: string | null
+          parent_direct_message: string | null
           prev_homework_override_at: string | null
           prev_homework_override_by: string | null
           prev_homework_override_text: string | null
@@ -1573,6 +1574,7 @@ export type Database = {
           lesson_types?: string[] | null
           next_lesson_goal?: string | null
           notes?: string | null
+          parent_direct_message?: string | null
           prev_homework_override_at?: string | null
           prev_homework_override_by?: string | null
           prev_homework_override_text?: string | null
@@ -1623,6 +1625,7 @@ export type Database = {
           lesson_types?: string[] | null
           next_lesson_goal?: string | null
           notes?: string | null
+          parent_direct_message?: string | null
           prev_homework_override_at?: string | null
           prev_homework_override_by?: string | null
           prev_homework_override_text?: string | null

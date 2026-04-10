@@ -1,0 +1,1 @@
+ALTER TABLE public.lesson_records ADD COLUMN parent_direct_message TEXT DEFAULT NULL;
