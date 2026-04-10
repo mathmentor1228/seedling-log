@@ -227,7 +227,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     try {
       const { data, error } = await supabase
         .from('lesson_records')
-        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, test_content, test_name, test_result, test_result_text, lesson_types, learning_issues, learning_issues_note, students!inner(name, grade)')
+        .select('id, student_id, subject, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, class_id, submitted, test_content, test_name, test_result, test_result_text, lesson_types, learning_issues, learning_issues_note, attendance_status, students!inner(name, grade)')
         .eq('lesson_date', searchDate)
         .eq('teacher_id', user!.id)
         .order('submitted', { ascending: true });
@@ -254,6 +254,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         lesson_types: r.lesson_types,
         learning_issues: r.learning_issues,
         learning_issues_note: r.learning_issues_note,
+        attendance_status: r.attendance_status,
       }));
       setDrafts(records);
       setSelectedIds(new Set());
