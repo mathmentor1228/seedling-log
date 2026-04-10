@@ -110,15 +110,20 @@ export default function StudentVocab() {
       .flatMap(s => s.words);
     if (allWords.length === 0) return;
 
-    const shuffled = [...allWords];
+    let shuffled = [...allWords];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
 
+    // For self-test, limit to selfTestWordCount
+    if (studyType === 'self_test') {
+      shuffled = shuffled.slice(0, Math.min(selfTestWordCount, shuffled.length));
+    }
+
     setCards(shuffled);
     
-    if (studyType === 'test' || studyType === 'listening' || studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing') {
+    if (studyType === 'test' || studyType === 'listening' || studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing' || studyType === 'self_test') {
       setTestMode(true);
       setStarted(true);
       return;
