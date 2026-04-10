@@ -54,11 +54,14 @@ export default function StudentVocab() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [mode, setMode] = useState<'eng_to_kor' | 'kor_to_eng'>('eng_to_kor');
-  const [studyType, setStudyType] = useState<'flashcard' | 'test' | 'listening' | 'eng_eng_mc' | 'eng_eng_typing'>('flashcard');
+  const [studyType, setStudyType] = useState<'flashcard' | 'test' | 'listening' | 'eng_eng_mc' | 'eng_eng_typing' | 'self_test'>('flashcard');
   const [started, setStarted] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // Self-test settings
+  const [selfTestWordCount, setSelfTestWordCount] = useState(20);
+  const [selfTestLevel, setSelfTestLevel] = useState(2);
 
   useEffect(() => {
     loadVocabSets();
