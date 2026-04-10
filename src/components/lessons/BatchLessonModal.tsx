@@ -86,10 +86,20 @@ const HOMEWORK_STATUS_OPTIONS = [
   { value: 'none_assigned', label: '없음' },
 ];
 
-type EditableField = 'lesson_types_field' | 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields' | 'parent_direct_message';
+const ATTENDANCE_STATUS_OPTIONS = [
+  { value: '출석', label: '출석' },
+  { value: '지각', label: '지각' },
+  { value: '조퇴', label: '조퇴' },
+  { value: '인정결석', label: '인정결석' },
+  { value: '무단결석', label: '무단결석' },
+  { value: '보충불가', label: '보충불가' },
+];
+
+type EditableField = 'lesson_types_field' | 'lesson_range' | 'understanding_score' | 'homework_status' | 'notes' | 'next_lesson_goal' | 'homework_items' | 'learning_issues' | 'test_fields' | 'parent_direct_message' | 'attendance_status';
 
 const FIELD_LABELS: Record<EditableField, string> = {
   lesson_types_field: '수업 종류',
+  attendance_status: '📋 출결 상태',
   lesson_range: '수업 내용',
   understanding_score: '이해도',
   homework_status: '숙제 상태',
