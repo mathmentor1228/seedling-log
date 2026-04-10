@@ -455,6 +455,12 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           p.test_name = unified;
           p.test_title = unified;
         }
+        if (activeFields.has('parent_direct_message')) {
+          const val = (usePerStudentParentMsg && recordId)
+            ? (perStudentParentMsg[recordId] ?? parentDirectMessage)
+            : parentDirectMessage;
+          p.parent_direct_message = val.trim() || null;
+        }
         if (submitAfter) {
           p.submitted = true;
           p.submitted_at = now;
