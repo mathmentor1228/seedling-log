@@ -138,6 +138,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [nextLessonGoal, setNextLessonGoal] = useState('');
   const [homeworkItems, setHomeworkItems] = useState<HomeworkItem[]>([]);
   const [parentDirectMessage, setParentDirectMessage] = useState('');
+  const [attendanceStatus, setAttendanceStatus] = useState<string[]>(['출석']);
 
   // Per-student toggles
   const [usePerStudentLessonTypes, setUsePerStudentLessonTypes] = useState(false);
@@ -151,6 +152,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [usePerStudentNextGoal, setUsePerStudentNextGoal] = useState(false);
   const [usePerStudentHomeworkItems, setUsePerStudentHomeworkItems] = useState(false);
   const [usePerStudentParentMsg, setUsePerStudentParentMsg] = useState(false);
+  const [usePerStudentAttendance, setUsePerStudentAttendance] = useState(false);
 
   // Per-student values
   const [perStudentLessonTypes, setPerStudentLessonTypes] = useState<Record<string, string[]>>({});
@@ -164,6 +166,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentNextGoal, setPerStudentNextGoal] = useState<Record<string, string>>({});
   const [perStudentHomeworkItems, setPerStudentHomeworkItems] = useState<Record<string, HomeworkItem[]>>({});
   const [perStudentParentMsg, setPerStudentParentMsg] = useState<Record<string, string>>({});
+  const [perStudentAttendance, setPerStudentAttendance] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (open) {
