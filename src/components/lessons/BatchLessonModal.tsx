@@ -829,6 +829,68 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
               </div>
             </FieldToggleBlock>
 
+            {/* Attendance Status */}
+            <FieldToggleBlock field="attendance_status" active={activeFields.has('attendance_status')} onToggle={() => toggleField('attendance_status')}>
+              <div className="space-y-2">
+                <PerStudentToggle checked={usePerStudentAttendance} onChange={setUsePerStudentAttendance} />
+                {usePerStudentAttendance ? (
+                  <PerStudentContainer>
+                    {selectedDraftsList.map(d => {
+                      const studentAtt = perStudentAttendance[d.id] ?? attendanceStatus;
+                      return (
+                        <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                          <div className="flex flex-wrap gap-1">
+                            {ATTENDANCE_STATUS_OPTIONS.map(opt => (
+                              <Badge
+                                key={opt.value}
+                                variant={studentAtt.includes(opt.value) ? 'default' : 'outline'}
+                                className={`cursor-pointer text-xs ${studentAtt.includes(opt.value) && opt.value !== '출석' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' : ''}`}
+                                onClick={() => {
+                                  const cur = perStudentAttendance[d.id] ?? [...attendanceStatus];
+                                  if (opt.value === '출석') {
+                                    setPerStudentAttendance(prev => ({ ...prev, [d.id]: ['출석'] }));
+                                  } else {
+                                    const without출석 = cur.filter(v => v !== '출석');
+                                    const next = without출석.includes(opt.value) ? without출석.filter(v => v !== opt.value) : [...without출석, opt.value];
+                                    setPerStudentAttendance(prev => ({ ...prev, [d.id]: next.length > 0 ? next : ['출석'] }));
+                                  }
+                                }}
+                              >
+                                {opt.label}
+                              </Badge>
+                            ))}
+                          </div>
+                        </StudentBlock>
+                      );
+                    })}
+                  </PerStudentContainer>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {ATTENDANCE_STATUS_OPTIONS.map(opt => (
+                      <Badge
+                        key={opt.value}
+                        variant={attendanceStatus.includes(opt.value) ? 'default' : 'outline'}
+                        className={`cursor-pointer text-xs ${attendanceStatus.includes(opt.value) && opt.value !== '출석' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/80' : ''}`}
+                        onClick={() => {
+                          if (opt.value === '출석') {
+                            setAttendanceStatus(['출석']);
+                          } else {
+                            setAttendanceStatus(prev => {
+                              const without출석 = prev.filter(v => v !== '출석');
+                              const next = without출석.includes(opt.value) ? without출석.filter(v => v !== opt.value) : [...without출석, opt.value];
+                              return next.length > 0 ? next : ['출석'];
+                            });
+                          }
+                        }}
+                      >
+                        {opt.label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </FieldToggleBlock>
+
             {/* Lesson Range */}
             <FieldToggleBlock field="lesson_range" active={activeFields.has('lesson_range')} onToggle={() => toggleField('lesson_range')}>
               <div className="space-y-2">
