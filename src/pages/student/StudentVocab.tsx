@@ -489,7 +489,7 @@ export default function StudentVocab() {
         onFinish={async (correct, wrong, total) => {
           const modeStr = studyType === 'eng_eng_mc' ? 'eng_eng_mc' : 'eng_eng_typing';
           const { error } = await studentApi.submitVocabCompletion(
-            selectedSetIds, correct, wrong, total, modeStr
+            selectedSetIds, correct, wrong, total, modeStr, false, 'assigned'
           );
           if (!error) {
             toast({ title: '테스트 기록 저장 완료! ✅' });
@@ -509,7 +509,37 @@ export default function StudentVocab() {
     );
   }
 
-  // Test mode view (existing Korean test)
+  // Self-test mode (student-initiated random test)
+  if (testMode && studyType === 'self_test') {
+    return (
+      <VocabSelfTest
+        words={cards}
+        mode={mode}
+        testLevel={selfTestLevel}
+        testTimeLimit={null}
+        onFinish={async (correct, wrong, total) => {
+          const { error } = await studentApi.submitVocabCompletion(
+            selectedSetIds, correct, wrong, total, mode + '_self_test', true, 'self'
+          );
+          if (!error) {
+            toast({ title: '셀프 테스트 기록 저장 완료! ✅', description: '담당 선생님에게 결과가 자동 전달됩니다.' });
+            setCompletions(prev => [{
+              id: crypto.randomUUID(),
+              word_set_ids: selectedSetIds,
+              correct_count: correct,
+              wrong_count: wrong,
+              total_count: total,
+              mode: mode + '_self_test',
+              completed_at: new Date().toISOString(),
+            }, ...prev]);
+          }
+        }}
+        onBack={() => { setStarted(false); setTestMode(false); }}
+      />
+    );
+  }
+
+  // Test mode view (existing Korean test - teacher assigned)
   if (testMode) {
     return (
       <VocabSelfTest
@@ -519,7 +549,7 @@ export default function StudentVocab() {
         testTimeLimit={testTimeLimit}
         onFinish={async (correct, wrong, total) => {
           const { error } = await studentApi.submitVocabCompletion(
-            selectedSetIds, correct, wrong, total, mode + '_test'
+            selectedSetIds, correct, wrong, total, mode + '_test', false, 'assigned'
           );
           if (!error) {
             toast({ title: '테스트 기록 저장 완료! ✅' });
