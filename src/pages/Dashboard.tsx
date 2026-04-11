@@ -504,6 +504,23 @@ export default function Dashboard() {
     originalEndTime: string;
   } | null>(null);
 
+  const getLessonStatusKey = (studentId: string, classId: string | null | undefined, subject: string) =>
+    `${studentId}:${classId || 'null'}:${subject}`;
+
+  async function refreshDashboardRosterData(options?: { includeAttendance?: boolean }) {
+    if (!user) return;
+
+    if (isAdmin(role)) {
+      await fetchAdminRosterData();
+      if (options?.includeAttendance) {
+        await fetchTodayAttendance();
+      }
+    }
+
+    await fetchTodaySlots();
+    await Promise.all([fetchSupplementaryLessons(), fetchExamPrepRoster()]);
+  }
+
   useEffect(() => {
     async function fetchDashboardData() {
       if (!user) return;
@@ -563,8 +580,6 @@ export default function Dashboard() {
           // Fetch overdue drafts for admin only
           if (isAdmin(role)) {
             await fetchOverdueDrafts();
-            await fetchTodayAttendance();
-            await fetchAdminRosterData();
           }
           
           // TEACHER-OVERDUE-WARN-V1: Fetch teacher's own overdue lessons
@@ -575,10 +590,8 @@ export default function Dashboard() {
 
         // Fetch today's slots for teacher, admin, or assistant
         if (isTeacher(role) || isAdmin(role) || isAssistant(role)) {
-          await fetchTodaySlots();
           await fetchTodayHolidays();
-          await fetchSupplementaryLessons();
-          await fetchExamPrepRoster();
+          await refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
         }
 
         // Fetch pending homework (unchecked)
@@ -707,11 +720,7 @@ export default function Dashboard() {
   useEffect(() => {
     const handleFocus = () => {
       if (user && (isTeacher(role) || isAdmin(role))) {
-        // refetch on focus
-        fetchTodaySlots();
-        if (isAdmin(role)) {
-          fetchTodayAttendance();
-        }
+        void refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
       }
     };
     
@@ -1052,7 +1061,7 @@ export default function Dashboard() {
         // PHOTO-STABLE-V2: Build status map with stable photo/audio data
         const statusMap: Record<string, typeof lessonStatusMap[string]> = {};
         (lessonRecords || []).forEach((lr: any) => {
-          const key = `${lr.student_id}:${lr.class_id}:${lr.subject}`;
+          const key = getLessonStatusKey(lr.student_id, lr.class_id, lr.subject);
           const photoKey = `${lr.student_id}:${lr.subject}`;
           const goalKey = `${lr.student_id}:${lr.subject}`;
           const pd = photoDataMap[photoKey];
@@ -1088,7 +1097,7 @@ export default function Dashboard() {
             });
             
             rosterRows.forEach((row: any) => {
-              const key = `${row.student_id}:${row.class_id}:${row.subject}`;
+              const key = getLessonStatusKey(row.student_id, row.class_id, row.subject);
               const tsKey = `${row.student_id}:${row.subject}`;
               const ts = testSchedMap[tsKey];
               if (!ts) return;
@@ -1124,7 +1133,7 @@ export default function Dashboard() {
 
         // Also populate statusMap for students with submissions but no lesson record
         rosterRows.forEach((row: any) => {
-          const key = `${row.student_id}:${row.class_id}:${row.subject}`;
+          const key = getLessonStatusKey(row.student_id, row.class_id, row.subject);
           const photoKey = `${row.student_id}:${row.subject}`;
           const hasPhoto = photoSubmissionSet.has(photoKey);
           const hasAudio = audioSubmissionSet.has(photoKey);
@@ -2010,14 +2019,7 @@ export default function Dashboard() {
         description: parts.join(', ') || '모든 일지가 이미 제출 상태입니다.',
       });
       
-      await fetchTodaySlots();
-      if (isAdmin(role)) {
-        await fetchAdminRosterData();
-      }
-      await Promise.all([
-        fetchSupplementaryLessons(),
-        fetchExamPrepRoster(),
-      ]);
+      await refreshDashboardRosterData();
     } catch (err: any) {
       console.error('Bulk draft create error:', err);
       toast({ title: '일괄 생성 실패', description: err.message, variant: 'destructive' });
@@ -2157,7 +2159,7 @@ export default function Dashboard() {
         setLessonStatusMap(prev => {
           const updated = { ...prev };
           data.forEach((d: any) => {
-            const key = `${d.student_id}:${d.class_id}:${d.subject}`;
+            const key = getLessonStatusKey(d.student_id, d.class_id, d.subject);
             if (!updated[key]) {
               const hasTestData = (d.test_content && d.test_content.trim() !== '') || (d.test_title && d.test_title.trim() !== '') || (d.test_result_text && d.test_result_text.trim() !== '');
               updated[key] = {
@@ -2226,6 +2228,14 @@ export default function Dashboard() {
       const studentNameMap: Record<string, string> = {};
       (students || []).forEach(s => { studentNameMap[s.id] = s.name; });
 
+      const enrollmentMap: Record<string, string[]> = {};
+      enrollments.forEach(e => {
+        if (!enrollmentMap[e.course_id]) enrollmentMap[e.course_id] = [];
+        if (!enrollmentMap[e.course_id].includes(e.student_id)) {
+          enrollmentMap[e.course_id].push(e.student_id);
+        }
+      });
+
       const courseSubjects = [...new Set(courses.map(c => c.subject))];
       const { data: examPrepLessonRecords } = await supabase
         .from('lesson_records')
@@ -2250,7 +2260,7 @@ export default function Dashboard() {
           const linkedRecord = examPrepRecordMap.get(`${sid}:${course.subject}`);
           if (!linkedRecord) return;
 
-          const key = `${sid}:exam-prep-${session.course_id}:${course.subject}`;
+          const key = getLessonStatusKey(sid, `exam-prep-${session.course_id}`, course.subject);
           examPrepStatusMap[key] = {
             submitted: linkedRecord.submitted || false,
             recordId: linkedRecord.id,
@@ -2278,15 +2288,6 @@ export default function Dashboard() {
 
       const teacherNameMap: Record<string, string> = {};
       (profiles || []).forEach(p => { teacherNameMap[p.id] = p.full_name || '알 수 없음'; });
-
-      // 6. Build enrollment map: course_id -> student_ids
-      const enrollmentMap: Record<string, string[]> = {};
-      enrollments.forEach(e => {
-        if (!enrollmentMap[e.course_id]) enrollmentMap[e.course_id] = [];
-        if (!enrollmentMap[e.course_id].includes(e.student_id)) {
-          enrollmentMap[e.course_id].push(e.student_id);
-        }
-      });
 
       // 7. For teacher view: add exam prep slots to todaySlots
       if (isTeacher(role)) {
@@ -2460,7 +2461,7 @@ export default function Dashboard() {
       });
       
       // Refresh today's slots to update badges
-      await fetchTodaySlots();
+      await refreshDashboardRosterData();
     } catch (error) {
       console.error('Error marking followup done:', error);
       toast({
@@ -3054,7 +3055,7 @@ export default function Dashboard() {
                                           className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground gap-1"
                                           onClick={() => {
                                             const slotStudents = slot.rows.map((r: any) => {
-                                              const statusKey = `${r.student_id}:${r.class_id}:${r.subject}`;
+                                              const statusKey = getLessonStatusKey(r.student_id, r.class_id, r.subject);
                                               const ls = lessonStatusMap[statusKey];
                                               return {
                                                 id: r.student_id,
@@ -3084,7 +3085,7 @@ export default function Dashboard() {
                                   {/* Student rows */}
                                   <div className="divide-y divide-border/50">
                                     {slot.rows.map((row: any) => {
-                                      const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
+                                      const statusKey = getLessonStatusKey(row.student_id, row.class_id, row.subject);
                                       const ls = lessonStatusMap[statusKey];
                                       const rawHwStatus = (() => {
                                         const hwFromRecord = ls?.homeworkStatus;
@@ -3755,12 +3756,7 @@ export default function Dashboard() {
         context={adminLessonModalContext}
         existingRecordId={adminLessonModalRecordId}
         onSaved={async () => {
-          await Promise.all([
-            fetchAdminRosterData(),
-            fetchTodaySlots(),
-            fetchSupplementaryLessons(),
-            fetchExamPrepRoster(),
-          ]);
+          await refreshDashboardRosterData();
         }}
         initialMode="edit"
         forceNewRecord={adminLessonModalForceNew}
@@ -3773,12 +3769,7 @@ export default function Dashboard() {
         context={rosterActionContext}
         mode="HOMEWORK_TEST"
         onSaved={async () => {
-          await Promise.all([
-            fetchAdminRosterData(),
-            fetchTodaySlots(),
-            fetchSupplementaryLessons(),
-            fetchExamPrepRoster(),
-          ]);
+          await refreshDashboardRosterData();
         }}
       />
 
