@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, getTodayKST } from '@/lib/utils';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Clock, Users, Sparkles, CheckCircle2, Loader2 } from 'lucide-react';
@@ -111,7 +111,7 @@ export function TeacherAttendanceView() {
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
   const [markingAll, setMarkingAll] = useState(false);
 
-  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const today = useMemo(() => getTodayKST(), []);
 
   const fetchSchedule = useCallback(async () => {
     try {
@@ -156,30 +156,56 @@ export function TeacherAttendanceView() {
       if (!cs || cs.length === 0) { setStudentMap({}); setLoading(false); return; }
 
       const allStudentIds = [...new Set(cs.map(r => r.student_id))];
-      const [studentRes, logRes] = await Promise.all([
+      const [studentRes, logRes, lessonRes] = await Promise.all([
         supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
         supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
+        supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today),
       ]);
 
       const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
       (logRes.data ?? []).forEach(l => { if (l.student_id) logMap.set(l.student_id, l); });
 
-      const studentData = new Map<string, StudentAttendance>();
+      const lessonMap = new Map<string, { attendance_status: string[] | null }>();
+      (lessonRes.data ?? []).forEach((record: any) => {
+        lessonMap.set(`${record.student_id}:${record.class_id}`, {
+          attendance_status: record.attendance_status ?? null,
+        });
+      });
+
+      const studentData = new Map<string, { id: string; name: string; school: string | null; grade: string | null; baseStatus: string | null }>();
       (studentRes.data ?? []).forEach(s => {
-        const log = logMap.get(s.id);
-        let status: AttendanceStatus = '미등원';
-        if (s.status === '결석') status = '결석';
-        else if (s.status === '지각') status = '지각';
-        else if (log?.checked_in_at) status = '등원';
-        else if (s.status === '등원') status = '등원';
-        studentData.set(s.id, { id: s.id, name: s.name, school: s.school, grade: s.grade, status, checkedInAt: log?.checked_in_at });
+        studentData.set(s.id, { id: s.id, name: s.name, school: s.school, grade: s.grade, baseStatus: (s as any).status ?? null });
       });
 
       const map: Record<string, StudentAttendance[]> = {};
       slots.forEach(slot => {
         const classStudentIds = cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
         map[slot.id] = classStudentIds
-          .map(sid => studentData.get(sid))
+          .map(sid => {
+            const student = studentData.get(sid);
+            if (!student) return null;
+
+            const log = logMap.get(sid);
+            const lesson = lessonMap.get(`${sid}:${slot.classId}`);
+            const attendance = lesson?.attendance_status ?? [];
+
+            let status: AttendanceStatus = '미등원';
+            if (attendance.includes('무단결석') || attendance.includes('인정결석')) status = '결석';
+            else if (attendance.includes('지각')) status = '지각';
+            else if (log?.checked_in_at) status = '등원';
+            else if (student.baseStatus === '결석') status = '결석';
+            else if (student.baseStatus === '지각') status = '지각';
+            else if (student.baseStatus === '등원') status = '등원';
+
+            return {
+              id: student.id,
+              name: student.name,
+              school: student.school,
+              grade: student.grade,
+              status,
+              checkedInAt: log?.checked_in_at,
+            } satisfies StudentAttendance;
+          })
           .filter((s): s is StudentAttendance => !!s)
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
       });
@@ -225,42 +251,136 @@ export function TeacherAttendanceView() {
 
   const handleStatusChange = useCallback(async (studentId: string, newStatus: AttendanceStatus) => {
     try {
+      if (!activeSlot) return;
       const student = activeStudents.find(s => s.id === studentId);
       if (!student || student.status === newStatus) return;
 
-      setActionLoading(prev => new Set(prev).add(studentId));
       const nowIso = new Date().toISOString();
+      const previousCheckedInAt = student.checkedInAt ?? null;
+      let lessonAttendanceStatus: string[] = ['정상등원'];
+      let lessonRangeText = '';
+      let supplementaryDate: string | null = null;
+      let supplementaryTime = '미정';
+
+      if (newStatus === '결석') {
+        const absenceReason = window.prompt(`${student.name} 학생의 결석 사유를 입력해주세요.`)?.trim();
+        if (!absenceReason) return;
+
+        const isExcused = window.confirm('인정결석으로 처리할까요?\n취소를 누르면 무단결석으로 기록됩니다.');
+        lessonAttendanceStatus = [isExcused ? '인정결석' : '무단결석'];
+        lessonRangeText = `결석 사유: ${absenceReason}`;
+
+        if (window.confirm('보강 일정이 있나요?\n확인 = 보강 일정 입력 / 취소 = 일정 없음')) {
+          const pickedDate = window.prompt('보강 날짜를 YYYY-MM-DD 형식으로 입력해주세요.', today)?.trim();
+          if (pickedDate) {
+            supplementaryDate = pickedDate;
+            supplementaryTime = window.prompt('보강 시간을 입력해주세요.\n예: 19:00 또는 미정', '미정')?.trim() || '미정';
+          }
+        }
+      } else if (newStatus === '지각') {
+        lessonAttendanceStatus = ['지각'];
+      } else if (newStatus === '미등원') {
+        lessonAttendanceStatus = ['미등원'];
+      }
+
+      setActionLoading(prev => new Set(prev).add(studentId));
 
       setStudentMap(prev => {
         const updated = { ...prev };
-        Object.keys(updated).forEach(slotId => {
-          updated[slotId] = updated[slotId].map(s =>
-            s.id === studentId ? { ...s, status: newStatus, checkedInAt: newStatus === '등원' ? nowIso : s.checkedInAt } : s
-          );
-        });
+        updated[activeSlot.id] = (updated[activeSlot.id] || []).map(s =>
+          s.id === studentId
+            ? {
+                ...s,
+                status: newStatus,
+                checkedInAt: newStatus === '등원' || newStatus === '지각' ? nowIso : null,
+              }
+            : s
+        );
         return updated;
       });
 
       const dbStatus = newStatus === '미등원' ? '미등원' : newStatus;
       await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
 
-      if (newStatus === '등원') {
+      const { data: existingLesson } = await supabase
+        .from('lesson_records')
+        .select('id, lesson_range')
+        .eq('student_id', studentId)
+        .eq('class_id', activeSlot.classId)
+        .eq('lesson_date', today)
+        .eq('subject', activeSlot.subject as any)
+        .maybeSingle();
+
+      const mergedLessonRange = lessonRangeText
+        ? existingLesson?.lesson_range?.includes(lessonRangeText)
+          ? existingLesson.lesson_range
+          : [existingLesson?.lesson_range?.trim(), lessonRangeText].filter(Boolean).join('\n')
+        : existingLesson?.lesson_range ?? '';
+
+      const lessonPayload: Record<string, any> = {
+        attendance_status: lessonAttendanceStatus,
+        lesson_range: mergedLessonRange,
+        submitted: false,
+      };
+
+      if (existingLesson) {
+        await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
+      } else {
+        await supabase.from('lesson_records').insert({
+          teacher_id: teacherId,
+          student_id: studentId,
+          class_id: activeSlot.classId,
+          subject: activeSlot.subject as any,
+          lesson_date: today,
+          lesson_range: lessonRangeText,
+          understanding_score: null,
+          homework_status: 'none_assigned',
+          learning_issues: [],
+          attendance_status: lessonAttendanceStatus,
+          submitted: false,
+        } as any);
+      }
+
+      if (newStatus === '등원' || newStatus === '지각') {
         const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
         if (existing?.length) {
-          await supabase.from('attendance_logs').update({ checked_in_at: nowIso }).eq('id', existing[0].id);
+          await supabase.from('attendance_logs').update({ checked_in_at: nowIso, checked_out_at: null }).eq('id', existing[0].id);
         } else {
           await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
         }
+      } else {
+        const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
+        if (existing?.length) {
+          await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('id', existing[0].id);
+        }
       }
 
-      setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
+      if (newStatus === '결석' && supplementaryDate) {
+        const notesContent = `[보충 시간: ${supplementaryTime}]`;
+        await supabase.from('lesson_records').insert({
+          teacher_id: teacherId,
+          student_id: studentId,
+          class_id: activeSlot.classId,
+          subject: activeSlot.subject as any,
+          lesson_date: supplementaryDate,
+          lesson_range: '보충수업 예정',
+          homework_status: 'none_assigned',
+          lesson_types: ['보충수업'],
+          attendance_status: ['정상등원'],
+          notes: notesContent,
+          submitted: false,
+        } as any);
+      }
+
       sonnerToast.success(`${student.name} → ${newStatus}`, { duration: 1500 });
     } catch (err) {
       console.error('handleStatusChange error:', err);
-      setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
+      await fetchStudents();
       sonnerToast.error('출결 처리 중 오류가 발생했습니다');
+    } finally {
+      setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
     }
-  }, [activeStudents, today, teacherId]);
+  }, [activeSlot, activeStudents, fetchStudents, teacherId, today]);
 
   const handleMarkAllPresent = async () => {
     const pending = activeStudents.filter(s => s.status === '미등원');

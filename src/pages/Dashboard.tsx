@@ -2202,6 +2202,20 @@ export default function Dashboard() {
       const studentNameMap: Record<string, string> = {};
       (students || []).forEach(s => { studentNameMap[s.id] = s.name; });
 
+      const courseSubjects = [...new Set(courses.map(c => c.subject))];
+      const { data: examPrepLessonRecords } = await supabase
+        .from('lesson_records')
+        .select('id, student_id, subject, submitted, attendance_status, homework_status')
+        .eq('lesson_date', today)
+        .in('student_id', studentIds)
+        .is('class_id', null)
+        .in('subject', courseSubjects as any);
+
+      const examPrepRecordMap = new Map<string, any>();
+      (examPrepLessonRecords || []).forEach((record: any) => {
+        examPrepRecordMap.set(`${record.student_id}:${record.subject}`, record);
+      });
+
       // 5. Fetch teacher names
       const teacherIds = [...new Set(courses.map(c => c.teacher_id))];
       const { data: profiles } = await supabase
@@ -2231,10 +2245,17 @@ export default function Dashboard() {
           const enrolledStudentIds = enrollmentMap[session.course_id] || [];
           const slotStudents: TodaySlotStudent[] = enrolledStudentIds
             .filter(sid => studentNameMap[sid])
-            .map(sid => ({
-              id: sid,
-              name: studentNameMap[sid],
-            }));
+            .map(sid => {
+              const linkedRecord = examPrepRecordMap.get(`${sid}:${course.subject}`);
+              return {
+                id: sid,
+                name: studentNameMap[sid],
+                lessonRecordId: linkedRecord?.id || null,
+                lessonSubmitted: linkedRecord?.submitted || false,
+                attendanceStatus: linkedRecord?.attendance_status || ['정상등원'],
+                homeworkStatus: linkedRecord?.homework_status || null,
+              } satisfies TodaySlotStudent;
+            });
 
           if (slotStudents.length === 0) return;
 
@@ -3454,16 +3475,16 @@ export default function Dashboard() {
                                             variant="outline"
                                             size="sm"
                                             className="h-7 text-xs px-2.5"
-                                            onClick={() => {
-                                              const ls = lessonStatusMap[`${student.id}_${slot.class_id}`];
+                                              onClick={() => {
                                               setAdminLessonModalContext({
                                                 student_id: student.id,
-                                                class_id: slot.class_id,
+                                                  class_id: slot.isExamPrep ? '' : slot.class_id,
                                                 subject: slot.subject as any,
                                                 lesson_date: getTodayKST(),
+                                                  ...(slot.isExamPrep ? { lesson_types: ['시험특강'] } : {}),
                                               });
-                                              setAdminLessonModalRecordId(ls?.recordId || null);
-                                              setAdminLessonModalForceNew(!ls?.recordId);
+                                                setAdminLessonModalRecordId(student.lessonRecordId || null);
+                                                setAdminLessonModalForceNew(!student.lessonRecordId);
                                               setAdminLessonModalOpen(true);
                                             }}
                                           >
@@ -3685,6 +3706,7 @@ export default function Dashboard() {
             fetchAdminRosterData(),
             fetchTodaySlots(),
             fetchSupplementaryLessons(),
+            fetchExamPrepRoster(),
           ]);
         }}
         initialMode="edit"
@@ -3702,6 +3724,7 @@ export default function Dashboard() {
             fetchAdminRosterData(),
             fetchTodaySlots(),
             fetchSupplementaryLessons(),
+            fetchExamPrepRoster(),
           ]);
         }}
       />
