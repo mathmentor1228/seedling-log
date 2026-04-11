@@ -162,8 +162,16 @@ export function TeacherAttendanceView() {
         supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today),
       ]);
 
-      const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
-      (logRes.data ?? []).forEach(l => { if (l.student_id) logMap.set(l.student_id, l); });
+        const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
+        (logRes.data ?? []).forEach(l => {
+          if (!l.student_id) return;
+          const prev = logMap.get(l.student_id);
+          const prevTime = prev?.checked_in_at ? new Date(prev.checked_in_at).getTime() : -1;
+          const nextTime = l.checked_in_at ? new Date(l.checked_in_at).getTime() : -1;
+          if (!prev || nextTime >= prevTime) {
+            logMap.set(l.student_id, l);
+          }
+        });
 
       const lessonMap = new Map<string, { attendance_status: string[] | null }>();
       (lessonRes.data ?? []).forEach((record: any) => {
@@ -190,8 +198,10 @@ export function TeacherAttendanceView() {
             const attendance = lesson?.attendance_status ?? [];
 
             let status: AttendanceStatus = '미등원';
-            if (attendance.includes('무단결석') || attendance.includes('인정결석')) status = '결석';
+            if (attendance.includes('무단결석') || attendance.includes('인정결석') || attendance.includes('결석')) status = '결석';
             else if (attendance.includes('지각')) status = '지각';
+            else if (attendance.includes('미등원')) status = '미등원';
+            else if (attendance.includes('정상등원')) status = '등원';
             else if (log?.checked_in_at) status = '등원';
             else if (student.baseStatus === '결석') status = '결석';
             else if (student.baseStatus === '지각') status = '지각';
@@ -225,6 +235,7 @@ export function TeacherAttendanceView() {
     const ch = supabase.channel('teacher-att-shared')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchStudents().catch(() => {}); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchStudents().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchStudents().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [teacherId, fetchStudents]);
@@ -300,9 +311,12 @@ export function TeacherAttendanceView() {
       });
 
       const dbStatus = newStatus === '미등원' ? '미등원' : newStatus;
-      await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
+      const { error: studentStatusError } = await supabase.from('students').update({ status: dbStatus } as any).eq('id', studentId);
+      if (studentStatusError) {
+        console.warn('Student status update skipped:', studentStatusError);
+      }
 
-      const { data: existingLesson } = await supabase
+      const { data: existingLesson, error: existingLessonError } = await supabase
         .from('lesson_records')
         .select('id, lesson_range')
         .eq('student_id', studentId)
@@ -310,6 +324,7 @@ export function TeacherAttendanceView() {
         .eq('lesson_date', today)
         .eq('subject', activeSlot.subject as any)
         .maybeSingle();
+      if (existingLessonError) throw existingLessonError;
 
       const mergedLessonRange = lessonRangeText
         ? existingLesson?.lesson_range?.includes(lessonRangeText)
@@ -324,9 +339,10 @@ export function TeacherAttendanceView() {
       };
 
       if (existingLesson) {
-        await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
+        const { error: updateLessonError } = await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
+        if (updateLessonError) throw updateLessonError;
       } else {
-        await supabase.from('lesson_records').insert({
+        const { error: insertLessonError } = await supabase.from('lesson_records').insert({
           teacher_id: teacherId,
           student_id: studentId,
           class_id: activeSlot.classId,
@@ -339,25 +355,27 @@ export function TeacherAttendanceView() {
           attendance_status: lessonAttendanceStatus,
           submitted: false,
         } as any);
+        if (insertLessonError) throw insertLessonError;
       }
 
       if (newStatus === '등원' || newStatus === '지각') {
-        const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
+        const { data: existing, error: existingLogError } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
+        if (existingLogError) throw existingLogError;
         if (existing?.length) {
-          await supabase.from('attendance_logs').update({ checked_in_at: nowIso, checked_out_at: null }).eq('id', existing[0].id);
+          const { error: updateLogError } = await supabase.from('attendance_logs').update({ checked_in_at: nowIso, checked_out_at: null }).eq('id', existing[0].id);
+          if (updateLogError) throw updateLogError;
         } else {
-          await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
+          const { error: insertLogError } = await supabase.from('attendance_logs').insert({ student_id: studentId, student_name: student.name, date: today, checked_in_at: nowIso, recorded_by: teacherId });
+          if (insertLogError) throw insertLogError;
         }
       } else {
-        const { data: existing } = await supabase.from('attendance_logs').select('id').eq('student_id', studentId).eq('date', today).limit(1);
-        if (existing?.length) {
-          await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('id', existing[0].id);
-        }
+        const { error: clearLogsError } = await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('student_id', studentId).eq('date', today);
+        if (clearLogsError) throw clearLogsError;
       }
 
       if (newStatus === '결석' && supplementaryDate) {
         const notesContent = `[보충 시간: ${supplementaryTime}]`;
-        await supabase.from('lesson_records').insert({
+        const { error: supplementaryInsertError } = await supabase.from('lesson_records').insert({
           teacher_id: teacherId,
           student_id: studentId,
           class_id: activeSlot.classId,
@@ -370,6 +388,7 @@ export function TeacherAttendanceView() {
           notes: notesContent,
           submitted: false,
         } as any);
+        if (supplementaryInsertError) throw supplementaryInsertError;
       }
 
       sonnerToast.success(`${student.name} → ${newStatus}`, { duration: 1500 });
