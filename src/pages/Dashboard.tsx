@@ -1856,39 +1856,47 @@ export default function Dashboard() {
     }
   }
 
-  // BULK-DRAFT-SAVE-V4: Create draft records for unrecorded students (including exam prep) + ensure all existing drafts are saved
+  // BULK-DRAFT-SAVE-V5: Create draft records for unrecorded students (including exam prep & supplementary) + ensure all existing drafts are saved
   async function handleBulkDraftCreate() {
     if (!user) return;
     setBulkDraftSaving(true);
     try {
       const today = getTodayKST();
-      const candidates = new Map<string, { student_id: string; class_id: string; subject: string; teacher_id: string; isExamPrep: boolean }>();
+      const candidates = new Map<string, { student_id: string; class_id: string; subject: string; teacher_id: string; isExamPrep: boolean; isSupplementary: boolean; existingRecordId?: string }>();
 
       if (isAdmin(role) && adminRosterData) {
-        adminRosterData.roster_rows.forEach(row => {
-          if (!row.student_id || !row.class_id || !row.teacher_id || row.class_id === '') return;
-          const isEP = row.class_id.startsWith('exam-prep-');
-          const statusKey = `${row.student_id}:${row.class_id}:${row.subject}`;
+        adminRosterData.roster_rows.forEach((row: any) => {
+          if (!row.student_id || !row.teacher_id) return;
+          const isEP = !!(row.class_id && row.class_id.startsWith('exam-prep-'));
+          const isSup = !!row.isSupplementary;
+          // Allow empty class_id for supplementary and exam prep
+          if (!isEP && !isSup && (!row.class_id || row.class_id === '')) return;
+          const statusKey = `${row.student_id}:${row.class_id || 'null'}:${row.subject}`;
           candidates.set(statusKey, {
             student_id: row.student_id,
-            class_id: row.class_id,
+            class_id: row.class_id || '',
             subject: row.subject,
             teacher_id: row.teacher_id,
             isExamPrep: isEP,
+            isSupplementary: isSup,
+            existingRecordId: row.supplementaryRecordId || undefined,
           });
         });
       } else {
         todaySlots.forEach(slot => {
           if (slot.isOverridden && slot.overrideType === 'cancelled') return;
-          const isEP = slot.isExamPrep || slot.class_id.startsWith('exam-prep-');
+          const isEP = !!(slot.isExamPrep || (slot.class_id && slot.class_id.startsWith('exam-prep-')));
+          const isSup = !!(slot as any).isSupplementary;
           slot.students.forEach(student => {
-            const key = `${student.id}:${slot.class_id}:${slot.subject}`;
+            const key = `${student.id}:${slot.class_id || 'null'}:${slot.subject}`;
             candidates.set(key, {
               student_id: student.id,
-              class_id: slot.class_id,
+              class_id: slot.class_id || '',
               subject: slot.subject,
               teacher_id: user.id,
               isExamPrep: isEP,
+              isSupplementary: isSup,
+              existingRecordId: (slot as any).supplementaryRecordId || undefined,
             });
           });
         });
@@ -1901,15 +1909,25 @@ export default function Dashboard() {
         return;
       }
 
-      const studentIds = [...new Set(allCandidates.map(item => item.student_id))];
-      const regularClassIds = [...new Set(allCandidates.filter(c => !c.isExamPrep).map(c => c.class_id))];
-      const examPrepStudentIds = [...new Set(allCandidates.filter(c => c.isExamPrep).map(c => c.student_id))];
-      const subjects = [...new Set(allCandidates.map(item => item.subject))];
+      // Separate candidates: those with known existing record IDs vs those needing lookup
+      const knownRecordIds: string[] = [];
+      const lookupCandidates = allCandidates.filter(c => {
+        if (c.existingRecordId) {
+          knownRecordIds.push(c.existingRecordId);
+          return false;
+        }
+        return true;
+      });
+
+      const studentIds = [...new Set(lookupCandidates.map(item => item.student_id))];
+      const regularClassIds = [...new Set(lookupCandidates.filter(c => !c.isExamPrep && !c.isSupplementary).map(c => c.class_id).filter(Boolean))];
+      const nullClassStudentIds = [...new Set(lookupCandidates.filter(c => c.isExamPrep || c.isSupplementary).map(c => c.student_id))];
+      const subjects = [...new Set(lookupCandidates.map(item => item.subject))];
 
       // Find existing records for today - regular classes
       let allExistingRecords: any[] = [];
       
-      if (regularClassIds.length > 0) {
+      if (regularClassIds.length > 0 && studentIds.length > 0) {
         const { data: regularRecords, error: regularErr } = await supabase
           .from('lesson_records')
           .select('id, student_id, class_id, subject, submitted')
@@ -1921,35 +1939,35 @@ export default function Dashboard() {
         allExistingRecords.push(...(regularRecords || []));
       }
 
-      // Find existing records for today - exam prep (class_id is null)
-      if (examPrepStudentIds.length > 0) {
+      // Find existing records for today - exam prep & supplementary (class_id is null)
+      if (nullClassStudentIds.length > 0) {
         const { data: epRecords, error: epErr } = await supabase
           .from('lesson_records')
           .select('id, student_id, class_id, subject, submitted')
           .eq('lesson_date', today)
-          .in('student_id', examPrepStudentIds)
+          .in('student_id', nullClassStudentIds)
           .is('class_id', null)
           .in('subject', subjects as any);
         if (epErr) throw epErr;
         allExistingRecords.push(...(epRecords || []));
       }
 
-      // Build existing keys: for exam prep use null class_id
+      // Build existing keys
       const existingKeys = new Set(
         allExistingRecords.map((record: any) => `${record.student_id}:${record.class_id || 'null'}:${record.subject}`)
       );
 
       // 1. Create new draft records for students without any record
-      const toCreate = allCandidates
+      const toCreate = lookupCandidates
         .filter(item => {
-          const key = item.isExamPrep
+          const key = (item.isExamPrep || item.isSupplementary)
             ? `${item.student_id}:null:${item.subject}`
             : `${item.student_id}:${item.class_id}:${item.subject}`;
           return !existingKeys.has(key);
         })
         .map(item => ({
           student_id: item.student_id,
-          class_id: item.isExamPrep ? null : item.class_id,
+          class_id: (item.isExamPrep || item.isSupplementary) ? null : item.class_id,
           subject: item.subject as any,
           teacher_id: item.teacher_id,
           lesson_date: today,
@@ -1967,17 +1985,20 @@ export default function Dashboard() {
       }
 
       // 2. Touch existing draft records (update updated_at to confirm save)
-      const draftRecordIds = (allExistingRecords || [])
-        .filter((r: any) => !r.submitted)
-        .map((r: any) => r.id);
+      const draftRecordIds = [
+        ...(allExistingRecords || []).filter((r: any) => !r.submitted).map((r: any) => r.id),
+        ...knownRecordIds, // supplementary records that already exist
+      ];
       
       let savedCount = 0;
       if (draftRecordIds.length > 0) {
-        const { error: updateErr } = await supabase
+        // Update only non-submitted ones; submitted ones will just be skipped by the WHERE
+        const { error: updateErr, count } = await supabase
           .from('lesson_records')
           .update({ updated_at: new Date().toISOString() })
-          .in('id', draftRecordIds);
-        if (!updateErr) savedCount = draftRecordIds.length;
+          .in('id', draftRecordIds)
+          .eq('submitted', false);
+        if (!updateErr) savedCount = count || draftRecordIds.length;
       }
 
       const parts: string[] = [];
