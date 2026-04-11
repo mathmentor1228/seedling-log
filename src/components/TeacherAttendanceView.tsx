@@ -206,7 +206,7 @@ export function TeacherAttendanceView() {
               checkedInAt: log?.checked_in_at,
             } satisfies StudentAttendance;
           })
-          .filter((s): s is StudentAttendance => !!s)
+          .filter((s): s is StudentAttendance => s !== null)
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
       });
       setStudentMap(map);
