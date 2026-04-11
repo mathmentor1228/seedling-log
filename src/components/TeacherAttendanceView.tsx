@@ -203,8 +203,8 @@ export function TeacherAttendanceView() {
               school: student.school,
               grade: student.grade,
               status,
-              checkedInAt: log?.checked_in_at,
-            } satisfies StudentAttendance;
+              checkedInAt: log?.checked_in_at ?? null,
+            } as StudentAttendance;
           })
           .filter((s): s is StudentAttendance => s !== null)
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
