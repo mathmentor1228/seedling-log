@@ -2013,8 +2013,11 @@ export default function Dashboard() {
       await fetchTodaySlots();
       if (isAdmin(role)) {
         await fetchAdminRosterData();
-        
       }
+      await Promise.all([
+        fetchSupplementaryLessons(),
+        fetchExamPrepRoster(),
+      ]);
     } catch (err: any) {
       console.error('Bulk draft create error:', err);
       toast({ title: '일괄 생성 실패', description: err.message, variant: 'destructive' });
@@ -2236,6 +2239,35 @@ export default function Dashboard() {
       (examPrepLessonRecords || []).forEach((record: any) => {
         examPrepRecordMap.set(`${record.student_id}:${record.subject}`, record);
       });
+
+      const examPrepStatusMap: Record<string, typeof lessonStatusMap[string]> = {};
+      sessions.forEach(session => {
+        const course = courseMap.get(session.course_id);
+        if (!course) return;
+
+        const enrolledStudentIds = enrollmentMap[session.course_id] || [];
+        enrolledStudentIds.forEach(sid => {
+          const linkedRecord = examPrepRecordMap.get(`${sid}:${course.subject}`);
+          if (!linkedRecord) return;
+
+          const key = `${sid}:exam-prep-${session.course_id}:${course.subject}`;
+          examPrepStatusMap[key] = {
+            submitted: linkedRecord.submitted || false,
+            recordId: linkedRecord.id,
+            homeworkStatus: linkedRecord.homework_status || null,
+            latestAssignmentCheckStatus: null,
+            hasNextHomework: false,
+            hasPhotoSubmission: false,
+          };
+        });
+      });
+
+      if (Object.keys(examPrepStatusMap).length > 0) {
+        setLessonStatusMap(prev => ({
+          ...prev,
+          ...examPrepStatusMap,
+        }));
+      }
 
       // 5. Fetch teacher names
       const teacherIds = [...new Set(courses.map(c => c.teacher_id))];
