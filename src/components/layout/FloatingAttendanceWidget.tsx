@@ -65,7 +65,6 @@ export function FloatingAttendanceWidget() {
         }}
         onMouseDown={onMouseDown}
         onTouchStart={onTouchStart}
-        onMouseEnter={() => setExpanded(true)}
         onClick={() => { if (!didDrag.current) setExpanded(true); }}
       >
         <span style={{ fontSize: 13, fontWeight: 700, color: isFull ? '#E24B4A' : colors.text, lineHeight: 1.1 }}>
@@ -90,8 +89,32 @@ export function FloatingAttendanceWidget() {
         borderRadius: 12,
         overflow: 'hidden',
       }}
-      onMouseLeave={() => setExpanded(false)}
     >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setExpanded(false);
+        }}
+        style={{
+          position: 'absolute',
+          top: 6,
+          right: 6,
+          zIndex: 2,
+          width: 20,
+          height: 20,
+          borderRadius: 999,
+          border: '1px solid rgba(255,255,255,0.25)',
+          background: 'rgba(0,0,0,0.15)',
+          color: 'white',
+          fontSize: 12,
+          lineHeight: '18px',
+          cursor: 'pointer',
+        }}
+      >
+        ×
+      </button>
+
       {/* Drag handle area over header */}
       <div
         style={{ cursor: 'move', position: 'absolute', top: 0, left: 0, right: 0, height: 36, zIndex: 1 }}
