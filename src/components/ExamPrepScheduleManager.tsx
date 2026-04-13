@@ -94,7 +94,7 @@ export function ExamPrepScheduleManager() {
   const [schoolExams, setSchoolExams] = useState<SchoolExamInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [mode, setMode] = useState<'list' | 'create' | 'trash'>('list');
+  const [mode, setMode] = useState<'list' | 'create' | 'trash' | 'final_prep'>('list');
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
