@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { FinalPrepOverview } from '@/components/exam-prep/FinalPrepOverview';
 
 // ── Types ──────────────────────────────────────────────
 interface Student {
