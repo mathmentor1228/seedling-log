@@ -1309,6 +1309,9 @@ export function ExamPrepScheduleManager() {
             </button>
           ))}
         </div>
+        <Button variant="outline" size="sm" className="border-destructive/30 text-destructive hover:bg-destructive/5" onClick={() => setMode('final_prep')}>
+          <CalendarDays className="w-4 h-4 mr-1" /> 직전특강
+        </Button>
         <Button variant="outline" size="sm" onClick={() => { fetchDeletedCourses(); setMode('trash'); }}>
           <Archive className="w-4 h-4 mr-1" /> 휴지통
         </Button>
