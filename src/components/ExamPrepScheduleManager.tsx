@@ -784,6 +784,23 @@ export function ExamPrepScheduleManager() {
     </Dialog>
   ) : null;
 
+  // ═══════════════ FINAL PREP MODE ═══════════════
+  if (mode === 'final_prep') {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMode('list')}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-destructive" /> 직전특강 통합 조회
+          </h2>
+        </div>
+        <FinalPrepOverview courses={courses} studentMap={studentMap} teacherMap={teacherMap} />
+      </div>
+    );
+  }
+
   // ═══════════════ TRASH MODE ═══════════════
   if (mode === 'trash') {
     return (
