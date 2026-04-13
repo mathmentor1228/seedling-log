@@ -232,7 +232,7 @@ export function BatchTestEntryModal({
           _test_result_text: entry.test_result_text || null,
           _test_result: entry.test_result,
           _test_date: date,
-          _test_assistant: testAssistant || null,
+          _test_assistant: (testAssistant && testAssistant !== 'none_selected') ? testAssistant : null,
           _test_slot: testSlot,
         });
         if (!error) { successCount++; savedRecordIds.push(recordId); }
