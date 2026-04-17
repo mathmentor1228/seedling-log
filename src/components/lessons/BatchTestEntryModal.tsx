@@ -183,6 +183,7 @@ export function BatchTestEntryModal({
 
     setSaving(true);
     try {
+      // BATCH-TEST-AUTOCREATE-V2: Auto-create lesson records for students without one
       const { data: existingRecords } = await supabase
         .from('lesson_records')
         .select('id, student_id')
@@ -194,28 +195,45 @@ export function BatchTestEntryModal({
 
       const missingStudents = selected.filter(e => !recordMap.has(e.student_id));
       if (missingStudents.length > 0) {
-        const newRecords = missingStudents.map(s => ({
-          student_id: s.student_id,
-          teacher_id: effectiveTeacherId,
-          lesson_date: date,
-          subject: subject as any,
-          lesson_types: ['테스트'] as string[],
-          understanding_score: 0,
-          homework_status: 'none',
-          lesson_range: '테스트',
-          submitted: true,
-          submitted_at: new Date().toISOString(),
-          test_content: testContent,
-          test_name: testContent,
-          test_date: date,
-          test_assistant: testAssistant || null,
-        }));
+        // Resolve per-student teacher_id via student_subject_teachers mapping (fallback to effectiveTeacherId)
+        const { data: sstMappings } = await supabase
+          .from('student_subject_teachers')
+          .select('student_id, teacher_id')
+          .eq('subject', subject)
+          .in('student_id', missingStudents.map(s => s.student_id));
+        const teacherMap = new Map((sstMappings || []).map(m => [m.student_id, m.teacher_id]));
 
-        const { data: inserted, error: insertError } = await supabase
-          .from('lesson_records').insert(newRecords).select('id, student_id');
-        if (insertError) console.error('Insert error:', insertError);
-        else if (inserted) {
-          for (const rec of inserted) recordMap.set(rec.student_id, rec.id);
+        const cleanAssistant = (testAssistant && testAssistant !== 'none_selected') ? testAssistant : null;
+
+        // Insert one-by-one so a single failure doesn't drop the whole batch
+        for (const s of missingStudents) {
+          const resolvedTeacherId = teacherMap.get(s.student_id) || effectiveTeacherId;
+          const newRecord = {
+            student_id: s.student_id,
+            teacher_id: resolvedTeacherId,
+            lesson_date: date,
+            subject: subject as any,
+            lesson_types: ['테스트'] as string[],
+            understanding_score: null,
+            homework_status: 'none_assigned', // HW-STATUS-ENUM-V2: must be valid enum
+            lesson_range: '테스트',
+            submitted: true,
+            submitted_at: new Date().toISOString(),
+            test_content: testContent,
+            test_name: testContent,
+            test_date: date,
+            test_assistant: cleanAssistant,
+          };
+          const { data: inserted, error: insertError } = await supabase
+            .from('lesson_records')
+            .insert(newRecord)
+            .select('id, student_id')
+            .single();
+          if (insertError) {
+            console.error(`[BATCH-TEST-AUTOCREATE-V2] Insert failed for ${s.student_name}:`, insertError);
+          } else if (inserted) {
+            recordMap.set(inserted.student_id, inserted.id);
+          }
         }
       }
 
