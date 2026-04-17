@@ -729,6 +729,15 @@ export default function Dashboard() {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [user, role]);
+
+  // HW-REALTIME-SYNC-V1: Refresh roster whenever homework status changes anywhere
+  useHomeworkRealtimeSync({
+    channelKey: 'main-dashboard',
+    enabled: !!user && (isTeacher(role) || isAdmin(role) || isAssistant(role)),
+    onChange: () => {
+      void refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
+    },
+  });
   async function fetchOverdueDrafts() {
     try {
       // Query the view directly
