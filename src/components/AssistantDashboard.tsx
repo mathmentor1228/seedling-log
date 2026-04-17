@@ -49,6 +49,7 @@ import SubmissionImageCarousel from '@/components/lessons/SubmissionImageCarouse
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Camera } from 'lucide-react';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
+import { useHomeworkRealtimeSync } from '@/hooks/useHomeworkRealtimeSync';
 
 interface Teacher {
   id: string;

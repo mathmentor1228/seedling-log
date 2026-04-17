@@ -44,6 +44,7 @@ import { getTodayKST } from '@/lib/utils';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
 import SubmissionImageCarousel from '@/components/lessons/SubmissionImageCarousel';
 import { isAdmin as checkIsAdmin, isTeacher as checkIsTeacher } from '@/lib/auth';
+import { useHomeworkRealtimeSync } from '@/hooks/useHomeworkRealtimeSync';
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'] as const;
 

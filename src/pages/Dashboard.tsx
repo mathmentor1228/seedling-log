@@ -21,6 +21,7 @@ import { LessonModal } from '@/components/lessons/LessonModal';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
 import { RosterActionModal } from '@/components/RosterActionModal';
 import { HomeworkAlertModal } from '@/components/HomeworkAlertModal';
+import { useHomeworkRealtimeSync } from '@/hooks/useHomeworkRealtimeSync';
 import SubmissionImageCarousel from '@/components/lessons/SubmissionImageCarousel';
 import StudentProgressWidget from '@/components/StudentProgressWidget';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
