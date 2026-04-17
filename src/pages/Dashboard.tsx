@@ -21,6 +21,7 @@ import { LessonModal } from '@/components/lessons/LessonModal';
 import DailyHomeworkManager from '@/components/DailyHomeworkManager';
 import { RosterActionModal } from '@/components/RosterActionModal';
 import { HomeworkAlertModal } from '@/components/HomeworkAlertModal';
+import { useHomeworkRealtimeSync } from '@/hooks/useHomeworkRealtimeSync';
 import SubmissionImageCarousel from '@/components/lessons/SubmissionImageCarousel';
 import StudentProgressWidget from '@/components/StudentProgressWidget';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -510,6 +511,7 @@ export default function Dashboard() {
   async function refreshDashboardRosterData(options?: { includeAttendance?: boolean }) {
     if (!user) return;
 
+    // HW-REALTIME-SYNC-V1: defined inline so the hook below can reference it
     if (isAdmin(role)) {
       await fetchAdminRosterData();
       if (options?.includeAttendance) {
@@ -727,6 +729,15 @@ export default function Dashboard() {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [user, role]);
+
+  // HW-REALTIME-SYNC-V1: Refresh roster whenever homework status changes anywhere
+  useHomeworkRealtimeSync({
+    channelKey: 'main-dashboard',
+    enabled: !!user && (isTeacher(role) || isAdmin(role) || isAssistant(role)),
+    onChange: () => {
+      void refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
+    },
+  });
   async function fetchOverdueDrafts() {
     try {
       // Query the view directly
