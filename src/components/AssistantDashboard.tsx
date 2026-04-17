@@ -233,6 +233,13 @@ export default function AssistantDashboard() {
     }
   }, [user, selectedDate]);
 
+  // HW-REALTIME-SYNC-V1: Re-fetch roster when homework status changes anywhere
+  useHomeworkRealtimeSync({
+    channelKey: 'assistant-dashboard',
+    enabled: !!user,
+    onChange: () => { if (user) fetchAllData(); },
+  });
+
   async function fetchAllData() {
     try {
       setLoading(true);

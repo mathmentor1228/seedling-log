@@ -511,6 +511,7 @@ export default function Dashboard() {
   async function refreshDashboardRosterData(options?: { includeAttendance?: boolean }) {
     if (!user) return;
 
+    // HW-REALTIME-SYNC-V1: defined inline so the hook below can reference it
     if (isAdmin(role)) {
       await fetchAdminRosterData();
       if (options?.includeAttendance) {

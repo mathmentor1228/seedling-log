@@ -118,6 +118,12 @@ export default function DailyHomeworkChecklist() {
     fetchData();
   }, [startDate, endDate, filterSubject]);
 
+  // HW-REALTIME-SYNC-V1: Auto-refresh when homework data changes anywhere in the app
+  useHomeworkRealtimeSync({
+    channelKey: 'daily-homework-checklist',
+    onChange: fetchData,
+  });
+
   async function fetchData() {
     setLoading(true);
     setSelectedIds(new Set());
