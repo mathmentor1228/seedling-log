@@ -535,7 +535,7 @@ function StaffUploadDialog({ defaultSchool, onClose, onSaved }: { defaultSchool:
     const next: Array<{ name: string; dataUrl: string }> = [];
     for (const f of Array.from(list).slice(0, 15)) {
       try {
-        const compressed = await compressImage(f, 1600, 0.85);
+        const compressed = await compressImage(f, 1600, 1600, 0.85);
         const dataUrl = await new Promise<string>((res, rej) => {
           const reader = new FileReader();
           reader.onload = () => res(reader.result as string);
