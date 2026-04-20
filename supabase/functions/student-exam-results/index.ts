@@ -203,18 +203,43 @@ Deno.serve(async (req) => {
   }
 });
 
+// Robust dataURL parser: avoids regex truncation on large/multiline base64 strings
+function parseDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
+  const s = String(dataUrl || '');
+  if (!s.startsWith('data:')) return null;
+  const commaIdx = s.indexOf(',');
+  if (commaIdx < 0) return null;
+  const header = s.slice(5, commaIdx); // e.g. "image/jpeg;base64"
+  const isBase64 = header.includes(';base64');
+  const mime = header.replace(';base64', '').trim() || 'application/octet-stream';
+  // Strip whitespace/newlines that some clients (or copy-paste) include
+  const payload = s.slice(commaIdx + 1).replace(/\s+/g, '');
+  if (!isBase64) return null;
+  // Chunked decode to avoid call-stack issues with huge strings on some runtimes
+  try {
+    const binary = atob(payload);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    return { mime, bytes };
+  } catch (e) {
+    console.error('parseDataUrl atob failed', e, 'payloadLen=', payload.length);
+    return null;
+  }
+}
+
 async function uploadPhotos(supabase: any, photos: any[], student_id: string, result_id: string) {
   if (!Array.isArray(photos) || photos.length === 0) return;
   for (let i = 0; i < photos.length; i++) {
     const p = photos[i];
     if (!p?.dataUrl) continue;
     try {
-      const match = String(p.dataUrl).match(/^data:(.+?);base64,(.+)$/);
-      if (!match) continue;
-      const mime = match[1];
-      const ext = mime.split('/')[1] || 'jpg';
-      const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+      const parsed = parseDataUrl(p.dataUrl);
+      if (!parsed) { console.error('photo parse failed', { name: p.name, len: String(p.dataUrl).length }); continue; }
+      const { mime, bytes } = parsed;
+      const ext = (mime.split('/')[1] || 'jpg').split('+')[0];
       const path = `${student_id}/${result_id}/${Date.now()}-${i}.${ext}`;
+      console.log('[uploadPhotos] uploading', { path, mime, size: bytes.length });
       const { error: upErr } = await supabase.storage.from('exam-results').upload(path, bytes, { contentType: mime, upsert: false });
       if (upErr) { console.error('upload err', upErr); continue; }
       await supabase.from('student_exam_result_photos').insert({
@@ -226,9 +251,9 @@ async function uploadPhotos(supabase: any, photos: any[], student_id: string, re
 
 async function uploadPdfFromDataUrl(supabase: any, pdf: { dataUrl: string; title: string; pageCount?: number }, result_id: string, user_id: string, staff_name: string) {
   try {
-    const match = String(pdf.dataUrl).match(/^data:(.+?);base64,(.+)$/);
-    if (!match) return { ok: false, error: 'invalid pdf data' };
-    const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+    const parsed = parseDataUrl(pdf.dataUrl);
+    if (!parsed) return { ok: false, error: 'invalid pdf data' };
+    const { bytes } = parsed;
     const path = `pdfs/${result_id}/${Date.now()}.pdf`;
     const { error } = await supabase.storage.from('exam-results').upload(path, bytes, { contentType: 'application/pdf', upsert: false });
     if (error) return { ok: false, error: error.message };
