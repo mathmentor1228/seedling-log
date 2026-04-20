@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
 import VoiceRecorder, { type RecordedAudio } from '@/components/student/VoiceRecorder';
+import { ExamResultSubmitCard } from '@/components/student/ExamResultSubmitCard';
 
 interface HomeworkItem {
   id: string;
@@ -839,6 +840,8 @@ export default function StudentHomework() {
   return (
     <div className="space-y-6 pb-20">
       <h1 className="text-xl font-bold">숙제</h1>
+
+      <ExamResultSubmitCard />
 
       {/* Pending Section */}
       <div className="space-y-3">
