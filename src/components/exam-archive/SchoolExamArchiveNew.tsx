@@ -2,7 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CalendarDays, BookOpen, FileText, Compass, AlertTriangle } from 'lucide-react';
+import { Loader2, CalendarDays, BookOpen, FileText, Compass, AlertTriangle, GraduationCap } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -13,6 +13,7 @@ import { ScheduleTab } from './ScheduleTab';
 import { TextbookTab } from './TextbookTab';
 import { ArchiveTab } from './ArchiveTab';
 import { GuideTab } from './GuideTab';
+import { StudentSubmissionsTab } from './StudentSubmissionsTab';
 import { Button } from '@/components/ui/button';
 
 class ExamArchiveErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -147,7 +148,7 @@ function SchoolExamArchiveInner() {
 
               {/* Tabs */}
               <Tabs defaultValue="schedule">
-                <TabsList className="grid w-full grid-cols-4 h-10">
+                <TabsList className="grid w-full grid-cols-5 h-10">
                   <TabsTrigger value="schedule" className="gap-1.5 text-xs">
                     <CalendarDays className="w-4 h-4" /> 시험/일정
                   </TabsTrigger>
@@ -156,6 +157,9 @@ function SchoolExamArchiveInner() {
                   </TabsTrigger>
                   <TabsTrigger value="archives" className="gap-1.5 text-xs">
                     <FileText className="w-4 h-4" /> 내신 자료
+                  </TabsTrigger>
+                  <TabsTrigger value="submissions" className="gap-1.5 text-xs">
+                    <GraduationCap className="w-4 h-4" /> 학생 제출
                   </TabsTrigger>
                   <TabsTrigger value="guide" className="gap-1.5 text-xs">
                     <Compass className="w-4 h-4" /> 선생님 가이드
@@ -185,6 +189,10 @@ function SchoolExamArchiveInner() {
                     archives={archives}
                     onRefetch={refetch}
                   />
+                </TabsContent>
+
+                <TabsContent value="submissions" className="mt-4">
+                  <StudentSubmissionsTab schoolName={selectedSchool} />
                 </TabsContent>
 
                 <TabsContent value="guide" className="mt-4">
