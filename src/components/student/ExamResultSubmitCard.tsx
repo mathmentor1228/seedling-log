@@ -109,7 +109,7 @@ export function ExamResultSubmitCard() {
         // Detect blur on ORIGINAL before compression
         const blur = await detectBlur(f);
         if (blur.isBlurry) blurryCount++;
-        const compressed = await compressImage(f, 1600, 0.85);
+        const compressed = await compressImage(f, 1600, 1600, 0.85);
         const dataUrl = await new Promise<string>((res, rej) => {
           const reader = new FileReader();
           reader.onload = () => res(reader.result as string);
