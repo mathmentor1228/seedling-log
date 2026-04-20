@@ -83,7 +83,7 @@ export function ExamResultSubmitCard() {
     const newFiles: Array<{ name: string; dataUrl: string }> = [];
     for (const f of Array.from(list).slice(0, 10)) {
       try {
-        const compressed = await compressImage(f, { maxWidth: 1600, quality: 0.82 });
+        const compressed = await compressImage(f, 1600, 0.82);
         const dataUrl = await new Promise<string>((res, rej) => {
           const reader = new FileReader();
           reader.onload = () => res(reader.result as string);
