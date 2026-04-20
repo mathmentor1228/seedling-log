@@ -3319,6 +3319,97 @@ export type Database = {
           },
         ]
       }
+      student_exam_result_photos: {
+        Row: {
+          created_at: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          original_name: string | null
+          result_id: string
+          sort_order: number
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name?: string | null
+          result_id: string
+          sort_order?: number
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          original_name?: string | null
+          result_id?: string
+          sort_order?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_exam_result_photos_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "student_exam_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_exam_results: {
+        Row: {
+          created_at: string
+          exam_date: string | null
+          exam_type: string
+          expected_score: number | null
+          id: string
+          note: string | null
+          school_name: string
+          student_id: string
+          subject: string
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          exam_date?: string | null
+          exam_type?: string
+          expected_score?: number | null
+          id?: string
+          note?: string | null
+          school_name: string
+          student_id: string
+          subject: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          exam_date?: string | null
+          exam_type?: string
+          expected_score?: number | null
+          id?: string
+          note?: string | null
+          school_name?: string
+          student_id?: string
+          subject?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_exam_results_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_group_members: {
         Row: {
           created_at: string
