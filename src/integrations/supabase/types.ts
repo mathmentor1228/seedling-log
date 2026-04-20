@@ -3319,6 +3319,50 @@ export type Database = {
           },
         ]
       }
+      student_exam_result_pdfs: {
+        Row: {
+          display_title: string
+          file_size: number | null
+          generated_at: string
+          generated_by: string | null
+          generated_by_name: string | null
+          id: string
+          page_count: number | null
+          result_id: string
+          storage_path: string
+        }
+        Insert: {
+          display_title: string
+          file_size?: number | null
+          generated_at?: string
+          generated_by?: string | null
+          generated_by_name?: string | null
+          id?: string
+          page_count?: number | null
+          result_id: string
+          storage_path: string
+        }
+        Update: {
+          display_title?: string
+          file_size?: number | null
+          generated_at?: string
+          generated_by?: string | null
+          generated_by_name?: string | null
+          id?: string
+          page_count?: number | null
+          result_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_exam_result_pdfs_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "student_exam_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_exam_result_photos: {
         Row: {
           created_at: string
@@ -3362,43 +3406,70 @@ export type Database = {
       }
       student_exam_results: {
         Row: {
+          actual_score: number | null
           created_at: string
           exam_date: string | null
+          exam_period: string | null
           exam_type: string
+          exam_year: number | null
           expected_score: number | null
           id: string
+          is_staff_upload: boolean
+          locked_at: string | null
+          locked_by: string | null
           note: string | null
           school_name: string
+          score_locked: boolean
           student_id: string
           subject: string
           submitted_at: string
           updated_at: string
+          uploaded_by_staff: string | null
+          uploaded_by_staff_name: string | null
         }
         Insert: {
+          actual_score?: number | null
           created_at?: string
           exam_date?: string | null
+          exam_period?: string | null
           exam_type?: string
+          exam_year?: number | null
           expected_score?: number | null
           id?: string
+          is_staff_upload?: boolean
+          locked_at?: string | null
+          locked_by?: string | null
           note?: string | null
           school_name: string
+          score_locked?: boolean
           student_id: string
           subject: string
           submitted_at?: string
           updated_at?: string
+          uploaded_by_staff?: string | null
+          uploaded_by_staff_name?: string | null
         }
         Update: {
+          actual_score?: number | null
           created_at?: string
           exam_date?: string | null
+          exam_period?: string | null
           exam_type?: string
+          exam_year?: number | null
           expected_score?: number | null
           id?: string
+          is_staff_upload?: boolean
+          locked_at?: string | null
+          locked_by?: string | null
           note?: string | null
           school_name?: string
+          score_locked?: boolean
           student_id?: string
           subject?: string
           submitted_at?: string
           updated_at?: string
+          uploaded_by_staff?: string | null
+          uploaded_by_staff_name?: string | null
         }
         Relationships: [
           {
