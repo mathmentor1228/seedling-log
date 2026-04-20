@@ -21,7 +21,20 @@ const EXAM_TYPES = [
   { value: 'other', label: '기타' },
 ];
 
-const SUBJECTS = ['국어', '영어', '수학', '사회', '과학', '한국사', '기타'];
+// 고등학생용: 수학 세부 과목 분리
+const HIGH_SUBJECTS = [
+  '국어', '영어',
+  '수학-공통수학1', '수학-공통수학2',
+  '수학-대수', '수학-미적분1', '수학-미적분2', '수학-확통', '수학-기하',
+  '사회', '과학', '한국사', '기타',
+];
+// 초/중등용: 단일 수학
+const DEFAULT_SUBJECTS = ['국어', '영어', '수학', '사회', '과학', '한국사', '기타'];
+
+function getSubjectsForStudent(schoolLevel?: string | null): string[] {
+  if (schoolLevel && schoolLevel.startsWith('고')) return HIGH_SUBJECTS;
+  return DEFAULT_SUBJECTS;
+}
 
 interface ExamResult {
   id: string;
@@ -190,7 +203,7 @@ export function ExamResultSubmitCard() {
                     <Select value={subject} onValueChange={setSubject}>
                       <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
                       <SelectContent>
-                        {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        {getSubjectsForStudent((student as any)?.school_level).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
