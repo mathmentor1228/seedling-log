@@ -1,15 +1,20 @@
-// EXAM-RESULT-STAFF-VIEW-V1: Staff tab for reviewing student-submitted exam results
-import { useEffect, useState, useMemo } from 'react';
+// EXAM-RESULT-STAFF-V2: Staff tab — review, edit, lock score, generate PDF, staff upload
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, FileImage, Search, Download, GraduationCap, ChevronDown, ChevronRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Loader2, FileImage, Search, FileText, ChevronDown, ChevronRight, GraduationCap, Lock, Unlock, Pencil, Trash2, Upload, Download, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
+import { generateExamResultPdf, buildPdfTitle } from '@/lib/examResultPdf';
+import { compressImage } from '@/lib/imageCompression';
 
 const EXAM_TYPE_LABELS: Record<string, string> = {
   midterm: '중간고사', final: '기말고사', performance: '수행평가', other: '기타',
@@ -22,6 +27,7 @@ const EXAM_TYPE_COLORS: Record<string, string> = {
 };
 
 interface Photo { id: string; storage_path: string; signedUrl?: string | null; }
+interface PdfRow { id: string; display_title: string; signedUrl?: string | null; generated_at: string; generated_by_name?: string | null; }
 interface Result {
   id: string;
   student_id: string;
@@ -29,19 +35,25 @@ interface Result {
   subject: string;
   exam_type: string;
   expected_score: number | null;
+  actual_score: number | null;
+  score_locked: boolean;
+  exam_year: number | null;
+  exam_period: string | null;
   note: string | null;
   exam_date: string | null;
   submitted_at: string;
+  is_staff_upload: boolean;
+  uploaded_by_staff_name: string | null;
   student_name?: string;
   student_grade?: string | null;
   photos: Photo[];
+  pdfs: PdfRow[];
 }
 
-interface Props {
-  schoolName: string;
-}
+interface Props { schoolName: string; }
 
 export function StudentSubmissionsTab({ schoolName }: Props) {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState<Result[]>([]);
   const [search, setSearch] = useState('');
@@ -49,65 +61,71 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [previewPhotos, setPreviewPhotos] = useState<Photo[] | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [editTarget, setEditTarget] = useState<Result | null>(null);
+  const [lockTarget, setLockTarget] = useState<Result | null>(null);
+  const [bulkConverting, setBulkConverting] = useState(false);
+  const [staffUploadOpen, setStaffUploadOpen] = useState(false);
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const { data: rows, error } = await supabase
-          .from('student_exam_results')
-          .select('*, student_exam_result_photos(id, storage_path, sort_order)')
-          .eq('school_name', schoolName)
-          .order('submitted_at', { ascending: false });
-        if (error) throw error;
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: rows, error } = await supabase
+        .from('student_exam_results')
+        .select('*, student_exam_result_photos(id, storage_path, sort_order), student_exam_result_pdfs(id, storage_path, display_title, generated_at, generated_by_name)')
+        .eq('school_name', schoolName)
+        .order('submitted_at', { ascending: false });
+      if (error) throw error;
 
-        const studentIds = Array.from(new Set((rows || []).map((r: any) => r.student_id)));
-        const { data: students } = studentIds.length > 0
-          ? await supabase.from('students').select('id, name, grade').in('id', studentIds)
-          : { data: [] as any[] };
-        const studentMap = new Map((students || []).map((s: any) => [s.id, s]));
+      const studentIds = Array.from(new Set((rows || []).map((r: any) => r.student_id)));
+      const { data: students } = studentIds.length > 0
+        ? await supabase.from('students').select('id, name, grade').in('id', studentIds)
+        : { data: [] as any[] };
+      const studentMap = new Map((students || []).map((s: any) => [s.id, s]));
 
-        const enriched = await Promise.all((rows || []).map(async (r: any) => {
-          const photos = await Promise.all((r.student_exam_result_photos || [])
-            .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
-            .map(async (p: any) => {
-              const { data: signed } = await supabase.storage.from('exam-results').createSignedUrl(p.storage_path, 3600);
-              return { ...p, signedUrl: signed?.signedUrl };
-            }));
-          const s = studentMap.get(r.student_id);
-          return {
-            ...r,
-            student_name: s?.name || '알 수 없음',
-            student_grade: s?.grade || null,
-            photos,
-          } as Result;
-        }));
-        if (!cancelled) setResults(enriched);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [schoolName]);
+      const enriched = await Promise.all((rows || []).map(async (r: any) => {
+        const photos = await Promise.all((r.student_exam_result_photos || [])
+          .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
+          .map(async (p: any) => {
+            const { data: signed } = await supabase.storage.from('exam-results').createSignedUrl(p.storage_path, 3600);
+            return { ...p, signedUrl: signed?.signedUrl };
+          }));
+        const pdfs = await Promise.all((r.student_exam_result_pdfs || [])
+          .sort((a: any, b: any) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime())
+          .map(async (p: any) => {
+            const { data: signed } = await supabase.storage.from('exam-results').createSignedUrl(p.storage_path, 3600);
+            return { ...p, signedUrl: signed?.signedUrl };
+          }));
+        const s = studentMap.get(r.student_id);
+        return {
+          ...r,
+          student_name: s?.name || '알 수 없음',
+          student_grade: s?.grade || null,
+          photos, pdfs,
+        } as Result;
+      }));
+      setResults(enriched);
+    } catch (e: any) {
+      toast({ title: '불러오기 실패', description: e?.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [schoolName, toast]);
 
-  const filtered = useMemo(() => {
-    return results.filter(r => {
-      if (examTypeFilter !== 'all' && r.exam_type !== examTypeFilter) return false;
-      if (subjectFilter !== 'all' && r.subject !== subjectFilter) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        if (!r.student_name?.toLowerCase().includes(q) && !r.subject.toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
-  }, [results, search, examTypeFilter, subjectFilter]);
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => results.filter(r => {
+    if (examTypeFilter !== 'all' && r.exam_type !== examTypeFilter) return false;
+    if (subjectFilter !== 'all' && r.subject !== subjectFilter) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      if (!r.student_name?.toLowerCase().includes(q) && !r.subject.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  }), [results, search, examTypeFilter, subjectFilter]);
 
   const subjectOptions = useMemo(() => Array.from(new Set(results.map(r => r.subject))), [results]);
 
-  // Group by student
   const grouped = useMemo(() => {
     const map = new Map<string, Result[]>();
     filtered.forEach(r => {
@@ -122,6 +140,84 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
       items,
     }));
   }, [filtered]);
+
+  const setBusy = (id: string, b: boolean) => setBusyIds(prev => ({ ...prev, [id]: b }));
+
+  const handleConvertToPdf = async (r: Result, silent = false) => {
+    if (!r.photos.length) {
+      if (!silent) toast({ title: '사진이 없어 PDF 변환 불가', variant: 'destructive' });
+      return null;
+    }
+    setBusy(r.id, true);
+    try {
+      const urls = r.photos.map(p => p.signedUrl).filter(Boolean) as string[];
+      const { blob, title } = await generateExamResultPdf({
+        studentName: r.student_name || '학생',
+        schoolName: r.school_name,
+        examYear: r.exam_year,
+        examDate: r.exam_date,
+        submittedAt: r.submitted_at,
+        examType: r.exam_type,
+        examPeriod: r.exam_period,
+        subject: r.subject,
+        imageUrls: urls,
+      });
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result as string);
+        reader.onerror = () => rej(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      const { data, error } = await supabase.functions.invoke('student-exam-results', {
+        body: { action: 'register_pdf', result_id: r.id, pdf: { dataUrl, title, pageCount: urls.length } },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (!silent) toast({ title: 'PDF 생성 완료', description: title });
+      return { title, signedUrl: data.signedUrl as string };
+    } catch (e: any) {
+      if (!silent) toast({ title: 'PDF 변환 실패', description: e?.message, variant: 'destructive' });
+      return null;
+    } finally {
+      setBusy(r.id, false);
+    }
+  };
+
+  const handleBulkConvert = async () => {
+    const targets = filtered.filter(r => r.photos.length > 0 && r.pdfs.length === 0);
+    if (targets.length === 0) {
+      toast({ title: '변환할 항목이 없습니다', description: 'PDF가 아직 없는 사진 제출본만 일괄 변환됩니다.' });
+      return;
+    }
+    if (!confirm(`${targets.length}건을 일괄 PDF 변환할까요?`)) return;
+    setBulkConverting(true);
+    let ok = 0, fail = 0;
+    for (const r of targets) {
+      const res = await handleConvertToPdf(r, true);
+      if (res) ok++; else fail++;
+    }
+    setBulkConverting(false);
+    toast({ title: '일괄 변환 완료', description: `성공 ${ok}건 / 실패 ${fail}건` });
+    load();
+  };
+
+  const handleDeletePdf = async (pdfId: string) => {
+    if (!confirm('이 PDF를 삭제할까요?')) return;
+    const { error } = await supabase.functions.invoke('student-exam-results', {
+      body: { action: 'delete_pdf', pdf_id: pdfId },
+    });
+    if (error) toast({ title: '삭제 실패', variant: 'destructive' });
+    else { toast({ title: 'PDF 삭제됨' }); load(); }
+  };
+
+  const handleDelete = async (r: Result) => {
+    if (!confirm(`${r.student_name} ${r.subject} 제출본을 삭제할까요?`)) return;
+    const { error } = await supabase.functions.invoke('student-exam-results', {
+      body: { action: 'staff_delete', result_id: r.id },
+    });
+    if (error) toast({ title: '삭제 실패', variant: 'destructive' });
+    else { toast({ title: '삭제됨' }); load(); }
+  };
 
   return (
     <div className="space-y-3">
@@ -146,6 +242,13 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
             {subjectOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setStaffUploadOpen(true)}>
+          <Plus className="w-3.5 h-3.5" /> 직접 업로드
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleBulkConvert} disabled={bulkConverting}>
+          {bulkConverting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+          일괄 PDF 변환
+        </Button>
         <span className="text-xs text-muted-foreground ml-auto">총 {filtered.length}건 / 학생 {grouped.length}명</span>
       </div>
 
@@ -161,7 +264,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
       ) : (
         <div className="space-y-2">
           {grouped.map(g => {
-            const isOpen = expanded[g.student_id] !== false; // default open
+            const isOpen = expanded[g.student_id] !== false;
             return (
               <Card key={g.student_id}>
                 <CardContent className="p-3">
@@ -206,21 +309,52 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                               </Badge>
                               {r.expected_score != null && (
                                 <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                                  {r.score_locked && <Lock className="w-2.5 h-2.5 mr-0.5 inline" />}
                                   예상 {r.expected_score}점
                                 </Badge>
+                              )}
+                              {r.actual_score != null && (
+                                <Badge className="text-[10px] h-4 px-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-0">
+                                  실제 {r.actual_score}점
+                                </Badge>
+                              )}
+                              {r.is_staff_upload && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1.5">교직원 업로드</Badge>
                               )}
                               <span className="text-[10px] text-muted-foreground ml-auto">
                                 {format(new Date(r.submitted_at), 'M/d HH:mm', { locale: ko })}
                               </span>
                             </div>
                             {r.exam_date && (
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                시험일: {format(new Date(r.exam_date), 'yyyy-MM-dd')}
-                              </p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">시험일: {format(new Date(r.exam_date), 'yyyy-MM-dd')}</p>
                             )}
-                            {r.note && (
-                              <p className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{r.note}</p>
+                            {r.note && <p className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{r.note}</p>}
+                            {r.pdfs.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {r.pdfs.map(p => (
+                                  <span key={p.id} className="inline-flex items-center gap-1 text-[10px] bg-muted/80 rounded px-1.5 py-0.5">
+                                    <FileText className="w-3 h-3" />
+                                    <a href={p.signedUrl || '#'} target="_blank" rel="noreferrer" className="underline truncate max-w-[200px]">{p.display_title}</a>
+                                    <button onClick={() => handleDeletePdf(p.id)} className="text-destructive hover:opacity-70"><Trash2 className="w-2.5 h-2.5" /></button>
+                                  </span>
+                                ))}
+                              </div>
                             )}
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => handleConvertToPdf(r)} disabled={busyIds[r.id] || r.photos.length === 0}>
+                                {busyIds[r.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} PDF 변환
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => setLockTarget(r)}>
+                                {r.score_locked ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                {r.score_locked ? '잠금해제/실제점수' : '점수 확정'}
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => setEditTarget(r)}>
+                                <Pencil className="w-3 h-3" /> 수정
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] gap-1 text-destructive hover:text-destructive" onClick={() => handleDelete(r)}>
+                                <Trash2 className="w-3 h-3" /> 삭제
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -233,6 +367,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
         </div>
       )}
 
+      {/* Photo preview */}
       <Dialog open={!!previewPhotos} onOpenChange={() => setPreviewPhotos(null)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>시험지 사진</DialogTitle></DialogHeader>
@@ -247,6 +382,276 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {editTarget && <EditDialog result={editTarget} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); load(); }} />}
+      {lockTarget && <LockDialog result={lockTarget} onClose={() => setLockTarget(null)} onSaved={() => { setLockTarget(null); load(); }} />}
+      {staffUploadOpen && <StaffUploadDialog defaultSchool={schoolName} onClose={() => setStaffUploadOpen(false)} onSaved={() => { setStaffUploadOpen(false); load(); }} />}
     </div>
+  );
+}
+
+// ---- Edit dialog ----
+function EditDialog({ result, onClose, onSaved }: { result: Result; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [school, setSchool] = useState(result.school_name);
+  const [subject, setSubject] = useState(result.subject);
+  const [examType, setExamType] = useState(result.exam_type);
+  const [score, setScore] = useState(result.expected_score?.toString() || '');
+  const [examDate, setExamDate] = useState(result.exam_date || '');
+  const [note, setNote] = useState(result.note || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const { data, error } = await supabase.functions.invoke('student-exam-results', {
+      body: {
+        action: 'staff_update', result_id: result.id,
+        patch: {
+          school_name: school, subject, exam_type: examType,
+          expected_score: score === '' ? null : Number(score),
+          exam_date: examDate || null, note: note || null,
+        },
+      },
+    });
+    setSaving(false);
+    if (error || data?.error) {
+      toast({ title: '저장 실패', description: error?.message || data?.error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: '수정되었습니다' });
+    onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>제출 정보 수정</DialogTitle></DialogHeader>
+        <div className="space-y-2">
+          <div><Label className="text-xs">학교명</Label><Input value={school} onChange={e => setSchool(e.target.value)} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label className="text-xs">과목</Label><Input value={subject} onChange={e => setSubject(e.target.value)} /></div>
+            <div><Label className="text-xs">시험 종류</Label>
+              <Select value={examType} onValueChange={setExamType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(EXAM_TYPE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label className="text-xs">예상 점수</Label><Input type="number" min={0} max={100} step={0.5} value={score} onChange={e => setScore(e.target.value)} /></div>
+            <div><Label className="text-xs">시험일</Label><Input type="date" value={examDate} onChange={e => setExamDate(e.target.value)} /></div>
+          </div>
+          <div><Label className="text-xs">메모</Label><Textarea rows={2} value={note} onChange={e => setNote(e.target.value)} /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>취소</Button>
+          <Button onClick={save} disabled={saving}>{saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}저장</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---- Lock score dialog ----
+function LockDialog({ result, onClose, onSaved }: { result: Result; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [actual, setActual] = useState(result.actual_score?.toString() || '');
+  const [busy, setBusy] = useState(false);
+
+  const lock = async () => {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke('student-exam-results', {
+      body: { action: 'lock_score', result_id: result.id, actual_score: actual === '' ? null : Number(actual) },
+    });
+    setBusy(false);
+    if (error || data?.error) { toast({ title: '확정 실패', description: error?.message || data?.error, variant: 'destructive' }); return; }
+    toast({ title: '점수 확정 완료' });
+    onSaved();
+  };
+  const unlock = async () => {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke('student-exam-results', { body: { action: 'unlock_score', result_id: result.id } });
+    setBusy(false);
+    if (error || data?.error) { toast({ title: '해제 실패', variant: 'destructive' }); return; }
+    toast({ title: '잠금 해제됨' });
+    onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>{result.score_locked ? '실제점수 입력 / 잠금 해제' : '예상점수 확정'}</DialogTitle></DialogHeader>
+        <div className="space-y-2 text-sm">
+          <p className="text-xs text-muted-foreground">{result.student_name} · {result.subject}</p>
+          <p className="text-xs">예상점수: <b>{result.expected_score ?? '-'}</b> 점</p>
+          <div>
+            <Label className="text-xs">실제 점수 (선택)</Label>
+            <Input type="number" min={0} max={100} step={0.5} value={actual} onChange={e => setActual(e.target.value)} placeholder="예: 92" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">확정 시 학생은 해당 항목을 삭제/수정할 수 없습니다.</p>
+        </div>
+        <DialogFooter className="gap-1">
+          {result.score_locked && <Button variant="outline" onClick={unlock} disabled={busy}>잠금 해제</Button>}
+          <Button variant="ghost" onClick={onClose}>닫기</Button>
+          <Button onClick={lock} disabled={busy}>{busy && <Loader2 className="w-4 h-4 animate-spin mr-1" />}{result.score_locked ? '실제점수 저장' : '확정'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---- Staff upload dialog ----
+function StaffUploadDialog({ defaultSchool, onClose, onSaved }: { defaultSchool: string; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [students, setStudents] = useState<any[]>([]);
+  const [picked, setPicked] = useState<any | null>(null);
+  const [school, setSchool] = useState(defaultSchool);
+  const [subject, setSubject] = useState('');
+  const [examType, setExamType] = useState('midterm');
+  const [score, setScore] = useState('');
+  const [examDate, setExamDate] = useState('');
+  const [note, setNote] = useState('');
+  const [photos, setPhotos] = useState<Array<{ name: string; dataUrl: string }>>([]);
+  const [pdfFile, setPdfFile] = useState<{ name: string; dataUrl: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const doSearch = async () => {
+    if (!query.trim()) return;
+    setSearching(true);
+    const { data, error } = await supabase.functions.invoke('student-exam-results', {
+      body: { action: 'staff_search_students', query: query.trim() },
+    });
+    setSearching(false);
+    if (error) { toast({ title: '검색 실패', variant: 'destructive' }); return; }
+    setStudents(data?.students || []);
+  };
+
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files; if (!list?.length) return;
+    const next: Array<{ name: string; dataUrl: string }> = [];
+    for (const f of Array.from(list).slice(0, 15)) {
+      try {
+        const compressed = await compressImage(f, 1600, 0.85);
+        const dataUrl = await new Promise<string>((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result as string);
+          reader.onerror = () => rej(reader.error);
+          reader.readAsDataURL(compressed);
+        });
+        next.push({ name: f.name, dataUrl });
+      } catch (err) { console.error(err); }
+    }
+    setPhotos(prev => [...prev, ...next].slice(0, 15));
+    e.target.value = '';
+  };
+
+  const handlePdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    if (f.type !== 'application/pdf') { toast({ title: 'PDF 파일만 가능', variant: 'destructive' }); return; }
+    const dataUrl = await new Promise<string>((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result as string);
+      reader.onerror = () => rej(reader.error);
+      reader.readAsDataURL(f);
+    });
+    setPdfFile({ name: f.name, dataUrl });
+    e.target.value = '';
+  };
+
+  const submit = async () => {
+    if (!picked) { toast({ title: '학생을 먼저 선택해주세요', variant: 'destructive' }); return; }
+    if (!school || !subject) { toast({ title: '학교/과목 필수', variant: 'destructive' }); return; }
+    if (photos.length === 0 && !pdfFile) { toast({ title: '사진 또는 PDF 1개 이상 첨부', variant: 'destructive' }); return; }
+    setSaving(true);
+    let pdfPayload: any = null;
+    if (pdfFile) {
+      const title = buildPdfTitle({
+        studentName: picked.name, schoolName: school, examDate: examDate || null,
+        submittedAt: new Date().toISOString(), examType, examPeriod: null, subject, imageUrls: [],
+      });
+      pdfPayload = { dataUrl: pdfFile.dataUrl, title };
+    }
+    const { data, error } = await supabase.functions.invoke('student-exam-results', {
+      body: {
+        action: 'staff_create', student_id: picked.id, school_name: school, subject, exam_type: examType,
+        expected_score: score, exam_date: examDate || null, note, photos, pdf: pdfPayload,
+      },
+    });
+    setSaving(false);
+    if (error || data?.error) { toast({ title: '업로드 실패', description: error?.message || data?.error, variant: 'destructive' }); return; }
+    toast({ title: '업로드 완료' });
+    onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>교직원 직접 업로드</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          {!picked ? (
+            <div className="space-y-2">
+              <Label className="text-xs">학생 검색 (이름 또는 학교)</Label>
+              <div className="flex gap-1">
+                <Input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} placeholder="예: 김민수" />
+                <Button onClick={doSearch} disabled={searching} size="sm">{searching ? <Loader2 className="w-4 h-4 animate-spin" /> : '검색'}</Button>
+              </div>
+              <div className="max-h-48 overflow-y-auto border rounded">
+                {students.map(s => (
+                  <button key={s.id} onClick={() => { setPicked(s); if (s.school) setSchool(s.school); }}
+                    className="w-full text-left px-2 py-1.5 hover:bg-muted text-xs flex items-center gap-2">
+                    <span className="font-medium">{s.name}</span>
+                    <span className="text-muted-foreground">{s.school || '-'}</span>
+                    {s.grade && <Badge variant="outline" className="text-[10px] h-4">{s.grade}학년</Badge>}
+                  </button>
+                ))}
+                {students.length === 0 && <p className="text-xs text-muted-foreground p-2">검색 결과 없음</p>}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between bg-muted/50 p-2 rounded">
+                <span className="text-sm font-medium">{picked.name} <span className="text-xs text-muted-foreground">({picked.school})</span></span>
+                <Button size="sm" variant="ghost" onClick={() => setPicked(null)}>변경</Button>
+              </div>
+              <div><Label className="text-xs">학교명</Label><Input value={school} onChange={e => setSchool(e.target.value)} /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">과목</Label><Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="예: 수학-미적분1" /></div>
+                <div><Label className="text-xs">시험 종류</Label>
+                  <Select value={examType} onValueChange={setExamType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(EXAM_TYPE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-xs">예상 점수</Label><Input type="number" min={0} max={100} value={score} onChange={e => setScore(e.target.value)} /></div>
+                <div><Label className="text-xs">시험일</Label><Input type="date" value={examDate} onChange={e => setExamDate(e.target.value)} /></div>
+              </div>
+              <div><Label className="text-xs">메모</Label><Textarea rows={2} value={note} onChange={e => setNote(e.target.value)} /></div>
+              <div>
+                <Label className="text-xs">시험지 사진 (최대 15장)</Label>
+                <Input type="file" accept="image/*" multiple onChange={handleFiles} />
+                {photos.length > 0 && <p className="text-[10px] text-muted-foreground mt-1">선택됨: {photos.length}장</p>}
+              </div>
+              <div>
+                <Label className="text-xs">또는 PDF 파일 직접 업로드</Label>
+                <Input type="file" accept="application/pdf" onChange={handlePdf} />
+                {pdfFile && <p className="text-[10px] text-muted-foreground mt-1">📄 {pdfFile.name}</p>}
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>취소</Button>
+          <Button onClick={submit} disabled={saving || !picked}>{saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}업로드</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,4 +1,4 @@
-// STUDENT-EXAM-RESULT-V1: Student card to upload exam result photos with metadata
+// STUDENT-EXAM-RESULT-V2: Student card with expanded subjects + blur detection + batch capture
 import { useState, useEffect, useCallback } from 'react';
 import { useStudentAuth } from '@/lib/studentAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { FileImage, Loader2, Plus, Trash2, Upload, X, GraduationCap } from 'lucide-react';
+import { FileImage, Loader2, Plus, Trash2, Upload, X, GraduationCap, AlertTriangle, Camera, Lock } from 'lucide-react';
 import { compressImage } from '@/lib/imageCompression';
+import { detectBlur } from '@/lib/imageBlurDetect';
 
 const EXAM_TYPES = [
   { value: 'midterm', label: '중간고사' },
@@ -21,14 +22,15 @@ const EXAM_TYPES = [
   { value: 'other', label: '기타' },
 ];
 
-// 고등학생용: 수학 세부 과목 분리
+// 고등학생: 과목 세분화 (수학/국어/영어/과학)
 const HIGH_SUBJECTS = [
-  '국어', '영어',
+  '국어-공통국어', '국어-문학', '국어-화법과작문',
+  '영어-공통영어', '영어-영어독해와작문',
   '수학-공통수학1', '수학-공통수학2',
   '수학-대수', '수학-미적분1', '수학-미적분2', '수학-확통', '수학-기하',
-  '사회', '과학', '한국사', '기타',
+  '과학-통합과학', '과학-생명', '과학-화학', '과학-물리', '과학-지구과학',
+  '사회', '한국사', '기타',
 ];
-// 초/중등용: 단일 수학
 const DEFAULT_SUBJECTS = ['국어', '영어', '수학', '사회', '과학', '한국사', '기타'];
 
 function getSubjectsForStudent(schoolLevel?: string | null): string[] {
@@ -42,10 +44,19 @@ interface ExamResult {
   subject: string;
   exam_type: string;
   expected_score: number | null;
+  actual_score?: number | null;
+  score_locked?: boolean;
   note: string | null;
   exam_date: string | null;
   submitted_at: string;
   photos: Array<{ id: string; signedUrl: string | null }>;
+}
+
+interface FileItem {
+  name: string;
+  dataUrl: string;
+  blurVariance: number;
+  isBlurry: boolean;
 }
 
 export function ExamResultSubmitCard() {
@@ -55,15 +66,15 @@ export function ExamResultSubmitCard() {
   const [results, setResults] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
-  // Form state
   const [school, setSchool] = useState('');
   const [subject, setSubject] = useState('');
   const [examType, setExamType] = useState('midterm');
   const [score, setScore] = useState('');
   const [note, setNote] = useState('');
   const [examDate, setExamDate] = useState('');
-  const [files, setFiles] = useState<Array<{ name: string; dataUrl: string }>>([]);
+  const [files, setFiles] = useState<FileItem[]>([]);
 
   const fetchResults = useCallback(async () => {
     if (!student) return;
@@ -82,10 +93,7 @@ export function ExamResultSubmitCard() {
     }
   }, [student]);
 
-  useEffect(() => {
-    fetchResults();
-  }, [fetchResults]);
-
+  useEffect(() => { fetchResults(); }, [fetchResults]);
   useEffect(() => {
     if (open && student?.school) setSchool(student.school);
   }, [open, student]);
@@ -93,23 +101,36 @@ export function ExamResultSubmitCard() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files;
     if (!list || list.length === 0) return;
-    const newFiles: Array<{ name: string; dataUrl: string }> = [];
-    for (const f of Array.from(list).slice(0, 10)) {
+    setAnalyzing(true);
+    const newFiles: FileItem[] = [];
+    let blurryCount = 0;
+    for (const f of Array.from(list).slice(0, 15)) {
       try {
-        const compressed = await compressImage(f, 1600, 0.82);
+        // Detect blur on ORIGINAL before compression
+        const blur = await detectBlur(f);
+        if (blur.isBlurry) blurryCount++;
+        const compressed = await compressImage(f, 1600, 0.85);
         const dataUrl = await new Promise<string>((res, rej) => {
           const reader = new FileReader();
           reader.onload = () => res(reader.result as string);
           reader.onerror = () => rej(reader.error);
           reader.readAsDataURL(compressed);
         });
-        newFiles.push({ name: f.name, dataUrl });
+        newFiles.push({ name: f.name, dataUrl, blurVariance: blur.variance, isBlurry: blur.isBlurry });
       } catch (err) {
-        console.error('compress err', err);
+        console.error('process err', err);
       }
     }
-    setFiles(prev => [...prev, ...newFiles].slice(0, 10));
+    setFiles(prev => [...prev, ...newFiles].slice(0, 15));
+    setAnalyzing(false);
     e.target.value = '';
+    if (blurryCount > 0) {
+      toast({
+        title: `흔들림 감지: ${blurryCount}장`,
+        description: '빨간색 표시된 사진은 다시 또렷하게 찍어 교체해주세요.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleSubmit = async () => {
@@ -117,6 +138,12 @@ export function ExamResultSubmitCard() {
     if (!school.trim()) { toast({ title: '학교명을 입력해주세요', variant: 'destructive' }); return; }
     if (!subject) { toast({ title: '과목을 선택해주세요', variant: 'destructive' }); return; }
     if (files.length === 0) { toast({ title: '시험지 사진을 1장 이상 업로드해주세요', variant: 'destructive' }); return; }
+
+    const blurry = files.filter(f => f.isBlurry);
+    if (blurry.length > 0) {
+      const ok = confirm(`흔들린 사진이 ${blurry.length}장 있습니다.\n그래도 제출하시겠습니까? (선생님이 확인하기 어려울 수 있어요)`);
+      if (!ok) return;
+    }
 
     setSubmitting(true);
     try {
@@ -131,19 +158,13 @@ export function ExamResultSubmitCard() {
           expected_score: score,
           note,
           exam_date: examDate || null,
-          photos: files,
+          photos: files.map(f => ({ name: f.name, dataUrl: f.dataUrl })),
         },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast({ title: '제출 완료', description: '담당 선생님께 자료가 전달되었습니다.' });
-      // Reset
-      setSubject('');
-      setExamType('midterm');
-      setScore('');
-      setNote('');
-      setExamDate('');
-      setFiles([]);
+      setSubject(''); setExamType('midterm'); setScore(''); setNote(''); setExamDate(''); setFiles([]);
       setOpen(false);
       fetchResults();
     } catch (e: any) {
@@ -192,6 +213,17 @@ export function ExamResultSubmitCard() {
               <DialogHeader>
                 <DialogTitle>내신 시험 결과 제출</DialogTitle>
               </DialogHeader>
+
+              {/* Camera guide banner */}
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-[11px] text-amber-700 dark:text-amber-400 space-y-0.5">
+                <div className="flex items-center gap-1 font-semibold">
+                  <Camera className="w-3.5 h-3.5" /> 사진 촬영 가이드
+                </div>
+                <p>• 시험지 전체가 화면에 다 들어오게 찍어주세요</p>
+                <p>• <b>흔들림 없이</b> 또렷하게 (자동 검사로 흔들림 감지 시 알려드려요)</p>
+                <p>• 페이지마다 따로 찍어 한 번에 모아 올려도 됩니다 (최대 15장)</p>
+              </div>
+
               <div className="space-y-3 pt-2">
                 <div>
                   <Label className="text-xs">학교명 *</Label>
@@ -234,13 +266,23 @@ export function ExamResultSubmitCard() {
                     placeholder="어려웠던 단원, 컨디션 등" />
                 </div>
                 <div>
-                  <Label className="text-xs">시험지 사진 * (최대 10장)</Label>
-                  <Input type="file" accept="image/*" multiple onChange={handleFileChange} />
+                  <Label className="text-xs">시험지 사진 * (최대 15장, 한 번에 모아 선택 가능)</Label>
+                  <Input type="file" accept="image/*" multiple capture="environment" onChange={handleFileChange} disabled={analyzing} />
+                  {analyzing && (
+                    <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> 흔들림 검사 중...
+                    </p>
+                  )}
                   {files.length > 0 && (
                     <div className="grid grid-cols-3 gap-2 mt-2">
                       {files.map((f, i) => (
-                        <div key={i} className="relative aspect-square rounded border overflow-hidden bg-muted">
+                        <div key={i} className={`relative aspect-square rounded border-2 overflow-hidden ${f.isBlurry ? 'border-destructive' : 'border-border'} bg-muted`}>
                           <img src={f.dataUrl} alt={f.name} className="w-full h-full object-cover" />
+                          {f.isBlurry && (
+                            <div className="absolute inset-x-0 bottom-0 bg-destructive/90 text-destructive-foreground text-[9px] py-0.5 px-1 flex items-center gap-0.5 justify-center font-semibold">
+                              <AlertTriangle className="w-2.5 h-2.5" /> 흔들림! 다시
+                            </div>
+                          )}
                           <button type="button" onClick={() => setFiles(files.filter((_, idx) => idx !== i))}
                             className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-0.5">
                             <X className="w-3 h-3" />
@@ -250,7 +292,7 @@ export function ExamResultSubmitCard() {
                     </div>
                   )}
                 </div>
-                <Button onClick={handleSubmit} disabled={submitting} className="w-full">
+                <Button onClick={handleSubmit} disabled={submitting || analyzing} className="w-full">
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
                   제출하기
                 </Button>
@@ -283,8 +325,14 @@ export function ExamResultSubmitCard() {
                       {EXAM_TYPES.find(t => t.value === r.exam_type)?.label}
                     </Badge>
                     {r.expected_score != null && (
-                      <Badge className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-0">
+                      <Badge className={`text-[10px] px-1.5 py-0 h-4 border-0 ${r.score_locked ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>
+                        {r.score_locked && <Lock className="w-2.5 h-2.5 mr-0.5 inline" />}
                         예상 {r.expected_score}점
+                      </Badge>
+                    )}
+                    {r.actual_score != null && (
+                      <Badge className="text-[10px] px-1.5 py-0 h-4 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-0">
+                        실제 {r.actual_score}점
                       </Badge>
                     )}
                   </div>
@@ -293,9 +341,11 @@ export function ExamResultSubmitCard() {
                     {r.photos.length > 1 && ` · 사진 ${r.photos.length}장`}
                   </p>
                 </div>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(r.id)}>
-                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                </Button>
+                {!r.score_locked && (
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDelete(r.id)}>
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                  </Button>
+                )}
               </div>
             ))}
           </div>
