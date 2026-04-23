@@ -3315,6 +3315,8 @@ export type Database = {
           id: string
           last_login_at: string | null
           pin_hash: string
+          session_expires_at: string | null
+          session_token: string | null
           student_id: string
           updated_at: string
         }
@@ -3323,6 +3325,8 @@ export type Database = {
           id?: string
           last_login_at?: string | null
           pin_hash: string
+          session_expires_at?: string | null
+          session_token?: string | null
           student_id: string
           updated_at?: string
         }
@@ -3331,6 +3335,8 @@ export type Database = {
           id?: string
           last_login_at?: string | null
           pin_hash?: string
+          session_expires_at?: string | null
+          session_token?: string | null
           student_id?: string
           updated_at?: string
         }
