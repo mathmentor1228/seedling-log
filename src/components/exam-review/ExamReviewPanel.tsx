@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { ExamTemplateSetup } from '@/components/exam/ExamTemplateSetup';
 import {
@@ -180,13 +179,13 @@ export function ExamReviewPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
   const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [overallComment, setOverallComment] = useState('');
-  const [itemCount, setItemCount] = useState(20);
-  const [itemReviews, setItemReviews] = useState<ItemReviewDraft[]>([]);
+  const [itemReviews, setItemReviews] = useState<OverlayReviewItem[]>([]);
+  const [template, setTemplate] = useState<OverlayTemplateData | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
 
   const loadResults = useCallback(async () => {
     setLoading(true);
@@ -258,7 +257,7 @@ export function ExamReviewPanel() {
     try {
       const { data: reviews, error: reviewError } = await supabase
         .from('exam_reviews')
-        .select('id, overall_comment, created_at')
+        .select('id, overall_comment, created_at, template_id, total_score, earned_score')
         .eq('result_id', resultId)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -270,32 +269,75 @@ export function ExamReviewPanel() {
       setOverallComment(currentReview?.overall_comment ?? '');
 
       if (!currentReview) {
-        setItemCount(20);
-        setItemReviews(createItemDrafts(20));
+        setItemReviews([]);
         return;
       }
 
       const { data: items, error: itemError } = await supabase
         .from('exam_item_reviews')
-        .select('id, item_number, result, error_types, item_comment')
+        .select('id, item_number, result, error_types, item_comment, score_earned, is_essay, custom_reason, overlay_x, overlay_y, page_number')
         .eq('review_id', currentReview.id)
         .order('item_number', { ascending: true });
 
       if (itemError) throw itemError;
 
-      const drafts: ItemReviewDraft[] = (items ?? []).map((item) => ({
+      const drafts: OverlayReviewItem[] = (items ?? []).map((item) => ({
         id: item.id,
         item_number: item.item_number,
         result: (item.result ?? '') as ItemResult,
         error_types: Array.isArray(item.error_types) ? item.error_types.filter((value): value is string => typeof value === 'string') : [],
         item_comment: item.item_comment ?? '',
+        score_earned: item.score_earned ?? 0,
+        is_essay: item.is_essay ?? false,
+        custom_reason: item.custom_reason ?? '',
+        overlay_x: item.overlay_x ?? null,
+        overlay_y: item.overlay_y ?? null,
+        page_number: item.page_number ?? null,
       }));
 
-      const nextCount = Math.max(20, drafts.length || 0);
-      setItemCount(nextCount);
-      setItemReviews(createItemDrafts(nextCount, drafts));
+      setItemReviews(drafts);
     } catch (error: any) {
       toast({ title: '리뷰 조회 실패', description: error.message, variant: 'destructive' });
+    }
+  }, [toast]);
+
+  const loadTemplate = useCallback(async (row: ExamResultRow | null) => {
+    if (!row?.students?.grade || !row.exam_year || !row.exam_period) {
+      setTemplate(null);
+      return;
+    }
+
+    setTemplateLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('exam_score_templates')
+        .select('id, total_items, items, error_types')
+        .eq('school_name', row.school_name)
+        .eq('subject', row.subject)
+        .eq('grade', row.students.grade)
+        .eq('exam_type', row.exam_type)
+        .eq('exam_year', row.exam_year)
+        .eq('exam_period', row.exam_period)
+        .maybeSingle();
+
+      if (error) throw error;
+      const templateRow = (data ?? null) as ScoreTemplateRow | null;
+      if (!templateRow) {
+        setTemplate(null);
+        return;
+      }
+
+      setTemplate({
+        id: templateRow.id,
+        total_items: templateRow.total_items,
+        items: normalizeTemplateItems(templateRow.items, templateRow.total_items || DEFAULT_TOTAL_ITEMS),
+        error_types: normalizeErrorTypes(templateRow.error_types),
+      });
+    } catch (error: any) {
+      setTemplate(null);
+      toast({ title: '템플릿 조회 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setTemplateLoading(false);
     }
   }, [toast]);
 
@@ -319,41 +361,14 @@ export function ExamReviewPanel() {
     if (!selectedId) {
       setReviewId(null);
       setOverallComment('');
-      setItemCount(20);
-      setItemReviews(createItemDrafts(20));
+      setItemReviews([]);
+      setTemplate(null);
       return;
     }
     void markInReview(selectedId);
     void loadReviewDetail(selectedId);
-  }, [loadReviewDetail, markInReview, selectedId]);
-
-  const handleItemCountChange = (value: number) => {
-    const safeCount = Math.max(1, Number.isFinite(value) ? value : 20);
-    setItemCount(safeCount);
-    setItemReviews((prev) => createItemDrafts(safeCount, prev));
-  };
-
-  const setItemResult = (itemNumber: number, value: Exclude<ItemResult, ''>) => {
-    setItemReviews((prev) => prev.map((item) => {
-      if (item.item_number !== itemNumber) return item;
-      const nextValue: ItemResult = item.result === value ? '' : value;
-      return {
-        ...item,
-        result: nextValue,
-        error_types: nextValue === 'correct' ? [] : item.error_types,
-      };
-    }));
-  };
-
-  const toggleError = (itemNumber: number, errorType: string, checked: boolean) => {
-    setItemReviews((prev) => prev.map((item) => {
-      if (item.item_number !== itemNumber) return item;
-      const error_types = checked
-        ? Array.from(new Set([...item.error_types, errorType]))
-        : item.error_types.filter((value) => value !== errorType);
-      return { ...item, error_types };
-    }));
-  };
+    void loadTemplate(selectedRow);
+  }, [loadReviewDetail, loadTemplate, markInReview, selectedId, selectedRow]);
 
   const persistReview = useCallback(async (markDone: boolean) => {
     if (!selectedRow || !user) return false;
