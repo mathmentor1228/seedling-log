@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ExamTemplateSetup } from '@/components/exam/ExamTemplateSetup';
-import { PhotoThumb } from '@/components/exam-review/PhotoThumb';
+import {
+  OverlayGradingPanel,
+  type OverlayPhoto,
+  type OverlayReviewItem,
+  type OverlayTemplateData,
+  type OverlayTemplateItem,
+} from '@/components/exam-review/OverlayGradingPanel';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
 type ItemResult = 'correct' | 'wrong' | 'partial' | '';
@@ -24,6 +27,9 @@ interface PhotoRow {
 interface ReviewSummary {
   id: string;
   overall_comment: string | null;
+  total_score?: number | null;
+  earned_score?: number | null;
+  template_id?: string | null;
 }
 
 interface ExamResultRow {
@@ -40,17 +46,19 @@ interface ExamResultRow {
   school_name: string;
   exam_date: string | null;
   students: { name: string; grade: string | null } | null;
-  student_exam_result_photos: PhotoRow[] | null;
+  student_exam_result_photos: OverlayPhoto[] | null;
   exam_reviews: ReviewSummary[] | null;
 }
 
-interface ItemReviewDraft {
-  id?: string;
-  item_number: number;
-  result: ItemResult;
-  error_types: string[];
-  item_comment: string;
+interface ScoreTemplateRow {
+  id: string;
+  total_items: number;
+  items: unknown;
+  error_types: unknown;
 }
+
+const DEFAULT_TOTAL_ITEMS = 20;
+const ALWAYS_INCLUDED_ERROR_TYPE = '기타(직접입력)';
 
 const STATUS_OPTIONS: Array<{ value: 'all' | ReviewStatus; label: string }> = [
   { value: 'all', label: '전체' },
@@ -72,14 +80,33 @@ const EXAM_TYPE_LABELS: Record<string, string> = {
   other: '기타',
 };
 
-const ERROR_TYPES = ['개념이해 부족', '계산실수', '문제이해 오류', '시간부족', '풀이누락', '유형파악 못함'] as const;
+function normalizeTemplateItems(raw: unknown, totalItems: number): OverlayTemplateItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return Array.from({ length: totalItems }, (_, index) => ({
+      no: index + 1,
+      type: '객관식',
+      points: 0,
+      is_essay: false,
+    }));
+  }
 
-function createItemDrafts(count: number, source: ItemReviewDraft[] = []): ItemReviewDraft[] {
-  return Array.from({ length: count }, (_, index) => {
-    const itemNumber = index + 1;
-    const existing = source.find((item) => item.item_number === itemNumber);
-    return existing ?? { item_number: itemNumber, result: '', error_types: [], item_comment: '' };
-  });
+  return raw
+    .map((item, index) => {
+      const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+      const isEssay = source.is_essay === true || source.type === '주관식';
+      return {
+        no: typeof source.no === 'number' && Number.isFinite(source.no) ? source.no : index + 1,
+        type: isEssay ? '주관식' : '객관식',
+        points: typeof source.points === 'number' && Number.isFinite(source.points) ? source.points : 0,
+        is_essay: isEssay,
+      } satisfies OverlayTemplateItem;
+    })
+    .sort((a, b) => a.no - b.no);
+}
+
+function normalizeErrorTypes(raw: unknown) {
+  const values = Array.isArray(raw) ? raw.filter((value): value is string => typeof value === 'string') : [];
+  return Array.from(new Set([...values, ALWAYS_INCLUDED_ERROR_TYPE]));
 }
 
 function SectionTitle({ title }: { title: string }) {
@@ -141,19 +168,6 @@ function getStatusClasses(status: ReviewStatus, selected: boolean) {
     card: 'border border-[hsl(var(--review-done-border))] bg-[hsl(var(--review-done-surface))] opacity-75',
     badge: 'bg-[hsl(var(--review-done-badge))] text-[hsl(var(--review-done-badge-foreground))]',
   };
-}
-
-function getResultButtonClasses(active: boolean, value: Exclude<ItemResult, ''>) {
-  if (!active) {
-    return 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]';
-  }
-  if (value === 'correct') {
-    return 'border-[hsl(var(--review-correct-border))] bg-[hsl(var(--review-correct-surface))] text-[hsl(var(--review-correct-foreground))]';
-  }
-  if (value === 'wrong') {
-    return 'border-[hsl(var(--review-wrong-border))] bg-[hsl(var(--review-wrong-surface))] text-[hsl(var(--review-wrong-foreground))]';
-  }
-  return 'border-[hsl(var(--review-partial-border))] bg-[hsl(var(--review-partial-surface))] text-[hsl(var(--review-partial-foreground))]';
 }
 
 export function ExamReviewPanel() {
