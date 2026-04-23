@@ -12,6 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 const DEFAULT_ERROR_TYPES = ['개념이해 부족', '문제이해 오류', '시간부족', '풀이누락', '유형파악 못함'] as const;
 const ALWAYS_INCLUDED_ERROR_TYPE = '기타(직접입력)';
 const DEFAULT_TOTAL_ITEMS = 20;
+const EXAM_YEAR_OPTIONS = [2025, 2026, 2027] as const;
+const EXAM_TYPE_OPTIONS = ['중간고사', '기말고사'] as const;
 
 type TemplateItemType = '객관식' | '주관식';
 
@@ -73,12 +75,24 @@ function normalizeTemplateItem(raw: unknown, fallbackNo: number): TemplateItem {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const itemType = source.type === '주관식' ? '주관식' : '객관식';
   const isEssay = typeof source.is_essay === 'boolean' ? source.is_essay : itemType === '주관식';
+  const parsedPoints = typeof source.points === 'number' && Number.isFinite(source.points) ? source.points : 0;
   return {
     no: typeof source.no === 'number' && Number.isFinite(source.no) ? source.no : fallbackNo,
     type: isEssay ? '주관식' : itemType,
-    points: typeof source.points === 'number' && Number.isFinite(source.points) ? source.points : 0,
+    points: Math.round(parsedPoints * 100) / 100,
     is_essay: isEssay,
   };
+}
+
+function roundPoints(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function formatPoints(value: number) {
+  if (!Number.isFinite(value)) return '0';
+  const rounded = roundPoints(value);
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(2).replace(/\.0+$/, '').replace(/(\.\d)0$/, '$1');
 }
 
 function normalizeTemplateItems(raw: unknown, fallbackTotal: number = DEFAULT_TOTAL_ITEMS): TemplateItem[] {
@@ -126,15 +140,29 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
   const [items, setItems] = useState<TemplateItem[]>(buildDefaultItems());
   const [selectedDefaultErrors, setSelectedDefaultErrors] = useState<string[]>([...DEFAULT_ERROR_TYPES]);
   const [customErrorTypes, setCustomErrorTypes] = useState<string[]>([]);
+  const [newErrorType, setNewErrorType] = useState('');
+  const [grade, setGrade] = useState('');
+  const [examYear, setExamYear] = useState<number | null>(null);
+  const [examPeriod, setExamPeriod] = useState('');
+  const [examType, setExamType] = useState('');
 
-  const grade = record?.students?.grade ?? null;
-  const canSave = Boolean(record && currentUserId && grade && record.exam_year && record.exam_period);
+  const canSave = Boolean(record && currentUserId && grade && examYear && examPeriod && examType && items.length > 0);
   const dialogTitle = templateId ? '템플릿 수정' : '템플릿 새로 만들기';
 
   const totalPoints = useMemo(
-    () => items.reduce((sum, item) => sum + (Number.isFinite(item.points) ? item.points : 0), 0),
+    () => roundPoints(items.reduce((sum, item) => sum + (Number.isFinite(item.points) ? item.points : 0), 0)),
     [items],
   );
+
+  useEffect(() => {
+    if (!open || !record) return;
+
+    setGrade(record.students?.grade ?? '');
+    setExamYear(record.exam_year ?? null);
+    setExamPeriod(record.exam_period ?? '');
+    setExamType(record.exam_type ?? '');
+    setNewErrorType('');
+  }, [open, record]);
 
   useEffect(() => {
     if (!open || !record) return;
@@ -142,7 +170,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     let active = true;
 
     const loadTemplate = async () => {
-      if (!grade || !record.exam_year || !record.exam_period) {
+      if (!grade || !examYear || !examPeriod || !examType) {
         setTemplateId(null);
         setItems(buildDefaultItems());
         setSelectedDefaultErrors([...DEFAULT_ERROR_TYPES]);
@@ -158,9 +186,9 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
           .eq('school_name', record.school_name)
           .eq('subject', record.subject)
           .eq('grade', grade)
-          .eq('exam_type', record.exam_type)
-          .eq('exam_year', record.exam_year)
-          .eq('exam_period', record.exam_period)
+          .eq('exam_type', examType)
+          .eq('exam_year', examYear)
+          .eq('exam_period', examPeriod)
           .maybeSingle();
 
         if (error) throw error;
@@ -183,6 +211,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
         setItems(normalizedItems);
         setSelectedDefaultErrors(selectedDefaults.length > 0 ? selectedDefaults : [...DEFAULT_ERROR_TYPES]);
         setCustomErrorTypes(customTypes);
+        setNewErrorType('');
       } catch (error: any) {
         if (!active) return;
         toast({ title: '템플릿 조회 실패', description: error.message, variant: 'destructive' });
@@ -196,7 +225,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     return () => {
       active = false;
     };
-  }, [grade, open, record, toast]);
+  }, [examPeriod, examType, examYear, grade, open, record, toast]);
 
   const updateItem = <K extends keyof TemplateItem>(index: number, key: K, value: TemplateItem[K]) => {
     setItems((prev) => prev.map((item, itemIndex) => {
