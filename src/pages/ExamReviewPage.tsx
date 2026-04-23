@@ -212,6 +212,8 @@ export default function ExamReviewPage() {
     });
   }, [gradeFilter, rows, statusFilter, subjectFilter]);
 
+  const reviewStats = useMemo(() => calculateReviewStats(itemReviews), [itemReviews]);
+
   const loadReviewDetail = useCallback(async (resultId: string) => {
     try {
       const { data: reviews, error: reviewError } = await supabase
