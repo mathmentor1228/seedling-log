@@ -14,6 +14,7 @@ import { toast } from '@/hooks/use-toast';
 import { speakEnglish } from '@/lib/ttsUtils';
 import VocabSelfTest from '@/components/student/VocabSelfTest';
 import EnglishEnglishTest from '@/components/student/EnglishEnglishTest';
+import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 
 interface VocabWord {
   english: string;
@@ -255,6 +256,7 @@ export default function StudentVocab() {
   if (!started) {
     return (
       <div className="space-y-4 p-4 max-w-lg mx-auto">
+        <StudentStudyTabs />
         <div>
           <h1 className="text-lg font-semibold flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-primary" />
