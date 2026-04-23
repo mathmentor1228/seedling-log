@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -236,7 +236,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
   const addErrorType = () => setCustomErrorTypes((prev) => [...prev, '']);
   const removeErrorType = (index: number) => setCustomErrorTypes((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
 
-  const handleTemplateFileParse = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTemplateFileParse = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || !record) return;
@@ -244,9 +244,10 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     setParsing(true);
     try {
       const fileDataUrl = await readFileAsDataUrl(file);
-      const { data, error } = await supabase.functions.invoke('parse-exam-template', {
+      const { data, error } = await supabase.functions.invoke('analyze-school-document', {
         body: {
           fileDataUrl,
+          fileType: 'exam_template',
           fileName: file.name,
           fileMimeType: file.type || null,
         },
