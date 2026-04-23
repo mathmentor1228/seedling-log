@@ -12,9 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, FileSearch, Plus, Trash2 } from 'lucide-react';
+import { Loader2, FileSearch } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -56,8 +56,15 @@ interface ItemReviewDraft {
   id?: string;
   item_number: number;
   result: ItemResult;
-  error_types: string;
+  error_types: string[];
   item_comment: string;
+}
+
+interface ReviewStats {
+  correct: number;
+  wrong: number;
+  partial: number;
+  topError: { label: string; count: number } | null;
 }
 
 const STATUS_OPTIONS: Array<{ value: 'all' | ReviewStatus; label: string }> = [
@@ -86,12 +93,42 @@ const EXAM_TYPE_LABELS: Record<string, string> = {
   other: '기타',
 };
 
-const ITEM_RESULT_LABELS: Array<{ value: ItemResult; label: string }> = [
-  { value: '', label: '미선택' },
-  { value: 'correct', label: '정답' },
-  { value: 'wrong', label: '오답' },
-  { value: 'partial', label: '부분정답' },
+const RESULT_BUTTONS: Array<{ value: Exclude<ItemResult, ''>; label: string; className: string }> = [
+  { value: 'correct', label: 'O', className: 'border-success/40 bg-success/10 text-success hover:bg-success/15' },
+  { value: 'wrong', label: 'X', className: 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15' },
+  { value: 'partial', label: '△', className: 'border-warning/40 bg-warning/10 text-warning hover:bg-warning/15' },
 ];
+
+const ERROR_TYPES = ['개념이해 부족', '계산실수', '문제이해 오류', '시간부족', '풀이누락', '유형파악 못함'] as const;
+
+function createItemDrafts(count: number, source: ItemReviewDraft[] = []): ItemReviewDraft[] {
+  return Array.from({ length: count }, (_, index) => {
+    const itemNumber = index + 1;
+    const existing = source.find((item) => item.item_number === itemNumber);
+    return existing ?? { item_number: itemNumber, result: '', error_types: [], item_comment: '' };
+  });
+}
+
+function calculateReviewStats(items: ItemReviewDraft[]): ReviewStats | null {
+  const reviewedItems = items.filter((item) => item.result !== '');
+  if (reviewedItems.length === 0) return null;
+
+  const errorCounter = new Map<string, number>();
+  reviewedItems.forEach((item) => {
+    item.error_types.forEach((errorType) => {
+      errorCounter.set(errorType, (errorCounter.get(errorType) ?? 0) + 1);
+    });
+  });
+
+  const topErrorEntry = [...errorCounter.entries()].sort((a, b) => b[1] - a[1])[0];
+
+  return {
+    correct: reviewedItems.filter((item) => item.result === 'correct').length,
+    wrong: reviewedItems.filter((item) => item.result === 'wrong').length,
+    partial: reviewedItems.filter((item) => item.result === 'partial').length,
+    topError: topErrorEntry ? { label: topErrorEntry[0], count: topErrorEntry[1] } : null,
+  };
+}
 
 function getPublicPhotoUrl(path: string) {
   return supabase.storage.from('exam-results').getPublicUrl(path).data.publicUrl;
@@ -111,6 +148,7 @@ export default function ExamReviewPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [overallComment, setOverallComment] = useState('');
+  const [itemCount, setItemCount] = useState(20);
   const [itemReviews, setItemReviews] = useState<ItemReviewDraft[]>([]);
 
   const loadResults = useCallback(async () => {
@@ -174,6 +212,8 @@ export default function ExamReviewPage() {
     });
   }, [gradeFilter, rows, statusFilter, subjectFilter]);
 
+  const reviewStats = useMemo(() => calculateReviewStats(itemReviews), [itemReviews]);
+
   const loadReviewDetail = useCallback(async (resultId: string) => {
     try {
       const { data: reviews, error: reviewError } = await supabase
@@ -190,7 +230,8 @@ export default function ExamReviewPage() {
       setOverallComment(currentReview?.overall_comment ?? '');
 
       if (!currentReview) {
-        setItemReviews([]);
+        setItemCount(20);
+        setItemReviews(createItemDrafts(20));
         return;
       }
 
@@ -206,10 +247,12 @@ export default function ExamReviewPage() {
         id: item.id,
         item_number: item.item_number,
         result: (item.result ?? '') as ItemResult,
-        error_types: Array.isArray(item.error_types) ? item.error_types.join(', ') : '',
+        error_types: Array.isArray(item.error_types) ? item.error_types.filter((value): value is string => typeof value === 'string') : [],
         item_comment: item.item_comment ?? '',
       }));
-      setItemReviews(drafts);
+      const nextCount = Math.max(20, drafts.length || 0);
+      setItemCount(nextCount);
+      setItemReviews(createItemDrafts(nextCount, drafts));
     } catch (error: any) {
       toast({ title: '리뷰 조회 실패', description: error.message, variant: 'destructive' });
     }
@@ -234,6 +277,7 @@ export default function ExamReviewPage() {
     if (!selectedId) {
       setReviewId(null);
       setOverallComment('');
+      setItemCount(20);
       setItemReviews([]);
       return;
     }
@@ -246,17 +290,24 @@ export default function ExamReviewPage() {
     setSelectedId(resultId);
   };
 
-  const handleAddItem = () => {
-    const maxNumber = itemReviews.reduce((max, item) => Math.max(max, item.item_number), 0);
-    setItemReviews((prev) => [...prev, { item_number: maxNumber + 1, result: '', error_types: '', item_comment: '' }]);
+  const handleItemCountChange = (value: number) => {
+    const safeCount = Math.max(1, Number.isFinite(value) ? value : 20);
+    setItemCount(safeCount);
+    setItemReviews((prev) => createItemDrafts(safeCount, prev));
   };
 
   const handleChangeItem = <K extends keyof ItemReviewDraft>(index: number, key: K, value: ItemReviewDraft[K]) => {
     setItemReviews((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item));
   };
 
-  const handleRemoveItem = (index: number) => {
-    setItemReviews((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  const handleToggleErrorType = (index: number, errorType: string, checked: boolean) => {
+    setItemReviews((prev) => prev.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const nextErrorTypes = checked
+        ? Array.from(new Set([...item.error_types, errorType]))
+        : item.error_types.filter((value) => value !== errorType);
+      return { ...item, error_types: nextErrorTypes };
+    }));
   };
 
   const persistReview = useCallback(async (markDone: boolean) => {
@@ -265,14 +316,7 @@ export default function ExamReviewPage() {
     const nowIso = new Date().toISOString();
     const reviewerName = fullName || user.email || '교직원';
     const normalizedItems = itemReviews
-      .filter((item) => item.item_number > 0)
-      .map((item) => ({
-        ...item,
-        error_types: item.error_types
-          .split(',')
-          .map((part) => part.trim())
-          .filter(Boolean),
-      }));
+      .filter((item) => item.item_number > 0 && item.result !== '');
 
     const reviewPayload = {
       result_id: selectedRow.id,
@@ -508,81 +552,109 @@ export default function ExamReviewPage() {
                           </div>
                         </section>
 
-                        <section className="space-y-3">
-                          <div className="flex items-center justify-between gap-3">
+                        <section className="space-y-4">
+                          <div className="flex flex-wrap items-end justify-between gap-3">
                             <div>
                               <h3 className="font-semibold text-foreground">문항별 채점</h3>
-                              <p className="text-sm text-muted-foreground">문항 번호, 채점 결과, 오답 유형, 코멘트를 기록하세요.</p>
+                              <p className="text-sm text-muted-foreground">총 문항 수를 입력하면 카드가 자동 생성됩니다.</p>
                             </div>
-                            <Button type="button" variant="outline" onClick={handleAddItem} className="gap-2">
-                              <Plus className="h-4 w-4" /> 문항 추가
-                            </Button>
+                            <div className="w-full max-w-40 space-y-2">
+                              <Label htmlFor="item-count">총 문항 수</Label>
+                              <Input
+                                id="item-count"
+                                type="number"
+                                min={1}
+                                value={itemCount}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => handleItemCountChange(Number(event.target.value) || 1)}
+                              />
+                            </div>
                           </div>
 
-                          <div className="rounded-md border">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="w-20">번호</TableHead>
-                                  <TableHead className="w-40">결과</TableHead>
-                                  <TableHead>오답 유형</TableHead>
-                                  <TableHead>코멘트</TableHead>
-                                  <TableHead className="w-16" />
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {itemReviews.length === 0 ? (
-                                  <TableRow>
-                                    <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                                      아직 입력된 문항 리뷰가 없습니다.
-                                    </TableCell>
-                                  </TableRow>
-                                ) : itemReviews.map((item, index) => (
-                                  <TableRow key={item.id ?? `${item.item_number}-${index}`}>
-                                    <TableCell>
-                                      <Input
-                                        type="number"
-                                        min={1}
-                                        value={item.item_number}
-                                        onChange={(event) => handleChangeItem(index, 'item_number', Number(event.target.value) || 0)}
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <Select value={item.result} onValueChange={(value) => handleChangeItem(index, 'result', value as ItemResult)}>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="결과 선택" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {ITEM_RESULT_LABELS.map((option) => (
-                                            <SelectItem key={option.value || 'empty'} value={option.value}>{option.label}</SelectItem>
+                          <div className="flex flex-wrap gap-3">
+                            {itemReviews.map((item, index) => {
+                              const showErrors = item.result === 'wrong' || item.result === 'partial';
+                              return (
+                                <div
+                                  key={item.id ?? `${item.item_number}-${index}`}
+                                  className="w-full rounded-md border border-border bg-card p-4 md:w-[calc(50%-0.375rem)] xl:w-[calc(33.333%-0.5rem)]"
+                                >
+                                  <div className="mb-3 flex items-center justify-between gap-2">
+                                    <p className="text-sm font-semibold text-foreground">{item.item_number}번</p>
+                                  </div>
+
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {RESULT_BUTTONS.map((option) => {
+                                      const active = item.result === option.value;
+                                      return (
+                                        <Button
+                                          key={option.value}
+                                          type="button"
+                                          variant="outline"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            handleChangeItem(index, 'result', item.result === option.value ? '' : option.value);
+                                            if (item.result !== option.value && option.value === 'correct') {
+                                              handleChangeItem(index, 'error_types', []);
+                                            }
+                                          }}
+                                          className={active ? option.className : 'border-border bg-background text-muted-foreground'}
+                                        >
+                                          {option.label}
+                                        </Button>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {showErrors ? (
+                                    <div className="mt-4 space-y-3">
+                                      <div className="space-y-2">
+                                        <p className="text-xs font-medium text-muted-foreground">오답 유형</p>
+                                        <div className="grid gap-2">
+                                          {ERROR_TYPES.map((errorType) => (
+                                            <label key={errorType} className="flex items-center gap-2 text-sm text-foreground">
+                                              <Checkbox
+                                                checked={item.error_types.includes(errorType)}
+                                                onCheckedChange={(checked) => {
+                                                  handleToggleErrorType(index, errorType, checked === true);
+                                                }}
+                                                onClick={(event) => event.stopPropagation()}
+                                              />
+                                              <span>{errorType}</span>
+                                            </label>
                                           ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Input
-                                        value={item.error_types}
-                                        onChange={(event) => handleChangeItem(index, 'error_types', event.target.value)}
-                                        placeholder="계산 실수, 개념 혼동"
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <Input
-                                        value={item.item_comment}
-                                        onChange={(event) => handleChangeItem(index, 'item_comment', event.target.value)}
-                                        placeholder="문항 코멘트 입력"
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveItem(index)}>
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label htmlFor={`item-comment-${item.item_number}`}>코멘트</Label>
+                                        <Input
+                                          id={`item-comment-${item.item_number}`}
+                                          value={item.item_comment}
+                                          onClick={(event) => event.stopPropagation()}
+                                          onChange={(event) => handleChangeItem(index, 'item_comment', event.target.value)}
+                                          placeholder="문항 코멘트 입력"
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
                           </div>
+
+                          {reviewStats ? (
+                            <div className="rounded-md border border-border bg-muted/20 p-4 text-sm text-foreground">
+                              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                <span>맞음 {reviewStats.correct}개</span>
+                                <span>틀림 {reviewStats.wrong}개</span>
+                                <span>부분 {reviewStats.partial}개</span>
+                              </div>
+                              <p className="mt-2 text-muted-foreground">
+                                가장 많은 오답유형: {reviewStats.topError ? `${reviewStats.topError.label} (${reviewStats.topError.count}회)` : '없음'}
+                              </p>
+                            </div>
+                          ) : null}
                         </section>
 
                         <section className="space-y-3">
