@@ -62,6 +62,34 @@ interface ExamTemplateSetupProps {
   onSaved?: () => void;
 }
 
+function normalizeTextValue(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeGradeValue(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : '';
+}
+
+function normalizeExamYearValue(value: number | string | null | undefined) {
+  if (value == null || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeExamTypeValue(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return '';
+
+  const lowered = trimmed.toLowerCase();
+  if (lowered === 'midterm' || trimmed === '중간고사') return '중간고사';
+  if (lowered === 'final' || trimmed === '기말고사') return '기말고사';
+  if (lowered === 'performance' || trimmed === '수행평가') return '수행평가';
+  if (lowered === 'other' || trimmed === '기타') return '기타';
+  return trimmed;
+}
+
 function buildDefaultItems(totalItems: number = DEFAULT_TOTAL_ITEMS): TemplateItem[] {
   return Array.from({ length: totalItems }, (_, index) => ({
     no: index + 1,
@@ -157,10 +185,10 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
   useEffect(() => {
     if (!open || !record) return;
 
-    setGrade(record.students?.grade ?? '');
-    setExamYear(record.exam_year ?? null);
-    setExamPeriod(record.exam_period ?? '');
-    setExamType(record.exam_type ?? '');
+    setGrade(normalizeGradeValue(record.students?.grade));
+    setExamYear(normalizeExamYearValue(record.exam_year));
+    setExamPeriod(normalizeTextValue(record.exam_period) ?? '');
+    setExamType(normalizeExamTypeValue(record.exam_type));
     setNewErrorType('');
   }, [open, record]);
 
@@ -180,21 +208,50 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
 
       setLoadingTemplate(true);
       try {
-        const { data, error } = await supabase
+        const schoolName = normalizeTextValue(record.school_name);
+        const subject = normalizeTextValue(record.subject);
+
+        if (!schoolName || !subject) {
+          setTemplateId(null);
+          setItems(buildDefaultItems());
+          setSelectedDefaultErrors([...DEFAULT_ERROR_TYPES]);
+          setCustomErrorTypes([]);
+          return;
+        }
+
+        console.log('템플릿 조회 조건:', {
+          school_name: schoolName,
+          subject,
+          grade,
+          exam_type: examType,
+          exam_year: examYear,
+          exam_period: examPeriod,
+        });
+
+        let query = supabase
           .from('exam_score_templates')
-          .select('id, total_items, items, error_types')
-          .eq('school_name', record.school_name)
-          .eq('subject', record.subject)
-          .eq('grade', grade)
-          .eq('exam_type', examType)
-          .eq('exam_year', examYear)
-          .eq('exam_period', examPeriod)
-          .maybeSingle();
+          .select('id, total_items, items, error_types, created_at')
+          .eq('school_name', schoolName)
+          .eq('subject', subject)
+          .eq('grade', String(grade));
+
+        if (examType) {
+          query = query.eq('exam_type', examType);
+        }
+        if (examYear != null) {
+          query = query.eq('exam_year', Number(examYear));
+        }
+        if (examPeriod) {
+          query = query.eq('exam_period', examPeriod);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(1);
 
         if (error) throw error;
         if (!active) return;
 
-        const existingTemplate = (data ?? null) as ExamTemplateRecord | null;
+        const existingTemplate = ((data ?? [])[0] ?? null) as ExamTemplateRecord | null;
+        console.log('조회 결과:', existingTemplate, '에러:', error);
 
         if (!existingTemplate) {
           setTemplateId(null);
@@ -345,12 +402,12 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
 
       const { error } = await supabase.from('exam_score_templates').upsert(
         {
-          school_name: record.school_name,
-          subject: record.subject,
-          grade,
-          exam_type: examType,
-          exam_year: examYear,
-          exam_period: examPeriod,
+          school_name: normalizeTextValue(record.school_name),
+          subject: normalizeTextValue(record.subject),
+          grade: String(grade),
+          exam_type: normalizeExamTypeValue(examType),
+          exam_year: Number(examYear),
+          exam_period: normalizeTextValue(examPeriod),
           total_items: normalizedItems.length,
           items: normalizedItems,
           error_types: errorTypes,
