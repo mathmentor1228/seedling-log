@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ExamTemplateSetup } from '@/components/exam/ExamTemplateSetup';
 import { PhotoThumb } from '@/components/exam-review/PhotoThumb';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
@@ -167,6 +168,7 @@ export function ExamReviewPanel() {
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
+  const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [overallComment, setOverallComment] = useState('');
   const [itemCount, setItemCount] = useState(20);
@@ -494,10 +496,15 @@ export function ExamReviewPanel() {
                     {selectedRow.school_name} · {EXAM_TYPE_LABELS[selectedRow.exam_type] ?? selectedRow.exam_type} · 예상 {formatScoreLabel(selectedRow.expected_score)}{selectedRow.actual_score != null ? ` → 실제 ${formatScoreLabel(selectedRow.actual_score)}` : ''}
                   </div>
                 </div>
-                <Button onClick={() => void persistReview(true)} disabled={saving} className="px-6 py-3">
-                  {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  리뷰 완료
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => setTemplateSetupOpen(true)}>
+                    이 시험 템플릿 설정
+                  </Button>
+                  <Button onClick={() => void persistReview(true)} disabled={saving} className="px-6 py-3">
+                    {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    리뷰 완료
+                  </Button>
+                </div>
               </div>
 
               <div className="mb-8">
@@ -655,6 +662,14 @@ export function ExamReviewPanel() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <ExamTemplateSetup
+        open={templateSetupOpen}
+        onOpenChange={setTemplateSetupOpen}
+        record={selectedRow}
+        currentUserId={user?.id ?? null}
+        onSaved={() => void loadResults()}
+      />
     </>
   );
 }

@@ -206,6 +206,30 @@ const EXAM_NOTICE_PARSE_SYSTEM_PROMPT = `당신은 한국 중고등학교 내신
 5. 범위가 불명확하면 원문 그대로 scope_text에 기록
 6. 없는 정보는 빈 배열[] 또는 null로 처리`;
 
+const TEMPLATE_PARSE_PROMPT = `이 시험지 이미지에서 아래 정보를 추출해주세요.
+
+반드시 JSON만 응답하세요.
+
+{
+  "total_items": 전체 문항 수(숫자),
+  "items": [
+    {
+      "no": 문항번호(숫자),
+      "type": "객관식" 또는 "주관식",
+      "points": 배점(숫자),
+      "is_essay": 주관식이면 true
+    }
+  ],
+  "total_points": 총점(숫자)
+}
+
+규칙:
+
+1. 배점이 명시된 경우 그대로 추출
+2. 배점이 없으면 총점/문항수로 균등 배분
+3. 주관식(서술형/단답형)은 is_essay:true
+4. 문항 번호순으로 정렬`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -226,9 +250,9 @@ serve(async (req) => {
         ? fileDataUrl
         : fileUrl;
 
-    if (!sourceUrl || !fileType || !schoolName) {
+    if (!sourceUrl || !fileType || (fileType !== 'exam_template' && !schoolName)) {
       return new Response(
-        JSON.stringify({ error: "fileType, schoolName, and a valid file source are required" }),
+        JSON.stringify({ error: fileType === 'exam_template' ? "fileType and a valid file source are required" : "fileType, schoolName, and a valid file source are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -318,6 +342,10 @@ ${subjectInstruction}
       "grade": 학년(숫자 또는 null),
       "subject": "과목명 또는 null",
       "description": "상세내용"
+    }
+
+    if (fileType === 'exam_template') {
+      extractionPrompt = TEMPLATE_PARSE_PROMPT;
     }
   ]
 }
