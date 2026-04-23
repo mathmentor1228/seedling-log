@@ -190,6 +190,7 @@ export function BatchTestEntryModal({
         .select('id, student_id')
         .eq('lesson_date', date)
         .eq('subject', subject as any)
+        .eq('teacher_id', effectiveTeacherId)
         .in('student_id', selected.map(s => s.student_id));
 
       const recordMap = new Map((existingRecords || []).map(r => [r.student_id, r.id]));
