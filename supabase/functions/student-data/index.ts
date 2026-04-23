@@ -85,11 +85,17 @@ Deno.serve(async (req) => {
     // Validate student session
     const { data: sessionData, error: sessionError } = await supabase
       .from('student_accounts')
-      .select('student_id')
+      .select('student_id, session_token, session_expires_at')
       .eq('student_id', student_id)
       .single();
 
-    if (sessionError || !sessionData) {
+    if (
+      sessionError ||
+      !sessionData ||
+      sessionData.session_token !== student_token ||
+      !sessionData.session_expires_at ||
+      new Date(sessionData.session_expires_at).getTime() <= Date.now()
+    ) {
       return new Response(
         JSON.stringify({ error: 'Invalid session' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -776,6 +782,98 @@ Deno.serve(async (req) => {
         if (error) throw error;
 
         result = { reports: data || [] };
+        break;
+      }
+
+      case 'exam_reviews': {
+        const { data: results, error: resultError } = await supabase
+          .from('student_exam_results')
+          .select('id, subject, exam_type, exam_date, exam_year, exam_period, actual_score, expected_score, review_status, school_name, submitted_at')
+          .eq('student_id', student_id)
+          .order('exam_date', { ascending: false, nullsFirst: false })
+          .order('submitted_at', { ascending: false });
+
+        if (resultError) throw resultError;
+
+        const resultIds = (results || []).map((row: any) => row.id);
+
+        const [{ data: photoRows, error: photoError }, { data: reviewRows, error: reviewError }] = await Promise.all([
+          resultIds.length > 0
+            ? supabase
+                .from('student_exam_result_photos')
+                .select('id, result_id, storage_path, sort_order')
+                .in('result_id', resultIds)
+                .order('sort_order', { ascending: true })
+            : Promise.resolve({ data: [], error: null }),
+          resultIds.length > 0
+            ? supabase
+                .from('exam_reviews')
+                .select('id, result_id, overall_comment, reviewed_at, reviewed_by_name, created_at')
+                .in('result_id', resultIds)
+                .order('created_at', { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+
+        if (photoError) throw photoError;
+        if (reviewError) throw reviewError;
+
+        const reviewIds = (reviewRows || []).map((row: any) => row.id);
+        const { data: itemRows, error: itemError } = reviewIds.length > 0
+          ? await supabase
+              .from('exam_item_reviews')
+              .select('id, review_id, item_number, result, error_types, item_comment')
+              .in('review_id', reviewIds)
+              .order('item_number', { ascending: true })
+          : { data: [], error: null };
+
+        if (itemError) throw itemError;
+
+        const photoMap = new Map<string, any[]>();
+        await Promise.all((photoRows || []).map(async (photo: any) => {
+          const { data: signed } = await supabase.storage.from('exam-results').createSignedUrl(photo.storage_path, 3600);
+          const list = photoMap.get(photo.result_id) || [];
+          list.push({
+            id: photo.id,
+            storage_path: photo.storage_path,
+            sort_order: photo.sort_order,
+            signed_url: signed?.signedUrl || null,
+          });
+          photoMap.set(photo.result_id, list);
+        }));
+
+        const itemMap = new Map<string, any[]>();
+        for (const item of itemRows || []) {
+          const list = itemMap.get(item.review_id) || [];
+          list.push({
+            id: item.id,
+            item_number: item.item_number,
+            result: item.result,
+            error_types: Array.isArray(item.error_types) ? item.error_types : [],
+            item_comment: item.item_comment,
+          });
+          itemMap.set(item.review_id, list);
+        }
+
+        const latestReviewByResult = new Map<string, any>();
+        for (const review of reviewRows || []) {
+          if (!latestReviewByResult.has(review.result_id)) {
+            latestReviewByResult.set(review.result_id, {
+              id: review.id,
+              overall_comment: review.overall_comment,
+              reviewed_at: review.reviewed_at,
+              reviewed_by_name: review.reviewed_by_name,
+              exam_item_reviews: itemMap.get(review.id) || [],
+            });
+          }
+        }
+
+        result = {
+          reviews: (results || []).map((row: any) => ({
+            ...row,
+            student_exam_result_photos: photoMap.get(row.id) || [],
+            exam_reviews: latestReviewByResult.has(row.id) ? [latestReviewByResult.get(row.id)] : [],
+          })),
+        };
         break;
       }
 

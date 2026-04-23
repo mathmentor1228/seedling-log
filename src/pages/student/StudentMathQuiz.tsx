@@ -17,6 +17,7 @@ import {
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
 import MathQuestionRoom from '@/components/student/MathQuestionRoom';
 import { MathRenderer } from '@/components/math/MathRenderer';
+import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 
 interface Quiz {
   id: string;
@@ -613,6 +614,7 @@ export default function StudentMathQuiz() {
   // Quiz list view
   return (
     <div className="p-4 space-y-4">
+      <StudentStudyTabs />
       <h1 className="text-xl font-bold flex items-center gap-2">
         <BookOpen className="w-5 h-5 text-primary" />
         개념 퀴즈

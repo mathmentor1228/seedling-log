@@ -104,6 +104,8 @@ export const studentApi = {
 
   getWeeklyReports: () => studentApiCall<{ reports: any[] }>('weekly_reports'),
 
+  getExamReviews: () => studentApiCall<{ reviews: any[] }>('exam_reviews'),
+
   getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[]; test_level?: number; test_time_limit?: number | null; active_test_assignment?: any | null }>('vocab_cards'),
 
   submitVocabCompletion: (wordSetIds: string[], correctCount: number, wrongCount: number, totalCount: number, mode: string, isSelfTest: boolean = false, testSource: string = 'assigned') =>
