@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -188,7 +188,7 @@ const buildEvaluationRowsFromNotice = (notice: ParsedExamNotice) => {
   return Array.from(subjectMap.values());
 };
 
-function SectionBlock({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+function SectionBlock({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
     <section className="space-y-3 rounded-lg border border-border bg-card p-4">
       <div className="space-y-1">
@@ -259,6 +259,47 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
     setExtractedData(updated);
   };
 
+  const updateEvaluationPlanField = (field: keyof ParsedExamNotice, value: any) => {
+    setEvaluationPlanData((prev) => ({ ...(prev ?? createEmptyExamNotice()), [field]: value }));
+  };
+
+  const updateScoreDistribution = (field: keyof ParsedExamNotice['score_distribution'], value: string) => {
+    setEvaluationPlanData((prev) => ({
+      ...(prev ?? createEmptyExamNotice()),
+      score_distribution: {
+        ...(prev?.score_distribution ?? createEmptyExamNotice().score_distribution),
+        [field]: value || null,
+      },
+    }));
+  };
+
+  const updateEvaluationListItem = (
+    listKey: 'exam_schedule' | 'exam_scope' | 'performance_assessments',
+    index: number,
+    field: string,
+    value: any,
+  ) => {
+    setEvaluationPlanData((prev) => {
+      const base = normalizeExamNotice(prev);
+      const list = [...base[listKey]] as any[];
+      list[index] = { ...list[index], [field]: value };
+      return { ...base, [listKey]: list };
+    });
+  };
+
+  const addEvaluationListItem = (listKey: 'exam_schedule' | 'exam_scope' | 'performance_assessments') => {
+    const emptyItem = listKey === 'exam_schedule'
+      ? { date: null, day: null, subject: null, start_time: null, end_time: null, grade: null }
+      : listKey === 'exam_scope'
+        ? { subject: null, scope_text: null, chapters: [], pages: null }
+        : { subject: null, type: null, title: null, ratio: null, period: null };
+
+    setEvaluationPlanData((prev) => {
+      const base = normalizeExamNotice(prev);
+      return { ...base, [listKey]: [...base[listKey], emptyItem] };
+    });
+  };
+
   const handleUploadAndAnalyze = async () => {
     if (!file) { toast.error('파일을 선택해주세요'); return; }
     setUploading(true);
@@ -290,8 +331,11 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
         items = result.data.schedules;
       } else if (fileType === 'textbook_list' && result.data?.textbooks) {
         items = result.data.textbooks;
-      } else if (fileType === 'evaluation_plan' && result.data?.evaluations) {
-        items = result.data.evaluations;
+      } else if (fileType === 'evaluation_plan') {
+        const notice = normalizeExamNotice(result.data);
+        const derivedRows = buildEvaluationRowsFromNotice(notice);
+        setEvaluationPlanData(notice);
+        items = derivedRows;
       } else if (fileType === 'other' && result.data?.schedules) {
         items = result.data.schedules;
       }
@@ -340,7 +384,8 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
         const { error } = await supabase.from('school_textbooks').insert(rows as any);
         if (error) throw error;
       } else if (fileType === 'evaluation_plan') {
-        const rows = selected.map((e: any) => ({
+        const sourceRows = evaluationPlanData ? buildEvaluationRowsFromNotice(evaluationPlanData) : selected;
+        const rows = sourceRows.map((e: any) => ({
           school_name: schoolName,
           schedule_type: e.exam_type?.includes('수행') ? 'performance' : 'exam',
           title: `${e.subject || ''} ${e.exam_type || ''}`.trim(),
@@ -358,7 +403,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
         // Also update/create matching school_exam_archives for evaluation plans
         const currentYear = new Date().getFullYear();
         const schoolLevel = schoolName.includes('초') ? '초' : schoolName.includes('중') ? '중' : '고';
-        for (const e of selected) {
+        for (const e of sourceRows) {
           if (!e.subject || !e.grade) continue;
           const baseSubject = normalizeSubjectForArchive(e.subject);
           const examType = normalizeExamType(e.exam_type);
@@ -405,6 +450,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
 
       toast.success(`${selectedItems.size}개 항목이 저장되었습니다`);
       setExtractedData(null);
+      setEvaluationPlanData(null);
       setFile(null);
       setUploadOpen(false);
       onRefetch();
