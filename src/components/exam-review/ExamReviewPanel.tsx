@@ -138,7 +138,9 @@ function formatDateTimeLabel(value: string | null | undefined) {
 
 function formatScoreLabel(value: number | null | undefined) {
   if (value == null) return '-';
-  return `${value}점`;
+  const rounded = Math.round(value * 100) / 100;
+  const display = Number.isInteger(rounded) ? `${rounded}` : `${Math.round(rounded * 10) / 10}`;
+  return `${display}점`;
 }
 
 async function resolvePhotoUrl(storagePath: string) {
@@ -579,8 +581,8 @@ export function ExamReviewPanel() {
         page_number: payload.page_number,
       });
 
-      const earnedScore = mergedItems.reduce((sum, item) => sum + (item.score_earned ?? 0), 0);
-      const totalScore = template.items.reduce((sum, item) => sum + item.points, 0);
+      const earnedScore = Math.round(mergedItems.reduce((sum, item) => sum + (item.score_earned ?? 0), 0) * 100) / 100;
+      const totalScore = Math.round(template.items.reduce((sum, item) => sum + (item.points || 0), 0) * 100) / 100;
 
       const { error: scoreError } = await supabase
         .from('exam_reviews')
@@ -614,8 +616,8 @@ export function ExamReviewPanel() {
     const wrongItems = itemReviews.filter((item) => item.result === 'wrong' || item.result === 'partial');
     const correctCount = itemReviews.filter((item) => item.result === 'correct').length;
     const totalItems = template.items.length;
-    const earnedScore = itemReviews.reduce((sum, item) => sum + (item.score_earned || 0), 0);
-    const totalScore = template.items.reduce((sum, item) => sum + item.points, 0);
+    const earnedScore = Math.round(itemReviews.reduce((sum, item) => sum + (item.score_earned || 0), 0) * 100) / 100;
+    const totalScore = Math.round(template.items.reduce((sum, item) => sum + (item.points || 0), 0) * 100) / 100;
     const errorTypeCounts: Record<string, number> = {};
 
     wrongItems.forEach((item) => {
