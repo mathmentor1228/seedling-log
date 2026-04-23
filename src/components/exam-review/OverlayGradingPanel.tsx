@@ -369,7 +369,7 @@ export function OverlayGradingPanel({
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <p className="text-[13px] font-semibold text-foreground">
-                      {activeItem.item_number}번 ({activeItem.points}점)
+                      {activeItem.item_number}번 ({displayScore(activeItem.points)}점)
                     </p>
                     <PenSquare className="h-4 w-4 text-muted-foreground" />
                   </div>
@@ -402,7 +402,7 @@ export function OverlayGradingPanel({
                           onChange={(event) => setEarnedScore(clampScore(Number(event.target.value), activeItem.points))}
                           className="h-8 w-20 px-2 text-sm"
                         />
-                        <span className="text-[11px] text-muted-foreground">/ {activeItem.points}점</span>
+                        <span className="text-[11px] text-muted-foreground">/ {displayScore(activeItem.points)}점</span>
                       </div>
                     </div>
                   ) : null}
