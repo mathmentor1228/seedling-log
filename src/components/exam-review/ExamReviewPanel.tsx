@@ -388,9 +388,7 @@ export function ExamReviewPanel() {
   }, [fullName, itemReviews, loadResults, loadReviewDetail, overallComment, reviewId, selectedRow, toast, user]);
 
   return (
-    <ProtectedRoute allowedRoles={['admin']}>
-      <AppLayout>
-        <div className="space-y-4">
+    <div className="space-y-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">내신 시험지 리뷰</h1>
             <p className="text-sm text-muted-foreground">업로드된 시험지를 확인하고 문항별 리뷰를 남길 수 있습니다.</p>
@@ -688,17 +686,15 @@ export function ExamReviewPanel() {
           </div>
         </div>
 
-        <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
-          <DialogContent className="max-w-5xl">
-            <DialogHeader>
-              <DialogTitle>시험지 원본 보기</DialogTitle>
-            </DialogHeader>
-            {selectedImage ? (
-              <img src={selectedImage} alt="시험지 원본" className="max-h-[80vh] w-full rounded-md object-contain" />
-            ) : null}
-          </DialogContent>
-        </Dialog>
-      </AppLayout>
-    </ProtectedRoute>
+      <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>시험지 원본 보기</DialogTitle>
+          </DialogHeader>
+          {selectedImage ? (
+            <img src={selectedImage} alt="시험지 원본" className="max-h-[80vh] w-full rounded-md object-contain" />
+          ) : null}
+        </DialogContent>
+      </Dialog>
   );
 }
