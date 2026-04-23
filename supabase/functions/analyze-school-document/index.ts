@@ -43,6 +43,45 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+function parseDataUrl(dataUrl: string): { mimeType: string; base64Data: string } | null {
+  const value = String(dataUrl || "");
+  if (!value.startsWith("data:")) return null;
+
+  const commaIndex = value.indexOf(",");
+  if (commaIndex < 0) return null;
+
+  const header = value.slice(5, commaIndex);
+  const payload = value.slice(commaIndex + 1).replace(/\s+/g, "");
+  const mimeType = header.replace(/;base64$/i, "").trim() || "application/octet-stream";
+
+  if (!header.toLowerCase().includes(";base64") || !payload) return null;
+
+  return { mimeType, base64Data: payload };
+}
+
+function normalizeDataUrlMimeType(dataUrl: string, fileMimeType?: string | null): string {
+  const parsed = parseDataUrl(dataUrl);
+  if (!parsed) return dataUrl;
+
+  const normalizedMimeType = (fileMimeType || "").trim().toLowerCase();
+  const mimeType = parsed.mimeType === "application/octet-stream" && normalizedMimeType
+    ? normalizedMimeType
+    : parsed.mimeType;
+
+  return `data:${mimeType};base64,${parsed.base64Data}`;
+}
+
+function isSupportedAiMimeType(mimeType: string): boolean {
+  return [
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/gif",
+  ].includes(mimeType.toLowerCase());
+}
+
 function extractStorageObjectLocation(url: string) {
   try {
     const parsedUrl = new URL(url);
@@ -111,6 +150,10 @@ async function resolveAiFileUrl(
   fileMimeType?: string | null,
   fileName?: string | null,
 ): Promise<string> {
+  if (sourceUrl.startsWith("data:")) {
+    return normalizeDataUrlMimeType(sourceUrl, fileMimeType);
+  }
+
   if (!isPdfSource(sourceUrl, fileMimeType, fileName)) {
     return sourceUrl;
   }
@@ -230,6 +273,24 @@ const TEMPLATE_PARSE_PROMPT = `이 시험지 이미지에서 아래 정보를 �
 3. 주관식(서술형/단답형)은 is_essay:true
 4. 문항 번호순으로 정렬`;
 
+function extractMessageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object" && "text" in part) {
+          const text = (part as { text?: unknown }).text;
+          return typeof text === "string" ? text : "";
+        }
+        return "";
+      })
+      .join("\n")
+      .trim();
+  }
+  return "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -323,6 +384,10 @@ ${subjectInstruction}
 JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
     }
 
+    if (fileType === "exam_template") {
+      extractionPrompt = TEMPLATE_PARSE_PROMPT;
+    }
+
     if (fileType === "other") {
       extractionPrompt = `
 다음은 ${schoolName} 관련 학교 문서입니다.
@@ -343,10 +408,6 @@ ${subjectInstruction}
       "subject": "과목명 또는 null",
       "description": "상세내용"
     }
-
-    if (fileType === 'exam_template') {
-      extractionPrompt = TEMPLATE_PARSE_PROMPT;
-    }
   ]
 }
 일정이 없으면 빈 배열을 반환해주세요. JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
@@ -360,16 +421,20 @@ ${subjectInstruction}
     }
 
     const aiFileUrl = await resolveAiFileUrl(sourceUrl, fileMimeType, fileName);
+    const parsedAiDataUrl = parseDataUrl(aiFileUrl);
+
+    if (parsedAiDataUrl && !isSupportedAiMimeType(parsedAiDataUrl.mimeType)) {
+      return new Response(
+        JSON.stringify({ error: "지원되지 않는 파일 형식입니다. PDF, PNG, JPG, WEBP 파일만 업로드해주세요." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Build messages — PDF data URLs are translated by the gateway to Gemini inlineData
     let contentParts: any[];
     if (isPdfDataUrl(aiFileUrl)) {
-      // For PDF data URLs: extract base64 and send as inline_data part
-      // The gateway translates this to Gemini's inlineData format
-      const commaIdx = aiFileUrl.indexOf(",");
-      const mimeMatch = aiFileUrl.match(/^data:([^;]+)/);
-      const mimeType = mimeMatch ? mimeMatch[1] : "application/pdf";
-      const base64Data = aiFileUrl.substring(commaIdx + 1);
+      const mimeType = parsedAiDataUrl?.mimeType || "application/pdf";
+      const base64Data = parsedAiDataUrl?.base64Data || "";
       contentParts = [
         {
           type: "image_url",
@@ -426,6 +491,12 @@ ${subjectInstruction}
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      if (response.status === 400 && errText.includes("Unable to process input image")) {
+        return new Response(
+          JSON.stringify({ error: "업로드한 시험지를 읽지 못했습니다. PDF 또는 선명한 PNG/JPG 이미지로 다시 시도해주세요." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       return new Response(
         JSON.stringify({ error: "AI 분석 실패" }),
@@ -434,8 +505,9 @@ ${subjectInstruction}
     }
 
     const aiResult = await response.json();
-    const responseText =
-      aiResult.choices?.[0]?.message?.content || "";
+    const responseText = extractMessageText(
+      aiResult.choices?.[0]?.message?.content,
+    );
 
     let extractedData: any = {};
     try {
