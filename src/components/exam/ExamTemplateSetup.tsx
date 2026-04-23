@@ -2,6 +2,7 @@ import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { displayExamType, normalizeExamType, normalizeGrade, normalizeTextValue } from '@/lib/examTemplateUtils';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -62,32 +63,10 @@ interface ExamTemplateSetupProps {
   onSaved?: () => void;
 }
 
-function normalizeTextValue(value: string | null | undefined) {
-  const trimmed = value?.trim() ?? '';
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normalizeGradeValue(value: string | null | undefined) {
-  const trimmed = value?.trim() ?? '';
-  return trimmed.length > 0 ? trimmed : '';
-}
-
 function normalizeExamYearValue(value: number | string | null | undefined) {
   if (value == null || value === '') return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeExamTypeValue(value: string | null | undefined) {
-  const trimmed = value?.trim() ?? '';
-  if (!trimmed) return '';
-
-  const lowered = trimmed.toLowerCase();
-  if (lowered === 'midterm' || trimmed === '중간고사') return '중간고사';
-  if (lowered === 'final' || trimmed === '기말고사') return '기말고사';
-  if (lowered === 'performance' || trimmed === '수행평가') return '수행평가';
-  if (lowered === 'other' || trimmed === '기타') return '기타';
-  return trimmed;
 }
 
 function buildDefaultItems(totalItems: number = DEFAULT_TOTAL_ITEMS): TemplateItem[] {
@@ -185,10 +164,10 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
   useEffect(() => {
     if (!open || !record) return;
 
-    setGrade(normalizeGradeValue(record.students?.grade));
+    setGrade(normalizeGrade(record.students?.grade) ?? '');
     setExamYear(normalizeExamYearValue(record.exam_year));
     setExamPeriod(normalizeTextValue(record.exam_period) ?? '');
-    setExamType(normalizeExamTypeValue(record.exam_type));
+    setExamType(normalizeExamType(record.exam_type) ?? '');
     setNewErrorType('');
   }, [open, record]);
 
@@ -236,7 +215,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
           .eq('grade', String(grade));
 
         if (examType) {
-          query = query.eq('exam_type', examType);
+          query = query.eq('exam_type', normalizeExamType(examType));
         }
         if (examYear != null) {
           query = query.eq('exam_year', Number(examYear));
@@ -245,12 +224,12 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
           query = query.eq('exam_period', examPeriod);
         }
 
-        const { data, error } = await query.order('created_at', { ascending: false }).limit(1);
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
 
         if (error) throw error;
         if (!active) return;
 
-        const existingTemplate = ((data ?? [])[0] ?? null) as ExamTemplateRecord | null;
+        const existingTemplate = (data ?? null) as ExamTemplateRecord | null;
         console.log('조회 결과:', existingTemplate, '에러:', error);
 
         if (!existingTemplate) {
@@ -376,7 +355,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
 
   const handleSave = async () => {
     if (!record || !currentUserId) return;
-    if (!grade || !examYear || !examPeriod || !examType) {
+      if (!grade || !examYear || !examPeriod || !examType) {
       toast({ title: '템플릿 저장 불가', description: '학년, 시험 연도, 학기 정보가 있어야 저장할 수 있습니다.', variant: 'destructive' });
       return;
     }
@@ -404,9 +383,9 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
         {
           school_name: normalizeTextValue(record.school_name),
           subject: normalizeTextValue(record.subject),
-          grade: String(grade),
-          exam_type: normalizeExamTypeValue(examType),
-          exam_year: Number(examYear),
+          grade: normalizeGrade(grade),
+          exam_type: normalizeExamType(examType),
+          exam_year: examYear ? Number(examYear) : null,
           exam_period: normalizeTextValue(examPeriod),
           total_items: normalizedItems.length,
           items: normalizedItems,
@@ -525,7 +504,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
                     >
                       <option value="">선택</option>
                       {EXAM_TYPE_OPTIONS.map((type) => (
-                        <option key={type} value={type}>{type}</option>
+                      <option key={type} value={normalizeExamType(type) ?? type}>{displayExamType(type)}</option>
                       ))}
                     </select>
                   </div>
