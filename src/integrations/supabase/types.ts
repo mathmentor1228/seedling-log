@@ -919,30 +919,48 @@ export type Database = {
       exam_item_reviews: {
         Row: {
           created_at: string | null
+          custom_reason: string | null
           error_types: Json | null
           id: string
+          is_essay: boolean | null
           item_comment: string | null
           item_number: number
+          overlay_x: number | null
+          overlay_y: number | null
+          page_number: number | null
           result: string | null
           review_id: string
+          score_earned: number | null
         }
         Insert: {
           created_at?: string | null
+          custom_reason?: string | null
           error_types?: Json | null
           id?: string
+          is_essay?: boolean | null
           item_comment?: string | null
           item_number: number
+          overlay_x?: number | null
+          overlay_y?: number | null
+          page_number?: number | null
           result?: string | null
           review_id: string
+          score_earned?: number | null
         }
         Update: {
           created_at?: string | null
+          custom_reason?: string | null
           error_types?: Json | null
           id?: string
+          is_essay?: boolean | null
           item_comment?: string | null
           item_number?: number
+          overlay_x?: number | null
+          overlay_y?: number | null
+          page_number?: number | null
           result?: string | null
           review_id?: string
+          score_earned?: number | null
         }
         Relationships: [
           {
@@ -1266,32 +1284,41 @@ export type Database = {
       exam_reviews: {
         Row: {
           created_at: string | null
+          earned_score: number | null
           id: string
           overall_comment: string | null
           result_id: string
           reviewed_at: string | null
           reviewed_by: string | null
           reviewed_by_name: string | null
+          template_id: string | null
+          total_score: number | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          earned_score?: number | null
           id?: string
           overall_comment?: string | null
           result_id: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           reviewed_by_name?: string | null
+          template_id?: string | null
+          total_score?: number | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          earned_score?: number | null
           id?: string
           overall_comment?: string | null
           result_id?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           reviewed_by_name?: string | null
+          template_id?: string | null
+          total_score?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1305,6 +1332,66 @@ export type Database = {
           {
             foreignKeyName: "exam_reviews_reviewed_by_fkey"
             columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_reviews_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "exam_score_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_score_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error_types: Json
+          exam_period: string
+          exam_type: string
+          exam_year: number
+          grade: string
+          id: string
+          items: Json
+          school_name: string
+          subject: string
+          total_items: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error_types?: Json
+          exam_period: string
+          exam_type: string
+          exam_year: number
+          grade: string
+          id?: string
+          items?: Json
+          school_name: string
+          subject: string
+          total_items?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error_types?: Json
+          exam_period?: string
+          exam_type?: string
+          exam_year?: number
+          grade?: string
+          id?: string
+          items?: Json
+          school_name?: string
+          subject?: string
+          total_items?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_score_templates_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
