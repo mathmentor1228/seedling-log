@@ -19,6 +19,187 @@ import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS } from './types';
 import { buildSchoolCalendarScheduleRow, fileToDataUrl, isGlobalMockExam } from './scheduleUploadUtils';
 import { ExamTimetableGrid } from './ExamTimetableGrid';
 
+type ParsedExamScheduleItem = {
+  date: string | null;
+  day: string | null;
+  subject: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  grade: string | number | null;
+};
+
+type ParsedExamScopeItem = {
+  subject: string | null;
+  scope_text: string | null;
+  chapters: string[];
+  pages: string | null;
+};
+
+type ParsedPerformanceAssessmentItem = {
+  subject: string | null;
+  type: string | null;
+  title: string | null;
+  ratio: string | number | null;
+  period: string | null;
+};
+
+type ParsedExamNotice = {
+  school_name: string | null;
+  exam_type: string | null;
+  exam_year: string | number | null;
+  exam_period: string | null;
+  grade: string | number | null;
+  score_distribution: {
+    midterm: string | number | null;
+    final: string | number | null;
+    performance: string | number | null;
+  };
+  exam_schedule: ParsedExamScheduleItem[];
+  exam_scope: ParsedExamScopeItem[];
+  performance_assessments: ParsedPerformanceAssessmentItem[];
+  notes: string | null;
+};
+
+const createEmptyExamNotice = (): ParsedExamNotice => ({
+  school_name: null,
+  exam_type: '중간고사',
+  exam_year: new Date().getFullYear(),
+  exam_period: '1학기',
+  grade: null,
+  score_distribution: {
+    midterm: null,
+    final: null,
+    performance: null,
+  },
+  exam_schedule: [],
+  exam_scope: [],
+  performance_assessments: [],
+  notes: null,
+});
+
+const normalizeExamNotice = (value: any): ParsedExamNotice => ({
+  ...createEmptyExamNotice(),
+  ...value,
+  score_distribution: {
+    ...createEmptyExamNotice().score_distribution,
+    ...(value?.score_distribution || {}),
+  },
+  exam_schedule: Array.isArray(value?.exam_schedule) ? value.exam_schedule : [],
+  exam_scope: Array.isArray(value?.exam_scope) ? value.exam_scope : [],
+  performance_assessments: Array.isArray(value?.performance_assessments) ? value.performance_assessments : [],
+});
+
+const getUnifiedEvaluationRatio = (scoreDistribution: ParsedExamNotice['score_distribution']) => {
+  const parts = [
+    scoreDistribution.midterm ? `중간${scoreDistribution.midterm}%` : null,
+    scoreDistribution.final ? `기말${scoreDistribution.final}%` : null,
+    scoreDistribution.performance ? `수행${scoreDistribution.performance}%` : null,
+  ].filter(Boolean);
+
+  return parts.join(' / ') || null;
+};
+
+const getExamDateRange = (schedule: ParsedExamScheduleItem[]) => {
+  const dates = schedule.map((item) => item.date).filter(Boolean) as string[];
+  if (dates.length === 0) return { start: null, end: null };
+  const sorted = [...dates].sort();
+  return { start: sorted[0], end: sorted[sorted.length - 1] };
+};
+
+const buildEvaluationRowsFromNotice = (notice: ParsedExamNotice) => {
+  const semester = notice.exam_period === '2학기' ? 2 : 1;
+  const examType = notice.exam_type || '중간고사';
+  const ratioText = getUnifiedEvaluationRatio(notice.score_distribution);
+  const dateRange = getExamDateRange(notice.exam_schedule);
+  const subjectMap = new Map<string, {
+    grade: number | null;
+    exam_range: string | null;
+    performance_detail: string | null;
+    evaluation_ratio: string | null;
+    exam_start_date: string | null;
+    exam_end_date: string | null;
+    exam_type: string;
+    subject: string;
+    semester: number;
+  }>();
+
+  for (const item of notice.exam_scope) {
+    const subject = item.subject?.trim();
+    if (!subject) continue;
+    const scopeParts = [
+      item.scope_text?.trim() || null,
+      item.chapters?.length ? `단원: ${item.chapters.join(', ')}` : null,
+      item.pages?.trim() ? `페이지: ${item.pages.trim()}` : null,
+    ].filter(Boolean);
+
+    subjectMap.set(subject, {
+      grade: notice.grade ? Number(notice.grade) : null,
+      exam_range: scopeParts.join(' / ') || null,
+      performance_detail: null,
+      evaluation_ratio: ratioText,
+      exam_start_date: dateRange.start,
+      exam_end_date: dateRange.end,
+      exam_type: examType,
+      subject,
+      semester,
+    });
+  }
+
+  for (const assessment of notice.performance_assessments) {
+    const subject = assessment.subject?.trim();
+    if (!subject) continue;
+    const prev = subjectMap.get(subject);
+    const assessmentDetail = [assessment.type, assessment.title, assessment.period, assessment.ratio ? `${assessment.ratio}%` : null]
+      .filter(Boolean)
+      .join(' / ');
+
+    subjectMap.set(subject, {
+      grade: prev?.grade ?? (notice.grade ? Number(notice.grade) : null),
+      exam_range: prev?.exam_range ?? null,
+      performance_detail: [prev?.performance_detail, assessmentDetail].filter(Boolean).join('\n') || null,
+      evaluation_ratio: prev?.evaluation_ratio ?? ratioText,
+      exam_start_date: prev?.exam_start_date ?? dateRange.start,
+      exam_end_date: prev?.exam_end_date ?? dateRange.end,
+      exam_type: prev?.exam_type ?? examType,
+      subject,
+      semester,
+    });
+  }
+
+  for (const item of notice.exam_schedule) {
+    const subject = item.subject?.trim();
+    if (!subject) continue;
+    const prev = subjectMap.get(subject);
+    const grade = item.grade ? Number(item.grade) : (notice.grade ? Number(notice.grade) : null);
+
+    subjectMap.set(subject, {
+      grade: Number.isNaN(grade) ? null : grade,
+      exam_range: prev?.exam_range ?? null,
+      performance_detail: prev?.performance_detail ?? null,
+      evaluation_ratio: prev?.evaluation_ratio ?? ratioText,
+      exam_start_date: prev?.exam_start_date ?? item.date ?? dateRange.start,
+      exam_end_date: prev?.exam_end_date ?? item.date ?? dateRange.end,
+      exam_type: prev?.exam_type ?? examType,
+      subject,
+      semester,
+    });
+  }
+
+  return Array.from(subjectMap.values());
+};
+
+function SectionBlock({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3 rounded-lg border border-border bg-card p-4">
+      <div className="space-y-1">
+        <div className="text-sm font-semibold text-foreground">{title}</div>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 interface Props {
   schoolName: string;
   schedules: Schedule[];
@@ -48,6 +229,7 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [extractedData, setExtractedData] = useState<any[] | null>(null);
+  const [evaluationPlanData, setEvaluationPlanData] = useState<ParsedExamNotice | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [savingExtracted, setSavingExtracted] = useState(false);
 
