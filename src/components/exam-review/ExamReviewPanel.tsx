@@ -217,6 +217,22 @@ function formatDateTimeLabel(value: string | null | undefined) {
   }).format(date);
 }
 
+function formatScoreLabel(value: number | null | undefined) {
+  if (value == null) return '-';
+  return `${value}점`;
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <div
+      className="mb-3 mt-6 border-b-2 pb-2 text-[15px] font-semibold text-foreground first:mt-0"
+      style={{ borderColor: 'hsl(var(--review-correct-surface))' }}
+    >
+      {title}
+    </div>
+  );
+}
+
 async function resolvePhotoUrl(storagePath: string) {
   const publicUrl = supabase.storage.from('exam-results').getPublicUrl(storagePath).data.publicUrl;
   if (publicUrl) return publicUrl;
