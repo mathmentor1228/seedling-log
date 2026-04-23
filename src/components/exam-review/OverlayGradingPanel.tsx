@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, PenSquar
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { PhotoThumb } from '@/components/exam-review/PhotoThumb';
 
 type ItemResult = 'correct' | 'wrong' | 'partial' | '';
 
@@ -97,6 +98,16 @@ function clampScore(value: number, max: number) {
   return Math.max(0, Math.min(value, max));
 }
 
+function calcTotal(items: OverlayTemplateItem[]) {
+  return Math.round(items.reduce((sum, item) => sum + (item.points || 0), 0) * 100) / 100;
+}
+
+function displayScore(score: number) {
+  if (!Number.isFinite(score)) return '0';
+  const rounded = Math.round(score * 100) / 100;
+  return Number.isInteger(rounded) ? `${rounded}` : `${Math.round(rounded * 10) / 10}`;
+}
+
 function ResultBadge({ result, no, onClick }: { result: Exclude<ItemResult, ''>; no: number; onClick: () => void }) {
   const style = RESULT_STYLES[result];
   return (
@@ -121,8 +132,8 @@ function ScoreSummaryPanel({ items, template }: { items: OverlayReviewItem[]; te
     const correct = scoredItems.filter((item) => item.result === 'correct').length;
     const wrong = scoredItems.filter((item) => item.result === 'wrong').length;
     const partial = scoredItems.filter((item) => item.result === 'partial').length;
-    const earned = scoredItems.reduce((sum, item) => sum + (item.score_earned ?? 0), 0);
-    const total = template.items.reduce((sum, item) => sum + item.points, 0);
+    const earned = Math.round(scoredItems.reduce((sum, item) => sum + (item.score_earned ?? 0), 0) * 100) / 100;
+    const total = calcTotal(template.items);
     const remaining = template.items.filter((templateItem) => !scoredItems.some((item) => item.item_number === templateItem.no));
     return { correct, wrong, partial, earned, total, remaining };
   }, [items, template]);
@@ -137,8 +148,8 @@ function ScoreSummaryPanel({ items, template }: { items: OverlayReviewItem[]; te
       <div className="rounded-lg border border-[hsl(var(--review-progress-border))] bg-[hsl(var(--review-progress-surface))] p-4">
         <div className="text-xs text-muted-foreground">획득 점수</div>
         <div className="mt-1 text-2xl font-bold text-foreground">
-          {summary.earned}
-          <span className="ml-1 text-sm font-medium text-muted-foreground">/ {summary.total}점</span>
+          {displayScore(summary.earned)}
+          <span className="ml-1 text-sm font-medium text-muted-foreground">/ {displayScore(summary.total)}점</span>
         </div>
       </div>
 
@@ -392,6 +403,106 @@ export function OverlayGradingPanel({
                           className="h-8 w-20 px-2 text-sm"
                         />
                         <span className="text-[11px] text-muted-foreground">/ {activeItem.points}점</span>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {result === 'wrong' || result === 'partial' ? (
+                    <div className="mb-3 space-y-1.5 rounded-md bg-muted/40 p-2">
+                      {template.error_types.map((type) => (
+                        type === '기타(직접입력)' ? (
+                          <Input
+                            key={type}
+                            placeholder="직접 입력..."
+                            value={customReason}
+                            onChange={(event) => setCustomReason(event.target.value)}
+                            className="h-8 text-xs"
+                          />
+                        ) : (
+                          <label key={type} className="flex items-center gap-2 text-[11px] text-foreground">
+                            <Checkbox checked={errorTypes.includes(type)} onCheckedChange={() => handleToggleError(type)} />
+                            <span>{type}</span>
+                          </label>
+                        )
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={resetEditor} disabled={saving}>
+                      취소
+                    </Button>
+                    <Button type="button" size="sm" className="flex-1" onClick={() => void handleSave()} disabled={!result || saving}>
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '확인'}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : currentPhoto ? (
+            <>
+              <PhotoThumb
+                storagePath={currentPhoto.storage_path}
+                alt={`시험지 ${page + 1}`}
+                fit="contain"
+                className="min-h-[28rem]"
+                imageClassName="block w-full rounded-lg"
+              />
+
+              {pageItems.map((item) => (
+                <div
+                  key={`${item.item_number}-${item.page_number}`}
+                  className="absolute z-10"
+                  style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}
+                >
+                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+                </div>
+              ))}
+
+              <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="시험지 위치에 채점 마커 추가" />
+
+              {activeItem ? (
+                <div
+                  className={`absolute z-20 min-w-[220px] rounded-[10px] border border-border bg-card p-3 shadow-lg ${editorPositionClass}`}
+                  style={{ left: `${activeItem.overlay_x}%`, top: `${activeItem.overlay_y}%` }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[13px] font-semibold text-foreground">
+                      {activeItem.item_number}번 ({displayScore(activeItem.points)}점)
+                    </p>
+                    <PenSquare className="h-4 w-4 text-muted-foreground" />
+                  </div>
+
+                  <div className="mb-3 flex gap-1.5">
+                    {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
+                      const active = result === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setResult(value)}
+                          className={`flex h-11 w-11 items-center justify-center rounded-lg border text-lg font-bold transition ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
+                        >
+                          {style.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeItem.is_essay ? (
+                    <div className="mb-3">
+                      <label className="mb-1 block text-[11px] text-muted-foreground">획득 점수</label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={activeItem.points}
+                          value={earnedScore}
+                          onChange={(event) => setEarnedScore(clampScore(Number(event.target.value), activeItem.points))}
+                          className="h-8 w-20 px-2 text-sm"
+                        />
+                        <span className="text-[11px] text-muted-foreground">/ {displayScore(activeItem.points)}점</span>
                       </div>
                     </div>
                   ) : null}
