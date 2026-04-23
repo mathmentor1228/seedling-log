@@ -43,6 +43,31 @@ export function PhotoThumb({
     if (src) onResolvedUrl?.(src);
   }, [onResolvedUrl, src]);
 
+  useEffect(() => {
+    if (publicUrl) return;
+
+    let active = true;
+    triedSignedUrl.current = true;
+
+    void (async () => {
+      const signedUrl = await getSignedImageUrl(storagePath);
+      if (!active) return;
+
+      if (signedUrl) {
+        setSrc(signedUrl);
+        setFailed(false);
+        return;
+      }
+
+      setFailed(true);
+      setSrc('');
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [publicUrl, storagePath]);
+
   const handleError = async () => {
     if (triedSignedUrl.current) {
       setFailed(true);
