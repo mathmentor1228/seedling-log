@@ -84,6 +84,34 @@ const EXAM_TYPE_LABELS: Record<string, string> = {
   other: '기타',
 };
 
+function normalizeTextValue(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeGradeValue(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeExamYearValue(value: number | string | null | undefined) {
+  if (value == null || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeExamTypeValue(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return null;
+
+  const lowered = trimmed.toLowerCase();
+  if (lowered === 'midterm' || trimmed === '중간고사') return '중간고사';
+  if (lowered === 'final' || trimmed === '기말고사') return '기말고사';
+  if (lowered === 'performance' || trimmed === '수행평가') return '수행평가';
+  if (lowered === 'other' || trimmed === '기타') return '기타';
+  return trimmed;
+}
+
 function normalizeTemplateItems(raw: unknown, totalItems: number): OverlayTemplateItem[] {
   if (!Array.isArray(raw) || raw.length === 0) {
     return Array.from({ length: totalItems }, (_, index) => ({
@@ -343,26 +371,52 @@ export function ExamReviewPanel() {
   }, [toast]);
 
   const loadTemplate = useCallback(async (row: ExamResultRow | null) => {
-    if (!row?.students?.grade || !row.exam_year || !row.exam_period) {
+    const schoolName = normalizeTextValue(row?.school_name);
+    const subject = normalizeTextValue(row?.subject);
+    const grade = normalizeGradeValue(row?.students?.grade);
+    const examType = normalizeExamTypeValue(row?.exam_type);
+    const examYear = normalizeExamYearValue(row?.exam_year);
+    const examPeriod = normalizeTextValue(row?.exam_period);
+
+    if (!row || !schoolName || !subject || !grade) {
       setTemplate(null);
       return;
     }
 
     setTemplateLoading(true);
     try {
-      const { data, error } = await supabase
+      console.log('템플릿 조회 조건:', {
+        school_name: schoolName,
+        subject,
+        grade,
+        exam_type: examType,
+        exam_year: examYear,
+        exam_period: examPeriod,
+      });
+
+      let query = supabase
         .from('exam_score_templates')
-        .select('id, total_items, items, error_types')
-        .eq('school_name', row.school_name)
-        .eq('subject', row.subject)
-        .eq('grade', row.students.grade)
-        .eq('exam_type', row.exam_type)
-        .eq('exam_year', row.exam_year)
-        .eq('exam_period', row.exam_period)
-        .maybeSingle();
+        .select('id, total_items, items, error_types, created_at')
+        .eq('school_name', schoolName)
+        .eq('subject', subject)
+        .eq('grade', grade);
+
+      if (examType) {
+        query = query.eq('exam_type', examType);
+      }
+      if (examYear != null) {
+        query = query.eq('exam_year', examYear);
+      }
+      if (examPeriod) {
+        query = query.eq('exam_period', examPeriod);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(1);
 
       if (error) throw error;
-      const templateRow = (data ?? null) as ScoreTemplateRow | null;
+      const templateRow = ((data ?? [])[0] ?? null) as ScoreTemplateRow | null;
+      console.log('조회 결과:', templateRow, '에러:', error);
+
       if (!templateRow) {
         setTemplate(null);
         return;
@@ -839,7 +893,10 @@ export function ExamReviewPanel() {
         onOpenChange={setTemplateSetupOpen}
         record={selectedRow}
         currentUserId={user?.id ?? null}
-        onSaved={() => void loadResults()}
+        onSaved={() => {
+          void loadResults();
+          void loadTemplate(selectedRow);
+        }}
       />
     </>
   );
