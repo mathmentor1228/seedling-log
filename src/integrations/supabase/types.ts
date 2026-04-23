@@ -554,6 +554,9 @@ export type Database = {
           assistant_confirmed_at: string | null
           assistant_memo: string | null
           clinic_date: string
+          confirmed_at: string | null
+          confirmed_by: string | null
+          confirmed_by_name: string | null
           content: string
           created_at: string
           end_time: string | null
@@ -578,6 +581,9 @@ export type Database = {
           assistant_confirmed_at?: string | null
           assistant_memo?: string | null
           clinic_date: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           content: string
           created_at?: string
           end_time?: string | null
@@ -602,6 +608,9 @@ export type Database = {
           assistant_confirmed_at?: string | null
           assistant_memo?: string | null
           clinic_date?: string
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           content?: string
           created_at?: string
           end_time?: string | null
@@ -621,6 +630,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "clinic_records_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "clinic_records_lesson_record_id_fkey"
             columns: ["lesson_record_id"]
@@ -1588,6 +1604,9 @@ export type Database = {
         Row: {
           attendance_status: string[] | null
           class_id: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          confirmed_by_name: string | null
           course: string | null
           created_at: string
           curriculum_unit_key: string | null
@@ -1639,6 +1658,9 @@ export type Database = {
         Insert: {
           attendance_status?: string[] | null
           class_id?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           course?: string | null
           created_at?: string
           curriculum_unit_key?: string | null
@@ -1690,6 +1712,9 @@ export type Database = {
         Update: {
           attendance_status?: string[] | null
           class_id?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           course?: string | null
           created_at?: string
           curriculum_unit_key?: string | null
@@ -1744,6 +1769,13 @@ export type Database = {
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_records_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -3221,6 +3253,9 @@ export type Database = {
           assistant_confirmed: boolean
           assistant_confirmed_at: string | null
           assistant_memo: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          confirmed_by_name: string | null
           created_at: string
           duration_minutes: number | null
           end_time: string | null
@@ -3244,6 +3279,9 @@ export type Database = {
           assistant_confirmed?: boolean
           assistant_confirmed_at?: string | null
           assistant_memo?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           created_at?: string
           duration_minutes?: number | null
           end_time?: string | null
@@ -3267,6 +3305,9 @@ export type Database = {
           assistant_confirmed?: boolean
           assistant_confirmed_at?: string | null
           assistant_memo?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           created_at?: string
           duration_minutes?: number | null
           end_time?: string | null
@@ -3286,6 +3327,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "self_study_records_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "self_study_records_lesson_record_id_fkey"
             columns: ["lesson_record_id"]
@@ -4355,6 +4403,9 @@ export type Database = {
           assistant_confirmed_at: string | null
           assistant_memo: string | null
           assistant_name: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          confirmed_by_name: string | null
           content: string
           created_at: string
           end_time: string | null
@@ -4381,6 +4432,9 @@ export type Database = {
           assistant_confirmed_at?: string | null
           assistant_memo?: string | null
           assistant_name?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           content: string
           created_at?: string
           end_time?: string | null
@@ -4407,6 +4461,9 @@ export type Database = {
           assistant_confirmed_at?: string | null
           assistant_memo?: string | null
           assistant_name?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_by_name?: string | null
           content?: string
           created_at?: string
           end_time?: string | null
@@ -4428,6 +4485,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "test_records_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "test_records_lesson_record_id_fkey"
             columns: ["lesson_record_id"]
