@@ -35,6 +35,7 @@ import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
 import MathConceptPage from "./pages/MathConceptPage";
 import ExamPrepPage from "./pages/ExamPrepPage";
 import StudySessionPage from "./pages/StudySessionPage";
+import ExamReviewPage from "./pages/ExamReviewPage";
 import QuizPrintPage from "./pages/QuizPrintPage";
 import QuizSubmitPage from "./pages/QuizSubmitPage";
 import QuizBulkUploadPage from "./pages/QuizBulkUploadPage";
@@ -147,6 +148,7 @@ const App = () => (
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
                 <Route path="/exam-archive" element={<SchoolExamArchivePage />} />
+                <Route path="/exam-review" element={<ExamReviewPage />} />
                 <Route path="/vocab-generator" element={<VocabTestGeneratorPage />} />
                 <Route path="/materials/:subject" element={<SubjectMaterialPage />} />
                 <Route path="/math-concepts" element={<MathConceptPage />} />
