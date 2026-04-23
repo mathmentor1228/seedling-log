@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ExamTemplateSetup } from '@/components/exam/ExamTemplateSetup';
-import { PhotoThumb } from '@/components/exam-review/PhotoThumb';
+import {
+  OverlayGradingPanel,
+  type OverlayPhoto,
+  type OverlayReviewItem,
+  type OverlayTemplateData,
+  type OverlayTemplateItem,
+} from '@/components/exam-review/OverlayGradingPanel';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
 type ItemResult = 'correct' | 'wrong' | 'partial' | '';
@@ -24,6 +26,9 @@ interface PhotoRow {
 interface ReviewSummary {
   id: string;
   overall_comment: string | null;
+  total_score?: number | null;
+  earned_score?: number | null;
+  template_id?: string | null;
 }
 
 interface ExamResultRow {
@@ -40,17 +45,19 @@ interface ExamResultRow {
   school_name: string;
   exam_date: string | null;
   students: { name: string; grade: string | null } | null;
-  student_exam_result_photos: PhotoRow[] | null;
+  student_exam_result_photos: OverlayPhoto[] | null;
   exam_reviews: ReviewSummary[] | null;
 }
 
-interface ItemReviewDraft {
-  id?: string;
-  item_number: number;
-  result: ItemResult;
-  error_types: string[];
-  item_comment: string;
+interface ScoreTemplateRow {
+  id: string;
+  total_items: number;
+  items: unknown;
+  error_types: unknown;
 }
+
+const DEFAULT_TOTAL_ITEMS = 20;
+const ALWAYS_INCLUDED_ERROR_TYPE = '기타(직접입력)';
 
 const STATUS_OPTIONS: Array<{ value: 'all' | ReviewStatus; label: string }> = [
   { value: 'all', label: '전체' },
@@ -72,14 +79,33 @@ const EXAM_TYPE_LABELS: Record<string, string> = {
   other: '기타',
 };
 
-const ERROR_TYPES = ['개념이해 부족', '계산실수', '문제이해 오류', '시간부족', '풀이누락', '유형파악 못함'] as const;
+function normalizeTemplateItems(raw: unknown, totalItems: number): OverlayTemplateItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return Array.from({ length: totalItems }, (_, index) => ({
+      no: index + 1,
+      type: '객관식',
+      points: 0,
+      is_essay: false,
+    }));
+  }
 
-function createItemDrafts(count: number, source: ItemReviewDraft[] = []): ItemReviewDraft[] {
-  return Array.from({ length: count }, (_, index) => {
-    const itemNumber = index + 1;
-    const existing = source.find((item) => item.item_number === itemNumber);
-    return existing ?? { item_number: itemNumber, result: '', error_types: [], item_comment: '' };
-  });
+  return raw
+    .map((item, index) => {
+      const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+      const isEssay = source.is_essay === true || source.type === '주관식';
+      return {
+        no: typeof source.no === 'number' && Number.isFinite(source.no) ? source.no : index + 1,
+        type: isEssay ? '주관식' : '객관식',
+        points: typeof source.points === 'number' && Number.isFinite(source.points) ? source.points : 0,
+        is_essay: isEssay,
+      } satisfies OverlayTemplateItem;
+    })
+    .sort((a, b) => a.no - b.no);
+}
+
+function normalizeErrorTypes(raw: unknown) {
+  const values = Array.isArray(raw) ? raw.filter((value): value is string => typeof value === 'string') : [];
+  return Array.from(new Set([...values, ALWAYS_INCLUDED_ERROR_TYPE]));
 }
 
 function SectionTitle({ title }: { title: string }) {
@@ -143,19 +169,6 @@ function getStatusClasses(status: ReviewStatus, selected: boolean) {
   };
 }
 
-function getResultButtonClasses(active: boolean, value: Exclude<ItemResult, ''>) {
-  if (!active) {
-    return 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]';
-  }
-  if (value === 'correct') {
-    return 'border-[hsl(var(--review-correct-border))] bg-[hsl(var(--review-correct-surface))] text-[hsl(var(--review-correct-foreground))]';
-  }
-  if (value === 'wrong') {
-    return 'border-[hsl(var(--review-wrong-border))] bg-[hsl(var(--review-wrong-surface))] text-[hsl(var(--review-wrong-foreground))]';
-  }
-  return 'border-[hsl(var(--review-partial-border))] bg-[hsl(var(--review-partial-surface))] text-[hsl(var(--review-partial-foreground))]';
-}
-
 export function ExamReviewPanel() {
   const { user, fullName } = useAuth();
   const { toast } = useToast();
@@ -166,13 +179,13 @@ export function ExamReviewPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
   const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [overallComment, setOverallComment] = useState('');
-  const [itemCount, setItemCount] = useState(20);
-  const [itemReviews, setItemReviews] = useState<ItemReviewDraft[]>([]);
+  const [itemReviews, setItemReviews] = useState<OverlayReviewItem[]>([]);
+  const [template, setTemplate] = useState<OverlayTemplateData | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
 
   const loadResults = useCallback(async () => {
     setLoading(true);
@@ -240,11 +253,42 @@ export function ExamReviewPanel() {
     return { correct, wrong, partial, topErrorType };
   }, [itemReviews]);
 
+  useEffect(() => {
+    let active = true;
+
+    const resolveUrls = async () => {
+      const missingPhotos = sortedPhotos.filter((photo) => !resolvedPhotoUrls[photo.storage_path]);
+      if (missingPhotos.length === 0) return;
+
+      const entries = await Promise.all(
+        missingPhotos.map(async (photo) => {
+          const url = await resolvePhotoUrl(photo.storage_path);
+          return [photo.storage_path, url] as const;
+        }),
+      );
+
+      if (!active) return;
+      setResolvedPhotoUrls((prev) => {
+        const next = { ...prev };
+        entries.forEach(([storagePath, url]) => {
+          if (url) next[storagePath] = url;
+        });
+        return next;
+      });
+    };
+
+    void resolveUrls();
+
+    return () => {
+      active = false;
+    };
+  }, [resolvedPhotoUrls, sortedPhotos]);
+
   const loadReviewDetail = useCallback(async (resultId: string) => {
     try {
       const { data: reviews, error: reviewError } = await supabase
         .from('exam_reviews')
-        .select('id, overall_comment, created_at')
+        .select('id, overall_comment, created_at, template_id, total_score, earned_score')
         .eq('result_id', resultId)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -256,32 +300,75 @@ export function ExamReviewPanel() {
       setOverallComment(currentReview?.overall_comment ?? '');
 
       if (!currentReview) {
-        setItemCount(20);
-        setItemReviews(createItemDrafts(20));
+        setItemReviews([]);
         return;
       }
 
       const { data: items, error: itemError } = await supabase
         .from('exam_item_reviews')
-        .select('id, item_number, result, error_types, item_comment')
+        .select('id, item_number, result, error_types, item_comment, score_earned, is_essay, custom_reason, overlay_x, overlay_y, page_number')
         .eq('review_id', currentReview.id)
         .order('item_number', { ascending: true });
 
       if (itemError) throw itemError;
 
-      const drafts: ItemReviewDraft[] = (items ?? []).map((item) => ({
+      const drafts: OverlayReviewItem[] = (items ?? []).map((item) => ({
         id: item.id,
         item_number: item.item_number,
         result: (item.result ?? '') as ItemResult,
         error_types: Array.isArray(item.error_types) ? item.error_types.filter((value): value is string => typeof value === 'string') : [],
         item_comment: item.item_comment ?? '',
+        score_earned: item.score_earned ?? 0,
+        is_essay: item.is_essay ?? false,
+        custom_reason: item.custom_reason ?? '',
+        overlay_x: item.overlay_x ?? null,
+        overlay_y: item.overlay_y ?? null,
+        page_number: item.page_number ?? null,
       }));
 
-      const nextCount = Math.max(20, drafts.length || 0);
-      setItemCount(nextCount);
-      setItemReviews(createItemDrafts(nextCount, drafts));
+      setItemReviews(drafts);
     } catch (error: any) {
       toast({ title: '리뷰 조회 실패', description: error.message, variant: 'destructive' });
+    }
+  }, [toast]);
+
+  const loadTemplate = useCallback(async (row: ExamResultRow | null) => {
+    if (!row?.students?.grade || !row.exam_year || !row.exam_period) {
+      setTemplate(null);
+      return;
+    }
+
+    setTemplateLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('exam_score_templates')
+        .select('id, total_items, items, error_types')
+        .eq('school_name', row.school_name)
+        .eq('subject', row.subject)
+        .eq('grade', row.students.grade)
+        .eq('exam_type', row.exam_type)
+        .eq('exam_year', row.exam_year)
+        .eq('exam_period', row.exam_period)
+        .maybeSingle();
+
+      if (error) throw error;
+      const templateRow = (data ?? null) as ScoreTemplateRow | null;
+      if (!templateRow) {
+        setTemplate(null);
+        return;
+      }
+
+      setTemplate({
+        id: templateRow.id,
+        total_items: templateRow.total_items,
+        items: normalizeTemplateItems(templateRow.items, templateRow.total_items || DEFAULT_TOTAL_ITEMS),
+        error_types: normalizeErrorTypes(templateRow.error_types),
+      });
+    } catch (error: any) {
+      setTemplate(null);
+      toast({ title: '템플릿 조회 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setTemplateLoading(false);
     }
   }, [toast]);
 
@@ -305,41 +392,14 @@ export function ExamReviewPanel() {
     if (!selectedId) {
       setReviewId(null);
       setOverallComment('');
-      setItemCount(20);
-      setItemReviews(createItemDrafts(20));
+      setItemReviews([]);
+      setTemplate(null);
       return;
     }
     void markInReview(selectedId);
     void loadReviewDetail(selectedId);
-  }, [loadReviewDetail, markInReview, selectedId]);
-
-  const handleItemCountChange = (value: number) => {
-    const safeCount = Math.max(1, Number.isFinite(value) ? value : 20);
-    setItemCount(safeCount);
-    setItemReviews((prev) => createItemDrafts(safeCount, prev));
-  };
-
-  const setItemResult = (itemNumber: number, value: Exclude<ItemResult, ''>) => {
-    setItemReviews((prev) => prev.map((item) => {
-      if (item.item_number !== itemNumber) return item;
-      const nextValue: ItemResult = item.result === value ? '' : value;
-      return {
-        ...item,
-        result: nextValue,
-        error_types: nextValue === 'correct' ? [] : item.error_types,
-      };
-    }));
-  };
-
-  const toggleError = (itemNumber: number, errorType: string, checked: boolean) => {
-    setItemReviews((prev) => prev.map((item) => {
-      if (item.item_number !== itemNumber) return item;
-      const error_types = checked
-        ? Array.from(new Set([...item.error_types, errorType]))
-        : item.error_types.filter((value) => value !== errorType);
-      return { ...item, error_types };
-    }));
-  };
+    void loadTemplate(selectedRow);
+  }, [loadReviewDetail, loadTemplate, markInReview, selectedId, selectedRow]);
 
   const persistReview = useCallback(async (markDone: boolean) => {
     if (!selectedRow || !user) return false;
@@ -380,8 +440,14 @@ export function ExamReviewPanel() {
           review_id: currentReviewId,
           item_number: item.item_number,
           result: item.result || null,
-          error_types: item.error_types as Json,
+          error_types: item.error_types,
           item_comment: item.item_comment.trim() || null,
+          score_earned: item.score_earned ?? 0,
+          is_essay: item.is_essay,
+          custom_reason: item.custom_reason.trim() || null,
+          overlay_x: item.overlay_x,
+          overlay_y: item.overlay_y,
+          page_number: item.page_number,
         }));
         const { error: insertError } = await supabase.from('exam_item_reviews').insert(insertPayload);
         if (insertError) throw insertError;
@@ -404,6 +470,97 @@ export function ExamReviewPanel() {
       setCompleting(false);
     }
   }, [fullName, itemReviews, loadResults, loadReviewDetail, overallComment, selectedRow, toast, user]);
+
+  const saveOverlayItem = useCallback(async (payload: {
+    id?: string;
+    item_number: number;
+    result: Exclude<ItemResult, ''>;
+    score_earned: number;
+    is_essay: boolean;
+    error_types: string[];
+    custom_reason: string;
+    overlay_x: number;
+    overlay_y: number;
+    page_number: number;
+  }) => {
+    if (!selectedRow || !user || !template) return;
+
+    const nowIso = new Date().toISOString();
+    const reviewerName = fullName || user.email || '교직원';
+
+    setSaving(true);
+    try {
+      const { data: upsertedReview, error: reviewError } = await supabase
+        .from('exam_reviews')
+        .upsert(
+          {
+            result_id: selectedRow.id,
+            reviewed_by: user.id,
+            reviewed_by_name: reviewerName,
+            overall_comment: overallComment.trim() || null,
+            template_id: template.id,
+            updated_at: nowIso,
+          },
+          { onConflict: 'result_id' },
+        )
+        .select('id')
+        .single();
+
+      if (reviewError) throw reviewError;
+
+      const currentReviewId = upsertedReview.id;
+      setReviewId(currentReviewId);
+
+      const { error: itemError } = await supabase.from('exam_item_reviews').upsert(
+        {
+          review_id: currentReviewId,
+          item_number: payload.item_number,
+          result: payload.result,
+          score_earned: payload.score_earned,
+          is_essay: payload.is_essay,
+          error_types: payload.error_types,
+          custom_reason: payload.custom_reason || null,
+          overlay_x: payload.overlay_x,
+          overlay_y: payload.overlay_y,
+          page_number: payload.page_number,
+        },
+        { onConflict: 'review_id,item_number' },
+      );
+
+      if (itemError) throw itemError;
+
+      const mergedItems = itemReviews.filter((item) => item.item_number !== payload.item_number).concat({
+        id: payload.id,
+        item_number: payload.item_number,
+        result: payload.result,
+        error_types: payload.error_types,
+        item_comment: '',
+        score_earned: payload.score_earned,
+        is_essay: payload.is_essay,
+        custom_reason: payload.custom_reason,
+        overlay_x: payload.overlay_x,
+        overlay_y: payload.overlay_y,
+        page_number: payload.page_number,
+      });
+
+      const earnedScore = mergedItems.reduce((sum, item) => sum + (item.score_earned ?? 0), 0);
+      const totalScore = template.items.reduce((sum, item) => sum + item.points, 0);
+
+      const { error: scoreError } = await supabase
+        .from('exam_reviews')
+        .update({ earned_score: earnedScore, total_score: totalScore, template_id: template.id, updated_at: nowIso })
+        .eq('id', currentReviewId);
+
+      if (scoreError) throw scoreError;
+
+      await loadReviewDetail(selectedRow.id);
+    } catch (error: any) {
+      toast({ title: '문항 저장 실패', description: error.message, variant: 'destructive' });
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  }, [fullName, itemReviews, loadReviewDetail, overallComment, selectedRow, template, toast, user]);
 
   return (
     <>
@@ -508,108 +665,17 @@ export function ExamReviewPanel() {
               </div>
 
               <div className="mb-8">
-                <SectionTitle title="시험지 사진" />
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {sortedPhotos.map((photo, index) => (
-                    <button
-                      key={photo.id}
-                      type="button"
-                      onClick={async () => {
-                        const cachedUrl = resolvedPhotoUrls[photo.storage_path];
-                        if (cachedUrl) {
-                          setSelectedImage(cachedUrl);
-                          return;
-                        }
-                        const resolvedUrl = await resolvePhotoUrl(photo.storage_path);
-                        if (resolvedUrl) {
-                          setResolvedPhotoUrls((prev) => ({ ...prev, [photo.storage_path]: resolvedUrl }));
-                          setSelectedImage(resolvedUrl);
-                        } else {
-                          toast({ title: '사진을 불러올 수 없습니다', variant: 'destructive' });
-                        }
-                      }}
-                      className="relative cursor-pointer text-left"
-                    >
-                      <PhotoThumb
-                        storagePath={photo.storage_path}
-                        alt={`시험지 ${index + 1}`}
-                        className="block h-40 w-full rounded-lg border border-border"
-                        imageClassName="block h-40 w-full rounded-lg border border-border object-cover"
-                        onResolvedUrl={(url) => setResolvedPhotoUrls((prev) => (prev[photo.storage_path] ? prev : { ...prev, [photo.storage_path]: url }))}
-                      />
-                      <div className="absolute bottom-1.5 left-1.5 rounded bg-black/50 px-2 py-0.5 text-[11px] text-white">
-                        {index + 1}번째
-                      </div>
-                    </button>
-                  ))}
-                  {sortedPhotos.length === 0 ? (
-                    <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                      등록된 시험지 사진이 없습니다.
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mb-8">
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <div className="min-w-[180px] flex-1">
-                    <SectionTitle title="문항별 채점" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] text-muted-foreground">총 문항 수</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={itemCount}
-                      onChange={(event) => handleItemCountChange(Number(event.target.value) || 1)}
-                      className="h-9 w-[60px] px-2 text-center"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
-                  {itemReviews.map((item) => {
-                    const showErrors = item.result === 'wrong' || item.result === 'partial';
-                    return (
-                      <div key={item.item_number} className="rounded-[10px] border border-border bg-background px-2 py-3 text-center">
-                        <div className="mb-2 text-xs text-muted-foreground">{item.item_number}번</div>
-                        <div className="flex justify-center gap-1">
-                          {([
-                            ['correct', 'O'],
-                            ['wrong', 'X'],
-                            ['partial', '△'],
-                          ] as const).map(([value, label]) => {
-                            const active = item.result === value;
-                            return (
-                              <button
-                                key={value}
-                                type="button"
-                                onClick={() => setItemResult(item.item_number, value)}
-                                className={`h-9 w-9 rounded-md border text-[15px] font-bold ${getResultButtonClasses(active, value)}`}
-                              >
-                                {label}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {showErrors ? (
-                          <div className="mt-2 text-left">
-                            {ERROR_TYPES.map((type) => (
-                              <label key={type} className="mb-1 flex cursor-pointer items-center gap-1 text-[10px] text-foreground/80">
-                                <Checkbox
-                                  checked={item.error_types.includes(type)}
-                                  onCheckedChange={(checked) => toggleError(item.item_number, type, checked === true)}
-                                />
-                                <span>{type}</span>
-                              </label>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+                <SectionTitle title="오버레이 채점" />
+                <OverlayGradingPanel
+                  photos={sortedPhotos}
+                  photoUrls={resolvedPhotoUrls}
+                  template={template}
+                  templateLoading={templateLoading}
+                  items={itemReviews}
+                  saving={saving}
+                  onSaveItem={saveOverlayItem}
+                  onOpenTemplateSetup={() => setTemplateSetupOpen(true)}
+                />
               </div>
 
               <div className="mb-6 rounded-[10px] border p-4" style={{ backgroundColor: 'hsl(var(--review-photo-placeholder-surface) / 0.35)', borderColor: 'hsl(var(--review-correct-surface))' }}>
@@ -649,19 +715,6 @@ export function ExamReviewPanel() {
           )}
         </div>
       </div>
-
-      <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>시험지 원본 보기</DialogTitle>
-          </DialogHeader>
-          {selectedImage ? (
-            <div className="max-h-[80vh] overflow-hidden rounded-md border border-border bg-muted/20 p-2">
-              <img src={selectedImage} alt="시험지 원본" className="max-h-[76vh] w-full rounded-md object-contain" />
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
 
       <ExamTemplateSetup
         open={templateSetupOpen}
