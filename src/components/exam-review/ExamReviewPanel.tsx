@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { displayExamType, normalizeExamType, normalizeGrade, normalizeTextValue } from '@/lib/examTemplateUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -77,39 +78,10 @@ const STATUS_LABEL: Record<ReviewStatus, string> = {
   done: '완료',
 };
 
-const EXAM_TYPE_LABELS: Record<string, string> = {
-  midterm: '중간고사',
-  final: '기말고사',
-  performance: '수행평가',
-  other: '기타',
-};
-
-function normalizeTextValue(value: string | null | undefined) {
-  const trimmed = value?.trim() ?? '';
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normalizeGradeValue(value: string | null | undefined) {
-  const trimmed = value?.trim() ?? '';
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 function normalizeExamYearValue(value: number | string | null | undefined) {
   if (value == null || value === '') return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeExamTypeValue(value: string | null | undefined) {
-  const trimmed = value?.trim() ?? '';
-  if (!trimmed) return null;
-
-  const lowered = trimmed.toLowerCase();
-  if (lowered === 'midterm' || trimmed === '중간고사') return '중간고사';
-  if (lowered === 'final' || trimmed === '기말고사') return '기말고사';
-  if (lowered === 'performance' || trimmed === '수행평가') return '수행평가';
-  if (lowered === 'other' || trimmed === '기타') return '기타';
-  return trimmed;
 }
 
 function normalizeTemplateItems(raw: unknown, totalItems: number): OverlayTemplateItem[] {
@@ -373,8 +345,8 @@ export function ExamReviewPanel() {
   const loadTemplate = useCallback(async (row: ExamResultRow | null) => {
     const schoolName = normalizeTextValue(row?.school_name);
     const subject = normalizeTextValue(row?.subject);
-    const grade = normalizeGradeValue(row?.students?.grade);
-    const examType = normalizeExamTypeValue(row?.exam_type);
+    const grade = normalizeGrade(row?.students?.grade);
+    const examType = normalizeExamType(row?.exam_type);
     const examYear = normalizeExamYearValue(row?.exam_year);
     const examPeriod = normalizeTextValue(row?.exam_period);
 
@@ -411,10 +383,10 @@ export function ExamReviewPanel() {
         query = query.eq('exam_period', examPeriod);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false }).limit(1);
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
 
       if (error) throw error;
-      const templateRow = ((data ?? [])[0] ?? null) as ScoreTemplateRow | null;
+      const templateRow = (data ?? null) as ScoreTemplateRow | null;
       console.log('조회 결과:', templateRow, '에러:', error);
 
       if (!templateRow) {
@@ -767,7 +739,7 @@ export function ExamReviewPanel() {
                     </div>
                     <div className="mb-1 text-[15px] font-bold text-foreground">{record.students?.name ?? '이름 없음'}</div>
                     <div className="text-xs text-muted-foreground">
-                      {record.school_name} · {EXAM_TYPE_LABELS[record.exam_type] ?? record.exam_type} · 예상 {formatScoreLabel(record.expected_score)}
+                      {record.school_name} · {displayExamType(record.exam_type)} · 예상 {formatScoreLabel(record.expected_score)}
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground/80">
                       사진 {record.student_exam_result_photos?.length ?? 0}장 · {formatDateTimeLabel(record.submitted_at)}
@@ -795,7 +767,7 @@ export function ExamReviewPanel() {
                     </span>
                   </div>
                   <div className="mt-1.5 text-[13px] text-muted-foreground">
-                    {selectedRow.school_name} · {EXAM_TYPE_LABELS[selectedRow.exam_type] ?? selectedRow.exam_type} · 예상 {formatScoreLabel(selectedRow.expected_score)}{selectedRow.actual_score != null ? ` → 실제 ${formatScoreLabel(selectedRow.actual_score)}` : ''}
+                    {selectedRow.school_name} · {displayExamType(selectedRow.exam_type)} · 예상 {formatScoreLabel(selectedRow.expected_score)}{selectedRow.actual_score != null ? ` → 실제 ${formatScoreLabel(selectedRow.actual_score)}` : ''}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
