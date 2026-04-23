@@ -148,6 +148,7 @@ export default function ExamReviewPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [overallComment, setOverallComment] = useState('');
+  const [itemCount, setItemCount] = useState(20);
   const [itemReviews, setItemReviews] = useState<ItemReviewDraft[]>([]);
 
   const loadResults = useCallback(async () => {
@@ -227,7 +228,8 @@ export default function ExamReviewPage() {
       setOverallComment(currentReview?.overall_comment ?? '');
 
       if (!currentReview) {
-        setItemReviews([]);
+        setItemCount(20);
+        setItemReviews(createItemDrafts(20));
         return;
       }
 
@@ -243,10 +245,12 @@ export default function ExamReviewPage() {
         id: item.id,
         item_number: item.item_number,
         result: (item.result ?? '') as ItemResult,
-        error_types: Array.isArray(item.error_types) ? item.error_types.join(', ') : '',
+        error_types: Array.isArray(item.error_types) ? item.error_types.filter((value): value is string => typeof value === 'string') : [],
         item_comment: item.item_comment ?? '',
       }));
-      setItemReviews(drafts);
+      const nextCount = Math.max(20, drafts.length || 0);
+      setItemCount(nextCount);
+      setItemReviews(createItemDrafts(nextCount, drafts));
     } catch (error: any) {
       toast({ title: '리뷰 조회 실패', description: error.message, variant: 'destructive' });
     }
@@ -271,6 +275,7 @@ export default function ExamReviewPage() {
     if (!selectedId) {
       setReviewId(null);
       setOverallComment('');
+      setItemCount(20);
       setItemReviews([]);
       return;
     }
@@ -283,17 +288,24 @@ export default function ExamReviewPage() {
     setSelectedId(resultId);
   };
 
-  const handleAddItem = () => {
-    const maxNumber = itemReviews.reduce((max, item) => Math.max(max, item.item_number), 0);
-    setItemReviews((prev) => [...prev, { item_number: maxNumber + 1, result: '', error_types: '', item_comment: '' }]);
+  const handleItemCountChange = (value: number) => {
+    const safeCount = Math.max(1, Number.isFinite(value) ? value : 20);
+    setItemCount(safeCount);
+    setItemReviews((prev) => createItemDrafts(safeCount, prev));
   };
 
   const handleChangeItem = <K extends keyof ItemReviewDraft>(index: number, key: K, value: ItemReviewDraft[K]) => {
     setItemReviews((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item));
   };
 
-  const handleRemoveItem = (index: number) => {
-    setItemReviews((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  const handleToggleErrorType = (index: number, errorType: string, checked: boolean) => {
+    setItemReviews((prev) => prev.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const nextErrorTypes = checked
+        ? Array.from(new Set([...item.error_types, errorType]))
+        : item.error_types.filter((value) => value !== errorType);
+      return { ...item, error_types: nextErrorTypes };
+    }));
   };
 
   const persistReview = useCallback(async (markDone: boolean) => {
@@ -302,14 +314,7 @@ export default function ExamReviewPage() {
     const nowIso = new Date().toISOString();
     const reviewerName = fullName || user.email || '교직원';
     const normalizedItems = itemReviews
-      .filter((item) => item.item_number > 0)
-      .map((item) => ({
-        ...item,
-        error_types: item.error_types
-          .split(',')
-          .map((part) => part.trim())
-          .filter(Boolean),
-      }));
+      .filter((item) => item.item_number > 0 && item.result !== '');
 
     const reviewPayload = {
       result_id: selectedRow.id,
