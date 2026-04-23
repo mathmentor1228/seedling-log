@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Loader2, FileSearch } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Json } from '@/integrations/supabase/types';
+import { PhotoThumb } from '@/components/exam-review/PhotoThumb';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
 type ItemResult = 'correct' | 'wrong' | 'partial' | '';
@@ -72,30 +73,94 @@ const STATUS_OPTIONS: Array<{ value: 'all' | ReviewStatus; label: string }> = [
   { value: 'done', label: '완료' },
 ];
 
-const STATUS_BADGE: Record<ReviewStatus, string> = {
-  pending: 'bg-warning/15 text-warning border-warning/30',
-  in_review: 'bg-primary/15 text-primary border-primary/30',
-  done: 'bg-success/15 text-success border-success/30',
-};
-
 const STATUS_LABEL: Record<ReviewStatus, string> = {
   pending: '대기중',
   in_review: '리뷰중',
   done: '완료',
 };
 
+const STATUS_STYLE: Record<ReviewStatus, { card: React.CSSProperties; badge: React.CSSProperties }> = {
+  pending: {
+    card: {
+      borderWidth: '2px',
+      borderColor: 'hsl(var(--review-pending-border))',
+      backgroundColor: 'hsl(var(--review-pending-surface))',
+    },
+    badge: {
+      backgroundColor: 'hsl(var(--review-pending-badge))',
+      color: 'hsl(var(--review-pending-badge-foreground))',
+    },
+  },
+  in_review: {
+    card: {
+      borderWidth: '2px',
+      borderColor: 'hsl(var(--review-progress-border))',
+      backgroundColor: 'hsl(var(--review-progress-surface))',
+    },
+    badge: {
+      backgroundColor: 'hsl(var(--review-progress-badge))',
+      color: 'hsl(var(--review-progress-badge-foreground))',
+    },
+  },
+  done: {
+    card: {
+      borderWidth: '1px',
+      borderColor: 'hsl(var(--review-done-border))',
+      backgroundColor: 'hsl(var(--review-done-surface))',
+      opacity: 0.75,
+    },
+    badge: {
+      backgroundColor: 'hsl(var(--review-done-badge))',
+      color: 'hsl(var(--review-done-badge-foreground))',
+    },
+  },
+};
+
 const EXAM_TYPE_LABELS: Record<string, string> = {
-  midterm: '중간',
-  final: '기말',
-  performance: '수행',
+  midterm: '중간고사',
+  final: '기말고사',
+  performance: '수행평가',
   other: '기타',
 };
 
-const RESULT_BUTTONS: Array<{ value: Exclude<ItemResult, ''>; label: string; className: string }> = [
-  { value: 'correct', label: 'O', className: 'border-success/40 bg-success/10 text-success hover:bg-success/15' },
-  { value: 'wrong', label: 'X', className: 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15' },
-  { value: 'partial', label: '△', className: 'border-warning/40 bg-warning/10 text-warning hover:bg-warning/15' },
-];
+const RESULT_BUTTON_STYLES: Record<Exclude<ItemResult, ''>, { active: React.CSSProperties; idle: React.CSSProperties }> = {
+  correct: {
+    active: {
+      backgroundColor: 'hsl(var(--review-correct-surface))',
+      border: '2px solid hsl(var(--review-correct-border))',
+      color: 'hsl(var(--review-correct-foreground))',
+    },
+    idle: {
+      backgroundColor: 'hsl(var(--review-idle-surface))',
+      border: '1px solid hsl(var(--review-idle-border))',
+      color: 'hsl(var(--review-idle-foreground))',
+    },
+  },
+  wrong: {
+    active: {
+      backgroundColor: 'hsl(var(--review-wrong-surface))',
+      border: '2px solid hsl(var(--review-wrong-border))',
+      color: 'hsl(var(--review-wrong-foreground))',
+    },
+    idle: {
+      backgroundColor: 'hsl(var(--review-idle-surface))',
+      border: '1px solid hsl(var(--review-idle-border))',
+      color: 'hsl(var(--review-idle-foreground))',
+    },
+  },
+  partial: {
+    active: {
+      backgroundColor: 'hsl(var(--review-partial-surface))',
+      border: '2px solid hsl(var(--review-partial-border))',
+      color: 'hsl(var(--review-partial-foreground))',
+    },
+    idle: {
+      backgroundColor: 'hsl(var(--review-idle-surface))',
+      border: '1px solid hsl(var(--review-idle-border))',
+      color: 'hsl(var(--review-idle-foreground))',
+    },
+  },
+};
 
 const ERROR_TYPES = ['개념이해 부족', '계산실수', '문제이해 오류', '시간부족', '풀이누락', '유형파악 못함'] as const;
 
@@ -128,8 +193,35 @@ function calculateReviewStats(items: ItemReviewDraft[]): ReviewStats | null {
   };
 }
 
-function getPublicPhotoUrl(path: string) {
-  return supabase.storage.from('exam-results').getPublicUrl(path).data.publicUrl;
+function formatDateLabel(value: string | null | undefined) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function formatDateTimeLabel(value: string | null | undefined) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+async function resolvePhotoUrl(storagePath: string) {
+  const publicUrl = supabase.storage.from('exam-results').getPublicUrl(storagePath).data.publicUrl;
+  if (publicUrl) return publicUrl;
+  const { data } = await supabase.storage.from('exam-results').createSignedUrl(storagePath, 3600);
+  return data?.signedUrl ?? '';
 }
 
 export function ExamReviewPanel() {
@@ -144,6 +236,7 @@ export function ExamReviewPanel() {
   const [gradeFilter, setGradeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [overallComment, setOverallComment] = useState('');
   const [itemCount, setItemCount] = useState(20);
@@ -174,7 +267,9 @@ export function ExamReviewPanel() {
         .order('submitted_at', { ascending: false });
 
       if (error) throw error;
-      setRows((data ?? []) as unknown as ExamResultRow[]);
+      const nextRows = (data ?? []) as unknown as ExamResultRow[];
+      setRows(nextRows);
+      setSelectedId((prev) => prev ?? nextRows[0]?.id ?? null);
     } catch (error: any) {
       toast({ title: '목록 조회 실패', description: error.message, variant: 'destructive' });
     } finally {
@@ -183,12 +278,17 @@ export function ExamReviewPanel() {
   }, [toast]);
 
   useEffect(() => {
-    loadResults();
+    void loadResults();
   }, [loadResults]);
 
   const selectedRow = useMemo(
     () => rows.find((row) => row.id === selectedId) ?? null,
     [rows, selectedId],
+  );
+
+  const sortedPhotos = useMemo(
+    () => (selectedRow?.student_exam_result_photos ?? []).slice().sort((a, b) => a.sort_order - b.sort_order),
+    [selectedRow],
   );
 
   const subjectOptions = useMemo(
@@ -267,7 +367,7 @@ export function ExamReviewPanel() {
       .eq('review_status', 'pending');
 
     if (!error) {
-      setRows((prev) => prev.map((item) => item.id === resultId ? { ...item, review_status: 'in_review' } : item));
+      setRows((prev) => prev.map((item) => (item.id === resultId ? { ...item, review_status: 'in_review' } : item)));
     }
   }, [rows]);
 
@@ -284,10 +384,6 @@ export function ExamReviewPanel() {
     void loadReviewDetail(selectedId);
   }, [loadReviewDetail, markInReview, selectedId]);
 
-  const handleSelectResult = (resultId: string) => {
-    setSelectedId(resultId);
-  };
-
   const handleItemCountChange = (value: number) => {
     const safeCount = Math.max(1, Number.isFinite(value) ? value : 20);
     setItemCount(safeCount);
@@ -295,7 +391,14 @@ export function ExamReviewPanel() {
   };
 
   const handleChangeItem = <K extends keyof ItemReviewDraft>(index: number, key: K, value: ItemReviewDraft[K]) => {
-    setItemReviews((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item));
+    setItemReviews((prev) => prev.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const next = { ...item, [key]: value };
+      if (key === 'result' && value === 'correct') {
+        next.error_types = [];
+      }
+      return next;
+    }));
   };
 
   const handleToggleErrorType = (index: number, errorType: string, checked: boolean) => {
@@ -313,40 +416,31 @@ export function ExamReviewPanel() {
 
     const nowIso = new Date().toISOString();
     const reviewerName = fullName || user.email || '교직원';
-    const normalizedItems = itemReviews
-      .filter((item) => item.item_number > 0 && item.result !== '');
-
-    const reviewPayload = {
-      result_id: selectedRow.id,
-      reviewed_by: user.id,
-      reviewed_by_name: reviewerName,
-      overall_comment: overallComment.trim() || null,
-      updated_at: nowIso,
-      ...(markDone ? { reviewed_at: nowIso } : {}),
-    };
+    const normalizedItems = itemReviews.filter((item) => item.item_number > 0 && item.result !== '');
 
     setSaving(true);
     if (markDone) setCompleting(true);
 
     try {
-      let currentReviewId = reviewId;
+      const { data: upsertedReview, error: reviewError } = await supabase
+        .from('exam_reviews')
+        .upsert(
+          {
+            result_id: selectedRow.id,
+            reviewed_by: user.id,
+            reviewed_by_name: reviewerName,
+            overall_comment: overallComment.trim() || null,
+            updated_at: nowIso,
+            reviewed_at: markDone ? nowIso : null,
+          },
+          { onConflict: 'result_id' },
+        )
+        .select('id')
+        .single();
 
-      if (currentReviewId) {
-        const { error } = await supabase
-          .from('exam_reviews')
-          .update(reviewPayload)
-          .eq('id', currentReviewId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from('exam_reviews')
-          .insert({ ...reviewPayload, reviewed_at: markDone ? nowIso : null })
-          .select('id')
-          .single();
-        if (error) throw error;
-        currentReviewId = data.id;
-        setReviewId(currentReviewId);
-      }
+      if (reviewError) throw reviewError;
+      const currentReviewId = upsertedReview.id;
+      setReviewId(currentReviewId);
 
       const { error: deleteError } = await supabase
         .from('exam_item_reviews')
@@ -385,306 +479,339 @@ export function ExamReviewPanel() {
       setSaving(false);
       setCompleting(false);
     }
-  }, [fullName, itemReviews, loadResults, loadReviewDetail, overallComment, reviewId, selectedRow, toast, user]);
+  }, [fullName, itemReviews, loadResults, loadReviewDetail, overallComment, selectedRow, toast, user]);
 
   return (
     <>
       <div className="space-y-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">내신 시험지 리뷰</h1>
-            <p className="text-sm text-muted-foreground">업로드된 시험지를 확인하고 문항별 리뷰를 남길 수 있습니다.</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">내신 시험지 리뷰</h1>
+          <p className="text-sm text-muted-foreground">업로드된 시험지를 확인하고 사진, 문항별 채점, 코멘트를 한 화면에서 정리합니다.</p>
+        </div>
 
-          <div className="flex min-h-[calc(100vh-12rem)] flex-col gap-4 lg:flex-row">
-            <Card className="w-full lg:w-80 lg:min-w-80 lg:max-w-80">
-              <CardHeader className="space-y-3 pb-4">
-                <CardTitle className="text-base">업로드 목록</CardTitle>
-                <div className="grid gap-2">
-                  <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="과목 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">전체 과목</SelectItem>
-                      {subjectOptions.map((subject) => (
-                        <SelectItem key={subject} value={subject}>{subject}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+        <div className="flex min-h-[calc(100vh-12rem)] flex-col gap-4 xl:flex-row">
+          <Card className="w-full xl:w-[360px] xl:min-w-[360px]">
+            <CardHeader className="space-y-3 pb-4">
+              <CardTitle className="text-base">업로드 목록</CardTitle>
+              <div className="grid gap-2">
+                <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="과목 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 과목</SelectItem>
+                    {subjectOptions.map((subject) => (
+                      <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-                  <Select value={gradeFilter} onValueChange={setGradeFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="학년 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">전체 학년</SelectItem>
-                      {gradeOptions.map((grade) => (
-                        <SelectItem key={grade} value={grade}>{grade}학년</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <Select value={gradeFilter} onValueChange={setGradeFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="학년 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 학년</SelectItem>
+                    {gradeOptions.map((grade) => (
+                      <SelectItem key={grade} value={grade}>{grade}학년</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-                  <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | ReviewStatus)}>
-                    <TabsList className="grid w-full grid-cols-4">
-                      {STATUS_OPTIONS.map((option) => (
-                        <TabsTrigger key={option.value} value={option.value} className="text-xs">
-                          {option.label}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </CardHeader>
+                <Tabs value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | ReviewStatus)}>
+                  <TabsList className="grid w-full grid-cols-4">
+                    {STATUS_OPTIONS.map((option) => (
+                      <TabsTrigger key={option.value} value={option.value} className="text-xs">
+                        {option.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              </div>
+            </CardHeader>
 
-              <CardContent className="p-0">
-                <ScrollArea className="h-[calc(100vh-20rem)] lg:h-[calc(100vh-16rem)]">
-                  <div className="space-y-2 p-3">
-                    {loading ? (
-                      <div className="flex items-center justify-center py-12 text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      </div>
-                    ) : filteredRows.length === 0 ? (
-                      <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                        조건에 맞는 시험지가 없습니다.
-                      </div>
-                    ) : (
-                      filteredRows.map((row) => {
-                        const status = (row.review_status ?? 'pending') as ReviewStatus;
-                        const latestReview = row.exam_reviews?.[0] ?? null;
-                        const displayScore = row.actual_score ?? row.expected_score;
-                        const photoCount = row.student_exam_result_photos?.length ?? 0;
-                        return (
-                          <button
-                            key={row.id}
-                            type="button"
-                            onClick={() => handleSelectResult(row.id)}
-                            className={`w-full rounded-md border p-3 text-left transition-colors ${selectedId === row.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="font-semibold text-foreground">{row.students?.name ?? '이름 없음'}</p>
-                                <p className="text-sm text-muted-foreground">{row.subject} · {row.students?.grade ? `${row.students.grade}학년` : '학년 미등록'}</p>
-                              </div>
-                              <Badge className={`border ${STATUS_BADGE[status]}`}>{STATUS_LABEL[status]}</Badge>
-                            </div>
-
-                            <div className="mt-2 text-xs text-muted-foreground">
-                              {row.exam_year ?? '-'} / {row.exam_period ?? '-'} / {EXAM_TYPE_LABELS[row.exam_type] ?? row.exam_type}
-                            </div>
-                            <div className="mt-1 text-sm text-foreground">
-                              {displayScore != null ? `${row.actual_score != null ? '실제' : '예상'} ${displayScore}점` : '점수 미입력'}
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              사진 {photoCount}장{latestReview?.reviewed_by_name ? ` · ${latestReview.reviewed_by_name}` : ''}
-                            </div>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            <Card className="flex-1">
-              <CardContent className="h-full p-0">
-                {!selectedRow ? (
-                  <div className="flex h-full min-h-[32rem] flex-col items-center justify-center gap-3 text-center text-muted-foreground">
-                    <FileSearch className="h-10 w-10 opacity-40" />
-                    <p>좌측에서 시험지를 선택해주세요</p>
-                  </div>
-                ) : (
-                  <div className="flex h-full min-h-[32rem] flex-col">
-                    <div className="border-b p-6">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <h2 className="text-xl font-semibold text-foreground">
-                            {selectedRow.students?.name ?? '이름 없음'} · {selectedRow.subject}
-                          </h2>
-                          <p className="text-sm text-muted-foreground">
-                            {selectedRow.school_name} · {selectedRow.students?.grade ? `${selectedRow.students.grade}학년` : '학년 미등록'}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {selectedRow.exam_year ?? '-'}년 / {selectedRow.exam_period ?? '-'} / {EXAM_TYPE_LABELS[selectedRow.exam_type] ?? selectedRow.exam_type}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-muted-foreground">점수</p>
-                          <p className="text-lg font-semibold text-foreground">
-                            {selectedRow.actual_score != null
-                              ? `실제 ${selectedRow.actual_score}점`
-                              : selectedRow.expected_score != null
-                                ? `예상 ${selectedRow.expected_score}점`
-                                : '미입력'}
-                          </p>
-                        </div>
-                      </div>
+            <CardContent className="p-0">
+              <ScrollArea className="h-[calc(100vh-20rem)] xl:h-[calc(100vh-16rem)]">
+                <div className="space-y-2 p-3">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-12 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
                     </div>
+                  ) : filteredRows.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      조건에 맞는 시험지가 없습니다.
+                    </div>
+                  ) : (
+                    filteredRows.map((row) => {
+                      const status = (row.review_status ?? 'pending') as ReviewStatus;
+                      const styleSet = STATUS_STYLE[status];
+                      const photoCount = row.student_exam_result_photos?.length ?? 0;
+                      return (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => setSelectedId(row.id)}
+                          className="mb-2 w-full rounded-[10px] p-4 text-left transition-transform hover:-translate-y-0.5"
+                          style={{
+                            cursor: 'pointer',
+                            ...styleSet.card,
+                            boxShadow: selectedId === row.id ? '0 0 0 2px hsl(var(--ring) / 0.18)' : 'none',
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <Badge className="border-0 px-2.5 py-1 text-xs font-semibold" style={styleSet.badge}>
+                              {STATUS_LABEL[status]}
+                            </Badge>
+                            <p className="text-sm font-semibold text-foreground">{row.subject}</p>
+                          </div>
 
-                    <ScrollArea className="flex-1">
-                      <div className="space-y-6 p-6">
-                        <section className="space-y-3">
+                          <div className="mt-3">
+                            <p className="text-base font-bold text-foreground">
+                              {row.students?.name ?? '이름 없음'}
+                              <span className="ml-2 text-sm font-medium text-muted-foreground">
+                                {row.students?.grade ? `${row.students.grade}학년` : '학년 미등록'}
+                              </span>
+                            </p>
+                            <p className="mt-2 text-sm text-foreground/80">
+                              {row.school_name} · {EXAM_TYPE_LABELS[row.exam_type] ?? row.exam_type} · 예상 {row.expected_score ?? '-'} / 실제 {row.actual_score ?? '-'}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              사진 {photoCount}장 · 업로드 {formatDateTimeLabel(row.submitted_at)}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+
+          <Card className="flex-1 overflow-hidden">
+            <CardContent className="h-full p-0">
+              {!selectedRow ? (
+                <div className="flex h-full min-h-[32rem] flex-col items-center justify-center gap-3 text-center text-muted-foreground">
+                  <FileSearch className="h-10 w-10 opacity-40" />
+                  <p>좌측에서 시험지를 선택해주세요</p>
+                </div>
+              ) : (
+                <div className="flex h-full min-h-[32rem] flex-col">
+                  <ScrollArea className="flex-1">
+                    <div className="space-y-8 p-6">
+                      <section className="space-y-4 rounded-lg border border-border bg-card p-5">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-[18px] font-bold text-foreground">{selectedRow.students?.name ?? '이름 없음'}</h2>
+                              <Badge variant="outline" className="px-2.5 py-1 text-xs font-semibold">{selectedRow.subject}</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {selectedRow.school_name} · {selectedRow.students?.grade ? `${selectedRow.students.grade}학년` : '학년 미등록'} · {selectedRow.exam_year ?? '-'} / {selectedRow.exam_period ?? '-'} / {EXAM_TYPE_LABELS[selectedRow.exam_type] ?? selectedRow.exam_type}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-3 text-lg font-bold text-foreground">
+                              <span>예상 {selectedRow.expected_score ?? '-'}</span>
+                              <span className="text-muted-foreground">→</span>
+                              <span>실제 {selectedRow.actual_score ?? '-'}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">시험일 {formatDateLabel(selectedRow.exam_date)} · 업로드 {formatDateTimeLabel(selectedRow.submitted_at)}</p>
+                          </div>
+
+                          <Button onClick={() => void persistReview(true)} disabled={saving}>
+                            {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            리뷰 완료 처리
+                          </Button>
+                        </div>
+                      </section>
+
+                      <section className="space-y-4 border-t border-border pt-8">
+                        <div>
+                          <h3 className="text-base font-semibold text-foreground">시험지 사진</h3>
+                          <p className="text-sm text-muted-foreground">썸네일을 클릭하면 원본을 크게 볼 수 있습니다.</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {sortedPhotos.length > 0 ? (
+                            sortedPhotos.map((photo, index) => (
+                              <button
+                                key={photo.id}
+                                type="button"
+                                onClick={async () => {
+                                  const cachedUrl = resolvedPhotoUrls[photo.storage_path];
+                                  if (cachedUrl) {
+                                    setSelectedImage(cachedUrl);
+                                    return;
+                                  }
+                                  const resolvedUrl = await resolvePhotoUrl(photo.storage_path);
+                                  if (resolvedUrl) {
+                                    setResolvedPhotoUrls((prev) => ({ ...prev, [photo.storage_path]: resolvedUrl }));
+                                    setSelectedImage(resolvedUrl);
+                                  } else {
+                                    toast({ title: '사진을 불러올 수 없습니다', variant: 'destructive' });
+                                  }
+                                }}
+                                className="overflow-hidden rounded-lg border border-border bg-muted/20 text-left transition hover:border-primary"
+                              >
+                                <div className="h-[160px] w-full p-2">
+                                  <PhotoThumb
+                                    storagePath={photo.storage_path}
+                                    alt={`시험지 ${index + 1}`}
+                                    onResolvedUrl={(url) => setResolvedPhotoUrls((prev) => prev[photo.storage_path] ? prev : { ...prev, [photo.storage_path]: url })}
+                                  />
+                                </div>
+                                <div className="px-3 pb-3 text-xs text-muted-foreground">{index + 1}번째 시험지</div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="col-span-2 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                              등록된 시험지 사진이 없습니다.
+                            </div>
+                          )}
+                        </div>
+                      </section>
+
+                      <section className="space-y-4 border-t border-border pt-8">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                           <div>
-                            <h3 className="font-semibold text-foreground">시험지 사진</h3>
-                            <p className="text-sm text-muted-foreground">썸네일을 클릭하면 원본을 크게 볼 수 있습니다.</p>
+                            <h3 className="text-base font-semibold text-foreground">문항별 채점</h3>
+                            <p className="text-sm text-muted-foreground">총 문항 수를 입력하면 채점 카드가 자동 생성됩니다.</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-                            {(selectedRow.student_exam_result_photos ?? [])
-                              .slice()
-                              .sort((a, b) => a.sort_order - b.sort_order)
-                              .map((photo) => {
-                                const publicUrl = getPublicPhotoUrl(photo.storage_path);
-                                return (
-                                  <button
-                                    key={photo.id}
-                                    type="button"
-                                    onClick={() => setSelectedImage(publicUrl)}
-                                    className="overflow-hidden rounded-md border bg-muted/30 text-left transition hover:border-primary"
-                                  >
-                                    <img src={publicUrl} alt={`시험지 ${photo.sort_order + 1}`} className="aspect-[3/4] w-full object-cover" loading="lazy" />
-                                    <div className="px-3 py-2 text-xs text-muted-foreground">{photo.sort_order + 1}번째 사진</div>
-                                  </button>
-                                );
-                              })}
+                          <div className="w-full max-w-[140px] space-y-2">
+                            <Label htmlFor="item-count">총 문항 수</Label>
+                            <Input
+                              id="item-count"
+                              type="number"
+                              min={1}
+                              value={itemCount}
+                              onChange={(event) => handleItemCountChange(Number(event.target.value) || 1)}
+                            />
                           </div>
-                        </section>
+                        </div>
 
-                        <section className="space-y-4">
-                          <div className="flex flex-wrap items-end justify-between gap-3">
-                            <div>
-                              <h3 className="font-semibold text-foreground">문항별 채점</h3>
-                              <p className="text-sm text-muted-foreground">총 문항 수를 입력하면 카드가 자동 생성됩니다.</p>
-                            </div>
-                            <div className="w-full max-w-40 space-y-2">
-                              <Label htmlFor="item-count">총 문항 수</Label>
-                              <Input
-                                id="item-count"
-                                type="number"
-                                min={1}
-                                value={itemCount}
-                                onClick={(event) => event.stopPropagation()}
-                                onChange={(event) => handleItemCountChange(Number(event.target.value) || 1)}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-3">
-                            {itemReviews.map((item, index) => {
-                              const showErrors = item.result === 'wrong' || item.result === 'partial';
-                              return (
-                                <div
-                                  key={item.id ?? `${item.item_number}-${index}`}
-                                  className="w-full rounded-md border border-border bg-card p-4 md:w-[calc(50%-0.375rem)] xl:w-[calc(33.333%-0.5rem)]"
-                                >
-                                  <div className="mb-3 flex items-center justify-between gap-2">
-                                    <p className="text-sm font-semibold text-foreground">{item.item_number}번</p>
-                                  </div>
-
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {RESULT_BUTTONS.map((option) => {
-                                      const active = item.result === option.value;
-                                      return (
-                                        <Button
-                                          key={option.value}
-                                          type="button"
-                                          variant="outline"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            handleChangeItem(index, 'result', item.result === option.value ? '' : option.value);
-                                            if (item.result !== option.value && option.value === 'correct') {
-                                              handleChangeItem(index, 'error_types', []);
-                                            }
+                        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                          {itemReviews.map((item, index) => {
+                            const showErrors = item.result === 'wrong' || item.result === 'partial';
+                            return (
+                              <div key={item.id ?? `${item.item_number}-${index}`} className="rounded-lg border border-border bg-card p-4">
+                                <div className="mb-3 flex items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold text-foreground">{item.item_number}번</p>
+                                  {item.error_types.length > 0 ? (
+                                    <div className="flex flex-wrap justify-end gap-1">
+                                      {item.error_types.map((errorType) => (
+                                        <span
+                                          key={errorType}
+                                          className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                          style={{
+                                            backgroundColor: 'hsl(var(--review-error-chip-surface))',
+                                            color: 'hsl(var(--review-error-chip-foreground))',
                                           }}
-                                          className={active ? option.className : 'border-border bg-background text-muted-foreground'}
                                         >
-                                          {option.label}
-                                        </Button>
-                                      );
-                                    })}
-                                  </div>
-
-                                  {showErrors ? (
-                                    <div className="mt-4 space-y-3">
-                                      <div className="space-y-2">
-                                        <p className="text-xs font-medium text-muted-foreground">오답 유형</p>
-                                        <div className="grid gap-2">
-                                          {ERROR_TYPES.map((errorType) => (
-                                            <label key={errorType} className="flex items-center gap-2 text-sm text-foreground">
-                                              <Checkbox
-                                                checked={item.error_types.includes(errorType)}
-                                                onCheckedChange={(checked) => {
-                                                  handleToggleErrorType(index, errorType, checked === true);
-                                                }}
-                                                onClick={(event) => event.stopPropagation()}
-                                              />
-                                              <span>{errorType}</span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      </div>
-
-                                      <div className="space-y-2">
-                                        <Label htmlFor={`item-comment-${item.item_number}`}>코멘트</Label>
-                                        <Input
-                                          id={`item-comment-${item.item_number}`}
-                                          value={item.item_comment}
-                                          onClick={(event) => event.stopPropagation()}
-                                          onChange={(event) => handleChangeItem(index, 'item_comment', event.target.value)}
-                                          placeholder="문항 코멘트 입력"
-                                        />
-                                      </div>
+                                          {errorType}
+                                        </span>
+                                      ))}
                                     </div>
                                   ) : null}
                                 </div>
-                              );
-                            })}
-                          </div>
 
-                          {reviewStats ? (
-                            <div className="rounded-md border border-border bg-muted/20 p-4 text-sm text-foreground">
-                              <div className="flex flex-wrap gap-x-4 gap-y-1">
-                                <span>맞음 {reviewStats.correct}개</span>
-                                <span>틀림 {reviewStats.wrong}개</span>
-                                <span>부분 {reviewStats.partial}개</span>
+                                <div className="grid grid-cols-3 gap-2">
+                                  {(['correct', 'wrong', 'partial'] as const).map((value) => {
+                                    const active = item.result === value;
+                                    return (
+                                      <button
+                                        key={value}
+                                        type="button"
+                                        onClick={() => handleChangeItem(index, 'result', active ? '' : value)}
+                                        className="flex h-11 w-full items-center justify-center rounded-lg text-lg font-bold transition"
+                                        style={active ? RESULT_BUTTON_STYLES[value].active : RESULT_BUTTON_STYLES[value].idle}
+                                      >
+                                        {value === 'correct' ? 'O' : value === 'wrong' ? 'X' : '△'}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {showErrors ? (
+                                  <div className="mt-4 space-y-4">
+                                    <div className="space-y-2">
+                                      <p className="text-xs font-medium text-muted-foreground">오답 유형</p>
+                                      <div className="grid gap-2">
+                                        {ERROR_TYPES.map((errorType) => (
+                                          <label key={errorType} className="flex items-center gap-2 text-sm text-foreground">
+                                            <Checkbox
+                                              checked={item.error_types.includes(errorType)}
+                                              onCheckedChange={(checked) => handleToggleErrorType(index, errorType, checked === true)}
+                                            />
+                                            <span>{errorType}</span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label htmlFor={`item-comment-${item.item_number}`}>문항 코멘트</Label>
+                                      <Input
+                                        id={`item-comment-${item.item_number}`}
+                                        value={item.item_comment}
+                                        onChange={(event) => handleChangeItem(index, 'item_comment', event.target.value)}
+                                        placeholder="필요한 경우 문항 코멘트를 입력해주세요"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : null}
                               </div>
-                              <p className="mt-2 text-muted-foreground">
-                                가장 많은 오답유형: {reviewStats.topError ? `${reviewStats.topError.label} (${reviewStats.topError.count}회)` : '없음'}
-                              </p>
-                            </div>
-                          ) : null}
-                        </section>
+                            );
+                          })}
+                        </div>
+                      </section>
 
-                        <section className="space-y-3">
-                          <div>
-                            <Label htmlFor="overall-comment" className="font-semibold text-foreground">전체 코멘트</Label>
-                            <p className="text-sm text-muted-foreground">학생에게 전달할 전체 리뷰를 작성하세요.</p>
+                      <section className="space-y-4 border-t border-border pt-8">
+                        <div>
+                          <h3 className="text-base font-semibold text-foreground">오답 요약</h3>
+                          <p className="text-sm text-muted-foreground">문항별 채점 결과를 기준으로 자동 계산됩니다.</p>
+                        </div>
+                        <div className="rounded-lg border border-border bg-muted/20 p-4">
+                          <div className="flex flex-wrap gap-4 text-sm font-medium text-foreground">
+                            <span>맞음 {reviewStats?.correct ?? 0}개</span>
+                            <span>틀림 {reviewStats?.wrong ?? 0}개</span>
+                            <span>부분 {reviewStats?.partial ?? 0}개</span>
                           </div>
-                          <Textarea
-                            id="overall-comment"
-                            value={overallComment}
-                            onChange={(event) => setOverallComment(event.target.value)}
-                            placeholder="전체 총평을 입력하세요"
-                            className="min-h-32"
-                          />
-                        </section>
-                      </div>
-                    </ScrollArea>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            가장 많은 오답유형: {reviewStats?.topError ? `${reviewStats.topError.label} (${reviewStats.topError.count}회)` : '없음'}
+                          </p>
+                        </div>
+                      </section>
 
-                    <div className="flex flex-col gap-2 border-t p-4 sm:flex-row sm:justify-end">
-                      <Button onClick={() => void persistReview(false)} disabled={saving} variant="outline">
-                        {saving && !completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        리뷰 저장
-                      </Button>
-                      <Button onClick={() => void persistReview(true)} disabled={saving}>
-                        {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        리뷰 완료
-                      </Button>
+                      <section className="space-y-4 border-t border-border pt-8">
+                        <div>
+                          <h3 className="text-base font-semibold text-foreground">선생님 코멘트</h3>
+                          <p className="text-sm text-muted-foreground">전체적인 피드백을 입력해주세요</p>
+                        </div>
+                        <Textarea
+                          id="overall-comment"
+                          rows={3}
+                          value={overallComment}
+                          onChange={(event) => setOverallComment(event.target.value)}
+                          placeholder="전체적인 피드백을 입력해주세요"
+                          className="min-h-[96px]"
+                        />
+                      </section>
                     </div>
+                  </ScrollArea>
+
+                  <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:justify-end">
+                    <Button onClick={() => void persistReview(false)} disabled={saving} variant="outline">
+                      {saving && !completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      임시저장
+                    </Button>
+                    <Button onClick={() => void persistReview(true)} disabled={saving}>
+                      {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      리뷰 완료
+                    </Button>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
@@ -693,7 +820,9 @@ export function ExamReviewPanel() {
             <DialogTitle>시험지 원본 보기</DialogTitle>
           </DialogHeader>
           {selectedImage ? (
-            <img src={selectedImage} alt="시험지 원본" className="max-h-[80vh] w-full rounded-md object-contain" />
+            <div className="max-h-[80vh] overflow-hidden rounded-md border border-border bg-muted/20 p-2">
+              <img src={selectedImage} alt="시험지 원본" className="max-h-[76vh] w-full rounded-md object-contain" />
+            </div>
           ) : null}
         </DialogContent>
       </Dialog>
