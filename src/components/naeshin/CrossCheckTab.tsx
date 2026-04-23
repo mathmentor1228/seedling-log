@@ -28,7 +28,6 @@ import {
 } from '@/components/ui/table';
 import { toast } from 'sonner';
 
-type AppRole = 'admin' | 'teacher' | 'assistant';
 type RecordType = '테스트' | '자습' | '클리닉' | '수업기록';
 type TypeFilter = 'all' | RecordType;
 type StatusFilter = 'all' | 'unconfirmed' | 'confirmed';
@@ -58,6 +57,8 @@ type BaseCrossCheckRecord = {
 type CrossCheckTabProps = {
   onUnconfirmedCountChange?: (count: number) => void;
 };
+
+type RecordPayload = Omit<BaseCrossCheckRecord, 'type'>;
 
 const TYPE_OPTIONS: Array<{ value: TypeFilter; label: string }> = [
   { value: 'all', label: '전체' },
@@ -212,11 +213,14 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
       const error = tests.error || selfStudy.error || clinic.error || lessons.error;
       if (error) throw error;
 
+      const withType = (items: RecordPayload[], type: RecordType): BaseCrossCheckRecord[] =>
+        items.map((record) => ({ ...record, type }));
+
       const merged: BaseCrossCheckRecord[] = [
-        ...((tests.data ?? []) as Array<Omit<BaseCrossCheckRecord, 'type'>>).map((record) => ({ ...record, type: '테스트' })),
-        ...((selfStudy.data ?? []) as Array<Omit<BaseCrossCheckRecord, 'type'>>).map((record) => ({ ...record, type: '자습' })),
-        ...((clinic.data ?? []) as Array<Omit<BaseCrossCheckRecord, 'type'>>).map((record) => ({ ...record, type: '클리닉' })),
-        ...((lessons.data ?? []) as Array<Omit<BaseCrossCheckRecord, 'type'>>).map((record) => ({ ...record, type: '수업기록' })),
+        ...withType((tests.data ?? []) as RecordPayload[], '테스트'),
+        ...withType((selfStudy.data ?? []) as RecordPayload[], '자습'),
+        ...withType((clinic.data ?? []) as RecordPayload[], '클리닉'),
+        ...withType((lessons.data ?? []) as RecordPayload[], '수업기록'),
       ].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
 
       setRecords(merged);
@@ -296,14 +300,19 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
     )));
 
     try {
-      const { error } = await supabase
-        .from(table)
-        .update({
-          confirmed_by: user.id,
-          confirmed_by_name: fullName ?? '확인자',
-          confirmed_at: now,
-        })
-        .eq('id', record.id);
+      const payload = {
+        confirmed_by: user.id,
+        confirmed_by_name: fullName ?? '확인자',
+        confirmed_at: now,
+      };
+
+      const { error } = table === 'test_records'
+        ? await supabase.from('test_records').update(payload).eq('id', record.id)
+        : table === 'self_study_records'
+          ? await supabase.from('self_study_records').update(payload).eq('id', record.id)
+          : table === 'clinic_records'
+            ? await supabase.from('clinic_records').update(payload).eq('id', record.id)
+            : await supabase.from('lesson_records').update(payload).eq('id', record.id);
 
       if (error) throw error;
     } catch (error) {
@@ -335,14 +344,19 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
     )));
 
     try {
-      const { error } = await supabase
-        .from(table)
-        .update({
-          confirmed_by: null,
-          confirmed_by_name: null,
-          confirmed_at: null,
-        })
-        .eq('id', record.id);
+      const payload = {
+        confirmed_by: null,
+        confirmed_by_name: null,
+        confirmed_at: null,
+      };
+
+      const { error } = table === 'test_records'
+        ? await supabase.from('test_records').update(payload).eq('id', record.id)
+        : table === 'self_study_records'
+          ? await supabase.from('self_study_records').update(payload).eq('id', record.id)
+          : table === 'clinic_records'
+            ? await supabase.from('clinic_records').update(payload).eq('id', record.id)
+            : await supabase.from('lesson_records').update(payload).eq('id', record.id);
 
       if (error) throw error;
     } catch (error) {
