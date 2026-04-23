@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, useMemo } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
