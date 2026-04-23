@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   UserCog,
   Calendar,
+  CalendarDays,
   ClipboardCheck,
   UserCheck,
   BarChart3,
