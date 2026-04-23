@@ -71,6 +71,43 @@
     --chart-3: 38 92% 50%;
     --chart-4: 0 84% 60%;
     --chart-5: 262 60% 55%;
+
+    --review-pending-surface: 40 73% 92%;
+    --review-pending-border: 40 89% 71%;
+    --review-pending-badge: 24 96% 54%;
+    --review-pending-badge-foreground: 0 0% 100%;
+
+    --review-progress-surface: 209 62% 95%;
+    --review-progress-border: 209 70% 54%;
+    --review-progress-badge: 210 74% 37%;
+    --review-progress-badge-foreground: 0 0% 100%;
+
+    --review-done-surface: 0 0% 100%;
+    --review-done-border: 214 32% 91%;
+    --review-done-badge: 161 69% 36%;
+    --review-done-badge-foreground: 0 0% 100%;
+
+    --review-correct-surface: 155 45% 92%;
+    --review-correct-border: 161 69% 36%;
+    --review-correct-foreground: 165 82% 17%;
+
+    --review-wrong-surface: 0 58% 95%;
+    --review-wrong-border: 0 72% 59%;
+    --review-wrong-foreground: 0 59% 30%;
+
+    --review-partial-surface: 40 73% 92%;
+    --review-partial-border: 32 78% 41%;
+    --review-partial-foreground: 34 82% 21%;
+
+    --review-idle-surface: 45 16% 94%;
+    --review-idle-border: 48 10% 82%;
+    --review-idle-foreground: 48 4% 52%;
+
+    --review-error-chip-surface: 242 76% 96%;
+    --review-error-chip-foreground: 245 45% 37%;
+
+    --review-photo-placeholder-surface: 210 16% 93%;
+    --review-photo-placeholder-foreground: 215 12% 45%;
   }
 
   .dark {
@@ -133,6 +170,43 @@
     --chart-3: 38 92% 50%;
     --chart-4: 0 84% 60%;
     --chart-5: 262 60% 55%;
+
+    --review-pending-surface: 40 73% 92%;
+    --review-pending-border: 40 89% 71%;
+    --review-pending-badge: 24 96% 54%;
+    --review-pending-badge-foreground: 0 0% 100%;
+
+    --review-progress-surface: 209 62% 95%;
+    --review-progress-border: 209 70% 54%;
+    --review-progress-badge: 210 74% 37%;
+    --review-progress-badge-foreground: 0 0% 100%;
+
+    --review-done-surface: 0 0% 100%;
+    --review-done-border: 214 32% 91%;
+    --review-done-badge: 161 69% 36%;
+    --review-done-badge-foreground: 0 0% 100%;
+
+    --review-correct-surface: 155 45% 92%;
+    --review-correct-border: 161 69% 36%;
+    --review-correct-foreground: 165 82% 17%;
+
+    --review-wrong-surface: 0 58% 95%;
+    --review-wrong-border: 0 72% 59%;
+    --review-wrong-foreground: 0 59% 30%;
+
+    --review-partial-surface: 40 73% 92%;
+    --review-partial-border: 32 78% 41%;
+    --review-partial-foreground: 34 82% 21%;
+
+    --review-idle-surface: 45 16% 94%;
+    --review-idle-border: 48 10% 82%;
+    --review-idle-foreground: 48 4% 52%;
+
+    --review-error-chip-surface: 242 76% 96%;
+    --review-error-chip-foreground: 245 45% 37%;
+
+    --review-photo-placeholder-surface: 210 16% 22%;
+    --review-photo-placeholder-foreground: 210 11% 72%;
   }
 }
 
