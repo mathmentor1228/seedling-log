@@ -252,7 +252,7 @@ serve(async (req) => {
 
     if (!sourceUrl || !fileType || (fileType !== 'exam_template' && !schoolName)) {
       return new Response(
-        JSON.stringify({ error: "fileType, schoolName, and a valid file source are required" }),
+        JSON.stringify({ error: fileType === 'exam_template' ? "fileType and a valid file source are required" : "fileType, schoolName, and a valid file source are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
