@@ -298,7 +298,7 @@ export function BatchTestEntryModal({
 
   const selectedCount = entries.filter(e => e.selected).length;
   const grouped = groupStudentsByGrade<StudentEntry>(filteredEntries);
-  const selectedTeacherName = teachers.find(t => t.id === teacherId)?.full_name || '';
+  const selectedTeacherName = teachers.find(t => t.id === effectiveTeacherId)?.full_name || '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -320,14 +320,20 @@ export function BatchTestEntryModal({
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs">담당 선생님 <span className="text-destructive">*</span></Label>
-                  <Select value={teacherId || (isAssistant ? '' : user?.id || '')} onValueChange={(v) => { setTeacherId(v); setSelectedTimeSlot('미정'); }}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="선생님 선택" /></SelectTrigger>
-                    <SelectContent>
-                      {teachers.map(t => (
-                        <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {canSelectTeacher ? (
+                    <Select value={teacherId} onValueChange={(v) => { setTeacherId(v); setSelectedTimeSlot('미정'); }}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                      <SelectContent>
+                        {teachers.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="h-9 flex items-center px-3 rounded-md border bg-muted/50 text-sm">
+                      {selectedTeacherName || '본인'}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">과목 <span className="text-destructive">*</span></Label>
@@ -389,7 +395,7 @@ export function BatchTestEntryModal({
           </Card>
 
           {/* Step 3: Students */}
-          {((isAssistant ? teacherId : user?.id) && subject) && (
+          {(effectiveTeacherId && subject) && (
             <Card className="border-muted">
               <CardContent className="p-3 space-y-3">
                 <div className="flex items-center justify-between">
@@ -426,8 +432,8 @@ export function BatchTestEntryModal({
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" /> 학생 로딩 중...
                   </div>
                 ) : filteredEntries.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-xs">
-                    {isAssistant && !teacherId ? '선생님을 먼저 선택해주세요' : '조건에 맞는 학생이 없습니다'}
+                    <div className="text-center py-6 text-muted-foreground text-xs">
+                      {canSelectTeacher && !teacherId ? '선생님을 먼저 선택해주세요' : '조건에 맞는 학생이 없습니다'}
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-[280px] overflow-y-auto">
