@@ -67,7 +67,7 @@ export function SchoolExamArchiveNew() {
 }
 
 function SchoolExamArchiveInner() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     schools,
@@ -81,11 +81,15 @@ function SchoolExamArchiveInner() {
     refetch,
   } = useExamArchiveData();
 
-  const currentTab = normalizeTab(searchParams.get('tab'));
+  const canViewReview = role === 'admin';
+  const canViewPrep = role === 'admin' || role === 'teacher';
+  const requestedTab = normalizeTab(searchParams.get('tab'));
+  const currentTab = requestedTab === 'review' && !canViewReview
+    ? 'overview'
+    : requestedTab === 'prep' && !canViewPrep
+      ? 'overview'
+      : requestedTab;
   const unconfirmedCount = 0;
-
-  const canViewReview = true;
-  const canViewPrep = true;
 
   const selectedSchoolSchedules = useMemo(
     () => schedules.filter((schedule) => schedule.school_name === selectedSchool),
