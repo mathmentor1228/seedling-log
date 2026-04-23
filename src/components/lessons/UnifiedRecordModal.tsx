@@ -201,7 +201,7 @@ export function UnifiedRecordModal({
 
       // Upsert lesson_record for linking
         async function upsertLessonRecord(types: string[], subject: string): Promise<string | null> {
-        const { data: existing } = await supabase
+        const { data: existing, error: existingError } = await supabase
           .from('lesson_records')
           .select('id, lesson_types')
           .eq('student_id', selectedStudentId)
@@ -209,15 +209,18 @@ export function UnifiedRecordModal({
             .eq('subject', subject as any)
           .maybeSingle();
 
+        if (existingError) throw existingError;
+
         if (existing) {
           const merged = [...new Set([...(existing.lesson_types || []), ...types])];
-          await supabase
+          const { error: updateError } = await supabase
             .from('lesson_records')
             .update({ lesson_types: merged as any })
             .eq('id', existing.id);
+          if (updateError) throw updateError;
           return existing.id;
         } else {
-          const { data: newRecord } = await supabase
+          const { data: newRecord, error: insertError } = await supabase
             .from('lesson_records')
             .insert({
               student_id: selectedStudentId,
@@ -233,6 +236,7 @@ export function UnifiedRecordModal({
             })
             .select('id')
             .single();
+          if (insertError) throw insertError;
           return newRecord?.id || null;
         }
       }
@@ -269,11 +273,13 @@ export function UnifiedRecordModal({
 
             if (lessonTestError) throw lessonTestError;
 
-            const { data: existingLesson } = await supabase
+            const { data: existingLesson, error: existingLessonError } = await supabase
               .from('lesson_records')
               .select('lesson_types')
               .eq('id', lessonRecordId)
               .maybeSingle();
+
+            if (existingLessonError) throw existingLessonError;
 
             const lessonTypes = Array.from(new Set([...(existingLesson?.lesson_types || []), '테스트']));
             const lessonPatch: Record<string, any> = { lesson_types: lessonTypes };
@@ -281,24 +287,52 @@ export function UnifiedRecordModal({
               lessonPatch.english_pass_fail = testPassed === true ? 'pass' : testPassed === false ? 'fail' : null;
             }
 
-            await supabase.from('lesson_records').update(lessonPatch).eq('id', lessonRecordId);
+            const { error: lessonPatchError } = await supabase.from('lesson_records').update(lessonPatch).eq('id', lessonRecordId);
+            if (lessonPatchError) throw lessonPatchError;
           }
 
-        await supabase.from('test_records').insert({
-          student_id: selectedStudentId,
-          teacher_id: teacherId!,
-          lesson_record_id: lessonRecordId,
-          test_date: selectedDate,
-          start_time: testStartTime || null,
-          end_time: testEndTime || null,
-          subject: testSubject,
-          test_type: testType,
-          content: testContent.trim(),
-          score: testScore.trim() || null,
-          passed: testPassed,
-          assistant_name: testAssistant && testAssistant !== 'none' ? testAssistant : null,
-          room: selectedRoom,
-        });
+          const testPayload = {
+            student_id: selectedStudentId,
+            teacher_id: teacherId!,
+            lesson_record_id: lessonRecordId,
+            test_date: selectedDate,
+            start_time: testStartTime || null,
+            end_time: testEndTime || null,
+            subject: testSubject,
+            test_type: testType,
+            content: testContent.trim(),
+            score: testScore.trim() || null,
+            passed: testPassed,
+            assistant_name: testAssistant && testAssistant !== 'none' ? testAssistant : null,
+            room: selectedRoom,
+          };
+
+          if (lessonRecordId) {
+            const { data: existingTestRecord, error: existingTestRecordError } = await supabase
+              .from('test_records')
+              .select('id')
+              .eq('lesson_record_id', lessonRecordId)
+              .eq('subject', testSubject)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (existingTestRecordError) throw existingTestRecordError;
+
+            if (existingTestRecord) {
+              const { error: updateTestRecordError } = await supabase
+                .from('test_records')
+                .update(testPayload)
+                .eq('id', existingTestRecord.id);
+              if (updateTestRecordError) throw updateTestRecordError;
+            } else {
+              const { error: insertTestRecordError } = await supabase.from('test_records').insert(testPayload);
+              if (insertTestRecordError) throw insertTestRecordError;
+            }
+          } else {
+            const { error: insertTestRecordError } = await supabase.from('test_records').insert(testPayload);
+            if (insertTestRecordError) throw insertTestRecordError;
+          }
       }
 
       if (selectedTypes.has('self_study')) {
