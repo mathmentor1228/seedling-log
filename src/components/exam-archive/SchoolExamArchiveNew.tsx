@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, useMemo } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExamReviewPanel } from '@/components/exam-review/ExamReviewPanel';
 import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
+import { CrossCheckTab } from '@/components/naeshin/CrossCheckTab';
 
 const ARCHIVE_TABS = ['overview', 'submissions', 'review', 'cross-check', 'prep'] as const;
 type ArchiveTabValue = (typeof ARCHIVE_TABS)[number];
@@ -89,7 +90,7 @@ function SchoolExamArchiveInner() {
     : requestedTab === 'prep' && !canViewPrep
       ? 'overview'
       : requestedTab;
-  const unconfirmedCount = 0;
+  const [unconfirmedCount, setUnconfirmedCount] = useState(0);
 
   const selectedSchoolSchedules = useMemo(
     () => schedules.filter((schedule) => schedule.school_name === selectedSchool),
@@ -281,15 +282,7 @@ function SchoolExamArchiveInner() {
                 </TabsContent>
 
                 <TabsContent value="cross-check" className="mt-4">
-                  <Card>
-                    <CardContent className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center">
-                      <ListChecks className="h-10 w-10 text-muted-foreground/50" />
-                      <div>
-                        <p className="font-medium text-foreground">크로스체킹 준비 중</p>
-                        <p className="text-sm text-muted-foreground">미확인 건수 집계와 상세 워크플로우는 다음 단계에서 연결됩니다.</p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <CrossCheckTab onUnconfirmedCountChange={setUnconfirmedCount} />
                 </TabsContent>
 
                 <TabsContent value="prep" className="mt-4">
