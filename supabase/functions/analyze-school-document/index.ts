@@ -230,6 +230,24 @@ const TEMPLATE_PARSE_PROMPT = `이 시험지 이미지에서 아래 정보를 �
 3. 주관식(서술형/단답형)은 is_essay:true
 4. 문항 번호순으로 정렬`;
 
+function extractMessageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object" && "text" in part) {
+          const text = (part as { text?: unknown }).text;
+          return typeof text === "string" ? text : "";
+        }
+        return "";
+      })
+      .join("\n")
+      .trim();
+  }
+  return "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -323,6 +341,10 @@ ${subjectInstruction}
 JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
     }
 
+    if (fileType === "exam_template") {
+      extractionPrompt = TEMPLATE_PARSE_PROMPT;
+    }
+
     if (fileType === "other") {
       extractionPrompt = `
 다음은 ${schoolName} 관련 학교 문서입니다.
@@ -342,10 +364,6 @@ ${subjectInstruction}
       "grade": 학년(숫자 또는 null),
       "subject": "과목명 또는 null",
       "description": "상세내용"
-    }
-
-    if (fileType === 'exam_template') {
-      extractionPrompt = TEMPLATE_PARSE_PROMPT;
     }
   ]
 }
@@ -434,8 +452,9 @@ ${subjectInstruction}
     }
 
     const aiResult = await response.json();
-    const responseText =
-      aiResult.choices?.[0]?.message?.content || "";
+    const responseText = extractMessageText(
+      aiResult.choices?.[0]?.message?.content,
+    );
 
     let extractedData: any = {};
     try {
