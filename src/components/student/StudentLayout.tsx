@@ -12,7 +12,8 @@
    LogOut,
    User,
    Languages,
-   Calculator
+  Calculator,
+  ClipboardCheck
  } from 'lucide-react';
  import { Button } from '@/components/ui/button';
  import {
@@ -35,6 +36,7 @@ const NAV_ITEMS = [
   { path: '/student/study', icon: BookOpen, label: '자습' },
   { path: '/student/vocab', icon: Languages, label: '단어' },
   { path: '/student/math-quiz', icon: Calculator, label: '수학' },
+  { path: '/student/exam-review', icon: ClipboardCheck, label: '리뷰' },
   { path: '/student/points', icon: Star, label: '포인트' },
   { path: '/student/schedule', icon: Calendar, label: '일정' },
 ];

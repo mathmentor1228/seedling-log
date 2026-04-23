@@ -142,8 +142,17 @@ Deno.serve(async (req) => {
     // ===== Student actions =====
     const { student_id, student_token } = body;
     if (!student_id || !student_token) return json({ error: 'Missing student auth' }, 400);
-    const { data: account } = await supabase.from('student_accounts').select('student_id').eq('student_id', student_id).single();
-    if (!account) return json({ error: 'Invalid session' }, 401);
+    const { data: account } = await supabase
+      .from('student_accounts')
+      .select('student_id, session_token, session_expires_at')
+      .eq('student_id', student_id)
+      .single();
+    if (
+      !account ||
+      account.session_token !== student_token ||
+      !account.session_expires_at ||
+      new Date(account.session_expires_at).getTime() <= Date.now()
+    ) return json({ error: 'Invalid session' }, 401);
 
     if (action === 'list') {
       const { data: results, error } = await supabase
