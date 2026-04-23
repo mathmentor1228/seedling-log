@@ -92,6 +92,14 @@ const corsHeaders = {
        // Generate session token (simple JWT-like token)
        const sessionToken = crypto.randomUUID();
        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+
+        await supabase
+          .from('student_accounts')
+          .update({
+            session_token: sessionToken,
+            session_expires_at: expiresAt,
+          })
+          .eq('id', account.id);
        
        return new Response(
          JSON.stringify({

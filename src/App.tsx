@@ -58,6 +58,7 @@ import StudentFeedback from "./pages/student/StudentFeedback";
 import StudentVocab from "./pages/student/StudentVocab";
 import StudentMathQuiz from "./pages/student/StudentMathQuiz";
 import StudentStudySession from "./pages/student/StudentStudySession";
+import StudentExamReview from "./pages/student/StudentExamReview";
 import { StudentLayout } from "@/components/student/StudentLayout";
 
 const queryClient = new QueryClient();
@@ -119,6 +120,9 @@ const App = () => (
                 } />
                 <Route path="/student/math-quiz" element={
                   <StudentAuthProvider><StudentLayout><StudentMathQuiz /></StudentLayout></StudentAuthProvider>
+                } />
+                <Route path="/student/exam-review" element={
+                  <StudentAuthProvider><StudentLayout><StudentExamReview /></StudentLayout></StudentAuthProvider>
                 } />
                 <Route path="/student/study" element={
                   <StudentAuthProvider><StudentLayout><StudentStudySession /></StudentLayout></StudentAuthProvider>
