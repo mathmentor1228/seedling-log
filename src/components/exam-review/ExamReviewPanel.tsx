@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -134,7 +132,7 @@ function getPublicPhotoUrl(path: string) {
   return supabase.storage.from('exam-results').getPublicUrl(path).data.publicUrl;
 }
 
-export default function ExamReviewPage() {
+export function ExamReviewPanel() {
   const { toast } = useToast();
   const { user, fullName } = useAuth();
   const [loading, setLoading] = useState(true);
