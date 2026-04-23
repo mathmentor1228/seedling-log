@@ -254,6 +254,9 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
       });
 
       if (error) throw error;
+      if (data?.error) {
+        throw new Error(typeof data.error === 'string' ? data.error : '시험지 분석에 실패했습니다.');
+      }
 
       const parsed = (data?.data ?? data) as TemplateParseResponse;
       const parsedItems = normalizeTemplateItems(parsed.items, parsed.total_items || DEFAULT_TOTAL_ITEMS);
