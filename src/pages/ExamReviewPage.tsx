@@ -12,9 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, FileSearch, Plus, Trash2 } from 'lucide-react';
+import { Loader2, FileSearch } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -56,8 +56,15 @@ interface ItemReviewDraft {
   id?: string;
   item_number: number;
   result: ItemResult;
-  error_types: string;
+  error_types: string[];
   item_comment: string;
+}
+
+interface ReviewStats {
+  correct: number;
+  wrong: number;
+  partial: number;
+  topError: { label: string; count: number } | null;
 }
 
 const STATUS_OPTIONS: Array<{ value: 'all' | ReviewStatus; label: string }> = [
@@ -86,12 +93,42 @@ const EXAM_TYPE_LABELS: Record<string, string> = {
   other: '기타',
 };
 
-const ITEM_RESULT_LABELS: Array<{ value: ItemResult; label: string }> = [
-  { value: '', label: '미선택' },
-  { value: 'correct', label: '정답' },
-  { value: 'wrong', label: '오답' },
-  { value: 'partial', label: '부분정답' },
+const RESULT_BUTTONS: Array<{ value: Exclude<ItemResult, ''>; label: string; className: string }> = [
+  { value: 'correct', label: 'O', className: 'border-success/40 bg-success/10 text-success hover:bg-success/15' },
+  { value: 'wrong', label: 'X', className: 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15' },
+  { value: 'partial', label: '△', className: 'border-warning/40 bg-warning/10 text-warning hover:bg-warning/15' },
 ];
+
+const ERROR_TYPES = ['개념이해 부족', '계산실수', '문제이해 오류', '시간부족', '풀이누락', '유형파악 못함'] as const;
+
+function createItemDrafts(count: number, source: ItemReviewDraft[] = []): ItemReviewDraft[] {
+  return Array.from({ length: count }, (_, index) => {
+    const itemNumber = index + 1;
+    const existing = source.find((item) => item.item_number === itemNumber);
+    return existing ?? { item_number: itemNumber, result: '', error_types: [], item_comment: '' };
+  });
+}
+
+function calculateReviewStats(items: ItemReviewDraft[]): ReviewStats | null {
+  const reviewedItems = items.filter((item) => item.result !== '');
+  if (reviewedItems.length === 0) return null;
+
+  const errorCounter = new Map<string, number>();
+  reviewedItems.forEach((item) => {
+    item.error_types.forEach((errorType) => {
+      errorCounter.set(errorType, (errorCounter.get(errorType) ?? 0) + 1);
+    });
+  });
+
+  const topErrorEntry = [...errorCounter.entries()].sort((a, b) => b[1] - a[1])[0];
+
+  return {
+    correct: reviewedItems.filter((item) => item.result === 'correct').length,
+    wrong: reviewedItems.filter((item) => item.result === 'wrong').length,
+    partial: reviewedItems.filter((item) => item.result === 'partial').length,
+    topError: topErrorEntry ? { label: topErrorEntry[0], count: topErrorEntry[1] } : null,
+  };
+}
 
 function getPublicPhotoUrl(path: string) {
   return supabase.storage.from('exam-results').getPublicUrl(path).data.publicUrl;
