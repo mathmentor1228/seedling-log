@@ -243,6 +243,19 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     }));
   };
 
+  const handlePointsChange = (index: number, value: string) => {
+    const trimmedValue = value.trim();
+    if (trimmedValue === '') {
+      updateItem(index, 'points', 0);
+      return;
+    }
+
+    const parsed = Number.parseFloat(trimmedValue);
+    if (Number.isNaN(parsed)) return;
+
+    updateItem(index, 'points', roundPoints(parsed));
+  };
+
   const addItem = () => {
     setItems((prev) => [...prev, { no: prev.length + 1, type: '객관식', points: 0, is_essay: false }]);
   };
@@ -262,7 +275,13 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     setCustomErrorTypes((prev) => prev.map((item, itemIndex) => (itemIndex === index ? value : item)));
   };
 
-  const addErrorType = () => setCustomErrorTypes((prev) => [...prev, '']);
+  const addErrorType = () => {
+    const trimmed = newErrorType.trim();
+    if (!trimmed) return;
+
+    setCustomErrorTypes((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    setNewErrorType('');
+  };
   const removeErrorType = (index: number) => setCustomErrorTypes((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
 
   const handleTemplateFileParse = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -300,7 +319,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
 
   const handleSave = async () => {
     if (!record || !currentUserId) return;
-    if (!grade || !record.exam_year || !record.exam_period) {
+    if (!grade || !examYear || !examPeriod || !examType) {
       toast({ title: '템플릿 저장 불가', description: '학년, 시험 연도, 학기 정보가 있어야 저장할 수 있습니다.', variant: 'destructive' });
       return;
     }
@@ -311,7 +330,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
         .map((item, index) => ({
           no: index + 1,
           type: item.is_essay ? '주관식' : item.type,
-          points: Number.isFinite(item.points) ? item.points : 0,
+          points: roundPoints(Number.isFinite(item.points) ? item.points : 0),
           is_essay: item.is_essay,
         }))
         .filter((item) => item.no > 0);
@@ -329,9 +348,9 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
           school_name: record.school_name,
           subject: record.subject,
           grade,
-          exam_type: record.exam_type,
-          exam_year: record.exam_year,
-          exam_period: record.exam_period,
+          exam_type: examType,
+          exam_year: examYear,
+          exam_period: examPeriod,
           total_items: normalizedItems.length,
           items: normalizedItems,
           error_types: errorTypes,
@@ -388,6 +407,78 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
                 </div>
               </section>
 
+              <section className="space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">템플릿 기본 정보 (필수)</h3>
+                  <p className="text-sm text-muted-foreground">학교명과 과목은 현재 시험지 정보에서 자동으로 가져옵니다.</p>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="template-grade">학년 *</Label>
+                    <select
+                      id="template-grade"
+                      value={grade}
+                      onChange={(event) => setGrade(event.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">선택</option>
+                      <option value="1">1학년</option>
+                      <option value="2">2학년</option>
+                      <option value="3">3학년</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="template-exam-year">시험 연도 *</Label>
+                    <select
+                      id="template-exam-year"
+                      value={examYear ?? ''}
+                      onChange={(event) => setExamYear(event.target.value ? Number(event.target.value) : null)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">선택</option>
+                      {EXAM_YEAR_OPTIONS.map((year) => (
+                        <option key={year} value={year}>{year}년</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="template-exam-period">학기 *</Label>
+                    <select
+                      id="template-exam-period"
+                      value={examPeriod}
+                      onChange={(event) => setExamPeriod(event.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">선택</option>
+                      <option value="1학기">1학기</option>
+                      <option value="2학기">2학기</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="template-exam-type">시험 종류 *</Label>
+                    <select
+                      id="template-exam-type"
+                      value={examType}
+                      onChange={(event) => setExamType(event.target.value)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">선택</option>
+                      {EXAM_TYPE_OPTIONS.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {!canSave ? (
+                  <p className="text-sm text-warning">위 항목을 모두 입력해야 템플릿을 저장할 수 있습니다.</p>
+                ) : null}
+              </section>
+
               <section className="space-y-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
@@ -395,7 +486,7 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
                     <p className="text-sm text-muted-foreground">문항번호, 유형, 배점을 직접 수정할 수 있습니다.</p>
                   </div>
                   <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-foreground">
-                    총점 <span className="font-semibold">{totalPoints}점</span>
+                    총점 <span className="font-semibold">{formatPoints(totalPoints)}점</span>
                   </div>
                 </div>
 
@@ -429,8 +520,9 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
                               <Input
                                 type="number"
                                 min={0}
-                                value={item.points}
-                                onChange={(event) => updateItem(index, 'points', Number(event.target.value) || 0)}
+                                step="0.01"
+                                value={formatPoints(item.points)}
+                                onChange={(event) => handlePointsChange(index, event.target.value)}
                                 className="h-10 w-20"
                               />
                               <span className="text-sm text-muted-foreground">점</span>
@@ -476,18 +568,39 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
 
                 <div className="space-y-2">
                   <Label>추가 오답유형</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newErrorType}
+                      onChange={(event) => {
+                        event.stopPropagation();
+                        setNewErrorType(event.target.value);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        addErrorType();
+                      }}
+                      placeholder="오답유형 입력 후 Enter 또는 추가 버튼"
+                    />
+                    <Button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        addErrorType();
+                      }}
+                    >
+                      추가
+                    </Button>
+                  </div>
                   {customErrorTypes.map((type, index) => (
-                    <div key={`${index}-${type}`} className="flex gap-2">
-                      <Input value={type} onChange={(event) => updateErrorType(index, event.target.value)} placeholder="예: 계산 과정 누락" />
-                      <Button type="button" variant="outline" size="icon" onClick={() => removeErrorType(index)}>
+                    <div key={`${index}-${type}`} className="flex items-center gap-2 rounded-md bg-accent/40 px-3 py-2 text-sm text-foreground">
+                      <span className="flex-1">{type}</span>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeErrorType(index)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
-                  <Button type="button" variant="outline" onClick={addErrorType} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    오답유형 추가
-                  </Button>
                   <p className="text-xs text-muted-foreground">‘{ALWAYS_INCLUDED_ERROR_TYPE}’ 항목은 항상 자동 포함됩니다.</p>
                 </div>
               </section>
