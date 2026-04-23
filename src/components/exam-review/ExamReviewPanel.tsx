@@ -665,108 +665,17 @@ export function ExamReviewPanel() {
               </div>
 
               <div className="mb-8">
-                <SectionTitle title="시험지 사진" />
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {sortedPhotos.map((photo, index) => (
-                    <button
-                      key={photo.id}
-                      type="button"
-                      onClick={async () => {
-                        const cachedUrl = resolvedPhotoUrls[photo.storage_path];
-                        if (cachedUrl) {
-                          setSelectedImage(cachedUrl);
-                          return;
-                        }
-                        const resolvedUrl = await resolvePhotoUrl(photo.storage_path);
-                        if (resolvedUrl) {
-                          setResolvedPhotoUrls((prev) => ({ ...prev, [photo.storage_path]: resolvedUrl }));
-                          setSelectedImage(resolvedUrl);
-                        } else {
-                          toast({ title: '사진을 불러올 수 없습니다', variant: 'destructive' });
-                        }
-                      }}
-                      className="relative cursor-pointer text-left"
-                    >
-                      <PhotoThumb
-                        storagePath={photo.storage_path}
-                        alt={`시험지 ${index + 1}`}
-                        className="block h-40 w-full rounded-lg border border-border"
-                        imageClassName="block h-40 w-full rounded-lg border border-border object-cover"
-                        onResolvedUrl={(url) => setResolvedPhotoUrls((prev) => (prev[photo.storage_path] ? prev : { ...prev, [photo.storage_path]: url }))}
-                      />
-                      <div className="absolute bottom-1.5 left-1.5 rounded bg-black/50 px-2 py-0.5 text-[11px] text-white">
-                        {index + 1}번째
-                      </div>
-                    </button>
-                  ))}
-                  {sortedPhotos.length === 0 ? (
-                    <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                      등록된 시험지 사진이 없습니다.
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mb-8">
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <div className="min-w-[180px] flex-1">
-                    <SectionTitle title="문항별 채점" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] text-muted-foreground">총 문항 수</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={itemCount}
-                      onChange={(event) => handleItemCountChange(Number(event.target.value) || 1)}
-                      className="h-9 w-[60px] px-2 text-center"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-5">
-                  {itemReviews.map((item) => {
-                    const showErrors = item.result === 'wrong' || item.result === 'partial';
-                    return (
-                      <div key={item.item_number} className="rounded-[10px] border border-border bg-background px-2 py-3 text-center">
-                        <div className="mb-2 text-xs text-muted-foreground">{item.item_number}번</div>
-                        <div className="flex justify-center gap-1">
-                          {([
-                            ['correct', 'O'],
-                            ['wrong', 'X'],
-                            ['partial', '△'],
-                          ] as const).map(([value, label]) => {
-                            const active = item.result === value;
-                            return (
-                              <button
-                                key={value}
-                                type="button"
-                                onClick={() => setItemResult(item.item_number, value)}
-                                className={`h-9 w-9 rounded-md border text-[15px] font-bold ${getResultButtonClasses(active, value)}`}
-                              >
-                                {label}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {showErrors ? (
-                          <div className="mt-2 text-left">
-                            {ERROR_TYPES.map((type) => (
-                              <label key={type} className="mb-1 flex cursor-pointer items-center gap-1 text-[10px] text-foreground/80">
-                                <Checkbox
-                                  checked={item.error_types.includes(type)}
-                                  onCheckedChange={(checked) => toggleError(item.item_number, type, checked === true)}
-                                />
-                                <span>{type}</span>
-                              </label>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+                <SectionTitle title="오버레이 채점" />
+                <OverlayGradingPanel
+                  photos={sortedPhotos}
+                  photoUrls={resolvedPhotoUrls}
+                  template={template}
+                  templateLoading={templateLoading}
+                  items={itemReviews}
+                  saving={saving}
+                  onSaveItem={saveOverlayItem}
+                  onOpenTemplateSetup={() => setTemplateSetupOpen(true)}
+                />
               </div>
 
               <div className="mb-6 rounded-[10px] border p-4" style={{ backgroundColor: 'hsl(var(--review-photo-placeholder-surface) / 0.35)', borderColor: 'hsl(var(--review-correct-surface))' }}>
@@ -806,19 +715,6 @@ export function ExamReviewPanel() {
           )}
         </div>
       </div>
-
-      <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>시험지 원본 보기</DialogTitle>
-          </DialogHeader>
-          {selectedImage ? (
-            <div className="max-h-[80vh] overflow-hidden rounded-md border border-border bg-muted/20 p-2">
-              <img src={selectedImage} alt="시험지 원본" className="max-h-[76vh] w-full rounded-md object-contain" />
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
 
       <ExamTemplateSetup
         open={templateSetupOpen}
