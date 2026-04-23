@@ -1,8 +1,9 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CalendarDays, BookOpen, FileText, Compass, AlertTriangle, GraduationCap } from 'lucide-react';
+import { Loader2, CalendarDays, BookOpen, FileText, Compass, AlertTriangle, GraduationCap, ClipboardCheck, ListChecks } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -15,6 +16,19 @@ import { ArchiveTab } from './ArchiveTab';
 import { GuideTab } from './GuideTab';
 import { StudentSubmissionsTab } from './StudentSubmissionsTab';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { ExamReviewPanel } from '@/components/exam-review/ExamReviewPanel';
+import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
+
+const ARCHIVE_TABS = ['overview', 'submissions', 'review', 'cross-check', 'prep'] as const;
+type ArchiveTabValue = (typeof ARCHIVE_TABS)[number];
+
+function normalizeTab(value: string | null): ArchiveTabValue {
+  if (value && ARCHIVE_TABS.includes(value as ArchiveTabValue)) {
+    return value as ArchiveTabValue;
+  }
+  return 'overview';
+}
 
 class ExamArchiveErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -53,7 +67,8 @@ export function SchoolExamArchiveNew() {
 }
 
 function SchoolExamArchiveInner() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     schools,
     schedules,
@@ -65,6 +80,42 @@ function SchoolExamArchiveInner() {
     setSelectedSchool,
     refetch,
   } = useExamArchiveData();
+
+  const canViewReview = role === 'admin';
+  const canViewPrep = role === 'admin' || role === 'teacher';
+  const requestedTab = normalizeTab(searchParams.get('tab'));
+  const currentTab = requestedTab === 'review' && !canViewReview
+    ? 'overview'
+    : requestedTab === 'prep' && !canViewPrep
+      ? 'overview'
+      : requestedTab;
+  const unconfirmedCount = 0;
+
+  const selectedSchoolSchedules = useMemo(
+    () => schedules.filter((schedule) => schedule.school_name === selectedSchool),
+    [schedules, selectedSchool],
+  );
+
+  const selectedSchoolTextbooks = useMemo(
+    () => textbooks.filter((textbook) => textbook.school_name === selectedSchool),
+    [textbooks, selectedSchool],
+  );
+
+  const selectedSchoolArchives = useMemo(
+    () => archives.filter((archive) => archive.school_name === selectedSchool),
+    [archives, selectedSchool],
+  );
+
+  const handleTabChange = (value: string) => {
+    const nextTab = normalizeTab(value);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (nextTab === 'overview') {
+      nextSearchParams.delete('tab');
+    } else {
+      nextSearchParams.set('tab', nextTab);
+    }
+    setSearchParams(nextSearchParams, { replace: true });
+  };
 
   const handleAddSchool = async (name: string, level: string) => {
     // Add a placeholder schedule so the school shows up
@@ -146,62 +197,103 @@ function SchoolExamArchiveInner() {
                 )}
               </div>
 
-              {/* Tabs */}
-              <Tabs defaultValue="schedule">
+              <Tabs value={currentTab} onValueChange={handleTabChange}>
                 <TabsList className="grid w-full grid-cols-5 h-10">
-                  <TabsTrigger value="schedule" className="gap-1.5 text-xs">
-                    <CalendarDays className="w-4 h-4" /> 시험/일정
-                  </TabsTrigger>
-                  <TabsTrigger value="textbooks" className="gap-1.5 text-xs">
-                    <BookOpen className="w-4 h-4" /> 교과서 정보
-                  </TabsTrigger>
-                  <TabsTrigger value="archives" className="gap-1.5 text-xs">
-                    <FileText className="w-4 h-4" /> 내신 자료
+                  <TabsTrigger value="overview" className="gap-1.5 text-xs">
+                    <CalendarDays className="w-4 h-4" /> 학교/일정
                   </TabsTrigger>
                   <TabsTrigger value="submissions" className="gap-1.5 text-xs">
-                    <GraduationCap className="w-4 h-4" /> 학생 제출
+                    <GraduationCap className="w-4 h-4" /> 학생제출
                   </TabsTrigger>
-                  <TabsTrigger value="guide" className="gap-1.5 text-xs">
-                    <Compass className="w-4 h-4" /> 선생님 가이드
+                  <TabsTrigger value="review" className="gap-1.5 text-xs" disabled={!canViewReview}>
+                    <ClipboardCheck className="w-4 h-4" /> 시험지리뷰
+                  </TabsTrigger>
+                  <TabsTrigger value="cross-check" className="gap-1.5 text-xs">
+                    <ListChecks className="w-4 h-4" />
+                    크로스체킹
+                    <span className="ml-1 rounded-full bg-destructive px-1.5 py-px text-[10px] font-medium text-destructive-foreground">
+                      {unconfirmedCount}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="prep" className="gap-1.5 text-xs" disabled={!canViewPrep}>
+                    <Compass className="w-4 h-4" /> 내신특강
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="schedule" className="mt-4">
-                  <ScheduleTab
-                    schoolName={selectedSchool}
-                    schedules={schedules}
-                    archives={archives}
-                    onRefetch={refetch}
-                  />
-                </TabsContent>
+                <TabsContent value="overview" className="mt-4 space-y-6">
+                  <section className="space-y-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">시험 일정</h3>
+                      <p className="text-sm text-muted-foreground">선택한 학교의 시험 및 학사 일정을 관리합니다.</p>
+                    </div>
+                    <ScheduleTab
+                      schoolName={selectedSchool}
+                      schedules={schedules}
+                      archives={archives}
+                      onRefetch={refetch}
+                    />
+                  </section>
 
-                <TabsContent value="textbooks" className="mt-4">
-                  <TextbookTab
-                    schoolName={selectedSchool}
-                    textbooks={textbooks}
-                    onRefetch={refetch}
-                  />
-                </TabsContent>
+                  <section className="space-y-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">교과서 정보</h3>
+                      <p className="text-sm text-muted-foreground">학교별 학년·과목 교재 구성을 확인하고 수정합니다.</p>
+                    </div>
+                    <TextbookTab
+                      schoolName={selectedSchool}
+                      textbooks={textbooks}
+                      onRefetch={refetch}
+                    />
+                  </section>
 
-                <TabsContent value="archives" className="mt-4">
-                  <ArchiveTab
-                    schoolName={selectedSchool}
-                    archives={archives}
-                    onRefetch={refetch}
-                  />
+                  <section className="space-y-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">내신 자료</h3>
+                      <p className="text-sm text-muted-foreground">시험 범위, 분석, 대비 노트를 학교별로 관리합니다.</p>
+                    </div>
+                    <ArchiveTab
+                      schoolName={selectedSchool}
+                      archives={archives}
+                      onRefetch={refetch}
+                    />
+                  </section>
+
+                  <section className="space-y-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">선생님 가이드</h3>
+                      <p className="text-sm text-muted-foreground">선택된 학교 데이터 기반 수업 준비 가이드를 생성합니다.</p>
+                    </div>
+                    <GuideTab
+                      schoolName={selectedSchool}
+                      schedules={selectedSchoolSchedules}
+                      textbooks={selectedSchoolTextbooks}
+                      archives={selectedSchoolArchives}
+                    />
+                  </section>
                 </TabsContent>
 
                 <TabsContent value="submissions" className="mt-4">
                   <StudentSubmissionsTab schoolName={selectedSchool} />
                 </TabsContent>
 
-                <TabsContent value="guide" className="mt-4">
-                  <GuideTab
-                    schoolName={selectedSchool}
-                    schedules={schedules}
-                    textbooks={textbooks}
-                    archives={archives}
-                  />
+                <TabsContent value="review" className="mt-4">
+                  {canViewReview ? <ExamReviewPanel /> : null}
+                </TabsContent>
+
+                <TabsContent value="cross-check" className="mt-4">
+                  <Card>
+                    <CardContent className="flex min-h-[240px] flex-col items-center justify-center gap-3 text-center">
+                      <ListChecks className="h-10 w-10 text-muted-foreground/50" />
+                      <div>
+                        <p className="font-medium text-foreground">크로스체킹 준비 중</p>
+                        <p className="text-sm text-muted-foreground">미확인 건수 집계와 상세 워크플로우는 다음 단계에서 연결됩니다.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="prep" className="mt-4">
+                  {canViewPrep ? <ExamPrepScheduleManager /> : null}
                 </TabsContent>
               </Tabs>
             </div>
