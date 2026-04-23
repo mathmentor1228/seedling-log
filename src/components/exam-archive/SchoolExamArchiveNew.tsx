@@ -91,6 +91,7 @@ function SchoolExamArchiveInner() {
       ? 'overview'
       : requestedTab;
   const [unconfirmedCount, setUnconfirmedCount] = useState(0);
+  const isReviewTab = currentTab === 'review' && canViewReview;
 
   const selectedSchoolSchedules = useMemo(
     () => schedules.filter((schedule) => schedule.school_name === selectedSchool),
@@ -170,18 +171,26 @@ function SchoolExamArchiveInner() {
         )}
       </div>
 
-      <div className="flex h-[calc(100vh-200px)] bg-background rounded-xl border shadow-sm overflow-hidden">
-        {/* Left sidebar */}
-        <SchoolSidebar
-          schools={schools}
-          selectedSchool={selectedSchool}
-          onSelectSchool={setSelectedSchool}
-          onAddSchool={handleAddSchool}
-        />
+      <div className="flex h-[calc(100vh-200px)] w-full overflow-hidden rounded-xl border bg-background shadow-sm">
+        {!isReviewTab ? (
+          <SchoolSidebar
+            schools={schools}
+            selectedSchool={selectedSchool}
+            onSelectSchool={setSelectedSchool}
+            onAddSchool={handleAddSchool}
+          />
+        ) : null}
 
-        {/* Right detail */}
         <div className="flex-1 overflow-y-auto">
-          {selectedSchool ? (
+          {isReviewTab ? (
+            <div className="h-full w-full">
+              <Tabs value={currentTab} onValueChange={handleTabChange}>
+                <TabsContent value="review" className="m-0 h-full">
+                  {canViewReview ? <ExamReviewPanel /> : null}
+                </TabsContent>
+              </Tabs>
+            </div>
+          ) : selectedSchool ? (
             <div className="p-6 space-y-5">
               {/* School header */}
               <div className="flex items-center gap-3">
