@@ -253,6 +253,37 @@ export function ExamReviewPanel() {
     return { correct, wrong, partial, topErrorType };
   }, [itemReviews]);
 
+  useEffect(() => {
+    let active = true;
+
+    const resolveUrls = async () => {
+      const missingPhotos = sortedPhotos.filter((photo) => !resolvedPhotoUrls[photo.storage_path]);
+      if (missingPhotos.length === 0) return;
+
+      const entries = await Promise.all(
+        missingPhotos.map(async (photo) => {
+          const url = await resolvePhotoUrl(photo.storage_path);
+          return [photo.storage_path, url] as const;
+        }),
+      );
+
+      if (!active) return;
+      setResolvedPhotoUrls((prev) => {
+        const next = { ...prev };
+        entries.forEach(([storagePath, url]) => {
+          if (url) next[storagePath] = url;
+        });
+        return next;
+      });
+    };
+
+    void resolveUrls();
+
+    return () => {
+      active = false;
+    };
+  }, [resolvedPhotoUrls, sortedPhotos]);
+
   const loadReviewDetail = useCallback(async (resultId: string) => {
     try {
       const { data: reviews, error: reviewError } = await supabase
@@ -409,8 +440,14 @@ export function ExamReviewPanel() {
           review_id: currentReviewId,
           item_number: item.item_number,
           result: item.result || null,
-          error_types: item.error_types as Json,
+          error_types: item.error_types,
           item_comment: item.item_comment.trim() || null,
+          score_earned: item.score_earned ?? 0,
+          is_essay: item.is_essay,
+          custom_reason: item.custom_reason.trim() || null,
+          overlay_x: item.overlay_x,
+          overlay_y: item.overlay_y,
+          page_number: item.page_number,
         }));
         const { error: insertError } = await supabase.from('exam_item_reviews').insert(insertPayload);
         if (insertError) throw insertError;
@@ -433,6 +470,97 @@ export function ExamReviewPanel() {
       setCompleting(false);
     }
   }, [fullName, itemReviews, loadResults, loadReviewDetail, overallComment, selectedRow, toast, user]);
+
+  const saveOverlayItem = useCallback(async (payload: {
+    id?: string;
+    item_number: number;
+    result: Exclude<ItemResult, ''>;
+    score_earned: number;
+    is_essay: boolean;
+    error_types: string[];
+    custom_reason: string;
+    overlay_x: number;
+    overlay_y: number;
+    page_number: number;
+  }) => {
+    if (!selectedRow || !user || !template) return;
+
+    const nowIso = new Date().toISOString();
+    const reviewerName = fullName || user.email || '교직원';
+
+    setSaving(true);
+    try {
+      const { data: upsertedReview, error: reviewError } = await supabase
+        .from('exam_reviews')
+        .upsert(
+          {
+            result_id: selectedRow.id,
+            reviewed_by: user.id,
+            reviewed_by_name: reviewerName,
+            overall_comment: overallComment.trim() || null,
+            template_id: template.id,
+            updated_at: nowIso,
+          },
+          { onConflict: 'result_id' },
+        )
+        .select('id')
+        .single();
+
+      if (reviewError) throw reviewError;
+
+      const currentReviewId = upsertedReview.id;
+      setReviewId(currentReviewId);
+
+      const { error: itemError } = await supabase.from('exam_item_reviews').upsert(
+        {
+          review_id: currentReviewId,
+          item_number: payload.item_number,
+          result: payload.result,
+          score_earned: payload.score_earned,
+          is_essay: payload.is_essay,
+          error_types: payload.error_types,
+          custom_reason: payload.custom_reason || null,
+          overlay_x: payload.overlay_x,
+          overlay_y: payload.overlay_y,
+          page_number: payload.page_number,
+        },
+        { onConflict: 'review_id,item_number' },
+      );
+
+      if (itemError) throw itemError;
+
+      const mergedItems = itemReviews.filter((item) => item.item_number !== payload.item_number).concat({
+        id: payload.id,
+        item_number: payload.item_number,
+        result: payload.result,
+        error_types: payload.error_types,
+        item_comment: '',
+        score_earned: payload.score_earned,
+        is_essay: payload.is_essay,
+        custom_reason: payload.custom_reason,
+        overlay_x: payload.overlay_x,
+        overlay_y: payload.overlay_y,
+        page_number: payload.page_number,
+      });
+
+      const earnedScore = mergedItems.reduce((sum, item) => sum + (item.score_earned ?? 0), 0);
+      const totalScore = template.items.reduce((sum, item) => sum + item.points, 0);
+
+      const { error: scoreError } = await supabase
+        .from('exam_reviews')
+        .update({ earned_score: earnedScore, total_score: totalScore, template_id: template.id, updated_at: nowIso })
+        .eq('id', currentReviewId);
+
+      if (scoreError) throw scoreError;
+
+      await loadReviewDetail(selectedRow.id);
+    } catch (error: any) {
+      toast({ title: '문항 저장 실패', description: error.message, variant: 'destructive' });
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  }, [fullName, itemReviews, loadReviewDetail, overallComment, selectedRow, template, toast, user]);
 
   return (
     <>
