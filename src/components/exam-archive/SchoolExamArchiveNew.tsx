@@ -182,32 +182,28 @@ function SchoolExamArchiveInner() {
         ) : null}
 
         <div className="flex-1 overflow-y-auto">
-          {isReviewTab ? (
-            <div className="h-full w-full">
-              <Tabs value={currentTab} onValueChange={handleTabChange}>
-                <TabsContent value="review" className="m-0 h-full">
-                  {canViewReview ? <ExamReviewPanel /> : null}
-                </TabsContent>
-              </Tabs>
-            </div>
-          ) : selectedSchool ? (
-            <div className="p-6 space-y-5">
+          {selectedSchool || isReviewTab ? (
+            <div className={isReviewTab ? 'flex h-full min-h-0 flex-col' : 'space-y-5 p-6'}>
+              {!isReviewTab ? (
+                <>
               {/* School header */}
-              <div className="flex items-center gap-3">
-                <h2 className="text-xl font-bold">{selectedSchool}</h2>
-                {selectedInfo && (
-                  <Badge variant="outline" className="text-xs">
-                    {SCHOOL_LEVEL_LABELS[selectedInfo.level] || selectedInfo.level}
-                  </Badge>
-                )}
-                {selectedInfo && selectedInfo.studentCount > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    담당 학생 {selectedInfo.studentCount}명
-                  </span>
-                )}
-              </div>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold">{selectedSchool}</h2>
+                    {selectedInfo && (
+                      <Badge variant="outline" className="text-xs">
+                        {SCHOOL_LEVEL_LABELS[selectedInfo.level] || selectedInfo.level}
+                      </Badge>
+                    )}
+                    {selectedInfo && selectedInfo.studentCount > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        담당 학생 {selectedInfo.studentCount}명
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : null}
 
-              <Tabs value={currentTab} onValueChange={handleTabChange}>
+              <Tabs value={currentTab} onValueChange={handleTabChange} className={isReviewTab ? 'flex h-full min-h-0 flex-col' : undefined}>
                 <TabsList className="grid w-full grid-cols-5 h-10">
                   <TabsTrigger value="overview" className="gap-1.5 text-xs">
                     <CalendarDays className="w-4 h-4" /> 학교/일정
@@ -286,7 +282,7 @@ function SchoolExamArchiveInner() {
                   <StudentSubmissionsTab schoolName={selectedSchool} />
                 </TabsContent>
 
-                <TabsContent value="review" className="mt-4">
+                <TabsContent value="review" className={isReviewTab ? 'mt-0 min-h-0 flex-1 overflow-hidden data-[state=active]:flex' : 'mt-4'}>
                   {canViewReview ? <ExamReviewPanel /> : null}
                 </TabsContent>
 
