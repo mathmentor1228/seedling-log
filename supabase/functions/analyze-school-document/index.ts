@@ -148,6 +148,64 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const CURRENT_YEAR = new Date().getFullYear();
+
+const EXAM_NOTICE_PARSE_SYSTEM_PROMPT = `당신은 한국 중고등학교 내신 시험 공고문을 분석하는 전문가입니다.
+
+업로드된 문서에서 아래 정보를 정확하게 추출해주세요.
+
+반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
+
+{
+  "school_name": "학교명 (문서에 없으면 null)",
+  "exam_type": "시험 종류 (중간고사/기말고사/모의고사 중 하나)",
+  "exam_year": "연도 (숫자, 예: 2026)",
+  "exam_period": "학기 (1학기/2학기 중 하나)",
+  "grade": "학년 (1/2/3 중 하나, 전학년이면 null)",
+  "score_distribution": {
+    "midterm": "중간고사 비율 (숫자만, 예: 35)",
+    "final": "기말고사 비율 (숫자만, 예: 35)",
+    "performance": "수행평가 비율 (숫자만, 예: 30)"
+  },
+  "exam_schedule": [
+    {
+      "date": "날짜 (YYYY-MM-DD 형식)",
+      "day": "요일 (월/화/수/목/금)",
+      "subject": "과목명",
+      "start_time": "시작시간 (HH:MM)",
+      "end_time": "종료시간 (HH:MM)",
+      "grade": "해당 학년"
+    }
+  ],
+  "exam_scope": [
+    {
+      "subject": "과목명",
+      "scope_text": "시험범위 원문 그대로",
+      "chapters": ["단원명1", "단원명2"],
+      "pages": "페이지 범위 (예: p.1~p.85)"
+    }
+  ],
+  "performance_assessments": [
+    {
+      "subject": "과목명",
+      "type": "수행평가 유형 (서술형/논술형/실기/포트폴리오/발표 등)",
+      "title": "수행평가 제목/내용",
+      "ratio": "비율 (숫자만)",
+      "period": "시행 시기 (예: 4월 3주)"
+    }
+  ],
+  "notes": "기타 특이사항 (없으면 null)"
+}
+
+추출 규칙:
+
+1. 표 형식의 데이터는 각 행을 개별 항목으로 변환
+2. 날짜는 반드시 YYYY-MM-DD 형식으로 변환 (예: 4월 22일 → ${CURRENT_YEAR}-04-22)
+3. 연도가 명시되지 않으면 현재 연도 사용
+4. 과목명은 약어 사용 금지 (수학→수학, 영어→영어, 국어→국어)
+5. 범위가 불명확하면 원문 그대로 scope_text에 기록
+6. 없는 정보는 빈 배열[] 또는 null로 처리`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -234,26 +292,10 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
     }
 
     if (fileType === "evaluation_plan") {
-      extractionPrompt = `
-다음은 ${schoolName} 평가계획서 문서입니다.
-${subjectInstruction}
+      extractionPrompt = `${EXAM_NOTICE_PARSE_SYSTEM_PROMPT}
 
-아래 JSON 형식으로 평가 정보를 추출해주세요:
-{
-  "evaluations": [
-    {
-      "grade": 학년(숫자),
-      "subject": "과목명",
-      "semester": 학기(숫자),
-      "exam_type": "중간고사|기말고사|수행평가",
-      "exam_start_date": "YYYY-MM-DD 또는 null",
-      "exam_end_date": "YYYY-MM-DD 또는 null",
-      "exam_range": "시험범위",
-      "evaluation_ratio": "반영비율 (예: 지필60%/수행40%)",
-      "performance_detail": "수행평가 상세내용"
-    }
-  ]
-}
+문서는 ${schoolName}의 시험 공고문 또는 평가계획 문서입니다.
+${subjectInstruction}
 JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
     }
 
@@ -328,6 +370,8 @@ ${subjectInstruction}
           model: "google/gemini-2.5-flash",   
           messages,
           max_tokens: 16384,
+          temperature: 0.1,
+          response_format: { type: "json_object" },
         }),
       }
     );
