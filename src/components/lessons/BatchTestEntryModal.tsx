@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
+import { useAuth, isAdmin as checkIsAdmin, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { CheckCircle2, XCircle, Minus, Loader2, Users, Search, Clock, UserCheck } from 'lucide-react';
 import { ASSISTANTS } from './constants';
 import { useTeachersList } from './useTeachersList';
@@ -52,6 +52,8 @@ export function BatchTestEntryModal({
   const { toast } = useToast();
   const { user, role } = useAuth();
   const isAssistant = checkIsAssistant(role);
+  const isAdmin = checkIsAdmin(role);
+  const canSelectTeacher = isAssistant || isAdmin;
   const { teachers } = useTeachersList();
   const [subject, setSubject] = useState(defaultSubject || '');
   const [date, setDate] = useState(defaultDate || getTodayKST());
@@ -65,6 +67,7 @@ export function BatchTestEntryModal({
   const [saving, setSaving] = useState(false);
   const [testSlot, setTestSlot] = useState<1 | 2>(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const effectiveTeacherId = canSelectTeacher ? teacherId : (user?.id || '');
 
   // Fetch time slots for selected teacher + date
   const fetchTimeSlots = useCallback(async (tid: string, d: string) => {
@@ -91,12 +94,12 @@ export function BatchTestEntryModal({
 
   const fetchStudents = useCallback(async (subj: string, selectedTeacherId?: string) => {
     if (!subj) { setEntries([]); return; }
-    const effectiveTeacherId = isAssistant ? (selectedTeacherId || teacherId) : (user?.id || '');
-    if (!effectiveTeacherId) { setEntries([]); return; }
+    const resolvedTeacherId = canSelectTeacher ? (selectedTeacherId || teacherId) : (user?.id || '');
+    if (!resolvedTeacherId) { setEntries([]); return; }
 
     setLoading(true);
     try {
-      const studentIds = await fetchTeacherStudentIds(effectiveTeacherId, subj);
+      const studentIds = await fetchTeacherStudentIds(resolvedTeacherId, subj);
       const students = await fetchStudentsByIds(studentIds);
 
       setEntries(students.map((s) => ({
@@ -117,7 +120,7 @@ export function BatchTestEntryModal({
     } finally {
       setLoading(false);
     }
-  }, [isAssistant, teacherId, toast, user?.id]);
+  }, [canSelectTeacher, teacherId, toast, user?.id]);
 
   useEffect(() => {
     if (open) {
@@ -137,16 +140,15 @@ export function BatchTestEntryModal({
   // When teacher or date changes, fetch time slots
   useEffect(() => {
     if (!open) return;
-    const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
     fetchTimeSlots(effectiveTeacherId, date);
-  }, [open, teacherId, date, isAssistant, user?.id, fetchTimeSlots]);
+  }, [open, effectiveTeacherId, date, fetchTimeSlots]);
 
   // When teacher + subject selected, fetch students
   useEffect(() => {
     if (!open || !subject) return;
-    if (isAssistant && !teacherId) { setEntries([]); return; }
+    if (canSelectTeacher && !teacherId) { setEntries([]); return; }
     void fetchStudents(subject, teacherId);
-  }, [open, subject, teacherId, isAssistant, fetchStudents]);
+  }, [open, subject, teacherId, canSelectTeacher, fetchStudents]);
 
   function toggleResult(idx: number) {
     setEntries(prev => prev.map((e, i) => {
@@ -176,7 +178,6 @@ export function BatchTestEntryModal({
     if (selected.length === 0) {
       toast({ title: '학생을 선택해주세요', variant: 'destructive' }); return;
     }
-    const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
     if (!effectiveTeacherId) {
       toast({ title: '담당 선생님을 선택해주세요', variant: 'destructive' }); return;
     }
@@ -189,6 +190,7 @@ export function BatchTestEntryModal({
         .select('id, student_id')
         .eq('lesson_date', date)
         .eq('subject', subject as any)
+        .eq('teacher_id', effectiveTeacherId)
         .in('student_id', selected.map(s => s.student_id));
 
       const recordMap = new Map((existingRecords || []).map(r => [r.student_id, r.id]));
@@ -297,7 +299,7 @@ export function BatchTestEntryModal({
 
   const selectedCount = entries.filter(e => e.selected).length;
   const grouped = groupStudentsByGrade<StudentEntry>(filteredEntries);
-  const selectedTeacherName = teachers.find(t => t.id === teacherId)?.full_name || '';
+  const selectedTeacherName = teachers.find(t => t.id === effectiveTeacherId)?.full_name || '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -319,14 +321,20 @@ export function BatchTestEntryModal({
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs">담당 선생님 <span className="text-destructive">*</span></Label>
-                  <Select value={teacherId || (isAssistant ? '' : user?.id || '')} onValueChange={(v) => { setTeacherId(v); setSelectedTimeSlot('미정'); }}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="선생님 선택" /></SelectTrigger>
-                    <SelectContent>
-                      {teachers.map(t => (
-                        <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {canSelectTeacher ? (
+                    <Select value={teacherId} onValueChange={(v) => { setTeacherId(v); setSelectedTimeSlot('미정'); }}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                      <SelectContent>
+                        {teachers.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="h-9 flex items-center px-3 rounded-md border bg-muted/50 text-sm">
+                      {selectedTeacherName || '본인'}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">과목 <span className="text-destructive">*</span></Label>
@@ -388,7 +396,7 @@ export function BatchTestEntryModal({
           </Card>
 
           {/* Step 3: Students */}
-          {((isAssistant ? teacherId : user?.id) && subject) && (
+          {(effectiveTeacherId && subject) && (
             <Card className="border-muted">
               <CardContent className="p-3 space-y-3">
                 <div className="flex items-center justify-between">
@@ -425,8 +433,8 @@ export function BatchTestEntryModal({
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" /> 학생 로딩 중...
                   </div>
                 ) : filteredEntries.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-xs">
-                    {isAssistant && !teacherId ? '선생님을 먼저 선택해주세요' : '조건에 맞는 학생이 없습니다'}
+                    <div className="text-center py-6 text-muted-foreground text-xs">
+                      {canSelectTeacher && !teacherId ? '선생님을 먼저 선택해주세요' : '조건에 맞는 학생이 없습니다'}
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-[280px] overflow-y-auto">

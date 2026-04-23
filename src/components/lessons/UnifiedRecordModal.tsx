@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
+import { useAuth, isAdmin as checkIsAdmin, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { getTodayKST } from '@/lib/utils';
 import { ASSISTANTS, ROOMS, SUBJECTS, TEST_TYPES, isSpecialRoom } from './constants';
 import { useTeachersList } from './useTeachersList';
@@ -53,6 +53,8 @@ export function UnifiedRecordModal({
 }: UnifiedRecordModalProps) {
   const { user, role } = useAuth();
   const isAssistant = checkIsAssistant(role);
+  const isAdmin = checkIsAdmin(role);
+  const canSelectTeacher = isAssistant || isAdmin;
   const { toast } = useToast();
   const { teachers } = useTeachersList();
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -90,6 +92,7 @@ export function UnifiedRecordModal({
   const [clinicContent, setClinicContent] = useState('');
   const [clinicNextMemo, setClinicNextMemo] = useState('');
   const [clinicTeacherNote, setClinicTeacherNote] = useState('');
+  const effectiveTeacherId = canSelectTeacher ? selectedTeacherId : (user?.id || '');
 
   // Auto-calculate study duration
   const studyDurationMinutes = useMemo(() => {
@@ -132,7 +135,6 @@ export function UnifiedRecordModal({
       return;
     }
 
-    const effectiveTeacherId = isAssistant ? selectedTeacherId : (selectedTeacherId || user?.id || '');
     if (!effectiveTeacherId) {
       setStudents([]);
       return;
@@ -148,7 +150,7 @@ export function UnifiedRecordModal({
         setStudents([]);
       }
     })();
-  }, [open, isAssistant, selectedTeacherId, selectedTypes, testSubject, user?.id]);
+  }, [open, effectiveTeacherId, selectedTypes, testSubject]);
 
   function toggleType(type: RecordType) {
     setSelectedTypes(prev => {
@@ -173,6 +175,7 @@ export function UnifiedRecordModal({
 
   const groupedStudents = useMemo(() => groupStudentsByGrade(students), [students]);
   const selectedStudentName = students.find(s => s.id === selectedStudentId)?.name || '';
+  const selectedTeacherName = teachers.find(t => t.id === effectiveTeacherId)?.full_name || '';
 
   async function handleSave() {
     if (!selectedStudentId) {
@@ -193,16 +196,17 @@ export function UnifiedRecordModal({
     }
 
     setSaving(true);
-    try {
-      const teacherId = selectedTeacherId || (!isAssistant ? user?.id : undefined);
+      try {
+        const teacherId = effectiveTeacherId || undefined;
 
       // Upsert lesson_record for linking
-      async function upsertLessonRecord(types: string[], subject: string): Promise<string | null> {
+        async function upsertLessonRecord(types: string[], subject: string): Promise<string | null> {
         const { data: existing } = await supabase
           .from('lesson_records')
           .select('id, lesson_types')
           .eq('student_id', selectedStudentId)
           .eq('lesson_date', selectedDate)
+            .eq('subject', subject as any)
           .maybeSingle();
 
         if (existing) {
@@ -221,8 +225,8 @@ export function UnifiedRecordModal({
               lesson_date: selectedDate,
               subject: subject as any,
               lesson_types: types,
-              understanding_score: 0,
-              homework_status: 'none',
+              understanding_score: null,
+              homework_status: 'none_assigned',
               lesson_range: types.join('+'),
               submitted: true,
               submitted_at: new Date().toISOString(),
@@ -241,6 +245,45 @@ export function UnifiedRecordModal({
       );
 
       if (selectedTypes.has('test')) {
+          if (lessonRecordId) {
+            const normalizedResult = testSubject === '영어'
+              ? 'none'
+              : testPassed === true
+                ? 'pass'
+                : testPassed === false
+                  ? 'fail'
+                  : 'none';
+
+            const { error: lessonTestError } = await supabase.rpc('update_lesson_test_fields', {
+              _lesson_id: lessonRecordId,
+              _test_name: testContent.trim(),
+              _test_content: testContent.trim(),
+              _test_result_text: testScore.trim() || null,
+              _test_result: normalizedResult,
+              _test_notes: null,
+              _test_date: selectedDate,
+              _test_time: testStartTime || null,
+              _test_assistant: testAssistant && testAssistant !== 'none' ? testAssistant : null,
+              _test_slot: 1,
+            });
+
+            if (lessonTestError) throw lessonTestError;
+
+            const { data: existingLesson } = await supabase
+              .from('lesson_records')
+              .select('lesson_types')
+              .eq('id', lessonRecordId)
+              .maybeSingle();
+
+            const lessonTypes = Array.from(new Set([...(existingLesson?.lesson_types || []), '테스트']));
+            const lessonPatch: Record<string, any> = { lesson_types: lessonTypes };
+            if (testSubject === '영어') {
+              lessonPatch.english_pass_fail = testPassed === true ? 'pass' : testPassed === false ? 'fail' : null;
+            }
+
+            await supabase.from('lesson_records').update(lessonPatch).eq('id', lessonRecordId);
+          }
+
         await supabase.from('test_records').insert({
           student_id: selectedStudentId,
           teacher_id: teacherId!,
@@ -330,7 +373,7 @@ export function UnifiedRecordModal({
                     role="combobox"
                     aria-expanded={studentPopoverOpen}
                     className="w-full justify-between font-normal"
-                    disabled={selectedTypes.has('test') && isAssistant && (!selectedTeacherId || !testSubject)}
+                    disabled={selectedTypes.has('test') && canSelectTeacher && (!selectedTeacherId || !testSubject)}
                   >
                     {selectedStudentName || '학생 선택...'}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -365,7 +408,7 @@ export function UnifiedRecordModal({
                   </Command>
                 </PopoverContent>
               </Popover>
-              {selectedTypes.has('test') && isAssistant && (!selectedTeacherId || !testSubject) && (
+              {selectedTypes.has('test') && canSelectTeacher && (!selectedTeacherId || !testSubject) && (
                 <p className="mt-1 text-xs text-muted-foreground">선생님과 과목을 먼저 선택해주세요</p>
               )}
             </div>
@@ -377,14 +420,20 @@ export function UnifiedRecordModal({
 
             <div>
               <Label>담당 선생님</Label>
-              <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
-                <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
-                <SelectContent>
-                  {teachers.map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {canSelectTeacher ? (
+                <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
+                  <SelectTrigger><SelectValue placeholder="선생님 선택" /></SelectTrigger>
+                  <SelectContent>
+                    {teachers.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex h-10 items-center rounded-md border bg-muted/50 px-3 text-sm">
+                  {selectedTeacherName || '본인'}
+                </div>
+              )}
             </div>
 
             <div className="col-span-2">
