@@ -516,34 +516,55 @@ export function LessonRecordForm({
         return;
       }
 
-      // Fallback: check test_schedules
-      const { data: testSched } = await supabase
-        .from('test_schedules')
-        .select('content, result_score, result_passed, test_type, test_time, notes')
-        .eq('student_id', record.student_id)
-        .eq('subject', record.subject)
-        .eq('test_date', record.lesson_date)
+      // Fallback 1: check linked test_records
+      const { data: testRecord } = await supabase
+        .from('test_records')
+        .select('content, score, passed, start_time, assistant_name')
+        .eq('lesson_record_id', existingRecordId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (testSched && (testSched.content?.trim() || testSched.result_score?.trim() || testSched.result_passed != null)) {
-        const resultText = testSched.result_score ||
-          (testSched.result_passed != null ? (testSched.result_passed ? '통과' : '불통과') : '');
-        const testResult = testSched.result_passed != null
-          ? (testSched.result_passed ? 'pass' as const : 'fail' as const)
-          : 'none' as const;
+      if (testRecord && (testRecord.content?.trim() || testRecord.score?.trim() || testRecord.passed != null)) {
         setTestFormData(prev => ({
           ...prev,
-          test_name: testSched.content || '',
-          test_result_text: resultText,
-          test_result: testResult,
-          test_notes: testSched.notes || prev.test_notes,
-          test_time: testSched.test_time || prev.test_time,
+          test_name: testRecord.content || '',
+          test_result_text: testRecord.score || '',
+          test_result: testRecord.passed === true ? 'pass' : testRecord.passed === false ? 'fail' : 'none',
+          test_time: testRecord.start_time || prev.test_time,
+          test_assistant: testRecord.assistant_name || prev.test_assistant,
         }));
-        toast({ title: '테스트 데이터 연동 완료', description: '테스트 스케줄에서 결과가 반영되었습니다.' });
+        toast({ title: '테스트 데이터 연동 완료', description: '테스트 기록에서 결과가 반영되었습니다.' });
       } else {
-        toast({ title: '연동할 테스트 데이터 없음', description: '이 날짜/과목에 입력된 테스트 기록이 없습니다.' });
+        // Fallback 2: legacy test_schedules
+        const { data: testSched } = await supabase
+          .from('test_schedules')
+          .select('content, result_score, result_passed, test_type, test_time, notes')
+          .eq('student_id', record.student_id)
+          .eq('subject', record.subject)
+          .eq('test_date', record.lesson_date)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (testSched && (testSched.content?.trim() || testSched.result_score?.trim() || testSched.result_passed != null)) {
+          const resultText = testSched.result_score ||
+            (testSched.result_passed != null ? (testSched.result_passed ? '통과' : '불통과') : '');
+          const testResult = testSched.result_passed != null
+            ? (testSched.result_passed ? 'pass' as const : 'fail' as const)
+            : 'none' as const;
+          setTestFormData(prev => ({
+            ...prev,
+            test_name: testSched.content || '',
+            test_result_text: resultText,
+            test_result: testResult,
+            test_notes: testSched.notes || prev.test_notes,
+            test_time: testSched.test_time || prev.test_time,
+          }));
+          toast({ title: '테스트 데이터 연동 완료', description: '기존 테스트 일정에서 결과가 반영되었습니다.' });
+        } else {
+          toast({ title: '연동할 테스트 데이터 없음', description: '이 날짜/과목에 입력된 테스트 기록이 없습니다.' });
+        }
       }
     } catch (err: any) {
       toast({ title: '연동 실패', description: err.message || '다시 시도해주세요.', variant: 'destructive' });
@@ -717,9 +738,49 @@ export function LessonRecordForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingRecordId, initialContext, isViewMode, forceNewRecord]);
 
-  // TEST-SCHEDULE-PREFILL-V1: Fetch test data from test_schedules to prefill when lesson_records has no test data
+  // TEST-PREFILL-V2: Fetch test data from test_records first, then legacy test_schedules
   async function prefillFromTestSchedules(studentId: string, subject: string, lessonDate: string) {
     try {
+      const { data: testRecord } = await supabase
+        .from('test_records')
+        .select('content, score, passed, start_time, assistant_name')
+        .eq('student_id', studentId)
+        .eq('subject', subject)
+        .eq('test_date', lessonDate)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (testRecord) {
+        const hasContent = !!(testRecord.content?.trim());
+        const hasResult = !!(testRecord.score?.trim()) || testRecord.passed != null;
+        
+        if (hasContent || hasResult) {
+          setTestFormData(prev => {
+            // Only prefill if current test data is empty
+            if (prev.test_name?.trim()) return prev;
+            
+            const resultText = testRecord.score || '';
+            const testResult = testRecord.passed != null
+              ? (testRecord.passed ? 'pass' as const : 'fail' as const)
+              : 'none' as const;
+            
+            console.log('[TEST-PREFILL-V2] Prefilling test data from test_records:', testRecord);
+            return {
+              ...prev,
+              test_name: testRecord.content || '',
+              test_result_text: resultText,
+              test_result: testResult,
+              test_notes: prev.test_notes,
+              test_date: lessonDate,
+              test_time: testRecord.start_time || prev.test_time,
+              test_assistant: testRecord.assistant_name || prev.test_assistant,
+            };
+          });
+          return;
+        }
+      }
+
       const { data: testSched } = await supabase
         .from('test_schedules')
         .select('content, result_score, result_passed, test_type, test_time, notes')
@@ -729,24 +790,22 @@ export function LessonRecordForm({
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
       if (testSched) {
         const hasContent = !!(testSched.content?.trim());
         const hasResult = !!(testSched.result_score?.trim()) || testSched.result_passed != null;
-        
+
         if (hasContent || hasResult) {
           setTestFormData(prev => {
-            // Only prefill if current test data is empty
             if (prev.test_name?.trim()) return prev;
-            
+
             const resultText = testSched.result_score || 
               (testSched.result_passed != null ? (testSched.result_passed ? '통과' : '불통과') : '');
-            // TEST-SCHEDULE-PREFILL-V2: Set test_result for all subjects (not just English)
             const testResult = testSched.result_passed != null
               ? (testSched.result_passed ? 'pass' as const : 'fail' as const)
               : 'none' as const;
-            
-            console.log('[TEST-SCHEDULE-PREFILL-V2] Prefilling test data from test_schedules:', testSched);
+
+            console.log('[TEST-PREFILL-V2] Prefilling legacy test data from test_schedules:', testSched);
             return {
               ...prev,
               test_name: testSched.content || '',
@@ -760,7 +819,7 @@ export function LessonRecordForm({
         }
       }
     } catch (err) {
-      console.error('[TEST-SCHEDULE-PREFILL-V1] Error:', err);
+      console.error('[TEST-PREFILL-V2] Error:', err);
     }
   }
 

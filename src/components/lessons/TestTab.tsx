@@ -20,7 +20,7 @@ import { useTeachersList } from './useTeachersList';
 
 export interface UnifiedTestRecord {
   id: string;
-  source: 'lesson_record' | 'test_schedule';
+  source: 'lesson_record' | 'test_record' | 'test_schedule';
   student_id: string;
   student_name: string;
   teacher_id: string;
@@ -118,24 +118,24 @@ export function TestTab() {
 
     if (filterSubject !== 'all') query = query.eq('subject', filterSubject as any);
 
-    let schedQuery = supabase
-      .from('test_schedules')
-      .select('*, students!inner(name, school_level, grade_year)')
+    let testRecordQuery = supabase
+      .from('test_records')
+      .select('id, lesson_record_id, student_id, teacher_id, test_date, subject, test_type, content, score, passed, assistant_name, room, students!inner(name, school_level, grade_year)')
       .gte('test_date', startDate)
       .lte('test_date', endDate)
       .order('test_date', { ascending: false });
 
-    if (filterSubject !== 'all') schedQuery = schedQuery.eq('subject', filterSubject);
+    if (filterSubject !== 'all') testRecordQuery = testRecordQuery.eq('subject', filterSubject);
 
-    const [lessonRes, schedRes] = await Promise.all([query, schedQuery]);
+    const [lessonRes, testRecordRes] = await Promise.all([query, testRecordQuery]);
 
     const lessonData = lessonRes.data || [];
-    const schedData = schedRes.data || [];
+    const testRecordData = testRecordRes.data || [];
 
     const allTeacherIds = [
       ...new Set([
         ...lessonData.map((r: any) => r.teacher_id),
-        ...schedData.map((r: any) => r.teacher_id),
+        ...testRecordData.map((r: any) => r.teacher_id),
       ].filter(Boolean))
     ];
 
@@ -199,10 +199,10 @@ export function TestTab() {
       }));
     results = [...results, ...slot2Results];
 
-    // Map test_schedules
-    const schedResults: UnifiedTestRecord[] = (schedData as any[]).map(r => ({
+    // Map test_records
+    const testRecordResults: UnifiedTestRecord[] = (testRecordData as any[]).map(r => ({
       id: r.id,
-      source: 'test_schedule' as const,
+      source: 'test_record' as const,
       student_id: r.student_id,
       student_name: r.students?.name || '',
       teacher_id: r.teacher_id,
@@ -210,22 +210,22 @@ export function TestTab() {
       test_date: r.test_date,
       subject: r.subject,
       test_type: r.test_type,
-      content: r.content || r.title || '',
-      score: r.result_score || null,
-      passed: r.result_passed,
-      assistant_name: null,
-      room: null,
+      content: r.content || '',
+      score: r.score || null,
+      passed: r.passed,
+      assistant_name: r.assistant_name || null,
+      room: r.room || null,
       english_pass_fail: null,
-      test_result: r.result_passed === true ? 'pass' : r.result_passed === false ? 'fail' : null,
+      test_result: r.passed === true ? 'pass' : r.passed === false ? 'fail' : null,
       test_slot: 1,
       school_level: r.students?.school_level || null,
       grade_year: r.students?.grade_year ?? null,
     }));
 
-    // Merge, avoiding duplicates (same student + same date + same subject from both sources)
-    const lessonKeys = new Set(results.map(r => `${r.student_id}_${r.test_date}_${r.subject}`));
-    const uniqueScheds = schedResults.filter(r => !lessonKeys.has(`${r.student_id}_${r.test_date}_${r.subject}`));
-    results = [...results, ...uniqueScheds];
+    // Merge, avoiding duplicates with linked lesson records first
+    const lessonKeys = new Set(results.map(r => `${r.id}_${r.test_slot}`));
+    const uniqueTestRecords = testRecordResults.filter((r: any) => !r.lesson_record_id || !lessonKeys.has(`${r.lesson_record_id}_1`));
+    results = [...results, ...uniqueTestRecords];
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -245,7 +245,7 @@ export function TestTab() {
     const channel = supabase
       .channel('test-tab-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => fetchRecords())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_schedules' }, () => fetchRecords())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'test_records' }, () => fetchRecords())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchRecords]);
@@ -289,17 +289,17 @@ export function TestTab() {
     setRecords(prev => prev.map(r => (r.id !== recordId || r.test_slot !== testSlot) ? r : { ...r, ...updates }));
 
     try {
-      if (rec.source === 'test_schedule') {
+      if (rec.source === 'test_record') {
         const dbUpdates: any = {};
         if (updates.content !== undefined) {
           dbUpdates.content = updates.content;
-          dbUpdates.title = updates.content;
         }
-        if (updates.score !== undefined) dbUpdates.result_score = updates.score;
-        if (updates.passed !== undefined) dbUpdates.result_passed = updates.passed;
+        if (updates.score !== undefined) dbUpdates.score = updates.score;
+        if (updates.passed !== undefined) dbUpdates.passed = updates.passed;
+        if (updates.assistant_name !== undefined) dbUpdates.assistant_name = updates.assistant_name;
 
         const { error } = await supabase
-          .from('test_schedules')
+          .from('test_records')
           .update(dbUpdates)
           .eq('id', recordId);
         if (error) throw error;
