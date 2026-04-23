@@ -388,7 +388,8 @@ export function ExamReviewPanel() {
   }, [fullName, itemReviews, loadResults, loadReviewDetail, overallComment, reviewId, selectedRow, toast, user]);
 
   return (
-    <div className="space-y-4">
+    <>
+      <div className="space-y-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">내신 시험지 리뷰</h1>
             <p className="text-sm text-muted-foreground">업로드된 시험지를 확인하고 문항별 리뷰를 남길 수 있습니다.</p>
@@ -684,7 +685,7 @@ export function ExamReviewPanel() {
               </CardContent>
             </Card>
           </div>
-        </div>
+      </div>
 
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
         <DialogContent className="max-w-5xl">
@@ -696,5 +697,6 @@ export function ExamReviewPanel() {
           ) : null}
         </DialogContent>
       </Dialog>
+    </>
   );
 }
