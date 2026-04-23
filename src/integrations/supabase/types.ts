@@ -900,6 +900,44 @@ export type Database = {
           },
         ]
       }
+      exam_item_reviews: {
+        Row: {
+          created_at: string | null
+          error_types: Json | null
+          id: string
+          item_comment: string | null
+          item_number: number
+          result: string | null
+          review_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_types?: Json | null
+          id?: string
+          item_comment?: string | null
+          item_number: number
+          result?: string | null
+          review_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error_types?: Json | null
+          id?: string
+          item_comment?: string | null
+          item_number?: number
+          result?: string | null
+          review_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_item_reviews_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "exam_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_prep_courses: {
         Row: {
           created_at: string
@@ -1205,6 +1243,54 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "exam_prep_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_reviews: {
+        Row: {
+          created_at: string | null
+          id: string
+          overall_comment: string | null
+          result_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          overall_comment?: string | null
+          result_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          overall_comment?: string | null
+          result_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_reviews_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "student_exam_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_reviews_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -3418,6 +3504,7 @@ export type Database = {
           locked_at: string | null
           locked_by: string | null
           note: string | null
+          review_status: string | null
           school_name: string
           score_locked: boolean
           student_id: string
@@ -3440,6 +3527,7 @@ export type Database = {
           locked_at?: string | null
           locked_by?: string | null
           note?: string | null
+          review_status?: string | null
           school_name: string
           score_locked?: boolean
           student_id: string
@@ -3462,6 +3550,7 @@ export type Database = {
           locked_at?: string | null
           locked_by?: string | null
           note?: string | null
+          review_status?: string | null
           school_name?: string
           score_locked?: boolean
           student_id?: string
