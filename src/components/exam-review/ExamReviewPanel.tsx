@@ -506,7 +506,7 @@ export function ExamReviewPanel() {
         </div>
 
         <div className="flex min-h-[calc(100vh-12rem)] flex-col gap-4 xl:flex-row">
-          <Card className="w-full xl:w-[360px] xl:min-w-[360px]">
+          <Card className="w-full xl:min-w-[380px] xl:max-w-[420px] xl:flex-[0_0_380px]">
             <CardHeader className="space-y-3 pb-4">
               <CardTitle className="text-base">업로드 목록</CardTitle>
               <div className="grid gap-2">
@@ -604,7 +604,7 @@ export function ExamReviewPanel() {
             </CardContent>
           </Card>
 
-          <Card className="flex-1 overflow-hidden">
+          <Card className="min-w-0 flex-1 overflow-hidden">
             <CardContent className="h-full p-0">
               {!selectedRow ? (
                 <div className="flex h-full min-h-[32rem] flex-col items-center justify-center gap-3 text-center text-muted-foreground">
@@ -612,39 +612,52 @@ export function ExamReviewPanel() {
                   <p>좌측에서 시험지를 선택해주세요</p>
                 </div>
               ) : (
-                <div className="flex h-full min-h-[32rem] flex-col">
+                <div className="flex h-full min-h-[32rem] min-w-0 flex-col">
                   <ScrollArea className="flex-1">
-                    <div className="space-y-8 p-6">
-                      <section className="space-y-4 rounded-lg border border-border bg-card p-5">
+                    <div className="space-y-6 p-6 [word-break:keep-all] [white-space:normal]">
+                      <section className="space-y-4">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="space-y-3">
+                          <div className="min-w-0 space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h2 className="text-[18px] font-bold text-foreground">{selectedRow.students?.name ?? '이름 없음'}</h2>
-                              <Badge variant="outline" className="px-2.5 py-1 text-xs font-semibold">{selectedRow.subject}</Badge>
+                              <span className="text-[20px] font-bold text-foreground">{selectedRow.students?.name ?? '이름 없음'}</span>
+                              <span
+                                className="inline-flex rounded-full px-2.5 py-1 text-[13px] font-medium"
+                                style={{
+                                  backgroundColor: 'hsl(var(--review-correct-surface))',
+                                  color: 'hsl(var(--review-correct-foreground))',
+                                }}
+                              >
+                                {selectedRow.subject}
+                              </span>
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              {selectedRow.school_name} · {selectedRow.students?.grade ? `${selectedRow.students.grade}학년` : '학년 미등록'} · {selectedRow.exam_year ?? '-'} / {selectedRow.exam_period ?? '-'} / {EXAM_TYPE_LABELS[selectedRow.exam_type] ?? selectedRow.exam_type}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-3 text-lg font-bold text-foreground">
-                              <span>예상 {selectedRow.expected_score ?? '-'}</span>
-                              <span className="text-muted-foreground">→</span>
-                              <span>실제 {selectedRow.actual_score ?? '-'}</span>
+                            <div className="text-[13px] text-muted-foreground">
+                              {selectedRow.school_name} · {selectedRow.students?.grade ? `${selectedRow.students.grade}학년` : '학년 미등록'} · {EXAM_TYPE_LABELS[selectedRow.exam_type] ?? selectedRow.exam_type}
                             </div>
-                            <p className="text-xs text-muted-foreground">시험일 {formatDateLabel(selectedRow.exam_date)} · 업로드 {formatDateTimeLabel(selectedRow.submitted_at)}</p>
+                            <div className="flex flex-wrap items-center gap-2 text-foreground">
+                              <span className="text-[13px] text-muted-foreground">예상</span>
+                              <span className="text-[22px] font-bold">{formatScoreLabel(selectedRow.expected_score)}</span>
+                              <span className="text-[13px] text-muted-foreground">→ 실제</span>
+                              <span
+                                className="text-[22px] font-bold"
+                                style={{ color: 'hsl(var(--review-done-badge))' }}
+                              >
+                                {formatScoreLabel(selectedRow.actual_score)}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {selectedRow.exam_year ?? '-'} / {selectedRow.exam_period ?? '-'} · 시험일 {formatDateLabel(selectedRow.exam_date)} · 업로드 {formatDateTimeLabel(selectedRow.submitted_at)}
+                            </div>
                           </div>
 
-                          <Button onClick={() => void persistReview(true)} disabled={saving}>
+                          <Button onClick={() => void persistReview(true)} disabled={saving} className="px-5 py-2.5">
                             {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            리뷰 완료 처리
+                            리뷰 완료
                           </Button>
                         </div>
                       </section>
 
-                      <section className="space-y-4 border-t border-border pt-8">
-                        <div>
-                          <h3 className="text-base font-semibold text-foreground">시험지 사진</h3>
-                          <p className="text-sm text-muted-foreground">썸네일을 클릭하면 원본을 크게 볼 수 있습니다.</p>
-                        </div>
+                      <section>
+                        <SectionTitle title="시험지 사진" />
                         <div className="grid grid-cols-2 gap-3">
                           {sortedPhotos.length > 0 ? (
                             sortedPhotos.map((photo, index) => (
@@ -665,16 +678,21 @@ export function ExamReviewPanel() {
                                     toast({ title: '사진을 불러올 수 없습니다', variant: 'destructive' });
                                   }
                                 }}
-                                className="overflow-hidden rounded-lg border border-border bg-muted/20 text-left transition hover:border-primary"
+                                className="relative overflow-hidden rounded-lg border text-left transition hover:border-primary"
+                                style={{ borderColor: 'hsl(var(--review-done-border))' }}
                               >
-                                <div className="h-[160px] w-full p-2">
+                                <div className="h-[180px] w-full bg-muted/20 p-2">
                                   <PhotoThumb
                                     storagePath={photo.storage_path}
                                     alt={`시험지 ${index + 1}`}
+                                    className="border"
+                                    imageClassName="rounded-lg"
                                     onResolvedUrl={(url) => setResolvedPhotoUrls((prev) => prev[photo.storage_path] ? prev : { ...prev, [photo.storage_path]: url })}
                                   />
                                 </div>
-                                <div className="px-3 pb-3 text-xs text-muted-foreground">{index + 1}번째 시험지</div>
+                                <div className="absolute bottom-2 left-2 rounded px-1.5 py-0.5 text-[11px] text-white" style={{ backgroundColor: 'hsl(0 0% 0% / 0.5)' }}>
+                                  {index + 1}번째 시험지
+                                </div>
                               </button>
                             ))
                           ) : (
@@ -685,10 +703,10 @@ export function ExamReviewPanel() {
                         </div>
                       </section>
 
-                      <section className="space-y-4 border-t border-border pt-8">
+                      <section>
+                        <SectionTitle title="문항별 채점" />
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                           <div>
-                            <h3 className="text-base font-semibold text-foreground">문항별 채점</h3>
                             <p className="text-sm text-muted-foreground">총 문항 수를 입력하면 채점 카드가 자동 생성됩니다.</p>
                           </div>
                           <div className="w-full max-w-[140px] space-y-2">
@@ -703,32 +721,13 @@ export function ExamReviewPanel() {
                           </div>
                         </div>
 
-                        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                           {itemReviews.map((item, index) => {
                             const showErrors = item.result === 'wrong' || item.result === 'partial';
                             return (
-                              <div key={item.id ?? `${item.item_number}-${index}`} className="rounded-lg border border-border bg-card p-4">
-                                <div className="mb-3 flex items-center justify-between gap-2">
-                                  <p className="text-sm font-semibold text-foreground">{item.item_number}번</p>
-                                  {item.error_types.length > 0 ? (
-                                    <div className="flex flex-wrap justify-end gap-1">
-                                      {item.error_types.map((errorType) => (
-                                        <span
-                                          key={errorType}
-                                          className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                                          style={{
-                                            backgroundColor: 'hsl(var(--review-error-chip-surface))',
-                                            color: 'hsl(var(--review-error-chip-foreground))',
-                                          }}
-                                        >
-                                          {errorType}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-2">
+                              <div key={item.id ?? `${item.item_number}-${index}`} className="rounded-[10px] border border-border bg-card px-2 py-3 text-center">
+                                <div className="mb-2 text-[13px] text-muted-foreground">{item.item_number}번</div>
+                                <div className="flex justify-center gap-1">
                                   {(['correct', 'wrong', 'partial'] as const).map((value) => {
                                     const active = item.result === value;
                                     return (
@@ -736,7 +735,7 @@ export function ExamReviewPanel() {
                                         key={value}
                                         type="button"
                                         onClick={() => handleChangeItem(index, 'result', active ? '' : value)}
-                                        className="flex h-11 w-full items-center justify-center rounded-lg text-lg font-bold transition"
+                                        className="flex h-10 w-10 items-center justify-center rounded-lg text-base font-bold transition"
                                         style={active ? RESULT_BUTTON_STYLES[value].active : RESULT_BUTTON_STYLES[value].idle}
                                       >
                                         {value === 'correct' ? 'O' : value === 'wrong' ? 'X' : '△'}
@@ -745,32 +744,43 @@ export function ExamReviewPanel() {
                                   })}
                                 </div>
 
-                                {showErrors ? (
-                                  <div className="mt-4 space-y-4">
-                                    <div className="space-y-2">
-                                      <p className="text-xs font-medium text-muted-foreground">오답 유형</p>
-                                      <div className="grid gap-2">
-                                        {ERROR_TYPES.map((errorType) => (
-                                          <label key={errorType} className="flex items-center gap-2 text-sm text-foreground">
-                                            <Checkbox
-                                              checked={item.error_types.includes(errorType)}
-                                              onCheckedChange={(checked) => handleToggleErrorType(index, errorType, checked === true)}
-                                            />
-                                            <span>{errorType}</span>
-                                          </label>
-                                        ))}
-                                      </div>
-                                    </div>
+                                {item.error_types.length > 0 ? (
+                                  <div className="mt-3 flex flex-wrap justify-center gap-1">
+                                    {item.error_types.map((errorType) => (
+                                      <span
+                                        key={errorType}
+                                        className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                        style={{
+                                          backgroundColor: 'hsl(var(--review-error-chip-surface))',
+                                          color: 'hsl(var(--review-error-chip-foreground))',
+                                        }}
+                                      >
+                                        {errorType}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
 
-                                    <div className="space-y-2">
-                                      <Label htmlFor={`item-comment-${item.item_number}`}>문항 코멘트</Label>
-                                      <Input
-                                        id={`item-comment-${item.item_number}`}
-                                        value={item.item_comment}
-                                        onChange={(event) => handleChangeItem(index, 'item_comment', event.target.value)}
-                                        placeholder="필요한 경우 문항 코멘트를 입력해주세요"
-                                      />
+                                {showErrors ? (
+                                  <div className="mt-3 space-y-3 text-left">
+                                    <div className="space-y-1.5">
+                                      {ERROR_TYPES.map((errorType) => (
+                                        <label key={errorType} className="flex items-start gap-2 text-[11px] text-foreground">
+                                          <Checkbox
+                                            checked={item.error_types.includes(errorType)}
+                                            onCheckedChange={(checked) => handleToggleErrorType(index, errorType, checked === true)}
+                                          />
+                                          <span className="leading-4">{errorType}</span>
+                                        </label>
+                                      ))}
                                     </div>
+                                    <Input
+                                      id={`item-comment-${item.item_number}`}
+                                      value={item.item_comment}
+                                      onChange={(event) => handleChangeItem(index, 'item_comment', event.target.value)}
+                                      placeholder="문항 코멘트"
+                                      className="h-9 text-xs"
+                                    />
                                   </div>
                                 ) : null}
                               </div>
@@ -779,11 +789,8 @@ export function ExamReviewPanel() {
                         </div>
                       </section>
 
-                      <section className="space-y-4 border-t border-border pt-8">
-                        <div>
-                          <h3 className="text-base font-semibold text-foreground">오답 요약</h3>
-                          <p className="text-sm text-muted-foreground">문항별 채점 결과를 기준으로 자동 계산됩니다.</p>
-                        </div>
+                      <section>
+                        <SectionTitle title="오답 요약" />
                         <div className="rounded-lg border border-border bg-muted/20 p-4">
                           <div className="flex flex-wrap gap-4 text-sm font-medium text-foreground">
                             <span>맞음 {reviewStats?.correct ?? 0}개</span>
@@ -796,33 +803,32 @@ export function ExamReviewPanel() {
                         </div>
                       </section>
 
-                      <section className="space-y-4 border-t border-border pt-8">
-                        <div>
-                          <h3 className="text-base font-semibold text-foreground">선생님 코멘트</h3>
-                          <p className="text-sm text-muted-foreground">전체적인 피드백을 입력해주세요</p>
-                        </div>
+                      <section>
+                        <SectionTitle title="선생님 코멘트" />
                         <Textarea
                           id="overall-comment"
-                          rows={3}
+                          rows={4}
                           value={overallComment}
                           onChange={(event) => setOverallComment(event.target.value)}
                           placeholder="전체적인 피드백을 입력해주세요"
-                          className="min-h-[96px]"
+                          className="min-h-[112px] resize-y"
                         />
+                      </section>
+
+                      <section>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Button onClick={() => void persistReview(false)} disabled={saving} variant="outline" className="flex-1">
+                            {saving && !completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            임시저장
+                          </Button>
+                          <Button onClick={() => void persistReview(true)} disabled={saving} className="sm:flex-[2]">
+                            {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            리뷰 완료로 저장
+                          </Button>
+                        </div>
                       </section>
                     </div>
                   </ScrollArea>
-
-                  <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:justify-end">
-                    <Button onClick={() => void persistReview(false)} disabled={saving} variant="outline">
-                      {saving && !completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      임시저장
-                    </Button>
-                    <Button onClick={() => void persistReview(true)} disabled={saving}>
-                      {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      리뷰 완료
-                    </Button>
-                  </div>
                 </div>
               )}
             </CardContent>
