@@ -8,6 +8,7 @@ interface PhotoThumbProps {
   className?: string;
   imageClassName?: string;
   fit?: 'cover' | 'contain';
+  onResolvedUrl?: (url: string) => void;
 }
 
 function getPublicImageUrl(storagePath: string) {
@@ -25,6 +26,7 @@ export function PhotoThumb({
   className,
   imageClassName,
   fit = 'cover',
+  onResolvedUrl,
 }: PhotoThumbProps) {
   const publicUrl = useMemo(() => getPublicImageUrl(storagePath), [storagePath]);
   const [src, setSrc] = useState(publicUrl);
@@ -36,6 +38,10 @@ export function PhotoThumb({
     setFailed(false);
     setSrc(publicUrl);
   }, [publicUrl]);
+
+  useEffect(() => {
+    if (src) onResolvedUrl?.(src);
+  }, [onResolvedUrl, src]);
 
   const handleError = async () => {
     if (triedSignedUrl.current) {
