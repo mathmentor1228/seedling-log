@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
+import { useAuth, isAdmin as checkIsAdmin, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { getTodayKST } from '@/lib/utils';
 import { ASSISTANTS, ROOMS, SUBJECTS, TEST_TYPES, isSpecialRoom } from './constants';
 import { useTeachersList } from './useTeachersList';
@@ -53,6 +53,8 @@ export function UnifiedRecordModal({
 }: UnifiedRecordModalProps) {
   const { user, role } = useAuth();
   const isAssistant = checkIsAssistant(role);
+  const isAdmin = checkIsAdmin(role);
+  const canSelectTeacher = isAssistant || isAdmin;
   const { toast } = useToast();
   const { teachers } = useTeachersList();
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -90,6 +92,7 @@ export function UnifiedRecordModal({
   const [clinicContent, setClinicContent] = useState('');
   const [clinicNextMemo, setClinicNextMemo] = useState('');
   const [clinicTeacherNote, setClinicTeacherNote] = useState('');
+  const effectiveTeacherId = canSelectTeacher ? selectedTeacherId : (user?.id || '');
 
   // Auto-calculate study duration
   const studyDurationMinutes = useMemo(() => {
@@ -132,7 +135,6 @@ export function UnifiedRecordModal({
       return;
     }
 
-    const effectiveTeacherId = isAssistant ? selectedTeacherId : (selectedTeacherId || user?.id || '');
     if (!effectiveTeacherId) {
       setStudents([]);
       return;
@@ -148,7 +150,7 @@ export function UnifiedRecordModal({
         setStudents([]);
       }
     })();
-  }, [open, isAssistant, selectedTeacherId, selectedTypes, testSubject, user?.id]);
+  }, [open, effectiveTeacherId, selectedTypes, testSubject]);
 
   function toggleType(type: RecordType) {
     setSelectedTypes(prev => {
