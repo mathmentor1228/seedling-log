@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
@@ -54,6 +54,11 @@ interface ScoreTemplateRow {
   total_items: number;
   items: unknown;
   error_types: unknown;
+}
+
+interface GenerateExamReviewCommentResponse {
+  comment?: string;
+  error?: string;
 }
 
 const DEFAULT_TOTAL_ITEMS = 20;
@@ -186,6 +191,8 @@ export function ExamReviewPanel() {
   const [itemReviews, setItemReviews] = useState<OverlayReviewItem[]>([]);
   const [template, setTemplate] = useState<OverlayTemplateData | null>(null);
   const [templateLoading, setTemplateLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiGenerated, setAiGenerated] = useState(false);
 
   const loadResults = useCallback(async () => {
     setLoading(true);
@@ -253,6 +260,8 @@ export function ExamReviewPanel() {
     return { correct, wrong, partial, topErrorType };
   }, [itemReviews]);
 
+  const hasItems = itemReviews.length > 0;
+
   useEffect(() => {
     let active = true;
 
@@ -298,6 +307,7 @@ export function ExamReviewPanel() {
       const currentReview = reviews?.[0] ?? null;
       setReviewId(currentReview?.id ?? null);
       setOverallComment(currentReview?.overall_comment ?? '');
+      setAiGenerated(false);
 
       if (!currentReview) {
         setItemReviews([]);
@@ -562,6 +572,87 @@ export function ExamReviewPanel() {
     }
   }, [fullName, itemReviews, loadReviewDetail, overallComment, selectedRow, template, toast, user]);
 
+  const resetComment = useCallback(() => {
+    setOverallComment('');
+    setAiGenerated(false);
+  }, []);
+
+  const handleGenerateAI = useCallback(async () => {
+    if (!selectedRow || !template || !hasItems) return;
+
+    if (overallComment.trim()) {
+      const shouldReplace = window.confirm('기존 내용이 대체됩니다. 계속하시겠습니까?');
+      if (!shouldReplace) return;
+    }
+
+    const wrongItems = itemReviews.filter((item) => item.result === 'wrong' || item.result === 'partial');
+    const correctCount = itemReviews.filter((item) => item.result === 'correct').length;
+    const totalItems = template.items.length;
+    const earnedScore = itemReviews.reduce((sum, item) => sum + (item.score_earned || 0), 0);
+    const totalScore = template.items.reduce((sum, item) => sum + item.points, 0);
+    const errorTypeCounts: Record<string, number> = {};
+
+    wrongItems.forEach((item) => {
+      item.error_types.forEach((type) => {
+        errorTypeCounts[type] = (errorTypeCounts[type] || 0) + 1;
+      });
+    });
+
+    const topErrors = Object.entries(errorTypeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([type, count]) => ({ type, count }));
+
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<GenerateExamReviewCommentResponse>('generate-exam-review-comment', {
+        body: {
+          studentName: selectedRow.students?.name ?? '학생',
+          grade: selectedRow.students?.grade ?? null,
+          subject: selectedRow.subject,
+          schoolName: selectedRow.school_name,
+          examYear: selectedRow.exam_year,
+          examPeriod: selectedRow.exam_period,
+          examType: selectedRow.exam_type,
+          totalItems,
+          correctCount,
+          wrongCount: wrongItems.filter((item) => item.result === 'wrong').length,
+          partialCount: wrongItems.filter((item) => item.result === 'partial').length,
+          earnedScore,
+          totalScore,
+          wrongItems: wrongItems.map((item) => {
+            const templateItem = template.items.find((templateEntry) => templateEntry.no === item.item_number);
+            return {
+              itemNumber: item.item_number,
+              type: templateItem?.type ?? (item.is_essay ? '주관식' : '객관식'),
+              points: templateItem?.points ?? 0,
+              errorTypes: item.error_types,
+              customReason: item.custom_reason || null,
+            };
+          }),
+          topErrors,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.comment) {
+        throw new Error(data?.error || 'AI 초안 생성에 실패했습니다.');
+      }
+
+      setOverallComment(data.comment);
+      setAiGenerated(true);
+      toast({ title: 'AI 초안이 생성되었습니다' });
+    } catch (error: any) {
+      toast({
+        title: 'AI 초안 생성 실패',
+        description: error?.message ?? 'AI 초안 생성에 실패했습니다. 다시 시도해주세요.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [hasItems, itemReviews, overallComment, selectedRow, template, toast]);
+
   return (
     <>
       <div className="flex h-full w-full overflow-hidden [white-space:normal] [word-break:keep-all]">
@@ -691,13 +782,40 @@ export function ExamReviewPanel() {
               </div>
 
               <div className="mb-6">
-                <SectionTitle title="선생님 코멘트" />
+                <div className="mb-3 flex items-center justify-between gap-3 border-b-2 pb-2" style={{ borderColor: 'hsl(var(--review-correct-surface))' }}>
+                  <div className="text-[15px] font-semibold text-foreground">선생님 코멘트</div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleGenerateAI()}
+                    disabled={isGenerating || !hasItems || !template}
+                    className="gap-2 border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary disabled:bg-muted disabled:text-muted-foreground"
+                  >
+                    {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    {isGenerating ? 'AI 분석 중...' : 'AI 초안 생성'}
+                  </Button>
+                </div>
+                {aiGenerated ? (
+                  <div className="mb-3 flex items-center justify-between gap-3 rounded-md bg-primary/10 px-3 py-2 text-xs text-primary">
+                    <span>✦ AI가 초안을 작성했어요. 자유롭게 수정해주세요.</span>
+                    <button
+                      type="button"
+                      onClick={resetComment}
+                      className="font-medium text-primary/90 underline-offset-4 hover:underline"
+                    >
+                      초기화
+                    </button>
+                  </div>
+                ) : null}
                 <Textarea
                   value={overallComment}
-                  onChange={(event) => setOverallComment(event.target.value)}
-                  placeholder="전체적인 피드백을 입력해주세요"
-                  rows={4}
-                  className="min-h-[112px] resize-y"
+                  onChange={(event) => {
+                    setOverallComment(event.target.value);
+                    if (aiGenerated) setAiGenerated(false);
+                  }}
+                  placeholder="전체적인 피드백을 입력하거나 AI 초안을 생성해보세요"
+                  rows={8}
+                  className="min-h-[176px] resize-y"
                 />
               </div>
 
