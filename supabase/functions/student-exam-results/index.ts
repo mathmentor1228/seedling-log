@@ -223,8 +223,26 @@ Deno.serve(async (req) => {
         exam_date: exam_date || null,
       }).select().single();
       if (insErr) return json({ error: insErr.message }, 500);
-      await uploadPhotos(supabase, photos || [], student_id, inserted.id);
+      // Photos are optional in create; clients may upload them separately via 'add_photos'
+      // to avoid hitting the edge function payload limit (~10MB).
+      await uploadPhotos(supabase, photos || [], student_id, inserted.id, 0);
       return json({ success: true, id: inserted.id });
+    }
+
+    // STUDENT-EXAM-CHUNK-UPLOAD-V1: append photos one (or few) at a time after create
+    if (action === 'add_photos') {
+      const { result_id, photos, start_index } = body;
+      if (!result_id) return json({ error: 'result_id required' }, 400);
+      // Verify ownership
+      const { data: own } = await supabase
+        .from('student_exam_results')
+        .select('id, student_id')
+        .eq('id', result_id)
+        .single();
+      if (!own || own.student_id !== student_id) return json({ error: 'Forbidden' }, 403);
+      const offset = Number(start_index) || 0;
+      await uploadPhotos(supabase, photos || [], student_id, result_id, offset);
+      return json({ success: true, uploaded: (photos || []).length });
     }
 
     if (action === 'delete') {
@@ -273,7 +291,7 @@ function parseDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | nu
   }
 }
 
-async function uploadPhotos(supabase: any, photos: any[], student_id: string, result_id: string) {
+async function uploadPhotos(supabase: any, photos: any[], student_id: string, result_id: string, indexOffset: number = 0) {
   if (!Array.isArray(photos) || photos.length === 0) return;
   for (let i = 0; i < photos.length; i++) {
     const p = photos[i];
@@ -283,12 +301,13 @@ async function uploadPhotos(supabase: any, photos: any[], student_id: string, re
       if (!parsed) { console.error('photo parse failed', { name: p.name, len: String(p.dataUrl).length }); continue; }
       const { mime, bytes } = parsed;
       const ext = (mime.split('/')[1] || 'jpg').split('+')[0];
-      const path = `${student_id}/${result_id}/${Date.now()}-${i}.${ext}`;
+      const sortIdx = indexOffset + i;
+      const path = `${student_id}/${result_id}/${Date.now()}-${sortIdx}.${ext}`;
       console.log('[uploadPhotos] uploading', { path, mime, size: bytes.length });
       const { error: upErr } = await supabase.storage.from('exam-results').upload(path, bytes, { contentType: mime, upsert: false });
       if (upErr) { console.error('upload err', upErr); continue; }
       await supabase.from('student_exam_result_photos').insert({
-        result_id, storage_path: path, original_name: p.name || null, mime_type: mime, file_size: bytes.length, sort_order: i,
+        result_id, storage_path: path, original_name: p.name || null, mime_type: mime, file_size: bytes.length, sort_order: sortIdx,
       });
     } catch (e) { console.error('photo proc err', e); }
   }

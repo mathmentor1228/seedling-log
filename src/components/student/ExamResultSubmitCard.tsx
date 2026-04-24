@@ -33,9 +33,17 @@ const HIGH_SUBJECTS = [
 ];
 const DEFAULT_SUBJECTS = ['국어', '영어', '수학', '사회', '과학', '한국사', '기타'];
 
-function getSubjectsForStudent(schoolLevel?: string | null): string[] {
-  if (schoolLevel && schoolLevel.startsWith('고')) return HIGH_SUBJECTS;
-  return DEFAULT_SUBJECTS;
+function isHighSchool(student: any): boolean {
+  // STUDENT-EXAM-SUBJECT-CLASSIFY-V2: derive from grade ('고1', '고2', '고3') or school_level
+  const lvl = student?.school_level;
+  if (typeof lvl === 'string' && lvl.startsWith('고')) return true;
+  const grade = student?.grade;
+  if (typeof grade === 'string' && grade.startsWith('고')) return true;
+  return false;
+}
+
+function getSubjectsForStudent(student: any): string[] {
+  return isHighSchool(student) ? HIGH_SUBJECTS : DEFAULT_SUBJECTS;
 }
 
 interface ExamResult {
@@ -147,7 +155,9 @@ export function ExamResultSubmitCard() {
 
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('student-exam-results', {
+      // STUDENT-EXAM-CHUNK-UPLOAD-V1: create row first WITHOUT photos to avoid
+      // exceeding the edge function payload limit when uploading many photos.
+      const { data: createData, error: createErr } = await supabase.functions.invoke('student-exam-results', {
         body: {
           action: 'create',
           student_id: student.id,
@@ -158,12 +168,47 @@ export function ExamResultSubmitCard() {
           expected_score: score,
           note,
           exam_date: examDate || null,
-          photos: files.map(f => ({ name: f.name, dataUrl: f.dataUrl })),
+          photos: [],
         },
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      toast({ title: '제출 완료', description: '담당 선생님께 자료가 전달되었습니다.' });
+      if (createErr) throw createErr;
+      if (createData?.error) throw new Error(createData.error);
+      const resultId = createData?.id;
+      if (!resultId) throw new Error('제출 ID를 받지 못했습니다.');
+
+      // Upload photos in small chunks (1 per request) to keep each payload small
+      const CHUNK = 1;
+      let failed = 0;
+      for (let i = 0; i < files.length; i += CHUNK) {
+        const slice = files.slice(i, i + CHUNK);
+        try {
+          const { data: addData, error: addErr } = await supabase.functions.invoke('student-exam-results', {
+            body: {
+              action: 'add_photos',
+              student_id: student.id,
+              student_token: student.token,
+              result_id: resultId,
+              start_index: i,
+              photos: slice.map(f => ({ name: f.name, dataUrl: f.dataUrl })),
+            },
+          });
+          if (addErr) throw addErr;
+          if (addData?.error) throw new Error(addData.error);
+        } catch (err) {
+          console.error('add_photos chunk failed', i, err);
+          failed += slice.length;
+        }
+      }
+
+      if (failed > 0) {
+        toast({
+          title: `사진 ${failed}장 업로드 실패`,
+          description: '나머지는 저장됐어요. 실패한 장은 다시 업로드해주세요.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: '제출 완료', description: '담당 선생님께 자료가 전달되었습니다.' });
+      }
       setSubject(''); setExamType('midterm'); setScore(''); setNote(''); setExamDate(''); setFiles([]);
       setOpen(false);
       fetchResults();
@@ -235,7 +280,7 @@ export function ExamResultSubmitCard() {
                     <Select value={subject} onValueChange={setSubject}>
                       <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
                       <SelectContent>
-                        {getSubjectsForStudent((student as any)?.school_level).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        {getSubjectsForStudent(student).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
