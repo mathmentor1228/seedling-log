@@ -342,6 +342,7 @@ export function ExamReviewPanel() {
 
       if (!currentReview) {
         setItemReviews([]);
+        setSelfChecks([]);
         return;
       }
 
@@ -368,6 +369,13 @@ export function ExamReviewPanel() {
       }));
 
       setItemReviews(drafts);
+
+      const { data: checks } = await supabase
+        .from('exam_student_self_checks')
+        .select('id, item_number, q_remembered, q_concept_confused, q_academy_helped, q_need_more, q_my_mistake, self_error_types, self_custom_reason')
+        .eq('review_id', currentReview.id)
+        .order('item_number', { ascending: true });
+      setSelfChecks((checks ?? []) as SelfCheckRow[]);
     } catch (error: any) {
       toast({ title: '리뷰 조회 실패', description: error.message, variant: 'destructive' });
     }
