@@ -223,8 +223,26 @@ Deno.serve(async (req) => {
         exam_date: exam_date || null,
       }).select().single();
       if (insErr) return json({ error: insErr.message }, 500);
-      await uploadPhotos(supabase, photos || [], student_id, inserted.id);
+      // Photos are optional in create; clients may upload them separately via 'add_photos'
+      // to avoid hitting the edge function payload limit (~10MB).
+      await uploadPhotos(supabase, photos || [], student_id, inserted.id, 0);
       return json({ success: true, id: inserted.id });
+    }
+
+    // STUDENT-EXAM-CHUNK-UPLOAD-V1: append photos one (or few) at a time after create
+    if (action === 'add_photos') {
+      const { result_id, photos, start_index } = body;
+      if (!result_id) return json({ error: 'result_id required' }, 400);
+      // Verify ownership
+      const { data: own } = await supabase
+        .from('student_exam_results')
+        .select('id, student_id')
+        .eq('id', result_id)
+        .single();
+      if (!own || own.student_id !== student_id) return json({ error: 'Forbidden' }, 403);
+      const offset = Number(start_index) || 0;
+      await uploadPhotos(supabase, photos || [], student_id, result_id, offset);
+      return json({ success: true, uploaded: (photos || []).length });
     }
 
     if (action === 'delete') {
