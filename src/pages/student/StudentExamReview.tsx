@@ -127,7 +127,10 @@ export default function StudentExamReview() {
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (done) setSelected(row);
+                  if (done) {
+                    setActiveTab('teacher');
+                    setSelected(row);
+                  }
                 }}
                 className="w-full text-left"
               >
