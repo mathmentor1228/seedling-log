@@ -33,9 +33,17 @@ const HIGH_SUBJECTS = [
 ];
 const DEFAULT_SUBJECTS = ['국어', '영어', '수학', '사회', '과학', '한국사', '기타'];
 
-function getSubjectsForStudent(schoolLevel?: string | null): string[] {
-  if (schoolLevel && schoolLevel.startsWith('고')) return HIGH_SUBJECTS;
-  return DEFAULT_SUBJECTS;
+function isHighSchool(student: any): boolean {
+  // STUDENT-EXAM-SUBJECT-CLASSIFY-V2: derive from grade ('고1', '고2', '고3') or school_level
+  const lvl = student?.school_level;
+  if (typeof lvl === 'string' && lvl.startsWith('고')) return true;
+  const grade = student?.grade;
+  if (typeof grade === 'string' && grade.startsWith('고')) return true;
+  return false;
+}
+
+function getSubjectsForStudent(student: any): string[] {
+  return isHighSchool(student) ? HIGH_SUBJECTS : DEFAULT_SUBJECTS;
 }
 
 interface ExamResult {
