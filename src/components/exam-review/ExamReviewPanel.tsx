@@ -737,6 +737,14 @@ export function ExamReviewPanel() {
             };
           }),
           topErrors,
+          selfChecks: selfChecks.map((c) => ({
+            itemNumber: c.item_number,
+            remembered: c.q_remembered,
+            conceptConfused: c.q_concept_confused,
+            academyHelped: c.q_academy_helped,
+            needMore: c.q_need_more || null,
+            myMistake: c.q_my_mistake || null,
+          })),
         },
       });
 
