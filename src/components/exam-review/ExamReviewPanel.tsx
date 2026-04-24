@@ -544,44 +544,84 @@ export function ExamReviewPanel() {
 
     setSaving(true);
     try {
-      const { data: upsertedReview, error: reviewError } = await supabase
-        .from('exam_reviews')
-        .upsert(
-          {
+      // 1) exam_reviews: SELECT → INSERT or UPDATE (avoid onConflict mismatch)
+      let currentReviewId = reviewId;
+      if (!currentReviewId) {
+        const { data: existingReview, error: existingReviewError } = await supabase
+          .from('exam_reviews')
+          .select('id')
+          .eq('result_id', selectedRow.id)
+          .maybeSingle();
+        if (existingReviewError) throw existingReviewError;
+        currentReviewId = existingReview?.id ?? null;
+      }
+
+      if (currentReviewId) {
+        const { error: updateReviewError } = await supabase
+          .from('exam_reviews')
+          .update({
+            reviewed_by: user.id,
+            reviewed_by_name: reviewerName,
+            overall_comment: overallComment.trim() || null,
+            template_id: template.id,
+            updated_at: nowIso,
+          })
+          .eq('id', currentReviewId);
+        if (updateReviewError) throw updateReviewError;
+      } else {
+        const { data: createdReview, error: createReviewError } = await supabase
+          .from('exam_reviews')
+          .insert({
             result_id: selectedRow.id,
             reviewed_by: user.id,
             reviewed_by_name: reviewerName,
             overall_comment: overallComment.trim() || null,
             template_id: template.id,
             updated_at: nowIso,
-          },
-          { onConflict: 'result_id' },
-        )
-        .select('id')
-        .single();
-
-      if (reviewError) throw reviewError;
-
-      const currentReviewId = upsertedReview.id;
+          })
+          .select('id')
+          .single();
+        if (createReviewError) throw createReviewError;
+        currentReviewId = createdReview.id;
+      }
       setReviewId(currentReviewId);
 
-      const { error: itemError } = await supabase.from('exam_item_reviews').upsert(
-        {
-          review_id: currentReviewId,
-          item_number: payload.item_number,
-          result: payload.result,
-          score_earned: payload.score_earned,
-          is_essay: payload.is_essay,
-          error_types: payload.error_types,
-          custom_reason: payload.custom_reason || null,
-          overlay_x: payload.overlay_x,
-          overlay_y: payload.overlay_y,
-          page_number: payload.page_number,
-        },
-        { onConflict: 'review_id,item_number' },
-      );
+      // 2) exam_item_reviews: SELECT → INSERT or UPDATE (avoid onConflict mismatch)
+      const { data: existingItem, error: existingItemError } = await supabase
+        .from('exam_item_reviews')
+        .select('id')
+        .eq('review_id', currentReviewId)
+        .eq('item_number', payload.item_number)
+        .maybeSingle();
+      if (existingItemError) throw existingItemError;
 
-      if (itemError) throw itemError;
+      const itemPayload = {
+        result: payload.result,
+        score_earned: payload.score_earned,
+        is_essay: payload.is_essay,
+        error_types: payload.error_types,
+        custom_reason: payload.custom_reason || null,
+        overlay_x: payload.overlay_x,
+        overlay_y: payload.overlay_y,
+        page_number: payload.page_number,
+      };
+
+      if (existingItem) {
+        const { error: updateItemError } = await supabase
+          .from('exam_item_reviews')
+          .update(itemPayload)
+          .eq('id', existingItem.id);
+        if (updateItemError) throw updateItemError;
+      } else {
+        const { error: insertItemError } = await supabase
+          .from('exam_item_reviews')
+          .insert({
+            review_id: currentReviewId,
+            item_number: payload.item_number,
+            ...itemPayload,
+          });
+        if (insertItemError) throw insertItemError;
+      }
 
       const mergedItems = itemReviews.filter((item) => item.item_number !== payload.item_number).concat({
         id: payload.id,
