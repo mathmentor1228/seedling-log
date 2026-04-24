@@ -207,6 +207,7 @@ export function ExamReviewPanel() {
   const [templateLoading, setTemplateLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiGenerated, setAiGenerated] = useState(false);
+  const [selfChecks, setSelfChecks] = useState<SelfCheckRow[]>([]);
 
   const loadResults = useCallback(async () => {
     setLoading(true);
