@@ -62,6 +62,18 @@ interface GenerateExamReviewCommentResponse {
   error?: string;
 }
 
+interface SelfCheckRow {
+  id: string;
+  item_number: number;
+  q_remembered: boolean | null;
+  q_concept_confused: boolean | null;
+  q_academy_helped: boolean | null;
+  q_need_more: string | null;
+  q_my_mistake: string | null;
+  self_error_types: unknown;
+  self_custom_reason: string | null;
+}
+
 const DEFAULT_TOTAL_ITEMS = 20;
 const ALWAYS_INCLUDED_ERROR_TYPE = '기타(직접입력)';
 
@@ -195,6 +207,7 @@ export function ExamReviewPanel() {
   const [templateLoading, setTemplateLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiGenerated, setAiGenerated] = useState(false);
+  const [selfChecks, setSelfChecks] = useState<SelfCheckRow[]>([]);
 
   const loadResults = useCallback(async () => {
     setLoading(true);
@@ -329,6 +342,7 @@ export function ExamReviewPanel() {
 
       if (!currentReview) {
         setItemReviews([]);
+        setSelfChecks([]);
         return;
       }
 
@@ -355,6 +369,13 @@ export function ExamReviewPanel() {
       }));
 
       setItemReviews(drafts);
+
+      const { data: checks } = await supabase
+        .from('exam_student_self_checks')
+        .select('id, item_number, q_remembered, q_concept_confused, q_academy_helped, q_need_more, q_my_mistake, self_error_types, self_custom_reason')
+        .eq('review_id', currentReview.id)
+        .order('item_number', { ascending: true });
+      setSelfChecks((checks ?? []) as SelfCheckRow[]);
     } catch (error: any) {
       toast({ title: '리뷰 조회 실패', description: error.message, variant: 'destructive' });
     }
@@ -447,6 +468,7 @@ export function ExamReviewPanel() {
       setReviewId(null);
       setOverallComment('');
       setItemReviews([]);
+      setSelfChecks([]);
       setTemplate(null);
       return;
     }
@@ -715,6 +737,14 @@ export function ExamReviewPanel() {
             };
           }),
           topErrors,
+          selfChecks: selfChecks.map((c) => ({
+            itemNumber: c.item_number,
+            remembered: c.q_remembered,
+            conceptConfused: c.q_concept_confused,
+            academyHelped: c.q_academy_helped,
+            needMore: c.q_need_more || null,
+            myMistake: c.q_my_mistake || null,
+          })),
         },
       });
 
@@ -735,7 +765,7 @@ export function ExamReviewPanel() {
     } finally {
       setIsGenerating(false);
     }
-  }, [hasItems, itemReviews, overallComment, selectedRow, template, toast]);
+  }, [hasItems, itemReviews, overallComment, selectedRow, selfChecks, template, toast]);
 
   return (
     <>
@@ -879,6 +909,34 @@ export function ExamReviewPanel() {
                     {isGenerating ? 'AI 분석 중...' : 'AI 초안 생성'}
                   </Button>
                 </div>
+                {selfChecks.length > 0 ? (
+                  <div className="mb-3 rounded-[10px] border border-sky-200 bg-sky-50 p-3">
+                    <p className="mb-2 text-xs font-semibold text-sky-900">
+                      학생 자가진단 결과 ({selfChecks.length}문항)
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      {selfChecks.map((check) => (
+                        <div key={check.id} className="rounded-md bg-background p-2 text-[11px]">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className="font-semibold text-foreground">{check.item_number}번</span>
+                            <span className="text-sky-700">
+                              기억 {check.q_remembered ? '✓' : '✗'}
+                            </span>
+                            <span className="text-amber-700">
+                              개념혼동 {check.q_concept_confused ? '✓' : '✗'}
+                            </span>
+                            <span className="text-emerald-700">
+                              학원도움 {check.q_academy_helped ? '✓' : '✗'}
+                            </span>
+                          </div>
+                          {check.q_need_more ? (
+                            <p className="mt-1 text-muted-foreground">💬 {check.q_need_more}</p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {aiGenerated ? (
                   <div className="mb-3 flex items-center justify-between gap-3 rounded-md bg-primary/10 px-3 py-2 text-xs text-primary">
                     <span>✦ AI가 초안을 작성했어요. 자유롭게 수정해주세요.</span>
