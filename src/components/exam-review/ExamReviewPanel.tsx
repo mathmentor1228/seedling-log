@@ -62,6 +62,18 @@ interface GenerateExamReviewCommentResponse {
   error?: string;
 }
 
+interface SelfCheckRow {
+  id: string;
+  item_number: number;
+  q_remembered: boolean | null;
+  q_concept_confused: boolean | null;
+  q_academy_helped: boolean | null;
+  q_need_more: string | null;
+  q_my_mistake: string | null;
+  self_error_types: unknown;
+  self_custom_reason: string | null;
+}
+
 const DEFAULT_TOTAL_ITEMS = 20;
 const ALWAYS_INCLUDED_ERROR_TYPE = '기타(직접입력)';
 
