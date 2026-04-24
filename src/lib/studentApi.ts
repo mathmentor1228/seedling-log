@@ -106,6 +106,21 @@ export const studentApi = {
 
   getExamReviews: () => studentApiCall<{ reviews: any[] }>('exam_reviews'),
 
+  saveExamSelfCheck: (reviewId: string, itemNumber: number, answers: {
+    remembered: boolean | null;
+    conceptConfused: boolean | null;
+    academyHelped: boolean | null;
+    needMore: string;
+    selfErrorTypes: string[];
+  }) => studentApiCall<{ success: boolean }>('save_exam_self_check', {
+    review_id: reviewId,
+    item_number: itemNumber,
+    answers,
+  }),
+
+  completeExamSelfCheck: (reviewId: string) =>
+    studentApiCall<{ success: boolean; points_awarded: number }>('complete_exam_self_check', { review_id: reviewId }),
+
   getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[]; test_level?: number; test_time_limit?: number | null; active_test_assignment?: any | null }>('vocab_cards'),
 
   submitVocabCompletion: (wordSetIds: string[], correctCount: number, wrongCount: number, totalCount: number, mode: string, isSelfTest: boolean = false, testSource: string = 'assigned') =>
