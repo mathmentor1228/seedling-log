@@ -476,8 +476,8 @@ export function OverlayGradingPanel({
 
               {activeItem ? (
                 <div
-                  className={`absolute z-20 min-w-[220px] rounded-[10px] border border-border bg-card p-3 shadow-lg ${editorPositionClass}`}
-                  style={{ left: `${activeItem.overlay_x}%`, top: `${activeItem.overlay_y}%` }}
+                  className={`absolute z-20 min-w-[220px] rounded-[10px] border border-border bg-card p-3 shadow-lg`}
+                  style={popupStyle ?? undefined}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
