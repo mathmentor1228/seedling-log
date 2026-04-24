@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
@@ -11,15 +11,6 @@ interface PhotoThumbProps {
   onResolvedUrl?: (url: string) => void;
 }
 
-function getPublicImageUrl(storagePath: string) {
-  return supabase.storage.from('exam-results').getPublicUrl(storagePath).data.publicUrl;
-}
-
-async function getSignedImageUrl(storagePath: string) {
-  const { data } = await supabase.storage.from('exam-results').createSignedUrl(storagePath, 3600);
-  return data?.signedUrl ?? '';
-}
-
 export function PhotoThumb({
   storagePath,
   alt,
@@ -28,63 +19,58 @@ export function PhotoThumb({
   fit = 'cover',
   onResolvedUrl,
 }: PhotoThumbProps) {
-  const publicUrl = useMemo(() => getPublicImageUrl(storagePath), [storagePath]);
-  const [src, setSrc] = useState(publicUrl);
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const triedSignedUrl = useRef(false);
 
   useEffect(() => {
-    triedSignedUrl.current = false;
+    let cancelled = false;
+    setLoading(true);
     setFailed(false);
-    setSrc(publicUrl);
-  }, [publicUrl]);
-
-  useEffect(() => {
-    if (src) onResolvedUrl?.(src);
-  }, [onResolvedUrl, src]);
-
-  useEffect(() => {
-    if (publicUrl) return;
-
-    let active = true;
-    triedSignedUrl.current = true;
+    setSrc(null);
 
     void (async () => {
-      const signedUrl = await getSignedImageUrl(storagePath);
-      if (!active) return;
+      try {
+        const { data, error } = await supabase.storage
+          .from('exam-results')
+          .createSignedUrl(storagePath, 3600);
 
-      if (signedUrl) {
-        setSrc(signedUrl);
-        setFailed(false);
-        return;
+        if (cancelled) return;
+
+        if (error || !data?.signedUrl) {
+          setFailed(true);
+        } else {
+          setSrc(data.signedUrl);
+          onResolvedUrl?.(data.signedUrl);
+        }
+      } catch {
+        if (!cancelled) setFailed(true);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      setFailed(true);
-      setSrc('');
     })();
 
     return () => {
-      active = false;
+      cancelled = true;
     };
-  }, [publicUrl, storagePath]);
+  }, [storagePath, onResolvedUrl]);
 
-  const handleError = async () => {
-    if (triedSignedUrl.current) {
-      setFailed(true);
-      setSrc('');
-      return;
-    }
-
-    triedSignedUrl.current = true;
-    const signedUrl = await getSignedImageUrl(storagePath);
-    if (signedUrl) {
-      setSrc(signedUrl);
-      return;
-    }
-
-    setFailed(true);
-    setSrc('');
-  };
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          'flex h-full w-full items-center justify-center rounded-md border border-border text-center text-xs font-medium',
+          className,
+        )}
+        style={{
+          backgroundColor: 'hsl(var(--review-photo-placeholder-surface))',
+          color: 'hsl(var(--review-photo-placeholder-foreground))',
+        }}
+      >
+        로딩 중...
+      </div>
+    );
+  }
 
   if (failed || !src) {
     return (
@@ -107,7 +93,7 @@ export function PhotoThumb({
     <img
       src={src}
       alt={alt}
-      onError={() => void handleError()}
+      onError={() => setFailed(true)}
       loading="lazy"
       className={cn(
         'h-full w-full rounded-md',
