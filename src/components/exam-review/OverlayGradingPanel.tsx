@@ -25,6 +25,7 @@ export interface OverlayPhoto {
   id: string;
   storage_path: string;
   sort_order: number;
+  signedUrl?: string | null;
 }
 
 export interface OverlayReviewItem {
