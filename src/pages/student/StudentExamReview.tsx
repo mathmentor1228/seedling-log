@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { studentApi } from '@/lib/studentApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
+import { SelfCheckTab } from '@/components/student/exam-review/SelfCheckTab';
 import { CheckCircle2, ClipboardCheck, Image as ImageIcon } from 'lucide-react';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
@@ -17,6 +18,18 @@ interface ReviewItem {
   result: ItemResult;
   error_types: string[];
   item_comment: string | null;
+  score_earned?: number | null;
+  page_number?: number | null;
+  custom_reason?: string | null;
+}
+
+interface SelfCheckRow {
+  item_number: number;
+  q_remembered: boolean | null;
+  q_concept_confused: boolean | null;
+  q_academy_helped: boolean | null;
+  q_need_more: string | null;
+  self_error_types: string[];
 }
 
 interface ReviewData {
@@ -25,6 +38,9 @@ interface ReviewData {
   reviewed_at: string | null;
   reviewed_by_name: string | null;
   exam_item_reviews: ReviewItem[];
+  self_check_completed?: boolean;
+  self_checks?: SelfCheckRow[];
+  template?: { id: string; error_types: string[]; items: Array<{ no: number; points: number }> } | null;
 }
 
 interface ExamReviewRow {
@@ -61,16 +77,17 @@ export default function StudentExamReview() {
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'teacher' | 'self'>('teacher');
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const { data } = await studentApi.getExamReviews();
-      setRows((data?.reviews || []) as ExamReviewRow[]);
-      setLoading(false);
-    };
-    void load();
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await studentApi.getExamReviews();
+    setRows((data?.reviews || []) as ExamReviewRow[]);
+    setLoading(false);
   }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
 
   const selectedReview = selected?.exam_reviews?.[0] ?? null;
 
@@ -110,7 +127,10 @@ export default function StudentExamReview() {
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (done) setSelected(row);
+                  if (done) {
+                    setActiveTab('teacher');
+                    setSelected(row);
+                  }
                 }}
                 className="w-full text-left"
               >
@@ -148,61 +168,85 @@ export default function StudentExamReview() {
           </DialogHeader>
 
           {selected ? (
-            <div className="space-y-5">
-              <div className="grid gap-3 md:grid-cols-2">
-                {(selected.student_exam_result_photos || []).map((photo) => (
-                  <button
-                    key={photo.id}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (photo.signed_url) setSelectedImage(photo.signed_url);
-                    }}
-                    className="overflow-hidden rounded-md border bg-muted/20"
-                  >
-                    {photo.signed_url ? (
-                      <img src={photo.signed_url} alt={`시험지 ${photo.sort_order + 1}`} className="aspect-[3/4] w-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="flex aspect-[3/4] items-center justify-center text-muted-foreground"><ImageIcon className="h-6 w-6" /></div>
-                    )}
-                  </button>
-                ))}
-              </div>
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'teacher' | 'self')}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="teacher">선생님 채점 결과</TabsTrigger>
+                <TabsTrigger value="self">
+                  내 자가진단 {selectedReview?.self_check_completed ? '✓' : ''}
+                </TabsTrigger>
+              </TabsList>
 
-              <div className="space-y-3">
-                <h3 className="font-semibold text-foreground">문항별 결과</h3>
-                <div className="flex flex-wrap gap-2">
-                  {(selectedReview?.exam_item_reviews || []).map((item) => (
-                    <div key={item.id} className="rounded-md border border-border bg-card px-3 py-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{item.item_number}번</span>
-                        <Badge variant={item.result === 'correct' ? 'success' : item.result === 'partial' ? 'warning' : 'destructive'}>
-                          {item.result ? RESULT_LABELS[item.result] : '-'}
-                        </Badge>
-                      </div>
-                      {item.error_types.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {item.error_types.map((errorType) => <Badge key={errorType} variant="outline">{errorType}</Badge>)}
-                        </div>
-                      ) : null}
-                    </div>
+              <TabsContent value="teacher" className="space-y-5">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(selected.student_exam_result_photos || []).map((photo) => (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (photo.signed_url) setSelectedImage(photo.signed_url);
+                      }}
+                      className="overflow-hidden rounded-md border bg-muted/20"
+                    >
+                      {photo.signed_url ? (
+                        <img src={photo.signed_url} alt={`시험지 ${photo.sort_order + 1}`} className="aspect-[3/4] w-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="flex aspect-[3/4] items-center justify-center text-muted-foreground"><ImageIcon className="h-6 w-6" /></div>
+                      )}
+                    </button>
                   ))}
                 </div>
-              </div>
 
-              <div className="space-y-2 rounded-md border border-border bg-muted/20 p-4">
-                <h3 className="font-semibold text-foreground">전체 선생님 코멘트</h3>
-                <p className="text-sm text-foreground whitespace-pre-wrap">{selectedReview?.overall_comment || '등록된 코멘트가 없습니다.'}</p>
-              </div>
-
-              <div className="space-y-2 rounded-md border border-border bg-muted/20 p-4 text-sm">
-                <div className="flex items-center gap-2 font-semibold text-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-primary" /> 오답 분석 요약
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-foreground">문항별 결과</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(selectedReview?.exam_item_reviews || []).map((item) => (
+                      <div key={item.id} className="rounded-md border border-border bg-card px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{item.item_number}번</span>
+                          <Badge variant={item.result === 'correct' ? 'success' : item.result === 'partial' ? 'warning' : 'destructive'}>
+                            {item.result ? RESULT_LABELS[item.result] : '-'}
+                          </Badge>
+                        </div>
+                        {item.error_types.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {item.error_types.map((errorType) => <Badge key={errorType} variant="outline">{errorType}</Badge>)}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <p className="text-foreground">틀린 문항: {summary.wrongNumbers.length > 0 ? summary.wrongNumbers.map((n) => `${n}번`).join(', ') : '없음'}</p>
-                <p className="text-foreground">주요 오답유형: {summary.errorTypes.length > 0 ? summary.errorTypes.join(', ') : '없음'}</p>
-              </div>
-            </div>
+
+                <div className="space-y-2 rounded-md border border-border bg-muted/20 p-4">
+                  <h3 className="font-semibold text-foreground">전체 선생님 코멘트</h3>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{selectedReview?.overall_comment || '등록된 코멘트가 없습니다.'}</p>
+                </div>
+
+                <div className="space-y-2 rounded-md border border-border bg-muted/20 p-4 text-sm">
+                  <div className="flex items-center gap-2 font-semibold text-foreground">
+                    <CheckCircle2 className="h-4 w-4 text-primary" /> 오답 분석 요약
+                  </div>
+                  <p className="text-foreground">틀린 문항: {summary.wrongNumbers.length > 0 ? summary.wrongNumbers.map((n) => `${n}번`).join(', ') : '없음'}</p>
+                  <p className="text-foreground">주요 오답유형: {summary.errorTypes.length > 0 ? summary.errorTypes.join(', ') : '없음'}</p>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="self">
+                {selectedReview ? (
+                  <SelfCheckTab
+                    reviewId={selectedReview.id}
+                    items={selectedReview.exam_item_reviews || []}
+                    selfChecks={selectedReview.self_checks || []}
+                    templateErrorTypes={selectedReview.template?.error_types || []}
+                    templateItems={selectedReview.template?.items || []}
+                    photos={selected.student_exam_result_photos || []}
+                    selfCheckCompleted={!!selectedReview.self_check_completed}
+                    onCompleted={() => void load()}
+                  />
+                ) : null}
+              </TabsContent>
+            </Tabs>
           ) : null}
         </DialogContent>
       </Dialog>

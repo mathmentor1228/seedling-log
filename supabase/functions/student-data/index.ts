@@ -808,7 +808,7 @@ Deno.serve(async (req) => {
           resultIds.length > 0
             ? supabase
                 .from('exam_reviews')
-                .select('id, result_id, overall_comment, reviewed_at, reviewed_by_name, created_at')
+                .select('id, result_id, overall_comment, reviewed_at, reviewed_by_name, created_at, template_id, self_check_completed, self_check_completed_at, self_check_points_given')
                 .in('result_id', resultIds)
                 .order('created_at', { ascending: false })
             : Promise.resolve({ data: [], error: null }),
@@ -818,15 +818,41 @@ Deno.serve(async (req) => {
         if (reviewError) throw reviewError;
 
         const reviewIds = (reviewRows || []).map((row: any) => row.id);
-        const { data: itemRows, error: itemError } = reviewIds.length > 0
-          ? await supabase
-              .from('exam_item_reviews')
-              .select('id, review_id, item_number, result, error_types, item_comment')
-              .in('review_id', reviewIds)
-              .order('item_number', { ascending: true })
-          : { data: [], error: null };
+        const templateIds = [...new Set((reviewRows || []).map((r: any) => r.template_id).filter(Boolean))];
+
+        const [{ data: itemRows, error: itemError }, { data: selfCheckRows }, { data: templateRows }] = await Promise.all([
+          reviewIds.length > 0
+            ? supabase
+                .from('exam_item_reviews')
+                .select('id, review_id, item_number, result, error_types, item_comment, score_earned, page_number, custom_reason')
+                .in('review_id', reviewIds)
+                .order('item_number', { ascending: true })
+            : Promise.resolve({ data: [], error: null }),
+          reviewIds.length > 0
+            ? supabase
+                .from('exam_student_self_checks')
+                .select('id, review_id, item_number, self_error_types, self_custom_reason, q_remembered, q_concept_confused, q_academy_helped, q_need_more, q_my_mistake')
+                .in('review_id', reviewIds)
+            : Promise.resolve({ data: [] }),
+          templateIds.length > 0
+            ? supabase
+                .from('exam_score_templates')
+                .select('id, error_types, items')
+                .in('id', templateIds)
+            : Promise.resolve({ data: [] }),
+        ]);
 
         if (itemError) throw itemError;
+
+        const templateMap = new Map<string, any>();
+        for (const t of templateRows || []) templateMap.set(t.id, t);
+
+        const selfCheckMap = new Map<string, any[]>();
+        for (const sc of selfCheckRows || []) {
+          const list = selfCheckMap.get(sc.review_id) || [];
+          list.push(sc);
+          selfCheckMap.set(sc.review_id, list);
+        }
 
         const photoMap = new Map<string, any[]>();
         await Promise.all((photoRows || []).map(async (photo: any) => {
@@ -850,6 +876,9 @@ Deno.serve(async (req) => {
             result: item.result,
             error_types: Array.isArray(item.error_types) ? item.error_types : [],
             item_comment: item.item_comment,
+            score_earned: item.score_earned,
+            page_number: item.page_number,
+            custom_reason: item.custom_reason,
           });
           itemMap.set(item.review_id, list);
         }
@@ -857,12 +886,22 @@ Deno.serve(async (req) => {
         const latestReviewByResult = new Map<string, any>();
         for (const review of reviewRows || []) {
           if (!latestReviewByResult.has(review.result_id)) {
+            const tpl = review.template_id ? templateMap.get(review.template_id) : null;
             latestReviewByResult.set(review.result_id, {
               id: review.id,
               overall_comment: review.overall_comment,
               reviewed_at: review.reviewed_at,
               reviewed_by_name: review.reviewed_by_name,
+              self_check_completed: review.self_check_completed || false,
+              self_check_completed_at: review.self_check_completed_at,
+              self_check_points_given: review.self_check_points_given || false,
               exam_item_reviews: itemMap.get(review.id) || [],
+              self_checks: selfCheckMap.get(review.id) || [],
+              template: tpl ? {
+                id: tpl.id,
+                error_types: Array.isArray(tpl.error_types) ? tpl.error_types : [],
+                items: Array.isArray(tpl.items) ? tpl.items : [],
+              } : null,
             });
           }
         }
@@ -874,6 +913,125 @@ Deno.serve(async (req) => {
             exam_reviews: latestReviewByResult.has(row.id) ? [latestReviewByResult.get(row.id)] : [],
           })),
         };
+        break;
+      }
+
+      case 'save_exam_self_check': {
+        const { review_id, item_number, answers } = params as any;
+        if (!review_id || typeof item_number !== 'number' || !answers) {
+          return new Response(JSON.stringify({ error: 'Missing review_id/item_number/answers' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const { data: rev } = await supabase
+          .from('exam_reviews')
+          .select('id, self_check_completed, student_exam_results!inner(student_id)')
+          .eq('id', review_id)
+          .maybeSingle();
+        if (!rev || (rev as any).student_exam_results?.student_id !== student_id) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        if ((rev as any).self_check_completed) {
+          return new Response(JSON.stringify({ error: 'Already completed' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const payload = {
+          review_id,
+          student_id,
+          item_number,
+          self_error_types: Array.isArray(answers.selfErrorTypes) ? answers.selfErrorTypes : [],
+          self_custom_reason: answers.needMore || null,
+          q_remembered: typeof answers.remembered === 'boolean' ? answers.remembered : null,
+          q_concept_confused: typeof answers.conceptConfused === 'boolean' ? answers.conceptConfused : null,
+          q_academy_helped: typeof answers.academyHelped === 'boolean' ? answers.academyHelped : null,
+          q_need_more: answers.needMore || null,
+          q_my_mistake: Array.isArray(answers.selfErrorTypes) ? answers.selfErrorTypes.join(', ') : null,
+        };
+
+        const { data: existing } = await supabase
+          .from('exam_student_self_checks')
+          .select('id')
+          .eq('review_id', review_id)
+          .eq('item_number', item_number)
+          .maybeSingle();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('exam_student_self_checks')
+            .update(payload)
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('exam_student_self_checks')
+            .insert(payload);
+          if (error) throw error;
+        }
+
+        result = { success: true };
+        break;
+      }
+
+      case 'complete_exam_self_check': {
+        const { review_id } = params as any;
+        if (!review_id) {
+          return new Response(JSON.stringify({ error: 'Missing review_id' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const { data: rev } = await supabase
+          .from('exam_reviews')
+          .select('id, self_check_points_given, student_exam_results!inner(student_id)')
+          .eq('id', review_id)
+          .maybeSingle();
+        if (!rev || (rev as any).student_exam_results?.student_id !== student_id) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        await supabase
+          .from('exam_reviews')
+          .update({
+            self_check_completed: true,
+            self_check_completed_at: new Date().toISOString(),
+          })
+          .eq('id', review_id);
+
+        let awarded = 0;
+        if (!(rev as any).self_check_points_given) {
+          const POINTS = 15;
+          const { data: studentRow } = await supabase
+            .from('students')
+            .select('total_points')
+            .eq('id', student_id)
+            .maybeSingle();
+          const current = (studentRow as any)?.total_points || 0;
+          await supabase
+            .from('students')
+            .update({ total_points: current + POINTS })
+            .eq('id', student_id);
+          await supabase
+            .from('student_point_history')
+            .insert({
+              student_id,
+              points: POINTS,
+              reason: '시험지 자가진단 완료',
+            });
+          await supabase
+            .from('exam_reviews')
+            .update({ self_check_points_given: true })
+            .eq('id', review_id);
+          awarded = POINTS;
+        }
+
+        result = { success: true, points_awarded: awarded };
         break;
       }
 
