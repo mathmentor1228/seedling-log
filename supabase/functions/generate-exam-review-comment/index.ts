@@ -19,6 +19,15 @@ const TopErrorSchema = z.object({
   count: z.number().int().min(1),
 });
 
+const SelfCheckSchema = z.object({
+  itemNumber: z.number().int().positive(),
+  remembered: z.boolean().nullable().optional(),
+  conceptConfused: z.boolean().nullable().optional(),
+  academyHelped: z.boolean().nullable().optional(),
+  needMore: z.string().nullable().optional(),
+  myMistake: z.string().nullable().optional(),
+});
+
 const RequestSchema = z.object({
   studentName: z.string().min(1).max(100),
   grade: z.string().nullable().optional(),
@@ -35,6 +44,7 @@ const RequestSchema = z.object({
   totalScore: z.number().min(0),
   wrongItems: z.array(WrongItemSchema),
   topErrors: z.array(TopErrorSchema).max(3).default([]),
+  selfChecks: z.array(SelfCheckSchema).default([]),
 });
 
 function buildPrompt(input: z.infer<typeof RequestSchema>) {
