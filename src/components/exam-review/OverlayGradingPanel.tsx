@@ -25,6 +25,7 @@ export interface OverlayPhoto {
   id: string;
   storage_path: string;
   sort_order: number;
+  signedUrl?: string | null;
 }
 
 export interface OverlayReviewItem {
@@ -443,6 +444,7 @@ export function OverlayGradingPanel({
             <>
               <PhotoThumb
                 storagePath={currentPhoto.storage_path}
+                signedUrl={currentPhoto.signedUrl ?? null}
                 alt={`시험지 ${page + 1}`}
                 fit="contain"
                 className="min-h-[28rem]"

@@ -199,29 +199,45 @@ export function ExamReviewPanel() {
   const loadResults = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('student_exam_results')
-        .select(`
-          id,
-          student_id,
-          subject,
-          exam_year,
-          exam_period,
-          exam_type,
-          actual_score,
-          expected_score,
-          review_status,
-          submitted_at,
-          school_name,
-          exam_date,
-          students(name, grade),
-          student_exam_result_photos(id, storage_path, sort_order),
-          exam_reviews(id, overall_comment)
-        `)
-        .order('submitted_at', { ascending: false });
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/student-exam-results`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token ?? ''}`,
+          },
+          body: JSON.stringify({ action: 'staff_list' }),
+        },
+      );
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload?.error || '목록 조회에 실패했습니다.');
 
-      if (error) throw error;
-      const nextRows = (data ?? []) as unknown as ExamResultRow[];
+      const rawRows = Array.isArray(payload?.results) ? payload.results : [];
+      const nextRows: ExamResultRow[] = rawRows.map((row: any) => {
+        const photos = Array.isArray(row.photos) ? row.photos : (row.student_exam_result_photos ?? []);
+        const normalizedPhotos: OverlayPhoto[] = photos.map((p: any) => ({
+          id: p.id,
+          storage_path: p.storage_path,
+          sort_order: p.sort_order ?? 0,
+          signedUrl: p.signedUrl ?? null,
+        }));
+        return {
+          ...row,
+          student_exam_result_photos: normalizedPhotos,
+        } as ExamResultRow;
+      });
+
+      // Pre-populate URL map from edge-function-provided signed URLs
+      const urlMap: Record<string, string> = {};
+      nextRows.forEach((row) => {
+        (row.student_exam_result_photos ?? []).forEach((photo) => {
+          if (photo.signedUrl) urlMap[photo.storage_path] = photo.signedUrl;
+        });
+      });
+      setResolvedPhotoUrls((prev) => ({ ...prev, ...urlMap }));
+
       setRows(nextRows);
       setSelectedId((prev) => (prev && nextRows.some((row) => row.id === prev) ? prev : null));
     } catch (error: any) {

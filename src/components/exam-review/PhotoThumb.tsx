@@ -9,6 +9,7 @@ interface PhotoThumbProps {
   imageClassName?: string;
   fit?: 'cover' | 'contain';
   onResolvedUrl?: (url: string) => void;
+  signedUrl?: string | null;
 }
 
 export function PhotoThumb({
@@ -18,12 +19,22 @@ export function PhotoThumb({
   imageClassName,
   fit = 'cover',
   onResolvedUrl,
+  signedUrl,
 }: PhotoThumbProps) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [src, setSrc] = useState<string | null>(signedUrl ?? null);
+  const [loading, setLoading] = useState(!signedUrl);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    // If signedUrl is provided by parent, use it directly — no need to re-resolve
+    if (signedUrl) {
+      setSrc(signedUrl);
+      setLoading(false);
+      setFailed(false);
+      onResolvedUrl?.(signedUrl);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setFailed(false);
@@ -53,7 +64,7 @@ export function PhotoThumb({
     return () => {
       cancelled = true;
     };
-  }, [storagePath, onResolvedUrl]);
+  }, [storagePath, onResolvedUrl, signedUrl]);
 
   if (loading) {
     return (
