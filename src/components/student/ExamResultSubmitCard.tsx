@@ -280,7 +280,7 @@ export function ExamResultSubmitCard() {
                     <Select value={subject} onValueChange={setSubject}>
                       <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
                       <SelectContent>
-                        {getSubjectsForStudent((student as any)?.school_level).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        {getSubjectsForStudent(student).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
