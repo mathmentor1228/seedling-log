@@ -360,7 +360,7 @@ serve(async (req) => {
       created_by: user.id,
     }));
 
-    const { error: insertError } = await adminClient.from('textbook_examples').insert(rows);
+    const { error: insertError } = await adminClient.from('textbook_examples').insert(rows as never);
     if (insertError) {
       console.error('[extract] Insert error:', insertError);
       return jsonResponse({ success: false, error: '문항 저장 중 오류가 발생했습니다.', detail: { reason: 'db_insert_error' } });
