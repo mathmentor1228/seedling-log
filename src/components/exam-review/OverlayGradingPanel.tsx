@@ -293,7 +293,18 @@ export function OverlayGradingPanel({
     resetEditor();
   };
 
-  const editorPositionClass = activeItem && activeItem.overlay_x > 72 ? '-translate-x-full' : '';
+  const popupStyle = useMemo<React.CSSProperties | null>(() => {
+    if (!activeItem) return null;
+    const fromRight = activeItem.overlay_x > 60;
+    const fromBottom = activeItem.overlay_y > 60;
+    return {
+      left: fromRight ? 'auto' : `${activeItem.overlay_x}%`,
+      right: fromRight ? `${100 - activeItem.overlay_x}%` : 'auto',
+      top: fromBottom ? 'auto' : `${activeItem.overlay_y}%`,
+      bottom: fromBottom ? `${100 - activeItem.overlay_y}%` : 'auto',
+      maxWidth: 'min(280px, calc(100% - 16px))',
+    };
+  }, [activeItem]);
 
   if (templateLoading) {
     return (
