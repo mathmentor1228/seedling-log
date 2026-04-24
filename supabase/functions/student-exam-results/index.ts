@@ -291,7 +291,7 @@ function parseDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } | nu
   }
 }
 
-async function uploadPhotos(supabase: any, photos: any[], student_id: string, result_id: string) {
+async function uploadPhotos(supabase: any, photos: any[], student_id: string, result_id: string, indexOffset: number = 0) {
   if (!Array.isArray(photos) || photos.length === 0) return;
   for (let i = 0; i < photos.length; i++) {
     const p = photos[i];
@@ -301,12 +301,13 @@ async function uploadPhotos(supabase: any, photos: any[], student_id: string, re
       if (!parsed) { console.error('photo parse failed', { name: p.name, len: String(p.dataUrl).length }); continue; }
       const { mime, bytes } = parsed;
       const ext = (mime.split('/')[1] || 'jpg').split('+')[0];
-      const path = `${student_id}/${result_id}/${Date.now()}-${i}.${ext}`;
+      const sortIdx = indexOffset + i;
+      const path = `${student_id}/${result_id}/${Date.now()}-${sortIdx}.${ext}`;
       console.log('[uploadPhotos] uploading', { path, mime, size: bytes.length });
       const { error: upErr } = await supabase.storage.from('exam-results').upload(path, bytes, { contentType: mime, upsert: false });
       if (upErr) { console.error('upload err', upErr); continue; }
       await supabase.from('student_exam_result_photos').insert({
-        result_id, storage_path: path, original_name: p.name || null, mime_type: mime, file_size: bytes.length, sort_order: i,
+        result_id, storage_path: path, original_name: p.name || null, mime_type: mime, file_size: bytes.length, sort_order: sortIdx,
       });
     } catch (e) { console.error('photo proc err', e); }
   }
