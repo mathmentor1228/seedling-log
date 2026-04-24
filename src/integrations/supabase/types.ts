@@ -1291,6 +1291,9 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           reviewed_by_name: string | null
+          self_check_completed: boolean | null
+          self_check_completed_at: string | null
+          self_check_points_given: boolean | null
           template_id: string | null
           total_score: number | null
           updated_at: string | null
@@ -1304,6 +1307,9 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           reviewed_by_name?: string | null
+          self_check_completed?: boolean | null
+          self_check_completed_at?: string | null
+          self_check_points_given?: boolean | null
           template_id?: string | null
           total_score?: number | null
           updated_at?: string | null
@@ -1317,6 +1323,9 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           reviewed_by_name?: string | null
+          self_check_completed?: boolean | null
+          self_check_completed_at?: string | null
+          self_check_points_given?: boolean | null
           template_id?: string | null
           total_score?: number | null
           updated_at?: string | null
@@ -1394,6 +1403,66 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_student_self_checks: {
+        Row: {
+          id: string
+          item_number: number
+          q_academy_helped: boolean | null
+          q_concept_confused: boolean | null
+          q_my_mistake: string | null
+          q_need_more: string | null
+          q_remembered: boolean | null
+          review_id: string
+          self_custom_reason: string | null
+          self_error_types: Json | null
+          student_id: string
+          submitted_at: string | null
+        }
+        Insert: {
+          id?: string
+          item_number: number
+          q_academy_helped?: boolean | null
+          q_concept_confused?: boolean | null
+          q_my_mistake?: string | null
+          q_need_more?: string | null
+          q_remembered?: boolean | null
+          review_id: string
+          self_custom_reason?: string | null
+          self_error_types?: Json | null
+          student_id: string
+          submitted_at?: string | null
+        }
+        Update: {
+          id?: string
+          item_number?: number
+          q_academy_helped?: boolean | null
+          q_concept_confused?: boolean | null
+          q_my_mistake?: string | null
+          q_need_more?: string | null
+          q_remembered?: boolean | null
+          review_id?: string
+          self_custom_reason?: string | null
+          self_error_types?: Json | null
+          student_id?: string
+          submitted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_student_self_checks_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "exam_reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_student_self_checks_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
             referencedColumns: ["id"]
           },
         ]
@@ -3192,6 +3261,80 @@ export type Database = {
             columns: ["archive_id"]
             isOneToOne: false
             referencedRelation: "school_exam_archives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      school_exam_reports: {
+        Row: {
+          academy_helped_rate: number | null
+          ai_report: string | null
+          avg_score: number | null
+          created_at: string | null
+          created_by: string | null
+          exam_period: string
+          exam_type: string
+          exam_year: number
+          final_report: string | null
+          grade: string
+          id: string
+          published: boolean | null
+          published_at: string | null
+          recommended_study: Json | null
+          school_name: string
+          subject: string
+          top_weak_concepts: Json | null
+          total_students: number | null
+          wrong_item_stats: Json | null
+        }
+        Insert: {
+          academy_helped_rate?: number | null
+          ai_report?: string | null
+          avg_score?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          exam_period: string
+          exam_type: string
+          exam_year: number
+          final_report?: string | null
+          grade: string
+          id?: string
+          published?: boolean | null
+          published_at?: string | null
+          recommended_study?: Json | null
+          school_name: string
+          subject: string
+          top_weak_concepts?: Json | null
+          total_students?: number | null
+          wrong_item_stats?: Json | null
+        }
+        Update: {
+          academy_helped_rate?: number | null
+          ai_report?: string | null
+          avg_score?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          exam_period?: string
+          exam_type?: string
+          exam_year?: number
+          final_report?: string | null
+          grade?: string
+          id?: string
+          published?: boolean | null
+          published_at?: string | null
+          recommended_study?: Json | null
+          school_name?: string
+          subject?: string
+          top_weak_concepts?: Json | null
+          total_students?: number | null
+          wrong_item_stats?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_exam_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
