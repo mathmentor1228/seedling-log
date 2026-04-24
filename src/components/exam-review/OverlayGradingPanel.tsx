@@ -444,6 +444,7 @@ export function OverlayGradingPanel({
             <>
               <PhotoThumb
                 storagePath={currentPhoto.storage_path}
+                signedUrl={currentPhoto.signedUrl ?? null}
                 alt={`시험지 ${page + 1}`}
                 fit="contain"
                 className="min-h-[28rem]"
