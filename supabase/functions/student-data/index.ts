@@ -808,7 +808,7 @@ Deno.serve(async (req) => {
           resultIds.length > 0
             ? supabase
                 .from('exam_reviews')
-                .select('id, result_id, overall_comment, reviewed_at, reviewed_by_name, created_at')
+                .select('id, result_id, overall_comment, reviewed_at, reviewed_by_name, created_at, template_id, self_check_completed, self_check_completed_at, self_check_points_given')
                 .in('result_id', resultIds)
                 .order('created_at', { ascending: false })
             : Promise.resolve({ data: [], error: null }),
@@ -818,15 +818,41 @@ Deno.serve(async (req) => {
         if (reviewError) throw reviewError;
 
         const reviewIds = (reviewRows || []).map((row: any) => row.id);
-        const { data: itemRows, error: itemError } = reviewIds.length > 0
-          ? await supabase
-              .from('exam_item_reviews')
-              .select('id, review_id, item_number, result, error_types, item_comment')
-              .in('review_id', reviewIds)
-              .order('item_number', { ascending: true })
-          : { data: [], error: null };
+        const templateIds = [...new Set((reviewRows || []).map((r: any) => r.template_id).filter(Boolean))];
+
+        const [{ data: itemRows, error: itemError }, { data: selfCheckRows }, { data: templateRows }] = await Promise.all([
+          reviewIds.length > 0
+            ? supabase
+                .from('exam_item_reviews')
+                .select('id, review_id, item_number, result, error_types, item_comment, score_earned, page_number, custom_reason')
+                .in('review_id', reviewIds)
+                .order('item_number', { ascending: true })
+            : Promise.resolve({ data: [], error: null }),
+          reviewIds.length > 0
+            ? supabase
+                .from('exam_student_self_checks')
+                .select('id, review_id, item_number, self_error_types, self_custom_reason, q_remembered, q_concept_confused, q_academy_helped, q_need_more, q_my_mistake')
+                .in('review_id', reviewIds)
+            : Promise.resolve({ data: [] }),
+          templateIds.length > 0
+            ? supabase
+                .from('exam_score_templates')
+                .select('id, error_types, items')
+                .in('id', templateIds)
+            : Promise.resolve({ data: [] }),
+        ]);
 
         if (itemError) throw itemError;
+
+        const templateMap = new Map<string, any>();
+        for (const t of templateRows || []) templateMap.set(t.id, t);
+
+        const selfCheckMap = new Map<string, any[]>();
+        for (const sc of selfCheckRows || []) {
+          const list = selfCheckMap.get(sc.review_id) || [];
+          list.push(sc);
+          selfCheckMap.set(sc.review_id, list);
+        }
 
         const photoMap = new Map<string, any[]>();
         await Promise.all((photoRows || []).map(async (photo: any) => {
