@@ -909,6 +909,34 @@ export function ExamReviewPanel() {
                     {isGenerating ? 'AI 분석 중...' : 'AI 초안 생성'}
                   </Button>
                 </div>
+                {selfChecks.length > 0 ? (
+                  <div className="mb-3 rounded-[10px] border border-sky-200 bg-sky-50 p-3">
+                    <p className="mb-2 text-xs font-semibold text-sky-900">
+                      학생 자가진단 결과 ({selfChecks.length}문항)
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      {selfChecks.map((check) => (
+                        <div key={check.id} className="rounded-md bg-background p-2 text-[11px]">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className="font-semibold text-foreground">{check.item_number}번</span>
+                            <span className="text-sky-700">
+                              기억 {check.q_remembered ? '✓' : '✗'}
+                            </span>
+                            <span className="text-amber-700">
+                              개념혼동 {check.q_concept_confused ? '✓' : '✗'}
+                            </span>
+                            <span className="text-emerald-700">
+                              학원도움 {check.q_academy_helped ? '✓' : '✗'}
+                            </span>
+                          </div>
+                          {check.q_need_more ? (
+                            <p className="mt-1 text-muted-foreground">💬 {check.q_need_more}</p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {aiGenerated ? (
                   <div className="mb-3 flex items-center justify-between gap-3 rounded-md bg-primary/10 px-3 py-2 text-xs text-primary">
                     <span>✦ AI가 초안을 작성했어요. 자유롭게 수정해주세요.</span>
