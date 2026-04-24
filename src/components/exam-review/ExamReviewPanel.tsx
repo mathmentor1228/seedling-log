@@ -765,7 +765,7 @@ export function ExamReviewPanel() {
     } finally {
       setIsGenerating(false);
     }
-  }, [hasItems, itemReviews, overallComment, selectedRow, template, toast]);
+  }, [hasItems, itemReviews, overallComment, selectedRow, selfChecks, template, toast]);
 
   return (
     <>
