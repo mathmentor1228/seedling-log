@@ -468,6 +468,7 @@ export function ExamReviewPanel() {
       setReviewId(null);
       setOverallComment('');
       setItemReviews([]);
+      setSelfChecks([]);
       setTemplate(null);
       return;
     }
