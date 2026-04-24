@@ -306,7 +306,7 @@ serve(async (req) => {
         warningMessage = 'PDF 다운로드 실패로 안정 모드(메타 기반)로 출제되었습니다.';
       } else {
         const pdfBytes = await fileData.arrayBuffer();
-        pdfBase64 = encodeBase64(new Uint8Array(pdfBytes));
+        pdfBase64 = encodeBase64(pdfBytes);
       }
     } else if (fileSize > INLINE_PDF_MAX_BYTES) {
       warningMessage = `파일 용량이 커 안정 모드(메타 기반)로 출제되었습니다. (권장 ${Math.round(
