@@ -66,6 +66,21 @@ function buildPrompt(input: z.infer<typeof RequestSchema>) {
 
   const roundedEarnedScore = Math.round(input.earnedScore * 10) / 10;
 
+  const selfCheckText = input.selfChecks.length > 0
+    ? input.selfChecks.map((c) => {
+      const remembered = c.remembered === true ? '기억함' : c.remembered === false ? '기억못함' : '응답없음';
+      const concept = c.conceptConfused === true ? '혼동' : c.conceptConfused === false ? '명확' : '응답없음';
+      const academy = c.academyHelped === true ? '도움됨' : c.academyHelped === false ? '모르겠음' : '응답없음';
+      const note = c.needMore?.trim() ? `, 학생메모="${c.needMore.trim()}"` : '';
+      const mistake = c.myMistake?.trim() ? `, 본인생각실수="${c.myMistake.trim()}"` : '';
+      return `- ${c.itemNumber}번: 기억여부=${remembered}, 개념혼동=${concept}, 학원도움=${academy}${note}${mistake}`;
+    }).join('\n')
+    : '- 자가진단 미완료';
+
+  const selfCheckSection = input.selfChecks.length > 0
+    ? `\n\n## 학생 자가진단\n${selfCheckText}\n\n위 자가진단 내용을 반영해서:\n- 학생이 스스로 인식한 약점을 언급해주세요\n- 학원 수업이 도움됐다고 한 부분은 격려해주세요\n- 학생이 더 필요하다고 한 부분은 구체적 방향을 제시해주세요`
+    : '';
+
   return `당신은 경험 많은 수학 전문 선생님입니다.
 
 아래 학생의 시험 채점 결과를 바탕으로 선생님이 학생에게 전달할 분석 코멘트 초안을 작성해주세요.
@@ -88,7 +103,7 @@ function buildPrompt(input: z.infer<typeof RequestSchema>) {
 ${wrongItemsText}
 
 ## 주요 오답 패턴
-${topErrorsText}
+${topErrorsText}${selfCheckSection}
 
 ## 작성 지침
 1. 학생에게 직접 말하는 따뜻하고 격려하는 톤으로 작성
