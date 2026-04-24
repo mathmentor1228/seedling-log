@@ -38,6 +38,42 @@ Deno.serve(async (req) => {
       const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
       const staffName = prof?.full_name || user.email || 'staff';
 
+      if (action === 'staff_list') {
+        const { student_id: filter_student_id, subject, review_status } = body;
+        let query = supabase
+          .from('student_exam_results')
+          .select(`
+            *,
+            students(id, name, grade, school),
+            student_exam_result_photos(id, storage_path, original_name, sort_order)
+          `)
+          .order('submitted_at', { ascending: false });
+
+        if (filter_student_id) query = query.eq('student_id', filter_student_id);
+        if (subject) query = query.eq('subject', subject);
+        if (review_status) query = query.eq('review_status', review_status);
+
+        const { data: results, error } = await query;
+        if (error) return json({ error: error.message }, 500);
+
+        const enriched = await Promise.all(
+          (results || []).map(async (r: any) => {
+            const photos = await Promise.all(
+              (r.student_exam_result_photos || [])
+                .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                .map(async (p: any) => {
+                  const { data: signed } = await supabase.storage
+                    .from('exam-results')
+                    .createSignedUrl(p.storage_path, 3600);
+                  return { ...p, signedUrl: signed?.signedUrl || null };
+                })
+            );
+            return { ...r, photos };
+          })
+        );
+        return json({ results: enriched });
+      }
+
       if (action === 'staff_search_students') {
         const q = String(body.query || '').trim();
         if (!q) return json({ students: [] });
