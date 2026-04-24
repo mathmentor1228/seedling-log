@@ -268,8 +268,9 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: `파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB).`, detail: { reason: 'pdf_too_large' } }, 413);
     }
 
-    const { data: textbook, error: textbookError } = await adminClient.from('textbooks').select('title, subject, grade, course').eq('id', textbookId).single();
+    const { data: textbookData, error: textbookError } = await adminClient.from('textbooks').select('title, subject, grade, course').eq('id', textbookId).single();
     if (textbookError) return jsonResponse({ success: false, error: '교재 정보를 찾을 수 없습니다.' });
+    const textbook = textbookData as { title?: string; subject?: string; grade?: string; course?: string } | null;
 
     const subject = textbook?.subject || '수학';
     const pdfUpload = isPdfFile(file);
