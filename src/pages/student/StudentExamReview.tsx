@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { studentApi } from '@/lib/studentApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
+import { SelfCheckTab } from '@/components/student/exam-review/SelfCheckTab';
 import { CheckCircle2, ClipboardCheck, Image as ImageIcon } from 'lucide-react';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
@@ -17,6 +18,18 @@ interface ReviewItem {
   result: ItemResult;
   error_types: string[];
   item_comment: string | null;
+  score_earned?: number | null;
+  page_number?: number | null;
+  custom_reason?: string | null;
+}
+
+interface SelfCheckRow {
+  item_number: number;
+  q_remembered: boolean | null;
+  q_concept_confused: boolean | null;
+  q_academy_helped: boolean | null;
+  q_need_more: string | null;
+  self_error_types: string[];
 }
 
 interface ReviewData {
@@ -25,6 +38,9 @@ interface ReviewData {
   reviewed_at: string | null;
   reviewed_by_name: string | null;
   exam_item_reviews: ReviewItem[];
+  self_check_completed?: boolean;
+  self_checks?: SelfCheckRow[];
+  template?: { id: string; error_types: string[]; items: Array<{ no: number; points: number }> } | null;
 }
 
 interface ExamReviewRow {
@@ -61,16 +77,17 @@ export default function StudentExamReview() {
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'teacher' | 'self'>('teacher');
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const { data } = await studentApi.getExamReviews();
-      setRows((data?.reviews || []) as ExamReviewRow[]);
-      setLoading(false);
-    };
-    void load();
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await studentApi.getExamReviews();
+    setRows((data?.reviews || []) as ExamReviewRow[]);
+    setLoading(false);
   }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
 
   const selectedReview = selected?.exam_reviews?.[0] ?? null;
 
