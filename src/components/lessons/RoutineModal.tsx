@@ -206,24 +206,17 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
     setGenerating(true);
 
     if (type === 'test') {
-      // Insert into test_schedules for proper integration
-      const rows = previewRows.map(r => ({
-        student_id: r.studentId,
-        teacher_id: r.teacherId,
-        test_date: r.date,
-        test_time: r.startTime || null,
-        subject: r.subject || '수학',
-        test_type: 'regular',
-        content: r.templateContent || null,
-        title: r.templateContent || null,
-        notes: null,
-      }));
-      const { error } = await supabase.from('test_schedules').insert(rows);
-      if (error) {
-        toast({ title: '생성 실패', description: error.message, variant: 'destructive' });
+      const dates = [...new Set(previewRows.map(r => r.date))];
+      const results = await Promise.all(
+        dates.map(date => supabase.functions.invoke('generate-routine-tests', { body: { date } }))
+      );
+      const failed = results.find(result => result.error);
+      if (failed) {
+        toast({ title: '생성 실패', description: failed.error.message, variant: 'destructive' });
       } else {
-        toast({ title: `${previewRows.length}건이 생성되었습니다` });
+        toast({ title: '이번 주 테스트 기록이 생성됐어요!' });
         setShowPreview(false);
+        fetchRoutines();
       }
     } else {
       const table = type === 'self_study' ? 'self_study_records' : 'clinic_records';
