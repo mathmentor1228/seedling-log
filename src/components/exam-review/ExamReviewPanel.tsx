@@ -27,6 +27,8 @@ interface PhotoRow {
 interface ReviewSummary {
   id: string;
   overall_comment: string | null;
+  reviewed_at?: string | null;
+  self_check_completed?: boolean | null;
   total_score?: number | null;
   earned_score?: number | null;
   template_id?: string | null;
@@ -186,6 +188,40 @@ function getStatusClasses(status: ReviewStatus, selected: boolean) {
     card: 'border border-[hsl(var(--review-done-border))] bg-[hsl(var(--review-done-surface))] opacity-75',
     badge: 'bg-[hsl(var(--review-done-badge))] text-[hsl(var(--review-done-badge-foreground))]',
   };
+}
+
+type ReviewPhase = 'scoring' | 'waiting_self_check' | 'ai_comment' | 'done';
+
+const REVIEW_PHASE_STEPS: Array<{ key: ReviewPhase; label: string }> = [
+  { key: 'scoring', label: '① 채점' },
+  { key: 'waiting_self_check', label: '② 학생자가진단' },
+  { key: 'ai_comment', label: '③ AI코멘트' },
+  { key: 'done', label: '④ 완료' },
+];
+
+function ReviewPhaseBar({ phase }: { phase: ReviewPhase }) {
+  const currentIndex = REVIEW_PHASE_STEPS.findIndex((step) => step.key === phase);
+  return (
+    <div className="mb-6 flex items-center gap-0">
+      {REVIEW_PHASE_STEPS.map((step, index) => {
+        const isDone = index < currentIndex;
+        const isCurrent = index === currentIndex;
+        return (
+          <div key={step.key} className="flex flex-1 items-center">
+            <div className="flex-1 text-center">
+              <div className={`mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${isDone ? 'bg-success text-success-foreground' : isCurrent ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                {isDone ? '✓' : index + 1}
+              </div>
+              <p className={`m-0 text-[10px] ${isCurrent ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{step.label}</p>
+            </div>
+            {index < REVIEW_PHASE_STEPS.length - 1 ? (
+              <div className={`mb-3.5 h-0.5 flex-[0.5] ${isDone ? 'bg-success' : 'bg-border'}`} />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function ExamReviewPanel() {
