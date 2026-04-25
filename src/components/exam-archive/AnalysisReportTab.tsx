@@ -117,7 +117,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [reports, setReports] = useState<AnalysisReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedSubject, setSelectedSubject] = useState('all');
+  const [selectedSubject, setSelectedSubject] = useState('전체');
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [form, setForm] = useState<ReportForm>(() => emptyForm(selectedSchool || schools[0]?.name || ''));
   const [items, setItems] = useState<AnalysisItem[]>(createDefaultItems);
@@ -126,7 +126,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
   const filteredReports = useMemo(() => {
     return reports
-      .filter((report) => selectedSubject === 'all' || report.subject === selectedSubject)
+      .filter((report) => selectedSubject === '전체' || report.subject === selectedSubject)
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   }, [reports, selectedSubject]);
 
@@ -365,24 +365,21 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-330px)] min-h-[620px] overflow-hidden rounded-lg border bg-background">
-      <aside className="w-60 shrink-0 border-r bg-muted/20 p-3">
-        <Button className="mb-3 h-9 w-full gap-2 text-xs" onClick={startNewReport}>
-          <Plus className="h-4 w-4" /> 새 보고서
+    <div className="flex h-full min-h-0 w-full overflow-hidden bg-background">
+      <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/20 p-4">
+        <Button className="mb-3 h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
+          <Plus className="h-4 w-4" /> 새 보고서 작성
         </Button>
 
-        <div className="mb-3 flex flex-wrap gap-1">
-          <Button size="sm" variant={selectedSubject === 'all' ? 'default' : 'outline'} className="h-7 px-2 text-[11px]" onClick={() => setSelectedSubject('all')}>
-            전체
-          </Button>
-          {SUBJECTS.map((subject) => (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {['전체', ...SUBJECTS].map((subject) => (
             <Button key={subject} size="sm" variant={selectedSubject === subject ? 'default' : 'outline'} className="h-7 px-2 text-[11px]" onClick={() => setSelectedSubject(subject)}>
               {subject}
             </Button>
           ))}
         </div>
 
-        <div className="space-y-2 overflow-y-auto pr-1 h-[calc(100%-84px)]">
+        <div className="space-y-2 pr-1">
           {loading ? (
             <div className="flex h-28 items-center justify-center text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -395,7 +392,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 key={report.id}
                 onClick={() => void selectReport(report)}
                 className={cn(
-                  'w-full rounded-md border bg-card p-3 text-left transition-colors hover:bg-accent',
+                   'w-full rounded-lg border bg-card p-3.5 text-left transition-colors hover:bg-accent',
                   selectedReportId === report.id && 'border-primary bg-primary/5',
                 )}
               >
@@ -415,7 +412,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
         </div>
       </aside>
 
-      <section className="flex-1 overflow-y-auto p-5">
+      <section className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
         {!selectedReportId && reports.length > 0 && form.schoolName === '' ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <FileText className="h-10 w-10 opacity-40" />
