@@ -198,8 +198,43 @@ function QuickGradeStrip({
         })}
       </div>
     </div>
+
+    <Dialog open={expandedOpen} onOpenChange={setExpandedOpen}>
+      <DialogContent className="max-h-[96vh] max-w-[96vw] overflow-y-auto p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 pr-8">
+          <div className="text-sm font-semibold text-foreground">큰 시험지 채점 · {photos.length === 0 ? '0 / 0페이지' : `${page + 1} / ${photos.length}페이지`}</div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(0, prev - 1))} disabled={page === 0}>
+              <ChevronLeft className="h-4 w-4" /> 이전
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(photos.length - 1, prev + 1))} disabled={photos.length === 0 || page === photos.length - 1}>
+              다음 <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-lg border border-border bg-card">
+          {currentPhotoUrl ? (
+            <img src={currentPhotoUrl} alt={`시험지 ${page + 1}`} className="block max-h-[74vh] w-full object-contain" />
+          ) : currentPhoto ? (
+            <PhotoThumb storagePath={currentPhoto.storage_path} signedUrl={currentPhoto.signedUrl ?? null} alt={`시험지 ${page + 1}`} fit="contain" className="min-h-[70vh]" imageClassName="block max-h-[74vh] w-full object-contain" />
+          ) : (
+            <div className="flex min-h-[70vh] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
+          )}
+          {pageItems.map((item) => (
+            <div key={`expanded-${item.item_number}-${item.page_number}`} className="absolute z-10" style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}>
+              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+            </div>
+          ))}
+          {currentPhoto ? <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="큰 시험지 위치에 채점 마커 추가" /> : null}
+          {renderActiveEditor()}
+        </div>
+        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openEditor} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
+
 
 function ScoreSummaryPanel({ items, template }: { items: OverlayReviewItem[]; template: OverlayTemplateData }) {
   const summary = useMemo(() => {
@@ -260,8 +295,43 @@ function ScoreSummaryPanel({ items, template }: { items: OverlayReviewItem[]; te
         )}
       </div>
     </div>
+
+    <Dialog open={expandedOpen} onOpenChange={setExpandedOpen}>
+      <DialogContent className="max-h-[96vh] max-w-[96vw] overflow-y-auto p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 pr-8">
+          <div className="text-sm font-semibold text-foreground">큰 시험지 채점 · {photos.length === 0 ? '0 / 0페이지' : `${page + 1} / ${photos.length}페이지`}</div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(0, prev - 1))} disabled={page === 0}>
+              <ChevronLeft className="h-4 w-4" /> 이전
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(photos.length - 1, prev + 1))} disabled={photos.length === 0 || page === photos.length - 1}>
+              다음 <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-lg border border-border bg-card">
+          {currentPhotoUrl ? (
+            <img src={currentPhotoUrl} alt={`시험지 ${page + 1}`} className="block max-h-[74vh] w-full object-contain" />
+          ) : currentPhoto ? (
+            <PhotoThumb storagePath={currentPhoto.storage_path} signedUrl={currentPhoto.signedUrl ?? null} alt={`시험지 ${page + 1}`} fit="contain" className="min-h-[70vh]" imageClassName="block max-h-[74vh] w-full object-contain" />
+          ) : (
+            <div className="flex min-h-[70vh] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
+          )}
+          {pageItems.map((item) => (
+            <div key={`expanded-${item.item_number}-${item.page_number}`} className="absolute z-10" style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}>
+              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+            </div>
+          ))}
+          {currentPhoto ? <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="큰 시험지 위치에 채점 마커 추가" /> : null}
+          {renderActiveEditor()}
+        </div>
+        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openEditor} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
+
 
 export function OverlayGradingPanel({
   photos,
@@ -430,6 +500,85 @@ export function OverlayGradingPanel({
     };
   }, [activeItem]);
 
+  const renderActiveEditor = () => activeItem ? (
+    <div
+      className="absolute z-20 min-w-[220px] rounded-[10px] border border-border bg-card p-3 shadow-lg"
+      style={popupStyle ?? undefined}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[13px] font-semibold text-foreground">
+          {activeItem.item_number}번 ({displayScore(activeItem.points)}점)
+        </p>
+        <PenSquare className="h-4 w-4 text-muted-foreground" />
+      </div>
+
+      <div className="mb-3 flex gap-1.5">
+        {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
+          const active = result === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setResult(value)}
+              className={`flex h-11 w-11 items-center justify-center rounded-lg border text-lg font-bold transition ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
+            >
+              {style.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeItem.is_essay ? (
+        <div className="mb-3">
+          <label className="mb-1 block text-[11px] text-muted-foreground">획득 점수</label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              max={activeItem.points}
+              value={earnedScore}
+              onChange={(event) => setEarnedScore(clampScore(Number(event.target.value), activeItem.points))}
+              className="h-8 w-20 px-2 text-sm"
+            />
+            <span className="text-[11px] text-muted-foreground">/ {displayScore(activeItem.points)}점</span>
+          </div>
+        </div>
+      ) : null}
+
+      {result === 'wrong' || result === 'partial' ? (
+        <div className="mb-3 space-y-1.5 rounded-md bg-muted/40 p-2">
+          {template.error_types.map((type) => (
+            type === '기타(직접입력)' ? (
+              <Input
+                key={type}
+                placeholder="직접 입력..."
+                value={customReason}
+                onChange={(event) => setCustomReason(event.target.value)}
+                className="h-8 text-xs"
+              />
+            ) : (
+              <label key={type} className="flex items-center gap-2 text-[11px] text-foreground">
+                <Checkbox checked={errorTypes.includes(type)} onCheckedChange={() => handleToggleError(type)} />
+                <span>{type}</span>
+              </label>
+            )
+          ))}
+        </div>
+      ) : null}
+
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" size="sm" className="flex-1" onClick={resetEditor} disabled={saving}>
+          취소
+        </Button>
+        <Button type="button" size="sm" className="flex-1" onClick={() => void handleSave()} disabled={!result || saving}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '확인'}
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
+
   if (templateLoading) {
     return (
       <div className="flex min-h-[32rem] items-center justify-center rounded-lg border border-border bg-card">
@@ -458,6 +607,7 @@ export function OverlayGradingPanel({
   }
 
   return (
+    <>
     <div className="flex flex-col gap-5 xl:flex-row">
       <div className="min-w-0 flex-[2]">
         <div className="mb-2 flex items-center gap-2 text-sm text-foreground">
@@ -484,6 +634,9 @@ export function OverlayGradingPanel({
           {currentPhotoUrl ? (
             <>
               <img src={currentPhotoUrl} alt={`시험지 ${page + 1}`} className="block w-full rounded-lg" />
+              <Button type="button" variant="secondary" size="sm" className="absolute right-3 top-3 z-30 shadow-sm" onClick={() => setExpandedOpen(true)}>
+                <Maximize2 className="h-4 w-4" /> 크게 채점
+              </Button>
 
               {pageItems.map((item) => (
                 <div
@@ -497,83 +650,7 @@ export function OverlayGradingPanel({
 
               <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="시험지 위치에 채점 마커 추가" />
 
-              {activeItem ? (
-                <div
-                  className={`absolute z-20 min-w-[220px] rounded-[10px] border border-border bg-card p-3 shadow-lg`}
-                  style={popupStyle ?? undefined}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-[13px] font-semibold text-foreground">
-                      {activeItem.item_number}번 ({displayScore(activeItem.points)}점)
-                    </p>
-                    <PenSquare className="h-4 w-4 text-muted-foreground" />
-                  </div>
-
-                  <div className="mb-3 flex gap-1.5">
-                    {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
-                      const active = result === value;
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setResult(value)}
-                          className={`flex h-11 w-11 items-center justify-center rounded-lg border text-lg font-bold transition ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
-                        >
-                          {style.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {activeItem.is_essay ? (
-                    <div className="mb-3">
-                      <label className="mb-1 block text-[11px] text-muted-foreground">획득 점수</label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={activeItem.points}
-                          value={earnedScore}
-                          onChange={(event) => setEarnedScore(clampScore(Number(event.target.value), activeItem.points))}
-                          className="h-8 w-20 px-2 text-sm"
-                        />
-                        <span className="text-[11px] text-muted-foreground">/ {displayScore(activeItem.points)}점</span>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {result === 'wrong' || result === 'partial' ? (
-                    <div className="mb-3 space-y-1.5 rounded-md bg-muted/40 p-2">
-                      {template.error_types.map((type) => (
-                        type === '기타(직접입력)' ? (
-                          <Input
-                            key={type}
-                            placeholder="직접 입력..."
-                            value={customReason}
-                            onChange={(event) => setCustomReason(event.target.value)}
-                            className="h-8 text-xs"
-                          />
-                        ) : (
-                          <label key={type} className="flex items-center gap-2 text-[11px] text-foreground">
-                            <Checkbox checked={errorTypes.includes(type)} onCheckedChange={() => handleToggleError(type)} />
-                            <span>{type}</span>
-                          </label>
-                        )
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={resetEditor} disabled={saving}>
-                      취소
-                    </Button>
-                    <Button type="button" size="sm" className="flex-1" onClick={() => void handleSave()} disabled={!result || saving}>
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '확인'}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
+              {renderActiveEditor()}
             </>
           ) : currentPhoto ? (
             <>
@@ -585,6 +662,9 @@ export function OverlayGradingPanel({
                 className="min-h-[28rem]"
                 imageClassName="block w-full rounded-lg"
               />
+              <Button type="button" variant="secondary" size="sm" className="absolute right-3 top-3 z-30 shadow-sm" onClick={() => setExpandedOpen(true)}>
+                <Maximize2 className="h-4 w-4" /> 크게 채점
+              </Button>
 
               {pageItems.map((item) => (
                 <div
@@ -598,83 +678,7 @@ export function OverlayGradingPanel({
 
               <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="시험지 위치에 채점 마커 추가" />
 
-              {activeItem ? (
-                <div
-                  className={`absolute z-20 min-w-[220px] rounded-[10px] border border-border bg-card p-3 shadow-lg`}
-                  style={popupStyle ?? undefined}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-[13px] font-semibold text-foreground">
-                      {activeItem.item_number}번 ({displayScore(activeItem.points)}점)
-                    </p>
-                    <PenSquare className="h-4 w-4 text-muted-foreground" />
-                  </div>
-
-                  <div className="mb-3 flex gap-1.5">
-                    {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
-                      const active = result === value;
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setResult(value)}
-                          className={`flex h-11 w-11 items-center justify-center rounded-lg border text-lg font-bold transition ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
-                        >
-                          {style.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {activeItem.is_essay ? (
-                    <div className="mb-3">
-                      <label className="mb-1 block text-[11px] text-muted-foreground">획득 점수</label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={activeItem.points}
-                          value={earnedScore}
-                          onChange={(event) => setEarnedScore(clampScore(Number(event.target.value), activeItem.points))}
-                          className="h-8 w-20 px-2 text-sm"
-                        />
-                        <span className="text-[11px] text-muted-foreground">/ {displayScore(activeItem.points)}점</span>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {result === 'wrong' || result === 'partial' ? (
-                    <div className="mb-3 space-y-1.5 rounded-md bg-muted/40 p-2">
-                      {template.error_types.map((type) => (
-                        type === '기타(직접입력)' ? (
-                          <Input
-                            key={type}
-                            placeholder="직접 입력..."
-                            value={customReason}
-                            onChange={(event) => setCustomReason(event.target.value)}
-                            className="h-8 text-xs"
-                          />
-                        ) : (
-                          <label key={type} className="flex items-center gap-2 text-[11px] text-foreground">
-                            <Checkbox checked={errorTypes.includes(type)} onCheckedChange={() => handleToggleError(type)} />
-                            <span>{type}</span>
-                          </label>
-                        )
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" className="flex-1" onClick={resetEditor} disabled={saving}>
-                      취소
-                    </Button>
-                    <Button type="button" size="sm" className="flex-1" onClick={() => void handleSave()} disabled={!result || saving}>
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '확인'}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
+              {renderActiveEditor()}
             </>
           ) : photos.length === 0 ? (
             <div className="flex min-h-[28rem] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
@@ -704,5 +708,39 @@ export function OverlayGradingPanel({
         </div>
       </div>
     </div>
+
+    <Dialog open={expandedOpen} onOpenChange={setExpandedOpen}>
+      <DialogContent className="max-h-[96vh] max-w-[96vw] overflow-y-auto p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 pr-8">
+          <div className="text-sm font-semibold text-foreground">큰 시험지 채점 · {photos.length === 0 ? '0 / 0페이지' : `${page + 1} / ${photos.length}페이지`}</div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(0, prev - 1))} disabled={page === 0}>
+              <ChevronLeft className="h-4 w-4" /> 이전
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(photos.length - 1, prev + 1))} disabled={photos.length === 0 || page === photos.length - 1}>
+              다음 <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-lg border border-border bg-card">
+          {currentPhotoUrl ? (
+            <img src={currentPhotoUrl} alt={`시험지 ${page + 1}`} className="block max-h-[74vh] w-full object-contain" />
+          ) : currentPhoto ? (
+            <PhotoThumb storagePath={currentPhoto.storage_path} signedUrl={currentPhoto.signedUrl ?? null} alt={`시험지 ${page + 1}`} fit="contain" className="min-h-[70vh]" imageClassName="block max-h-[74vh] w-full object-contain" />
+          ) : (
+            <div className="flex min-h-[70vh] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
+          )}
+          {pageItems.map((item) => (
+            <div key={`expanded-${item.item_number}-${item.page_number}`} className="absolute z-10" style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}>
+              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+            </div>
+          ))}
+          {currentPhoto ? <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="큰 시험지 위치에 채점 마커 추가" /> : null}
+          {renderActiveEditor()}
+        </div>
+        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openEditor} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
