@@ -980,6 +980,8 @@ export type Database = {
       }
       exam_analysis_reports: {
         Row: {
+          answer_image_paths: Json | null
+          answer_mode: string | null
           answer_pdf_path: string | null
           avg_score: number | null
           created_at: string | null
@@ -1005,6 +1007,8 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          answer_image_paths?: Json | null
+          answer_mode?: string | null
           answer_pdf_path?: string | null
           avg_score?: number | null
           created_at?: string | null
@@ -1030,6 +1034,8 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          answer_image_paths?: Json | null
+          answer_mode?: string | null
           answer_pdf_path?: string | null
           avg_score?: number | null
           created_at?: string | null
