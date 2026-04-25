@@ -27,6 +27,8 @@ interface PhotoRow {
 interface ReviewSummary {
   id: string;
   overall_comment: string | null;
+  reviewed_at?: string | null;
+  self_check_completed?: boolean | null;
   total_score?: number | null;
   earned_score?: number | null;
   template_id?: string | null;
@@ -188,6 +190,40 @@ function getStatusClasses(status: ReviewStatus, selected: boolean) {
   };
 }
 
+type ReviewPhase = 'scoring' | 'waiting_self_check' | 'ai_comment' | 'done';
+
+const REVIEW_PHASE_STEPS: Array<{ key: ReviewPhase; label: string }> = [
+  { key: 'scoring', label: '① 채점' },
+  { key: 'waiting_self_check', label: '② 학생자가진단' },
+  { key: 'ai_comment', label: '③ AI코멘트' },
+  { key: 'done', label: '④ 완료' },
+];
+
+function ReviewPhaseBar({ phase }: { phase: ReviewPhase }) {
+  const currentIndex = REVIEW_PHASE_STEPS.findIndex((step) => step.key === phase);
+  return (
+    <div className="mb-6 flex items-center gap-0">
+      {REVIEW_PHASE_STEPS.map((step, index) => {
+        const isDone = index < currentIndex;
+        const isCurrent = index === currentIndex;
+        return (
+          <div key={step.key} className="flex flex-1 items-center">
+            <div className="flex-1 text-center">
+              <div className={`mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${isDone ? 'bg-success text-success-foreground' : isCurrent ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                {isDone ? '✓' : index + 1}
+              </div>
+              <p className={`m-0 text-[10px] ${isCurrent ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{step.label}</p>
+            </div>
+            {index < REVIEW_PHASE_STEPS.length - 1 ? (
+              <div className={`mb-3.5 h-0.5 flex-[0.5] ${isDone ? 'bg-success' : 'bg-border'}`} />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ExamReviewPanel() {
   const { user, fullName } = useAuth();
   const { toast } = useToast();
@@ -201,6 +237,7 @@ export function ExamReviewPanel() {
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
   const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [reviewMeta, setReviewMeta] = useState<ReviewSummary | null>(null);
   const [overallComment, setOverallComment] = useState('');
   const [itemReviews, setItemReviews] = useState<OverlayReviewItem[]>([]);
   const [template, setTemplate] = useState<OverlayTemplateData | null>(null);
@@ -293,6 +330,25 @@ export function ExamReviewPanel() {
 
   const hasItems = itemReviews.length > 0;
 
+  const wrongItems = useMemo(
+    () => itemReviews.filter((item) => item.result === 'wrong' || item.result === 'partial'),
+    [itemReviews],
+  );
+
+  const selfCheckCount = useMemo(() => {
+    const completedNumbers = new Set(selfChecks.map((check) => check.item_number));
+    return wrongItems.filter((item) => completedNumbers.has(item.item_number)).length;
+  }, [selfChecks, wrongItems]);
+
+  const reviewPhase: ReviewPhase = useMemo(() => {
+    if (!reviewMeta?.reviewed_at && selectedRow?.review_status !== 'done') return 'scoring';
+    if (reviewMeta?.overall_comment?.trim()) return 'done';
+    if (wrongItems.length > 0 && !reviewMeta?.self_check_completed) return 'waiting_self_check';
+    return 'ai_comment';
+  }, [reviewMeta, selectedRow?.review_status, wrongItems.length]);
+
+  const selfCheckProgress = wrongItems.length > 0 ? Math.round((selfCheckCount / wrongItems.length) * 100) : 100;
+
   useEffect(() => {
     let active = true;
 
@@ -328,7 +384,7 @@ export function ExamReviewPanel() {
     try {
       const { data: reviews, error: reviewError } = await supabase
         .from('exam_reviews')
-        .select('id, overall_comment, created_at, template_id, total_score, earned_score')
+        .select('id, overall_comment, reviewed_at, self_check_completed, created_at, template_id, total_score, earned_score')
         .eq('result_id', resultId)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -337,12 +393,14 @@ export function ExamReviewPanel() {
 
       const currentReview = reviews?.[0] ?? null;
       setReviewId(currentReview?.id ?? null);
+      setReviewMeta(currentReview ?? null);
       setOverallComment(currentReview?.overall_comment ?? '');
       setAiGenerated(false);
 
       if (!currentReview) {
         setItemReviews([]);
         setSelfChecks([]);
+        setReviewMeta(null);
         return;
       }
 
@@ -466,6 +524,7 @@ export function ExamReviewPanel() {
   useEffect(() => {
     if (!selectedId) {
       setReviewId(null);
+      setReviewMeta(null);
       setOverallComment('');
       setItemReviews([]);
       setSelfChecks([]);
@@ -495,7 +554,6 @@ export function ExamReviewPanel() {
             result_id: selectedRow.id,
             reviewed_by: user.id,
             reviewed_by_name: reviewerName,
-            overall_comment: overallComment.trim() || null,
             updated_at: nowIso,
             reviewed_at: markDone ? nowIso : null,
           },
@@ -683,8 +741,55 @@ export function ExamReviewPanel() {
     setAiGenerated(false);
   }, []);
 
+  useEffect(() => {
+    if (!reviewId || !selectedRow) return undefined;
+
+    const channel = supabase
+      .channel(`self_check_watch_${reviewId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_student_self_checks', filter: `review_id=eq.${reviewId}` }, () => {
+        void loadReviewDetail(selectedRow.id);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'exam_reviews', filter: `id=eq.${reviewId}` }, () => {
+        void loadReviewDetail(selectedRow.id);
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [loadReviewDetail, reviewId, selectedRow]);
+
+  const handleMarkDone = useCallback(async () => {
+    const ok = await persistReview(true);
+    if (ok) toast({ title: '채점 완료', description: '학생에게 자가진단을 요청했습니다.' });
+  }, [persistReview, toast]);
+
+  const handleFinalSave = useCallback(async () => {
+    if (!reviewId || !user || !overallComment.trim()) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('exam_reviews')
+        .update({
+          overall_comment: overallComment.trim(),
+          reviewed_by: user.id,
+          reviewed_by_name: fullName || user.email || '교직원',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', reviewId);
+      if (error) throw error;
+      if (selectedRow) await loadReviewDetail(selectedRow.id);
+      toast({ title: '리뷰가 최종 저장됐어요' });
+    } catch (error: any) {
+      toast({ title: '최종 저장 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }, [fullName, loadReviewDetail, overallComment, reviewId, selectedRow, toast, user]);
+
   const handleGenerateAI = useCallback(async () => {
-    if (!selectedRow || !template || !hasItems) return;
+    if (!selectedRow || !template || !hasItems || reviewPhase !== 'ai_comment') return;
 
     if (overallComment.trim()) {
       const shouldReplace = window.confirm('기존 내용이 대체됩니다. 계속하시겠습니까?');
@@ -765,7 +870,7 @@ export function ExamReviewPanel() {
     } finally {
       setIsGenerating(false);
     }
-  }, [hasItems, itemReviews, overallComment, selectedRow, selfChecks, template, toast]);
+  }, [hasItems, itemReviews, overallComment, reviewPhase, selectedRow, selfChecks, template, toast]);
 
   return (
     <>
@@ -862,12 +967,10 @@ export function ExamReviewPanel() {
                   <Button type="button" variant="outline" onClick={() => setTemplateSetupOpen(true)}>
                     이 시험 템플릿 설정
                   </Button>
-                  <Button onClick={() => void persistReview(true)} disabled={saving} className="px-6 py-3">
-                    {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    리뷰 완료
-                  </Button>
                 </div>
               </div>
+
+              <ReviewPhaseBar phase={reviewPhase} />
 
               <div className="mb-8">
                 <SectionTitle title="오버레이 채점" />
@@ -895,20 +998,34 @@ export function ExamReviewPanel() {
                 ) : null}
               </div>
 
-              <div className="mb-6">
-                <div className="mb-3 flex items-center justify-between gap-3 border-b-2 pb-2" style={{ borderColor: 'hsl(var(--review-correct-surface))' }}>
-                  <div className="text-[15px] font-semibold text-foreground">선생님 코멘트</div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void handleGenerateAI()}
-                    disabled={isGenerating || !hasItems || !template}
-                    className="gap-2 border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary disabled:bg-muted disabled:text-muted-foreground"
-                  >
-                    {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                    {isGenerating ? 'AI 분석 중...' : 'AI 초안 생성'}
-                  </Button>
+              {reviewPhase === 'waiting_self_check' ? (
+                <div className="mb-6 rounded-[10px] bg-warning/10 p-4 text-center">
+                  <p className="mb-1 text-sm font-semibold text-warning">⏳ 학생 자가진단 대기 중</p>
+                  <p className="mb-3 text-xs text-warning/80">학생이 자가진단을 완료하면 AI 코멘트를 작성할 수 있어요</p>
+                  <p className="text-[11px] text-muted-foreground">틀린 문항 {wrongItems.length}개 중 {selfCheckCount}개 완료</p>
+                  <div className="mt-2 h-1.5 rounded-full bg-border">
+                    <div className="h-full rounded-full bg-warning transition-all duration-500" style={{ width: `${selfCheckProgress}%` }} />
+                  </div>
                 </div>
+              ) : null}
+
+              {reviewPhase === 'ai_comment' || reviewPhase === 'done' ? (
+                <div className="mb-6">
+                  <div className="mb-3 flex items-center justify-between gap-3 border-b-2 pb-2" style={{ borderColor: 'hsl(var(--review-correct-surface))' }}>
+                    <div className="text-[15px] font-semibold text-foreground">선생님 코멘트</div>
+                    {reviewPhase === 'ai_comment' ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleGenerateAI()}
+                        disabled={isGenerating || !hasItems || !template}
+                        className="gap-2 border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary disabled:bg-muted disabled:text-muted-foreground"
+                      >
+                        {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                        {isGenerating ? 'AI 분석 중...' : 'AI 초안 생성'}
+                      </Button>
+                    ) : null}
+                  </div>
                 {selfChecks.length > 0 ? (
                   <div className="mb-3 rounded-[10px] border border-sky-200 bg-sky-50 p-3">
                     <p className="mb-2 text-xs font-semibold text-sky-900">
@@ -957,20 +1074,32 @@ export function ExamReviewPanel() {
                   }}
                   placeholder="전체적인 피드백을 입력하거나 AI 초안을 생성해보세요"
                   rows={8}
+                  disabled={reviewPhase === 'done'}
                   className="min-h-[176px] resize-y"
                 />
-              </div>
+                </div>
+              ) : null}
 
-              <div className="flex gap-2.5">
-                <Button onClick={() => void persistReview(false)} disabled={saving} variant="outline" className="flex-1 py-3">
-                  {saving && !completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  임시저장
-                </Button>
-                <Button onClick={() => void persistReview(true)} disabled={saving} className="flex-[2] py-3">
+              {reviewPhase === 'scoring' ? (
+                <Button onClick={() => void handleMarkDone()} disabled={saving} className="w-full py-3">
                   {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  리뷰 완료로 저장
+                  채점 완료 — 학생에게 자가진단 요청
                 </Button>
-              </div>
+              ) : null}
+
+              {reviewPhase === 'ai_comment' ? (
+                <Button onClick={() => void handleFinalSave()} disabled={saving || !overallComment.trim()} className="w-full py-3">
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  최종 저장 및 리뷰 완료
+                </Button>
+              ) : null}
+
+              {reviewPhase === 'done' ? (
+                <div className="rounded-[10px] bg-success/10 p-4 text-center">
+                  <p className="mb-1 text-base font-bold text-success">✅ 리뷰 완료</p>
+                  <p className="text-xs text-success/80">학생과 학부모에게 공개됐어요</p>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
