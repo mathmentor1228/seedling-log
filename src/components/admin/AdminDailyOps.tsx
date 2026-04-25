@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LessonModal } from '@/components/lessons/LessonModal';
+import { ParentUnvisitedNotifier } from '@/components/admin/ParentUnvisitedNotifier';
 import { 
   CalendarIcon, 
   CalendarDays,
@@ -365,6 +366,8 @@ export function AdminDailyOps() {
           </SelectContent>
         </Select>
       </div>
+
+      <ParentUnvisitedNotifier />
 
       {/* KPI Summary Bar */}
       {loading ? (
