@@ -238,6 +238,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       avgScore: report.avg_score == null ? '' : String(report.avg_score),
       overallReview: report.overall_review ?? '',
       originalPdfPath: report.original_pdf_path ?? '',
+      answerMode: report.answer_mode === 'image' || report.answer_mode === 'pdf' ? report.answer_mode : 'direct',
+      answers: report.answers && typeof report.answers === 'object' && !Array.isArray(report.answers) ? report.answers : {},
+      answerImagePaths: Array.isArray(report.answer_image_paths) ? report.answer_image_paths : [],
       answerPdfPath: report.answer_pdf_path ?? '',
       studyLinks: Array.isArray(report.study_links) ? report.study_links : [],
     });
