@@ -75,6 +75,7 @@ export function ExamResultSubmitCard() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
 
   const [school, setSchool] = useState('');
   const [subject, setSubject] = useState('');
@@ -112,12 +113,13 @@ export function ExamResultSubmitCard() {
     setAnalyzing(true);
     const newFiles: FileItem[] = [];
     let blurryCount = 0;
-    for (const f of Array.from(list).slice(0, 15)) {
+    const remainingSlots = Math.max(0, 15 - files.length);
+    for (const f of Array.from(list).filter((file) => file.type.startsWith('image/')).slice(0, remainingSlots)) {
       try {
         // Detect blur on ORIGINAL before compression
         const blur = await detectBlur(f);
         if (blur.isBlurry) blurryCount++;
-        const compressed = await compressImage(f, 1600, 1600, 0.85);
+        const compressed = await compressImage(f, 1280, 1280, 0.72);
         const dataUrl = await new Promise<string>((res, rej) => {
           const reader = new FileReader();
           reader.onload = () => res(reader.result as string);
@@ -132,6 +134,10 @@ export function ExamResultSubmitCard() {
     setFiles(prev => [...prev, ...newFiles].slice(0, 15));
     setAnalyzing(false);
     e.target.value = '';
+    if (newFiles.length === 0) {
+      toast({ title: '사진을 처리하지 못했어요', description: 'JPG/PNG 사진으로 다시 선택해주세요.', variant: 'destructive' });
+      return;
+    }
     if (blurryCount > 0) {
       toast({
         title: `흔들림 감지: ${blurryCount}장`,
@@ -154,6 +160,7 @@ export function ExamResultSubmitCard() {
     }
 
     setSubmitting(true);
+    setUploadProgress('제출 정보 저장 중...');
     try {
       // STUDENT-EXAM-CHUNK-UPLOAD-V1: create row first WITHOUT photos to avoid
       // exceeding the edge function payload limit when uploading many photos.
@@ -179,23 +186,35 @@ export function ExamResultSubmitCard() {
       // Upload photos in small chunks (1 per request) to keep each payload small
       const CHUNK = 1;
       let failed = 0;
+      const uploadChunk = async (slice: FileItem[], startIndex: number) => {
+        const payload = {
+          action: 'add_photos',
+          student_id: student.id,
+          student_token: student.token,
+          result_id: resultId,
+          start_index: startIndex,
+          photos: slice.map(f => ({ name: f.name, dataUrl: f.dataUrl })),
+        };
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const { data: addData, error: addErr } = await supabase.functions.invoke('student-exam-results', { body: payload });
+            if (addErr) throw addErr;
+            if (addData?.error) throw new Error(addData.error);
+            return true;
+          } catch (err) {
+            console.error('add_photos chunk failed', startIndex, `attempt ${attempt}`, err);
+            if (attempt === 3) return false;
+            await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+          }
+        }
+        return false;
+      };
+
       for (let i = 0; i < files.length; i += CHUNK) {
         const slice = files.slice(i, i + CHUNK);
-        try {
-          const { data: addData, error: addErr } = await supabase.functions.invoke('student-exam-results', {
-            body: {
-              action: 'add_photos',
-              student_id: student.id,
-              student_token: student.token,
-              result_id: resultId,
-              start_index: i,
-              photos: slice.map(f => ({ name: f.name, dataUrl: f.dataUrl })),
-            },
-          });
-          if (addErr) throw addErr;
-          if (addData?.error) throw new Error(addData.error);
-        } catch (err) {
-          console.error('add_photos chunk failed', i, err);
+        setUploadProgress(`사진 업로드 중 ${Math.min(i + 1, files.length)} / ${files.length}`);
+        const ok = await uploadChunk(slice, i);
+        if (!ok) {
           failed += slice.length;
         }
       }
@@ -216,6 +235,7 @@ export function ExamResultSubmitCard() {
       toast({ title: '제출 실패', description: e?.message || '오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setSubmitting(false);
+      setUploadProgress('');
     }
   };
 
@@ -312,10 +332,15 @@ export function ExamResultSubmitCard() {
                 </div>
                 <div>
                   <Label className="text-xs">시험지 사진 * (최대 15장, 한 번에 모아 선택 가능)</Label>
-                  <Input type="file" accept="image/*" multiple capture="environment" onChange={handleFileChange} disabled={analyzing} />
+                  <Input type="file" accept="image/*" multiple onChange={handleFileChange} disabled={analyzing} />
                   {analyzing && (
                     <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
                       <Loader2 className="w-3 h-3 animate-spin" /> 흔들림 검사 중...
+                    </p>
+                  )}
+                  {uploadProgress && (
+                    <p className="text-[10px] text-primary mt-1 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> {uploadProgress}
                     </p>
                   )}
                   {files.length > 0 && (
