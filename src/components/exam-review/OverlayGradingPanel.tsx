@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2, RotateCcw, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -289,9 +289,14 @@ export function OverlayGradingPanel({
   const [tooltip, setTooltip] = useState<GradeTooltip | null>(null);
   const [essayScore, setEssayScore] = useState(0);
   const [expandedOpen, setExpandedOpen] = useState(false);
+  const [expandedRotation, setExpandedRotation] = useState(0);
 
   const currentPhoto = photos[page] ?? null;
   const currentPhotoUrl = currentPhoto ? photoUrls[currentPhoto.storage_path] ?? '' : '';
+
+  useEffect(() => {
+    if (expandedOpen) setExpandedRotation(0);
+  }, [expandedOpen]);
 
   const pageItems = useMemo(
     () => items.filter((item) => item.result && item.page_number === page + 1 && item.overlay_x != null && item.overlay_y != null),
