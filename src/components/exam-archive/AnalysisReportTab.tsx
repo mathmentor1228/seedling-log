@@ -626,13 +626,23 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               <button
                 key={report.id}
                 onClick={() => void selectReport(report)}
+                onMouseEnter={() => setHoverId(report.id)}
+                onMouseLeave={() => setHoverId(null)}
                 className={cn(
-                   'w-full rounded-lg border bg-card p-3.5 text-left transition-colors hover:bg-accent',
+                   'relative w-full rounded-lg border bg-card p-3.5 text-left transition-colors hover:bg-accent',
                   selectedReportId === report.id && 'border-primary bg-primary/5',
                 )}
               >
+                {hoverId === report.id ? (
+                  <span className="absolute right-2 top-2 flex gap-1">
+                    <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleEdit(report); }} className="inline-flex items-center rounded bg-info/10 px-2 py-1 text-[11px] font-medium text-info"><Pencil className="mr-1 h-3 w-3" />수정</span>
+                    <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); void handleDelete(report); }} className={cn('inline-flex items-center rounded px-2 py-1 text-[11px] font-medium', report.is_locked ? 'cursor-not-allowed bg-muted text-muted-foreground' : 'bg-destructive/10 text-destructive')}>
+                      {report.is_locked ? <Lock className="h-3 w-3" /> : '삭제'}
+                    </span>
+                  </span>
+                ) : null}
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold">{report.subject}</span>
+                  <span className="flex items-center gap-1 truncate text-sm font-semibold">{report.subject}{report.is_locked ? <Lock className="h-3 w-3 text-muted-foreground" /> : null}</span>
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">{report.exam_type}</span>
                 </div>
                 <div className="text-xs text-muted-foreground">{report.school_name} · {report.grade}학년</div>
