@@ -183,7 +183,7 @@ function SchoolExamArchiveInner() {
           />
         ) : null}
 
-        <div className="flex-1 overflow-y-auto">
+        <div className={cn('min-w-0 flex-1 overflow-y-auto', isFullWidthTab && 'w-full')}>
           {selectedSchool || isFullWidthTab ? (
             <div className={isFullWidthTab ? 'flex h-full min-h-0 flex-col' : 'space-y-5 p-6'}>
               {!isFullWidthTab ? (

@@ -755,12 +755,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
             </FormSection>
 
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full min-w-[820px] border-collapse text-sm">
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[900px] table-fixed border-collapse text-sm">
+                  <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
-                      {(SUBJECT_COLUMNS[form.subject] ?? SUBJECT_COLUMNS.기타).map((column) => <th key={column} className="px-3 py-2 text-left text-xs font-medium">{column}</th>)}
-                      <th className="w-10 px-2 py-2" />
+                      {(SUBJECT_COLUMNS[form.subject] ?? SUBJECT_COLUMNS.기타).map((column) => <th key={column} className="px-3 py-2 text-left text-xs font-medium leading-5">{column}</th>)}
+                      <th className="px-2 py-2" />
                     </tr>
                   </thead>
                   <tbody>
@@ -785,6 +786,20 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
 function FormSection({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h4 className="text-base font-semibold">{title}</h4>{action}</div>{children}</section>;
+}
+
+function AnalysisColGroup({ subject }: { subject: string }) {
+  const widths = subject === '수학'
+    ? ['4%', '16%', '28%', '8%', '6%', '6%', '28%', '4%']
+    : subject === '영어'
+      ? ['4%', '10%', '14%', '6%', '6%', '8%', '48%', '4%']
+      : subject === '국어'
+        ? ['4%', '10%', '34%', '10%', '6%', '6%', '4%']
+        : subject === '과학'
+          ? ['4%', '18%', '12%', '8%', '8%', '46%', '4%']
+          : ['5%', '18%', '10%', '10%', '52%', '5%'];
+
+  return <colgroup>{widths.map((width, index) => <col key={`${subject}-${index}`} style={{ width }} />)}</colgroup>;
 }
 
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
@@ -842,27 +857,31 @@ function PdfBox({ title, url, linkLabel, onRemove, onUpload }: { title: string; 
 }
 
 function CellInput(props: React.ComponentProps<typeof Input>) {
-  return <Input {...props} className={cn('h-8 min-w-24 border-0 bg-transparent px-2 text-xs focus-visible:ring-1', props.className)} />;
+  return <Input {...props} className={cn('min-h-8 w-full min-w-0 border border-border bg-background px-2 py-1.5 text-xs leading-5 [word-break:keep-all] focus-visible:ring-1', props.className)} />;
+}
+
+function CellTextarea(props: React.ComponentProps<typeof Textarea>) {
+  return <Textarea {...props} className={cn('min-h-14 w-full min-w-0 resize-y whitespace-pre-wrap border border-border bg-background px-2 py-1.5 text-xs leading-5 [word-break:keep-all] focus-visible:ring-1', props.className)} />;
 }
 
 function CellSelect({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
-  return <Select value={value} onValueChange={onChange}><SelectTrigger className="h-8 min-w-24 border-0 bg-transparent px-2 text-xs focus:ring-1"><SelectValue placeholder="선택" /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>;
+  return <Select value={value} onValueChange={onChange}><SelectTrigger className="h-8 w-full min-w-0 border border-border bg-background px-2 text-xs focus:ring-1"><SelectValue placeholder="선택" /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>;
 }
 
 function ItemRow({ subject, item, index, updateItem, removeItem }: { subject: string; item: AnalysisItem; index: number; updateItem: <K extends keyof AnalysisItem>(index: number, key: K, value: AnalysisItem[K]) => void; removeItem: (index: number) => void }) {
   return (
     <tr className="border-b even:bg-muted/30">
-      <td className="px-3 py-1 text-center text-xs text-muted-foreground">{item.item_number}</td>
-      {subject === '수학' ? <><td><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td><td><CellInput value={item.problem_desc ?? ''} onChange={(e) => updateItem(index, 'problem_desc', e.target.value)} placeholder="문제설명" /></td></> : null}
-      {subject === '영어' ? <><td><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="모의고사/교과서" /></td><td><CellInput value={item.question_type ?? ''} onChange={(e) => updateItem(index, 'question_type', e.target.value)} placeholder="어휘/어법" /></td></> : null}
-      {subject === '국어' ? <><td><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="출제유형" /></td><td><CellInput value={item.content ?? ''} onChange={(e) => updateItem(index, 'content', e.target.value)} placeholder="내용" /></td><td><CellInput value={item.area ?? ''} onChange={(e) => updateItem(index, 'area', e.target.value)} placeholder="독서/문학" /></td></> : null}
-      {subject === '과학' ? <td><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td> : null}
-      {subject !== '영어' && subject !== '국어' ? <td><CellSelect value={item.item_type ?? ''} options={['객관식', '논술형', '단답형']} onChange={(value) => updateItem(index, 'item_type', value)} /></td> : null}
-      {subject === '영어' ? <><td><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td><CellInput value={item.classification ?? ''} onChange={(e) => updateItem(index, 'classification', e.target.value)} placeholder="분류" /></td></> : null}
-      {subject === '국어' ? <><td><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td></> : null}
-      {subject !== '영어' && subject !== '국어' ? <><td><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td><CellInput value={item.note ?? ''} onChange={(e) => updateItem(index, 'note', e.target.value)} placeholder="특이사항" /></td></> : null}
-      {subject === '영어' ? <td><CellInput value={item.note ?? ''} onChange={(e) => updateItem(index, 'note', e.target.value)} placeholder="특이사항" /></td> : null}
-      <td className="px-1 py-1"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeItem(index)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
+      <td className="px-3 py-2 text-center text-xs text-muted-foreground align-top">{item.item_number}</td>
+      {subject === '수학' ? <><td className="px-2 py-2 align-top"><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td><td className="px-2 py-2 align-top"><CellInput value={item.problem_desc ?? ''} onChange={(e) => updateItem(index, 'problem_desc', e.target.value)} placeholder="문제설명" /></td></> : null}
+      {subject === '영어' ? <><td className="px-2 py-2 align-top"><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="모의고사/교과서" /></td><td className="px-2 py-2 align-top"><CellInput value={item.question_type ?? ''} onChange={(e) => updateItem(index, 'question_type', e.target.value)} placeholder="어휘/어법" /></td></> : null}
+      {subject === '국어' ? <><td className="px-2 py-2 align-top"><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="출제유형" /></td><td className="px-2 py-2 align-top"><CellInput value={item.content ?? ''} onChange={(e) => updateItem(index, 'content', e.target.value)} placeholder="내용" /></td><td className="px-2 py-2 align-top"><CellInput value={item.area ?? ''} onChange={(e) => updateItem(index, 'area', e.target.value)} placeholder="독서/문학" /></td></> : null}
+      {subject === '과학' ? <td className="px-2 py-2 align-top"><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td> : null}
+      {subject !== '영어' && subject !== '국어' ? <td className="px-2 py-2 align-top"><CellSelect value={item.item_type ?? ''} options={['객관식', '논술형', '단답형']} onChange={(value) => updateItem(index, 'item_type', value)} /></td> : null}
+      {subject === '영어' ? <><td className="px-2 py-2 align-top"><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td className="px-2 py-2 align-top"><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className="px-2 py-2 align-top"><CellInput value={item.classification ?? ''} onChange={(e) => updateItem(index, 'classification', e.target.value)} placeholder="분류" /></td></> : null}
+      {subject === '국어' ? <><td className="px-2 py-2 align-top"><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className="px-2 py-2 align-top"><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td></> : null}
+      {subject !== '영어' && subject !== '국어' ? <><td className="px-2 py-2 align-top"><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td className="px-2 py-2 align-top"><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className="px-2 py-2 align-top"><CellTextarea rows={2} value={item.note ?? ''} onChange={(e) => updateItem(index, 'note', e.target.value)} placeholder="특이사항" /></td></> : null}
+      {subject === '영어' ? <td className="px-2 py-2 align-top"><CellTextarea rows={2} value={item.note ?? ''} onChange={(e) => updateItem(index, 'note', e.target.value)} placeholder="특이사항" /></td> : null}
+      <td className="px-1 py-2 align-top"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeItem(index)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
     </tr>
   );
 }
