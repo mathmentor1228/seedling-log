@@ -173,6 +173,24 @@ export function ParentUnvisitedNotifier() {
     }
   }
 
+  function downloadExcel() {
+    const rows = unvisited.map((student) => ({
+      학생명: student.name,
+      학년: student.grade ? `${student.grade}학년` : '',
+      담당선생님: student.teacher_name || '',
+      학부모명: student.parent_name || '',
+      연락처: student.parent_phone || '',
+      마지막접속: student.parent_last_visited ? new Date(student.parent_last_visited).toLocaleDateString('ko-KR') : '기록없음',
+    }));
+
+    import('xlsx').then((XLSX) => {
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '미접속학부모');
+      XLSX.writeFile(wb, `미접속학부모_${new Date().toLocaleDateString('ko-KR')}.xlsx`);
+    });
+  }
+
   const allSelected = unvisited.length > 0 && selected.length === unvisited.length;
 
   return (
@@ -206,10 +224,16 @@ export function ParentUnvisitedNotifier() {
             <Checkbox checked={allSelected} onCheckedChange={(checked) => toggleAll(checked === true)} />
             전체 선택 ({unvisited.length}명)
           </label>
-          <Button onClick={handleSendKakao} disabled={selected.length === 0 || sending} className="bg-warning text-warning-foreground hover:bg-warning/90">
-            <MessageCircle className="h-4 w-4" />
-            카카오톡 발송 ({selected.length}명)
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button variant="outline" onClick={downloadExcel} disabled={unvisited.length === 0}>
+              <Download className="h-4 w-4" />
+              엑셀 다운로드
+            </Button>
+            <Button onClick={handleSendKakao} disabled={selected.length === 0 || sending} className="bg-warning text-warning-foreground hover:bg-warning/90">
+              <MessageCircle className="h-4 w-4" />
+              카카오톡 발송 ({selected.length}명)
+            </Button>
+          </div>
         </div>
 
         {loading ? (
