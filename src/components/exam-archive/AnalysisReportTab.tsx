@@ -310,6 +310,40 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setItems((prev) => prev.filter((_, i) => i !== index).map((item, i) => ({ ...item, item_number: i + 1, sort_order: i })));
   }
 
+  function setAnswer(itemNumber: number, value: string) {
+    if (isLocked) return;
+    updateForm('answers', { ...form.answers, [String(itemNumber)]: value });
+  }
+
+  function removeAnswerImage(index: number) {
+    if (isLocked) return;
+    updateForm('answerImagePaths', form.answerImagePaths.filter((_, i) => i !== index));
+  }
+
+  async function handleAnswerImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    if (isLocked) {
+      toast.error('잠금 상태에서는 답지 이미지를 변경할 수 없습니다.');
+      return;
+    }
+
+    const safeId = selectedReportId ?? crypto.randomUUID();
+    const uploadedPaths: string[] = [];
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue;
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const path = `exam-analysis/${safeId}/answer-image-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+      const { error } = await supabase.storage.from('exam-analysis').upload(path, file, { contentType: file.type, upsert: true });
+      if (!error) uploadedPaths.push(path);
+    }
+    if (uploadedPaths.length > 0) {
+      updateForm('answerImagePaths', [...form.answerImagePaths, ...uploadedPaths]);
+      toast.success('답지 이미지 업로드 완료');
+    }
+  }
+
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'original' | 'answer') {
     const file = e.target.files?.[0];
     if (!file) return;
