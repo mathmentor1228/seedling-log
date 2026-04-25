@@ -562,6 +562,7 @@ export function ExamReviewPanel() {
       setItemReviews([]);
       setSelfChecks([]);
       setTemplate(null);
+      setAnswerDisplay(null);
       return;
     }
     void markInReview(selectedId);
@@ -1016,6 +1017,7 @@ export function ExamReviewPanel() {
                   saving={saving}
                   onSaveItem={saveOverlayItem}
                   onOpenTemplateSetup={() => setTemplateSetupOpen(true)}
+                  answerDisplay={answerDisplay}
                 />
               </div>
 
