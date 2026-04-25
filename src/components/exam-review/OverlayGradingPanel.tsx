@@ -281,6 +281,30 @@ export function OverlayGradingPanel({
     [items, page],
   );
 
+  const quickGradeItems = useMemo<QuickGradeItem[]>(() => {
+    if (!template) return [];
+    const positionedItems = items
+      .filter((item) => item.page_number === page + 1 && item.overlay_x != null && item.overlay_y != null)
+      .map((item) => {
+        const templateItem = template.items.find((source) => source.no === item.item_number);
+        return {
+          id: item.id,
+          item_number: item.item_number,
+          overlay_x: item.overlay_x ?? 0,
+          overlay_y: item.overlay_y ?? 0,
+          page_number: item.page_number ?? page + 1,
+          is_essay: item.is_essay,
+          points: templateItem?.points ?? 0,
+          result: item.result,
+          score_earned: item.score_earned,
+          error_types: item.error_types,
+          custom_reason: item.custom_reason,
+        } satisfies QuickGradeItem;
+      });
+
+    return positionedItems.sort((a, b) => a.item_number - b.item_number);
+  }, [items, page, template]);
+
   const openEditor = (item: OverlayReviewItem) => {
     if (item.overlay_x == null || item.overlay_y == null || item.page_number == null || !item.result) return;
     const points = template?.items.find((templateItem) => templateItem.no === item.item_number)?.points ?? 0;
@@ -357,6 +381,31 @@ export function OverlayGradingPanel({
     });
 
     resetEditor();
+  };
+
+  const handleQuickGrade = async (item: QuickGradeItem, nextResult: Exclude<ItemResult, ''>) => {
+    const nextScore = item.is_essay
+      ? nextResult === 'correct'
+        ? item.points
+        : nextResult === 'partial'
+          ? clampScore(item.score_earned ?? Math.round((item.points / 2) * 100) / 100, item.points)
+          : 0
+      : nextResult === 'correct'
+        ? item.points
+        : 0;
+
+    await onSaveItem({
+      id: item.id,
+      item_number: item.item_number,
+      result: nextResult,
+      score_earned: nextScore,
+      is_essay: item.is_essay,
+      error_types: nextResult === 'correct' ? [] : item.error_types,
+      custom_reason: nextResult === 'correct' ? '' : item.custom_reason,
+      overlay_x: item.overlay_x,
+      overlay_y: item.overlay_y,
+      page_number: item.page_number,
+    });
   };
 
   const popupStyle = useMemo<React.CSSProperties | null>(() => {
