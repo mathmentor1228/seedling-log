@@ -676,6 +676,13 @@ export function OverlayGradingPanel({
             </div>
           )}
         </div>
+
+        <QuickGradeStrip
+          items={quickGradeItems}
+          saving={saving}
+          onEdit={openEditor}
+          onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)}
+        />
       </div>
 
       <div className="w-full xl:max-w-[320px] xl:flex-1">
