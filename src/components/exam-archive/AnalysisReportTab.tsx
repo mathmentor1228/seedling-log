@@ -150,6 +150,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
   const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
+  const [isExtractingAnswers, setIsExtractingAnswers] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
 
@@ -315,6 +316,46 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     updateForm('answers', { ...form.answers, [String(itemNumber)]: value });
   }
 
+  async function extractAnswersFromFile(file: File) {
+    if (isLocked) return;
+    setIsExtractingAnswers(true);
+    try {
+      const fileDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const { data, error } = await supabase.functions.invoke('extract-answer-key', {
+        body: {
+          fileDataUrl,
+          fileName: file.name,
+          fileMimeType: file.type || null,
+          subject: form.subject,
+          totalItems: items.length,
+        },
+      });
+
+      if (error || data?.error) throw new Error(error?.message || data?.error || '정답 추출 실패');
+      const extracted = data?.answers && typeof data.answers === 'object' && !Array.isArray(data.answers)
+        ? Object.entries(data.answers as Record<string, unknown>).reduce<Record<string, string>>((acc, [key, value]) => {
+            if (value !== null && value !== undefined && String(value).trim()) acc[key] = String(value).trim();
+            return acc;
+          }, {})
+        : {};
+
+      updateForm('answers', extracted);
+      updateForm('answerMode', 'direct');
+      toast.success(`정답 ${Object.keys(extracted).length}개 추출 완료 — 내용을 확인하고 수정해주세요.`);
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : '정답 추출 실패. 다시 시도해주세요.');
+    } finally {
+      setIsExtractingAnswers(false);
+    }
+  }
+
   function removeAnswerImage(index: number) {
     if (isLocked) return;
     updateForm('answerImagePaths', form.answerImagePaths.filter((_, i) => i !== index));
@@ -342,6 +383,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       updateForm('answerImagePaths', [...form.answerImagePaths, ...uploadedPaths]);
       toast.success('답지 이미지 업로드 완료');
     }
+    if (files[0]) await extractAnswersFromFile(files[0]);
   }
 
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'original' | 'answer') {
@@ -370,7 +412,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     }
 
     if (type === 'original') updateForm('originalPdfPath', path);
-    else updateForm('answerPdfPath', path);
+    else {
+      updateForm('answerPdfPath', path);
+      await extractAnswersFromFile(file);
+    }
     toast.success('PDF 업로드 완료');
   }
 
@@ -666,7 +711,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] min-h-0 w-full overflow-hidden bg-background">
+    <div className="flex h-[calc(100vh-160px)] min-h-0 w-full overflow-hidden bg-background">
       <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
         <Button className="mb-3 h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
           <Plus className="h-4 w-4" /> 새 보고서 작성
@@ -723,7 +768,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
         </div>
       </aside>
 
-      <section className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
+      <section className="min-w-0 flex-1 overflow-y-auto px-7 py-5">
         {!selectedReportId && reports.length > 0 && form.schoolName === '' ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <FileText className="h-10 w-10 opacity-40" />
@@ -810,6 +855,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               pdfUrl={answerPdfUrl}
               onPdfUpload={(e) => void handlePdfUpload(e, 'answer')}
               onRemovePdf={() => updateForm('answerPdfPath', '')}
+              isExtracting={isExtractingAnswers}
             />
 
             <FormSection title="수업자료 링크" action={<Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={addLink}><Plus className="h-3.5 w-3.5" /> 링크 추가</Button>}>
@@ -826,8 +872,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
             </FormSection>
 
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
-              <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[1000px] table-fixed border-collapse text-sm">
+              <div className="w-full overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[900px] table-fixed border-collapse text-sm">
                   <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
@@ -859,25 +905,26 @@ function FormSection({ title, action, children }: { title: string; action?: Reac
   return <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h4 className="text-base font-semibold">{title}</h4>{action}</div>{children}</section>;
 }
 
-function AnswerSheetSection({ mode, onModeChange, items, answers, setAnswer, imageUrls, onImageUpload, onRemoveImage, pdfUrl, onPdfUpload, onRemovePdf }: { mode: ReportForm['answerMode']; onModeChange: (mode: ReportForm['answerMode']) => void; items: AnalysisItem[]; answers: Record<string, string>; setAnswer: (itemNumber: number, value: string) => void; imageUrls: string[]; onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemoveImage: (index: number) => void; pdfUrl: string | null; onPdfUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemovePdf: () => void }) {
+function AnswerSheetSection({ mode, onModeChange, items, answers, setAnswer, imageUrls, onImageUpload, onRemoveImage, pdfUrl, onPdfUpload, onRemovePdf, isExtracting }: { mode: ReportForm['answerMode']; onModeChange: (mode: ReportForm['answerMode']) => void; items: AnalysisItem[]; answers: Record<string, string>; setAnswer: (itemNumber: number, value: string) => void; imageUrls: string[]; onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemoveImage: (index: number) => void; pdfUrl: string | null; onPdfUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemovePdf: () => void; isExtracting: boolean }) {
   const modes: { key: ReportForm['answerMode']; label: string }[] = [{ key: 'direct', label: '직접 입력' }, { key: 'image', label: '이미지' }, { key: 'pdf', label: 'PDF' }];
   return <FormSection title="답지" action={<div className="flex gap-1.5">{modes.map((entry) => <Button key={entry.key} type="button" size="sm" variant={mode === entry.key ? 'default' : 'outline'} className="h-7 px-3 text-xs" onClick={() => onModeChange(entry.key)}>{entry.label}</Button>)}</div>}>
     {mode === 'direct' ? <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">{items.map((item) => <div key={item.item_number} className="rounded-lg border border-border bg-card p-2 text-center"><p className="mb-1 text-[11px] text-muted-foreground">{item.item_number}번{item.points ? ` (${item.points}점)` : ''}</p>{item.item_type === '논술형' || item.item_type === '단답형' ? <Textarea rows={2} value={answers[String(item.item_number)] || ''} onChange={(e) => setAnswer(item.item_number, e.target.value)} placeholder="정답" className="min-h-14 resize-none text-xs" /> : <div className="flex justify-center gap-1">{[1, 2, 3, 4, 5].map((n) => <Button key={n} type="button" variant={answers[String(item.item_number)] === String(n) ? 'default' : 'outline'} size="icon" className="h-7 w-7 rounded-full text-xs" onClick={() => setAnswer(item.item_number, String(n))}>{n}</Button>)}</div>}</div>)}</div> : null}
     {mode === 'image' ? <div>{imageUrls.length > 0 ? <div className="mb-3 grid gap-2 sm:grid-cols-3">{imageUrls.map((url, index) => <div key={url} className="relative overflow-hidden rounded-lg border border-border"><img src={url} alt={`답지 ${index + 1}`} className="w-full object-contain" /><Button type="button" variant="destructive" size="icon" className="absolute right-1 top-1 h-6 w-6" onClick={() => onRemoveImage(index)}>×</Button></div>)}</div> : <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">JPG/PNG 답지 이미지를 업로드하세요.</div>}<label className="flex cursor-pointer items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent">+ 이미지 추가<input type="file" accept="image/*" multiple className="hidden" onChange={onImageUpload} /></label></div> : null}
     {mode === 'pdf' ? <div className="rounded-lg border border-dashed border-border p-4 text-center">{pdfUrl ? <div className="flex items-center justify-center gap-3"><a href={pdfUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline-offset-4 hover:underline">📄 답지 PDF 보기</a><Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={onRemovePdf}>삭제</Button></div> : <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"><Upload className="h-4 w-4" /> 답지 PDF 업로드<input type="file" accept=".pdf,application/pdf" className="hidden" onChange={onPdfUpload} /></label>}</div> : null}
+    {isExtracting ? <div className="mt-2 flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-xs font-medium text-primary"><Loader2 className="h-3.5 w-3.5 animate-spin" /> AI가 정답을 추출하고 있어요...</div> : null}
   </FormSection>;
 }
 
 function AnalysisColGroup({ subject }: { subject: string }) {
   const widths = subject === '수학'
-    ? ['50px', '150px', '220px', '80px', '60px', '60px', '280px', '40px']
+    ? ['44px', '140px', '200px', '80px', '56px', '56px', undefined, '36px']
     : subject === '영어'
-      ? ['50px', '150px', '220px', '60px', '60px', '80px', '280px', '40px']
+      ? ['44px', '140px', '200px', '80px', '56px', '56px', undefined, '36px']
       : subject === '국어'
-        ? ['50px', '150px', '220px', '80px', '60px', '60px', '40px']
-        : ['50px', '150px', '220px', '80px', '60px', '60px', '280px', '40px'];
+        ? ['44px', '140px', '200px', '80px', '56px', '56px', '36px']
+        : ['44px', '140px', '200px', '80px', '56px', '56px', undefined, '36px'];
 
-  return <colgroup>{widths.map((width, index) => <col key={`${subject}-${index}`} style={{ width }} />)}</colgroup>;
+  return <colgroup>{widths.map((width, index) => <col key={`${subject}-${index}`} style={width ? { width } : undefined} />)}</colgroup>;
 }
 
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
@@ -947,20 +994,20 @@ function CellSelect({ value, options, onChange }: { value: string; options: stri
 }
 
 function ItemRow({ subject, item, index, updateItem, removeItem }: { subject: string; item: AnalysisItem; index: number; updateItem: <K extends keyof AnalysisItem>(index: number, key: K, value: AnalysisItem[K]) => void; removeItem: (index: number) => void }) {
-  const cellClass = 'px-2 py-2 align-top whitespace-pre-wrap [word-break:keep-all]';
+  const cellClass = 'border-b border-muted px-3 py-2.5 align-top text-[13px] leading-6 whitespace-pre-wrap [word-break:keep-all]';
   return (
     <tr className="border-b even:bg-muted/30">
-      <td className="px-3 py-2 text-center text-xs text-muted-foreground align-top whitespace-pre-wrap [word-break:keep-all]">{item.item_number}</td>
+      <td className={`${cellClass} text-center text-xs text-muted-foreground`}>{item.item_number}</td>
       {subject === '수학' ? <><td className={cellClass}><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td><td className={cellClass}><CellInput value={item.problem_desc ?? ''} onChange={(e) => updateItem(index, 'problem_desc', e.target.value)} placeholder="문제설명" /></td></> : null}
       {subject === '영어' ? <><td className={cellClass}><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="모의고사/교과서" /></td><td className={cellClass}><CellInput value={item.question_type ?? ''} onChange={(e) => updateItem(index, 'question_type', e.target.value)} placeholder="어휘/어법" /></td></> : null}
       {subject === '국어' ? <><td className={cellClass}><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="출제유형" /></td><td className={cellClass}><CellInput value={item.content ?? ''} onChange={(e) => updateItem(index, 'content', e.target.value)} placeholder="내용" /></td><td className={cellClass}><CellInput value={item.area ?? ''} onChange={(e) => updateItem(index, 'area', e.target.value)} placeholder="독서/문학" /></td></> : null}
-      {subject === '과학' ? <td className="px-2 py-2 align-top"><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td> : null}
-      {subject !== '영어' && subject !== '국어' ? <td className="px-2 py-2 align-top"><CellSelect value={item.item_type ?? ''} options={['객관식', '논술형', '단답형']} onChange={(value) => updateItem(index, 'item_type', value)} /></td> : null}
-      {subject === '영어' ? <><td className="px-2 py-2 align-top"><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td className="px-2 py-2 align-top"><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className="px-2 py-2 align-top"><CellInput value={item.classification ?? ''} onChange={(e) => updateItem(index, 'classification', e.target.value)} placeholder="분류" /></td></> : null}
-      {subject === '국어' ? <><td className="px-2 py-2 align-top"><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className="px-2 py-2 align-top"><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td></> : null}
-      {subject !== '영어' && subject !== '국어' ? <><td className="px-2 py-2 align-top"><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td className="px-2 py-2 align-top"><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className="px-2 py-2 align-top"><CellTextarea rows={2} value={item.note ?? ''} onChange={(e) => updateItem(index, 'note', e.target.value)} placeholder="특이사항" /></td></> : null}
-      {subject === '영어' ? <td className="px-2 py-2 align-top"><CellTextarea rows={2} value={item.note ?? ''} onChange={(e) => updateItem(index, 'note', e.target.value)} placeholder="특이사항" /></td> : null}
-      <td className="px-1 py-2 align-top"><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeItem(index)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
+      {subject === '과학' ? <td className={cellClass}><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td> : null}
+      {subject !== '영어' && subject !== '국어' ? <td className={cellClass}><CellSelect value={item.item_type ?? ''} options={['객관식', '논술형', '단답형']} onChange={(value) => updateItem(index, 'item_type', value)} /></td> : null}
+      {subject === '영어' ? <><td className={cellClass}><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td className={cellClass}><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className={cellClass}><CellInput value={item.classification ?? ''} onChange={(e) => updateItem(index, 'classification', e.target.value)} placeholder="분류" /></td></> : null}
+      {subject === '국어' ? <><td className={cellClass}><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className={cellClass}><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td></> : null}
+      {subject !== '영어' && subject !== '국어' ? <><td className={cellClass}><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td className={cellClass}><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className={cellClass}><CellTextarea rows={2} value={item.note ?? ''} onChange={(e) => updateItem(index, 'note', e.target.value)} placeholder="특이사항" /></td></> : null}
+      {subject === '영어' ? <td className={cellClass}><CellTextarea rows={2} value={item.note ?? ''} onChange={(e) => updateItem(index, 'note', e.target.value)} placeholder="특이사항" /></td> : null}
+      <td className={cellClass}><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeItem(index)}><Trash2 className="h-3.5 w-3.5" /></Button></td>
     </tr>
   );
 }

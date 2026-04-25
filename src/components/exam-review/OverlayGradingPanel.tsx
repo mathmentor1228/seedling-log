@@ -25,6 +25,7 @@ export interface OverlayTemplateData {
   total_items: number;
   items: OverlayTemplateItem[];
   error_types: string[];
+  answers?: Record<number, string>;
 }
 
 export interface OverlayPhoto {
@@ -127,7 +128,8 @@ function displayScore(score: number) {
   return Number.isInteger(rounded) ? `${rounded}` : `${Math.round(rounded * 10) / 10}`;
 }
 
-function getTemplateAnswer(item: OverlayTemplateItem | undefined) {
+function getTemplateAnswer(item: OverlayTemplateItem | undefined, answers?: Record<number, string>) {
+  if (item && answers?.[item.no]) return answers[item.no];
   const source = item as (OverlayTemplateItem & { answer?: unknown; correct_answer?: unknown; correctAnswer?: unknown }) | undefined;
   const value = source?.answer ?? source?.correct_answer ?? source?.correctAnswer;
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -386,7 +388,7 @@ export function OverlayGradingPanel({
       page_number: item.page_number,
       is_essay: item.is_essay,
       points,
-      answer: getTemplateAnswer(templateItem),
+      answer: getTemplateAnswer(templateItem, template?.answers),
     });
     setEssayScore(clampScore(item.score_earned ?? points, points));
   };
@@ -408,7 +410,7 @@ export function OverlayGradingPanel({
       page_number: page + 1,
       is_essay: nextUnscored.is_essay,
       points: nextUnscored.points,
-      answer: getTemplateAnswer(nextUnscored),
+      answer: getTemplateAnswer(nextUnscored, template.answers),
     });
     setEssayScore(nextUnscored.is_essay ? nextUnscored.points : 0);
   };
@@ -474,7 +476,7 @@ export function OverlayGradingPanel({
       </p>
       {tooltip.answer ? (
         <p className="m-0 max-w-[150px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-          정답 {tooltip.answer}
+          정답: {tooltip.answer}
         </p>
       ) : null}
       <div className="flex gap-1.5">
