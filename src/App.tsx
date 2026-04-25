@@ -3,65 +3,73 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/lib/auth";
 import Index from "./pages/Index";
 import VocabTestViewPage from "./pages/VocabTestViewPage";
 import Auth from "./pages/Auth";
-import DashboardPage from "./pages/DashboardPage";
-import PrincipalDashboard from "./pages/PrincipalDashboard";
-import TeacherDashboard from "./pages/TeacherDashboard";
-import AssistantDashboardPage from "./pages/AssistantDashboardPage";
-import ParentDashboardPage from "./pages/ParentDashboardPage";
-import StudentsPage from "./pages/StudentsPage";
-import ClassesPage from "./pages/ClassesPage";
-import LessonsPage from "./pages/LessonsPage";
-import ReportsPage from "./pages/ReportsPage";
-
-import UserManagementPage from "./pages/UserManagementPage";
-import TimetablePage from "./pages/TimetablePage";
-import AssistantRequestsPage from "./pages/AssistantRequestsPage";
-import AssistantPage from "./pages/AssistantPage";
-import StatsPage from "./pages/StatsPage";
-import AdminBriefingPage from "./pages/AdminBriefingPage";
-import AdminReportPage from "./pages/AdminReportPage";
-import AdminDailyOpsPage from "./pages/AdminDailyOpsPage";
-import AdminOfficePage from "./pages/AdminOfficePage";
-import TuitionPage from "./pages/TuitionPage";
-import TextbookPage from "./pages/TextbookPage";
-import ReportStatusPage from "./pages/ReportStatusPage";
-import VocabTestPage from "./pages/VocabTestPage";
-import VocabTestGeneratorPage from "./pages/VocabTestGeneratorPage";
-import SchoolExamArchivePage from "./pages/SchoolExamArchivePage";
-import MathConceptPage from "./pages/MathConceptPage";
-import ExamPrepPage from "./pages/ExamPrepPage";
-import StudySessionPage from "./pages/StudySessionPage";
-import ExamReviewPage from "./pages/ExamReviewPage";
+import { Loader2 } from "lucide-react";
 import QuizPrintPage from "./pages/QuizPrintPage";
 import QuizSubmitPage from "./pages/QuizSubmitPage";
-import QuizBulkUploadPage from "./pages/QuizBulkUploadPage";
-import QuizLookupPage from "./pages/QuizLookupPage";
 import NotFound from "./pages/NotFound";
-import LessonRecordPage from "./pages/LessonRecordPage";
-import BatchLessonEntryPage from "./pages/BatchLessonEntryPage";
 import TrialSignup from "./pages/TrialSignup";
-import SubjectMaterialPage from "./pages/SubjectMaterialPage";
 import PublicReport from "./pages/PublicReport";
 import ParentPortal from "./pages/ParentPortal";
 import ParentNotifications from "./pages/ParentNotifications";
 import { StudentAuthProvider } from "@/lib/studentAuth";
-import StudentLogin from "./pages/student/StudentLogin";
-import StudentDashboard from "./pages/student/StudentDashboard";
-import StudentHomework from "./pages/student/StudentHomework";
-import StudentPoints from "./pages/student/StudentPoints";
-import StudentSchedule from "./pages/student/StudentSchedule";
-import StudentFeedback from "./pages/student/StudentFeedback";
-import StudentVocab from "./pages/student/StudentVocab";
-import StudentMathQuiz from "./pages/student/StudentMathQuiz";
-import StudentStudySession from "./pages/student/StudentStudySession";
-import StudentExamReview from "./pages/student/StudentExamReview";
 import { StudentLayout } from "@/components/student/StudentLayout";
 
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const PrincipalDashboard = lazy(() => import("./pages/PrincipalDashboard"));
+const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
+const AssistantDashboardPage = lazy(() => import("./pages/AssistantDashboardPage"));
+const ParentDashboardPage = lazy(() => import("./pages/ParentDashboardPage"));
+const StudentsPage = lazy(() => import("./pages/StudentsPage"));
+const ClassesPage = lazy(() => import("./pages/ClassesPage"));
+const LessonsPage = lazy(() => import("./pages/LessonsPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const UserManagementPage = lazy(() => import("./pages/UserManagementPage"));
+const TimetablePage = lazy(() => import("./pages/TimetablePage"));
+const AssistantRequestsPage = lazy(() => import("./pages/AssistantRequestsPage"));
+const AssistantPage = lazy(() => import("./pages/AssistantPage"));
+const StatsPage = lazy(() => import("./pages/StatsPage"));
+const AdminBriefingPage = lazy(() => import("./pages/AdminBriefingPage"));
+const AdminReportPage = lazy(() => import("./pages/AdminReportPage"));
+const AdminDailyOpsPage = lazy(() => import("./pages/AdminDailyOpsPage"));
+const AdminOfficePage = lazy(() => import("./pages/AdminOfficePage"));
+const TuitionPage = lazy(() => import("./pages/TuitionPage"));
+const TextbookPage = lazy(() => import("./pages/TextbookPage"));
+const ReportStatusPage = lazy(() => import("./pages/ReportStatusPage"));
+const VocabTestPage = lazy(() => import("./pages/VocabTestPage"));
+const VocabTestGeneratorPage = lazy(() => import("./pages/VocabTestGeneratorPage"));
+const SchoolExamArchivePage = lazy(() => import("./pages/SchoolExamArchivePage"));
+const MathConceptPage = lazy(() => import("./pages/MathConceptPage"));
+const ExamPrepPage = lazy(() => import("./pages/ExamPrepPage"));
+const StudySessionPage = lazy(() => import("./pages/StudySessionPage"));
+const ExamReviewPage = lazy(() => import("./pages/ExamReviewPage"));
+const QuizBulkUploadPage = lazy(() => import("./pages/QuizBulkUploadPage"));
+const QuizLookupPage = lazy(() => import("./pages/QuizLookupPage"));
+const LessonRecordPage = lazy(() => import("./pages/LessonRecordPage"));
+const BatchLessonEntryPage = lazy(() => import("./pages/BatchLessonEntryPage"));
+const SubjectMaterialPage = lazy(() => import("./pages/SubjectMaterialPage"));
+const StudentLogin = lazy(() => import("./pages/student/StudentLogin"));
+const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard"));
+const StudentHomework = lazy(() => import("./pages/student/StudentHomework"));
+const StudentPoints = lazy(() => import("./pages/student/StudentPoints"));
+const StudentSchedule = lazy(() => import("./pages/student/StudentSchedule"));
+const StudentFeedback = lazy(() => import("./pages/student/StudentFeedback"));
+const StudentVocab = lazy(() => import("./pages/student/StudentVocab"));
+const StudentMathQuiz = lazy(() => import("./pages/student/StudentMathQuiz"));
+const StudentStudySession = lazy(() => import("./pages/student/StudentStudySession"));
+const StudentExamReview = lazy(() => import("./pages/student/StudentExamReview"));
+
 const queryClient = new QueryClient();
+
+const RouteLoading = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <Loader2 className="h-7 w-7 animate-spin text-primary" />
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -82,10 +90,11 @@ const App = () => (
           {/* All authenticated routes */}
           <Route path="/*" element={
             <AuthProvider>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/login" element={<Auth />} />
-                <Route path="/auth" element={<Navigate to="/login" replace />} />
+              <Suspense fallback={<RouteLoading />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/login" element={<Auth />} />
+                  <Route path="/auth" element={<Navigate to="/login" replace />} />
 
                 {/* Role-based dashboards */}
                 <Route path="/principal" element={<PrincipalDashboard />} />
@@ -160,8 +169,9 @@ const App = () => (
                 <Route path="/quiz-lookup" element={<QuizLookupPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="/study-sessions" element={<StudySessionPage />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
             </AuthProvider>
           } />
         </Routes>
