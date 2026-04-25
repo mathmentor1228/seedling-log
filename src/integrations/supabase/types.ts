@@ -983,6 +983,7 @@ export type Database = {
           answer_image_paths: Json | null
           answer_mode: string | null
           answer_pdf_path: string | null
+          answers: Json | null
           avg_score: number | null
           created_at: string | null
           created_by: string | null
@@ -1010,6 +1011,7 @@ export type Database = {
           answer_image_paths?: Json | null
           answer_mode?: string | null
           answer_pdf_path?: string | null
+          answers?: Json | null
           avg_score?: number | null
           created_at?: string | null
           created_by?: string | null
@@ -1037,6 +1039,7 @@ export type Database = {
           answer_image_paths?: Json | null
           answer_mode?: string | null
           answer_pdf_path?: string | null
+          answers?: Json | null
           avg_score?: number | null
           created_at?: string | null
           created_by?: string | null
