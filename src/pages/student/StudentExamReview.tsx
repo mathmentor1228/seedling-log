@@ -24,12 +24,14 @@ interface ReviewItem {
 }
 
 interface SelfCheckRow {
+  id?: string;
   item_number: number;
   q_remembered: boolean | null;
   q_concept_confused: boolean | null;
   q_academy_helped: boolean | null;
   q_need_more: string | null;
   self_error_types: string[];
+  self_custom_reason?: string | null;
 }
 
 interface ReviewData {
@@ -78,6 +80,11 @@ interface SchoolExamReport {
   ai_report?: string | null;
 }
 
+interface SelfCheckTarget {
+  row: ExamReviewRow;
+  review: ReviewData;
+}
+
 const EXAM_TYPE_LABELS: Record<string, string> = {
   midterm: '중간고사',
   final: '기말고사',
@@ -95,7 +102,13 @@ function toStringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-function ExamReportOverview({ schoolReport, reviews }: { schoolReport: SchoolExamReport | null; reviews: ExamReviewRow[] }) {
+function ExamReportOverview({
+  schoolReport, reviews, onOpenSelfCheck,
+}: {
+  schoolReport: SchoolExamReport | null;
+  reviews: ExamReviewRow[];
+  onOpenSelfCheck: (target: SelfCheckTarget) => void;
+}) {
   const recommended = toStringList(schoolReport?.recommended_study);
   const weakConcepts = toStringList(schoolReport?.top_weak_concepts);
   const topWrongRate = schoolReport?.wrong_item_stats?.[0]?.wrong_rate ?? 0;
@@ -145,7 +158,7 @@ function ExamReportOverview({ schoolReport, reviews }: { schoolReport: SchoolExa
         {reviews.length === 0 ? (
           <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">아직 리뷰가 없습니다.</CardContent></Card>
         ) : (
-          reviews.map((row) => <PersonalReportCard key={row.id} row={row} />)
+          reviews.map((row) => <PersonalReportCard key={row.id} row={row} onOpenSelfCheck={onOpenSelfCheck} />)
         )}
       </section>
     </div>
@@ -162,9 +175,10 @@ function InsightBox({ title, items, tone }: { title: string; items: string[]; to
   return <div className={`rounded-xl border p-3 ${className}`}><p className="mb-2 text-xs font-semibold">{title}</p><ul className="m-0 list-disc space-y-1 pl-4 text-xs text-primary-foreground/85">{items.map((item, index) => <li key={index}>{item}</li>)}</ul></div>;
 }
 
-function PersonalReportCard({ row }: { row: ExamReviewRow }) {
+function PersonalReportCard({ row, onOpenSelfCheck }: { row: ExamReviewRow; onOpenSelfCheck: (target: SelfCheckTarget) => void }) {
   const review = row.exam_reviews[0];
   const items = review?.exam_item_reviews || [];
+  const isDone = row.review_status === 'done' && !!review?.reviewed_at;
   const selfChecks = review?.self_checks || [];
   const correct = items.filter((item) => item.result === 'correct').length;
   const wrong = items.filter((item) => item.result === 'wrong').length;
@@ -181,6 +195,20 @@ function PersonalReportCard({ row }: { row: ExamReviewRow }) {
             <span className="text-sm text-muted-foreground">{row.exam_year ?? '-'}년 {row.exam_period ?? '-'} {EXAM_TYPE_LABELS[row.exam_type] ?? row.exam_type}</span>
           </div>
           <div className="text-right"><p className="text-2xl font-bold text-primary">{review?.earned_score ?? row.actual_score ?? '-'}점</p><p className="text-[11px] text-muted-foreground">/ {review?.total_score ?? '-'}점 만점</p></div>
+        </div>
+        <div className="mb-4 flex items-center justify-end gap-2">
+          {isDone ? (
+            <>
+              <span className="text-xs font-medium text-success">✓ 리뷰 완료</span>
+              {!review?.self_check_completed ? (
+                <button type="button" onClick={() => review && onOpenSelfCheck({ row, review })} className="rounded-full border-0 bg-success/15 px-3 py-1 text-xs font-medium text-success">자가진단 하기 (+15P) 🎯</button>
+              ) : (
+                <span className="text-xs text-primary">✦ 자가진단 완료</span>
+              )}
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">리뷰 준비중</span>
+          )}
         </div>
         <div className="mb-4 grid grid-cols-3 gap-2">
           <MiniStat value={String(correct)} label="맞음" variant="success" />
