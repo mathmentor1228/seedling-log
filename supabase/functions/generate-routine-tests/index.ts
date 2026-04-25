@@ -3,51 +3,24 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Content-Type': 'application/json',
 };
 
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const DAY_MAP: Record<number, string> = {
+  0: '일',
+  1: '월',
+  2: '화',
+  3: '수',
+  4: '목',
+  5: '금',
+  6: '토',
+};
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: corsHeaders,
   });
-}
-
-function getKstDateString(date = new Date()) {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return formatter.format(date);
-}
-
-function getKstDayOfWeek(dateString: string) {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const utcNoon = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
-  return Number(new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Seoul',
-    weekday: 'short',
-  }).formatToParts(utcNoon).find(part => part.type === 'weekday') ? utcNoon.toLocaleString('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }) : utcNoon.getUTCDay());
-}
-
-function dayNameToNumber(dayName: string) {
-  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  return map[dayName] ?? 0;
-}
-
-function getKstDow(dateString: string) {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-  const dayName = date.toLocaleDateString('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' });
-  return dayNameToNumber(dayName);
-}
-
-function normalizeStudentIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((id): id is string => typeof id === 'string' && id.length > 0);
 }
 
 Deno.serve(async (req) => {
@@ -58,82 +31,112 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const targetDate = typeof body.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
       ? body.date
-      : getKstDateString();
-    const dayOfWeek = getKstDow(targetDate);
+      : new Date().toISOString().split('T')[0];
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!supabaseUrl || !serviceKey) return json({ error: 'Server is not configured' }, 500);
+
+    if (!supabaseUrl || !serviceKey) {
+      return json({ error: 'Server is not configured' }, 500);
+    }
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    const { data: routines, error: routineError } = await supabase
+    const date = new Date(`${targetDate}T00:00:00+09:00`);
+    const dayOfWeek = DAY_MAP[date.getDay()];
+
+    const { data: routines, error: routinesError } = await supabase
       .from('routine_schedules')
       .select('*')
-      .eq('type', 'test')
       .eq('is_active', true)
       .eq('auto_create_test', true)
-      .eq('day_of_week', dayOfWeek)
-      .or(`last_generated_date.is.null,last_generated_date.neq.${targetDate}`);
+      .contains('days', JSON.stringify([dayOfWeek]));
 
-    if (routineError) return json({ error: routineError.message }, 500);
+    if (routinesError) throw routinesError;
 
-    let createdCount = 0;
-    const summaries: Array<{ routine_id: string; day: string; student_count: number; test_record_ids: string[] }> = [];
+    if (!routines?.length) {
+      return json({ message: '오늘 루틴 없음' });
+    }
 
-    for (const routine of routines || []) {
-      const studentIds = normalizeStudentIds(routine.student_ids);
-      if (studentIds.length === 0) continue;
+    const results: Array<{ routine_id: string; generated: number }> = [];
 
-      const records = studentIds.map(studentId => ({
-        student_id: studentId,
-        teacher_id: routine.teacher_id,
-        test_date: targetDate,
-        start_time: routine.start_time || null,
-        end_time: routine.end_time || null,
-        subject: routine.subject || '수학',
-        test_type: 'regular',
-        content: routine.test_content || routine.template_content || '',
-        assistant_name: routine.assistant_name || null,
-        room: routine.room || 'general',
-        memo: `정기 루틴 자동생성 (${DAY_LABELS[dayOfWeek]}요일)`,
-      }));
+    for (const routine of routines) {
+      const { data: existing, error: existingError } = await supabase
+        .from('routine_generation_logs')
+        .select('id')
+        .eq('routine_id', routine.id)
+        .eq('generated_date', targetDate)
+        .maybeSingle();
 
-      const { data: inserted, error: insertError } = await supabase
-        .from('test_records')
-        .insert(records)
-        .select('id');
+      if (existingError) throw existingError;
+      if (existing) continue;
 
-      if (insertError) throw insertError;
+      const studentIds: string[] = Array.isArray(routine.student_ids) ? routine.student_ids : [];
+      const createdIds: string[] = [];
 
-      const testRecordIds = (inserted || []).map((row: { id: string }) => row.id);
-      createdCount += testRecordIds.length;
+      for (const studentId of studentIds) {
+        const { data: existingTest, error: existingTestError } = await supabase
+          .from('test_records')
+          .select('id')
+          .eq('student_id', studentId)
+          .eq('test_date', targetDate)
+          .eq('subject', routine.subject)
+          .maybeSingle();
 
-      const { error: logError } = await supabase.from('routine_generation_logs').insert({
-        routine_id: routine.id,
-        generated_date: targetDate,
-        student_ids: studentIds,
-        test_record_ids: testRecordIds,
-      });
+        if (existingTestError) throw existingTestError;
+
+        if (existingTest) {
+          createdIds.push(existingTest.id);
+          continue;
+        }
+
+        const { data: newTest, error: insertError } = await supabase
+          .from('test_records')
+          .insert({
+            student_id: studentId,
+            test_date: targetDate,
+            subject: routine.subject,
+            teacher_id: routine.teacher_id,
+            assistant_id: routine.assistant_id || null,
+            room_id: routine.room_id || null,
+            content: routine.test_content || routine.template_content || null,
+            source: 'routine_auto',
+            routine_id: routine.id,
+          })
+          .select('id')
+          .single();
+
+        if (insertError) throw insertError;
+        if (newTest) createdIds.push(newTest.id);
+      }
+
+      const { error: logError } = await supabase
+        .from('routine_generation_logs')
+        .insert({
+          routine_id: routine.id,
+          generated_date: targetDate,
+          student_ids: studentIds,
+          test_record_ids: createdIds,
+        });
+
       if (logError) throw logError;
 
       const { error: updateError } = await supabase
         .from('routine_schedules')
         .update({ last_generated_date: targetDate })
         .eq('id', routine.id);
+
       if (updateError) throw updateError;
 
-      summaries.push({
+      results.push({
         routine_id: routine.id,
-        day: DAY_LABELS[dayOfWeek],
-        student_count: studentIds.length,
-        test_record_ids: testRecordIds,
+        generated: createdIds.length,
       });
     }
 
-    return json({ success: true, date: targetDate, routine_count: summaries.length, created_count: createdCount, routines: summaries });
-  } catch (error) {
-    console.error('[generate-routine-tests]', error);
-    return json({ error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+    return json({ success: true, results });
+  } catch (e) {
+    console.error('[generate-routine-tests]', e);
+    return json({ error: e instanceof Error ? e.message : 'Unknown error' }, 500);
   }
 });
