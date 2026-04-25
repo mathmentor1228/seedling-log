@@ -28,6 +28,9 @@ type AnalysisReport = {
   avg_score: number | null;
   overall_review: string | null;
   original_pdf_path: string | null;
+  answer_mode: string | null;
+  answers: Record<string, string> | null;
+  answer_image_paths: string[] | null;
   answer_pdf_path: string | null;
   study_links: StudyLink[] | null;
   created_by: string | null;
@@ -82,6 +85,9 @@ type ReportForm = {
   avgScore: string;
   overallReview: string;
   originalPdfPath: string;
+  answerMode: 'direct' | 'image' | 'pdf';
+  answers: Record<string, string>;
+  answerImagePaths: string[];
   answerPdfPath: string;
   studyLinks: StudyLink[];
 };
@@ -116,6 +122,9 @@ const emptyForm = (schoolName = ''): ReportForm => ({
   avgScore: '',
   overallReview: '',
   originalPdfPath: '',
+  answerMode: 'direct',
+  answers: {},
+  answerImagePaths: [],
   answerPdfPath: '',
   studyLinks: [],
 });
@@ -139,6 +148,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [items, setItems] = useState<AnalysisItem[]>(createDefaultItems);
   const [originalPdfUrl, setOriginalPdfUrl] = useState<string | null>(null);
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
+  const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -172,8 +182,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }, [form.schoolName, selectedReportId, selectedSchool]);
 
   useEffect(() => {
-    void refreshSignedUrls(form.originalPdfPath, form.answerPdfPath);
-  }, [form.originalPdfPath, form.answerPdfPath]);
+    void refreshSignedUrls(form.originalPdfPath, form.answerPdfPath, form.answerImagePaths);
+  }, [form.originalPdfPath, form.answerPdfPath, form.answerImagePaths]);
 
   async function fetchReports() {
     setLoading(true);
@@ -191,9 +201,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setLoading(false);
   }
 
-  async function refreshSignedUrls(originalPath: string, answerPath: string) {
+  async function refreshSignedUrls(originalPath: string, answerPath: string, answerImagePaths: string[]) {
     setOriginalPdfUrl(null);
     setAnswerPdfUrl(null);
+    setAnswerImageUrls([]);
 
     if (originalPath) {
       const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(originalPath, 3600);
@@ -202,6 +213,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (answerPath) {
       const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(answerPath, 3600);
       setAnswerPdfUrl(data?.signedUrl ?? null);
+    }
+    if (answerImagePaths.length > 0) {
+      const urls = await Promise.all(answerImagePaths.map(async (path) => {
+        const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(path, 3600);
+        return data?.signedUrl ?? '';
+      }));
+      setAnswerImageUrls(urls.filter(Boolean));
     }
   }
 
@@ -220,6 +238,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       avgScore: report.avg_score == null ? '' : String(report.avg_score),
       overallReview: report.overall_review ?? '',
       originalPdfPath: report.original_pdf_path ?? '',
+      answerMode: report.answer_mode === 'image' || report.answer_mode === 'pdf' ? report.answer_mode : 'direct',
+      answers: report.answers && typeof report.answers === 'object' && !Array.isArray(report.answers) ? report.answers : {},
+      answerImagePaths: Array.isArray(report.answer_image_paths) ? report.answer_image_paths : [],
       answerPdfPath: report.answer_pdf_path ?? '',
       studyLinks: Array.isArray(report.study_links) ? report.study_links : [],
     });
@@ -287,6 +308,40 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   function removeItem(index: number) {
     if (isLocked) return;
     setItems((prev) => prev.filter((_, i) => i !== index).map((item, i) => ({ ...item, item_number: i + 1, sort_order: i })));
+  }
+
+  function setAnswer(itemNumber: number, value: string) {
+    if (isLocked) return;
+    updateForm('answers', { ...form.answers, [String(itemNumber)]: value });
+  }
+
+  function removeAnswerImage(index: number) {
+    if (isLocked) return;
+    updateForm('answerImagePaths', form.answerImagePaths.filter((_, i) => i !== index));
+  }
+
+  async function handleAnswerImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    if (isLocked) {
+      toast.error('잠금 상태에서는 답지 이미지를 변경할 수 없습니다.');
+      return;
+    }
+
+    const safeId = selectedReportId ?? crypto.randomUUID();
+    const uploadedPaths: string[] = [];
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue;
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const path = `exam-analysis/${safeId}/answer-image-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+      const { error } = await supabase.storage.from('exam-analysis').upload(path, file, { contentType: file.type, upsert: true });
+      if (!error) uploadedPaths.push(path);
+    }
+    if (uploadedPaths.length > 0) {
+      updateForm('answerImagePaths', [...form.answerImagePaths, ...uploadedPaths]);
+      toast.success('답지 이미지 업로드 완료');
+    }
   }
 
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'original' | 'answer') {
@@ -487,6 +542,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       avg_score: form.avgScore ? Number(form.avgScore) : null,
       overall_review: form.overallReview || null,
       original_pdf_path: form.originalPdfPath || null,
+      answer_mode: form.answerMode,
+      answers: form.answers,
+      answer_image_paths: form.answerImagePaths,
       answer_pdf_path: form.answerPdfPath || null,
       study_links: form.studyLinks.filter((link) => link.title || link.url),
       created_by: user.id,
@@ -582,7 +640,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     const confirmed = window.confirm(`"${report.subject} ${report.exam_type}" 보고서를\n삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
     if (!confirmed) return;
 
-    const paths = [report.original_pdf_path, report.answer_pdf_path].filter(Boolean) as string[];
+    const paths = [report.original_pdf_path, report.answer_pdf_path, ...(Array.isArray(report.answer_image_paths) ? report.answer_image_paths : [])].filter(Boolean) as string[];
     if (paths.length > 0) {
       const { error: storageError } = await supabase.storage.from('exam-analysis').remove(paths);
       if (storageError) console.error(storageError);
@@ -735,11 +793,24 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
             </FormSection>
 
             <FormSection title="파일 첨부">
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-1">
                 <PdfBox title="원본 시험지 PDF" url={originalPdfUrl} linkLabel="파일 보기" onRemove={() => updateForm('originalPdfPath', '')} onUpload={(e) => void handlePdfUpload(e, 'original')} />
-                <PdfBox title="답지 PDF" url={answerPdfUrl} linkLabel="답지 보기" onRemove={() => updateForm('answerPdfPath', '')} onUpload={(e) => void handlePdfUpload(e, 'answer')} />
               </div>
             </FormSection>
+
+            <AnswerSheetSection
+              mode={form.answerMode}
+              onModeChange={(mode) => updateForm('answerMode', mode)}
+              items={items}
+              answers={form.answers}
+              setAnswer={setAnswer}
+              imageUrls={answerImageUrls}
+              onImageUpload={handleAnswerImageUpload}
+              onRemoveImage={removeAnswerImage}
+              pdfUrl={answerPdfUrl}
+              onPdfUpload={(e) => void handlePdfUpload(e, 'answer')}
+              onRemovePdf={() => updateForm('answerPdfPath', '')}
+            />
 
             <FormSection title="수업자료 링크" action={<Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={addLink}><Plus className="h-3.5 w-3.5" /> 링크 추가</Button>}>
               <div className="space-y-2">
@@ -756,7 +827,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
               <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[900px] table-fixed border-collapse text-sm">
+                <table className="w-full min-w-[1000px] table-fixed border-collapse text-sm">
                   <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
@@ -788,16 +859,23 @@ function FormSection({ title, action, children }: { title: string; action?: Reac
   return <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h4 className="text-base font-semibold">{title}</h4>{action}</div>{children}</section>;
 }
 
+function AnswerSheetSection({ mode, onModeChange, items, answers, setAnswer, imageUrls, onImageUpload, onRemoveImage, pdfUrl, onPdfUpload, onRemovePdf }: { mode: ReportForm['answerMode']; onModeChange: (mode: ReportForm['answerMode']) => void; items: AnalysisItem[]; answers: Record<string, string>; setAnswer: (itemNumber: number, value: string) => void; imageUrls: string[]; onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemoveImage: (index: number) => void; pdfUrl: string | null; onPdfUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemovePdf: () => void }) {
+  const modes: { key: ReportForm['answerMode']; label: string }[] = [{ key: 'direct', label: '직접 입력' }, { key: 'image', label: '이미지' }, { key: 'pdf', label: 'PDF' }];
+  return <FormSection title="답지" action={<div className="flex gap-1.5">{modes.map((entry) => <Button key={entry.key} type="button" size="sm" variant={mode === entry.key ? 'default' : 'outline'} className="h-7 px-3 text-xs" onClick={() => onModeChange(entry.key)}>{entry.label}</Button>)}</div>}>
+    {mode === 'direct' ? <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">{items.map((item) => <div key={item.item_number} className="rounded-lg border border-border bg-card p-2 text-center"><p className="mb-1 text-[11px] text-muted-foreground">{item.item_number}번{item.points ? ` (${item.points}점)` : ''}</p>{item.item_type === '논술형' || item.item_type === '단답형' ? <Textarea rows={2} value={answers[String(item.item_number)] || ''} onChange={(e) => setAnswer(item.item_number, e.target.value)} placeholder="정답" className="min-h-14 resize-none text-xs" /> : <div className="flex justify-center gap-1">{[1, 2, 3, 4, 5].map((n) => <Button key={n} type="button" variant={answers[String(item.item_number)] === String(n) ? 'default' : 'outline'} size="icon" className="h-7 w-7 rounded-full text-xs" onClick={() => setAnswer(item.item_number, String(n))}>{n}</Button>)}</div>}</div>)}</div> : null}
+    {mode === 'image' ? <div>{imageUrls.length > 0 ? <div className="mb-3 grid gap-2 sm:grid-cols-3">{imageUrls.map((url, index) => <div key={url} className="relative overflow-hidden rounded-lg border border-border"><img src={url} alt={`답지 ${index + 1}`} className="w-full object-contain" /><Button type="button" variant="destructive" size="icon" className="absolute right-1 top-1 h-6 w-6" onClick={() => onRemoveImage(index)}>×</Button></div>)}</div> : <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">JPG/PNG 답지 이미지를 업로드하세요.</div>}<label className="flex cursor-pointer items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent">+ 이미지 추가<input type="file" accept="image/*" multiple className="hidden" onChange={onImageUpload} /></label></div> : null}
+    {mode === 'pdf' ? <div className="rounded-lg border border-dashed border-border p-4 text-center">{pdfUrl ? <div className="flex items-center justify-center gap-3"><a href={pdfUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline-offset-4 hover:underline">📄 답지 PDF 보기</a><Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={onRemovePdf}>삭제</Button></div> : <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"><Upload className="h-4 w-4" /> 답지 PDF 업로드<input type="file" accept=".pdf,application/pdf" className="hidden" onChange={onPdfUpload} /></label>}</div> : null}
+  </FormSection>;
+}
+
 function AnalysisColGroup({ subject }: { subject: string }) {
   const widths = subject === '수학'
-    ? ['4%', '16%', '28%', '8%', '6%', '6%', '28%', '4%']
+    ? ['50px', '150px', '220px', '80px', '60px', '60px', '280px', '40px']
     : subject === '영어'
-      ? ['4%', '10%', '14%', '6%', '6%', '8%', '48%', '4%']
+      ? ['50px', '150px', '220px', '60px', '60px', '80px', '280px', '40px']
       : subject === '국어'
-        ? ['4%', '10%', '34%', '10%', '6%', '6%', '4%']
-        : subject === '과학'
-          ? ['4%', '18%', '12%', '8%', '8%', '46%', '4%']
-          : ['5%', '18%', '10%', '10%', '52%', '5%'];
+        ? ['50px', '150px', '220px', '80px', '60px', '60px', '40px']
+        : ['50px', '150px', '220px', '80px', '60px', '60px', '280px', '40px'];
 
   return <colgroup>{widths.map((width, index) => <col key={`${subject}-${index}`} style={{ width }} />)}</colgroup>;
 }
@@ -869,12 +947,13 @@ function CellSelect({ value, options, onChange }: { value: string; options: stri
 }
 
 function ItemRow({ subject, item, index, updateItem, removeItem }: { subject: string; item: AnalysisItem; index: number; updateItem: <K extends keyof AnalysisItem>(index: number, key: K, value: AnalysisItem[K]) => void; removeItem: (index: number) => void }) {
+  const cellClass = 'px-2 py-2 align-top whitespace-pre-wrap [word-break:keep-all]';
   return (
     <tr className="border-b even:bg-muted/30">
-      <td className="px-3 py-2 text-center text-xs text-muted-foreground align-top">{item.item_number}</td>
-      {subject === '수학' ? <><td className="px-2 py-2 align-top"><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td><td className="px-2 py-2 align-top"><CellInput value={item.problem_desc ?? ''} onChange={(e) => updateItem(index, 'problem_desc', e.target.value)} placeholder="문제설명" /></td></> : null}
-      {subject === '영어' ? <><td className="px-2 py-2 align-top"><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="모의고사/교과서" /></td><td className="px-2 py-2 align-top"><CellInput value={item.question_type ?? ''} onChange={(e) => updateItem(index, 'question_type', e.target.value)} placeholder="어휘/어법" /></td></> : null}
-      {subject === '국어' ? <><td className="px-2 py-2 align-top"><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="출제유형" /></td><td className="px-2 py-2 align-top"><CellInput value={item.content ?? ''} onChange={(e) => updateItem(index, 'content', e.target.value)} placeholder="내용" /></td><td className="px-2 py-2 align-top"><CellInput value={item.area ?? ''} onChange={(e) => updateItem(index, 'area', e.target.value)} placeholder="독서/문학" /></td></> : null}
+      <td className="px-3 py-2 text-center text-xs text-muted-foreground align-top whitespace-pre-wrap [word-break:keep-all]">{item.item_number}</td>
+      {subject === '수학' ? <><td className={cellClass}><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td><td className={cellClass}><CellInput value={item.problem_desc ?? ''} onChange={(e) => updateItem(index, 'problem_desc', e.target.value)} placeholder="문제설명" /></td></> : null}
+      {subject === '영어' ? <><td className={cellClass}><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="모의고사/교과서" /></td><td className={cellClass}><CellInput value={item.question_type ?? ''} onChange={(e) => updateItem(index, 'question_type', e.target.value)} placeholder="어휘/어법" /></td></> : null}
+      {subject === '국어' ? <><td className={cellClass}><CellInput value={item.source_type ?? ''} onChange={(e) => updateItem(index, 'source_type', e.target.value)} placeholder="출제유형" /></td><td className={cellClass}><CellInput value={item.content ?? ''} onChange={(e) => updateItem(index, 'content', e.target.value)} placeholder="내용" /></td><td className={cellClass}><CellInput value={item.area ?? ''} onChange={(e) => updateItem(index, 'area', e.target.value)} placeholder="독서/문학" /></td></> : null}
       {subject === '과학' ? <td className="px-2 py-2 align-top"><CellInput value={item.unit_name ?? ''} onChange={(e) => updateItem(index, 'unit_name', e.target.value)} placeholder="단원명" /></td> : null}
       {subject !== '영어' && subject !== '국어' ? <td className="px-2 py-2 align-top"><CellSelect value={item.item_type ?? ''} options={['객관식', '논술형', '단답형']} onChange={(value) => updateItem(index, 'item_type', value)} /></td> : null}
       {subject === '영어' ? <><td className="px-2 py-2 align-top"><CellInput type="number" value={item.points ?? ''} onChange={(e) => updateItem(index, 'points', e.target.value ? Number(e.target.value) : null)} /></td><td className="px-2 py-2 align-top"><CellSelect value={item.difficulty ?? '중'} options={ITEM_DIFFICULTIES} onChange={(value) => updateItem(index, 'difficulty', value)} /></td><td className="px-2 py-2 align-top"><CellInput value={item.classification ?? ''} onChange={(e) => updateItem(index, 'classification', e.target.value)} placeholder="분류" /></td></> : null}
