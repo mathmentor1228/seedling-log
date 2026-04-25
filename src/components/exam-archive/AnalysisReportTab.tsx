@@ -793,11 +793,24 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
             </FormSection>
 
             <FormSection title="파일 첨부">
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-1">
                 <PdfBox title="원본 시험지 PDF" url={originalPdfUrl} linkLabel="파일 보기" onRemove={() => updateForm('originalPdfPath', '')} onUpload={(e) => void handlePdfUpload(e, 'original')} />
-                <PdfBox title="답지 PDF" url={answerPdfUrl} linkLabel="답지 보기" onRemove={() => updateForm('answerPdfPath', '')} onUpload={(e) => void handlePdfUpload(e, 'answer')} />
               </div>
             </FormSection>
+
+            <AnswerSheetSection
+              mode={form.answerMode}
+              onModeChange={(mode) => updateForm('answerMode', mode)}
+              items={items}
+              answers={form.answers}
+              setAnswer={setAnswer}
+              imageUrls={answerImageUrls}
+              onImageUpload={handleAnswerImageUpload}
+              onRemoveImage={removeAnswerImage}
+              pdfUrl={answerPdfUrl}
+              onPdfUpload={(e) => void handlePdfUpload(e, 'answer')}
+              onRemovePdf={() => updateForm('answerPdfPath', '')}
+            />
 
             <FormSection title="수업자료 링크" action={<Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={addLink}><Plus className="h-3.5 w-3.5" /> 링크 추가</Button>}>
               <div className="space-y-2">
@@ -814,7 +827,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
               <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[900px] table-fixed border-collapse text-sm">
+                <table className="w-full min-w-[1000px] table-fixed border-collapse text-sm">
                   <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
