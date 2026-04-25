@@ -488,7 +488,7 @@ export function ExamReviewPanel() {
 
       let query = supabase
         .from('exam_score_templates')
-        .select('id, total_items, items, error_types, answer_mode, answers, answer_image_paths, answer_pdf_path, created_at')
+        .select('id, total_items, items, error_types, created_at')
         .eq('school_name', schoolName)
         .eq('subject', subject)
         .eq('grade', grade);
@@ -516,32 +516,68 @@ export function ExamReviewPanel() {
       }
 
       const normalizedItems = normalizeTemplateItems(templateRow.items, templateRow.total_items || DEFAULT_TOTAL_ITEMS);
-      const normalizedAnswers = normalizeAnswers(templateRow.answers);
       setTemplate({
         id: templateRow.id,
         total_items: templateRow.total_items,
         items: normalizedItems,
         error_types: normalizeErrorTypes(templateRow.error_types),
-        answers: normalizedAnswers,
       });
+    } catch (error: any) {
+      setTemplate(null);
+      toast({ title: '템플릿 조회 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setTemplateLoading(false);
+    }
+  }, [toast]);
 
-      if (templateRow.answer_mode === 'image' && Array.isArray(templateRow.answer_image_paths)) {
-        const urls = await Promise.all(templateRow.answer_image_paths.filter((path): path is string => typeof path === 'string').map(async (path) => {
+  const loadAnswersFromReport = useCallback(async (row: ExamResultRow | null) => {
+    const schoolName = normalizeTextValue(row?.school_name);
+    const subject = normalizeTextValue(row?.subject);
+    const examType = normalizeExamType(row?.exam_type);
+    const examYear = normalizeExamYearValue(row?.exam_year);
+    const examPeriod = normalizeTextValue(row?.exam_period);
+
+    if (!row || !schoolName || !subject || !examType) {
+      setReportAnswers({});
+      setAnswerDisplay(null);
+      return;
+    }
+
+    try {
+      let query = supabase
+        .from('exam_analysis_reports')
+        .select('answers, answer_mode, answer_image_paths, answer_pdf_path')
+        .eq('school_name', schoolName)
+        .eq('subject', subject)
+        .eq('exam_type', examType);
+
+      if (examYear != null) query = query.eq('exam_year', examYear);
+      if (examPeriod) query = query.eq('exam_period', examPeriod);
+
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (error) throw error;
+
+      const report = (data ?? null) as AnalysisReportAnswerRow | null;
+      const normalizedAnswers = normalizeAnswers(report?.answers);
+      setReportAnswers(normalizedAnswers);
+
+      if (!report) {
+        setAnswerDisplay(null);
+      } else if (report.answer_mode === 'image' && Array.isArray(report.answer_image_paths)) {
+        const urls = await Promise.all(report.answer_image_paths.filter((path): path is string => typeof path === 'string').map(async (path) => {
           return await getCachedSignedUrl('exam-analysis', path, 3600) ?? '';
         }));
         setAnswerDisplay({ type: 'image', urls: urls.filter(Boolean) });
-      } else if (templateRow.answer_mode === 'pdf' && templateRow.answer_pdf_path) {
-        const signedUrl = await getCachedSignedUrl('exam-analysis', templateRow.answer_pdf_path, 3600);
+      } else if (report.answer_mode === 'pdf' && report.answer_pdf_path) {
+        const signedUrl = await getCachedSignedUrl('exam-analysis', report.answer_pdf_path, 3600);
         setAnswerDisplay(signedUrl ? { type: 'pdf', url: signedUrl } : null);
       } else {
         setAnswerDisplay({ type: 'direct', answers: normalizedAnswers });
       }
     } catch (error: any) {
-      setTemplate(null);
+      setReportAnswers({});
       setAnswerDisplay(null);
-      toast({ title: '템플릿 조회 실패', description: error.message, variant: 'destructive' });
-    } finally {
-      setTemplateLoading(false);
+      toast({ title: '분석보고서 정답 조회 실패', description: error.message, variant: 'destructive' });
     }
   }, [toast]);
 
