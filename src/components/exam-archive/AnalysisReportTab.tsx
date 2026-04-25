@@ -292,6 +292,103 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     toast.success('PDF 업로드 완료');
   }
 
+  function applyParsedAnalysis(parsed: ParsedExamAnalysis) {
+    if (parsed.textbook) updateForm('textbook', parsed.textbook);
+    if (parsed.exam_scope) updateForm('examScope', parsed.exam_scope);
+    if (parsed.exam_difficulty) updateForm('difficulty', parsed.exam_difficulty);
+    if (parsed.overall_review) updateForm('overallReview', parsed.overall_review);
+    if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+      setItems(parsed.items.map((item, index) => ({ ...item, item_number: item.item_number || index + 1, sort_order: index })));
+    }
+    setParseResult({
+      total_items: Number(parsed.total_items ?? parsed.items?.length ?? 0),
+      total_points: Number(parsed.total_points ?? parsed.items?.reduce((sum, item) => sum + (Number(item.points) || 0), 0) ?? 0),
+    });
+  }
+
+  async function runAIParse(fileDataUrl: string, fileName: string, fileMimeType: string | null) {
+    const { data: result, error } = await supabase.functions.invoke('analyze-school-document', {
+      body: {
+        fileDataUrl,
+        fileName,
+        fileMimeType,
+        fileType: 'exam_analysis',
+        subjectFilter: form.subject,
+        schoolName: form.schoolName || selectedSchool || '학교 미지정',
+      },
+    });
+    if (error || result?.error) throw new Error(error?.message || result?.error || 'AI 분석 실패');
+    applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis);
+  }
+
+  async function handleAIParse(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      toast.error('이미지 또는 PDF 파일만 업로드할 수 있습니다.');
+      return;
+    }
+
+    setIsParsing(true);
+    setParseResult(null);
+    try {
+      const fileDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      await runAIParse(fileDataUrl, file.name, file.type || null);
+
+      const safeId = selectedReportId ?? crypto.randomUUID();
+      const extension = file.name.split('.').pop()?.toLowerCase() || (file.type === 'application/pdf' ? 'pdf' : 'png');
+      const path = `exam-analysis/${safeId}/original-${Date.now()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from('exam-analysis').upload(path, file, {
+        contentType: file.type || undefined,
+        upsert: true,
+      });
+      if (!uploadError) updateForm('originalPdfPath', path);
+
+      toast.success('AI 분석이 완료됐어요.');
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : 'AI 분석 실패. 다시 시도해주세요.');
+    } finally {
+      setIsParsing(false);
+    }
+  }
+
+  async function parseExistingPdf() {
+    if (!originalPdfUrl) {
+      toast.error('업로드된 원본 시험지가 없습니다.');
+      return;
+    }
+    setIsParsing(true);
+    setParseResult(null);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('analyze-school-document', {
+        body: {
+          fileUrl: originalPdfUrl,
+          fileName: 'original.pdf',
+          fileMimeType: 'application/pdf',
+          fileType: 'exam_analysis',
+          subjectFilter: form.subject,
+          schoolName: form.schoolName || selectedSchool || '학교 미지정',
+        },
+      });
+      if (error || result?.error) throw new Error(error?.message || result?.error || 'AI 분석 실패');
+      applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis);
+      toast.success('AI 분석이 완료됐어요.');
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : 'AI 분석 실패. 다시 시도해주세요.');
+    } finally {
+      setIsParsing(false);
+    }
+  }
+
   async function handleSave() {
     if (!user) {
       toast.error('로그인이 필요합니다.');
