@@ -25,6 +25,9 @@ interface TemplateItem {
   is_essay: boolean;
 }
 
+type AnswerMode = 'direct' | 'image' | 'pdf';
+type TemplateAnswers = Record<number, string>;
+
 interface TemplateParseResponse {
   total_items?: number;
   total_points?: number;
@@ -41,6 +44,10 @@ interface ExamTemplateRecord {
   total_items: number;
   items: unknown;
   error_types: unknown;
+  answer_mode?: string | null;
+  answers?: unknown;
+  answer_image_paths?: unknown;
+  answer_pdf_path?: string | null;
 }
 
 interface ExamTemplateSetupRecord {
@@ -123,6 +130,23 @@ function normalizeErrorTypes(raw: unknown) {
   return { selectedDefaults, customErrorTypes };
 }
 
+function normalizeAnswerMode(raw: unknown): AnswerMode {
+  return raw === 'image' || raw === 'pdf' || raw === 'direct' ? raw : 'direct';
+}
+
+function normalizeAnswers(raw: unknown): TemplateAnswers {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.entries(raw as Record<string, unknown>).reduce<TemplateAnswers>((acc, [key, value]) => {
+    const itemNo = Number(key);
+    if (Number.isFinite(itemNo) && typeof value === 'string') acc[itemNo] = value;
+    return acc;
+  }, {});
+}
+
+function normalizeStringArray(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((value): value is string => typeof value === 'string' && value.length > 0) : [];
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -152,6 +176,12 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
   const [examYear, setExamYear] = useState<number | null>(null);
   const [examPeriod, setExamPeriod] = useState('');
   const [examType, setExamType] = useState('');
+  const [answerMode, setAnswerMode] = useState<AnswerMode>('direct');
+  const [answers, setAnswers] = useState<TemplateAnswers>({});
+  const [answerImagePaths, setAnswerImagePaths] = useState<string[]>([]);
+  const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
+  const [answerPdfPath, setAnswerPdfPath] = useState<string | null>(null);
+  const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
 
   const canSave = Boolean(record && currentUserId && grade && examYear && examPeriod && examType && items.length > 0);
   const dialogTitle = templateId ? '템플릿 수정' : '템플릿 새로 만들기';
@@ -237,6 +267,12 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
           setItems(buildDefaultItems());
           setSelectedDefaultErrors([...DEFAULT_ERROR_TYPES]);
           setCustomErrorTypes([]);
+          setAnswerMode('direct');
+          setAnswers({});
+          setAnswerImagePaths([]);
+          setAnswerImageUrls([]);
+          setAnswerPdfPath(null);
+          setAnswerPdfUrl(null);
           return;
         }
 
@@ -247,6 +283,10 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
         setItems(normalizedItems);
         setSelectedDefaultErrors(selectedDefaults.length > 0 ? selectedDefaults : [...DEFAULT_ERROR_TYPES]);
         setCustomErrorTypes(customTypes);
+        setAnswerMode(normalizeAnswerMode(existingTemplate.answer_mode));
+        setAnswers(normalizeAnswers(existingTemplate.answers));
+        setAnswerImagePaths(normalizeStringArray(existingTemplate.answer_image_paths));
+        setAnswerPdfPath(existingTemplate.answer_pdf_path ?? null);
         setNewErrorType('');
       } catch (error: any) {
         if (!active) return;
@@ -262,6 +302,29 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
       active = false;
     };
   }, [examPeriod, examType, examYear, grade, open, record, toast]);
+
+  useEffect(() => {
+    let active = true;
+
+    const resolveAnswerFiles = async () => {
+      const [imageEntries, pdfEntry] = await Promise.all([
+        Promise.all(answerImagePaths.map(async (path) => {
+          const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(path, 3600);
+          return data?.signedUrl ?? '';
+        })),
+        answerPdfPath ? supabase.storage.from('exam-analysis').createSignedUrl(answerPdfPath, 3600) : Promise.resolve({ data: null }),
+      ]);
+      if (!active) return;
+      setAnswerImageUrls(imageEntries.filter(Boolean));
+      setAnswerPdfUrl(pdfEntry.data?.signedUrl ?? null);
+    };
+
+    void resolveAnswerFiles();
+
+    return () => {
+      active = false;
+    };
+  }, [answerImagePaths, answerPdfPath]);
 
   const updateItem = <K extends keyof TemplateItem>(index: number, key: K, value: TemplateItem[K]) => {
     setItems((prev) => prev.map((item, itemIndex) => {
@@ -319,6 +382,56 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     setNewErrorType('');
   };
   const removeErrorType = (index: number) => setCustomErrorTypes((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+
+  const setAnswer = (itemNo: number, value: string) => {
+    setAnswers((prev) => ({ ...prev, [itemNo]: value }));
+  };
+
+  const handleAnswerImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (!files.length || !record) return;
+
+    const safeId = templateId ?? crypto.randomUUID();
+    const uploadedPaths: string[] = [];
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
+        const path = `exam-analysis/${safeId}/answer-image-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+        const { error } = await supabase.storage.from('exam-analysis').upload(path, file, { contentType: file.type || undefined, upsert: true });
+        if (error) throw error;
+        uploadedPaths.push(path);
+      }
+      if (uploadedPaths.length > 0) setAnswerImagePaths((prev) => [...prev, ...uploadedPaths]);
+    } catch (error: any) {
+      toast({ title: '답지 이미지 업로드 실패', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleAnswerPdfUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !record) return;
+    if (file.type !== 'application/pdf') {
+      toast({ title: 'PDF 파일만 업로드할 수 있습니다', variant: 'destructive' });
+      return;
+    }
+    try {
+      const safeId = templateId ?? crypto.randomUUID();
+      const path = `exam-analysis/${safeId}/answer-${Date.now()}.pdf`;
+      const { error } = await supabase.storage.from('exam-analysis').upload(path, file, { contentType: 'application/pdf', upsert: true });
+      if (error) throw error;
+      setAnswerPdfPath(path);
+      toast({ title: '답지 PDF 업로드 완료' });
+    } catch (error: any) {
+      toast({ title: '답지 PDF 업로드 실패', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const removeAnswerImage = (index: number) => {
+    setAnswerImagePaths((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
 
   const handleTemplateFileParse = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -390,6 +503,10 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
           total_items: normalizedItems.length,
           items: normalizedItems,
           error_types: errorTypes,
+          answer_mode: answerMode,
+          answers,
+          answer_image_paths: answerImagePaths,
+          answer_pdf_path: answerPdfPath,
           created_by: currentUserId,
         } as any,
         { onConflict: 'school_name,subject,grade,exam_type,exam_year,exam_period' },
@@ -587,6 +704,20 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
                 </Button>
               </section>
 
+              <AnswerSheetSection
+                mode={answerMode}
+                items={items}
+                answers={answers}
+                imageUrls={answerImageUrls}
+                pdfUrl={answerPdfUrl}
+                onModeChange={setAnswerMode}
+                onSetAnswer={setAnswer}
+                onImageUpload={handleAnswerImageUpload}
+                onRemoveImage={removeAnswerImage}
+                onPdfUpload={handleAnswerPdfUpload}
+                onRemovePdf={() => setAnswerPdfPath(null)}
+              />
+
               <section className="space-y-4 rounded-lg border p-4">
                 <div>
                   <h3 className="text-base font-semibold text-foreground">오답유형 설정</h3>
@@ -661,5 +792,89 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AnswerSheetSection({
+  mode,
+  items,
+  answers,
+  imageUrls,
+  pdfUrl,
+  onModeChange,
+  onSetAnswer,
+  onImageUpload,
+  onRemoveImage,
+  onPdfUpload,
+  onRemovePdf,
+}: {
+  mode: AnswerMode;
+  items: TemplateItem[];
+  answers: TemplateAnswers;
+  imageUrls: string[];
+  pdfUrl: string | null;
+  onModeChange: (mode: AnswerMode) => void;
+  onSetAnswer: (itemNo: number, value: string) => void;
+  onImageUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemoveImage: (index: number) => void;
+  onPdfUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemovePdf: () => void;
+}) {
+  return (
+    <section className="space-y-4 rounded-lg border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">답지</h3>
+          <p className="text-sm text-muted-foreground">채점 화면 우측에 실시간으로 표시됩니다.</p>
+        </div>
+        <div className="flex rounded-md bg-muted p-1">
+          {([
+            ['direct', '직접 입력'],
+            ['image', '이미지'],
+            ['pdf', 'PDF'],
+          ] as const).map(([key, label]) => (
+            <Button key={key} type="button" size="sm" variant={mode === key ? 'default' : 'ghost'} className="h-8 px-3 text-xs" onClick={() => onModeChange(key)}>
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {mode === 'direct' ? (
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {items.map((item) => (
+            <div key={item.no} className="rounded-md border bg-background p-2 text-center">
+              <p className="mb-1 text-[11px] text-muted-foreground">{item.no}번{item.points ? ` (${formatPoints(item.points)}점)` : ''}</p>
+              {item.is_essay ? (
+                <textarea value={answers[item.no] ?? ''} onChange={(event) => onSetAnswer(item.no, event.target.value)} rows={2} placeholder="정답" className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              ) : (
+                <div className="flex justify-center gap-1">
+                  {[1, 2, 3, 4, 5].map((value) => {
+                    const active = answers[item.no] === String(value);
+                    return <Button key={value} type="button" size="icon" variant={active ? 'default' : 'outline'} className="h-7 w-7 rounded-full text-xs" onClick={() => onSetAnswer(item.no, String(value))}>{value}</Button>;
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {mode === 'image' ? (
+        <div className="space-y-3">
+          {imageUrls.length > 0 ? <div className="grid gap-2 sm:grid-cols-3">{imageUrls.map((url, index) => <div key={`${url}-${index}`} className="relative"><img src={url} alt={`답지 ${index + 1}`} className="w-full rounded-md border" /><Button type="button" variant="secondary" size="icon" className="absolute right-1 top-1 h-6 w-6" onClick={() => onRemoveImage(index)}><Trash2 className="h-3 w-3" /></Button></div>)}</div> : null}
+          <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground hover:bg-accent">
+            이미지 업로드 (JPG/PNG 복수 선택 가능)
+            <input type="file" accept="image/*" multiple className="hidden" onChange={onImageUpload} />
+          </label>
+        </div>
+      ) : null}
+
+      {mode === 'pdf' ? (
+        <div className="rounded-lg border border-dashed p-4 text-center">
+          {pdfUrl ? <div className="flex items-center justify-center gap-3 text-sm"><a href={pdfUrl} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-4 hover:underline">📄 답지 PDF 보기</a><Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={onRemovePdf}>삭제</Button></div> : <label className="cursor-pointer text-sm text-muted-foreground">📎 답지 PDF 업로드<input type="file" accept=".pdf,application/pdf" className="hidden" onChange={onPdfUpload} /></label>}
+        </div>
+      ) : null}
+    </section>
   );
 }

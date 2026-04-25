@@ -12,7 +12,13 @@ export interface OverlayTemplateItem {
   type: '객관식' | '주관식';
   points: number;
   is_essay: boolean;
+  answer?: string | null;
 }
+
+export type OverlayAnswerDisplay =
+  | { type: 'direct'; answers: Record<number, string> }
+  | { type: 'image'; urls: string[] }
+  | { type: 'pdf'; url: string };
 
 export interface OverlayTemplateData {
   id: string;
@@ -85,6 +91,7 @@ interface OverlayGradingPanelProps {
   saving: boolean;
   onSaveItem: (payload: OverlaySavePayload) => Promise<void>;
   onOpenTemplateSetup: () => void;
+  answerDisplay?: OverlayAnswerDisplay | null;
 }
 
 const RESULT_STYLES: Record<Exclude<ItemResult, ''>, { label: string; container: string; button: string }> = {
@@ -273,6 +280,45 @@ function ScoreSummaryPanel({ items, template }: { items: OverlayReviewItem[]; te
   );
 }
 
+function AnswerDisplayPanel({ answerDisplay, template, items }: { answerDisplay: OverlayAnswerDisplay | null | undefined; template: OverlayTemplateData; items: OverlayReviewItem[] }) {
+  const [showAnswer, setShowAnswer] = useState(true);
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-card p-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-foreground">답지</p>
+        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setShowAnswer((prev) => !prev)}>
+          {showAnswer ? '숨기기' : '보기'}
+        </Button>
+      </div>
+      {showAnswer ? (
+        !answerDisplay ? <p className="text-xs text-muted-foreground">등록된 답지가 없습니다.</p> : answerDisplay.type === 'direct' ? (
+          <div className="grid grid-cols-2 gap-1.5">
+            {template.items.map((item) => {
+              const scored = items.find((reviewItem) => reviewItem.item_number === item.no);
+              const tone = !scored?.result ? 'bg-muted/50' : scored.result === 'correct' ? 'bg-[hsl(var(--review-correct-surface))]' : scored.result === 'wrong' ? 'bg-[hsl(var(--review-wrong-surface))]' : 'bg-[hsl(var(--review-partial-surface))]';
+              return (
+                <div key={item.no} className={`flex items-center justify-between gap-1 rounded-md px-2 py-1 text-[11px] text-foreground ${tone}`}>
+                  <span className="text-muted-foreground">{item.no}번</span>
+                  <span className="max-w-[72px] truncate font-bold">{answerDisplay.answers[item.no] || '-'}</span>
+                  <span>{scored?.result === 'correct' ? '✓' : scored?.result === 'wrong' ? '✗' : scored?.result === 'partial' ? '△' : ''}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : answerDisplay.type === 'image' ? (
+          <div className="space-y-2">{answerDisplay.urls.map((url, index) => <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`답지 ${index + 1}`} className="mb-2 w-full rounded-md border border-border" /></a>)}</div>
+        ) : (
+          <div className="space-y-2 text-center">
+            <a href={answerDisplay.url} target="_blank" rel="noreferrer" className="inline-flex rounded-md bg-primary/10 px-3 py-2 text-xs font-medium text-primary underline-offset-4 hover:underline">📄 답지 PDF 열기</a>
+            <iframe src={answerDisplay.url} title="답지" className="h-[300px] w-full rounded-md border border-border" />
+          </div>
+        )
+      ) : null}
+    </div>
+  );
+}
+
 
 export function OverlayGradingPanel({
   photos,
@@ -283,6 +329,7 @@ export function OverlayGradingPanel({
   saving,
   onSaveItem,
   onOpenTemplateSetup,
+  answerDisplay,
 }: OverlayGradingPanelProps) {
   const imageContainerRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(0);
@@ -585,6 +632,7 @@ export function OverlayGradingPanel({
 
       <div className="w-full xl:max-w-[320px] xl:flex-1">
         <ScoreSummaryPanel items={items} template={template} />
+        <AnswerDisplayPanel answerDisplay={answerDisplay} template={template} items={items} />
         <div className="mt-3 rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
           <div className="flex items-start gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 text-[hsl(var(--review-done-badge))]" />
