@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2, PenSquare } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { PhotoThumb } from '@/components/exam-review/PhotoThumb';
@@ -51,6 +50,10 @@ interface ActiveOverlayItem {
   page_number: number;
   is_essay: boolean;
   points: number;
+}
+
+interface GradeTooltip extends ActiveOverlayItem {
+  answer: string | null;
 }
 
 interface OverlaySavePayload {
@@ -115,6 +118,12 @@ function displayScore(score: number) {
   if (!Number.isFinite(score)) return '0';
   const rounded = Math.round(score * 100) / 100;
   return Number.isInteger(rounded) ? `${rounded}` : `${Math.round(rounded * 10) / 10}`;
+}
+
+function getTemplateAnswer(item: OverlayTemplateItem | undefined) {
+  const source = item as (OverlayTemplateItem & { answer?: unknown; correct_answer?: unknown; correctAnswer?: unknown }) | undefined;
+  const value = source?.answer ?? source?.correct_answer ?? source?.correctAnswer;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function ResultBadge({ result, no, onClick }: { result: Exclude<ItemResult, ''>; no: number; onClick: () => void }) {
@@ -277,11 +286,8 @@ export function OverlayGradingPanel({
 }: OverlayGradingPanelProps) {
   const imageContainerRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(0);
-  const [activeItem, setActiveItem] = useState<ActiveOverlayItem | null>(null);
-  const [result, setResult] = useState<Exclude<ItemResult, ''> | ''>('');
-  const [earnedScore, setEarnedScore] = useState(0);
-  const [errorTypes, setErrorTypes] = useState<string[]>([]);
-  const [customReason, setCustomReason] = useState('');
+  const [tooltip, setTooltip] = useState<GradeTooltip | null>(null);
+  const [essayScore, setEssayScore] = useState(0);
   const [expandedOpen, setExpandedOpen] = useState(false);
 
   const currentPhoto = photos[page] ?? null;
@@ -316,10 +322,11 @@ export function OverlayGradingPanel({
     return positionedItems.sort((a, b) => a.item_number - b.item_number);
   }, [items, page, template]);
 
-  const openEditor = (item: OverlayReviewItem | QuickGradeItem) => {
-    if (item.overlay_x == null || item.overlay_y == null || item.page_number == null || !item.result) return;
-    const points = template?.items.find((templateItem) => templateItem.no === item.item_number)?.points ?? 0;
-    setActiveItem({
+  const openTooltip = (item: OverlayReviewItem | QuickGradeItem) => {
+    if (item.overlay_x == null || item.overlay_y == null || item.page_number == null) return;
+    const templateItem = template?.items.find((source) => source.no === item.item_number);
+    const points = templateItem?.points ?? 0;
+    setTooltip({
       id: item.id,
       item_number: item.item_number,
       overlay_x: item.overlay_x,
@@ -327,19 +334,9 @@ export function OverlayGradingPanel({
       page_number: item.page_number,
       is_essay: item.is_essay,
       points,
+      answer: getTemplateAnswer(templateItem),
     });
-    setResult(item.result);
-    setEarnedScore(clampScore(item.score_earned ?? points, points));
-    setErrorTypes(item.error_types);
-    setCustomReason(item.custom_reason);
-  };
-
-  const resetEditor = () => {
-    setActiveItem(null);
-    setResult('');
-    setEarnedScore(0);
-    setErrorTypes([]);
-    setCustomReason('');
+    setEssayScore(clampScore(item.score_earned ?? points, points));
   };
 
   const handleImageClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -352,46 +349,16 @@ export function OverlayGradingPanel({
     const nextUnscored = template.items.find((templateItem) => !items.some((item) => item.item_number === templateItem.no && item.result));
     if (!nextUnscored) return;
 
-    setActiveItem({
+    setTooltip({
       item_number: nextUnscored.no,
       overlay_x: x,
       overlay_y: y,
       page_number: page + 1,
       is_essay: nextUnscored.is_essay,
       points: nextUnscored.points,
+      answer: getTemplateAnswer(nextUnscored),
     });
-    setResult('');
-    setEarnedScore(nextUnscored.is_essay ? nextUnscored.points : 0);
-    setErrorTypes([]);
-    setCustomReason('');
-  };
-
-  const handleToggleError = (value: string) => {
-    setErrorTypes((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]));
-  };
-
-  const handleSave = async () => {
-    if (!activeItem || !result) return;
-    const nextScore = activeItem.is_essay
-      ? clampScore(earnedScore, activeItem.points)
-      : result === 'correct'
-        ? activeItem.points
-        : 0;
-
-    await onSaveItem({
-      id: activeItem.id,
-      item_number: activeItem.item_number,
-      result,
-      score_earned: nextScore,
-      is_essay: activeItem.is_essay,
-      error_types: result === 'correct' ? [] : errorTypes,
-      custom_reason: result === 'correct' ? '' : customReason.trim(),
-      overlay_x: activeItem.overlay_x,
-      overlay_y: activeItem.overlay_y,
-      page_number: activeItem.page_number,
-    });
-
-    resetEditor();
+    setEssayScore(nextUnscored.is_essay ? nextUnscored.points : 0);
   };
 
   const handleQuickGrade = async (item: QuickGradeItem, nextResult: Exclude<ItemResult, ''>) => {
@@ -419,94 +386,75 @@ export function OverlayGradingPanel({
     });
   };
 
-  const popupStyle = useMemo<React.CSSProperties | null>(() => {
-    if (!activeItem) return null;
-    const fromRight = activeItem.overlay_x > 60;
-    const fromBottom = activeItem.overlay_y > 60;
-    return {
-      left: fromRight ? 'auto' : `${activeItem.overlay_x}%`,
-      right: fromRight ? `${100 - activeItem.overlay_x}%` : 'auto',
-      top: fromBottom ? 'auto' : `${activeItem.overlay_y}%`,
-      bottom: fromBottom ? `${100 - activeItem.overlay_y}%` : 'auto',
-      maxWidth: 'min(280px, calc(100% - 16px))',
-    };
-  }, [activeItem]);
+  const handleTooltipGrade = async (nextResult: Exclude<ItemResult, ''>) => {
+    if (!tooltip) return;
+    const nextScore = tooltip.is_essay
+      ? clampScore(essayScore, tooltip.points)
+      : nextResult === 'correct'
+        ? tooltip.points
+        : 0;
 
-  const renderActiveEditor = () => activeItem ? (
+    const payload: OverlaySavePayload = {
+      id: tooltip.id,
+      item_number: tooltip.item_number,
+      result: nextResult,
+      score_earned: nextScore,
+      is_essay: tooltip.is_essay,
+      error_types: [],
+      custom_reason: '',
+      overlay_x: tooltip.overlay_x,
+      overlay_y: tooltip.overlay_y,
+      page_number: tooltip.page_number,
+    };
+
+    setTooltip(null);
+    await onSaveItem(payload);
+  };
+
+  const renderGradeTooltip = () => tooltip ? (
     <div
-      className="absolute z-20 min-w-[220px] rounded-[10px] border border-border bg-card p-3 shadow-lg"
-      style={popupStyle ?? undefined}
+      className="absolute z-20 flex min-w-[120px] -translate-x-1/2 -translate-y-[110%] flex-col items-center gap-1.5 rounded-[10px] border border-border bg-card px-2.5 py-2 shadow-lg"
+      style={{ left: `${tooltip.overlay_x}%`, top: `${tooltip.overlay_y}%` }}
       onClick={(event) => event.stopPropagation()}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[13px] font-semibold text-foreground">
-          {activeItem.item_number}번 ({displayScore(activeItem.points)}점)
+      <p className="m-0 text-[11px] font-medium text-muted-foreground">
+        {tooltip.item_number}번 ({displayScore(tooltip.points)}점)
+      </p>
+      {tooltip.answer ? (
+        <p className="m-0 max-w-[150px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+          정답 {tooltip.answer}
         </p>
-        <PenSquare className="h-4 w-4 text-muted-foreground" />
+      ) : null}
+      <div className="flex gap-1.5">
+        {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => void handleTooltipGrade(value)}
+            disabled={saving}
+            className={`flex h-11 w-11 items-center justify-center rounded-lg border-2 text-lg font-bold transition hover:scale-105 disabled:opacity-50 ${style.button}`}
+            aria-label={`${tooltip.item_number}번 ${style.label}로 즉시 채점`}
+          >
+            {style.label}
+          </button>
+        ))}
       </div>
-
-      <div className="mb-3 flex gap-1.5">
-        {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
-          const active = result === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setResult(value)}
-              className={`flex h-11 w-11 items-center justify-center rounded-lg border text-lg font-bold transition ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
-            >
-              {style.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {activeItem.is_essay ? (
-        <div className="mb-3">
-          <label className="mb-1 block text-[11px] text-muted-foreground">획득 점수</label>
-          <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              min={0}
-              max={activeItem.points}
-              value={earnedScore}
-              onChange={(event) => setEarnedScore(clampScore(Number(event.target.value), activeItem.points))}
-              className="h-8 w-20 px-2 text-sm"
-            />
-            <span className="text-[11px] text-muted-foreground">/ {displayScore(activeItem.points)}점</span>
-          </div>
+      {tooltip.is_essay ? (
+        <div className="flex items-center gap-1">
+          <Input
+            type="number"
+            min={0}
+            max={tooltip.points}
+            value={essayScore}
+            onChange={(event) => setEssayScore(clampScore(Number(event.target.value), tooltip.points))}
+            className="h-7 w-[54px] px-1.5 text-center text-xs"
+          />
+          <span className="text-[11px] text-muted-foreground">/{displayScore(tooltip.points)}점</span>
         </div>
       ) : null}
-
-      {result === 'wrong' || result === 'partial' ? (
-        <div className="mb-3 space-y-1.5 rounded-md bg-muted/40 p-2">
-          {template.error_types.map((type) => (
-            type === '기타(직접입력)' ? (
-              <Input
-                key={type}
-                placeholder="직접 입력..."
-                value={customReason}
-                onChange={(event) => setCustomReason(event.target.value)}
-                className="h-8 text-xs"
-              />
-            ) : (
-              <label key={type} className="flex items-center gap-2 text-[11px] text-foreground">
-                <Checkbox checked={errorTypes.includes(type)} onCheckedChange={() => handleToggleError(type)} />
-                <span>{type}</span>
-              </label>
-            )
-          ))}
-        </div>
-      ) : null}
-
-      <div className="flex gap-2">
-        <Button type="button" variant="outline" size="sm" className="flex-1" onClick={resetEditor} disabled={saving}>
-          취소
-        </Button>
-        <Button type="button" size="sm" className="flex-1" onClick={() => void handleSave()} disabled={!result || saving}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '확인'}
-        </Button>
-      </div>
+      <button type="button" onClick={() => setTooltip(null)} className="text-[10px] text-muted-foreground/70 hover:text-muted-foreground">
+        취소
+      </button>
     </div>
   ) : null;
 
@@ -576,13 +524,13 @@ export function OverlayGradingPanel({
                   className="absolute z-10"
                   style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}
                 >
-                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openTooltip(item)} />
                 </div>
               ))}
 
               <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="시험지 위치에 채점 마커 추가" />
 
-              {renderActiveEditor()}
+              {renderGradeTooltip()}
             </>
           ) : currentPhoto ? (
             <>
@@ -604,13 +552,13 @@ export function OverlayGradingPanel({
                   className="absolute z-10"
                   style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}
                 >
-                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openTooltip(item)} />
                 </div>
               ))}
 
               <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="시험지 위치에 채점 마커 추가" />
 
-              {renderActiveEditor()}
+              {renderGradeTooltip()}
             </>
           ) : photos.length === 0 ? (
             <div className="flex min-h-[28rem] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
@@ -625,7 +573,7 @@ export function OverlayGradingPanel({
         <QuickGradeStrip
           items={quickGradeItems}
           saving={saving}
-          onEdit={openEditor}
+          onEdit={openTooltip}
           onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)}
         />
       </div>
@@ -664,13 +612,13 @@ export function OverlayGradingPanel({
           )}
           {pageItems.map((item) => (
             <div key={`expanded-${item.item_number}-${item.page_number}`} className="absolute z-10" style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}>
-              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openTooltip(item)} />
             </div>
           ))}
           {currentPhoto ? <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="큰 시험지 위치에 채점 마커 추가" /> : null}
-          {renderActiveEditor()}
+          {renderGradeTooltip()}
         </div>
-        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openEditor} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
+        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openTooltip} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
       </DialogContent>
     </Dialog>
     </>
