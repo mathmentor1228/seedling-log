@@ -245,6 +245,11 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setSelectedReportId(null);
     setForm(emptyForm(selectedSchool || schools[0]?.name || ''));
     setItems(createDefaultItems());
+    setParseResult(null);
+  }
+
+  function handleEdit(report: AnalysisReport) {
+    void selectReport(report);
   }
 
   function updateForm<K extends keyof ReportForm>(key: K, value: ReportForm[K]) {
@@ -252,6 +257,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   function addLink() {
+    if (isLocked) return;
     updateForm('studyLinks', [...form.studyLinks, { title: '', url: '' }]);
   }
 
@@ -263,18 +269,22 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   function removeLink(index: number) {
+    if (isLocked) return;
     updateForm('studyLinks', form.studyLinks.filter((_, i) => i !== index));
   }
 
   function addItem() {
+    if (isLocked) return;
     setItems((prev) => [...prev, { item_number: prev.length + 1, difficulty: '중', sort_order: prev.length }]);
   }
 
   function updateItem<K extends keyof AnalysisItem>(index: number, key: K, value: AnalysisItem[K]) {
+    if (isLocked) return;
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   }
 
   function removeItem(index: number) {
+    if (isLocked) return;
     setItems((prev) => prev.filter((_, i) => i !== index).map((item, i) => ({ ...item, item_number: i + 1, sort_order: i })));
   }
 
