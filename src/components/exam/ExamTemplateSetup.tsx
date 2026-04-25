@@ -303,6 +303,29 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     };
   }, [examPeriod, examType, examYear, grade, open, record, toast]);
 
+  useEffect(() => {
+    let active = true;
+
+    const resolveAnswerFiles = async () => {
+      const [imageEntries, pdfEntry] = await Promise.all([
+        Promise.all(answerImagePaths.map(async (path) => {
+          const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(path, 3600);
+          return data?.signedUrl ?? '';
+        })),
+        answerPdfPath ? supabase.storage.from('exam-analysis').createSignedUrl(answerPdfPath, 3600) : Promise.resolve({ data: null }),
+      ]);
+      if (!active) return;
+      setAnswerImageUrls(imageEntries.filter(Boolean));
+      setAnswerPdfUrl(pdfEntry.data?.signedUrl ?? null);
+    };
+
+    void resolveAnswerFiles();
+
+    return () => {
+      active = false;
+    };
+  }, [answerImagePaths, answerPdfPath]);
+
   const updateItem = <K extends keyof TemplateItem>(index: number, key: K, value: TemplateItem[K]) => {
     setItems((prev) => prev.map((item, itemIndex) => {
       if (itemIndex !== index) return item;
