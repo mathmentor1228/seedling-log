@@ -517,6 +517,12 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
             <div className="flex min-h-[320px] items-center justify-center">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="flex min-h-[320px] flex-col items-center justify-center px-4 py-14 text-center text-muted-foreground">
+              <p className="mb-3 text-4xl">✅</p>
+              <p className="text-base font-semibold text-foreground">미확인 기록이 없어요</p>
+              <p className="mt-1 text-sm">모든 기록이 확인 완료됐습니다</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -531,14 +537,7 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRecords.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-40 text-center text-sm text-muted-foreground">
-                      조건에 맞는 기록이 없습니다.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredRecords.map((record) => {
+                {filteredRecords.map((record) => {
                     const isConfirmed = !!record.confirmed_by;
                     const pending = !!pendingKeys[`${record.type}:${record.id}`];
                     const teacherName = record.teacher_id ? (teacherNameMap[record.teacher_id] ?? '미지정') : '미지정';
@@ -549,7 +548,7 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
                         <TableCell className="font-medium">{record.students?.name ?? '-'}</TableCell>
                         <TableCell>{normalizeGrade(record.students?.grade)}</TableCell>
                         <TableCell>
-                          <span className="inline-flex rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
+                          <span className={cn('inline-flex rounded-md border px-2 py-1 text-xs font-medium', TYPE_BADGE_CLASSES[record.type])}>
                             {record.type}
                           </span>
                         </TableCell>
@@ -602,8 +601,7 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
                         </TableCell>
                       </TableRow>
                     );
-                  })
-                )}
+                  })}
               </TableBody>
             </Table>
           )}
