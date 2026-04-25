@@ -65,6 +65,13 @@ interface OverlaySavePayload {
   page_number: number;
 }
 
+interface QuickGradeItem extends ActiveOverlayItem {
+  result: ItemResult;
+  score_earned: number | null;
+  error_types: string[];
+  custom_reason: string;
+}
+
 interface OverlayGradingPanelProps {
   photos: OverlayPhoto[];
   photoUrls: Record<string, string>;
@@ -124,6 +131,65 @@ function ResultBadge({ result, no, onClick }: { result: Exclude<ItemResult, ''>;
       <span className="text-[14px] leading-none">{style.label}</span>
       <span className="leading-none">{no}</span>
     </button>
+  );
+}
+
+function QuickGradeStrip({
+  items,
+  saving,
+  onEdit,
+  onQuickGrade,
+}: {
+  items: QuickGradeItem[];
+  saving: boolean;
+  onEdit: (item: QuickGradeItem) => void;
+  onQuickGrade: (item: QuickGradeItem, result: Exclude<ItemResult, ''>) => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-center text-xs text-muted-foreground">
+        시험지 위치를 클릭하면 해당 문항이 여기에 추가됩니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-card p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-foreground">현재 페이지 빠른 채점</p>
+        <p className="text-xs text-muted-foreground">O / X / △ 클릭 즉시 저장</p>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {items.map((item) => (
+          <div key={`${item.item_number}-${item.page_number}`} className="shrink-0 rounded-lg border border-border bg-muted/20 p-2">
+            <button
+              type="button"
+              onClick={() => onEdit(item)}
+              className="mb-2 w-full text-center text-xs font-semibold text-foreground hover:text-primary"
+            >
+              {item.item_number}번
+            </button>
+            <div className="flex gap-1">
+              {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
+                const active = item.result === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onQuickGrade(item, value)}
+                    disabled={saving}
+                    className={`flex h-9 w-9 items-center justify-center rounded-md border text-base font-bold transition disabled:opacity-50 ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
+                    aria-label={`${item.item_number}번 ${style.label}로 채점`}
+                  >
+                    {style.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -215,7 +281,31 @@ export function OverlayGradingPanel({
     [items, page],
   );
 
-  const openEditor = (item: OverlayReviewItem) => {
+  const quickGradeItems = useMemo<QuickGradeItem[]>(() => {
+    if (!template) return [];
+    const positionedItems = items
+      .filter((item) => item.page_number === page + 1 && item.overlay_x != null && item.overlay_y != null)
+      .map((item) => {
+        const templateItem = template.items.find((source) => source.no === item.item_number);
+        return {
+          id: item.id,
+          item_number: item.item_number,
+          overlay_x: item.overlay_x ?? 0,
+          overlay_y: item.overlay_y ?? 0,
+          page_number: item.page_number ?? page + 1,
+          is_essay: item.is_essay,
+          points: templateItem?.points ?? 0,
+          result: item.result,
+          score_earned: item.score_earned,
+          error_types: item.error_types,
+          custom_reason: item.custom_reason,
+        } satisfies QuickGradeItem;
+      });
+
+    return positionedItems.sort((a, b) => a.item_number - b.item_number);
+  }, [items, page, template]);
+
+  const openEditor = (item: OverlayReviewItem | QuickGradeItem) => {
     if (item.overlay_x == null || item.overlay_y == null || item.page_number == null || !item.result) return;
     const points = template?.items.find((templateItem) => templateItem.no === item.item_number)?.points ?? 0;
     setActiveItem({
@@ -291,6 +381,31 @@ export function OverlayGradingPanel({
     });
 
     resetEditor();
+  };
+
+  const handleQuickGrade = async (item: QuickGradeItem, nextResult: Exclude<ItemResult, ''>) => {
+    const nextScore = item.is_essay
+      ? nextResult === 'correct'
+        ? item.points
+        : nextResult === 'partial'
+          ? clampScore(item.score_earned ?? Math.round((item.points / 2) * 100) / 100, item.points)
+          : 0
+      : nextResult === 'correct'
+        ? item.points
+        : 0;
+
+    await onSaveItem({
+      id: item.id,
+      item_number: item.item_number,
+      result: nextResult,
+      score_earned: nextScore,
+      is_essay: item.is_essay,
+      error_types: nextResult === 'correct' ? [] : item.error_types,
+      custom_reason: nextResult === 'correct' ? '' : item.custom_reason,
+      overlay_x: item.overlay_x,
+      overlay_y: item.overlay_y,
+      page_number: item.page_number,
+    });
   };
 
   const popupStyle = useMemo<React.CSSProperties | null>(() => {
@@ -561,6 +676,13 @@ export function OverlayGradingPanel({
             </div>
           )}
         </div>
+
+        <QuickGradeStrip
+          items={quickGradeItems}
+          saving={saving}
+          onEdit={openEditor}
+          onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)}
+        />
       </div>
 
       <div className="w-full xl:max-w-[320px] xl:flex-1">
