@@ -93,6 +93,7 @@ function SchoolExamArchiveInner() {
       : requestedTab;
   const [unconfirmedCount, setUnconfirmedCount] = useState(0);
   const isReviewTab = currentTab === 'review' && canViewReview;
+  const isFullWidthTab = isReviewTab || currentTab === 'analysis';
 
   const selectedSchoolSchedules = useMemo(
     () => schedules.filter((schedule) => schedule.school_name === selectedSchool),
@@ -173,7 +174,7 @@ function SchoolExamArchiveInner() {
       </div>
 
       <div className="flex h-[calc(100vh-200px)] w-full overflow-hidden rounded-xl border bg-background shadow-sm">
-        {!isReviewTab ? (
+        {!isFullWidthTab ? (
           <SchoolSidebar
             schools={schools}
             selectedSchool={selectedSchool}
@@ -183,9 +184,9 @@ function SchoolExamArchiveInner() {
         ) : null}
 
         <div className="flex-1 overflow-y-auto">
-          {selectedSchool || isReviewTab ? (
-            <div className={isReviewTab ? 'flex h-full min-h-0 flex-col' : 'space-y-5 p-6'}>
-              {!isReviewTab ? (
+          {selectedSchool || isFullWidthTab ? (
+            <div className={isFullWidthTab ? 'flex h-full min-h-0 flex-col' : 'space-y-5 p-6'}>
+              {!isFullWidthTab ? (
                 <>
               {/* School header */}
                   <div className="flex items-center gap-3">
@@ -204,7 +205,7 @@ function SchoolExamArchiveInner() {
                 </>
               ) : null}
 
-              <Tabs value={currentTab} onValueChange={handleTabChange} className={isReviewTab ? 'flex h-full min-h-0 flex-col' : undefined}>
+              <Tabs value={currentTab} onValueChange={handleTabChange} className={isFullWidthTab ? 'flex h-full min-h-0 flex-col' : undefined}>
                 <TabsList className="grid w-full grid-cols-6 h-10">
                   <TabsTrigger value="overview" className="gap-1.5 text-xs">
                     <CalendarDays className="w-4 h-4" /> 학교/일정
@@ -294,7 +295,7 @@ function SchoolExamArchiveInner() {
                   <CrossCheckTab onUnconfirmedCountChange={setUnconfirmedCount} />
                 </TabsContent>
 
-                <TabsContent value="analysis" className="mt-4">
+                <TabsContent value="analysis" className="mt-0 min-h-0 flex-1 overflow-hidden data-[state=active]:flex">
                   <AnalysisReportTab schools={schools} selectedSchool={selectedSchool} />
                 </TabsContent>
 
