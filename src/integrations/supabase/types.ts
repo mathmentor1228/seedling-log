@@ -1517,6 +1517,10 @@ export type Database = {
       }
       exam_score_templates: {
         Row: {
+          answer_image_paths: Json | null
+          answer_mode: string | null
+          answer_pdf_path: string | null
+          answers: Json | null
           created_at: string
           created_by: string | null
           error_types: Json
@@ -1531,6 +1535,10 @@ export type Database = {
           total_items: number
         }
         Insert: {
+          answer_image_paths?: Json | null
+          answer_mode?: string | null
+          answer_pdf_path?: string | null
+          answers?: Json | null
           created_at?: string
           created_by?: string | null
           error_types?: Json
@@ -1545,6 +1553,10 @@ export type Database = {
           total_items?: number
         }
         Update: {
+          answer_image_paths?: Json | null
+          answer_mode?: string | null
+          answer_pdf_path?: string | null
+          answers?: Json | null
           created_at?: string
           created_by?: string | null
           error_types?: Json
