@@ -59,10 +59,13 @@ interface ScoreTemplateRow {
   total_items: number;
   items: unknown;
   error_types: unknown;
-  answer_mode?: string | null;
-  answers?: unknown;
-  answer_image_paths?: unknown;
-  answer_pdf_path?: string | null;
+}
+
+interface AnalysisReportAnswerRow {
+  answers: unknown;
+  answer_mode: string | null;
+  answer_image_paths: unknown;
+  answer_pdf_path: string | null;
 }
 
 interface GenerateExamReviewCommentResponse {
@@ -258,6 +261,7 @@ export function ExamReviewPanel() {
   const [overallComment, setOverallComment] = useState('');
   const [itemReviews, setItemReviews] = useState<OverlayReviewItem[]>([]);
   const [template, setTemplate] = useState<OverlayTemplateData | null>(null);
+  const [reportAnswers, setReportAnswers] = useState<Record<number, string>>({});
   const [answerDisplay, setAnswerDisplay] = useState<OverlayAnswerDisplay | null>(null);
   const [templateLoading, setTemplateLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
