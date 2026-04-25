@@ -605,13 +605,15 @@ export function ExamReviewPanel() {
       setItemReviews([]);
       setSelfChecks([]);
       setTemplate(null);
+      setReportAnswers({});
       setAnswerDisplay(null);
       return;
     }
     void markInReview(selectedId);
     void loadReviewDetail(selectedId);
     void loadTemplate(selectedRow);
-  }, [loadReviewDetail, loadTemplate, markInReview, selectedId, selectedRow]);
+    void loadAnswersFromReport(selectedRow);
+  }, [loadAnswersFromReport, loadReviewDetail, loadTemplate, markInReview, selectedId, selectedRow]);
 
   const persistReview = useCallback(async (markDone: boolean) => {
     if (!selectedRow || !user) return false;
