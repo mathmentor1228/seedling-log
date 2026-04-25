@@ -510,11 +510,13 @@ export function ExamReviewPanel() {
       }
 
       const normalizedItems = normalizeTemplateItems(templateRow.items, templateRow.total_items || DEFAULT_TOTAL_ITEMS);
+      const normalizedAnswers = normalizeAnswers(templateRow.answers);
       setTemplate({
         id: templateRow.id,
         total_items: templateRow.total_items,
         items: normalizedItems,
         error_types: normalizeErrorTypes(templateRow.error_types),
+        answers: normalizedAnswers,
       });
 
       if (templateRow.answer_mode === 'image' && Array.isArray(templateRow.answer_image_paths)) {
@@ -527,7 +529,7 @@ export function ExamReviewPanel() {
         const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(templateRow.answer_pdf_path, 3600);
         setAnswerDisplay(data?.signedUrl ? { type: 'pdf', url: data.signedUrl } : null);
       } else {
-        setAnswerDisplay({ type: 'direct', answers: normalizeAnswers(templateRow.answers) });
+        setAnswerDisplay({ type: 'direct', answers: normalizedAnswers });
       }
     } catch (error: any) {
       setTemplate(null);
