@@ -755,12 +755,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
             </FormSection>
 
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full min-w-[820px] border-collapse text-sm">
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[900px] table-fixed border-collapse text-sm">
+                  <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
-                      {(SUBJECT_COLUMNS[form.subject] ?? SUBJECT_COLUMNS.기타).map((column) => <th key={column} className="px-3 py-2 text-left text-xs font-medium">{column}</th>)}
-                      <th className="w-10 px-2 py-2" />
+                      {(SUBJECT_COLUMNS[form.subject] ?? SUBJECT_COLUMNS.기타).map((column) => <th key={column} className="px-3 py-2 text-left text-xs font-medium leading-5">{column}</th>)}
+                      <th className="px-2 py-2" />
                     </tr>
                   </thead>
                   <tbody>
