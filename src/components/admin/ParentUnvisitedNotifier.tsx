@@ -251,6 +251,7 @@ export function ParentUnvisitedNotifier() {
                 <TableHead className="w-10"></TableHead>
                 <TableHead>학생</TableHead>
                 <TableHead>학년</TableHead>
+                <TableHead>담당선생님</TableHead>
                 <TableHead>학부모</TableHead>
                 <TableHead>연락처</TableHead>
                 <TableHead>마지막 접속</TableHead>
@@ -268,6 +269,7 @@ export function ParentUnvisitedNotifier() {
                     </TableCell>
                     <TableCell className="font-medium">{student.name}</TableCell>
                     <TableCell className="text-muted-foreground">{student.grade ? `${student.grade}학년` : '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{student.teacher_name || '-'}</TableCell>
                     <TableCell>{student.parent_name || '-'}</TableCell>
                     <TableCell className="text-muted-foreground">{student.parent_phone || '-'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
