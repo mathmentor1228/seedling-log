@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 import { SelfCheckTab } from '@/components/student/exam-review/SelfCheckTab';
-import { CheckCircle2, ClipboardCheck, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle2, ClipboardCheck, Image as ImageIcon, School } from 'lucide-react';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
 type ItemResult = 'correct' | 'wrong' | 'partial' | null;
@@ -34,6 +34,8 @@ interface SelfCheckRow {
 
 interface ReviewData {
   id: string;
+  earned_score: number | null;
+  total_score: number | null;
   overall_comment: string | null;
   reviewed_at: string | null;
   reviewed_by_name: string | null;
@@ -59,6 +61,23 @@ interface ExamReviewRow {
   exam_reviews: ReviewData[];
 }
 
+interface SchoolExamReport {
+  id: string;
+  school_name: string;
+  subject: string;
+  grade: string;
+  exam_type: string;
+  exam_year: number;
+  exam_period: string;
+  total_students: number | null;
+  academy_helped_rate: number | null;
+  wrong_item_stats: Array<{ wrong_rate?: number; item_number?: number }> | null;
+  final_report: string | null;
+  recommended_study: string[] | null;
+  top_weak_concepts: string[] | null;
+  ai_report?: string | null;
+}
+
 const EXAM_TYPE_LABELS: Record<string, string> = {
   midterm: '중간고사',
   final: '기말고사',
@@ -75,6 +94,7 @@ const RESULT_LABELS: Record<Exclude<ItemResult, null>, string> = {
 export default function StudentExamReview() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
+  const [schoolReport, setSchoolReport] = useState<SchoolExamReport | null>(null);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'teacher' | 'self'>('teacher');
@@ -83,6 +103,7 @@ export default function StudentExamReview() {
     setLoading(true);
     const { data } = await studentApi.getExamReviews();
     setRows((data?.reviews || []) as ExamReviewRow[]);
+    setSchoolReport((data?.school_report || null) as SchoolExamReport | null);
     setLoading(false);
   }, []);
 
