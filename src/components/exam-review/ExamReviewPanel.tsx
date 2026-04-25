@@ -256,6 +256,7 @@ export function ExamReviewPanel() {
   const [overallComment, setOverallComment] = useState('');
   const [itemReviews, setItemReviews] = useState<OverlayReviewItem[]>([]);
   const [template, setTemplate] = useState<OverlayTemplateData | null>(null);
+  const [answerDisplay, setAnswerDisplay] = useState<OverlayAnswerDisplay | null>(null);
   const [templateLoading, setTemplateLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiGenerated, setAiGenerated] = useState(false);
@@ -464,6 +465,7 @@ export function ExamReviewPanel() {
 
     if (!row || !schoolName || !subject || !grade) {
       setTemplate(null);
+      setAnswerDisplay(null);
       return;
     }
 
@@ -480,7 +482,7 @@ export function ExamReviewPanel() {
 
       let query = supabase
         .from('exam_score_templates')
-        .select('id, total_items, items, error_types, created_at')
+        .select('id, total_items, items, error_types, answer_mode, answers, answer_image_paths, answer_pdf_path, created_at')
         .eq('school_name', schoolName)
         .eq('subject', subject)
         .eq('grade', grade);
@@ -503,17 +505,33 @@ export function ExamReviewPanel() {
 
       if (!templateRow) {
         setTemplate(null);
+        setAnswerDisplay(null);
         return;
       }
 
+      const normalizedItems = normalizeTemplateItems(templateRow.items, templateRow.total_items || DEFAULT_TOTAL_ITEMS);
       setTemplate({
         id: templateRow.id,
         total_items: templateRow.total_items,
-        items: normalizeTemplateItems(templateRow.items, templateRow.total_items || DEFAULT_TOTAL_ITEMS),
+        items: normalizedItems,
         error_types: normalizeErrorTypes(templateRow.error_types),
       });
+
+      if (templateRow.answer_mode === 'image' && Array.isArray(templateRow.answer_image_paths)) {
+        const urls = await Promise.all(templateRow.answer_image_paths.filter((path): path is string => typeof path === 'string').map(async (path) => {
+          const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(path, 3600);
+          return data?.signedUrl ?? '';
+        }));
+        setAnswerDisplay({ type: 'image', urls: urls.filter(Boolean) });
+      } else if (templateRow.answer_mode === 'pdf' && templateRow.answer_pdf_path) {
+        const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(templateRow.answer_pdf_path, 3600);
+        setAnswerDisplay(data?.signedUrl ? { type: 'pdf', url: data.signedUrl } : null);
+      } else {
+        setAnswerDisplay({ type: 'direct', answers: normalizeAnswers(templateRow.answers) });
+      }
     } catch (error: any) {
       setTemplate(null);
+      setAnswerDisplay(null);
       toast({ title: '템플릿 조회 실패', description: error.message, variant: 'destructive' });
     } finally {
       setTemplateLoading(false);
