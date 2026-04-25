@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 
 interface PhotoThumbProps {
   storagePath: string;
@@ -44,17 +44,15 @@ export function PhotoThumb({
 
     void (async () => {
       try {
-        const { data, error } = await supabase.storage
-          .from('exam-results')
-          .createSignedUrl(storagePath, 3600);
+        const signedUrlResult = await getCachedSignedUrl('exam-results', storagePath, 3600);
 
         if (cancelled) return;
 
-        if (error || !data?.signedUrl) {
+        if (!signedUrlResult) {
           setFailed(true);
         } else {
-          setSrc(data.signedUrl);
-          onResolvedUrl?.(data.signedUrl);
+          setSrc(signedUrlResult);
+          onResolvedUrl?.(signedUrlResult);
         }
       } catch {
         if (!cancelled) setFailed(true);
