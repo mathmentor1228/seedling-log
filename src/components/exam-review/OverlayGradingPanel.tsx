@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2, PenSquare } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { PhotoThumb } from '@/components/exam-review/PhotoThumb';
@@ -115,6 +114,12 @@ function displayScore(score: number) {
   if (!Number.isFinite(score)) return '0';
   const rounded = Math.round(score * 100) / 100;
   return Number.isInteger(rounded) ? `${rounded}` : `${Math.round(rounded * 10) / 10}`;
+}
+
+function getTemplateAnswer(item: OverlayTemplateItem | undefined) {
+  const source = item as (OverlayTemplateItem & { answer?: unknown; correct_answer?: unknown; correctAnswer?: unknown }) | undefined;
+  const value = source?.answer ?? source?.correct_answer ?? source?.correctAnswer;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 function ResultBadge({ result, no, onClick }: { result: Exclude<ItemResult, ''>; no: number; onClick: () => void }) {
