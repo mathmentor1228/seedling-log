@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -379,9 +380,9 @@ export function SchoolExamArchive() {
   };
 
   const handleDownloadFile = async (mat: Material) => {
-    const { data, error } = await supabase.storage.from('school-exam-materials').createSignedUrl(mat.storage_path, 3600);
-    if (error || !data?.signedUrl) { toast.error('다운로드 링크 생성 실패'); return; }
-    window.open(data.signedUrl, '_blank');
+    const signedUrl = await getCachedSignedUrl('school-exam-materials', mat.storage_path, 3600);
+    if (!signedUrl) { toast.error('다운로드 링크 생성 실패'); return; }
+    window.open(signedUrl, '_blank');
   };
 
   const handleDeleteMaterial = async (mat: Material) => {
@@ -644,10 +645,10 @@ export function SchoolExamArchive() {
 
   const getSignedUrl = useCallback(async (storagePath: string) => {
     if (signedUrls[storagePath]) return signedUrls[storagePath];
-    const { data, error } = await supabase.storage.from('school-exam-materials').createSignedUrl(storagePath, 3600);
-    if (!error && data?.signedUrl) {
-      setSignedUrls(prev => ({ ...prev, [storagePath]: data.signedUrl }));
-      return data.signedUrl;
+    const signedUrl = await getCachedSignedUrl('school-exam-materials', storagePath, 3600);
+    if (signedUrl) {
+      setSignedUrls(prev => ({ ...prev, [storagePath]: signedUrl }));
+      return signedUrl;
     }
     return null;
   }, [signedUrls]);
@@ -665,7 +666,7 @@ export function SchoolExamArchive() {
     if (imageMats.length > 0) {
       imageMats.forEach(m => getSignedUrl(m.storage_path));
     }
-  }, [materials]);
+  }, [materials, signedUrls, getSignedUrl]);
 
   // School calendar images
   interface CalendarImage {
@@ -701,12 +702,10 @@ export function SchoolExamArchive() {
     // Load signed URLs for all images
     const urlPromises = (data || []).map(async (img: CalendarImage) => {
       try {
-        const { data: urlData, error: urlError } = await supabase.storage
-          .from('school-exam-materials')
-          .createSignedUrl(img.storage_path, 3600);
-        if (urlError) { console.error('Signed URL error:', urlError, img.storage_path); return null; }
-        if (urlData?.signedUrl) {
-          return { path: img.storage_path, url: urlData.signedUrl };
+        if (calendarUrls[img.storage_path]) return null;
+        const signedUrl = await getCachedSignedUrl('school-exam-materials', img.storage_path, 3600);
+        if (signedUrl) {
+          return { path: img.storage_path, url: signedUrl };
         }
       } catch (e) { console.error('Signed URL exception:', e); }
       return null;
@@ -717,7 +716,7 @@ export function SchoolExamArchive() {
     if (Object.keys(newUrls).length > 0) {
       setCalendarUrls(prev => ({ ...prev, ...newUrls }));
     }
-  }, []);
+  }, [calendarUrls]);
 
   useEffect(() => { loadCalendarImages(); }, [loadCalendarImages]);
 

@@ -3,6 +3,7 @@ import { Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { displayExamType, normalizeExamType, normalizeGrade, normalizeTextValue } from '@/lib/examTemplateUtils';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -309,14 +310,13 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     const resolveAnswerFiles = async () => {
       const [imageEntries, pdfEntry] = await Promise.all([
         Promise.all(answerImagePaths.map(async (path) => {
-          const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(path, 3600);
-          return data?.signedUrl ?? '';
+          return await getCachedSignedUrl('exam-analysis', path, 3600) ?? '';
         })),
-        answerPdfPath ? supabase.storage.from('exam-analysis').createSignedUrl(answerPdfPath, 3600) : Promise.resolve({ data: null }),
+        answerPdfPath ? getCachedSignedUrl('exam-analysis', answerPdfPath, 3600) : Promise.resolve(null),
       ]);
       if (!active) return;
       setAnswerImageUrls(imageEntries.filter(Boolean));
-      setAnswerPdfUrl(pdfEntry.data?.signedUrl ?? null);
+      setAnswerPdfUrl(pdfEntry);
     };
 
     void resolveAnswerFiles();

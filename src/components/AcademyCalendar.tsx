@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth, isAdmin as checkIsAdmin, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { getTodayKST, getKSTDateObject } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { ExamSubjectDetails } from '@/components/ExamSubjectDetails';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -527,12 +528,7 @@ export function AcademyCalendar() {
   }
 
   async function getSignedUrl(storagePath: string): Promise<string | null> {
-    const { data, error } = await supabase.storage
-      .from('attachments')
-      .createSignedUrl(storagePath, 60 * 5);
-    
-    if (error || !data) return null;
-    return data.signedUrl;
+    return await getCachedSignedUrl('attachments', storagePath, 60 * 5);
   }
 
   async function handleDownloadPoster(attachment: EventAttachment) {
@@ -1665,13 +1661,13 @@ function PosterThumbnail({ attachment, onClick }: { attachment: EventAttachment;
   const [url, setUrl] = useState<string | null>(null);
   
   useEffect(() => {
+    let active = true;
     async function loadUrl() {
-      const { data } = await supabase.storage
-        .from('attachments')
-        .createSignedUrl(attachment.storage_path, 60 * 5);
-      if (data) setUrl(data.signedUrl);
+      const signedUrl = await getCachedSignedUrl('attachments', attachment.storage_path, 60 * 5);
+      if (active) setUrl(signedUrl);
     }
     loadUrl();
+    return () => { active = false; };
   }, [attachment.storage_path]);
   
   if (!url) {
@@ -1813,13 +1809,13 @@ function EventImageViewer({ attachment, onDownload }: { attachment: EventAttachm
   const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
+    let active = true;
     async function loadUrl() {
-      const { data } = await supabase.storage
-        .from('attachments')
-        .createSignedUrl(attachment.storage_path, 60 * 10);
-      if (data) setUrl(data.signedUrl);
+      const signedUrl = await getCachedSignedUrl('attachments', attachment.storage_path, 60 * 10);
+      if (active) setUrl(signedUrl);
     }
     loadUrl();
+    return () => { active = false; };
   }, [attachment.storage_path]);
 
   if (!url) {

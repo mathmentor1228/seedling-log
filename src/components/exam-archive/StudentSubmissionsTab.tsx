@@ -15,6 +15,7 @@ import { ko } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { generateExamResultPdf, buildPdfTitle } from '@/lib/examResultPdf';
 import { compressImage } from '@/lib/imageCompression';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 
 const EXAM_TYPE_LABELS: Record<string, string> = {
   midterm: '중간고사', final: '기말고사', performance: '수행평가', other: '기타',
@@ -87,14 +88,14 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
         const photos = await Promise.all((r.student_exam_result_photos || [])
           .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
           .map(async (p: any) => {
-            const { data: signed } = await supabase.storage.from('exam-results').createSignedUrl(p.storage_path, 3600);
-            return { ...p, signedUrl: signed?.signedUrl };
+            const signedUrl = await getCachedSignedUrl('exam-results', p.storage_path, 3600);
+            return { ...p, signedUrl };
           }));
         const pdfs = await Promise.all((r.student_exam_result_pdfs || [])
           .sort((a: any, b: any) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime())
           .map(async (p: any) => {
-            const { data: signed } = await supabase.storage.from('exam-results').createSignedUrl(p.storage_path, 3600);
-            return { ...p, signedUrl: signed?.signedUrl };
+            const signedUrl = await getCachedSignedUrl('exam-results', p.storage_path, 3600);
+            return { ...p, signedUrl };
           }));
         const s = studentMap.get(r.student_id);
         return {

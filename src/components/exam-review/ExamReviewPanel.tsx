@@ -3,6 +3,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { displayExamType, normalizeExamType, normalizeGrade, normalizeTextValue } from '@/lib/examTemplateUtils';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -175,8 +176,7 @@ function formatScoreLabel(value: number | null | undefined) {
 async function resolvePhotoUrl(storagePath: string) {
   const publicUrl = supabase.storage.from('exam-results').getPublicUrl(storagePath).data.publicUrl;
   if (publicUrl) return publicUrl;
-  const { data } = await supabase.storage.from('exam-results').createSignedUrl(storagePath, 3600);
-  return data?.signedUrl ?? '';
+  return await getCachedSignedUrl('exam-results', storagePath, 3600) ?? '';
 }
 
 function getStatusClasses(status: ReviewStatus, selected: boolean) {
@@ -521,13 +521,12 @@ export function ExamReviewPanel() {
 
       if (templateRow.answer_mode === 'image' && Array.isArray(templateRow.answer_image_paths)) {
         const urls = await Promise.all(templateRow.answer_image_paths.filter((path): path is string => typeof path === 'string').map(async (path) => {
-          const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(path, 3600);
-          return data?.signedUrl ?? '';
+          return await getCachedSignedUrl('exam-analysis', path, 3600) ?? '';
         }));
         setAnswerDisplay({ type: 'image', urls: urls.filter(Boolean) });
       } else if (templateRow.answer_mode === 'pdf' && templateRow.answer_pdf_path) {
-        const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(templateRow.answer_pdf_path, 3600);
-        setAnswerDisplay(data?.signedUrl ? { type: 'pdf', url: data.signedUrl } : null);
+        const signedUrl = await getCachedSignedUrl('exam-analysis', templateRow.answer_pdf_path, 3600);
+        setAnswerDisplay(signedUrl ? { type: 'pdf', url: signedUrl } : null);
       } else {
         setAnswerDisplay({ type: 'direct', answers: normalizedAnswers });
       }

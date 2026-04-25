@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth, isAdmin as checkIsAdmin } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -417,13 +418,9 @@ export function TeamNotesBoard() {
 
   async function handleDownloadAttachment(storagePath: string, originalName: string) {
     try {
-      const { data, error } = await supabase.storage
-        .from('team_files')
-        .createSignedUrl(storagePath, 60);
-      
-      if (error) throw error;
-      
-      window.open(data.signedUrl, '_blank');
+      const signedUrl = await getCachedSignedUrl('team_files', storagePath, 60);
+      if (!signedUrl) throw new Error('Signed URL unavailable');
+      window.open(signedUrl, '_blank');
     } catch (error) {
       console.error('Error downloading attachment:', error);
       toast({

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -208,17 +209,14 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setAnswerImageUrls([]);
 
     if (originalPath) {
-      const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(originalPath, 3600);
-      setOriginalPdfUrl(data?.signedUrl ?? null);
+      setOriginalPdfUrl(await getCachedSignedUrl('exam-analysis', originalPath, 3600));
     }
     if (answerPath) {
-      const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(answerPath, 3600);
-      setAnswerPdfUrl(data?.signedUrl ?? null);
+      setAnswerPdfUrl(await getCachedSignedUrl('exam-analysis', answerPath, 3600));
     }
     if (answerImagePaths.length > 0) {
       const urls = await Promise.all(answerImagePaths.map(async (path) => {
-        const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(path, 3600);
-        return data?.signedUrl ?? '';
+        return await getCachedSignedUrl('exam-analysis', path, 3600) ?? '';
       }));
       setAnswerImageUrls(urls.filter(Boolean));
     }

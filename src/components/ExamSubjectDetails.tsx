@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -175,12 +176,9 @@ export function ExamSubjectDetails({ eventId, examStartDate, examEndDate }: Prop
   async function handleDownloadPaper(detail: ExamSubjectDetail) {
     if (!detail.paper_storage_path) return;
     try {
-      const { data, error } = await supabase.storage
-        .from('exam-papers')
-        .createSignedUrl(detail.paper_storage_path, 60 * 5);
-      if (error) throw error;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
+      const signedUrl = await getCachedSignedUrl('exam-papers', detail.paper_storage_path, 60 * 5);
+      if (signedUrl) {
+        window.open(signedUrl, '_blank');
       }
     } catch (err: any) {
       toast.error('다운로드 실패: ' + err.message);

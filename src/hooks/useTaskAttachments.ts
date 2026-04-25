@@ -2,6 +2,7 @@
 // Hook for fetching task attachment counts and generating signed URLs
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 
 export interface TaskAttachment {
   id: string;
@@ -69,16 +70,7 @@ export async function fetchTaskAttachments(taskId: string): Promise<TaskAttachme
 // Generate signed URL for a single attachment
 export async function generateSignedUrl(storagePath: string): Promise<string | null> {
   try {
-    const { data, error } = await supabase.storage
-      .from('attachments')
-      .createSignedUrl(storagePath, 3600); // 1 hour expiry
-
-    if (error) {
-      console.error('[SIGNED_URL] Error generating signed URL:', error);
-      return null;
-    }
-
-    return data?.signedUrl || null;
+    return await getCachedSignedUrl('attachments', storagePath, 3600);
   } catch (error) {
     console.error('[SIGNED_URL] Error:', error);
     return null;

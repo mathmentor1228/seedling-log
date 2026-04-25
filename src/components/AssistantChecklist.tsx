@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -530,12 +531,7 @@ export default function AssistantChecklist({ onTestOnlyVisit }: AssistantCheckli
   }
 
   async function getSignedUrl(storagePath: string): Promise<string | null> {
-    const { data, error } = await supabase.storage
-      .from('attachments')
-      .createSignedUrl(storagePath, 60 * 5); // 5 min
-    
-    if (error || !data) return null;
-    return data.signedUrl;
+    return await getCachedSignedUrl('attachments', storagePath, 60 * 5);
   }
 
   async function handleDownload(attachment: TaskAttachment) {
