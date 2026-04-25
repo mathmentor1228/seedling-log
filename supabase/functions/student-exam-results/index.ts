@@ -336,6 +336,68 @@ async function uploadPhotos(supabase: any, photos: any[], student_id: string, re
   }
 }
 
+async function extractFirstItemNumber(photo: { signedUrl: string | null; sort_order: number }, fallback: number) {
+  if (!photo.signedUrl) return fallback;
+  const apiKey = Deno.env.get('LOVABLE_API_KEY');
+  if (!apiKey) return fallback;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: photo.signedUrl } },
+            { type: 'text', text: '이 시험지 페이지에서 가장 첫 번째로 나오는 문항 번호만 숫자로만 답해주세요. 예: 1, 11, 21. 문항 번호가 없으면 0으로 답해주세요.' },
+          ],
+        }],
+        temperature: 0,
+        max_tokens: 20,
+      }),
+    });
+    if (!response.ok) return fallback;
+    const data = await response.json();
+    const text = String(data.choices?.[0]?.message?.content ?? '').trim();
+    const match = text.match(/\d+/);
+    const number = match ? Number(match[0]) : 0;
+    return Number.isFinite(number) && number > 0 ? number : fallback;
+  } catch (e) {
+    console.error('extractFirstItemNumber failed', e);
+    return fallback;
+  }
+}
+
+async function sortResultPhotosByPageNumber(supabase: any, result_id: string) {
+  const { data: photos, error } = await supabase
+    .from('student_exam_result_photos')
+    .select('id, storage_path, original_name, sort_order')
+    .eq('result_id', result_id)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  if (!photos || photos.length <= 1) return { photos: photos || [], sorted: false };
+
+  const withUrls = await Promise.all(photos.map(async (photo: any) => {
+    const { data: signed } = await supabase.storage.from('exam-results').createSignedUrl(photo.storage_path, 900);
+    return { ...photo, signedUrl: signed?.signedUrl || null };
+  }));
+
+  const withNumbers = await Promise.all(withUrls.map(async (photo: any, index: number) => ({
+    ...photo,
+    firstItemNo: await extractFirstItemNumber(photo, (index + 1) * 10000),
+  })));
+
+  const sorted = [...withNumbers].sort((a: any, b: any) => a.firstItemNo - b.firstItemNo);
+  await Promise.all(sorted.map((photo: any, index: number) => supabase
+    .from('student_exam_result_photos')
+    .update({ sort_order: index })
+    .eq('id', photo.id)));
+
+  return { photos: sorted.map((p: any, index: number) => ({ ...p, sort_order: index })), sorted: true };
+}
+
 async function uploadPdfFromDataUrl(supabase: any, pdf: { dataUrl: string; title: string; pageCount?: number }, result_id: string, user_id: string, staff_name: string) {
   try {
     const parsed = parseDataUrl(pdf.dataUrl);
