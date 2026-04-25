@@ -52,6 +52,10 @@ interface ActiveOverlayItem {
   points: number;
 }
 
+interface GradeTooltip extends ActiveOverlayItem {
+  answer: string | null;
+}
+
 interface OverlaySavePayload {
   id?: string;
   item_number: number;
@@ -282,11 +286,8 @@ export function OverlayGradingPanel({
 }: OverlayGradingPanelProps) {
   const imageContainerRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState(0);
-  const [activeItem, setActiveItem] = useState<ActiveOverlayItem | null>(null);
-  const [result, setResult] = useState<Exclude<ItemResult, ''> | ''>('');
-  const [earnedScore, setEarnedScore] = useState(0);
-  const [errorTypes, setErrorTypes] = useState<string[]>([]);
-  const [customReason, setCustomReason] = useState('');
+  const [tooltip, setTooltip] = useState<GradeTooltip | null>(null);
+  const [essayScore, setEssayScore] = useState(0);
   const [expandedOpen, setExpandedOpen] = useState(false);
 
   const currentPhoto = photos[page] ?? null;
@@ -321,10 +322,11 @@ export function OverlayGradingPanel({
     return positionedItems.sort((a, b) => a.item_number - b.item_number);
   }, [items, page, template]);
 
-  const openEditor = (item: OverlayReviewItem | QuickGradeItem) => {
-    if (item.overlay_x == null || item.overlay_y == null || item.page_number == null || !item.result) return;
-    const points = template?.items.find((templateItem) => templateItem.no === item.item_number)?.points ?? 0;
-    setActiveItem({
+  const openTooltip = (item: OverlayReviewItem | QuickGradeItem) => {
+    if (item.overlay_x == null || item.overlay_y == null || item.page_number == null) return;
+    const templateItem = template?.items.find((source) => source.no === item.item_number);
+    const points = templateItem?.points ?? 0;
+    setTooltip({
       id: item.id,
       item_number: item.item_number,
       overlay_x: item.overlay_x,
@@ -332,19 +334,9 @@ export function OverlayGradingPanel({
       page_number: item.page_number,
       is_essay: item.is_essay,
       points,
+      answer: getTemplateAnswer(templateItem),
     });
-    setResult(item.result);
-    setEarnedScore(clampScore(item.score_earned ?? points, points));
-    setErrorTypes(item.error_types);
-    setCustomReason(item.custom_reason);
-  };
-
-  const resetEditor = () => {
-    setActiveItem(null);
-    setResult('');
-    setEarnedScore(0);
-    setErrorTypes([]);
-    setCustomReason('');
+    setEssayScore(clampScore(item.score_earned ?? points, points));
   };
 
   const handleImageClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -357,46 +349,16 @@ export function OverlayGradingPanel({
     const nextUnscored = template.items.find((templateItem) => !items.some((item) => item.item_number === templateItem.no && item.result));
     if (!nextUnscored) return;
 
-    setActiveItem({
+    setTooltip({
       item_number: nextUnscored.no,
       overlay_x: x,
       overlay_y: y,
       page_number: page + 1,
       is_essay: nextUnscored.is_essay,
       points: nextUnscored.points,
+      answer: getTemplateAnswer(nextUnscored),
     });
-    setResult('');
-    setEarnedScore(nextUnscored.is_essay ? nextUnscored.points : 0);
-    setErrorTypes([]);
-    setCustomReason('');
-  };
-
-  const handleToggleError = (value: string) => {
-    setErrorTypes((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]));
-  };
-
-  const handleSave = async () => {
-    if (!activeItem || !result) return;
-    const nextScore = activeItem.is_essay
-      ? clampScore(earnedScore, activeItem.points)
-      : result === 'correct'
-        ? activeItem.points
-        : 0;
-
-    await onSaveItem({
-      id: activeItem.id,
-      item_number: activeItem.item_number,
-      result,
-      score_earned: nextScore,
-      is_essay: activeItem.is_essay,
-      error_types: result === 'correct' ? [] : errorTypes,
-      custom_reason: result === 'correct' ? '' : customReason.trim(),
-      overlay_x: activeItem.overlay_x,
-      overlay_y: activeItem.overlay_y,
-      page_number: activeItem.page_number,
-    });
-
-    resetEditor();
+    setEssayScore(nextUnscored.is_essay ? nextUnscored.points : 0);
   };
 
   const handleQuickGrade = async (item: QuickGradeItem, nextResult: Exclude<ItemResult, ''>) => {
