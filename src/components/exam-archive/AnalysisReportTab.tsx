@@ -542,6 +542,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       avg_score: form.avgScore ? Number(form.avgScore) : null,
       overall_review: form.overallReview || null,
       original_pdf_path: form.originalPdfPath || null,
+      answer_mode: form.answerMode,
+      answers: form.answers,
+      answer_image_paths: form.answerImagePaths,
       answer_pdf_path: form.answerPdfPath || null,
       study_links: form.studyLinks.filter((link) => link.title || link.url),
       created_by: user.id,
@@ -637,7 +640,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     const confirmed = window.confirm(`"${report.subject} ${report.exam_type}" 보고서를\n삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
     if (!confirmed) return;
 
-    const paths = [report.original_pdf_path, report.answer_pdf_path].filter(Boolean) as string[];
+    const paths = [report.original_pdf_path, report.answer_pdf_path, ...(Array.isArray(report.answer_image_paths) ? report.answer_image_paths : [])].filter(Boolean) as string[];
     if (paths.length > 0) {
       const { error: storageError } = await supabase.storage.from('exam-analysis').remove(paths);
       if (storageError) console.error(storageError);
