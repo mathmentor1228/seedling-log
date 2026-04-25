@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -644,10 +645,10 @@ export function SchoolExamArchive() {
 
   const getSignedUrl = useCallback(async (storagePath: string) => {
     if (signedUrls[storagePath]) return signedUrls[storagePath];
-    const { data, error } = await supabase.storage.from('school-exam-materials').createSignedUrl(storagePath, 3600);
-    if (!error && data?.signedUrl) {
-      setSignedUrls(prev => ({ ...prev, [storagePath]: data.signedUrl }));
-      return data.signedUrl;
+    const signedUrl = await getCachedSignedUrl('school-exam-materials', storagePath, 3600);
+    if (signedUrl) {
+      setSignedUrls(prev => ({ ...prev, [storagePath]: signedUrl }));
+      return signedUrl;
     }
     return null;
   }, [signedUrls]);
@@ -665,7 +666,7 @@ export function SchoolExamArchive() {
     if (imageMats.length > 0) {
       imageMats.forEach(m => getSignedUrl(m.storage_path));
     }
-  }, [materials]);
+  }, [materials, signedUrls, getSignedUrl]);
 
   // School calendar images
   interface CalendarImage {
