@@ -133,7 +133,9 @@ function normalizeAnswers(raw: unknown): Record<number, string> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   return Object.entries(raw as Record<string, unknown>).reduce<Record<number, string>>((acc, [key, value]) => {
     const itemNo = Number(key);
-    if (Number.isFinite(itemNo) && typeof value === 'string') acc[itemNo] = value;
+    if (!Number.isFinite(itemNo)) return acc;
+    if (typeof value === 'string' && value.trim()) acc[itemNo] = value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) acc[itemNo] = String(value);
     return acc;
   }, {});
 }
