@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { FileText, Loader2, Plus, Save, Sparkles, Trash2, Upload } from 'lucide-react';
+import { FileText, Loader2, Lock, Pencil, Plus, Save, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -34,6 +34,10 @@ type AnalysisReport = {
   created_by_name: string | null;
   created_at: string;
   updated_at: string;
+  is_locked: boolean | null;
+  locked_by: string | null;
+  locked_by_name: string | null;
+  locked_at: string | null;
 };
 
 type AnalysisItem = {
@@ -125,7 +129,7 @@ interface Props {
 }
 
 export function AnalysisReportTab({ schools, selectedSchool }: Props) {
-  const { user, fullName } = useAuth();
+  const { user, fullName, role } = useAuth();
   const [reports, setReports] = useState<AnalysisReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -137,6 +141,14 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+
+  const selectedReport = useMemo(
+    () => reports.find((report) => report.id === selectedReportId) ?? null,
+    [reports, selectedReportId],
+  );
+  const isLocked = !!selectedReport?.is_locked;
+  const canManageLock = role === 'admin';
 
   const filteredReports = useMemo(() => {
     return reports
@@ -233,13 +245,20 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setSelectedReportId(null);
     setForm(emptyForm(selectedSchool || schools[0]?.name || ''));
     setItems(createDefaultItems());
+    setParseResult(null);
+  }
+
+  function handleEdit(report: AnalysisReport) {
+    void selectReport(report);
   }
 
   function updateForm<K extends keyof ReportForm>(key: K, value: ReportForm[K]) {
+    if (isLocked) return;
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function addLink() {
+    if (isLocked) return;
     updateForm('studyLinks', [...form.studyLinks, { title: '', url: '' }]);
   }
 
@@ -251,24 +270,32 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   function removeLink(index: number) {
+    if (isLocked) return;
     updateForm('studyLinks', form.studyLinks.filter((_, i) => i !== index));
   }
 
   function addItem() {
+    if (isLocked) return;
     setItems((prev) => [...prev, { item_number: prev.length + 1, difficulty: '중', sort_order: prev.length }]);
   }
 
   function updateItem<K extends keyof AnalysisItem>(index: number, key: K, value: AnalysisItem[K]) {
+    if (isLocked) return;
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   }
 
   function removeItem(index: number) {
+    if (isLocked) return;
     setItems((prev) => prev.filter((_, i) => i !== index).map((item, i) => ({ ...item, item_number: i + 1, sort_order: i })));
   }
 
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'original' | 'answer') {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (isLocked) {
+      toast.error('잠금 상태에서는 파일을 변경할 수 없습니다.');
+      return;
+    }
     if (file.type !== 'application/pdf') {
       toast.error('PDF 파일만 업로드할 수 있습니다.');
       return;
@@ -325,6 +352,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (isLocked) {
+      toast.error('잠금 상태에서는 AI 분석을 실행할 수 없습니다.');
+      return;
+    }
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
       toast.error('이미지 또는 PDF 파일만 업로드할 수 있습니다.');
       return;
@@ -361,6 +392,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   async function parseExistingPdf() {
+    if (isLocked) {
+      toast.error('잠금 상태에서는 AI 분석을 실행할 수 없습니다.');
+      return;
+    }
     if (!originalPdfUrl) {
       toast.error('업로드된 원본 시험지가 없습니다.');
       return;
@@ -394,12 +429,51 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       toast.error('로그인이 필요합니다.');
       return;
     }
+    if (isLocked) {
+      toast.error('잠금 상태에서는 저장할 수 없습니다.');
+      return;
+    }
     if (!form.schoolName || !form.grade || !form.subject || !form.examType || !form.examYear || !form.examPeriod) {
       toast.error('필수 정보를 입력해주세요.');
       return;
     }
 
     setSaving(true);
+    const { data: existing, error: existingError } = await (supabase as any)
+      .from('exam_analysis_reports')
+      .select('id, created_by_name, updated_at, is_locked')
+      .eq('school_name', form.schoolName)
+      .eq('grade', form.grade)
+      .eq('subject', form.subject)
+      .eq('exam_type', form.examType)
+      .eq('exam_year', Number(form.examYear))
+      .eq('exam_period', form.examPeriod)
+      .maybeSingle();
+
+    if (existingError) {
+      toast.error('기존 보고서 확인에 실패했습니다.');
+      console.error(existingError);
+      setSaving(false);
+      return;
+    }
+
+    if (existing && existing.id !== selectedReportId) {
+      if (existing.is_locked) {
+        alert('이 보고서는 잠금 상태입니다.\n원장에게 잠금 해제를 요청해주세요.');
+        setSaving(false);
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `⚠️ 기존 보고서가 있습니다!\n\n작성자: ${existing.created_by_name || '작성자 미상'}\n수정일: ${new Date(existing.updated_at).toLocaleDateString('ko-KR')}\n\n덮어쓰시겠습니까?\n(기존 내용이 모두 삭제됩니다)`,
+      );
+
+      if (!confirmed) {
+        setSaving(false);
+        return;
+      }
+    }
+
     const payload = {
       school_name: form.schoolName,
       grade: form.grade,
@@ -475,6 +549,64 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setSaving(false);
   }
 
+  async function handleToggleLock() {
+    if (!selectedReport || !user || role !== 'admin') return;
+
+    const newLocked = !selectedReport.is_locked;
+    const confirmed = window.confirm(
+      newLocked
+        ? '이 보고서를 잠금 처리하시겠습니까?\n잠금 후 선생님이 수정할 수 없습니다.'
+        : '잠금을 해제하시겠습니까?',
+    );
+    if (!confirmed) return;
+
+    const lockPayload = {
+      is_locked: newLocked,
+      locked_by: newLocked ? user.id : null,
+      locked_by_name: newLocked ? fullName || user.email || '' : null,
+      locked_at: newLocked ? new Date().toISOString() : null,
+    };
+    const { error } = await (supabase as any).from('exam_analysis_reports').update(lockPayload).eq('id', selectedReport.id);
+    if (error) {
+      toast.error('잠금 상태 변경에 실패했습니다.');
+      console.error(error);
+      return;
+    }
+
+    setReports((prev) => prev.map((report) => (report.id === selectedReport.id ? { ...report, ...lockPayload } : report)));
+    toast.success(newLocked ? '보고서를 잠금 처리했습니다.' : '잠금을 해제했습니다.');
+  }
+
+  async function handleDelete(report: AnalysisReport) {
+    if (report.is_locked) return;
+    const confirmed = window.confirm(`"${report.subject} ${report.exam_type}" 보고서를\n삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
+    if (!confirmed) return;
+
+    const paths = [report.original_pdf_path, report.answer_pdf_path].filter(Boolean) as string[];
+    if (paths.length > 0) {
+      const { error: storageError } = await supabase.storage.from('exam-analysis').remove(paths);
+      if (storageError) console.error(storageError);
+    }
+
+    const { error: itemDeleteError } = await (supabase as any).from('exam_analysis_items').delete().eq('report_id', report.id);
+    if (itemDeleteError) {
+      toast.error('문항 분석 삭제에 실패했습니다.');
+      console.error(itemDeleteError);
+      return;
+    }
+
+    const { error } = await (supabase as any).from('exam_analysis_reports').delete().eq('id', report.id);
+    if (error) {
+      toast.error('보고서 삭제에 실패했습니다.');
+      console.error(error);
+      return;
+    }
+
+    setReports((prev) => prev.filter((row) => row.id !== report.id));
+    if (selectedReportId === report.id) startNewReport();
+    toast.success('보고서를 삭제했습니다.');
+  }
+
   return (
     <div className="flex h-[calc(100vh-120px)] min-h-0 w-full overflow-hidden bg-background">
       <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
@@ -502,13 +634,23 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               <button
                 key={report.id}
                 onClick={() => void selectReport(report)}
+                onMouseEnter={() => setHoverId(report.id)}
+                onMouseLeave={() => setHoverId(null)}
                 className={cn(
-                   'w-full rounded-lg border bg-card p-3.5 text-left transition-colors hover:bg-accent',
+                   'relative w-full rounded-lg border bg-card p-3.5 text-left transition-colors hover:bg-accent',
                   selectedReportId === report.id && 'border-primary bg-primary/5',
                 )}
               >
+                {hoverId === report.id ? (
+                  <span className="absolute right-2 top-2 flex gap-1">
+                    <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleEdit(report); }} className="inline-flex items-center rounded bg-info/10 px-2 py-1 text-[11px] font-medium text-info"><Pencil className="mr-1 h-3 w-3" />수정</span>
+                    <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); void handleDelete(report); }} className={cn('inline-flex items-center rounded px-2 py-1 text-[11px] font-medium', report.is_locked ? 'cursor-not-allowed bg-muted text-muted-foreground' : 'bg-destructive/10 text-destructive')}>
+                      {report.is_locked ? <Lock className="h-3 w-3" /> : '삭제'}
+                    </span>
+                  </span>
+                ) : null}
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold">{report.subject}</span>
+                  <span className="flex items-center gap-1 truncate text-sm font-semibold">{report.subject}{report.is_locked ? <Lock className="h-3 w-3 text-muted-foreground" /> : null}</span>
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">{report.exam_type}</span>
                 </div>
                 <div className="text-xs text-muted-foreground">{report.school_name} · {report.grade}학년</div>
@@ -536,19 +678,37 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 <h3 className="text-xl font-bold text-primary">{selectedReportId ? `${form.subject} 분석보고서` : '새 보고서 작성'}</h3>
                 {selectedReportId ? <p className="mt-1 text-sm text-muted-foreground">{form.schoolName} · {form.grade}학년 · {form.examYear}년 {form.examPeriod} {form.examType}</p> : null}
               </div>
-              <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                저장
-              </Button>
+              <div className="flex items-center gap-2">
+                {canManageLock && selectedReport ? (
+                  <Button variant={selectedReport.is_locked ? 'destructive' : 'warning'} onClick={() => void handleToggleLock()} className="gap-2">
+                    {selectedReport.is_locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                    {selectedReport.is_locked ? '잠금 해제' : '잠금'}
+                  </Button>
+                ) : null}
+                {!isLocked ? (
+                  <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    저장
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
-            <AIParsePanel
-              isParsing={isParsing}
-              parseResult={parseResult}
-              originalPdfPath={form.originalPdfPath}
-              onUpload={handleAIParse}
-              onParseExisting={() => void parseExistingPdf()}
-            />
+            {selectedReport?.is_locked ? (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                <Lock className="h-4 w-4" />
+                잠금 상태입니다 — {selectedReport.locked_by_name || '관리자'}이(가) {selectedReport.locked_at ? new Date(selectedReport.locked_at).toLocaleDateString('ko-KR') : ''}에 잠금{canManageLock ? ' (위 버튼으로 해제 가능)' : ''}
+              </div>
+            ) : null}
+
+            <fieldset disabled={isLocked} className={cn('space-y-6', isLocked && 'opacity-75')}>
+              <AIParsePanel
+                isParsing={isParsing}
+                parseResult={parseResult}
+                originalPdfPath={form.originalPdfPath}
+                onUpload={handleAIParse}
+                onParseExisting={() => void parseExistingPdf()}
+              />
 
             <FormSection title="기본정보">
               <div className="grid gap-3 xl:grid-cols-6 md:grid-cols-3">
@@ -614,7 +774,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                   </tbody>
                 </table>
               </div>
-            </FormSection>
+              </FormSection>
+            </fieldset>
           </div>
         )}
       </section>
