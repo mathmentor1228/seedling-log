@@ -859,16 +859,23 @@ function FormSection({ title, action, children }: { title: string; action?: Reac
   return <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h4 className="text-base font-semibold">{title}</h4>{action}</div>{children}</section>;
 }
 
+function AnswerSheetSection({ mode, onModeChange, items, answers, setAnswer, imageUrls, onImageUpload, onRemoveImage, pdfUrl, onPdfUpload, onRemovePdf }: { mode: ReportForm['answerMode']; onModeChange: (mode: ReportForm['answerMode']) => void; items: AnalysisItem[]; answers: Record<string, string>; setAnswer: (itemNumber: number, value: string) => void; imageUrls: string[]; onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemoveImage: (index: number) => void; pdfUrl: string | null; onPdfUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemovePdf: () => void }) {
+  const modes: { key: ReportForm['answerMode']; label: string }[] = [{ key: 'direct', label: '직접 입력' }, { key: 'image', label: '이미지' }, { key: 'pdf', label: 'PDF' }];
+  return <FormSection title="답지" action={<div className="flex gap-1.5">{modes.map((entry) => <Button key={entry.key} type="button" size="sm" variant={mode === entry.key ? 'default' : 'outline'} className="h-7 px-3 text-xs" onClick={() => onModeChange(entry.key)}>{entry.label}</Button>)}</div>}>
+    {mode === 'direct' ? <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">{items.map((item) => <div key={item.item_number} className="rounded-lg border border-border bg-card p-2 text-center"><p className="mb-1 text-[11px] text-muted-foreground">{item.item_number}번{item.points ? ` (${item.points}점)` : ''}</p>{item.item_type === '논술형' || item.item_type === '단답형' ? <Textarea rows={2} value={answers[String(item.item_number)] || ''} onChange={(e) => setAnswer(item.item_number, e.target.value)} placeholder="정답" className="min-h-14 resize-none text-xs" /> : <div className="flex justify-center gap-1">{[1, 2, 3, 4, 5].map((n) => <Button key={n} type="button" variant={answers[String(item.item_number)] === String(n) ? 'default' : 'outline'} size="icon" className="h-7 w-7 rounded-full text-xs" onClick={() => setAnswer(item.item_number, String(n))}>{n}</Button>)}</div>}</div>)}</div> : null}
+    {mode === 'image' ? <div>{imageUrls.length > 0 ? <div className="mb-3 grid gap-2 sm:grid-cols-3">{imageUrls.map((url, index) => <div key={url} className="relative overflow-hidden rounded-lg border border-border"><img src={url} alt={`답지 ${index + 1}`} className="w-full object-contain" /><Button type="button" variant="destructive" size="icon" className="absolute right-1 top-1 h-6 w-6" onClick={() => onRemoveImage(index)}>×</Button></div>)}</div> : <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">JPG/PNG 답지 이미지를 업로드하세요.</div>}<label className="flex cursor-pointer items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent">+ 이미지 추가<input type="file" accept="image/*" multiple className="hidden" onChange={onImageUpload} /></label></div> : null}
+    {mode === 'pdf' ? <div className="rounded-lg border border-dashed border-border p-4 text-center">{pdfUrl ? <div className="flex items-center justify-center gap-3"><a href={pdfUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline-offset-4 hover:underline">📄 답지 PDF 보기</a><Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={onRemovePdf}>삭제</Button></div> : <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"><Upload className="h-4 w-4" /> 답지 PDF 업로드<input type="file" accept=".pdf,application/pdf" className="hidden" onChange={onPdfUpload} /></label>}</div> : null}
+  </FormSection>;
+}
+
 function AnalysisColGroup({ subject }: { subject: string }) {
   const widths = subject === '수학'
-    ? ['4%', '16%', '28%', '8%', '6%', '6%', '28%', '4%']
+    ? ['50px', '150px', '220px', '80px', '60px', '60px', '280px', '40px']
     : subject === '영어'
-      ? ['4%', '10%', '14%', '6%', '6%', '8%', '48%', '4%']
+      ? ['50px', '150px', '220px', '60px', '60px', '80px', '280px', '40px']
       : subject === '국어'
-        ? ['4%', '10%', '34%', '10%', '6%', '6%', '4%']
-        : subject === '과학'
-          ? ['4%', '18%', '12%', '8%', '8%', '46%', '4%']
-          : ['5%', '18%', '10%', '10%', '52%', '5%'];
+        ? ['50px', '150px', '220px', '80px', '60px', '60px', '40px']
+        : ['50px', '150px', '220px', '80px', '60px', '60px', '280px', '40px'];
 
   return <colgroup>{widths.map((width, index) => <col key={`${subject}-${index}`} style={{ width }} />)}</colgroup>;
 }
