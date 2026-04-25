@@ -119,6 +119,8 @@ export default function StudentExamReview() {
     return { wrongNumbers, errorTypes };
   }, [selectedReview]);
 
+  const completedReviews = useMemo(() => rows.filter((row) => row.exam_reviews?.[0]?.reviewed_at), [rows]);
+
   return (
     <div className="space-y-4 pb-20">
       <div className="space-y-2">
@@ -128,6 +130,8 @@ export default function StudentExamReview() {
         </h1>
         <StudentStudyTabs />
       </div>
+
+      {!loading ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} /> : null}
 
       {loading ? (
         <div className="space-y-3">
