@@ -794,3 +794,87 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
     </Dialog>
   );
 }
+
+function AnswerSheetSection({
+  mode,
+  items,
+  answers,
+  imageUrls,
+  pdfUrl,
+  onModeChange,
+  onSetAnswer,
+  onImageUpload,
+  onRemoveImage,
+  onPdfUpload,
+  onRemovePdf,
+}: {
+  mode: AnswerMode;
+  items: TemplateItem[];
+  answers: TemplateAnswers;
+  imageUrls: string[];
+  pdfUrl: string | null;
+  onModeChange: (mode: AnswerMode) => void;
+  onSetAnswer: (itemNo: number, value: string) => void;
+  onImageUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemoveImage: (index: number) => void;
+  onPdfUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemovePdf: () => void;
+}) {
+  return (
+    <section className="space-y-4 rounded-lg border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">답지</h3>
+          <p className="text-sm text-muted-foreground">채점 화면 우측에 실시간으로 표시됩니다.</p>
+        </div>
+        <div className="flex rounded-md bg-muted p-1">
+          {([
+            ['direct', '직접 입력'],
+            ['image', '이미지'],
+            ['pdf', 'PDF'],
+          ] as const).map(([key, label]) => (
+            <Button key={key} type="button" size="sm" variant={mode === key ? 'default' : 'ghost'} className="h-8 px-3 text-xs" onClick={() => onModeChange(key)}>
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {mode === 'direct' ? (
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {items.map((item) => (
+            <div key={item.no} className="rounded-md border bg-background p-2 text-center">
+              <p className="mb-1 text-[11px] text-muted-foreground">{item.no}번{item.points ? ` (${formatPoints(item.points)}점)` : ''}</p>
+              {item.is_essay ? (
+                <textarea value={answers[item.no] ?? ''} onChange={(event) => onSetAnswer(item.no, event.target.value)} rows={2} placeholder="정답" className="w-full resize-none rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              ) : (
+                <div className="flex justify-center gap-1">
+                  {[1, 2, 3, 4, 5].map((value) => {
+                    const active = answers[item.no] === String(value);
+                    return <Button key={value} type="button" size="icon" variant={active ? 'default' : 'outline'} className="h-7 w-7 rounded-full text-xs" onClick={() => onSetAnswer(item.no, String(value))}>{value}</Button>;
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {mode === 'image' ? (
+        <div className="space-y-3">
+          {imageUrls.length > 0 ? <div className="grid gap-2 sm:grid-cols-3">{imageUrls.map((url, index) => <div key={`${url}-${index}`} className="relative"><img src={url} alt={`답지 ${index + 1}`} className="w-full rounded-md border" /><Button type="button" variant="secondary" size="icon" className="absolute right-1 top-1 h-6 w-6" onClick={() => onRemoveImage(index)}><Trash2 className="h-3 w-3" /></Button></div>)}</div> : null}
+          <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed px-4 py-6 text-sm text-muted-foreground hover:bg-accent">
+            이미지 업로드 (JPG/PNG 복수 선택 가능)
+            <input type="file" accept="image/*" multiple className="hidden" onChange={onImageUpload} />
+          </label>
+        </div>
+      ) : null}
+
+      {mode === 'pdf' ? (
+        <div className="rounded-lg border border-dashed p-4 text-center">
+          {pdfUrl ? <div className="flex items-center justify-center gap-3 text-sm"><a href={pdfUrl} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-4 hover:underline">📄 답지 PDF 보기</a><Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={onRemovePdf}>삭제</Button></div> : <label className="cursor-pointer text-sm text-muted-foreground">📎 답지 PDF 업로드<input type="file" accept=".pdf,application/pdf" className="hidden" onChange={onPdfUpload} /></label>}
+        </div>
+      ) : null}
+    </section>
+  );
+}
