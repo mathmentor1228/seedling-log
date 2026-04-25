@@ -330,6 +330,25 @@ export function ExamReviewPanel() {
 
   const hasItems = itemReviews.length > 0;
 
+  const wrongItems = useMemo(
+    () => itemReviews.filter((item) => item.result === 'wrong' || item.result === 'partial'),
+    [itemReviews],
+  );
+
+  const selfCheckCount = useMemo(() => {
+    const completedNumbers = new Set(selfChecks.map((check) => check.item_number));
+    return wrongItems.filter((item) => completedNumbers.has(item.item_number)).length;
+  }, [selfChecks, wrongItems]);
+
+  const reviewPhase: ReviewPhase = useMemo(() => {
+    if (!reviewMeta?.reviewed_at && selectedRow?.review_status !== 'done') return 'scoring';
+    if (reviewMeta?.overall_comment?.trim()) return 'done';
+    if (wrongItems.length > 0 && !reviewMeta?.self_check_completed) return 'waiting_self_check';
+    return 'ai_comment';
+  }, [reviewMeta, selectedRow?.review_status, wrongItems.length]);
+
+  const selfCheckProgress = wrongItems.length > 0 ? Math.round((selfCheckCount / wrongItems.length) * 100) : 100;
+
   useEffect(() => {
     let active = true;
 
