@@ -788,6 +788,18 @@ function FormSection({ title, action, children }: { title: string; action?: Reac
   return <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h4 className="text-base font-semibold">{title}</h4>{action}</div>{children}</section>;
 }
 
+function AnalysisColGroup({ subject }: { subject: string }) {
+  const widths = subject === '수학'
+    ? ['4%', '16%', '28%', '8%', '6%', '6%', '28%', '4%']
+    : subject === '영어'
+      ? ['4%', '10%', '14%', '6%', '6%', '8%', '48%', '4%']
+      : subject === '국어'
+        ? ['4%', '10%', '34%', '10%', '6%', '6%', '4%']
+        : ['4%', '16%', '22%', '8%', '6%', '6%', '34%', '4%'];
+
+  return <colgroup>{widths.map((width, index) => <col key={`${subject}-${index}`} style={{ width }} />)}</colgroup>;
+}
+
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return <div className={className}><Label className="mb-1.5 block text-xs font-medium">{label}</Label>{children}</div>;
 }
@@ -843,7 +855,11 @@ function PdfBox({ title, url, linkLabel, onRemove, onUpload }: { title: string; 
 }
 
 function CellInput(props: React.ComponentProps<typeof Input>) {
-  return <Input {...props} className={cn('h-8 min-w-24 border-0 bg-transparent px-2 text-xs focus-visible:ring-1', props.className)} />;
+  return <Input {...props} className={cn('min-h-8 w-full min-w-0 border border-border bg-background px-2 py-1.5 text-xs leading-5 focus-visible:ring-1', props.className)} />;
+}
+
+function CellTextarea(props: React.ComponentProps<typeof Textarea>) {
+  return <Textarea {...props} className={cn('min-h-14 w-full min-w-0 resize-y border border-border bg-background px-2 py-1.5 text-xs leading-5 focus-visible:ring-1', props.className)} />;
 }
 
 function CellSelect({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
