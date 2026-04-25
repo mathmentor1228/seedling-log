@@ -148,6 +148,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [items, setItems] = useState<AnalysisItem[]>(createDefaultItems);
   const [originalPdfUrl, setOriginalPdfUrl] = useState<string | null>(null);
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
+  const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -181,8 +182,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }, [form.schoolName, selectedReportId, selectedSchool]);
 
   useEffect(() => {
-    void refreshSignedUrls(form.originalPdfPath, form.answerPdfPath);
-  }, [form.originalPdfPath, form.answerPdfPath]);
+    void refreshSignedUrls(form.originalPdfPath, form.answerPdfPath, form.answerImagePaths);
+  }, [form.originalPdfPath, form.answerPdfPath, form.answerImagePaths]);
 
   async function fetchReports() {
     setLoading(true);
@@ -200,9 +201,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setLoading(false);
   }
 
-  async function refreshSignedUrls(originalPath: string, answerPath: string) {
+  async function refreshSignedUrls(originalPath: string, answerPath: string, answerImagePaths: string[]) {
     setOriginalPdfUrl(null);
     setAnswerPdfUrl(null);
+    setAnswerImageUrls([]);
 
     if (originalPath) {
       const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(originalPath, 3600);
@@ -211,6 +213,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (answerPath) {
       const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(answerPath, 3600);
       setAnswerPdfUrl(data?.signedUrl ?? null);
+    }
+    if (answerImagePaths.length > 0) {
+      const urls = await Promise.all(answerImagePaths.map(async (path) => {
+        const { data } = await supabase.storage.from('exam-analysis').createSignedUrl(path, 3600);
+        return data?.signedUrl ?? '';
+      }));
+      setAnswerImageUrls(urls.filter(Boolean));
     }
   }
 
