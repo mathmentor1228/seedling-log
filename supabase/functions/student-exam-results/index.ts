@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(url, key);
 
     // ===== Staff actions: require authenticated staff JWT =====
-    const STAFF_ACTIONS = ['staff_list', 'staff_create', 'staff_update', 'staff_delete', 'lock_score', 'unlock_score', 'register_pdf', 'delete_pdf', 'list_pdfs', 'staff_search_students'];
+    const STAFF_ACTIONS = ['staff_list', 'staff_create', 'staff_update', 'staff_delete', 'lock_score', 'unlock_score', 'register_pdf', 'delete_pdf', 'list_pdfs', 'staff_search_students', 'sort_photos'];
     if (STAFF_ACTIONS.includes(action)) {
       const auth = req.headers.get('Authorization');
       if (!auth) return json({ error: 'Unauthorized' }, 401);
@@ -104,8 +104,16 @@ Deno.serve(async (req) => {
         }).select().single();
         if (insErr) return json({ error: insErr.message }, 500);
         await uploadPhotos(supabase, photos || [], student_id, ins.id);
+        if ((photos || []).length > 1) await sortResultPhotosByPageNumber(supabase, ins.id).catch((e) => console.error('staff photo sort failed', e));
         if (pdf?.dataUrl) await uploadPdfFromDataUrl(supabase, pdf, ins.id, user.id, staffName);
         return json({ success: true, id: ins.id });
+      }
+
+      if (action === 'sort_photos') {
+        const { result_id } = body;
+        if (!result_id) return json({ error: 'result_id required' }, 400);
+        const sorted = await sortResultPhotosByPageNumber(supabase, result_id);
+        return json({ success: true, ...sorted });
       }
 
       if (action === 'staff_update') {
@@ -198,7 +206,9 @@ Deno.serve(async (req) => {
         .order('submitted_at', { ascending: false });
       if (error) return json({ error: error.message }, 500);
       const enriched = await Promise.all((results || []).map(async (r: any) => {
-        const photos = await Promise.all((r.student_exam_result_photos || []).map(async (p: any) => {
+        const photos = await Promise.all((r.student_exam_result_photos || [])
+          .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map(async (p: any) => {
           const { data: signed } = await supabase.storage.from('exam-results').createSignedUrl(p.storage_path, 3600);
           return { ...p, signedUrl: signed?.signedUrl || null };
         }));
@@ -243,6 +253,19 @@ Deno.serve(async (req) => {
       const offset = Number(start_index) || 0;
       await uploadPhotos(supabase, photos || [], student_id, result_id, offset);
       return json({ success: true, uploaded: (photos || []).length });
+    }
+
+    if (action === 'sort_photos') {
+      const { result_id } = body;
+      if (!result_id) return json({ error: 'result_id required' }, 400);
+      const { data: own } = await supabase
+        .from('student_exam_results')
+        .select('id, student_id')
+        .eq('id', result_id)
+        .single();
+      if (!own || own.student_id !== student_id) return json({ error: 'Forbidden' }, 403);
+      const sorted = await sortResultPhotosByPageNumber(supabase, result_id);
+      return json({ success: true, ...sorted });
     }
 
     if (action === 'delete') {
