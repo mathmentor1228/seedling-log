@@ -232,6 +232,7 @@ export default function StudentExamReview() {
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
   const [schoolReport, setSchoolReport] = useState<SchoolExamReport | null>(null);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
+  const [selfCheckTarget, setSelfCheckTarget] = useState<SelfCheckTarget | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'teacher' | 'self'>('teacher');
 
@@ -244,6 +245,11 @@ export default function StudentExamReview() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  const openSelfCheck = useCallback((target: SelfCheckTarget) => {
+    setSelected(null);
+    setSelfCheckTarget(target);
+  }, []);
 
 
   const selectedReview = selected?.exam_reviews?.[0] ?? null;
@@ -267,7 +273,7 @@ export default function StudentExamReview() {
         <StudentStudyTabs />
       </div>
 
-      {!loading ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} /> : null}
+      {!loading ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} onOpenSelfCheck={openSelfCheck} /> : null}
 
       {loading ? (
         <div className="space-y-3">
@@ -411,6 +417,33 @@ export default function StudentExamReview() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {selfCheckTarget ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/50 px-4 py-5">
+          <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl bg-background shadow-xl">
+            <div className="bg-gradient-to-br from-primary to-info px-6 py-5 text-primary-foreground">
+              <h2 className="mb-1 text-lg font-bold">내 시험 돌아보기 🔍</h2>
+              <p className="text-sm text-primary-foreground/75">틀린 문항을 하나씩 분석해보세요. 완료하면 +15P 지급돼요!</p>
+            </div>
+            <div className="p-5">
+              <SelfCheckTab
+                reviewId={selfCheckTarget.review.id}
+                items={selfCheckTarget.review.exam_item_reviews || []}
+                selfChecks={selfCheckTarget.review.self_checks || []}
+                templateErrorTypes={selfCheckTarget.review.template?.error_types || []}
+                templateItems={selfCheckTarget.review.template?.items || []}
+                photos={selfCheckTarget.row.student_exam_result_photos || []}
+                selfCheckCompleted={!!selfCheckTarget.review.self_check_completed}
+                onCompleted={() => {
+                  setSelfCheckTarget(null);
+                  void load();
+                }}
+              />
+              <button type="button" onClick={() => setSelfCheckTarget(null)} className="mt-3 w-full rounded-lg px-4 py-2 text-sm text-muted-foreground">나중에 하기</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
         <DialogContent className="max-w-4xl">
