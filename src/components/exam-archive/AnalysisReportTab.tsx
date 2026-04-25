@@ -670,19 +670,37 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 <h3 className="text-xl font-bold text-primary">{selectedReportId ? `${form.subject} 분석보고서` : '새 보고서 작성'}</h3>
                 {selectedReportId ? <p className="mt-1 text-sm text-muted-foreground">{form.schoolName} · {form.grade}학년 · {form.examYear}년 {form.examPeriod} {form.examType}</p> : null}
               </div>
-              <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                저장
-              </Button>
+              <div className="flex items-center gap-2">
+                {canManageLock && selectedReport ? (
+                  <Button variant={selectedReport.is_locked ? 'destructive' : 'warning'} onClick={() => void handleToggleLock()} className="gap-2">
+                    {selectedReport.is_locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                    {selectedReport.is_locked ? '잠금 해제' : '잠금'}
+                  </Button>
+                ) : null}
+                {!isLocked ? (
+                  <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    저장
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
-            <AIParsePanel
-              isParsing={isParsing}
-              parseResult={parseResult}
-              originalPdfPath={form.originalPdfPath}
-              onUpload={handleAIParse}
-              onParseExisting={() => void parseExistingPdf()}
-            />
+            {selectedReport?.is_locked ? (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                <Lock className="h-4 w-4" />
+                잠금 상태입니다 — {selectedReport.locked_by_name || '관리자'}이(가) {selectedReport.locked_at ? new Date(selectedReport.locked_at).toLocaleDateString('ko-KR') : ''}에 잠금{canManageLock ? ' (위 버튼으로 해제 가능)' : ''}
+              </div>
+            ) : null}
+
+            <fieldset disabled={isLocked} className={cn('space-y-6', isLocked && 'opacity-75')}>
+              <AIParsePanel
+                isParsing={isParsing}
+                parseResult={parseResult}
+                originalPdfPath={form.originalPdfPath}
+                onUpload={handleAIParse}
+                onParseExisting={() => void parseExistingPdf()}
+              />
 
             <FormSection title="기본정보">
               <div className="grid gap-3 xl:grid-cols-6 md:grid-cols-3">
@@ -748,7 +766,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                   </tbody>
                 </table>
               </div>
-            </FormSection>
+              </FormSection>
+            </fieldset>
           </div>
         )}
       </section>
