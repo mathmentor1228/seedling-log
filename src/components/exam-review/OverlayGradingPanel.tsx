@@ -283,7 +283,7 @@ function ScoreSummaryPanel({ items, template }: { items: OverlayReviewItem[]; te
   );
 }
 
-function AnswerDisplayPanel({ answerDisplay, template, items }: { answerDisplay: OverlayAnswerDisplay | null | undefined; template: OverlayTemplateData; items: OverlayReviewItem[] }) {
+function AnswerDisplayPanel({ answerDisplay, template, items, reportAnswers }: { answerDisplay: OverlayAnswerDisplay | null | undefined; template: OverlayTemplateData; items: OverlayReviewItem[]; reportAnswers: Record<number, string> }) {
   const [showAnswer, setShowAnswer] = useState(true);
 
   return (
@@ -303,7 +303,7 @@ function AnswerDisplayPanel({ answerDisplay, template, items }: { answerDisplay:
               return (
                 <div key={item.no} className={`flex items-center justify-between gap-1 rounded-md px-2 py-1 text-[11px] text-foreground ${tone}`}>
                   <span className="text-muted-foreground">{item.no}번</span>
-                  <span className="max-w-[72px] truncate font-bold">{answerDisplay.answers[item.no] || '-'}</span>
+                  <span className="max-w-[72px] truncate font-bold">{reportAnswers[item.no] || '-'}</span>
                   <span>{scored?.result === 'correct' ? '✓' : scored?.result === 'wrong' ? '✗' : scored?.result === 'partial' ? '△' : ''}</span>
                 </div>
               );
