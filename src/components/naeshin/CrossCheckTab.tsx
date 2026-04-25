@@ -81,6 +81,13 @@ const getTableName = (type: RecordType) => ({
   수업기록: 'lesson_records',
 }[type]);
 
+const TYPE_BADGE_CLASSES: Record<RecordType, string> = {
+  테스트: 'border-primary/20 bg-primary/10 text-primary',
+  자습: 'border-success/20 bg-success/10 text-success',
+  클리닉: 'border-warning/20 bg-warning/10 text-warning',
+  수업기록: 'border-info/20 bg-info/10 text-info',
+};
+
 const normalizeGrade = (grade: string | number | null | undefined) => {
   if (grade === null || grade === undefined || grade === '') return '-';
   return typeof grade === 'number' ? `${grade}` : grade;
@@ -155,12 +162,25 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
     setTeachers(profileRows ?? []);
   }, [canChooseTeacher]);
 
+  const fetchMyStudentIds = useCallback(async () => {
+    if (!user?.id) return [];
+
+    const { data, error } = await supabase
+      .from('teacher_student_links')
+      .select('student_id')
+      .eq('teacher_id', user.id);
+
+    if (error) throw error;
+
+    return Array.from(new Set((data ?? []).map((row) => row.student_id).filter(Boolean)));
+  }, [user?.id]);
+
   const fetchAllRecords = useCallback(async () => {
     if (!user || !role) return;
 
     setLoading(true);
 
-    const teacherId = isTeacher ? user.id : teacherFilter !== 'all' ? teacherFilter : null;
+    const teacherId = !isTeacher && teacherFilter !== 'all' ? teacherFilter : null;
     const startDateText = startDate ? format(startDate, 'yyyy-MM-dd') : null;
     const endDateText = endDate ? format(endDate, 'yyyy-MM-dd') : null;
 
@@ -183,6 +203,9 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
     };
 
     try {
+      const myStudentIds = isTeacher ? await fetchMyStudentIds() : [];
+      const myStudentIdSet = new Set(myStudentIds);
+
       const [tests, selfStudy, clinic, lessons] = await Promise.all([
         applyCommonFilters(
           supabase
@@ -223,13 +246,15 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
         ...withType((lessons.data ?? []) as RecordPayload[], '수업기록'),
       ].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
 
-      setRecords(merged);
+      setRecords(isTeacher
+        ? merged.filter((record) => myStudentIdSet.has(record.student_id) || record.teacher_id === user.id)
+        : merged);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '크로스체킹 데이터를 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
-  }, [endDate, isTeacher, role, startDate, teacherFilter, user]);
+  }, [endDate, fetchMyStudentIds, isTeacher, role, startDate, teacherFilter, user]);
 
   useEffect(() => {
     void fetchTeachers();
@@ -492,6 +517,12 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
             <div className="flex min-h-[320px] items-center justify-center">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="flex min-h-[320px] flex-col items-center justify-center px-4 py-14 text-center text-muted-foreground">
+              <p className="mb-3 text-4xl">✅</p>
+              <p className="text-base font-semibold text-foreground">미확인 기록이 없어요</p>
+              <p className="mt-1 text-sm">모든 기록이 확인 완료됐습니다</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -506,14 +537,7 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRecords.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-40 text-center text-sm text-muted-foreground">
-                      조건에 맞는 기록이 없습니다.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredRecords.map((record) => {
+                {filteredRecords.map((record) => {
                     const isConfirmed = !!record.confirmed_by;
                     const pending = !!pendingKeys[`${record.type}:${record.id}`];
                     const teacherName = record.teacher_id ? (teacherNameMap[record.teacher_id] ?? '미지정') : '미지정';
@@ -524,7 +548,7 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
                         <TableCell className="font-medium">{record.students?.name ?? '-'}</TableCell>
                         <TableCell>{normalizeGrade(record.students?.grade)}</TableCell>
                         <TableCell>
-                          <span className="inline-flex rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
+                          <span className={cn('inline-flex rounded-md border px-2 py-1 text-xs font-medium', TYPE_BADGE_CLASSES[record.type])}>
                             {record.type}
                           </span>
                         </TableCell>
@@ -577,8 +601,7 @@ export function CrossCheckTab({ onUnconfirmedCountChange }: CrossCheckTabProps) 
                         </TableCell>
                       </TableRow>
                     );
-                  })
-                )}
+                  })}
               </TableBody>
             </Table>
           )}
