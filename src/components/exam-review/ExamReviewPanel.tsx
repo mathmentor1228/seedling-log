@@ -741,8 +741,55 @@ export function ExamReviewPanel() {
     setAiGenerated(false);
   }, []);
 
+  useEffect(() => {
+    if (!reviewId || !selectedRow) return undefined;
+
+    const channel = supabase
+      .channel(`self_check_watch_${reviewId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_student_self_checks', filter: `review_id=eq.${reviewId}` }, () => {
+        void loadReviewDetail(selectedRow.id);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'exam_reviews', filter: `id=eq.${reviewId}` }, () => {
+        void loadReviewDetail(selectedRow.id);
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [loadReviewDetail, reviewId, selectedRow]);
+
+  const handleMarkDone = useCallback(async () => {
+    const ok = await persistReview(true);
+    if (ok) toast({ title: '채점 완료', description: '학생에게 자가진단을 요청했습니다.' });
+  }, [persistReview, toast]);
+
+  const handleFinalSave = useCallback(async () => {
+    if (!reviewId || !user || !overallComment.trim()) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('exam_reviews')
+        .update({
+          overall_comment: overallComment.trim(),
+          reviewed_by: user.id,
+          reviewed_by_name: fullName || user.email || '교직원',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', reviewId);
+      if (error) throw error;
+      if (selectedRow) await loadReviewDetail(selectedRow.id);
+      toast({ title: '리뷰가 최종 저장됐어요' });
+    } catch (error: any) {
+      toast({ title: '최종 저장 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }, [fullName, loadReviewDetail, overallComment, reviewId, selectedRow, toast, user]);
+
   const handleGenerateAI = useCallback(async () => {
-    if (!selectedRow || !template || !hasItems) return;
+    if (!selectedRow || !template || !hasItems || reviewPhase !== 'ai_comment') return;
 
     if (overallComment.trim()) {
       const shouldReplace = window.confirm('기존 내용이 대체됩니다. 계속하시겠습니까?');
