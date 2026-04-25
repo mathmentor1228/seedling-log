@@ -967,12 +967,10 @@ export function ExamReviewPanel() {
                   <Button type="button" variant="outline" onClick={() => setTemplateSetupOpen(true)}>
                     이 시험 템플릿 설정
                   </Button>
-                  <Button onClick={() => void persistReview(true)} disabled={saving} className="px-6 py-3">
-                    {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    리뷰 완료
-                  </Button>
                 </div>
               </div>
+
+              <ReviewPhaseBar phase={reviewPhase} />
 
               <div className="mb-8">
                 <SectionTitle title="오버레이 채점" />
