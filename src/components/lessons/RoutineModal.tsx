@@ -285,6 +285,9 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
                     <span className="text-sm">{(Array.isArray(r.student_ids) ? r.student_ids : []).length}명</span>
                     {r.subject && <Badge variant="secondary" className="text-xs">{r.subject}</Badge>}
                     <span className="text-xs text-muted-foreground">{ROOMS.find(rm => rm.value === r.room)?.label}</span>
+                    {r.last_generated_date && (
+                      <span className="text-xs font-medium text-primary">마지막 생성: {r.last_generated_date}</span>
+                    )}
                     {r.start_time && <span className="text-xs text-muted-foreground">{r.start_time.slice(0, 5)}~{r.end_time?.slice(0, 5)}</span>}
                   </div>
                   <div className="flex items-center gap-1">
@@ -399,18 +402,37 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>과목</Label>
-                <Select value={subject} onValueChange={setSubject}>
-                  <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="수학">수학</SelectItem>
-                    <SelectItem value="영어">영어</SelectItem>
-                    <SelectItem value="국어">국어</SelectItem>
-                    <SelectItem value="과학">과학</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {type === 'test' ? (
+                <div>
+                  <Label>테스트 유형</Label>
+                  <div className="mt-1 flex gap-2">
+                    {['수학', '영어', '기타'].map(testTypeOption => (
+                      <Button
+                        key={testTypeOption}
+                        type="button"
+                        variant={testType === testTypeOption ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setTestType(testTypeOption)}
+                      >
+                        {testTypeOption}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Label>과목</Label>
+                  <Select value={subject} onValueChange={setSubject}>
+                    <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="수학">수학</SelectItem>
+                      <SelectItem value="영어">영어</SelectItem>
+                      <SelectItem value="국어">국어</SelectItem>
+                      <SelectItem value="과학">과학</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <Label>강의실</Label>
                 <Select value={room} onValueChange={setRoom}>
