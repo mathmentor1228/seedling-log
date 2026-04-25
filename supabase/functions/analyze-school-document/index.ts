@@ -388,6 +388,35 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
       extractionPrompt = TEMPLATE_PARSE_PROMPT;
     }
 
+    if (fileType === "exam_analysis") {
+      extractionPrompt = `
+당신은 한국 중고등학교 내신 시험지를 분석하는 전문가입니다.
+업로드된 ${subjectFilter || "선택 과목"} 시험지를 분석해서 아래 JSON 형식으로만 응답하세요.
+{
+  "textbook": "교과서명 또는 null",
+  "exam_scope": "시험범위",
+  "exam_difficulty": "매우쉬움|쉬움|중|어려움|매우어려움",
+  "overall_review": "이 시험의 특징과 출제 경향 분석 3~5문장",
+  "total_items": 총문항수,
+  "total_points": 총점,
+  "items": [{
+    "item_number": 번호,
+    "item_type": "객관식|논술형|단답형",
+    "points": 배점,
+    "difficulty": "하|중하|중|중상|상",
+    "unit_name": "단원명 또는 null",
+    "problem_desc": "문제설명 또는 null",
+    "question_type": "문제유형 또는 null",
+    "source_type": "출제유형 또는 null",
+    "classification": "분류 또는 null",
+    "content": "내용 또는 null",
+    "area": "영역 또는 null",
+    "note": "특이사항 또는 null"
+  }]
+}
+배점 합계가 총점과 일치하는지 확인하고, JSON만 반환하세요.`;
+    }
+
     if (fileType === "other") {
       extractionPrompt = `
 다음은 ${schoolName} 관련 학교 문서입니다.
