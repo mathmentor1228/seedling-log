@@ -998,20 +998,34 @@ export function ExamReviewPanel() {
                 ) : null}
               </div>
 
-              <div className="mb-6">
-                <div className="mb-3 flex items-center justify-between gap-3 border-b-2 pb-2" style={{ borderColor: 'hsl(var(--review-correct-surface))' }}>
-                  <div className="text-[15px] font-semibold text-foreground">선생님 코멘트</div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void handleGenerateAI()}
-                    disabled={isGenerating || !hasItems || !template}
-                    className="gap-2 border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary disabled:bg-muted disabled:text-muted-foreground"
-                  >
-                    {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                    {isGenerating ? 'AI 분석 중...' : 'AI 초안 생성'}
-                  </Button>
+              {reviewPhase === 'waiting_self_check' ? (
+                <div className="mb-6 rounded-[10px] bg-warning/10 p-4 text-center">
+                  <p className="mb-1 text-sm font-semibold text-warning">⏳ 학생 자가진단 대기 중</p>
+                  <p className="mb-3 text-xs text-warning/80">학생이 자가진단을 완료하면 AI 코멘트를 작성할 수 있어요</p>
+                  <p className="text-[11px] text-muted-foreground">틀린 문항 {wrongItems.length}개 중 {selfCheckCount}개 완료</p>
+                  <div className="mt-2 h-1.5 rounded-full bg-border">
+                    <div className="h-full rounded-full bg-warning transition-all duration-500" style={{ width: `${selfCheckProgress}%` }} />
+                  </div>
                 </div>
+              ) : null}
+
+              {reviewPhase === 'ai_comment' || reviewPhase === 'done' ? (
+                <div className="mb-6">
+                  <div className="mb-3 flex items-center justify-between gap-3 border-b-2 pb-2" style={{ borderColor: 'hsl(var(--review-correct-surface))' }}>
+                    <div className="text-[15px] font-semibold text-foreground">선생님 코멘트</div>
+                    {reviewPhase === 'ai_comment' ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleGenerateAI()}
+                        disabled={isGenerating || !hasItems || !template}
+                        className="gap-2 border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary disabled:bg-muted disabled:text-muted-foreground"
+                      >
+                        {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                        {isGenerating ? 'AI 분석 중...' : 'AI 초안 생성'}
+                      </Button>
+                    ) : null}
+                  </div>
                 {selfChecks.length > 0 ? (
                   <div className="mb-3 rounded-[10px] border border-sky-200 bg-sky-50 p-3">
                     <p className="mb-2 text-xs font-semibold text-sky-900">
