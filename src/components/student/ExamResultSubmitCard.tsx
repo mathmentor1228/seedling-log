@@ -75,6 +75,7 @@ export function ExamResultSubmitCard() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [sortingResultId, setSortingResultId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState('');
 
   const [school, setSchool] = useState('');
@@ -219,6 +220,18 @@ export function ExamResultSubmitCard() {
         }
       }
 
+      if (files.length > 1) {
+        setSortingResultId(resultId);
+        setUploadProgress('AI가 사진 순서를 정렬하는 중...');
+        const { data: sortData, error: sortErr } = await supabase.functions.invoke('student-exam-results', {
+          body: { action: 'sort_photos', student_id: student.id, student_token: student.token, result_id: resultId },
+        });
+        if (sortErr || sortData?.error) {
+          toast({ title: '사진 자동 정렬 실패', description: '제출은 완료됐고 기존 순서로 저장됐어요.', variant: 'destructive' });
+        }
+        setSortingResultId(null);
+      }
+
       if (failed > 0) {
         toast({
           title: `사진 ${failed}장 업로드 실패`,
@@ -235,6 +248,7 @@ export function ExamResultSubmitCard() {
       toast({ title: '제출 실패', description: e?.message || '오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setSubmitting(false);
+      setSortingResultId(null);
       setUploadProgress('');
     }
   };
