@@ -90,10 +90,11 @@ const App = () => (
           {/* All authenticated routes */}
           <Route path="/*" element={
             <AuthProvider>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/login" element={<Auth />} />
-                <Route path="/auth" element={<Navigate to="/login" replace />} />
+              <Suspense fallback={<RouteLoading />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/login" element={<Auth />} />
+                  <Route path="/auth" element={<Navigate to="/login" replace />} />
 
                 {/* Role-based dashboards */}
                 <Route path="/principal" element={<PrincipalDashboard />} />
@@ -168,8 +169,9 @@ const App = () => (
                 <Route path="/quiz-lookup" element={<QuizLookupPage />} />
                 <Route path="/exam-prep" element={<ExamPrepPage />} />
                 <Route path="/study-sessions" element={<StudySessionPage />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
             </AuthProvider>
           } />
         </Routes>
