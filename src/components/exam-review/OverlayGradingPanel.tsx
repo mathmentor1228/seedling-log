@@ -524,13 +524,13 @@ export function OverlayGradingPanel({
                   className="absolute z-10"
                   style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}
                 >
-                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openTooltip(item)} />
                 </div>
               ))}
 
               <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="시험지 위치에 채점 마커 추가" />
 
-              {renderActiveEditor()}
+              {renderGradeTooltip()}
             </>
           ) : currentPhoto ? (
             <>
@@ -552,13 +552,13 @@ export function OverlayGradingPanel({
                   className="absolute z-10"
                   style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}
                 >
-                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+                  <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openTooltip(item)} />
                 </div>
               ))}
 
               <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="시험지 위치에 채점 마커 추가" />
 
-              {renderActiveEditor()}
+              {renderGradeTooltip()}
             </>
           ) : photos.length === 0 ? (
             <div className="flex min-h-[28rem] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
@@ -573,7 +573,7 @@ export function OverlayGradingPanel({
         <QuickGradeStrip
           items={quickGradeItems}
           saving={saving}
-          onEdit={openEditor}
+          onEdit={openTooltip}
           onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)}
         />
       </div>
@@ -612,13 +612,13 @@ export function OverlayGradingPanel({
           )}
           {pageItems.map((item) => (
             <div key={`expanded-${item.item_number}-${item.page_number}`} className="absolute z-10" style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}>
-              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
+              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openTooltip(item)} />
             </div>
           ))}
           {currentPhoto ? <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="큰 시험지 위치에 채점 마커 추가" /> : null}
-          {renderActiveEditor()}
+          {renderGradeTooltip()}
         </div>
-        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openEditor} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
+        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openTooltip} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
       </DialogContent>
     </Dialog>
     </>
