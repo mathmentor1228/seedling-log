@@ -305,7 +305,7 @@ export function OverlayGradingPanel({
     return positionedItems.sort((a, b) => a.item_number - b.item_number);
   }, [items, page, template]);
 
-  const openEditor = (item: OverlayReviewItem) => {
+  const openEditor = (item: OverlayReviewItem | QuickGradeItem) => {
     if (item.overlay_x == null || item.overlay_y == null || item.page_number == null || !item.result) return;
     const points = template?.items.find((templateItem) => templateItem.no === item.item_number)?.points ?? 0;
     setActiveItem({
