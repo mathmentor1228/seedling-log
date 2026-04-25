@@ -857,11 +857,11 @@ function PdfBox({ title, url, linkLabel, onRemove, onUpload }: { title: string; 
 }
 
 function CellInput(props: React.ComponentProps<typeof Input>) {
-  return <Input {...props} className={cn('min-h-8 w-full min-w-0 border border-border bg-background px-2 py-1.5 text-xs leading-5 focus-visible:ring-1', props.className)} />;
+  return <Input {...props} className={cn('min-h-8 w-full min-w-0 border border-border bg-background px-2 py-1.5 text-xs leading-5 [word-break:keep-all] focus-visible:ring-1', props.className)} />;
 }
 
 function CellTextarea(props: React.ComponentProps<typeof Textarea>) {
-  return <Textarea {...props} className={cn('min-h-14 w-full min-w-0 resize-y border border-border bg-background px-2 py-1.5 text-xs leading-5 focus-visible:ring-1', props.className)} />;
+  return <Textarea {...props} className={cn('min-h-14 w-full min-w-0 resize-y whitespace-pre-wrap border border-border bg-background px-2 py-1.5 text-xs leading-5 [word-break:keep-all] focus-visible:ring-1', props.className)} />;
 }
 
 function CellSelect({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
