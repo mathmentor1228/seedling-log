@@ -711,7 +711,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] min-h-0 w-full overflow-hidden bg-background">
+    <div className="flex h-[calc(100vh-160px)] min-h-0 w-full overflow-hidden bg-background">
       <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
         <Button className="mb-3 h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
           <Plus className="h-4 w-4" /> 새 보고서 작성
@@ -768,7 +768,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
         </div>
       </aside>
 
-      <section className="min-w-0 flex-1 overflow-y-auto px-8 py-6">
+      <section className="min-w-0 flex-1 overflow-y-auto px-7 py-5">
         {!selectedReportId && reports.length > 0 && form.schoolName === '' ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <FileText className="h-10 w-10 opacity-40" />
@@ -855,6 +855,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               pdfUrl={answerPdfUrl}
               onPdfUpload={(e) => void handlePdfUpload(e, 'answer')}
               onRemovePdf={() => updateForm('answerPdfPath', '')}
+              isExtracting={isExtractingAnswers}
             />
 
             <FormSection title="수업자료 링크" action={<Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={addLink}><Plus className="h-3.5 w-3.5" /> 링크 추가</Button>}>
@@ -871,8 +872,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
             </FormSection>
 
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
-              <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[1000px] table-fixed border-collapse text-sm">
+              <div className="w-full overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[900px] table-fixed border-collapse text-sm">
                   <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
