@@ -2893,52 +2893,96 @@ export type Database = {
         }
         Relationships: []
       }
+      routine_generation_logs: {
+        Row: {
+          created_at: string | null
+          generated_date: string
+          id: string
+          routine_id: string | null
+          student_ids: Json | null
+          test_record_ids: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          generated_date: string
+          id?: string
+          routine_id?: string | null
+          student_ids?: Json | null
+          test_record_ids?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          generated_date?: string
+          id?: string
+          routine_id?: string | null
+          student_ids?: Json | null
+          test_record_ids?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_generation_logs_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routine_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routine_schedules: {
         Row: {
           assistant_name: string | null
+          auto_create_test: boolean | null
           created_at: string
           day_of_week: number
           end_time: string | null
           id: string
           is_active: boolean
+          last_generated_date: string | null
           room: string
           start_time: string | null
           student_ids: Json
           subject: string | null
           teacher_id: string
           template_content: string | null
+          test_content: string | null
           type: string
           updated_at: string
         }
         Insert: {
           assistant_name?: string | null
+          auto_create_test?: boolean | null
           created_at?: string
           day_of_week: number
           end_time?: string | null
           id?: string
           is_active?: boolean
+          last_generated_date?: string | null
           room?: string
           start_time?: string | null
           student_ids?: Json
           subject?: string | null
           teacher_id: string
           template_content?: string | null
+          test_content?: string | null
           type: string
           updated_at?: string
         }
         Update: {
           assistant_name?: string | null
+          auto_create_test?: boolean | null
           created_at?: string
           day_of_week?: number
           end_time?: string | null
           id?: string
           is_active?: boolean
+          last_generated_date?: string | null
           room?: string
           start_time?: string | null
           student_ids?: Json
           subject?: string | null
           teacher_id?: string
           template_content?: string | null
+          test_content?: string | null
           type?: string
           updated_at?: string
         }
