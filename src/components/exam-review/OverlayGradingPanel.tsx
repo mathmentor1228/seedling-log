@@ -475,9 +475,9 @@ export function OverlayGradingPanel({
         {tooltip.item_number}번 ({displayScore(tooltip.points)}점)
       </p>
       {tooltip.answer ? (
-        <p className="m-0 max-w-[150px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+        <div className="mb-1 rounded-md bg-[hsl(var(--review-correct-surface))] px-2.5 py-0.5 text-center text-[13px] font-semibold text-[hsl(var(--review-correct-foreground))]">
           정답: {tooltip.answer}
-        </p>
+        </div>
       ) : null}
       <div className="flex gap-1.5">
         {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => (
