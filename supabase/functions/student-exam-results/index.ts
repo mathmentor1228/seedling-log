@@ -358,7 +358,11 @@ async function extractFirstItemNumber(photo: { signedUrl: string | null; sort_or
         max_tokens: 20,
       }),
     });
-    if (!response.ok) return fallback;
+    if (!response.ok) {
+      if (response.status === 429) throw new Error('AI 요청이 많아 사진 순서 자동 정렬을 잠시 후 다시 시도해주세요.');
+      if (response.status === 402) throw new Error('AI 사용량 크레딧이 부족해 사진 순서 자동 정렬을 실행하지 못했습니다.');
+      return fallback;
+    }
     const data = await response.json();
     const text = String(data.choices?.[0]?.message?.content ?? '').trim();
     const match = text.match(/\d+/);
