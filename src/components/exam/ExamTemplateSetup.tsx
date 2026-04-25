@@ -267,6 +267,12 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
           setItems(buildDefaultItems());
           setSelectedDefaultErrors([...DEFAULT_ERROR_TYPES]);
           setCustomErrorTypes([]);
+          setAnswerMode('direct');
+          setAnswers({});
+          setAnswerImagePaths([]);
+          setAnswerImageUrls([]);
+          setAnswerPdfPath(null);
+          setAnswerPdfUrl(null);
           return;
         }
 
@@ -277,6 +283,10 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
         setItems(normalizedItems);
         setSelectedDefaultErrors(selectedDefaults.length > 0 ? selectedDefaults : [...DEFAULT_ERROR_TYPES]);
         setCustomErrorTypes(customTypes);
+        setAnswerMode(normalizeAnswerMode(existingTemplate.answer_mode));
+        setAnswers(normalizeAnswers(existingTemplate.answers));
+        setAnswerImagePaths(normalizeStringArray(existingTemplate.answer_image_paths));
+        setAnswerPdfPath(existingTemplate.answer_pdf_path ?? null);
         setNewErrorType('');
       } catch (error: any) {
         if (!active) return;
