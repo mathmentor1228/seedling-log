@@ -505,6 +505,7 @@ export function ExamReviewPanel() {
   useEffect(() => {
     if (!selectedId) {
       setReviewId(null);
+      setReviewMeta(null);
       setOverallComment('');
       setItemReviews([]);
       setSelfChecks([]);
@@ -534,7 +535,6 @@ export function ExamReviewPanel() {
             result_id: selectedRow.id,
             reviewed_by: user.id,
             reviewed_by_name: reviewerName,
-            overall_comment: overallComment.trim() || null,
             updated_at: nowIso,
             reviewed_at: markDone ? nowIso : null,
           },
