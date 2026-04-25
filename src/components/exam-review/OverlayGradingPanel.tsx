@@ -87,6 +87,7 @@ interface OverlayGradingPanelProps {
   photos: OverlayPhoto[];
   photoUrls: Record<string, string>;
   template: OverlayTemplateData | null;
+  reportAnswers: Record<number, string>;
   templateLoading: boolean;
   items: OverlayReviewItem[];
   saving: boolean;
@@ -326,6 +327,7 @@ export function OverlayGradingPanel({
   photos,
   photoUrls,
   template,
+  reportAnswers,
   templateLoading,
   items,
   saving,
@@ -388,7 +390,7 @@ export function OverlayGradingPanel({
       page_number: item.page_number,
       is_essay: item.is_essay,
       points,
-      answer: getTemplateAnswer(templateItem, template?.answers),
+      answer: getTemplateAnswer(templateItem, reportAnswers),
     });
     setEssayScore(clampScore(item.score_earned ?? points, points));
   };
@@ -410,7 +412,7 @@ export function OverlayGradingPanel({
       page_number: page + 1,
       is_essay: nextUnscored.is_essay,
       points: nextUnscored.points,
-      answer: getTemplateAnswer(nextUnscored, template.answers),
+      answer: getTemplateAnswer(nextUnscored, reportAnswers),
     });
     setEssayScore(nextUnscored.is_essay ? nextUnscored.points : 0);
   };
