@@ -916,6 +916,142 @@ export type Database = {
           },
         ]
       }
+      exam_analysis_items: {
+        Row: {
+          area: string | null
+          classification: string | null
+          content: string | null
+          difficulty: string | null
+          id: string
+          item_number: number
+          item_type: string | null
+          note: string | null
+          points: number | null
+          problem_desc: string | null
+          question_type: string | null
+          report_id: string
+          sort_order: number | null
+          source_type: string | null
+          unit_name: string | null
+        }
+        Insert: {
+          area?: string | null
+          classification?: string | null
+          content?: string | null
+          difficulty?: string | null
+          id?: string
+          item_number: number
+          item_type?: string | null
+          note?: string | null
+          points?: number | null
+          problem_desc?: string | null
+          question_type?: string | null
+          report_id: string
+          sort_order?: number | null
+          source_type?: string | null
+          unit_name?: string | null
+        }
+        Update: {
+          area?: string | null
+          classification?: string | null
+          content?: string | null
+          difficulty?: string | null
+          id?: string
+          item_number?: number
+          item_type?: string | null
+          note?: string | null
+          points?: number | null
+          problem_desc?: string | null
+          question_type?: string | null
+          report_id?: string
+          sort_order?: number | null
+          source_type?: string | null
+          unit_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_analysis_items_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "exam_analysis_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_analysis_reports: {
+        Row: {
+          answer_pdf_path: string | null
+          avg_score: number | null
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          exam_difficulty: string | null
+          exam_period: string
+          exam_scope: string | null
+          exam_type: string
+          exam_year: number
+          grade: string
+          id: string
+          original_pdf_path: string | null
+          overall_review: string | null
+          school_name: string
+          study_links: Json | null
+          subject: string
+          textbook: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          answer_pdf_path?: string | null
+          avg_score?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          exam_difficulty?: string | null
+          exam_period: string
+          exam_scope?: string | null
+          exam_type: string
+          exam_year: number
+          grade: string
+          id?: string
+          original_pdf_path?: string | null
+          overall_review?: string | null
+          school_name: string
+          study_links?: Json | null
+          subject: string
+          textbook?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          answer_pdf_path?: string | null
+          avg_score?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          exam_difficulty?: string | null
+          exam_period?: string
+          exam_scope?: string | null
+          exam_type?: string
+          exam_year?: number
+          grade?: string
+          id?: string
+          original_pdf_path?: string | null
+          overall_review?: string | null
+          school_name?: string
+          study_links?: Json | null
+          subject?: string
+          textbook?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_analysis_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_item_reviews: {
         Row: {
           created_at: string | null
