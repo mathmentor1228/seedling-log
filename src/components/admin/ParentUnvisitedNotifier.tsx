@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MessageCircle, RefreshCw, Users } from 'lucide-react';
+import { Download, MessageCircle, RefreshCw, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,11 +16,22 @@ interface UnvisitedParent {
   parent_phone: string | null;
   parent_token: string | null;
   parent_last_visited: string | null;
+  teacher_name?: string;
 }
 
 interface ParentPortalVisit {
   student_id: string;
   visited_at: string;
+}
+
+interface StudentTeacherMap {
+  student_id: string;
+  teacher_id: string;
+}
+
+interface ProfileRow {
+  id: string;
+  full_name: string | null;
 }
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -65,7 +76,7 @@ export function ParentUnvisitedNotifier() {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      const [studentsRes, visitsRes] = await Promise.all([
+      const [studentsRes, visitsRes, mappingsRes, profilesRes] = await Promise.all([
         supabase
           .from('students')
           .select('id, name, grade, parent_name, parent_phone, parent_token')
@@ -77,10 +88,18 @@ export function ParentUnvisitedNotifier() {
           .select('student_id, visited_at')
           .order('visited_at', { ascending: false })
           .limit(5000),
+        supabase
+          .from('student_subject_teachers')
+          .select('student_id, teacher_id'),
+        supabase
+          .from('profiles')
+          .select('id, full_name'),
       ]);
 
       if (studentsRes.error) throw studentsRes.error;
       if (visitsRes.error) throw visitsRes.error;
+      if (mappingsRes.error) throw mappingsRes.error;
+      if (profilesRes.error) throw profilesRes.error;
 
       const latestVisitByStudent = new Map<string, string>();
       ((visitsRes.data ?? []) as ParentPortalVisit[]).forEach((visit) => {
@@ -89,10 +108,22 @@ export function ParentUnvisitedNotifier() {
         }
       });
 
-      const rows = ((studentsRes.data ?? []) as Omit<UnvisitedParent, 'parent_last_visited'>[])
+      const teacherNamesById = new Map(
+        ((profilesRes.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile.full_name || '알 수 없음']),
+      );
+      const teacherNamesByStudent = new Map<string, Set<string>>();
+      ((mappingsRes.data ?? []) as StudentTeacherMap[]).forEach((mapping) => {
+        const teacherName = teacherNamesById.get(mapping.teacher_id);
+        if (!teacherName) return;
+        if (!teacherNamesByStudent.has(mapping.student_id)) teacherNamesByStudent.set(mapping.student_id, new Set());
+        teacherNamesByStudent.get(mapping.student_id)!.add(teacherName);
+      });
+
+      const rows = ((studentsRes.data ?? []) as Omit<UnvisitedParent, 'parent_last_visited' | 'teacher_name'>[])
         .map((student) => ({
           ...student,
           parent_last_visited: latestVisitByStudent.get(student.id) ?? null,
+          teacher_name: [...(teacherNamesByStudent.get(student.id) ?? [])].join(', '),
         }))
         .filter((student) => {
           if (!student.parent_last_visited) return true;
