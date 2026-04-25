@@ -469,6 +469,16 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
               <Input value={templateContent} onChange={e => setTemplateContent(e.target.value)} placeholder="기본 범위/내용" />
             </div>
 
+            {type === 'test' && (
+              <div className="flex items-center justify-between rounded-md bg-accent/20 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-accent-foreground">test_records 자동 생성</p>
+                  <p className="text-xs text-muted-foreground">루틴 요일 아침에 자동으로 테스트 기록이 생성됩니다</p>
+                </div>
+                <Checkbox checked={autoCreate} onCheckedChange={checked => setAutoCreate(checked === true)} />
+              </div>
+            )}
+
             <div>
               <Label>대상 학생 *</Label>
               <Input placeholder="학생 검색..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} className="mb-2" />
