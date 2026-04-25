@@ -25,6 +25,9 @@ interface TemplateItem {
   is_essay: boolean;
 }
 
+type AnswerMode = 'direct' | 'image' | 'pdf';
+type TemplateAnswers = Record<number, string>;
+
 interface TemplateParseResponse {
   total_items?: number;
   total_points?: number;
@@ -41,6 +44,10 @@ interface ExamTemplateRecord {
   total_items: number;
   items: unknown;
   error_types: unknown;
+  answer_mode?: string | null;
+  answers?: unknown;
+  answer_image_paths?: unknown;
+  answer_pdf_path?: string | null;
 }
 
 interface ExamTemplateSetupRecord {
