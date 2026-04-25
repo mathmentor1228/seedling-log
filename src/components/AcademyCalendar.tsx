@@ -1661,13 +1661,13 @@ function PosterThumbnail({ attachment, onClick }: { attachment: EventAttachment;
   const [url, setUrl] = useState<string | null>(null);
   
   useEffect(() => {
+    let active = true;
     async function loadUrl() {
-      const { data } = await supabase.storage
-        .from('attachments')
-        .createSignedUrl(attachment.storage_path, 60 * 5);
-      if (data) setUrl(data.signedUrl);
+      const signedUrl = await getCachedSignedUrl('attachments', attachment.storage_path, 60 * 5);
+      if (active) setUrl(signedUrl);
     }
     loadUrl();
+    return () => { active = false; };
   }, [attachment.storage_path]);
   
   if (!url) {
@@ -1809,13 +1809,13 @@ function EventImageViewer({ attachment, onDownload }: { attachment: EventAttachm
   const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
+    let active = true;
     async function loadUrl() {
-      const { data } = await supabase.storage
-        .from('attachments')
-        .createSignedUrl(attachment.storage_path, 60 * 10);
-      if (data) setUrl(data.signedUrl);
+      const signedUrl = await getCachedSignedUrl('attachments', attachment.storage_path, 60 * 10);
+      if (active) setUrl(signedUrl);
     }
     loadUrl();
+    return () => { active = false; };
   }, [attachment.storage_path]);
 
   if (!url) {
