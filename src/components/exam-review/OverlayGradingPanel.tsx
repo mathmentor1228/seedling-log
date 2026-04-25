@@ -12,7 +12,13 @@ export interface OverlayTemplateItem {
   type: '객관식' | '주관식';
   points: number;
   is_essay: boolean;
+  answer?: string | null;
 }
+
+export type OverlayAnswerDisplay =
+  | { type: 'direct'; answers: Record<number, string> }
+  | { type: 'image'; urls: string[] }
+  | { type: 'pdf'; url: string };
 
 export interface OverlayTemplateData {
   id: string;
@@ -85,6 +91,7 @@ interface OverlayGradingPanelProps {
   saving: boolean;
   onSaveItem: (payload: OverlaySavePayload) => Promise<void>;
   onOpenTemplateSetup: () => void;
+  answerDisplay?: OverlayAnswerDisplay | null;
 }
 
 const RESULT_STYLES: Record<Exclude<ItemResult, ''>, { label: string; container: string; button: string }> = {
