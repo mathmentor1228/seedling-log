@@ -786,6 +786,13 @@ Deno.serve(async (req) => {
       }
 
       case 'exam_reviews': {
+        const { data: studentRow, error: studentError } = await supabase
+          .from('students')
+          .select('school, grade')
+          .eq('id', student_id)
+          .single();
+        if (studentError) throw studentError;
+
         const { data: results, error: resultError } = await supabase
           .from('student_exam_results')
           .select('id, subject, exam_type, exam_date, exam_year, exam_period, actual_score, expected_score, review_status, school_name, submitted_at')
@@ -808,7 +815,7 @@ Deno.serve(async (req) => {
           resultIds.length > 0
             ? supabase
                 .from('exam_reviews')
-                .select('id, result_id, overall_comment, reviewed_at, reviewed_by_name, created_at, template_id, self_check_completed, self_check_completed_at, self_check_points_given')
+                .select('id, result_id, earned_score, total_score, overall_comment, reviewed_at, reviewed_by_name, created_at, template_id, self_check_completed, self_check_completed_at, self_check_points_given')
                 .in('result_id', resultIds)
                 .order('created_at', { ascending: false })
             : Promise.resolve({ data: [], error: null }),
@@ -889,6 +896,8 @@ Deno.serve(async (req) => {
             const tpl = review.template_id ? templateMap.get(review.template_id) : null;
             latestReviewByResult.set(review.result_id, {
               id: review.id,
+              earned_score: review.earned_score,
+              total_score: review.total_score,
               overall_comment: review.overall_comment,
               reviewed_at: review.reviewed_at,
               reviewed_by_name: review.reviewed_by_name,
@@ -906,7 +915,20 @@ Deno.serve(async (req) => {
           }
         }
 
+        const { data: schoolReport, error: schoolReportError } = studentRow?.school
+          ? await supabase
+              .from('school_exam_reports')
+              .select('*')
+              .eq('school_name', studentRow.school)
+              .eq('published', true)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          : { data: null, error: null };
+        if (schoolReportError) throw schoolReportError;
+
         result = {
+          school_report: schoolReport || null,
           reviews: (results || []).map((row: any) => ({
             ...row,
             student_exam_result_photos: photoMap.get(row.id) || [],

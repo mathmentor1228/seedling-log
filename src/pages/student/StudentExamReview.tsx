@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 import { SelfCheckTab } from '@/components/student/exam-review/SelfCheckTab';
-import { CheckCircle2, ClipboardCheck, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle2, ClipboardCheck, Image as ImageIcon, School } from 'lucide-react';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
 type ItemResult = 'correct' | 'wrong' | 'partial' | null;
@@ -34,6 +34,8 @@ interface SelfCheckRow {
 
 interface ReviewData {
   id: string;
+  earned_score: number | null;
+  total_score: number | null;
   overall_comment: string | null;
   reviewed_at: string | null;
   reviewed_by_name: string | null;
@@ -59,6 +61,23 @@ interface ExamReviewRow {
   exam_reviews: ReviewData[];
 }
 
+interface SchoolExamReport {
+  id: string;
+  school_name: string;
+  subject: string;
+  grade: string;
+  exam_type: string;
+  exam_year: number;
+  exam_period: string;
+  total_students: number | null;
+  academy_helped_rate: number | null;
+  wrong_item_stats: Array<{ wrong_rate?: number; item_number?: number }> | null;
+  final_report: string | null;
+  recommended_study: string[] | null;
+  top_weak_concepts: string[] | null;
+  ai_report?: string | null;
+}
+
 const EXAM_TYPE_LABELS: Record<string, string> = {
   midterm: '중간고사',
   final: '기말고사',
@@ -72,9 +91,118 @@ const RESULT_LABELS: Record<Exclude<ItemResult, null>, string> = {
   partial: '△',
 };
 
+function toStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function ExamReportOverview({ schoolReport, reviews }: { schoolReport: SchoolExamReport | null; reviews: ExamReviewRow[] }) {
+  const recommended = toStringList(schoolReport?.recommended_study);
+  const weakConcepts = toStringList(schoolReport?.top_weak_concepts);
+  const topWrongRate = schoolReport?.wrong_item_stats?.[0]?.wrong_rate ?? 0;
+
+  return (
+    <div className="space-y-4">
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <School className="h-4 w-4 text-primary" />
+          <h2 className="text-base font-bold text-foreground">종합 리포트</h2>
+        </div>
+        {schoolReport ? (
+          <div className="rounded-2xl bg-gradient-to-br from-primary to-info p-5 text-primary-foreground shadow-sm">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <p className="mb-1 text-xs text-primary-foreground/70">
+                  {schoolReport.school_name} · {schoolReport.exam_year}년 {schoolReport.exam_period} {schoolReport.exam_type}
+                </p>
+                <h3 className="text-xl font-bold">📊 시험 종합 리포트</h3>
+              </div>
+              <span className="rounded-full bg-success/25 px-3 py-1 text-[11px] font-medium text-success-foreground">더멘토학원 분석</span>
+            </div>
+
+            <div className="mb-5 grid grid-cols-3 gap-2">
+              <MetricCard value={`${schoolReport.total_students ?? 0}명`} label="더멘토 수강생" tone="success" />
+              <MetricCard value={`${schoolReport.academy_helped_rate ?? 0}%`} label="학원 수업 도움됨" tone="warning" />
+              <MetricCard value={`${topWrongRate}%`} label="최고 오답률 문항" tone="destructive" />
+            </div>
+
+            <div className="mb-3 rounded-xl bg-primary-foreground/10 p-4">
+              <p className="mb-2 text-xs font-semibold text-primary-foreground/75">📝 시험 총평</p>
+              <p className="whitespace-pre-wrap text-sm leading-7 text-primary-foreground/90">{schoolReport.final_report || '등록된 시험 총평이 없습니다.'}</p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <InsightBox title="✅ 학원이 도움준 것" items={weakConcepts.length ? weakConcepts : ['핵심 개념 정리 및 문제풀이 전략']} tone="success" />
+              <InsightBox title="🎯 앞으로 집중할 것" items={recommended.length ? recommended : ['취약 단원 반복 학습 필요']} tone="warning" />
+            </div>
+          </div>
+        ) : (
+          <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">공개된 학교별 종합 리포트가 없습니다.</CardContent></Card>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-base font-bold text-foreground">개인 리포트</h2>
+        {reviews.length === 0 ? (
+          <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">아직 리뷰가 없습니다.</CardContent></Card>
+        ) : (
+          reviews.map((row) => <PersonalReportCard key={row.id} row={row} />)
+        )}
+      </section>
+    </div>
+  );
+}
+
+function MetricCard({ value, label, tone }: { value: string; label: string; tone: 'success' | 'warning' | 'destructive' }) {
+  const toneClass = tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : 'text-destructive';
+  return <div className="rounded-xl bg-primary-foreground/10 p-3 text-center"><p className={`text-2xl font-bold ${toneClass}`}>{value}</p><p className="text-[11px] text-primary-foreground/65">{label}</p></div>;
+}
+
+function InsightBox({ title, items, tone }: { title: string; items: string[]; tone: 'success' | 'warning' }) {
+  const className = tone === 'success' ? 'border-success/40 bg-success/20 text-success' : 'border-warning/40 bg-warning/20 text-warning';
+  return <div className={`rounded-xl border p-3 ${className}`}><p className="mb-2 text-xs font-semibold">{title}</p><ul className="m-0 list-disc space-y-1 pl-4 text-xs text-primary-foreground/85">{items.map((item, index) => <li key={index}>{item}</li>)}</ul></div>;
+}
+
+function PersonalReportCard({ row }: { row: ExamReviewRow }) {
+  const review = row.exam_reviews[0];
+  const items = review?.exam_item_reviews || [];
+  const selfChecks = review?.self_checks || [];
+  const correct = items.filter((item) => item.result === 'correct').length;
+  const wrong = items.filter((item) => item.result === 'wrong').length;
+  const helped = selfChecks.filter((check) => check.q_academy_helped).length;
+  const helpedRate = selfChecks.length > 0 ? `${Math.round((helped / selfChecks.length) * 100)}%` : '-';
+  const needMore = selfChecks.filter((check) => check.q_need_more).slice(0, 2);
+
+  return (
+    <Card className="rounded-2xl">
+      <CardContent className="p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Badge variant="success">{row.subject}</Badge>
+            <span className="text-sm text-muted-foreground">{row.exam_year ?? '-'}년 {row.exam_period ?? '-'} {EXAM_TYPE_LABELS[row.exam_type] ?? row.exam_type}</span>
+          </div>
+          <div className="text-right"><p className="text-2xl font-bold text-primary">{review?.earned_score ?? row.actual_score ?? '-'}점</p><p className="text-[11px] text-muted-foreground">/ {review?.total_score ?? '-'}점 만점</p></div>
+        </div>
+        <div className="mb-4 grid grid-cols-3 gap-2">
+          <MiniStat value={String(correct)} label="맞음" variant="success" />
+          <MiniStat value={String(wrong)} label="틀림" variant="destructive" />
+          <MiniStat value={helpedRate} label="학원도움" variant="primary" />
+        </div>
+        {review?.overall_comment ? <div className="mb-3 rounded-xl border border-success/20 bg-success/10 p-3"><p className="mb-1 text-xs font-semibold text-success">선생님 코멘트</p><p className="whitespace-pre-wrap text-sm leading-7 text-foreground">{review.overall_comment}</p></div> : null}
+        {selfChecks.length > 0 ? <div className="grid gap-2 md:grid-cols-2"><div className="rounded-xl bg-success/10 p-3"><p className="mb-2 text-xs font-semibold text-success">✅ 학원이 도움준 부분</p>{selfChecks.filter((check) => check.q_academy_helped).slice(0, 3).map((check) => <p key={check.item_number} className="text-xs text-success">· {check.item_number}번 문항 관련 학습</p>) || null}{helped === 0 ? <p className="text-xs text-muted-foreground">자가진단 완료 후 표시됩니다</p> : null}</div><div className="rounded-xl bg-warning/10 p-3"><p className="mb-2 text-xs font-semibold text-warning">🎯 앞으로 집중할 부분</p>{needMore.map((check) => <p key={check.item_number} className="text-xs text-warning">· {check.q_need_more}</p>)}{needMore.length === 0 ? <p className="text-xs text-muted-foreground">자가진단 완료 후 표시됩니다</p> : null}</div></div> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniStat({ value, label, variant }: { value: string; label: string; variant: 'success' | 'destructive' | 'primary' }) {
+  const className = variant === 'success' ? 'bg-success/10 text-success' : variant === 'destructive' ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary';
+  return <div className={`rounded-lg p-3 text-center ${className}`}><p className="text-lg font-bold">{value}</p><p className="text-[11px]">{label}</p></div>;
+}
+
 export default function StudentExamReview() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
+  const [schoolReport, setSchoolReport] = useState<SchoolExamReport | null>(null);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'teacher' | 'self'>('teacher');
@@ -83,6 +211,7 @@ export default function StudentExamReview() {
     setLoading(true);
     const { data } = await studentApi.getExamReviews();
     setRows((data?.reviews || []) as ExamReviewRow[]);
+    setSchoolReport((data?.school_report || null) as SchoolExamReport | null);
     setLoading(false);
   }, []);
 
@@ -98,6 +227,8 @@ export default function StudentExamReview() {
     return { wrongNumbers, errorTypes };
   }, [selectedReview]);
 
+  const completedReviews = useMemo(() => rows.filter((row) => row.exam_reviews?.[0]?.reviewed_at), [rows]);
+
   return (
     <div className="space-y-4 pb-20">
       <div className="space-y-2">
@@ -107,6 +238,8 @@ export default function StudentExamReview() {
         </h1>
         <StudentStudyTabs />
       </div>
+
+      {!loading ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} /> : null}
 
       {loading ? (
         <div className="space-y-3">
