@@ -176,6 +176,12 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
   const [examYear, setExamYear] = useState<number | null>(null);
   const [examPeriod, setExamPeriod] = useState('');
   const [examType, setExamType] = useState('');
+  const [answerMode, setAnswerMode] = useState<AnswerMode>('direct');
+  const [answers, setAnswers] = useState<TemplateAnswers>({});
+  const [answerImagePaths, setAnswerImagePaths] = useState<string[]>([]);
+  const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
+  const [answerPdfPath, setAnswerPdfPath] = useState<string | null>(null);
+  const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
 
   const canSave = Boolean(record && currentUserId && grade && examYear && examPeriod && examType && items.length > 0);
   const dialogTitle = templateId ? '템플릿 수정' : '템플릿 새로 만들기';
