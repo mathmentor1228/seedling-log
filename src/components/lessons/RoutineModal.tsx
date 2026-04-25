@@ -41,6 +41,8 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
   const [days, setDays] = useState<number[]>([]);
   const [teacherId, setTeacherId] = useState('');
   const [subject, setSubject] = useState('');
+  const [testType, setTestType] = useState('수학');
+  const [autoCreate, setAutoCreate] = useState(true);
   const [room, setRoom] = useState('general');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -84,6 +86,8 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
     setDays([routine.day_of_week]);
     setTeacherId(routine.teacher_id || '');
     setSubject(routine.subject || '');
+    setTestType(routine.subject || '수학');
+    setAutoCreate(routine.auto_create_test ?? true);
     setRoom(routine.room || 'general');
     setStartTime(routine.start_time?.slice(0, 5) || '');
     setEndTime(routine.end_time?.slice(0, 5) || '');
@@ -106,9 +110,11 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
       start_time: startTime || null,
       end_time: endTime || null,
       student_ids: selectedStudents,
-      subject: subject || null,
+      subject: type === 'test' ? testType : subject || null,
       room,
       template_content: templateContent || null,
+      auto_create_test: type === 'test' ? autoCreate : false,
+      test_content: type === 'test' ? templateContent || null : null,
       assistant_name: type === 'test' ? (assistantName && assistantName !== 'none' ? assistantName : null) : null,
     };
 
@@ -144,7 +150,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
   }
 
   function resetForm() {
-    setDays([]); setTeacherId(''); setSubject(''); setRoom('general');
+    setDays([]); setTeacherId(''); setSubject(''); setTestType('수학'); setAutoCreate(true); setRoom('general');
     setStartTime(''); setEndTime(''); setSelectedStudents([]);
     setTemplateContent(''); setAssistantName(''); setStudentSearch('');
     setEditingRoutineId(null);
