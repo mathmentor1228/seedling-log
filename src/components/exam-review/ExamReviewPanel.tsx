@@ -656,6 +656,26 @@ export function ExamReviewPanel() {
 
     const nowIso = new Date().toISOString();
     const reviewerName = fullName || user.email || '교직원';
+    const previousItems = itemReviews;
+    const optimisticItem: OverlayReviewItem = {
+      id: payload.id,
+      item_number: payload.item_number,
+      result: payload.result,
+      error_types: payload.error_types,
+      item_comment: '',
+      score_earned: payload.score_earned,
+      is_essay: payload.is_essay,
+      custom_reason: payload.custom_reason,
+      overlay_x: payload.overlay_x,
+      overlay_y: payload.overlay_y,
+      page_number: payload.page_number,
+    };
+    const mergedItems = previousItems
+      .filter((item) => item.item_number !== payload.item_number)
+      .concat(optimisticItem)
+      .sort((a, b) => a.item_number - b.item_number);
+
+    setItemReviews(mergedItems);
 
     setSaving(true);
     try {
@@ -738,20 +758,6 @@ export function ExamReviewPanel() {
         if (insertItemError) throw insertItemError;
       }
 
-      const mergedItems = itemReviews.filter((item) => item.item_number !== payload.item_number).concat({
-        id: payload.id,
-        item_number: payload.item_number,
-        result: payload.result,
-        error_types: payload.error_types,
-        item_comment: '',
-        score_earned: payload.score_earned,
-        is_essay: payload.is_essay,
-        custom_reason: payload.custom_reason,
-        overlay_x: payload.overlay_x,
-        overlay_y: payload.overlay_y,
-        page_number: payload.page_number,
-      });
-
       const earnedScore = Math.round(mergedItems.reduce((sum, item) => sum + (item.score_earned ?? 0), 0) * 100) / 100;
       const totalScore = Math.round(template.items.reduce((sum, item) => sum + (item.points || 0), 0) * 100) / 100;
 
@@ -764,12 +770,13 @@ export function ExamReviewPanel() {
 
       await loadReviewDetail(selectedRow.id);
     } catch (error: any) {
+      setItemReviews(previousItems);
       toast({ title: '문항 저장 실패', description: error.message, variant: 'destructive' });
       throw error;
     } finally {
       setSaving(false);
     }
-  }, [fullName, itemReviews, loadReviewDetail, overallComment, selectedRow, template, toast, user]);
+  }, [fullName, itemReviews, loadReviewDetail, overallComment, reviewId, selectedRow, template, toast, user]);
 
   const resetComment = useCallback(() => {
     setOverallComment('');
