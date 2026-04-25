@@ -34,6 +34,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const AUTH_LOOKUP_TIMEOUT_MS = 8000;
+
+async function withTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => resolve(fallback), AUTH_LOOKUP_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } catch (error) {
+    console.error('Auth lookup failed:', error);
+    return fallback;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -42,6 +60,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [fullName, setFullName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [trialExpiresAt, setTrialExpiresAt] = useState<string | null>(null);
+
+  const applySession = async (nextSession: Session | null, finishLoading = false) => {
+    setSession(nextSession);
+    setUser(nextSession?.user ?? null);
+
+    if (!nextSession?.user) {
+      setRole(null);
+      setTrialExpiresAt(null);
+      setAssignedSubject(null);
+      setFullName(null);
+      if (finishLoading) setLoading(false);
+      return;
+    }
+
+    const [result, profile] = await Promise.all([
+      withTimeout(fetchUserRole(nextSession.user.id), { role: null, trialExpiresAt: null }),
+      withTimeout(fetchProfile(nextSession.user.id), { assignedSubject: null, fullName: null }),
+    ]);
+
+    setRole(result.role);
+    setTrialExpiresAt(result.trialExpiresAt);
+    setAssignedSubject(profile.assignedSubject);
+    setFullName(profile.fullName);
+    if (finishLoading) setLoading(false);
+  };
 
   const fetchUserRole = async (userId: string) => {
     const { data, error } = await supabase
@@ -80,52 +123,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    let mounted = true;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          setTimeout(() => {
-          Promise.all([
-              fetchUserRole(session.user.id),
-              fetchProfile(session.user.id),
-            ]).then(([result, profile]) => {
-              setRole(result.role);
-              setTrialExpiresAt(result.trialExpiresAt);
-              setAssignedSubject(profile.assignedSubject);
-              setFullName(profile.fullName);
-            });
-          }, 0);
-        } else {
-          setRole(null);
-          setTrialExpiresAt(null);
-          setAssignedSubject(null);
-        }
+        setTimeout(() => {
+          if (mounted) void applySession(session);
+        }, 0);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (mounted) return applySession(session, true);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
 
-      if (session?.user) {
-        Promise.all([
-          fetchUserRole(session.user.id),
-          fetchProfile(session.user.id),
-        ]).then(([result, profile]) => {
-          setRole(result.role);
-          setTrialExpiresAt(result.trialExpiresAt);
-          setAssignedSubject(profile.assignedSubject);
-          setFullName(profile.fullName);
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
