@@ -870,7 +870,7 @@ export function ExamReviewPanel() {
     } finally {
       setIsGenerating(false);
     }
-  }, [hasItems, itemReviews, overallComment, selectedRow, selfChecks, template, toast]);
+  }, [hasItems, itemReviews, overallComment, reviewPhase, selectedRow, selfChecks, template, toast]);
 
   return (
     <>
