@@ -992,6 +992,10 @@ export type Database = {
           exam_year: number
           grade: string
           id: string
+          is_locked: boolean | null
+          locked_at: string | null
+          locked_by: string | null
+          locked_by_name: string | null
           original_pdf_path: string | null
           overall_review: string | null
           school_name: string
@@ -1013,6 +1017,10 @@ export type Database = {
           exam_year: number
           grade: string
           id?: string
+          is_locked?: boolean | null
+          locked_at?: string | null
+          locked_by?: string | null
+          locked_by_name?: string | null
           original_pdf_path?: string | null
           overall_review?: string | null
           school_name: string
@@ -1034,6 +1042,10 @@ export type Database = {
           exam_year?: number
           grade?: string
           id?: string
+          is_locked?: boolean | null
+          locked_at?: string | null
+          locked_by?: string | null
+          locked_by_name?: string | null
           original_pdf_path?: string | null
           overall_review?: string | null
           school_name?: string
@@ -1046,6 +1058,13 @@ export type Database = {
           {
             foreignKeyName: "exam_analysis_reports_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_analysis_reports_locked_by_fkey"
+            columns: ["locked_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
