@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, PenSquare } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2, PenSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { PhotoThumb } from '@/components/exam-review/PhotoThumb';
 
 type ItemResult = 'correct' | 'wrong' | 'partial' | '';
@@ -147,47 +148,54 @@ function QuickGradeStrip({
 }) {
   if (items.length === 0) {
     return (
-      <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-center text-xs text-muted-foreground">
-        시험지 위치를 클릭하면 해당 문항이 여기에 추가됩니다.
+      <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-4 text-center text-sm text-muted-foreground">
+        시험지를 클릭해 문항 위치를 찍으면 아래에서 바로 O / X / △ 채점할 수 있습니다.
       </div>
     );
   }
 
   return (
-    <div className="mt-3 rounded-lg border border-border bg-card p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-foreground">현재 페이지 빠른 채점</p>
-        <p className="text-xs text-muted-foreground">O / X / △ 클릭 즉시 저장</p>
+    <div className="mt-3 rounded-lg border border-border bg-card p-3 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-foreground">현재 페이지 문항</p>
+        <p className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">O / X / △ 누르면 즉시 저장</p>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {items.map((item) => (
-          <div key={`${item.item_number}-${item.page_number}`} className="shrink-0 rounded-lg border border-border bg-muted/20 p-2">
-            <button
-              type="button"
-              onClick={() => onEdit(item)}
-              className="mb-2 w-full text-center text-xs font-semibold text-foreground hover:text-primary"
+        {items.map((item) => {
+          const activeStyle = item.result ? RESULT_STYLES[item.result as Exclude<ItemResult, ''>] : null;
+          return (
+            <div
+              key={`${item.item_number}-${item.page_number}`}
+              className={`shrink-0 rounded-lg border p-2 ${activeStyle ? activeStyle.container : 'border-border bg-muted/20 text-foreground'}`}
             >
-              {item.item_number}번
-            </button>
-            <div className="flex gap-1">
-              {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
-                const active = item.result === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => onQuickGrade(item, value)}
-                    disabled={saving}
-                    className={`flex h-9 w-9 items-center justify-center rounded-md border text-base font-bold transition disabled:opacity-50 ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
-                    aria-label={`${item.item_number}번 ${style.label}로 채점`}
-                  >
-                    {style.label}
-                  </button>
-                );
-              })}
+              <button
+                type="button"
+                onClick={() => onEdit(item)}
+                className="mb-2 flex w-full items-center justify-center gap-1 text-xs font-bold hover:opacity-80"
+              >
+                <span>{item.item_number}번</span>
+                {item.result ? <span className="text-sm">{RESULT_STYLES[item.result as Exclude<ItemResult, ''>].label}</span> : null}
+              </button>
+              <div className="grid grid-cols-3 gap-1">
+                {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
+                  const active = item.result === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => onQuickGrade(item, value)}
+                      disabled={saving}
+                      className={`flex h-11 w-11 items-center justify-center rounded-md border text-lg font-bold transition hover:scale-105 disabled:opacity-50 ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
+                      aria-label={`${item.item_number}번 ${style.label}로 채점`}
+                    >
+                      {style.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -272,6 +280,7 @@ export function OverlayGradingPanel({
   const [earnedScore, setEarnedScore] = useState(0);
   const [errorTypes, setErrorTypes] = useState<string[]>([]);
   const [customReason, setCustomReason] = useState('');
+  const [expandedOpen, setExpandedOpen] = useState(false);
 
   const currentPhoto = photos[page] ?? null;
   const currentPhotoUrl = currentPhoto ? photoUrls[currentPhoto.storage_path] ?? '' : '';
@@ -331,10 +340,10 @@ export function OverlayGradingPanel({
     setCustomReason('');
   };
 
-  const handleImageClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (!template || !imageContainerRef.current) return;
+  const handleImageClick = (event: React.MouseEvent<HTMLElement>) => {
+    if (!template) return;
 
-    const rect = imageContainerRef.current.getBoundingClientRect();
+    const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
 
