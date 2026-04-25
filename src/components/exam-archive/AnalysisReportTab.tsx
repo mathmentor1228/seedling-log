@@ -548,6 +548,57 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setSaving(false);
   }
 
+  async function handleToggleLock() {
+    if (!selectedReport || !user || role !== 'admin') return;
+
+    const newLocked = !selectedReport.is_locked;
+    const confirmed = window.confirm(
+      newLocked
+        ? '이 보고서를 잠금 처리하시겠습니까?\n잠금 후 선생님이 수정할 수 없습니다.'
+        : '잠금을 해제하시겠습니까?',
+    );
+    if (!confirmed) return;
+
+    const lockPayload = {
+      is_locked: newLocked,
+      locked_by: newLocked ? user.id : null,
+      locked_by_name: newLocked ? fullName || user.email || '' : null,
+      locked_at: newLocked ? new Date().toISOString() : null,
+    };
+    const { error } = await (supabase as any).from('exam_analysis_reports').update(lockPayload).eq('id', selectedReport.id);
+    if (error) {
+      toast.error('잠금 상태 변경에 실패했습니다.');
+      console.error(error);
+      return;
+    }
+
+    setReports((prev) => prev.map((report) => (report.id === selectedReport.id ? { ...report, ...lockPayload } : report)));
+    toast.success(newLocked ? '보고서를 잠금 처리했습니다.' : '잠금을 해제했습니다.');
+  }
+
+  async function handleDelete(report: AnalysisReport) {
+    if (report.is_locked) return;
+    const confirmed = window.confirm(`"${report.subject} ${report.exam_type}" 보고서를\n삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
+    if (!confirmed) return;
+
+    const paths = [report.original_pdf_path, report.answer_pdf_path].filter(Boolean) as string[];
+    if (paths.length > 0) {
+      const { error: storageError } = await supabase.storage.from('exam-analysis').remove(paths);
+      if (storageError) console.error(storageError);
+    }
+
+    const { error } = await (supabase as any).from('exam_analysis_reports').delete().eq('id', report.id);
+    if (error) {
+      toast.error('보고서 삭제에 실패했습니다.');
+      console.error(error);
+      return;
+    }
+
+    setReports((prev) => prev.filter((row) => row.id !== report.id));
+    if (selectedReportId === report.id) startNewReport();
+    toast.success('보고서를 삭제했습니다.');
+  }
+
   return (
     <div className="flex h-[calc(100vh-120px)] min-h-0 w-full overflow-hidden bg-background">
       <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
