@@ -198,40 +198,6 @@ function QuickGradeStrip({
         })}
       </div>
     </div>
-
-    <Dialog open={expandedOpen} onOpenChange={setExpandedOpen}>
-      <DialogContent className="max-h-[96vh] max-w-[96vw] overflow-y-auto p-3 sm:p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 pr-8">
-          <div className="text-sm font-semibold text-foreground">큰 시험지 채점 · {photos.length === 0 ? '0 / 0페이지' : `${page + 1} / ${photos.length}페이지`}</div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(0, prev - 1))} disabled={page === 0}>
-              <ChevronLeft className="h-4 w-4" /> 이전
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(photos.length - 1, prev + 1))} disabled={photos.length === 0 || page === photos.length - 1}>
-              다음 <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-lg border border-border bg-card">
-          {currentPhotoUrl ? (
-            <img src={currentPhotoUrl} alt={`시험지 ${page + 1}`} className="block max-h-[74vh] w-full object-contain" />
-          ) : currentPhoto ? (
-            <PhotoThumb storagePath={currentPhoto.storage_path} signedUrl={currentPhoto.signedUrl ?? null} alt={`시험지 ${page + 1}`} fit="contain" className="min-h-[70vh]" imageClassName="block max-h-[74vh] w-full object-contain" />
-          ) : (
-            <div className="flex min-h-[70vh] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
-          )}
-          {pageItems.map((item) => (
-            <div key={`expanded-${item.item_number}-${item.page_number}`} className="absolute z-10" style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}>
-              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
-            </div>
-          ))}
-          {currentPhoto ? <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="큰 시험지 위치에 채점 마커 추가" /> : null}
-          {renderActiveEditor()}
-        </div>
-        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openEditor} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
-      </DialogContent>
-    </Dialog>
-    </>
   );
 }
 
@@ -295,40 +261,6 @@ function ScoreSummaryPanel({ items, template }: { items: OverlayReviewItem[]; te
         )}
       </div>
     </div>
-
-    <Dialog open={expandedOpen} onOpenChange={setExpandedOpen}>
-      <DialogContent className="max-h-[96vh] max-w-[96vw] overflow-y-auto p-3 sm:p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 pr-8">
-          <div className="text-sm font-semibold text-foreground">큰 시험지 채점 · {photos.length === 0 ? '0 / 0페이지' : `${page + 1} / ${photos.length}페이지`}</div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(0, prev - 1))} disabled={page === 0}>
-              <ChevronLeft className="h-4 w-4" /> 이전
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(photos.length - 1, prev + 1))} disabled={photos.length === 0 || page === photos.length - 1}>
-              다음 <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-lg border border-border bg-card">
-          {currentPhotoUrl ? (
-            <img src={currentPhotoUrl} alt={`시험지 ${page + 1}`} className="block max-h-[74vh] w-full object-contain" />
-          ) : currentPhoto ? (
-            <PhotoThumb storagePath={currentPhoto.storage_path} signedUrl={currentPhoto.signedUrl ?? null} alt={`시험지 ${page + 1}`} fit="contain" className="min-h-[70vh]" imageClassName="block max-h-[74vh] w-full object-contain" />
-          ) : (
-            <div className="flex min-h-[70vh] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
-          )}
-          {pageItems.map((item) => (
-            <div key={`expanded-${item.item_number}-${item.page_number}`} className="absolute z-10" style={{ left: `${item.overlay_x}%`, top: `${item.overlay_y}%`, transform: 'translate(-50%, -50%)' }}>
-              <ResultBadge result={item.result as Exclude<ItemResult, ''>} no={item.item_number} onClick={() => openEditor(item)} />
-            </div>
-          ))}
-          {currentPhoto ? <button type="button" className="absolute inset-0 cursor-crosshair" onClick={handleImageClick} aria-label="큰 시험지 위치에 채점 마커 추가" /> : null}
-          {renderActiveEditor()}
-        </div>
-        <QuickGradeStrip items={quickGradeItems} saving={saving} onEdit={openEditor} onQuickGrade={(item, nextResult) => void handleQuickGrade(item, nextResult)} />
-      </DialogContent>
-    </Dialog>
-    </>
   );
 }
 
