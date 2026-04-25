@@ -253,6 +253,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   function updateForm<K extends keyof ReportForm>(key: K, value: ReportForm[K]) {
+    if (isLocked) return;
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -585,6 +586,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (paths.length > 0) {
       const { error: storageError } = await supabase.storage.from('exam-analysis').remove(paths);
       if (storageError) console.error(storageError);
+    }
+
+    const { error: itemDeleteError } = await (supabase as any).from('exam_analysis_items').delete().eq('report_id', report.id);
+    if (itemDeleteError) {
+      toast.error('문항 분석 삭제에 실패했습니다.');
+      console.error(itemDeleteError);
+      return;
     }
 
     const { error } = await (supabase as any).from('exam_analysis_reports').delete().eq('id', report.id);
