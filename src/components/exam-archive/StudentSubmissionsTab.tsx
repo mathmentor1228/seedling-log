@@ -301,7 +301,12 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                     <div className="space-y-1.5 pl-5">
                       {g.items.map(r => (
                         <div key={r.id} className="flex items-start gap-2 p-2 rounded border bg-card/50">
-                          <div className="flex gap-1 flex-shrink-0">
+                          <div className="relative flex gap-1 flex-shrink-0">
+                            {sortingIds[r.id] && (
+                              <div className="absolute inset-0 z-10 rounded bg-background/80 flex items-center justify-center">
+                                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                              </div>
+                            )}
                             {r.photos.slice(0, 2).map(p => (
                               p.signedUrl ? (
                                 <button key={p.id} onClick={() => setPreviewPhotos(r.photos)}
@@ -364,6 +369,12 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                               <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => handleConvertToPdf(r)} disabled={busyIds[r.id] || r.photos.length === 0}>
                                 {busyIds[r.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} PDF 변환
                               </Button>
+                              {r.photos.length > 1 && (
+                                <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => handleSortPhotos(r)} disabled={sortingIds[r.id]}>
+                                  {sortingIds[r.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <ListOrdered className="w-3 h-3" />}
+                                  순서 재정렬
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => setLockTarget(r)}>
                                 {r.score_locked ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                                 {r.score_locked ? '잠금해제/실제점수' : '점수 확정'}
