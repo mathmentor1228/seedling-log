@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Loader2, FileImage, Search, FileText, ChevronDown, ChevronRight, GraduationCap, Lock, Unlock, Pencil, Trash2, Upload, Download, Plus } from 'lucide-react';
+import { Loader2, FileImage, Search, FileText, ChevronDown, ChevronRight, GraduationCap, Lock, Unlock, Pencil, Trash2, Upload, Download, Plus, ListOrdered } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -67,6 +67,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
   const [bulkConverting, setBulkConverting] = useState(false);
   const [staffUploadOpen, setStaffUploadOpen] = useState(false);
   const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
+  const [sortingIds, setSortingIds] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,6 +144,24 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
   }, [filtered]);
 
   const setBusy = (id: string, b: boolean) => setBusyIds(prev => ({ ...prev, [id]: b }));
+  const setSorting = (id: string, b: boolean) => setSortingIds(prev => ({ ...prev, [id]: b }));
+
+  const handleSortPhotos = async (r: Result) => {
+    if (r.photos.length <= 1) return;
+    setSorting(r.id, true);
+    try {
+      const { data, error } = await supabase.functions.invoke('student-exam-results', {
+        body: { action: 'sort_photos', result_id: r.id },
+      });
+      if (error || data?.error) throw new Error(error?.message || data?.error);
+      toast({ title: '사진 순서 정렬 완료', description: 'AI가 인식한 첫 문항 번호 기준으로 정렬했습니다.' });
+      await load();
+    } catch (e: any) {
+      toast({ title: '사진 정렬 실패', description: e?.message || '기존 순서를 유지합니다.', variant: 'destructive' });
+    } finally {
+      setSorting(r.id, false);
+    }
+  };
 
   const handleConvertToPdf = async (r: Result, silent = false) => {
     if (!r.photos.length) {
@@ -282,7 +301,12 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                     <div className="space-y-1.5 pl-5">
                       {g.items.map(r => (
                         <div key={r.id} className="flex items-start gap-2 p-2 rounded border bg-card/50">
-                          <div className="flex gap-1 flex-shrink-0">
+                          <div className="relative flex gap-1 flex-shrink-0">
+                            {sortingIds[r.id] && (
+                              <div className="absolute inset-0 z-10 rounded bg-background/80 flex items-center justify-center">
+                                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                              </div>
+                            )}
                             {r.photos.slice(0, 2).map(p => (
                               p.signedUrl ? (
                                 <button key={p.id} onClick={() => setPreviewPhotos(r.photos)}
@@ -345,6 +369,12 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                               <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => handleConvertToPdf(r)} disabled={busyIds[r.id] || r.photos.length === 0}>
                                 {busyIds[r.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} PDF 변환
                               </Button>
+                              {r.photos.length > 1 && (
+                                <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => handleSortPhotos(r)} disabled={sortingIds[r.id]}>
+                                  {sortingIds[r.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <ListOrdered className="w-3 h-3" />}
+                                  순서 재정렬
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => setLockTarget(r)}>
                                 {r.score_locked ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                                 {r.score_locked ? '잠금해제/실제점수' : '점수 확정'}
