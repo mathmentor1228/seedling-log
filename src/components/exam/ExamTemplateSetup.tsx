@@ -383,6 +383,56 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
   };
   const removeErrorType = (index: number) => setCustomErrorTypes((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
 
+  const setAnswer = (itemNo: number, value: string) => {
+    setAnswers((prev) => ({ ...prev, [itemNo]: value }));
+  };
+
+  const handleAnswerImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (!files.length || !record) return;
+
+    const safeId = templateId ?? crypto.randomUUID();
+    const uploadedPaths: string[] = [];
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
+        const path = `exam-analysis/${safeId}/answer-image-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+        const { error } = await supabase.storage.from('exam-analysis').upload(path, file, { contentType: file.type || undefined, upsert: true });
+        if (error) throw error;
+        uploadedPaths.push(path);
+      }
+      if (uploadedPaths.length > 0) setAnswerImagePaths((prev) => [...prev, ...uploadedPaths]);
+    } catch (error: any) {
+      toast({ title: '답지 이미지 업로드 실패', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleAnswerPdfUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !record) return;
+    if (file.type !== 'application/pdf') {
+      toast({ title: 'PDF 파일만 업로드할 수 있습니다', variant: 'destructive' });
+      return;
+    }
+    try {
+      const safeId = templateId ?? crypto.randomUUID();
+      const path = `exam-analysis/${safeId}/answer-${Date.now()}.pdf`;
+      const { error } = await supabase.storage.from('exam-analysis').upload(path, file, { contentType: 'application/pdf', upsert: true });
+      if (error) throw error;
+      setAnswerPdfPath(path);
+      toast({ title: '답지 PDF 업로드 완료' });
+    } catch (error: any) {
+      toast({ title: '답지 PDF 업로드 실패', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const removeAnswerImage = (index: number) => {
+    setAnswerImagePaths((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
+
   const handleTemplateFileParse = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
