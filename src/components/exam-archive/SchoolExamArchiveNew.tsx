@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CalendarDays, BookOpen, FileText, Compass, AlertTriangle, GraduationCap, ClipboardCheck, ListChecks } from 'lucide-react';
+import { Loader2, CalendarDays, BookOpen, FileText, Compass, AlertTriangle, GraduationCap, ClipboardCheck, ListChecks, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -20,8 +20,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ExamReviewPanel } from '@/components/exam-review/ExamReviewPanel';
 import { ExamPrepScheduleManager } from '@/components/ExamPrepScheduleManager';
 import { CrossCheckTab } from '@/components/naeshin/CrossCheckTab';
+import { AnalysisReportTab } from './AnalysisReportTab';
 
-const ARCHIVE_TABS = ['overview', 'submissions', 'review', 'cross-check', 'prep'] as const;
+const ARCHIVE_TABS = ['overview', 'submissions', 'review', 'cross-check', 'analysis', 'prep'] as const;
 type ArchiveTabValue = (typeof ARCHIVE_TABS)[number];
 
 function normalizeTab(value: string | null): ArchiveTabValue {
@@ -204,7 +205,7 @@ function SchoolExamArchiveInner() {
               ) : null}
 
               <Tabs value={currentTab} onValueChange={handleTabChange} className={isReviewTab ? 'flex h-full min-h-0 flex-col' : undefined}>
-                <TabsList className="grid w-full grid-cols-5 h-10">
+                <TabsList className="grid w-full grid-cols-6 h-10">
                   <TabsTrigger value="overview" className="gap-1.5 text-xs">
                     <CalendarDays className="w-4 h-4" /> 학교/일정
                   </TabsTrigger>
@@ -220,6 +221,9 @@ function SchoolExamArchiveInner() {
                     <span className="ml-1 rounded-full bg-destructive px-1.5 py-px text-[10px] font-medium text-destructive-foreground">
                       {unconfirmedCount}
                     </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="analysis" className="gap-1.5 text-xs">
+                    <BarChart3 className="w-4 h-4" /> 분석보고서
                   </TabsTrigger>
                   <TabsTrigger value="prep" className="gap-1.5 text-xs" disabled={!canViewPrep}>
                     <Compass className="w-4 h-4" /> 내신특강
@@ -288,6 +292,10 @@ function SchoolExamArchiveInner() {
 
                 <TabsContent value="cross-check" className="mt-4">
                   <CrossCheckTab onUnconfirmedCountChange={setUnconfirmedCount} />
+                </TabsContent>
+
+                <TabsContent value="analysis" className="mt-4">
+                  <AnalysisReportTab schools={schools} selectedSchool={selectedSchool} />
                 </TabsContent>
 
                 <TabsContent value="prep" className="mt-4">
