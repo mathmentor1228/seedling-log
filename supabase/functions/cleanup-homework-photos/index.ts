@@ -47,7 +47,7 @@ function extractHomeworkStoragePaths(value: string | null | undefined): string[]
 
 async function removeStoragePaths(supabase: ReturnType<typeof createClient>, paths: string[], errors: string[]) {
   let removed = 0;
-  const uniquePaths = [...new Set(paths)];
+  const uniquePaths = Array.from(new Set(paths));
 
   for (let i = 0; i < uniquePaths.length; i += BATCH_SIZE) {
     const batch = uniquePaths.slice(i, i + BATCH_SIZE);
