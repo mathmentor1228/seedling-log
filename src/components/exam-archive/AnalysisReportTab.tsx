@@ -150,6 +150,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
   const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
+  const [isExtractingAnswers, setIsExtractingAnswers] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
 
@@ -315,6 +316,46 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     updateForm('answers', { ...form.answers, [String(itemNumber)]: value });
   }
 
+  async function extractAnswersFromFile(file: File) {
+    if (isLocked) return;
+    setIsExtractingAnswers(true);
+    try {
+      const fileDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const { data, error } = await supabase.functions.invoke('extract-answer-key', {
+        body: {
+          fileDataUrl,
+          fileName: file.name,
+          fileMimeType: file.type || null,
+          subject: form.subject,
+          totalItems: items.length,
+        },
+      });
+
+      if (error || data?.error) throw new Error(error?.message || data?.error || '정답 추출 실패');
+      const extracted = data?.answers && typeof data.answers === 'object' && !Array.isArray(data.answers)
+        ? Object.entries(data.answers as Record<string, unknown>).reduce<Record<string, string>>((acc, [key, value]) => {
+            if (value !== null && value !== undefined && String(value).trim()) acc[key] = String(value).trim();
+            return acc;
+          }, {})
+        : {};
+
+      updateForm('answers', extracted);
+      updateForm('answerMode', 'direct');
+      toast.success(`정답 ${Object.keys(extracted).length}개 추출 완료 — 내용을 확인하고 수정해주세요.`);
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : '정답 추출 실패. 다시 시도해주세요.');
+    } finally {
+      setIsExtractingAnswers(false);
+    }
+  }
+
   function removeAnswerImage(index: number) {
     if (isLocked) return;
     updateForm('answerImagePaths', form.answerImagePaths.filter((_, i) => i !== index));
@@ -342,6 +383,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       updateForm('answerImagePaths', [...form.answerImagePaths, ...uploadedPaths]);
       toast.success('답지 이미지 업로드 완료');
     }
+    if (files[0]) await extractAnswersFromFile(files[0]);
   }
 
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'original' | 'answer') {
@@ -370,7 +412,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     }
 
     if (type === 'original') updateForm('originalPdfPath', path);
-    else updateForm('answerPdfPath', path);
+    else {
+      updateForm('answerPdfPath', path);
+      await extractAnswersFromFile(file);
+    }
     toast.success('PDF 업로드 완료');
   }
 
