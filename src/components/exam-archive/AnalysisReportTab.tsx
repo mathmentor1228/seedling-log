@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { FileText, Loader2, Plus, Save, Trash2, Upload } from 'lucide-react';
+import { FileText, Loader2, Plus, Save, Sparkles, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -52,6 +52,18 @@ type AnalysisItem = {
   area?: string | null;
   sort_order?: number | null;
 };
+
+type ParseResult = { total_items: number; total_points: number };
+
+type ParsedExamAnalysis = Partial<{
+  textbook: string | null;
+  exam_scope: string | null;
+  exam_difficulty: string | null;
+  overall_review: string | null;
+  total_items: number;
+  total_points: number;
+  items: AnalysisItem[];
+}>;
 
 type ReportForm = {
   schoolName: string;
@@ -123,6 +135,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [items, setItems] = useState<AnalysisItem[]>(createDefaultItems);
   const [originalPdfUrl, setOriginalPdfUrl] = useState<string | null>(null);
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
 
   const filteredReports = useMemo(() => {
     return reports
@@ -278,6 +292,103 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     toast.success('PDF 업로드 완료');
   }
 
+  function applyParsedAnalysis(parsed: ParsedExamAnalysis) {
+    if (parsed.textbook) updateForm('textbook', parsed.textbook);
+    if (parsed.exam_scope) updateForm('examScope', parsed.exam_scope);
+    if (parsed.exam_difficulty) updateForm('difficulty', parsed.exam_difficulty);
+    if (parsed.overall_review) updateForm('overallReview', parsed.overall_review);
+    if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+      setItems(parsed.items.map((item, index) => ({ ...item, item_number: item.item_number || index + 1, sort_order: index })));
+    }
+    setParseResult({
+      total_items: Number(parsed.total_items ?? parsed.items?.length ?? 0),
+      total_points: Number(parsed.total_points ?? parsed.items?.reduce((sum, item) => sum + (Number(item.points) || 0), 0) ?? 0),
+    });
+  }
+
+  async function runAIParse(fileDataUrl: string, fileName: string, fileMimeType: string | null) {
+    const { data: result, error } = await supabase.functions.invoke('analyze-school-document', {
+      body: {
+        fileDataUrl,
+        fileName,
+        fileMimeType,
+        fileType: 'exam_analysis',
+        subjectFilter: form.subject,
+        schoolName: form.schoolName || selectedSchool || '학교 미지정',
+      },
+    });
+    if (error || result?.error) throw new Error(error?.message || result?.error || 'AI 분석 실패');
+    applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis);
+  }
+
+  async function handleAIParse(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      toast.error('이미지 또는 PDF 파일만 업로드할 수 있습니다.');
+      return;
+    }
+
+    setIsParsing(true);
+    setParseResult(null);
+    try {
+      const fileDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      await runAIParse(fileDataUrl, file.name, file.type || null);
+
+      const safeId = selectedReportId ?? crypto.randomUUID();
+      const extension = file.name.split('.').pop()?.toLowerCase() || (file.type === 'application/pdf' ? 'pdf' : 'png');
+      const path = `exam-analysis/${safeId}/original-${Date.now()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from('exam-analysis').upload(path, file, {
+        contentType: file.type || undefined,
+        upsert: true,
+      });
+      if (!uploadError) updateForm('originalPdfPath', path);
+
+      toast.success('AI 분석이 완료됐어요.');
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : 'AI 분석 실패. 다시 시도해주세요.');
+    } finally {
+      setIsParsing(false);
+    }
+  }
+
+  async function parseExistingPdf() {
+    if (!originalPdfUrl) {
+      toast.error('업로드된 원본 시험지가 없습니다.');
+      return;
+    }
+    setIsParsing(true);
+    setParseResult(null);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('analyze-school-document', {
+        body: {
+          fileUrl: originalPdfUrl,
+          fileName: 'original.pdf',
+          fileMimeType: 'application/pdf',
+          fileType: 'exam_analysis',
+          subjectFilter: form.subject,
+          schoolName: form.schoolName || selectedSchool || '학교 미지정',
+        },
+      });
+      if (error || result?.error) throw new Error(error?.message || result?.error || 'AI 분석 실패');
+      applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis);
+      toast.success('AI 분석이 완료됐어요.');
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : 'AI 분석 실패. 다시 시도해주세요.');
+    } finally {
+      setIsParsing(false);
+    }
+  }
+
   async function handleSave() {
     if (!user) {
       toast.error('로그인이 필요합니다.');
@@ -365,8 +476,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full overflow-hidden bg-background">
-      <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/20 p-4">
+    <div className="flex h-[calc(100vh-120px)] min-h-0 w-full overflow-hidden bg-background">
+      <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
         <Button className="mb-3 h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
           <Plus className="h-4 w-4" /> 새 보고서 작성
         </Button>
@@ -397,13 +508,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 )}
               >
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold">{report.school_name}</span>
-                  <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">{report.subject}</span>
+                  <span className="truncate text-sm font-semibold">{report.subject}</span>
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">{report.exam_type}</span>
                 </div>
-                <div className="text-xs text-muted-foreground">{report.grade}학년 · {report.exam_year} {report.exam_period}</div>
-                <div className="mt-1 text-xs font-medium">{report.exam_type}</div>
+                <div className="text-xs text-muted-foreground">{report.school_name} · {report.grade}학년</div>
+                <div className="mt-1 text-[11px] text-muted-foreground">{report.exam_year}년 {report.exam_period} · {report.created_by_name || '작성자 미상'}</div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                  <span className="truncate">{report.created_by_name || '작성자 미상'}</span>
+                  <span className="truncate">{report.textbook || '교과서 미입력'}</span>
                   <span>{format(new Date(report.updated_at || report.created_at), 'MM/dd')}</span>
                 </div>
               </button>
@@ -420,10 +531,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b-2 border-primary/20 pb-4">
               <div>
-                <h3 className="text-lg font-semibold">분석보고서</h3>
-                <p className="text-sm text-muted-foreground">시험 총평과 문항별 분석, 수업자료 링크를 관리합니다.</p>
+                <h3 className="text-xl font-bold text-primary">{selectedReportId ? `${form.subject} 분석보고서` : '새 보고서 작성'}</h3>
+                {selectedReportId ? <p className="mt-1 text-sm text-muted-foreground">{form.schoolName} · {form.grade}학년 · {form.examYear}년 {form.examPeriod} {form.examType}</p> : null}
               </div>
               <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -431,8 +542,16 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               </Button>
             </div>
 
+            <AIParsePanel
+              isParsing={isParsing}
+              parseResult={parseResult}
+              originalPdfPath={form.originalPdfPath}
+              onUpload={handleAIParse}
+              onParseExisting={() => void parseExistingPdf()}
+            />
+
             <FormSection title="기본정보">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 xl:grid-cols-6 md:grid-cols-3">
                 <Field label="학교 *"><NativeSelect value={form.schoolName} onChange={(value) => updateForm('schoolName', value)} options={schools.map((s) => s.name)} /></Field>
                 <Field label="학년 *"><NativeSelect value={form.grade} onChange={(value) => updateForm('grade', value)} options={GRADES} suffix="학년" /></Field>
                 <Field label="과목 *"><NativeSelect value={form.subject} onChange={(value) => updateForm('subject', value)} options={SUBJECTS} /></Field>
@@ -443,10 +562,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
             </FormSection>
 
             <FormSection title="시험 정보">
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 xl:grid-cols-[2fr_1fr_1fr_1fr] md:grid-cols-2">
+                <Field label="시험 범위"><Input value={form.examScope} onChange={(e) => updateForm('examScope', e.target.value)} placeholder="예) 다항식 ~ 이차방정식" /></Field>
                 <Field label="교과서"><Input value={form.textbook} onChange={(e) => updateForm('textbook', e.target.value)} placeholder="예) 천재(전)" /></Field>
                 <Field label="시험 난도"><NativeSelect value={form.difficulty} onChange={(value) => updateForm('difficulty', value)} options={DIFFICULTIES} /></Field>
-                <Field label="시험 범위" className="md:col-span-2"><Input value={form.examScope} onChange={(e) => updateForm('examScope', e.target.value)} placeholder="예) 다항식 ~ 이차방정식" /></Field>
                 <Field label="평균 점수"><Input type="number" value={form.avgScore} onChange={(e) => updateForm('avgScore', e.target.value)} placeholder="예) 89.98" /></Field>
               </div>
             </FormSection>
@@ -517,6 +636,28 @@ function NativeSelect({ value, options, suffix = '', onChange }: { value: string
       <SelectTrigger><SelectValue /></SelectTrigger>
       <SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}{suffix}</SelectItem>)}</SelectContent>
     </Select>
+  );
+}
+
+function AIParsePanel({ isParsing, parseResult, originalPdfPath, onUpload, onParseExisting }: { isParsing: boolean; parseResult: ParseResult | null; originalPdfPath: string; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onParseExisting: () => void }) {
+  return (
+    <section className="rounded-xl bg-gradient-to-br from-info/10 to-primary/10 p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="mb-1 flex items-center gap-2 text-sm font-bold text-info"><Sparkles className="h-4 w-4" /> AI 자동 분석</p>
+          <p className="text-xs text-info/80">시험지 이미지나 PDF를 업로드하면 AI가 문항/배점/단원을 자동으로 채워줍니다</p>
+        </div>
+        {isParsing ? <div className="flex items-center gap-2 text-sm text-primary"><Loader2 className="h-4 w-4 animate-spin" /> AI 분석 중...</div> : null}
+      </div>
+      <div className="flex gap-2">
+        <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-primary bg-background px-4 py-3 text-sm font-medium text-primary hover:bg-primary/5">
+          <Upload className="h-4 w-4" /> 시험지 업로드 (이미지/PDF)
+          <input type="file" accept="image/*,.pdf,application/pdf" className="hidden" onChange={onUpload} disabled={isParsing} />
+        </label>
+        {originalPdfPath ? <Button variant="outline" className="h-auto flex-1 border-primary text-primary" onClick={onParseExisting} disabled={isParsing}>업로드된 시험지로 AI 분석</Button> : null}
+      </div>
+      {parseResult ? <div className="mt-3 rounded-lg bg-background/70 px-3 py-2 text-xs font-medium text-emerald-700">✓ 분석 완료 — 문항 {parseResult.total_items}개, 총점 {parseResult.total_points}점 추출됨. 아래 내용을 확인하고 수정해주세요.</div> : null}
+    </section>
   );
 }
 
