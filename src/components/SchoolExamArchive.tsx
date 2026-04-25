@@ -380,9 +380,9 @@ export function SchoolExamArchive() {
   };
 
   const handleDownloadFile = async (mat: Material) => {
-    const { data, error } = await supabase.storage.from('school-exam-materials').createSignedUrl(mat.storage_path, 3600);
-    if (error || !data?.signedUrl) { toast.error('다운로드 링크 생성 실패'); return; }
-    window.open(data.signedUrl, '_blank');
+    const signedUrl = await getCachedSignedUrl('school-exam-materials', mat.storage_path, 3600);
+    if (!signedUrl) { toast.error('다운로드 링크 생성 실패'); return; }
+    window.open(signedUrl, '_blank');
   };
 
   const handleDeleteMaterial = async (mat: Material) => {
