@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { FileText, Loader2, Plus, Save, Trash2, Upload } from 'lucide-react';
+import { FileText, Loader2, Plus, Save, Sparkles, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -52,6 +52,18 @@ type AnalysisItem = {
   area?: string | null;
   sort_order?: number | null;
 };
+
+type ParseResult = { total_items: number; total_points: number };
+
+type ParsedExamAnalysis = Partial<{
+  textbook: string | null;
+  exam_scope: string | null;
+  exam_difficulty: string | null;
+  overall_review: string | null;
+  total_items: number;
+  total_points: number;
+  items: AnalysisItem[];
+}>;
 
 type ReportForm = {
   schoolName: string;
@@ -123,6 +135,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [items, setItems] = useState<AnalysisItem[]>(createDefaultItems);
   const [originalPdfUrl, setOriginalPdfUrl] = useState<string | null>(null);
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
 
   const filteredReports = useMemo(() => {
     return reports
