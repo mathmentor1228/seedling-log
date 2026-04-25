@@ -795,7 +795,9 @@ function AnalysisColGroup({ subject }: { subject: string }) {
       ? ['4%', '10%', '14%', '6%', '6%', '8%', '48%', '4%']
       : subject === '국어'
         ? ['4%', '10%', '34%', '10%', '6%', '6%', '4%']
-        : ['4%', '16%', '22%', '8%', '6%', '6%', '34%', '4%'];
+        : subject === '과학'
+          ? ['4%', '18%', '12%', '8%', '8%', '46%', '4%']
+          : ['5%', '18%', '10%', '10%', '52%', '5%'];
 
   return <colgroup>{widths.map((width, index) => <col key={`${subject}-${index}`} style={{ width }} />)}</colgroup>;
 }
@@ -863,7 +865,7 @@ function CellTextarea(props: React.ComponentProps<typeof Textarea>) {
 }
 
 function CellSelect({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
-  return <Select value={value} onValueChange={onChange}><SelectTrigger className="h-8 min-w-24 border-0 bg-transparent px-2 text-xs focus:ring-1"><SelectValue placeholder="선택" /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>;
+  return <Select value={value} onValueChange={onChange}><SelectTrigger className="h-8 w-full min-w-0 border border-border bg-background px-2 text-xs focus:ring-1"><SelectValue placeholder="선택" /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select>;
 }
 
 function ItemRow({ subject, item, index, updateItem, removeItem }: { subject: string; item: AnalysisItem; index: number; updateItem: <K extends keyof AnalysisItem>(index: number, key: K, value: AnalysisItem[K]) => void; removeItem: (index: number) => void }) {
