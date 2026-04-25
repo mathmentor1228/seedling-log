@@ -4688,7 +4688,9 @@ export type Database = {
           memo: string | null
           passed: boolean | null
           room: string
+          routine_id: string | null
           score: string | null
+          source: string | null
           start_time: string | null
           student_id: string
           subject: string
@@ -4717,7 +4719,9 @@ export type Database = {
           memo?: string | null
           passed?: boolean | null
           room?: string
+          routine_id?: string | null
           score?: string | null
+          source?: string | null
           start_time?: string | null
           student_id: string
           subject: string
@@ -4746,7 +4750,9 @@ export type Database = {
           memo?: string | null
           passed?: boolean | null
           room?: string
+          routine_id?: string | null
           score?: string | null
+          source?: string | null
           start_time?: string | null
           student_id?: string
           subject?: string
@@ -4778,6 +4784,13 @@ export type Database = {
             columns: ["lesson_record_id"]
             isOneToOne: false
             referencedRelation: "overdue_lesson_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_records_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routine_schedules"
             referencedColumns: ["id"]
           },
           {

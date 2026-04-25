@@ -41,6 +41,8 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
   const [days, setDays] = useState<number[]>([]);
   const [teacherId, setTeacherId] = useState('');
   const [subject, setSubject] = useState('');
+  const [testType, setTestType] = useState('수학');
+  const [autoCreate, setAutoCreate] = useState(true);
   const [room, setRoom] = useState('general');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -84,6 +86,8 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
     setDays([routine.day_of_week]);
     setTeacherId(routine.teacher_id || '');
     setSubject(routine.subject || '');
+    setTestType(routine.subject || '수학');
+    setAutoCreate(routine.auto_create_test ?? true);
     setRoom(routine.room || 'general');
     setStartTime(routine.start_time?.slice(0, 5) || '');
     setEndTime(routine.end_time?.slice(0, 5) || '');
@@ -106,9 +110,11 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
       start_time: startTime || null,
       end_time: endTime || null,
       student_ids: selectedStudents,
-      subject: subject || null,
+      subject: type === 'test' ? testType : subject || null,
       room,
       template_content: templateContent || null,
+      auto_create_test: type === 'test' ? autoCreate : false,
+      test_content: type === 'test' ? templateContent || null : null,
       assistant_name: type === 'test' ? (assistantName && assistantName !== 'none' ? assistantName : null) : null,
     };
 
@@ -144,7 +150,7 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
   }
 
   function resetForm() {
-    setDays([]); setTeacherId(''); setSubject(''); setRoom('general');
+    setDays([]); setTeacherId(''); setSubject(''); setTestType('수학'); setAutoCreate(true); setRoom('general');
     setStartTime(''); setEndTime(''); setSelectedStudents([]);
     setTemplateContent(''); setAssistantName(''); setStudentSearch('');
     setEditingRoutineId(null);
@@ -200,24 +206,17 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
     setGenerating(true);
 
     if (type === 'test') {
-      // Insert into test_schedules for proper integration
-      const rows = previewRows.map(r => ({
-        student_id: r.studentId,
-        teacher_id: r.teacherId,
-        test_date: r.date,
-        test_time: r.startTime || null,
-        subject: r.subject || '수학',
-        test_type: 'regular',
-        content: r.templateContent || null,
-        title: r.templateContent || null,
-        notes: null,
-      }));
-      const { error } = await supabase.from('test_schedules').insert(rows);
-      if (error) {
-        toast({ title: '생성 실패', description: error.message, variant: 'destructive' });
+      const dates = [...new Set(previewRows.map(r => r.date))];
+      const results = await Promise.all(
+        dates.map(date => supabase.functions.invoke('generate-routine-tests', { body: { date } }))
+      );
+      const failed = results.find(result => result.error);
+      if (failed) {
+        toast({ title: '생성 실패', description: failed.error.message, variant: 'destructive' });
       } else {
-        toast({ title: `${previewRows.length}건이 생성되었습니다` });
+        toast({ title: '이번 주 테스트 기록이 생성됐어요!' });
         setShowPreview(false);
+        fetchRoutines();
       }
     } else {
       const table = type === 'self_study' ? 'self_study_records' : 'clinic_records';
@@ -286,6 +285,9 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
                     <span className="text-sm">{(Array.isArray(r.student_ids) ? r.student_ids : []).length}명</span>
                     {r.subject && <Badge variant="secondary" className="text-xs">{r.subject}</Badge>}
                     <span className="text-xs text-muted-foreground">{ROOMS.find(rm => rm.value === r.room)?.label}</span>
+                    {r.last_generated_date && (
+                      <span className="text-xs font-medium text-primary">마지막 생성: {r.last_generated_date}</span>
+                    )}
                     {r.start_time && <span className="text-xs text-muted-foreground">{r.start_time.slice(0, 5)}~{r.end_time?.slice(0, 5)}</span>}
                   </div>
                   <div className="flex items-center gap-1">
@@ -400,18 +402,37 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>과목</Label>
-                <Select value={subject} onValueChange={setSubject}>
-                  <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="수학">수학</SelectItem>
-                    <SelectItem value="영어">영어</SelectItem>
-                    <SelectItem value="국어">국어</SelectItem>
-                    <SelectItem value="과학">과학</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {type === 'test' ? (
+                <div>
+                  <Label>테스트 유형</Label>
+                  <div className="mt-1 flex gap-2">
+                    {['수학', '영어', '기타'].map(testTypeOption => (
+                      <Button
+                        key={testTypeOption}
+                        type="button"
+                        variant={testType === testTypeOption ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setTestType(testTypeOption)}
+                      >
+                        {testTypeOption}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Label>과목</Label>
+                  <Select value={subject} onValueChange={setSubject}>
+                    <SelectTrigger><SelectValue placeholder="과목 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="수학">수학</SelectItem>
+                      <SelectItem value="영어">영어</SelectItem>
+                      <SelectItem value="국어">국어</SelectItem>
+                      <SelectItem value="과학">과학</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <Label>강의실</Label>
                 <Select value={room} onValueChange={setRoom}>
@@ -447,6 +468,16 @@ export function RoutineModal({ open, onOpenChange, type }: RoutineModalProps) {
               <Label>템플릿 내용</Label>
               <Input value={templateContent} onChange={e => setTemplateContent(e.target.value)} placeholder="기본 범위/내용" />
             </div>
+
+            {type === 'test' && (
+              <div className="flex items-center justify-between rounded-md bg-accent/20 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-accent-foreground">test_records 자동 생성</p>
+                  <p className="text-xs text-muted-foreground">루틴 요일 아침에 자동으로 테스트 기록이 생성됩니다</p>
+                </div>
+                <Checkbox checked={autoCreate} onCheckedChange={checked => setAutoCreate(checked === true)} />
+              </div>
+            )}
 
             <div>
               <Label>대상 학생 *</Label>
