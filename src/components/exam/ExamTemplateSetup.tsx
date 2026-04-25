@@ -130,6 +130,23 @@ function normalizeErrorTypes(raw: unknown) {
   return { selectedDefaults, customErrorTypes };
 }
 
+function normalizeAnswerMode(raw: unknown): AnswerMode {
+  return raw === 'image' || raw === 'pdf' || raw === 'direct' ? raw : 'direct';
+}
+
+function normalizeAnswers(raw: unknown): TemplateAnswers {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.entries(raw as Record<string, unknown>).reduce<TemplateAnswers>((acc, [key, value]) => {
+    const itemNo = Number(key);
+    if (Number.isFinite(itemNo) && typeof value === 'string') acc[itemNo] = value;
+    return acc;
+  }, {});
+}
+
+function normalizeStringArray(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((value): value is string => typeof value === 'string' && value.length > 0) : [];
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
