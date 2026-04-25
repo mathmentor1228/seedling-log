@@ -87,6 +87,7 @@ interface OverlayGradingPanelProps {
   photos: OverlayPhoto[];
   photoUrls: Record<string, string>;
   template: OverlayTemplateData | null;
+  reportAnswers: Record<number, string>;
   templateLoading: boolean;
   items: OverlayReviewItem[];
   saving: boolean;
@@ -282,7 +283,7 @@ function ScoreSummaryPanel({ items, template }: { items: OverlayReviewItem[]; te
   );
 }
 
-function AnswerDisplayPanel({ answerDisplay, template, items }: { answerDisplay: OverlayAnswerDisplay | null | undefined; template: OverlayTemplateData; items: OverlayReviewItem[] }) {
+function AnswerDisplayPanel({ answerDisplay, template, items, reportAnswers }: { answerDisplay: OverlayAnswerDisplay | null | undefined; template: OverlayTemplateData; items: OverlayReviewItem[]; reportAnswers: Record<number, string> }) {
   const [showAnswer, setShowAnswer] = useState(true);
 
   return (
@@ -302,7 +303,7 @@ function AnswerDisplayPanel({ answerDisplay, template, items }: { answerDisplay:
               return (
                 <div key={item.no} className={`flex items-center justify-between gap-1 rounded-md px-2 py-1 text-[11px] text-foreground ${tone}`}>
                   <span className="text-muted-foreground">{item.no}번</span>
-                  <span className="max-w-[72px] truncate font-bold">{answerDisplay.answers[item.no] || '-'}</span>
+                  <span className="max-w-[72px] truncate font-bold">{reportAnswers[item.no] || '-'}</span>
                   <span>{scored?.result === 'correct' ? '✓' : scored?.result === 'wrong' ? '✗' : scored?.result === 'partial' ? '△' : ''}</span>
                 </div>
               );
@@ -326,6 +327,7 @@ export function OverlayGradingPanel({
   photos,
   photoUrls,
   template,
+  reportAnswers,
   templateLoading,
   items,
   saving,
@@ -388,7 +390,7 @@ export function OverlayGradingPanel({
       page_number: item.page_number,
       is_essay: item.is_essay,
       points,
-      answer: getTemplateAnswer(templateItem, template?.answers),
+      answer: getTemplateAnswer(templateItem, reportAnswers),
     });
     setEssayScore(clampScore(item.score_earned ?? points, points));
   };
@@ -410,7 +412,7 @@ export function OverlayGradingPanel({
       page_number: page + 1,
       is_essay: nextUnscored.is_essay,
       points: nextUnscored.points,
-      answer: getTemplateAnswer(nextUnscored, template.answers),
+      answer: getTemplateAnswer(nextUnscored, reportAnswers),
     });
     setEssayScore(nextUnscored.is_essay ? nextUnscored.points : 0);
   };
@@ -634,7 +636,7 @@ export function OverlayGradingPanel({
 
       <div className="w-full xl:max-w-[320px] xl:flex-1">
         <ScoreSummaryPanel items={items} template={template} />
-        <AnswerDisplayPanel answerDisplay={answerDisplay} template={template} items={items} />
+        <AnswerDisplayPanel answerDisplay={answerDisplay} template={template} items={items} reportAnswers={reportAnswers} />
         <div className="mt-3 rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
           <div className="flex items-start gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 text-[hsl(var(--review-done-badge))]" />
