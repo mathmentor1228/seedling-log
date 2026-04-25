@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MessageCircle, RefreshCw, Users } from 'lucide-react';
+import { Download, MessageCircle, RefreshCw, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,11 +16,22 @@ interface UnvisitedParent {
   parent_phone: string | null;
   parent_token: string | null;
   parent_last_visited: string | null;
+  teacher_name?: string;
 }
 
 interface ParentPortalVisit {
   student_id: string;
   visited_at: string;
+}
+
+interface StudentTeacherMap {
+  student_id: string;
+  teacher_id: string;
+}
+
+interface ProfileRow {
+  id: string;
+  full_name: string | null;
 }
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -65,7 +76,7 @@ export function ParentUnvisitedNotifier() {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      const [studentsRes, visitsRes] = await Promise.all([
+      const [studentsRes, visitsRes, mappingsRes, profilesRes] = await Promise.all([
         supabase
           .from('students')
           .select('id, name, grade, parent_name, parent_phone, parent_token')
@@ -77,10 +88,18 @@ export function ParentUnvisitedNotifier() {
           .select('student_id, visited_at')
           .order('visited_at', { ascending: false })
           .limit(5000),
+        supabase
+          .from('student_subject_teachers')
+          .select('student_id, teacher_id'),
+        supabase
+          .from('profiles')
+          .select('id, full_name'),
       ]);
 
       if (studentsRes.error) throw studentsRes.error;
       if (visitsRes.error) throw visitsRes.error;
+      if (mappingsRes.error) throw mappingsRes.error;
+      if (profilesRes.error) throw profilesRes.error;
 
       const latestVisitByStudent = new Map<string, string>();
       ((visitsRes.data ?? []) as ParentPortalVisit[]).forEach((visit) => {
@@ -89,10 +108,22 @@ export function ParentUnvisitedNotifier() {
         }
       });
 
-      const rows = ((studentsRes.data ?? []) as Omit<UnvisitedParent, 'parent_last_visited'>[])
+      const teacherNamesById = new Map(
+        ((profilesRes.data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile.full_name || '알 수 없음']),
+      );
+      const teacherNamesByStudent = new Map<string, Set<string>>();
+      ((mappingsRes.data ?? []) as StudentTeacherMap[]).forEach((mapping) => {
+        const teacherName = teacherNamesById.get(mapping.teacher_id);
+        if (!teacherName) return;
+        if (!teacherNamesByStudent.has(mapping.student_id)) teacherNamesByStudent.set(mapping.student_id, new Set());
+        teacherNamesByStudent.get(mapping.student_id)!.add(teacherName);
+      });
+
+      const rows = ((studentsRes.data ?? []) as Omit<UnvisitedParent, 'parent_last_visited' | 'teacher_name'>[])
         .map((student) => ({
           ...student,
           parent_last_visited: latestVisitByStudent.get(student.id) ?? null,
+          teacher_name: [...(teacherNamesByStudent.get(student.id) ?? [])].join(', '),
         }))
         .filter((student) => {
           if (!student.parent_last_visited) return true;
@@ -142,6 +173,24 @@ export function ParentUnvisitedNotifier() {
     }
   }
 
+  function downloadExcel() {
+    const rows = unvisited.map((student) => ({
+      학생명: student.name,
+      학년: student.grade ? `${student.grade}학년` : '',
+      담당선생님: student.teacher_name || '',
+      학부모명: student.parent_name || '',
+      연락처: student.parent_phone || '',
+      마지막접속: student.parent_last_visited ? new Date(student.parent_last_visited).toLocaleDateString('ko-KR') : '기록없음',
+    }));
+
+    import('xlsx').then((XLSX) => {
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '미접속학부모');
+      XLSX.writeFile(wb, `미접속학부모_${new Date().toLocaleDateString('ko-KR')}.xlsx`);
+    });
+  }
+
   const allSelected = unvisited.length > 0 && selected.length === unvisited.length;
 
   return (
@@ -175,10 +224,16 @@ export function ParentUnvisitedNotifier() {
             <Checkbox checked={allSelected} onCheckedChange={(checked) => toggleAll(checked === true)} />
             전체 선택 ({unvisited.length}명)
           </label>
-          <Button onClick={handleSendKakao} disabled={selected.length === 0 || sending} className="bg-warning text-warning-foreground hover:bg-warning/90">
-            <MessageCircle className="h-4 w-4" />
-            카카오톡 발송 ({selected.length}명)
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button variant="outline" onClick={downloadExcel} disabled={unvisited.length === 0}>
+              <Download className="h-4 w-4" />
+              엑셀 다운로드
+            </Button>
+            <Button onClick={handleSendKakao} disabled={selected.length === 0 || sending} className="bg-warning text-warning-foreground hover:bg-warning/90">
+              <MessageCircle className="h-4 w-4" />
+              카카오톡 발송 ({selected.length}명)
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -196,6 +251,7 @@ export function ParentUnvisitedNotifier() {
                 <TableHead className="w-10"></TableHead>
                 <TableHead>학생</TableHead>
                 <TableHead>학년</TableHead>
+                <TableHead>담당선생님</TableHead>
                 <TableHead>학부모</TableHead>
                 <TableHead>연락처</TableHead>
                 <TableHead>마지막 접속</TableHead>
@@ -213,6 +269,7 @@ export function ParentUnvisitedNotifier() {
                     </TableCell>
                     <TableCell className="font-medium">{student.name}</TableCell>
                     <TableCell className="text-muted-foreground">{student.grade ? `${student.grade}학년` : '-'}</TableCell>
+                    <TableCell className="text-muted-foreground">{student.teacher_name || '-'}</TableCell>
                     <TableCell>{student.parent_name || '-'}</TableCell>
                     <TableCell className="text-muted-foreground">{student.parent_phone || '-'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
