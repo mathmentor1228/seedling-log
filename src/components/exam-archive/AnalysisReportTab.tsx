@@ -28,6 +28,9 @@ type AnalysisReport = {
   avg_score: number | null;
   overall_review: string | null;
   original_pdf_path: string | null;
+  answer_mode: string | null;
+  answers: Record<string, string> | null;
+  answer_image_paths: string[] | null;
   answer_pdf_path: string | null;
   study_links: StudyLink[] | null;
   created_by: string | null;
@@ -82,6 +85,9 @@ type ReportForm = {
   avgScore: string;
   overallReview: string;
   originalPdfPath: string;
+  answerMode: 'direct' | 'image' | 'pdf';
+  answers: Record<string, string>;
+  answerImagePaths: string[];
   answerPdfPath: string;
   studyLinks: StudyLink[];
 };
@@ -116,6 +122,9 @@ const emptyForm = (schoolName = ''): ReportForm => ({
   avgScore: '',
   overallReview: '',
   originalPdfPath: '',
+  answerMode: 'direct',
+  answers: {},
+  answerImagePaths: [],
   answerPdfPath: '',
   studyLinks: [],
 });
