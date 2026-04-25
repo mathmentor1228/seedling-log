@@ -476,8 +476,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full overflow-hidden bg-background">
-      <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/20 p-4">
+    <div className="flex h-[calc(100vh-120px)] min-h-0 w-full overflow-hidden bg-background">
+      <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
         <Button className="mb-3 h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
           <Plus className="h-4 w-4" /> 새 보고서 작성
         </Button>
@@ -508,13 +508,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 )}
               >
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold">{report.school_name}</span>
-                  <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">{report.subject}</span>
+                  <span className="truncate text-sm font-semibold">{report.subject}</span>
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">{report.exam_type}</span>
                 </div>
-                <div className="text-xs text-muted-foreground">{report.grade}학년 · {report.exam_year} {report.exam_period}</div>
-                <div className="mt-1 text-xs font-medium">{report.exam_type}</div>
+                <div className="text-xs text-muted-foreground">{report.school_name} · {report.grade}학년</div>
+                <div className="mt-1 text-[11px] text-muted-foreground">{report.exam_year}년 {report.exam_period} · {report.created_by_name || '작성자 미상'}</div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                  <span className="truncate">{report.created_by_name || '작성자 미상'}</span>
+                  <span className="truncate">{report.textbook || '교과서 미입력'}</span>
                   <span>{format(new Date(report.updated_at || report.created_at), 'MM/dd')}</span>
                 </div>
               </button>
@@ -531,10 +531,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b-2 border-primary/20 pb-4">
               <div>
-                <h3 className="text-lg font-semibold">분석보고서</h3>
-                <p className="text-sm text-muted-foreground">시험 총평과 문항별 분석, 수업자료 링크를 관리합니다.</p>
+                <h3 className="text-xl font-bold text-primary">{selectedReportId ? `${form.subject} 분석보고서` : '새 보고서 작성'}</h3>
+                {selectedReportId ? <p className="mt-1 text-sm text-muted-foreground">{form.schoolName} · {form.grade}학년 · {form.examYear}년 {form.examPeriod} {form.examType}</p> : null}
               </div>
               <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -542,8 +542,16 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               </Button>
             </div>
 
+            <AIParsePanel
+              isParsing={isParsing}
+              parseResult={parseResult}
+              originalPdfPath={form.originalPdfPath}
+              onUpload={handleAIParse}
+              onParseExisting={() => void parseExistingPdf()}
+            />
+
             <FormSection title="기본정보">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 xl:grid-cols-6 md:grid-cols-3">
                 <Field label="학교 *"><NativeSelect value={form.schoolName} onChange={(value) => updateForm('schoolName', value)} options={schools.map((s) => s.name)} /></Field>
                 <Field label="학년 *"><NativeSelect value={form.grade} onChange={(value) => updateForm('grade', value)} options={GRADES} suffix="학년" /></Field>
                 <Field label="과목 *"><NativeSelect value={form.subject} onChange={(value) => updateForm('subject', value)} options={SUBJECTS} /></Field>
@@ -554,10 +562,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
             </FormSection>
 
             <FormSection title="시험 정보">
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 xl:grid-cols-[2fr_1fr_1fr_1fr] md:grid-cols-2">
+                <Field label="시험 범위"><Input value={form.examScope} onChange={(e) => updateForm('examScope', e.target.value)} placeholder="예) 다항식 ~ 이차방정식" /></Field>
                 <Field label="교과서"><Input value={form.textbook} onChange={(e) => updateForm('textbook', e.target.value)} placeholder="예) 천재(전)" /></Field>
                 <Field label="시험 난도"><NativeSelect value={form.difficulty} onChange={(value) => updateForm('difficulty', value)} options={DIFFICULTIES} /></Field>
-                <Field label="시험 범위" className="md:col-span-2"><Input value={form.examScope} onChange={(e) => updateForm('examScope', e.target.value)} placeholder="예) 다항식 ~ 이차방정식" /></Field>
                 <Field label="평균 점수"><Input type="number" value={form.avgScore} onChange={(e) => updateForm('avgScore', e.target.value)} placeholder="예) 89.98" /></Field>
               </div>
             </FormSection>
