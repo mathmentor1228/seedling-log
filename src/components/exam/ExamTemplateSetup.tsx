@@ -704,6 +704,20 @@ export function ExamTemplateSetup({ open, onOpenChange, record, currentUserId, o
                 </Button>
               </section>
 
+              <AnswerSheetSection
+                mode={answerMode}
+                items={items}
+                answers={answers}
+                imageUrls={answerImageUrls}
+                pdfUrl={answerPdfUrl}
+                onModeChange={setAnswerMode}
+                onSetAnswer={setAnswer}
+                onImageUpload={handleAnswerImageUpload}
+                onRemoveImage={removeAnswerImage}
+                onPdfUpload={handleAnswerPdfUpload}
+                onRemovePdf={() => setAnswerPdfPath(null)}
+              />
+
               <section className="space-y-4 rounded-lg border p-4">
                 <div>
                   <h3 className="text-base font-semibold text-foreground">오답유형 설정</h3>
