@@ -1064,6 +1064,7 @@ export function ExamReviewPanel() {
                   photos={sortedPhotos}
                   photoUrls={resolvedPhotoUrls}
                   template={template}
+                  reportAnswers={reportAnswers}
                   templateLoading={templateLoading}
                   items={itemReviews}
                   saving={saving}

@@ -636,7 +636,7 @@ export function OverlayGradingPanel({
 
       <div className="w-full xl:max-w-[320px] xl:flex-1">
         <ScoreSummaryPanel items={items} template={template} />
-        <AnswerDisplayPanel answerDisplay={answerDisplay} template={template} items={items} />
+        <AnswerDisplayPanel answerDisplay={answerDisplay} template={template} items={items} reportAnswers={reportAnswers} />
         <div className="mt-3 rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
           <div className="flex items-start gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 text-[hsl(var(--review-done-badge))]" />
