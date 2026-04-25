@@ -428,12 +428,51 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       toast.error('로그인이 필요합니다.');
       return;
     }
+    if (isLocked) {
+      toast.error('잠금 상태에서는 저장할 수 없습니다.');
+      return;
+    }
     if (!form.schoolName || !form.grade || !form.subject || !form.examType || !form.examYear || !form.examPeriod) {
       toast.error('필수 정보를 입력해주세요.');
       return;
     }
 
     setSaving(true);
+    const { data: existing, error: existingError } = await (supabase as any)
+      .from('exam_analysis_reports')
+      .select('id, created_by_name, updated_at, is_locked')
+      .eq('school_name', form.schoolName)
+      .eq('grade', form.grade)
+      .eq('subject', form.subject)
+      .eq('exam_type', form.examType)
+      .eq('exam_year', Number(form.examYear))
+      .eq('exam_period', form.examPeriod)
+      .maybeSingle();
+
+    if (existingError) {
+      toast.error('기존 보고서 확인에 실패했습니다.');
+      console.error(existingError);
+      setSaving(false);
+      return;
+    }
+
+    if (existing && existing.id !== selectedReportId) {
+      if (existing.is_locked) {
+        alert('이 보고서는 잠금 상태입니다.\n원장에게 잠금 해제를 요청해주세요.');
+        setSaving(false);
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `⚠️ 기존 보고서가 있습니다!\n\n작성자: ${existing.created_by_name || '작성자 미상'}\n수정일: ${new Date(existing.updated_at).toLocaleDateString('ko-KR')}\n\n덮어쓰시겠습니까?\n(기존 내용이 모두 삭제됩니다)`,
+      );
+
+      if (!confirmed) {
+        setSaving(false);
+        return;
+      }
+    }
+
     const payload = {
       school_name: form.schoolName,
       grade: form.grade,
