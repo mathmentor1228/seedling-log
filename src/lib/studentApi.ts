@@ -111,6 +111,7 @@ export const studentApi = {
     conceptConfused: boolean | null;
     academyHelped: boolean | null;
     needMore: string;
+    customReason?: string;
     selfErrorTypes: string[];
   }) => studentApiCall<{ success: boolean }>('save_exam_self_check', {
     review_id: reviewId,

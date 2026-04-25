@@ -948,12 +948,17 @@ Deno.serve(async (req) => {
 
         const { data: rev } = await supabase
           .from('exam_reviews')
-          .select('id, self_check_completed, student_exam_results!inner(student_id)')
+          .select('id, reviewed_at, self_check_completed, student_exam_results!inner(student_id, review_status)')
           .eq('id', review_id)
           .maybeSingle();
         if (!rev || (rev as any).student_exam_results?.student_id !== student_id) {
           return new Response(JSON.stringify({ error: 'Forbidden' }), {
             status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        if (!(rev as any).reviewed_at || (rev as any).student_exam_results?.review_status !== 'done') {
+          return new Response(JSON.stringify({ error: 'Review is not ready' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
         if ((rev as any).self_check_completed) {
@@ -967,7 +972,7 @@ Deno.serve(async (req) => {
           student_id,
           item_number,
           self_error_types: Array.isArray(answers.selfErrorTypes) ? answers.selfErrorTypes : [],
-          self_custom_reason: answers.needMore || null,
+          self_custom_reason: answers.customReason || null,
           q_remembered: typeof answers.remembered === 'boolean' ? answers.remembered : null,
           q_concept_confused: typeof answers.conceptConfused === 'boolean' ? answers.conceptConfused : null,
           q_academy_helped: typeof answers.academyHelped === 'boolean' ? answers.academyHelped : null,
@@ -1009,12 +1014,17 @@ Deno.serve(async (req) => {
 
         const { data: rev } = await supabase
           .from('exam_reviews')
-          .select('id, self_check_points_given, student_exam_results!inner(student_id)')
+          .select('id, reviewed_at, self_check_completed, self_check_points_given, student_exam_results!inner(student_id, review_status)')
           .eq('id', review_id)
           .maybeSingle();
         if (!rev || (rev as any).student_exam_results?.student_id !== student_id) {
           return new Response(JSON.stringify({ error: 'Forbidden' }), {
             status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        if (!(rev as any).reviewed_at || (rev as any).student_exam_results?.review_status !== 'done') {
+          return new Response(JSON.stringify({ error: 'Review is not ready' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
 
