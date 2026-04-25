@@ -237,6 +237,7 @@ export function ExamReviewPanel() {
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
   const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [reviewMeta, setReviewMeta] = useState<ReviewSummary | null>(null);
   const [overallComment, setOverallComment] = useState('');
   const [itemReviews, setItemReviews] = useState<OverlayReviewItem[]>([]);
   const [template, setTemplate] = useState<OverlayTemplateData | null>(null);
@@ -364,7 +365,7 @@ export function ExamReviewPanel() {
     try {
       const { data: reviews, error: reviewError } = await supabase
         .from('exam_reviews')
-        .select('id, overall_comment, created_at, template_id, total_score, earned_score')
+        .select('id, overall_comment, reviewed_at, self_check_completed, created_at, template_id, total_score, earned_score')
         .eq('result_id', resultId)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -373,12 +374,14 @@ export function ExamReviewPanel() {
 
       const currentReview = reviews?.[0] ?? null;
       setReviewId(currentReview?.id ?? null);
+      setReviewMeta(currentReview ?? null);
       setOverallComment(currentReview?.overall_comment ?? '');
       setAiGenerated(false);
 
       if (!currentReview) {
         setItemReviews([]);
         setSelfChecks([]);
+        setReviewMeta(null);
         return;
       }
 
