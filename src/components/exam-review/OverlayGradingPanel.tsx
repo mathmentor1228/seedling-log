@@ -65,6 +65,13 @@ interface OverlaySavePayload {
   page_number: number;
 }
 
+interface QuickGradeItem extends ActiveOverlayItem {
+  result: ItemResult;
+  score_earned: number | null;
+  error_types: string[];
+  custom_reason: string;
+}
+
 interface OverlayGradingPanelProps {
   photos: OverlayPhoto[];
   photoUrls: Record<string, string>;
@@ -124,6 +131,65 @@ function ResultBadge({ result, no, onClick }: { result: Exclude<ItemResult, ''>;
       <span className="text-[14px] leading-none">{style.label}</span>
       <span className="leading-none">{no}</span>
     </button>
+  );
+}
+
+function QuickGradeStrip({
+  items,
+  saving,
+  onEdit,
+  onQuickGrade,
+}: {
+  items: QuickGradeItem[];
+  saving: boolean;
+  onEdit: (item: QuickGradeItem) => void;
+  onQuickGrade: (item: QuickGradeItem, result: Exclude<ItemResult, ''>) => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-center text-xs text-muted-foreground">
+        시험지 위치를 클릭하면 해당 문항이 여기에 추가됩니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-card p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-foreground">현재 페이지 빠른 채점</p>
+        <p className="text-xs text-muted-foreground">O / X / △ 클릭 즉시 저장</p>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {items.map((item) => (
+          <div key={`${item.item_number}-${item.page_number}`} className="shrink-0 rounded-lg border border-border bg-muted/20 p-2">
+            <button
+              type="button"
+              onClick={() => onEdit(item)}
+              className="mb-2 w-full text-center text-xs font-semibold text-foreground hover:text-primary"
+            >
+              {item.item_number}번
+            </button>
+            <div className="flex gap-1">
+              {(Object.entries(RESULT_STYLES) as Array<[Exclude<ItemResult, ''>, (typeof RESULT_STYLES)[Exclude<ItemResult, ''>]]>).map(([value, style]) => {
+                const active = item.result === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onQuickGrade(item, value)}
+                    disabled={saving}
+                    className={`flex h-9 w-9 items-center justify-center rounded-md border text-base font-bold transition disabled:opacity-50 ${active ? style.button + ' border-2' : 'border-[hsl(var(--review-idle-border))] bg-[hsl(var(--review-idle-surface))] text-[hsl(var(--review-idle-foreground))]'}`}
+                    aria-label={`${item.item_number}번 ${style.label}로 채점`}
+                  >
+                    {style.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
