@@ -10,6 +10,7 @@ import { ExamTemplateSetup } from '@/components/exam/ExamTemplateSetup';
 import {
   OverlayGradingPanel,
   type OverlayPhoto,
+  type OverlayAnswerDisplay,
   type OverlayReviewItem,
   type OverlayTemplateData,
   type OverlayTemplateItem,
@@ -57,6 +58,10 @@ interface ScoreTemplateRow {
   total_items: number;
   items: unknown;
   error_types: unknown;
+  answer_mode?: string | null;
+  answers?: unknown;
+  answer_image_paths?: unknown;
+  answer_pdf_path?: string | null;
 }
 
 interface GenerateExamReviewCommentResponse {
