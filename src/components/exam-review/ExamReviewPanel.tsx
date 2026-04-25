@@ -122,9 +122,19 @@ function normalizeTemplateItems(raw: unknown, totalItems: number): OverlayTempla
         type: isEssay ? '주관식' : '객관식',
         points: typeof source.points === 'number' && Number.isFinite(source.points) ? source.points : 0,
         is_essay: isEssay,
+        answer: typeof source.answer === 'string' ? source.answer : null,
       } satisfies OverlayTemplateItem;
     })
     .sort((a, b) => a.no - b.no);
+}
+
+function normalizeAnswers(raw: unknown): Record<number, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.entries(raw as Record<string, unknown>).reduce<Record<number, string>>((acc, [key, value]) => {
+    const itemNo = Number(key);
+    if (Number.isFinite(itemNo) && typeof value === 'string') acc[itemNo] = value;
+    return acc;
+  }, {});
 }
 
 function normalizeErrorTypes(raw: unknown) {
