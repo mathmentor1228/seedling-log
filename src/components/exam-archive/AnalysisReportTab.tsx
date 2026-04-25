@@ -291,6 +291,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'original' | 'answer') {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (isLocked) {
+      toast.error('잠금 상태에서는 파일을 변경할 수 없습니다.');
+      return;
+    }
     if (file.type !== 'application/pdf') {
       toast.error('PDF 파일만 업로드할 수 있습니다.');
       return;
@@ -347,6 +351,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (isLocked) {
+      toast.error('잠금 상태에서는 AI 분석을 실행할 수 없습니다.');
+      return;
+    }
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
       toast.error('이미지 또는 PDF 파일만 업로드할 수 있습니다.');
       return;
@@ -383,6 +391,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   async function parseExistingPdf() {
+    if (isLocked) {
+      toast.error('잠금 상태에서는 AI 분석을 실행할 수 없습니다.');
+      return;
+    }
     if (!originalPdfUrl) {
       toast.error('업로드된 원본 시험지가 없습니다.');
       return;
