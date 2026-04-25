@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2, RotateCcw, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -289,9 +289,14 @@ export function OverlayGradingPanel({
   const [tooltip, setTooltip] = useState<GradeTooltip | null>(null);
   const [essayScore, setEssayScore] = useState(0);
   const [expandedOpen, setExpandedOpen] = useState(false);
+  const [expandedRotation, setExpandedRotation] = useState(0);
 
   const currentPhoto = photos[page] ?? null;
   const currentPhotoUrl = currentPhoto ? photoUrls[currentPhoto.storage_path] ?? '' : '';
+
+  useEffect(() => {
+    if (expandedOpen) setExpandedRotation(0);
+  }, [expandedOpen]);
 
   const pageItems = useMemo(
     () => items.filter((item) => item.result && item.page_number === page + 1 && item.overlay_x != null && item.overlay_y != null),
@@ -600,13 +605,19 @@ export function OverlayGradingPanel({
             <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(photos.length - 1, prev + 1))} disabled={photos.length === 0 || page === photos.length - 1}>
               다음 <ChevronRight className="h-4 w-4" />
             </Button>
+            <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => setExpandedRotation((prev) => (prev - 90 + 360) % 360)} aria-label="시험지 반시계 방향 회전">
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => setExpandedRotation((prev) => (prev + 90) % 360)} aria-label="시험지 시계 방향 회전">
+              <RotateCw className="h-4 w-4" />
+            </Button>
           </div>
         </div>
         <div className="relative mx-auto max-w-5xl overflow-hidden rounded-lg border border-border bg-card">
           {currentPhotoUrl ? (
-            <img src={currentPhotoUrl} alt={`시험지 ${page + 1}`} className="block max-h-[74vh] w-full object-contain" />
+            <img src={currentPhotoUrl} alt={`시험지 ${page + 1}`} className="block max-h-[74vh] w-full object-contain transition-transform duration-300" style={{ transform: `rotate(${expandedRotation}deg)` }} />
           ) : currentPhoto ? (
-            <PhotoThumb storagePath={currentPhoto.storage_path} signedUrl={currentPhoto.signedUrl ?? null} alt={`시험지 ${page + 1}`} fit="contain" className="min-h-[70vh]" imageClassName="block max-h-[74vh] w-full object-contain" />
+            <PhotoThumb storagePath={currentPhoto.storage_path} signedUrl={currentPhoto.signedUrl ?? null} alt={`시험지 ${page + 1}`} fit="contain" className="min-h-[70vh]" imageClassName="block max-h-[74vh] w-full object-contain transition-transform duration-300" imageStyle={{ transform: `rotate(${expandedRotation}deg)` }} />
           ) : (
             <div className="flex min-h-[70vh] items-center justify-center text-sm text-muted-foreground">등록된 시험지 사진이 없습니다.</div>
           )}

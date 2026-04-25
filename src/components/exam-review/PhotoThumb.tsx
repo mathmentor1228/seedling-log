@@ -7,6 +7,7 @@ interface PhotoThumbProps {
   alt: string;
   className?: string;
   imageClassName?: string;
+  imageStyle?: React.CSSProperties;
   fit?: 'cover' | 'contain';
   onResolvedUrl?: (url: string) => void;
   signedUrl?: string | null;
@@ -17,6 +18,7 @@ export function PhotoThumb({
   alt,
   className,
   imageClassName,
+  imageStyle,
   fit = 'cover',
   onResolvedUrl,
   signedUrl,
@@ -112,6 +114,7 @@ export function PhotoThumb({
         imageClassName,
         className,
       )}
+      style={imageStyle}
     />
   );
 }
