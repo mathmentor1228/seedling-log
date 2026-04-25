@@ -702,12 +702,10 @@ export function SchoolExamArchive() {
     // Load signed URLs for all images
     const urlPromises = (data || []).map(async (img: CalendarImage) => {
       try {
-        const { data: urlData, error: urlError } = await supabase.storage
-          .from('school-exam-materials')
-          .createSignedUrl(img.storage_path, 3600);
-        if (urlError) { console.error('Signed URL error:', urlError, img.storage_path); return null; }
-        if (urlData?.signedUrl) {
-          return { path: img.storage_path, url: urlData.signedUrl };
+        if (calendarUrls[img.storage_path]) return null;
+        const signedUrl = await getCachedSignedUrl('school-exam-materials', img.storage_path, 3600);
+        if (signedUrl) {
+          return { path: img.storage_path, url: signedUrl };
         }
       } catch (e) { console.error('Signed URL exception:', e); }
       return null;
@@ -718,7 +716,7 @@ export function SchoolExamArchive() {
     if (Object.keys(newUrls).length > 0) {
       setCalendarUrls(prev => ({ ...prev, ...newUrls }));
     }
-  }, []);
+  }, [calendarUrls]);
 
   useEffect(() => { loadCalendarImages(); }, [loadCalendarImages]);
 
