@@ -1074,20 +1074,32 @@ export function ExamReviewPanel() {
                   }}
                   placeholder="전체적인 피드백을 입력하거나 AI 초안을 생성해보세요"
                   rows={8}
+                  disabled={reviewPhase === 'done'}
                   className="min-h-[176px] resize-y"
                 />
-              </div>
+                </div>
+              ) : null}
 
-              <div className="flex gap-2.5">
-                <Button onClick={() => void persistReview(false)} disabled={saving} variant="outline" className="flex-1 py-3">
-                  {saving && !completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  임시저장
-                </Button>
-                <Button onClick={() => void persistReview(true)} disabled={saving} className="flex-[2] py-3">
+              {reviewPhase === 'scoring' ? (
+                <Button onClick={() => void handleMarkDone()} disabled={saving} className="w-full py-3">
                   {completing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  리뷰 완료로 저장
+                  채점 완료 — 학생에게 자가진단 요청
                 </Button>
-              </div>
+              ) : null}
+
+              {reviewPhase === 'ai_comment' ? (
+                <Button onClick={() => void handleFinalSave()} disabled={saving || !overallComment.trim()} className="w-full py-3">
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  최종 저장 및 리뷰 완료
+                </Button>
+              ) : null}
+
+              {reviewPhase === 'done' ? (
+                <div className="rounded-[10px] bg-success/10 p-4 text-center">
+                  <p className="mb-1 text-base font-bold text-success">✅ 리뷰 완료</p>
+                  <p className="text-xs text-success/80">학생과 학부모에게 공개됐어요</p>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
