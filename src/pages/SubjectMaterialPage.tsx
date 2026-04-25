@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
@@ -263,16 +264,14 @@ export default function SubjectMaterialPage() {
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
   const getSignedFileUrl = useCallback(async (file: MaterialFile) => {
-    const { data, error } = await supabase.storage
-      .from('materials')
-      .createSignedUrl(file.storage_path, 300);
+    const signedUrl = await getCachedSignedUrl('materials', file.storage_path, 300);
 
-    if (error || !data?.signedUrl) {
+    if (!signedUrl) {
       toast({ title: '파일 링크 생성 실패', variant: 'destructive' });
       return null;
     }
 
-    return data.signedUrl;
+    return signedUrl;
   }, [toast]);
 
   const uploadFiles = useCallback(async (selectedFiles: File[]) => {
