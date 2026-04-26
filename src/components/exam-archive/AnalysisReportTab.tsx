@@ -875,7 +875,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               <div className="min-w-0 space-y-4">
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
               <div className="w-full overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[980px] table-fixed border-collapse text-sm">
+                <table className="min-w-full table-fixed border-collapse text-sm">
                   <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
@@ -973,12 +973,12 @@ function AnswerSheetSection({ mode, onModeChange, items, answers, setAnswer, ima
 
 function AnalysisColGroup({ subject }: { subject: string }) {
   const widths = subject === '수학'
-    ? ['44px', '140px', '200px', '80px', '56px', '56px', undefined, '36px']
+    ? ['4%', '18%', '26%', '10%', '7%', '7%', '24%', '4%']
     : subject === '영어'
-      ? ['44px', '140px', '200px', '80px', '56px', '56px', undefined, '36px']
+      ? ['4%', '18%', '24%', '8%', '8%', '12%', '22%', '4%']
       : subject === '국어'
-        ? ['44px', '140px', '200px', '80px', '56px', '56px', '36px']
-        : ['44px', '140px', '200px', '80px', '56px', '56px', undefined, '36px'];
+        ? ['4%', '18%', '32%', '14%', '8%', '20%', '4%']
+        : ['4%', '22%', '24%', '12%', '8%', '26%', '4%'];
 
   return <colgroup>{widths.map((width, index) => <col key={`${subject}-${index}`} style={width ? { width } : undefined} />)}</colgroup>;
 }
