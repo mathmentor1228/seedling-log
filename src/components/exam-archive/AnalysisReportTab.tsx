@@ -802,7 +802,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               </div>
             ) : null}
 
-            <fieldset disabled={isLocked} className={cn('grid gap-4 2xl:grid-cols-[minmax(360px,0.8fr)_minmax(720px,1.2fr)]', isLocked && 'opacity-75')}>
+            <fieldset disabled={isLocked} className={cn('space-y-4', isLocked && 'opacity-75')}>
               <div className="space-y-4">
               <AIParsePanel
                 isParsing={isParsing}
@@ -874,7 +874,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               <div className="min-w-0 space-y-4">
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
               <div className="w-full overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[760px] table-fixed border-collapse text-sm">
+                <table className="w-full min-w-[980px] table-fixed border-collapse text-sm">
                   <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
@@ -894,6 +894,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 </table>
               </div>
               </FormSection>
+                <AnalysisInsightCharts items={items} subject={form.subject} pointTotal={pointTotal} />
               </div>
             </fieldset>
           </div>
