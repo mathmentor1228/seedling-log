@@ -274,6 +274,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Show shared components (TeamNotesBoard, AcademyCalendar) on dashboard routes
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/teacher';
+  const isWideWorkspace = location.pathname === '/exam-archive';
 
   const renderNavItem = (item: NavItem, indent = false) => {
     const isActive = location.pathname === item.href;
@@ -442,7 +443,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Main content */}
       <div className={cn("min-h-screen pt-14 lg:pt-0 flex flex-col transition-all duration-200", sidebarCollapsed ? "lg:ml-14" : "lg:ml-56")}>
         <main className="flex-1">
-          <div className="p-5 lg:p-8 max-w-7xl mx-auto">
+          <div className={cn('mx-auto', isWideWorkspace ? 'max-w-none p-3 lg:p-4' : 'max-w-7xl p-5 lg:p-8')}>
             {isDashboard && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
                 <TeamNotesBoard />
