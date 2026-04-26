@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { FileText, Loader2, Lock, Pencil, Plus, Save, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
+import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -802,7 +803,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               </div>
             ) : null}
 
-            <fieldset disabled={isLocked} className={cn('grid gap-4 2xl:grid-cols-[minmax(360px,0.8fr)_minmax(720px,1.2fr)]', isLocked && 'opacity-75')}>
+            <fieldset disabled={isLocked} className={cn('space-y-4', isLocked && 'opacity-75')}>
               <div className="space-y-4">
               <AIParsePanel
                 isParsing={isParsing}
@@ -874,7 +875,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               <div className="min-w-0 space-y-4">
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
               <div className="w-full overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[760px] table-fixed border-collapse text-sm">
+                <table className="w-full min-w-[980px] table-fixed border-collapse text-sm">
                   <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
@@ -894,6 +895,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 </table>
               </div>
               </FormSection>
+                <AnalysisInsightCharts items={items} subject={form.subject} pointTotal={pointTotal} />
               </div>
             </fieldset>
           </div>
@@ -905,6 +907,58 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
 function FormSection({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h4 className="text-base font-semibold">{title}</h4>{action}</div>{children}</section>;
+}
+
+function AnalysisInsightCharts({ items, subject, pointTotal }: { items: AnalysisItem[]; subject: string; pointTotal: number }) {
+  const scoredItems = items.filter((item) => Number(item.points) > 0);
+  const difficultyData = ITEM_DIFFICULTIES.map((difficulty) => ({
+    name: difficulty,
+    count: items.filter((item) => (item.difficulty || '중') === difficulty).length,
+  })).filter((entry) => entry.count > 0);
+  const typeData = Object.entries(items.reduce<Record<string, number>>((acc, item) => {
+    const key = item.item_type || item.question_type || item.source_type || '미분류';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {})).map(([name, count]) => ({ name, count }));
+  const pointData = items.map((item) => ({ name: `${item.item_number}번`, points: Number(item.points) || 0 }));
+  const avgPoint = scoredItems.length ? (pointTotal / scoredItems.length).toFixed(1) : '0';
+  const colors = ['hsl(var(--primary))', 'hsl(var(--info))', 'hsl(var(--warning))', 'hsl(var(--success))', 'hsl(var(--muted-foreground))'];
+
+  return (
+    <FormSection title="시험 분석 요약" action={<span className="text-sm text-muted-foreground">{subject} · {items.length}문항</span>}>
+      <div className="grid gap-3 lg:grid-cols-4">
+        <MetricBox label="총 문항" value={`${items.length}개`} />
+        <MetricBox label="총 배점" value={`${pointTotal}점`} />
+        <MetricBox label="평균 배점" value={`${avgPoint}점`} />
+        <MetricBox label="난도 구간" value={`${difficultyData.length || 0}개`} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1.4fr]">
+        <ChartBox title="난도 분포">
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart><Pie data={difficultyData} dataKey="count" nameKey="name" innerRadius={48} outerRadius={78} paddingAngle={3}>{difficultyData.map((_, index) => <Cell key={index} fill={colors[index % colors.length]} />)}</Pie><Tooltip /></PieChart>
+          </ResponsiveContainer>
+        </ChartBox>
+        <ChartBox title="문항 유형">
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart><Pie data={typeData} dataKey="count" nameKey="name" innerRadius={48} outerRadius={78} paddingAngle={3}>{typeData.map((_, index) => <Cell key={index} fill={colors[index % colors.length]} />)}</Pie><Tooltip /></PieChart>
+          </ResponsiveContainer>
+        </ChartBox>
+        <ChartBox title="문항별 배점">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={pointData} margin={{ top: 12, right: 12, left: -20, bottom: 0 }}><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="points" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /></BarChart>
+          </ResponsiveContainer>
+        </ChartBox>
+      </div>
+    </FormSection>
+  );
+}
+
+function MetricBox({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-bold text-foreground">{value}</p></div>;
+}
+
+function ChartBox({ title, children }: { title: string; children: React.ReactNode }) {
+  return <div className="rounded-lg border bg-card p-4"><p className="mb-2 text-sm font-semibold text-foreground">{title}</p>{children}</div>;
 }
 
 function AnswerSheetSection({ mode, onModeChange, items, answers, setAnswer, imageUrls, onImageUpload, onRemoveImage, pdfUrl, onPdfUpload, onRemovePdf, isExtracting }: { mode: ReportForm['answerMode']; onModeChange: (mode: ReportForm['answerMode']) => void; items: AnalysisItem[]; answers: Record<string, string>; setAnswer: (itemNumber: number, value: string) => void; imageUrls: string[]; onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemoveImage: (index: number) => void; pdfUrl: string | null; onPdfUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemovePdf: () => void; isExtracting: boolean }) {
