@@ -709,8 +709,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-160px)] min-h-0 w-full overflow-hidden bg-background">
-      <aside className="w-[300px] min-w-[300px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
+    <div className="flex h-full min-h-0 w-full overflow-hidden bg-background">
+      <aside className="w-[340px] min-w-[340px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
         <Button className="mb-3 h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
           <Plus className="h-4 w-4" /> 새 보고서 작성
         </Button>
@@ -766,15 +766,15 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
         </div>
       </aside>
 
-      <section className="min-w-0 flex-1 overflow-y-auto px-7 py-5">
+      <section className="min-w-0 flex-1 overflow-y-auto px-4 py-4 xl:px-6">
         {!selectedReportId && reports.length > 0 && form.schoolName === '' ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <FileText className="h-10 w-10 opacity-40" />
             <p className="text-sm">좌측에서 보고서를 선택하거나 새로 만드세요</p>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between border-b-2 border-primary/20 pb-4">
+          <div className="space-y-5">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b-2 border-primary/20 bg-background/95 pb-3 pt-1 backdrop-blur">
               <div>
                 <h3 className="text-xl font-bold text-primary">{selectedReportId ? `${form.subject} 분석보고서` : '새 보고서 작성'}</h3>
                 {selectedReportId ? <p className="mt-1 text-sm text-muted-foreground">{form.schoolName} · {form.grade}학년 · {form.examYear}년 {form.examPeriod} {form.examType}</p> : null}
@@ -802,7 +802,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               </div>
             ) : null}
 
-            <fieldset disabled={isLocked} className={cn('space-y-6', isLocked && 'opacity-75')}>
+            <fieldset disabled={isLocked} className={cn('grid gap-4 2xl:grid-cols-[minmax(360px,0.8fr)_minmax(720px,1.2fr)]', isLocked && 'opacity-75')}>
+              <div className="space-y-4">
               <AIParsePanel
                 isParsing={isParsing}
                 parseResult={parseResult}
@@ -856,7 +857,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               isExtracting={isExtractingAnswers}
             />
 
-            <FormSection title="수업자료 링크" action={<Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={addLink}><Plus className="h-3.5 w-3.5" /> 링크 추가</Button>}>
+              <FormSection title="수업자료 링크" action={<Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={addLink}><Plus className="h-3.5 w-3.5" /> 링크 추가</Button>}>
               <div className="space-y-2">
                 {form.studyLinks.length === 0 ? <p className="text-sm text-muted-foreground">등록된 링크가 없습니다.</p> : null}
                 {form.studyLinks.map((link, index) => (
@@ -868,10 +869,12 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 ))}
               </div>
             </FormSection>
+              </div>
 
+              <div className="min-w-0 space-y-4">
             <FormSection title="문항별 분석" action={<span className="text-sm text-muted-foreground">합계: {pointTotal}점</span>}>
               <div className="w-full overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[900px] table-fixed border-collapse text-sm">
+                <table className="w-full min-w-[760px] table-fixed border-collapse text-sm">
                   <AnalysisColGroup subject={form.subject} />
                   <thead className="bg-primary text-primary-foreground">
                     <tr>
@@ -891,6 +894,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 </table>
               </div>
               </FormSection>
+              </div>
             </fieldset>
           </div>
         )}

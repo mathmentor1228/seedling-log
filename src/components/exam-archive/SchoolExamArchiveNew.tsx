@@ -146,7 +146,7 @@ function SchoolExamArchiveInner() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
@@ -173,7 +173,7 @@ function SchoolExamArchiveInner() {
         )}
       </div>
 
-      <div className="flex h-[calc(100vh-200px)] w-full overflow-hidden rounded-xl border bg-background shadow-sm">
+      <div className="flex h-[calc(100vh-150px)] w-full overflow-hidden rounded-xl border bg-background shadow-sm">
         {!isFullWidthTab ? (
           <SchoolSidebar
             schools={schools}
@@ -206,27 +206,27 @@ function SchoolExamArchiveInner() {
               ) : null}
 
               <Tabs value={currentTab} onValueChange={handleTabChange} className={isFullWidthTab ? 'flex h-full min-h-0 flex-col' : undefined}>
-                <TabsList className="grid w-full grid-cols-6 h-10">
-                  <TabsTrigger value="overview" className="gap-1.5 text-xs">
+                <TabsList className="sticky top-0 z-10 grid h-auto w-full grid-cols-2 gap-1 rounded-none border-b bg-muted/80 p-2 backdrop-blur sm:grid-cols-3 xl:grid-cols-6">
+                  <TabsTrigger value="overview" className="h-10 gap-1.5 text-xs">
                     <CalendarDays className="w-4 h-4" /> 학교/일정
                   </TabsTrigger>
-                  <TabsTrigger value="submissions" className="gap-1.5 text-xs">
+                  <TabsTrigger value="submissions" className="h-10 gap-1.5 text-xs">
                     <GraduationCap className="w-4 h-4" /> 학생제출
                   </TabsTrigger>
-                  <TabsTrigger value="review" className="gap-1.5 text-xs" disabled={!canViewReview}>
+                  <TabsTrigger value="review" className="h-10 gap-1.5 text-xs" disabled={!canViewReview}>
                     <ClipboardCheck className="w-4 h-4" /> 시험지리뷰
                   </TabsTrigger>
-                  <TabsTrigger value="cross-check" className="gap-1.5 text-xs">
+                  <TabsTrigger value="cross-check" className="h-10 gap-1.5 text-xs">
                     <ListChecks className="w-4 h-4" />
                     크로스체킹
                     <span className="ml-1 rounded-full bg-destructive px-1.5 py-px text-[10px] font-medium text-destructive-foreground">
                       {unconfirmedCount}
                     </span>
                   </TabsTrigger>
-                  <TabsTrigger value="analysis" className="gap-1.5 text-xs">
+                  <TabsTrigger value="analysis" className="h-10 gap-1.5 text-xs">
                     <BarChart3 className="w-4 h-4" /> 분석보고서
                   </TabsTrigger>
-                  <TabsTrigger value="prep" className="gap-1.5 text-xs" disabled={!canViewPrep}>
+                  <TabsTrigger value="prep" className="h-10 gap-1.5 text-xs" disabled={!canViewPrep}>
                     <Compass className="w-4 h-4" /> 내신특강
                   </TabsTrigger>
                 </TabsList>
