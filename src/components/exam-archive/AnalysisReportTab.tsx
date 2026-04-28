@@ -714,6 +714,57 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     toast.success(newLocked ? '보고서를 잠금 처리했습니다.' : '잠금을 해제했습니다.');
   }
 
+  async function handleGenerateDeepAnalysis() {
+    if (!selectedReportId) {
+      toast.error('먼저 분석보고서를 저장해주세요.');
+      return;
+    }
+    setIsGeneratingDeepAnalysis(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-deep-exam-analysis', { body: { report_id: selectedReportId } });
+      if (error || data?.error) throw new Error(error?.message || data?.error || '고도화 분석 생성 실패');
+      setDeepAnalysis((data.report ?? null) as DeepAnalysisReport | null);
+      toast.success('고도화 분석 초안이 생성됐어요. 검토 후 게시해주세요.');
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : '고도화 분석 생성 실패');
+    } finally {
+      setIsGeneratingDeepAnalysis(false);
+    }
+  }
+
+  async function handleUpdateDeepAnalysis(patch: Partial<DeepAnalysisReport>) {
+    if (!deepAnalysis) return;
+    setDeepAnalysis((prev) => (prev ? { ...prev, ...patch } : prev));
+    const { error } = await (supabase as any).from('exam_deep_analysis_reports').update(patch).eq('id', deepAnalysis.id);
+    if (error) {
+      toast.error('고도화 분석 저장에 실패했습니다.');
+      console.error(error);
+      await fetchDeepAnalysis(deepAnalysis.analysis_report_id);
+    }
+  }
+
+  async function handlePublishDeepAnalysis() {
+    if (!deepAnalysis || !user) return;
+    setIsPublishingDeepAnalysis(true);
+    const nextStatus = deepAnalysis.status === 'published' ? 'draft' : 'published';
+    const patch = {
+      status: nextStatus,
+      reviewed_by: user.id,
+      published_by: nextStatus === 'published' ? user.id : null,
+      published_at: nextStatus === 'published' ? new Date().toISOString() : null,
+    };
+    const { error } = await (supabase as any).from('exam_deep_analysis_reports').update(patch).eq('id', deepAnalysis.id);
+    if (error) {
+      toast.error('게시 상태 변경에 실패했습니다.');
+      console.error(error);
+    } else {
+      setDeepAnalysis((prev) => (prev ? { ...prev, status: nextStatus, published_at: patch.published_at } : prev));
+      toast.success(nextStatus === 'published' ? '학부모·학생웹에 게시됐어요.' : '게시를 해제했습니다.');
+    }
+    setIsPublishingDeepAnalysis(false);
+  }
+
   async function handleDelete(report: AnalysisReport) {
     if (report.is_locked) return;
     const confirmed = window.confirm(`"${report.subject} ${report.exam_type}" 보고서를\n삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
