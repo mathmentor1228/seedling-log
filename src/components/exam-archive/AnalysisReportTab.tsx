@@ -574,6 +574,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     }
 
     setSaving(true);
+    try {
     const { data: existing, error: existingError } = await (supabase as any)
       .from('exam_analysis_reports')
       .select('id, created_by_name, updated_at, is_locked')
@@ -588,14 +589,12 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (existingError) {
       toast.error('기존 보고서 확인에 실패했습니다.');
       console.error(existingError);
-      setSaving(false);
       return;
     }
 
     if (existing && existing.id !== selectedReportId) {
       if (existing.is_locked) {
         alert('이 보고서는 잠금 상태입니다.\n원장에게 잠금 해제를 요청해주세요.');
-        setSaving(false);
         return;
       }
 
@@ -604,7 +603,6 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       );
 
       if (!confirmed) {
-        setSaving(false);
         return;
       }
     }
@@ -639,23 +637,21 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       .single();
 
     if (error || !report) {
-      toast.error('보고서 저장에 실패했습니다.');
+      toast.error(error?.message || '보고서 저장에 실패했습니다.');
       console.error(error);
-      setSaving(false);
       return;
     }
 
     const reportId = (report as AnalysisReport).id;
     const { error: deleteError } = await (supabase as any).from('exam_analysis_items').delete().eq('report_id', reportId);
     if (deleteError) {
-      toast.error('기존 문항 정리에 실패했습니다.');
+      toast.error(deleteError.message || '기존 문항 정리에 실패했습니다.');
       console.error(deleteError);
-      setSaving(false);
       return;
     }
 
     const rows = items.map((item, index) => ({
-      item_number: item.item_number || index + 1,
+      item_number: index + 1,
       item_type: item.item_type || null,
       points: item.points == null ? null : Number(item.points),
       difficulty: item.difficulty || null,
@@ -674,9 +670,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (rows.length > 0) {
       const { error: insertError } = await (supabase as any).from('exam_analysis_items').insert(rows);
       if (insertError) {
-        toast.error('문항 분석 저장에 실패했습니다.');
+        toast.error(insertError.message || '문항 분석 저장에 실패했습니다.');
         console.error(insertError);
-        setSaving(false);
         return;
       }
     }
@@ -684,7 +679,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     toast.success('저장됐어요!');
     setSelectedReportId(reportId);
     await fetchReports();
+    } finally {
     setSaving(false);
+    }
   }
 
   async function handleToggleLock() {
@@ -1059,12 +1056,17 @@ function ChartBox({ title, children }: { title: string; children: React.ReactNod
 
 function DeepAnalysisSection({ report, disabled, isGenerating, isPublishing, onGenerate, onPublish, onChange }: { report: DeepAnalysisReport | null; disabled: boolean; isGenerating: boolean; isPublishing: boolean; onGenerate: () => void; onPublish: () => void; onChange: (patch: Partial<DeepAnalysisReport>) => void }) {
   return <FormSection title="공개용 고도화 분석" action={<div className="flex gap-2"><Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" disabled={disabled || isGenerating} onClick={onGenerate}>{isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}AI 초안 생성</Button>{report ? <Button type="button" variant={report.status === 'published' ? 'secondary' : 'default'} size="sm" className="h-8 gap-1 text-xs" disabled={isPublishing} onClick={onPublish}>{isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : report.status === 'published' ? <Eye className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}{report.status === 'published' ? '게시 해제' : '게시'}</Button> : null}</div>}>
-    {!report ? <div className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">채점 완료 데이터가 쌓이면 AI 초안을 생성해 학부모·학생웹에 게시할 수 있습니다.</div> : <div className="space-y-4 rounded-lg border bg-card p-4"><div className="flex items-center justify-between"><Badge variant={report.status === 'published' ? 'success' : 'secondary'}>{report.status === 'published' ? '게시됨' : '검토중'}</Badge>{report.published_at ? <span className="text-xs text-muted-foreground">게시일 {new Date(report.published_at).toLocaleDateString('ko-KR')}</span> : null}</div><Field label="시험 전체 인사이트"><Textarea rows={5} value={report.overall_insights ?? ''} onChange={(e) => onChange({ overall_insights: e.target.value })} className="resize-y leading-7" /></Field><div className="grid gap-3 lg:grid-cols-3"><DeepJsonBox title="학생들이 어려웠을 부분" items={report.difficult_points} render={(item) => <><p className="font-semibold text-foreground">{item.title || '포인트'}</p><p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>{item.study_tip ? <p className="mt-2 text-xs text-primary">→ {item.study_tip}</p> : null}</>} /><DeepJsonBox title="점수대별 추천" items={report.score_band_recommendations} render={(item) => <><p className="font-semibold text-foreground">{item.band || '점수대'}</p><p className="mt-1 text-xs text-muted-foreground">{item.diagnosis}</p><p className="mt-2 text-xs text-primary">{item.priority}</p></>} /><DeepJsonBox title="학생별 추천" items={report.student_recommendations} render={(item) => <><p className="font-semibold text-foreground">{item.student_name || '학생'} · {item.score_band || '-'}</p><p className="mt-1 text-xs text-muted-foreground">{item.summary}</p><p className="mt-2 text-xs text-primary">{(item.recommended_actions || []).slice(0, 2).join(' · ')}</p></>} /></div><Field label="내부 검토 메모"><Textarea rows={3} value={report.teacher_notes ?? ''} onChange={(e) => onChange({ teacher_notes: e.target.value })} placeholder="게시 전 확인할 메모" /></Field></div>}
+    {!report ? <div className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">채점 완료 데이터가 쌓이면 AI 초안을 생성해 학부모·학생웹에 게시할 수 있습니다.</div> : <div className="space-y-4 rounded-lg border bg-card p-4"><div className="flex items-center justify-between"><Badge variant={report.status === 'published' ? 'success' : 'secondary'}>{report.status === 'published' ? '게시됨' : '검토중'}</Badge>{report.published_at ? <span className="text-xs text-muted-foreground">게시일 {new Date(report.published_at).toLocaleDateString('ko-KR')}</span> : null}</div><Field label="시험 전체 인사이트"><Textarea rows={7} value={report.overall_insights ?? ''} onChange={(e) => onChange({ overall_insights: e.target.value })} className="resize-y leading-7" /></Field><div className="grid gap-3 xl:grid-cols-3"><DeepJsonBox title="학생들이 어려웠을 부분" items={report.difficult_points} render={(item) => <><p className="font-semibold text-foreground">{item.title || '포인트'}{item.items?.length ? <span className="ml-2 text-xs font-normal text-muted-foreground">{item.items.join(', ')}번</span> : null}</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{item.reason}</p>{item.study_tip ? <p className="mt-2 whitespace-pre-wrap text-xs font-medium leading-5 text-primary">→ {item.study_tip}</p> : null}</>} /><DeepJsonBox title="점수대별 추천" items={report.score_band_recommendations} render={(item) => <><p className="font-semibold text-foreground">{item.band || '점수대'}</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{item.diagnosis}</p><p className="mt-2 whitespace-pre-wrap text-xs font-medium leading-5 text-primary">{item.priority}</p><ActionList actions={item.actions} /></>} /><DeepJsonBox title="학생별 추천" items={report.student_recommendations} render={(item) => <><p className="font-semibold text-foreground">{item.student_name || '학생'} · {item.score_band || '-'}</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{item.summary}</p>{item.focus_items?.length ? <p className="mt-2 text-xs text-muted-foreground">집중 문항: {item.focus_items.join(', ')}번</p> : null}<ActionList actions={item.recommended_actions} /></>} /></div><Field label="내부 검토 메모"><Textarea rows={3} value={report.teacher_notes ?? ''} onChange={(e) => onChange({ teacher_notes: e.target.value })} placeholder="게시 전 확인할 메모" /></Field></div>}
   </FormSection>;
 }
 
+function ActionList({ actions }: { actions?: string[] }) {
+  if (!actions?.length) return null;
+  return <ul className="mt-2 space-y-1 text-xs leading-5 text-foreground">{actions.map((action, index) => <li key={index} className="flex gap-2"><span className="text-primary">•</span><span>{action}</span></li>)}</ul>;
+}
+
 function DeepJsonBox<T>({ title, items, render }: { title: string; items: T[]; render: (item: T) => React.ReactNode }) {
-  return <div className="rounded-lg border bg-background p-3"><p className="mb-2 text-sm font-semibold text-foreground">{title}</p><div className="max-h-72 space-y-2 overflow-y-auto pr-1">{items.length === 0 ? <p className="text-xs text-muted-foreground">내용 없음</p> : items.map((item, index) => <div key={index} className="rounded-md bg-muted/40 p-3 text-sm">{render(item)}</div>)}</div></div>;
+  return <div className="rounded-lg border bg-background p-3"><p className="mb-2 text-sm font-semibold text-foreground">{title}</p><div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">{items.length === 0 ? <p className="text-xs text-muted-foreground">내용 없음</p> : items.map((item, index) => <div key={index} className="rounded-md bg-muted/40 p-3 text-sm">{render(item)}</div>)}</div></div>;
 }
 
 function AnswerSheetSection({ mode, onModeChange, items, answers, setAnswer, imageUrls, onImageUpload, onRemoveImage, pdfUrl, onPdfUpload, onRemovePdf, isExtracting }: { mode: ReportForm['answerMode']; onModeChange: (mode: ReportForm['answerMode']) => void; items: AnalysisItem[]; answers: Record<string, string>; setAnswer: (itemNumber: number, value: string) => void; imageUrls: string[]; onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemoveImage: (index: number) => void; pdfUrl: string | null; onPdfUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemovePdf: () => void; isExtracting: boolean }) {

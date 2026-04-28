@@ -41,6 +41,17 @@ function itemTitle(item: any) {
   return item.unit_name || item.problem_desc || item.question_type || item.source_type || item.content || item.item_type || `${item.item_number}번`;
 }
 
+function subjectSpecificGuidance(subject: string) {
+  if (subject === '영어') {
+    return `영어 과목 작성 기준:
+- 지문 유형(교과서/외부지문/대화문/문법/어휘/서술형)과 문제 유형(빈칸, 순서, 삽입, 어법, 어휘, 내용일치 등)을 구분해 분석
+- 학생이 어려웠을 지점을 "단어를 몰랐다" 수준이 아니라 근거문장 위치, 접속사·대명사 단서, 문장 구조, 선지 함정, 변형 문장 대응 관점으로 설명
+- 점수대별 추천은 단어 암기만 반복하지 말고 ①지문 구조 독해 ②근거 표시 훈련 ③오답 선지 제거 ④어법 포인트 누적 ⑤서술형 문장 전환/영작 중 우선순위를 제시
+- 학부모에게 공개될 문장이므로 전문적이되 과도한 불안 조성은 피하고, 바로 실행 가능한 학습 루틴으로 작성`;
+  }
+  return '';
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -160,13 +171,14 @@ Deno.serve(async (req) => {
 기존 총평: ${report.overall_review || '-'}
 문항 분석: ${JSON.stringify(itemStats)}
 학생 요약: ${JSON.stringify(studentSummaries)}
+${subjectSpecificGuidance(report.subject)}
 
 반드시 JSON만 반환:
 {
-  "overall_insights": "시험 전체 총평 500자 이내",
-  "difficult_points": [{"title":"어려웠을 포인트", "reason":"왜 어려웠는지", "items":[1,2], "study_tip":"대응 학습"}],
-  "score_band_recommendations": [{"band":"90점 이상|80점대|70점대|60점대|60점 미만", "diagnosis":"현재 상태", "priority":"우선 학습", "actions":["실행1","실행2"]}],
-  "student_recommendations": [{"student_id":"uuid", "student_name":"이름", "score_band":"점수대", "summary":"개인 요약", "focus_items":[1,2], "recommended_actions":["실행1","실행2"]}]
+  "overall_insights": "시험 전체 총평 700자 이내. 출제경향, 체감난도, 변별 포인트, 점수대별 갈림길, 다음 학습 우선순위를 포함",
+  "difficult_points": [{"title":"어려웠을 포인트", "reason":"왜 어려웠는지 2~4문장", "items":[1,2], "study_tip":"대응 학습 2~3문장"}],
+  "score_band_recommendations": [{"band":"90점 이상|80점대|70점대|60점대|60점 미만", "diagnosis":"현재 상태 2~3문장", "priority":"우선 학습 2~3문장", "actions":["구체 실행1","구체 실행2","구체 실행3"]}],
+  "student_recommendations": [{"student_id":"uuid", "student_name":"이름", "score_band":"점수대", "summary":"개인 요약 2~3문장", "focus_items":[1,2], "recommended_actions":["구체 실행1","구체 실행2","구체 실행3"]}]
 }`;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
