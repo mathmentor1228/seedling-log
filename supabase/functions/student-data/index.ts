@@ -942,7 +942,12 @@ Deno.serve(async (req) => {
 
         result = {
           school_report: schoolReport || null,
-          deep_reports: deepReports || [],
+          deep_reports: (deepReports || []).map((report: any) => ({
+            ...report,
+            my_recommendation: Array.isArray(report.student_recommendations)
+              ? report.student_recommendations.find((item: any) => item.student_id === student_id) || null
+              : null,
+          })),
           reviews: (results || []).map((row: any) => ({
             ...row,
             student_exam_result_photos: photoMap.get(row.id) || [],
