@@ -156,7 +156,7 @@ export default function StudentMathQuiz() {
           toast({ title: '채점 완료!', description: `${data.grading.total_correct}/${data.grading.total_graded}문항 정답` });
         }
       } else {
-        toast({ title: '제출 완료', description: '채점 중 오류가 발생했습니다. 선생님이 직접 확인합니다.' });
+        toast({ title: '제출 완료', description: '사진 업로드가 완료되었습니다. AI 채점은 잠시 후 결과에 반영됩니다.' });
       }
 
       fetchData();
@@ -210,6 +210,10 @@ export default function StudentMathQuiz() {
           }
           toast({ title: '채점 완료!', description: `${data.grading.total_correct}/${data.grading.total_graded}문항 정답` });
         }
+      }
+
+      if (!data?.grading) {
+        toast({ title: '재제출 완료', description: '사진 업로드가 완료되었습니다. AI 채점은 잠시 후 결과에 반영됩니다.' });
       }
 
       fetchData();
