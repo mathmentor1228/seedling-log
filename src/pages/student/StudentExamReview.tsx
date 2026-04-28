@@ -3,6 +3,7 @@ import { studentApi } from '@/lib/studentApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
@@ -248,6 +249,8 @@ export default function StudentExamReview() {
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
   const [schoolReport, setSchoolReport] = useState<SchoolExamReport | null>(null);
   const [deepReports, setDeepReports] = useState<DeepExamReport[]>([]);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
   const [selfCheckTarget, setSelfCheckTarget] = useState<SelfCheckTarget | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -255,12 +258,14 @@ export default function StudentExamReview() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await studentApi.getExamReviews();
+    const { data } = await studentApi.getExamReviews(selectedYear);
     setRows((data?.reviews || []) as ExamReviewRow[]);
     setSchoolReport((data?.school_report || null) as SchoolExamReport | null);
     setDeepReports((data?.deep_reports || []) as DeepExamReport[]);
+    setAvailableYears((data?.available_years || []) as number[]);
+    setSelectedYear((data?.selected_exam_year ?? null) as number | null);
     setLoading(false);
-  }, []);
+  }, [selectedYear]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -291,6 +296,23 @@ export default function StudentExamReview() {
         </h1>
         <StudentStudyTabs />
       </div>
+
+      {!loading && availableYears.length > 0 ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">조회 연도</p>
+            <p className="text-xs text-muted-foreground">시험 본 연도 기준으로 표시됩니다.</p>
+          </div>
+          <Select value={selectedYear ? String(selectedYear) : undefined} onValueChange={(value) => setSelectedYear(Number(value))}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="연도 선택" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableYears.map((year) => <SelectItem key={year} value={String(year)}>{year}년</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       {!loading && hasSubmittedExamPhotos ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} onOpenSelfCheck={openSelfCheck} /> : null}
       {!loading && hasSubmittedExamPhotos ? <DeepExamReportSection reports={deepReports} /> : null}
