@@ -927,8 +927,20 @@ Deno.serve(async (req) => {
           : { data: null, error: null };
         if (schoolReportError) throw schoolReportError;
 
+        const { data: deepReports, error: deepReportError } = studentRow?.school
+          ? await supabase
+              .from('exam_deep_analysis_reports')
+              .select('id, analysis_report_id, status, overall_insights, difficult_points, score_band_recommendations, student_recommendations, published_at, exam_analysis_reports!inner(school_name, grade, subject, exam_type, exam_year, exam_period, exam_scope)')
+              .eq('status', 'published')
+              .eq('exam_analysis_reports.school_name', studentRow.school)
+              .order('published_at', { ascending: false })
+              .limit(10)
+          : { data: [], error: null };
+        if (deepReportError) throw deepReportError;
+
         result = {
           school_report: schoolReport || null,
+          deep_reports: deepReports || [],
           reviews: (results || []).map((row: any) => ({
             ...row,
             student_exam_result_photos: photoMap.get(row.id) || [],
