@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     // D-day: no date cap — always show nearest upcoming exam
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes, deepExamRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url")
@@ -188,6 +188,13 @@ Deno.serve(async (req) => {
         .select("course_id, status")
         .eq("student_id", studentId)
         .in("status", ["confirmed", "auto_confirmed"]),
+      supabase
+        .from("exam_deep_analysis_reports")
+        .select("id, analysis_report_id, overall_insights, difficult_points, score_band_recommendations, student_recommendations, published_at, exam_analysis_reports!inner(school_name, grade, subject, exam_type, exam_year, exam_period, exam_scope)")
+        .eq("status", "published")
+        .eq("exam_analysis_reports.school_name", student.school)
+        .order("published_at", { ascending: false })
+        .limit(6),
     ]);
 
     // Fetch class schedules for the student's classes
@@ -287,6 +294,7 @@ Deno.serve(async (req) => {
         })(),
         unpaid_textbooks: unpaidTextbooks,
         account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,
+        deep_exam_reports: deepExamRes.data || [],
         exam_prep_schedules: await (async () => {
           const confirmedEnrollments = examPrepRes.data || [];
           if (confirmedEnrollments.length === 0) return [];
