@@ -19,6 +19,20 @@ import MathQuestionRoom from '@/components/student/MathQuestionRoom';
 import { MathRenderer } from '@/components/math/MathRenderer';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 
+const uploadStudentQuizImage = async (file: File, studentId: string, quizId: string, index: number, prefix = '') => {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${studentId}/${quizId}/${prefix}${Date.now()}_${index}_${safeName}`;
+  const { error } = await supabase.storage
+    .from('quiz-submissions')
+    .upload(path, file, { upsert: false });
+  if (error) throw error;
+
+  const { data } = supabase.storage
+    .from('quiz-submissions')
+    .getPublicUrl(path);
+  return data.publicUrl;
+};
+
 interface Quiz {
   id: string;
   concept_id: string;
@@ -108,20 +122,9 @@ export default function StudentMathQuiz() {
 
     setUploading(true);
     try {
-      const uploadedUrls: string[] = [];
-      for (const img of images) {
-        const safeName = img.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${student.id}/${selectedQuiz.id}/${Date.now()}_${safeName}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('quiz-submissions')
-          .upload(path, img.file);
-        if (uploadErr) throw uploadErr;
-
-        const { data: urlData } = supabase.storage
-          .from('quiz-submissions')
-          .getPublicUrl(path);
-        uploadedUrls.push(urlData.publicUrl);
-      }
+      const uploadedUrls = await Promise.all(
+        images.map((img, index) => uploadStudentQuizImage(img.file, student.id, selectedQuiz.id, index))
+      );
 
       setUploading(false);
       setGrading(true);
@@ -171,20 +174,9 @@ export default function StudentMathQuiz() {
 
     setUploading(true);
     try {
-      const uploadedUrls: string[] = [];
-      for (const img of resubmitImages) {
-        const safeName = img.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${student.id}/${selectedQuiz.id}/resubmit_${Date.now()}_${safeName}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('quiz-submissions')
-          .upload(path, img.file);
-        if (uploadErr) throw uploadErr;
-
-        const { data: urlData } = supabase.storage
-          .from('quiz-submissions')
-          .getPublicUrl(path);
-        uploadedUrls.push(urlData.publicUrl);
-      }
+      const uploadedUrls = await Promise.all(
+        resubmitImages.map((img, index) => uploadStudentQuizImage(img.file, student.id, selectedQuiz.id, index, 'resubmit_'))
+      );
 
       setUploading(false);
       setGrading(true);
