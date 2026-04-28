@@ -4062,6 +4062,7 @@ export type Database = {
           exam_type: string
           exam_year: number | null
           expected_score: number | null
+          grade_at_exam: string | null
           id: string
           is_staff_upload: boolean
           locked_at: string | null
@@ -4085,6 +4086,7 @@ export type Database = {
           exam_type?: string
           exam_year?: number | null
           expected_score?: number | null
+          grade_at_exam?: string | null
           id?: string
           is_staff_upload?: boolean
           locked_at?: string | null
@@ -4108,6 +4110,7 @@ export type Database = {
           exam_type?: string
           exam_year?: number | null
           expected_score?: number | null
+          grade_at_exam?: string | null
           id?: string
           is_staff_upload?: boolean
           locked_at?: string | null
@@ -6305,6 +6308,10 @@ export type Database = {
         }[]
       }
       get_teacher_roster_sheet: { Args: { _date: string }; Returns: Json }
+      grade_at_year: {
+        Args: { current_grade: string; exam_year: number }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

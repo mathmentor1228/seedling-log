@@ -786,6 +786,9 @@ Deno.serve(async (req) => {
       }
 
       case 'exam_reviews': {
+        const requestedExamYear = params?.exam_year != null && Number.isFinite(Number(params.exam_year))
+          ? Number(params.exam_year)
+          : null;
         const { data: studentRow, error: studentError } = await supabase
           .from('students')
           .select('school, grade, grade_year')
@@ -826,7 +829,14 @@ Deno.serve(async (req) => {
 
         const resultIdsWithPhotos = new Set((photoRows || []).map((photo: any) => photo.result_id));
         const photoBackedResults = (results || []).filter((row: any) => resultIdsWithPhotos.has(row.id));
-        const submittedExamYears = [...new Set(photoBackedResults.map((row: any) => row.exam_year).filter((year: any) => year != null))];
+        const submittedExamYears = [...new Set(photoBackedResults.map((row: any) => row.exam_year).filter((year: any) => year != null))]
+          .sort((a: any, b: any) => Number(b) - Number(a));
+        const selectedExamYear = requestedExamYear && submittedExamYears.includes(requestedExamYear)
+          ? requestedExamYear
+          : (submittedExamYears[0] ?? null);
+        const filteredPhotoBackedResults = selectedExamYear != null
+          ? photoBackedResults.filter((row: any) => row.exam_year === selectedExamYear)
+          : photoBackedResults;
 
         const reviewIds = (reviewRows || []).map((row: any) => row.id);
         const templateIds = [...new Set((reviewRows || []).map((r: any) => r.template_id).filter(Boolean))];
@@ -926,21 +936,21 @@ Deno.serve(async (req) => {
               .eq('school_name', studentRow.school)
               .eq('published', true)
           : null;
-        if (schoolReportQuery && submittedExamYears.length > 0) schoolReportQuery = schoolReportQuery.in('exam_year', submittedExamYears);
+        if (schoolReportQuery && selectedExamYear != null) schoolReportQuery = schoolReportQuery.eq('exam_year', selectedExamYear);
         const { data: schoolReport, error: schoolReportError } = schoolReportQuery
           ? await schoolReportQuery.order('created_at', { ascending: false }).limit(1).maybeSingle()
           : { data: null, error: null };
         if (schoolReportError) throw schoolReportError;
 
         const gradeKey = String(studentRow?.grade_year || studentRow?.grade || '');
-        let deepReportQuery = studentRow?.school && submittedExamYears.length > 0
+        let deepReportQuery = studentRow?.school && selectedExamYear != null
           ? supabase
               .from('exam_deep_analysis_reports')
               .select('id, analysis_report_id, status, overall_insights, difficult_points, score_band_recommendations, student_recommendations, published_at, exam_analysis_reports!inner(school_name, grade, subject, exam_type, exam_year, exam_period, exam_scope)')
               .eq('status', 'published')
               .eq('exam_analysis_reports.school_name', studentRow.school)
               .eq('exam_analysis_reports.grade', gradeKey)
-              .in('exam_analysis_reports.exam_year', submittedExamYears)
+              .eq('exam_analysis_reports.exam_year', selectedExamYear)
           : null;
         const { data: deepReports, error: deepReportError } = deepReportQuery
           ? await deepReportQuery.order('published_at', { ascending: false }).limit(10)
@@ -948,6 +958,8 @@ Deno.serve(async (req) => {
         if (deepReportError) throw deepReportError;
 
         result = {
+          available_years: submittedExamYears,
+          selected_exam_year: selectedExamYear,
           school_report: schoolReport || null,
           deep_reports: (deepReports || []).map((report: any) => ({
             ...report,
@@ -955,7 +967,7 @@ Deno.serve(async (req) => {
               ? report.student_recommendations.find((item: any) => item.student_id === student_id) || null
               : null,
           })),
-          reviews: photoBackedResults.map((row: any) => ({
+          reviews: filteredPhotoBackedResults.map((row: any) => ({
             ...row,
             student_exam_result_photos: photoMap.get(row.id) || [],
             exam_reviews: latestReviewByResult.has(row.id) ? [latestReviewByResult.get(row.id)] : [],
