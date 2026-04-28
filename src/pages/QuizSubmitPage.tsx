@@ -8,8 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Camera, Loader2, CheckCircle2, Sparkles, Upload } from 'lucide-react';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
-import { compressImage } from '@/lib/imageCompression';
-import { preprocessImageForOCR } from '@/lib/imagePreprocess';
 import logoImg from '@/assets/logo-thementor.png';
 
 const uploadQuizImage = async (file: File, studentId: string, quizId: string, index: number) => {
