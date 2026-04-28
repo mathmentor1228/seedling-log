@@ -193,6 +193,7 @@ Deno.serve(async (req) => {
         .select("id, analysis_report_id, overall_insights, difficult_points, score_band_recommendations, student_recommendations, published_at, exam_analysis_reports!inner(school_name, grade, subject, exam_type, exam_year, exam_period, exam_scope)")
         .eq("status", "published")
         .eq("exam_analysis_reports.school_name", student.school)
+        .eq("exam_analysis_reports.grade", String(student.grade_year || student.grade || ""))
         .order("published_at", { ascending: false })
         .limit(6),
     ]);
