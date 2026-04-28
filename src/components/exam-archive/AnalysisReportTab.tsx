@@ -982,6 +982,15 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               </div>
               </FormSection>
                 <AnalysisInsightCharts items={items} subject={form.subject} pointTotal={pointTotal} />
+                <DeepAnalysisSection
+                  report={deepAnalysis}
+                  disabled={!selectedReportId || isLocked}
+                  isGenerating={isGeneratingDeepAnalysis}
+                  isPublishing={isPublishingDeepAnalysis}
+                  onGenerate={() => void handleGenerateDeepAnalysis()}
+                  onPublish={() => void handlePublishDeepAnalysis()}
+                  onChange={(patch) => void handleUpdateDeepAnalysis(patch)}
+                />
               </div>
             </fieldset>
           </div>
