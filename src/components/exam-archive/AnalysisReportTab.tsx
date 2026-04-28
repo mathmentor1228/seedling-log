@@ -575,7 +575,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
     setSaving(true);
     try {
-    const { data: existing, error: existingError } = await (supabase as any)
+      const { data: existing, error: existingError } = await (supabase as any)
       .from('exam_analysis_reports')
       .select('id, created_by_name, updated_at, is_locked')
       .eq('school_name', form.schoolName)
@@ -625,7 +625,6 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       answer_image_paths: form.answerImagePaths,
       answer_pdf_path: form.answerPdfPath || null,
       study_links: form.studyLinks.filter((link) => link.title || link.url),
-      created_by: user.id,
       created_by_name: fullName || user.email || '',
       updated_at: new Date().toISOString(),
     };
@@ -680,7 +679,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setSelectedReportId(reportId);
     await fetchReports();
     } finally {
-    setSaving(false);
+      setSaving(false);
     }
   }
 
