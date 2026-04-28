@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { FileText, Loader2, Lock, Pencil, Plus, Save, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
+import { Eye, FileText, Loader2, Lock, Pencil, Plus, Save, Send, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,6 +60,18 @@ type AnalysisItem = {
   content?: string | null;
   area?: string | null;
   sort_order?: number | null;
+};
+
+type DeepAnalysisReport = {
+  id: string;
+  analysis_report_id: string;
+  status: 'draft' | 'published';
+  overall_insights: string | null;
+  difficult_points: Array<{ title?: string; reason?: string; items?: number[]; study_tip?: string }>;
+  score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string; actions?: string[] }>;
+  student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; focus_items?: number[]; recommended_actions?: string[] }>;
+  teacher_notes: string | null;
+  published_at: string | null;
 };
 
 type ParseResult = { total_items: number; total_points: number };
@@ -153,6 +165,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isExtractingAnswers, setIsExtractingAnswers] = useState(false);
+  const [deepAnalysis, setDeepAnalysis] = useState<DeepAnalysisReport | null>(null);
+  const [isGeneratingDeepAnalysis, setIsGeneratingDeepAnalysis] = useState(false);
+  const [isPublishingDeepAnalysis, setIsPublishingDeepAnalysis] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
 
@@ -188,6 +203,11 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     void refreshSignedUrls(form.originalPdfPath, form.answerPdfPath, form.answerImagePaths);
   }, [form.originalPdfPath, form.answerPdfPath, form.answerImagePaths]);
 
+  useEffect(() => {
+    if (selectedReportId) void fetchDeepAnalysis(selectedReportId);
+    else setDeepAnalysis(null);
+  }, [selectedReportId]);
+
   async function fetchReports() {
     setLoading(true);
     const { data, error } = await (supabase as any)
@@ -221,6 +241,21 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       }));
       setAnswerImageUrls(urls.filter(Boolean));
     }
+  }
+
+  async function fetchDeepAnalysis(reportId: string) {
+    const { data, error } = await (supabase as any)
+      .from('exam_deep_analysis_reports')
+      .select('*')
+      .eq('analysis_report_id', reportId)
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      setDeepAnalysis(null);
+      return;
+    }
+    setDeepAnalysis((data ?? null) as DeepAnalysisReport | null);
   }
 
   async function selectReport(report: AnalysisReport) {
