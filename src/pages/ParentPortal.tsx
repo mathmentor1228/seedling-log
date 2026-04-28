@@ -225,6 +225,10 @@ export default function ParentPortal() {
 }
 
 /* ═══════ Status Banner + Summary ═══════ */
+function DeepExamParentSection({ reports, studentName }: { reports: DeepExamReport[]; studentName: string }) {
+  return <Card className="border-primary/20 bg-primary/5 shadow-sm"><CardHeader className="pb-2 pt-4 px-4"><CardTitle className="flex items-center gap-2 text-sm font-bold text-foreground"><TrendingUp className="h-4 w-4 text-primary" /> 내신 시험 분석</CardTitle></CardHeader><CardContent className="space-y-4 px-4 pb-4">{reports.slice(0, 2).map((report) => { const meta = report.exam_analysis_reports; const personal = report.student_recommendations.find((item) => item.student_name === studentName) || report.student_recommendations[0]; return <div key={report.id} className="rounded-xl border bg-card p-3"><div className="mb-2 flex items-center justify-between gap-2"><Badge variant="outline">{meta?.subject || '시험'}</Badge><span className="text-[11px] text-muted-foreground">{meta?.exam_year}년 {meta?.exam_period}</span></div><p className="text-sm font-bold text-foreground">{meta?.school_name} {meta?.exam_type}</p><p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-foreground">{report.overall_insights}</p>{personal ? <div className="mt-3 rounded-lg bg-primary/10 p-3"><p className="text-xs font-semibold text-primary">{personal.score_band || '개인'} 학습 추천</p><p className="mt-1 text-xs leading-5 text-foreground">{personal.summary}</p>{personal.recommended_actions?.length ? <p className="mt-2 text-xs text-muted-foreground">{personal.recommended_actions.slice(0, 2).join(' · ')}</p> : null}</div> : null}</div>; })}</CardContent></Card>;
+}
+
 function SummaryCards({ lessons, homework }: { lessons: LessonRecord[]; homework: Homework[] }) {
   const totalLessons = lessons.length;
   const checkedHw = homework.filter(h => h.check_status === 'checked');
