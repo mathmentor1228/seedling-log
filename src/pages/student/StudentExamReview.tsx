@@ -280,6 +280,7 @@ export default function StudentExamReview() {
   }, [selectedReview]);
 
   const completedReviews = useMemo(() => rows.filter((row) => row.exam_reviews?.[0]?.reviewed_at), [rows]);
+  const hasSubmittedExamPhotos = rows.length > 0;
 
   return (
     <div className="space-y-4 pb-20">
@@ -291,8 +292,8 @@ export default function StudentExamReview() {
         <StudentStudyTabs />
       </div>
 
-      {!loading ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} onOpenSelfCheck={openSelfCheck} /> : null}
-      {!loading ? <DeepExamReportSection reports={deepReports} /> : null}
+      {!loading && hasSubmittedExamPhotos ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} onOpenSelfCheck={openSelfCheck} /> : null}
+      {!loading && hasSubmittedExamPhotos ? <DeepExamReportSection reports={deepReports} /> : null}
 
       {loading ? (
         <div className="space-y-3">
