@@ -574,6 +574,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     }
 
     setSaving(true);
+    try {
     const { data: existing, error: existingError } = await (supabase as any)
       .from('exam_analysis_reports')
       .select('id, created_by_name, updated_at, is_locked')
@@ -588,14 +589,12 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (existingError) {
       toast.error('기존 보고서 확인에 실패했습니다.');
       console.error(existingError);
-      setSaving(false);
       return;
     }
 
     if (existing && existing.id !== selectedReportId) {
       if (existing.is_locked) {
         alert('이 보고서는 잠금 상태입니다.\n원장에게 잠금 해제를 요청해주세요.');
-        setSaving(false);
         return;
       }
 
@@ -604,7 +603,6 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       );
 
       if (!confirmed) {
-        setSaving(false);
         return;
       }
     }
@@ -639,23 +637,21 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       .single();
 
     if (error || !report) {
-      toast.error('보고서 저장에 실패했습니다.');
+      toast.error(error?.message || '보고서 저장에 실패했습니다.');
       console.error(error);
-      setSaving(false);
       return;
     }
 
     const reportId = (report as AnalysisReport).id;
     const { error: deleteError } = await (supabase as any).from('exam_analysis_items').delete().eq('report_id', reportId);
     if (deleteError) {
-      toast.error('기존 문항 정리에 실패했습니다.');
+      toast.error(deleteError.message || '기존 문항 정리에 실패했습니다.');
       console.error(deleteError);
-      setSaving(false);
       return;
     }
 
     const rows = items.map((item, index) => ({
-      item_number: item.item_number || index + 1,
+      item_number: index + 1,
       item_type: item.item_type || null,
       points: item.points == null ? null : Number(item.points),
       difficulty: item.difficulty || null,
@@ -674,9 +670,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (rows.length > 0) {
       const { error: insertError } = await (supabase as any).from('exam_analysis_items').insert(rows);
       if (insertError) {
-        toast.error('문항 분석 저장에 실패했습니다.');
+        toast.error(insertError.message || '문항 분석 저장에 실패했습니다.');
         console.error(insertError);
-        setSaving(false);
         return;
       }
     }
@@ -684,7 +679,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     toast.success('저장됐어요!');
     setSelectedReportId(reportId);
     await fetchReports();
+    } finally {
     setSaving(false);
+    }
   }
 
   async function handleToggleLock() {
