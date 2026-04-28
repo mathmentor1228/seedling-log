@@ -8,8 +8,6 @@ import { Loader2, Camera, CheckCircle2, XCircle, HelpCircle, Star, PartyPopper }
 import { MathRenderer } from './MathRenderer';
 import type { QuizQuestion } from './MathConceptManager';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
-import { compressImage } from '@/lib/imageCompression';
-import { preprocessImageForOCR } from '@/lib/imagePreprocess';
 
 const uploadQuizSubmissionImage = async (file: File, studentId: string, quizId: string, index: number) => {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
