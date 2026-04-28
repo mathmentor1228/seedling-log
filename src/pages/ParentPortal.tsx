@@ -18,7 +18,8 @@ interface ClassScheduleItem { class_name: string; subject: string; day_of_week: 
 interface UpcomingSupplement { id: string; date: string; subject: string; range: string; course: string | null; time: string | null; teacher_name: string | null; }
 interface UnpaidTextbook { id: string; textbook_name: string; subject: string; total_amount: number; created_at: string; }
 interface ExamPrepScheduleItem { course_id: string; subject: string; title: string; description: string | null; status: string; sessions: Array<{ session_label: string; schedule_date: string; start_time: string; end_time: string }>; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; }
+interface DeepExamReport { id: string; overall_insights: string | null; difficult_points: Array<{ title?: string; reason?: string; study_tip?: string }>; score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string }>; student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; recommended_actions?: string[] }>; published_at: string | null; exam_analysis_reports?: { school_name?: string; subject?: string; exam_year?: number; exam_period?: string; exam_type?: string; exam_scope?: string | null }; }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -101,6 +102,7 @@ export default function ParentPortal() {
   const vocabResults = data.vocab_results || [];
   const classSchedule = data.class_schedule || [];
   const upcomingSupplements = data.upcoming_supplements || [];
+  const deepExamReports = data.deep_exam_reports || [];
   const label = `${student.name}${student.school_level && student.grade_year ? ` (${student.school_level}${student.grade_year})` : ''}`;
 
   return (
@@ -162,6 +164,8 @@ export default function ParentPortal() {
         {data.exam_prep_schedules && data.exam_prep_schedules.length > 0 && (
           <ExamPrepParentSection schedules={data.exam_prep_schedules} />
         )}
+
+        {deepExamReports.length > 0 && <DeepExamParentSection reports={deepExamReports} studentName={student.name} />}
 
         {/* Summary Stats */}
         <SummaryCards lessons={lessons} homework={homework} />
