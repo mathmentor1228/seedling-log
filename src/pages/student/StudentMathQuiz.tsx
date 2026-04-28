@@ -19,6 +19,20 @@ import MathQuestionRoom from '@/components/student/MathQuestionRoom';
 import { MathRenderer } from '@/components/math/MathRenderer';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 
+const uploadStudentQuizImage = async (file: File, studentId: string, quizId: string, index: number, prefix = '') => {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${studentId}/${quizId}/${prefix}${Date.now()}_${index}_${safeName}`;
+  const { error } = await supabase.storage
+    .from('quiz-submissions')
+    .upload(path, file, { upsert: false });
+  if (error) throw error;
+
+  const { data } = supabase.storage
+    .from('quiz-submissions')
+    .getPublicUrl(path);
+  return data.publicUrl;
+};
+
 interface Quiz {
   id: string;
   concept_id: string;
@@ -108,20 +122,9 @@ export default function StudentMathQuiz() {
 
     setUploading(true);
     try {
-      const uploadedUrls: string[] = [];
-      for (const img of images) {
-        const safeName = img.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${student.id}/${selectedQuiz.id}/${Date.now()}_${safeName}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('quiz-submissions')
-          .upload(path, img.file);
-        if (uploadErr) throw uploadErr;
-
-        const { data: urlData } = supabase.storage
-          .from('quiz-submissions')
-          .getPublicUrl(path);
-        uploadedUrls.push(urlData.publicUrl);
-      }
+      const uploadedUrls = await Promise.all(
+        images.map((img, index) => uploadStudentQuizImage(img.file, student.id, selectedQuiz.id, index))
+      );
 
       setUploading(false);
       setGrading(true);
@@ -153,7 +156,7 @@ export default function StudentMathQuiz() {
           toast({ title: '채점 완료!', description: `${data.grading.total_correct}/${data.grading.total_graded}문항 정답` });
         }
       } else {
-        toast({ title: '제출 완료', description: '채점 중 오류가 발생했습니다. 선생님이 직접 확인합니다.' });
+        toast({ title: '제출 완료', description: '사진 업로드가 완료되었습니다. AI 채점은 잠시 후 결과에 반영됩니다.' });
       }
 
       fetchData();
@@ -171,20 +174,9 @@ export default function StudentMathQuiz() {
 
     setUploading(true);
     try {
-      const uploadedUrls: string[] = [];
-      for (const img of resubmitImages) {
-        const safeName = img.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${student.id}/${selectedQuiz.id}/resubmit_${Date.now()}_${safeName}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('quiz-submissions')
-          .upload(path, img.file);
-        if (uploadErr) throw uploadErr;
-
-        const { data: urlData } = supabase.storage
-          .from('quiz-submissions')
-          .getPublicUrl(path);
-        uploadedUrls.push(urlData.publicUrl);
-      }
+      const uploadedUrls = await Promise.all(
+        resubmitImages.map((img, index) => uploadStudentQuizImage(img.file, student.id, selectedQuiz.id, index, 'resubmit_'))
+      );
 
       setUploading(false);
       setGrading(true);
@@ -218,6 +210,10 @@ export default function StudentMathQuiz() {
           }
           toast({ title: '채점 완료!', description: `${data.grading.total_correct}/${data.grading.total_graded}문항 정답` });
         }
+      }
+
+      if (!data?.grading) {
+        toast({ title: '재제출 완료', description: '사진 업로드가 완료되었습니다. AI 채점은 잠시 후 결과에 반영됩니다.' });
       }
 
       fetchData();
@@ -439,7 +435,7 @@ export default function StudentMathQuiz() {
                   ) : null;
                 })}
               </div>
-              <HomeworkImageUploader images={resubmitImages} onImagesChange={setResubmitImages} disabled={uploading || grading} />
+              <HomeworkImageUploader images={resubmitImages} onImagesChange={setResubmitImages} disabled={uploading || grading} maxFiles={6} maxDimension={1000} quality={0.62} />
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -513,7 +509,7 @@ export default function StudentMathQuiz() {
               <Card>
                 <CardContent className="pt-4 space-y-2">
                   <p className="text-sm font-medium">📸 다시 제출하기</p>
-                  <HomeworkImageUploader images={images} onImagesChange={setImages} disabled={uploading || grading} />
+                  <HomeworkImageUploader images={images} onImagesChange={setImages} disabled={uploading || grading} maxFiles={8} maxDimension={1000} quality={0.62} />
                   <Button className="w-full" onClick={handleSubmit} disabled={images.length === 0 || uploading || grading}>
                     {uploading ? (
                       <><Loader2 className="w-4 h-4 animate-spin mr-2" /> 업로드 중...</>
@@ -593,7 +589,7 @@ export default function StudentMathQuiz() {
 
               <div className="border-t pt-4">
                 <p className="text-sm font-medium mb-2">📸 내 풀이 사진 올리기</p>
-                <HomeworkImageUploader images={images} onImagesChange={setImages} disabled={uploading || grading} />
+                <HomeworkImageUploader images={images} onImagesChange={setImages} disabled={uploading || grading} maxFiles={8} maxDimension={1000} quality={0.62} />
                 <Button className="w-full mt-2" onClick={handleSubmit} disabled={images.length === 0 || uploading || grading}>
                   {uploading ? (
                     <><Loader2 className="w-4 h-4 animate-spin mr-2" /> 업로드 중...</>

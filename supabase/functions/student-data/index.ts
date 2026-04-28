@@ -1338,27 +1338,31 @@ Deno.serve(async (req) => {
 
         if (subErr) throw subErr;
 
-        // Trigger AI grading via the grade-quiz-submission function
+        // Trigger AI grading in the background so the student upload request can finish quickly.
         const gradeUrl = `${supabaseUrl}/functions/v1/grade-quiz-submission`;
-        const gradeResp = await fetch(gradeUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${serviceRoleKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ submission_id: submission.id }),
-        });
+        EdgeRuntime.waitUntil(
+          fetch(gradeUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${serviceRoleKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ submission_id: submission.id }),
+          }).catch(async (error) => {
+            console.error('Background quiz grading failed:', error);
+            await supabase
+              .from('math_quiz_submissions')
+              .update({ status: 'grading_failed', updated_at: new Date().toISOString() })
+              .eq('id', submission.id);
+          })
+        );
 
-        const gradeData = await gradeResp.json();
-        if (gradeData.error) {
-          result = { submission_id: submission.id, grading: null, error: gradeData.error };
-        } else {
-          result = { 
-            submission_id: submission.id, 
-            grading: gradeData.grading, 
-            points_awarded: gradeData.points_awarded 
-          };
-        }
+        result = {
+          submission_id: submission.id,
+          grading: null,
+          points_awarded: 0,
+          status: 'submitted',
+        };
         break;
       }
 

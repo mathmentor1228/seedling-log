@@ -8,8 +8,20 @@ import { Loader2, Camera, CheckCircle2, XCircle, HelpCircle, Star, PartyPopper }
 import { MathRenderer } from './MathRenderer';
 import type { QuizQuestion } from './MathConceptManager';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
-import { compressImage } from '@/lib/imageCompression';
-import { preprocessImageForOCR } from '@/lib/imagePreprocess';
+
+const uploadQuizSubmissionImage = async (file: File, studentId: string, quizId: string, index: number) => {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${studentId}/${quizId}/${Date.now()}_${index}_${safeName}`;
+  const { error } = await supabase.storage
+    .from('quiz-submissions')
+    .upload(path, file, { upsert: false });
+  if (error) throw error;
+
+  const { data } = supabase.storage
+    .from('quiz-submissions')
+    .getPublicUrl(path);
+  return data.publicUrl;
+};
 
 interface Props {
   quiz: { id: string; concept_id: string; questions: QuizQuestion[] };
@@ -49,23 +61,9 @@ export function QuizSubmissionUpload({ quiz, studentId, onSubmitted }: Props) {
 
     setUploading(true);
     try {
-      // Upload images to storage
-      const uploadedUrls: string[] = [];
-      for (const img of images) {
-        const preprocessed = await preprocessImageForOCR(img.file);
-        const compressed = await compressImage(preprocessed);
-        const safeName = compressed.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${studentId}/${quiz.id}/${Date.now()}_${safeName}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('quiz-submissions')
-          .upload(path, compressed);
-        if (uploadErr) throw uploadErr;
-
-        const { data: urlData } = supabase.storage
-          .from('quiz-submissions')
-          .getPublicUrl(path);
-        uploadedUrls.push(urlData.publicUrl);
-      }
+      const uploadedUrls = await Promise.all(
+        images.map((img, index) => uploadQuizSubmissionImage(img.file, studentId, quiz.id, index))
+      );
 
       // Create submission record
       const { data: submission, error: insertErr } = await supabase
@@ -155,6 +153,9 @@ export function QuizSubmissionUpload({ quiz, studentId, onSubmitted }: Props) {
               images={images}
               onImagesChange={setImages}
               disabled={uploading || grading}
+              maxFiles={8}
+              maxDimension={1000}
+              quality={0.62}
             />
             <Button
               className="w-full"

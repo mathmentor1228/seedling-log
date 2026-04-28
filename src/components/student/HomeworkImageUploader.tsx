@@ -18,6 +18,9 @@ interface HomeworkImageUploaderProps {
   images: ImageItem[];
   onImagesChange: (images: ImageItem[]) => void;
   disabled?: boolean;
+  maxFiles?: number;
+  maxDimension?: number;
+  quality?: number;
 }
 
 export type { ImageItem };
@@ -26,6 +29,9 @@ export default function HomeworkImageUploader({
   images,
   onImagesChange,
   disabled = false,
+  maxFiles = MAX_FILES,
+  maxDimension = 1200,
+  quality = 0.7,
 }: HomeworkImageUploaderProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,11 +44,11 @@ export default function HomeworkImageUploader({
     // Reset input so same file can be selected again
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    const remaining = MAX_FILES - images.length;
+    const remaining = maxFiles - images.length;
     if (remaining <= 0) {
       toast({
         title: '최대 개수 초과',
-        description: `사진은 최대 ${MAX_FILES}장까지 업로드할 수 있습니다.`,
+        description: `사진은 최대 ${maxFiles}장까지 업로드할 수 있습니다.`,
         variant: 'destructive',
       });
       return;
@@ -52,7 +58,7 @@ export default function HomeworkImageUploader({
     if (files.length > remaining) {
       toast({
         title: '일부만 추가됨',
-        description: `최대 ${MAX_FILES}장까지만 가능합니다. ${remaining}장만 추가됩니다.`,
+        description: `최대 ${maxFiles}장까지만 가능합니다. ${remaining}장만 추가됩니다.`,
       });
     }
 
@@ -85,7 +91,7 @@ export default function HomeworkImageUploader({
     
     for (const file of validFiles) {
       try {
-        const compressed = await compressImage(file);
+        const compressed = await compressImage(file, maxDimension, maxDimension, quality);
         const preview = URL.createObjectURL(compressed);
         newItems.push({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -155,7 +161,7 @@ export default function HomeworkImageUploader({
       )}
 
       {/* Add button */}
-      {images.length < MAX_FILES && (
+      {images.length < maxFiles && (
         <Button
           variant="outline"
           className="w-full h-24 flex flex-col gap-1"
@@ -171,7 +177,7 @@ export default function HomeworkImageUploader({
             <>
               <Camera className="w-6 h-6" />
               <span className="text-xs">
-                사진 촬영 / 선택 ({images.length}/{MAX_FILES})
+                사진 촬영 / 선택 ({images.length}/{maxFiles})
               </span>
             </>
           )}

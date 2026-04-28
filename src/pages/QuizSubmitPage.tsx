@@ -6,11 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Camera, Loader2, CheckCircle2, Sparkles, Upload } from 'lucide-react';
+import { Loader2, CheckCircle2, Upload } from 'lucide-react';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
-import { compressImage } from '@/lib/imageCompression';
-import { preprocessImageForOCR } from '@/lib/imagePreprocess';
 import logoImg from '@/assets/logo-thementor.png';
+
+const uploadQuizImage = async (file: File, studentId: string, quizId: string, index: number) => {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${studentId}/${quizId}/${Date.now()}_${index}_${safeName}`;
+  const { error } = await supabase.storage
+    .from('quiz-submissions')
+    .upload(path, file, { upsert: false });
+  if (error) throw error;
+
+  const { data } = supabase.storage
+    .from('quiz-submissions')
+    .getPublicUrl(path);
+  return data.publicUrl;
+};
 
 export default function QuizSubmitPage() {
   const [searchParams] = useSearchParams();
@@ -82,22 +94,9 @@ export default function QuizSubmitPage() {
     if (!quizId || !studentId || !conceptId || images.length === 0) return;
     setSubmitting(true);
     try {
-      const uploadedUrls: string[] = [];
-      for (const img of images) {
-        // Preprocess then compress
-        const preprocessed = await preprocessImageForOCR(img.file);
-        const compressed = await compressImage(preprocessed);
-        const safeName = compressed.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${studentId}/${quizId}/${Date.now()}_${safeName}`;
-        const { error: upErr } = await supabase.storage
-          .from('quiz-submissions')
-          .upload(path, compressed);
-        if (upErr) throw upErr;
-        const { data: urlData } = supabase.storage
-          .from('quiz-submissions')
-          .getPublicUrl(path);
-        uploadedUrls.push(urlData.publicUrl);
-      }
+      const uploadedUrls = await Promise.all(
+        images.map((img, index) => uploadQuizImage(img.file, studentId, quizId, index))
+      );
 
       const { error: insErr } = await supabase
         .from('math_quiz_submissions')
@@ -171,6 +170,9 @@ export default function QuizSubmitPage() {
                 images={images}
                 onImagesChange={setImages}
                 disabled={submitting}
+                maxFiles={8}
+                maxDimension={1000}
+                quality={0.62}
               />
 
               {error && <p className="text-sm text-destructive">{error}</p>}
