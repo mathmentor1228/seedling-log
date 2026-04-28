@@ -104,7 +104,13 @@ export const studentApi = {
 
   getWeeklyReports: () => studentApiCall<{ reports: any[] }>('weekly_reports'),
 
-  getExamReviews: () => studentApiCall<{ reviews: any[]; school_report?: any | null; deep_reports?: any[] }>('exam_reviews'),
+  getExamReviews: (examYear?: number | null) => studentApiCall<{
+    reviews: any[];
+    school_report?: any | null;
+    deep_reports?: any[];
+    available_years?: number[];
+    selected_exam_year?: number | null;
+  }>('exam_reviews', examYear ? { exam_year: examYear } : {}),
 
   saveExamSelfCheck: (reviewId: string, itemNumber: number, answers: {
     remembered: boolean | null;
