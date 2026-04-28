@@ -788,7 +788,7 @@ Deno.serve(async (req) => {
       case 'exam_reviews': {
         const { data: studentRow, error: studentError } = await supabase
           .from('students')
-          .select('school, grade')
+          .select('school, grade, grade_year')
           .eq('id', student_id)
           .single();
         if (studentError) throw studentError;
@@ -927,12 +927,14 @@ Deno.serve(async (req) => {
           : { data: null, error: null };
         if (schoolReportError) throw schoolReportError;
 
+        const gradeKey = String(studentRow?.grade_year || studentRow?.grade || '');
         const { data: deepReports, error: deepReportError } = studentRow?.school
           ? await supabase
               .from('exam_deep_analysis_reports')
               .select('id, analysis_report_id, status, overall_insights, difficult_points, score_band_recommendations, student_recommendations, published_at, exam_analysis_reports!inner(school_name, grade, subject, exam_type, exam_year, exam_period, exam_scope)')
               .eq('status', 'published')
               .eq('exam_analysis_reports.school_name', studentRow.school)
+              .eq('exam_analysis_reports.grade', gradeKey)
               .order('published_at', { ascending: false })
               .limit(10)
           : { data: [], error: null };
