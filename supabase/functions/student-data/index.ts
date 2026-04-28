@@ -824,6 +824,10 @@ Deno.serve(async (req) => {
         if (photoError) throw photoError;
         if (reviewError) throw reviewError;
 
+        const resultIdsWithPhotos = new Set((photoRows || []).map((photo: any) => photo.result_id));
+        const photoBackedResults = (results || []).filter((row: any) => resultIdsWithPhotos.has(row.id));
+        const submittedExamYears = [...new Set(photoBackedResults.map((row: any) => row.exam_year).filter((year: any) => year != null))];
+
         const reviewIds = (reviewRows || []).map((row: any) => row.id);
         const templateIds = [...new Set((reviewRows || []).map((r: any) => r.template_id).filter(Boolean))];
 
@@ -915,28 +919,31 @@ Deno.serve(async (req) => {
           }
         }
 
-        const { data: schoolReport, error: schoolReportError } = studentRow?.school
-          ? await supabase
+        let schoolReportQuery = studentRow?.school
+          ? supabase
               .from('school_exam_reports')
               .select('*')
               .eq('school_name', studentRow.school)
               .eq('published', true)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle()
+          : null;
+        if (schoolReportQuery && submittedExamYears.length > 0) schoolReportQuery = schoolReportQuery.in('exam_year', submittedExamYears);
+        const { data: schoolReport, error: schoolReportError } = schoolReportQuery
+          ? await schoolReportQuery.order('created_at', { ascending: false }).limit(1).maybeSingle()
           : { data: null, error: null };
         if (schoolReportError) throw schoolReportError;
 
         const gradeKey = String(studentRow?.grade_year || studentRow?.grade || '');
-        const { data: deepReports, error: deepReportError } = studentRow?.school
-          ? await supabase
+        let deepReportQuery = studentRow?.school && submittedExamYears.length > 0
+          ? supabase
               .from('exam_deep_analysis_reports')
               .select('id, analysis_report_id, status, overall_insights, difficult_points, score_band_recommendations, student_recommendations, published_at, exam_analysis_reports!inner(school_name, grade, subject, exam_type, exam_year, exam_period, exam_scope)')
               .eq('status', 'published')
               .eq('exam_analysis_reports.school_name', studentRow.school)
               .eq('exam_analysis_reports.grade', gradeKey)
-              .order('published_at', { ascending: false })
-              .limit(10)
+              .in('exam_analysis_reports.exam_year', submittedExamYears)
+          : null;
+        const { data: deepReports, error: deepReportError } = deepReportQuery
+          ? await deepReportQuery.order('published_at', { ascending: false }).limit(10)
           : { data: [], error: null };
         if (deepReportError) throw deepReportError;
 
@@ -948,7 +955,7 @@ Deno.serve(async (req) => {
               ? report.student_recommendations.find((item: any) => item.student_id === student_id) || null
               : null,
           })),
-          reviews: (results || []).map((row: any) => ({
+          reviews: photoBackedResults.map((row: any) => ({
             ...row,
             student_exam_result_photos: photoMap.get(row.id) || [],
             exam_reviews: latestReviewByResult.has(row.id) ? [latestReviewByResult.get(row.id)] : [],

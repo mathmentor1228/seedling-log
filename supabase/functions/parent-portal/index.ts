@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     // D-day: no date cap — always show nearest upcoming exam
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes, deepExamRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes, deepExamRes, examResultYearsRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url")
@@ -195,7 +195,11 @@ Deno.serve(async (req) => {
         .eq("exam_analysis_reports.school_name", student.school)
         .eq("exam_analysis_reports.grade", String(student.grade_year || student.grade || ""))
         .order("published_at", { ascending: false })
-        .limit(6),
+        .limit(30),
+      supabase
+        .from("student_exam_results")
+        .select("id, exam_year, student_exam_result_photos(id)")
+        .eq("student_id", studentId),
     ]);
 
     // Fetch class schedules for the student's classes
@@ -219,6 +223,11 @@ Deno.serve(async (req) => {
       }));
     }
 
+    const submittedExamYears = new Set(
+      (examResultYearsRes.data || [])
+        .filter((row: any) => row.exam_year != null && (row.student_exam_result_photos || []).length > 0)
+        .map((row: any) => row.exam_year)
+    );
     const homework = hwRes.data || [];
     const rawLessons = lessonRes.data || [];
     const attendance = attendanceRes.data || [];
@@ -295,7 +304,9 @@ Deno.serve(async (req) => {
         })(),
         unpaid_textbooks: unpaidTextbooks,
         account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,
-        deep_exam_reports: deepExamRes.data || [],
+        deep_exam_reports: (deepExamRes.data || [])
+          .filter((report: any) => submittedExamYears.has(report.exam_analysis_reports?.exam_year))
+          .slice(0, 6),
         exam_prep_schedules: await (async () => {
           const confirmedEnrollments = examPrepRes.data || [];
           if (confirmedEnrollments.length === 0) return [];
