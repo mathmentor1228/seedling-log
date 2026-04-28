@@ -177,7 +177,7 @@ export default function HomeworkImageUploader({
             <>
               <Camera className="w-6 h-6" />
               <span className="text-xs">
-                사진 촬영 / 선택 ({images.length}/{MAX_FILES})
+                사진 촬영 / 선택 ({images.length}/{maxFiles})
               </span>
             </>
           )}
