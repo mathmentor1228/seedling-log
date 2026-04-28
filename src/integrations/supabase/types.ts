@@ -1080,6 +1080,65 @@ export type Database = {
           },
         ]
       }
+      exam_deep_analysis_reports: {
+        Row: {
+          analysis_report_id: string
+          created_at: string
+          difficult_points: Json
+          generated_by: string | null
+          id: string
+          overall_insights: string | null
+          published_at: string | null
+          published_by: string | null
+          reviewed_by: string | null
+          score_band_recommendations: Json
+          status: string
+          student_recommendations: Json
+          teacher_notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          analysis_report_id: string
+          created_at?: string
+          difficult_points?: Json
+          generated_by?: string | null
+          id?: string
+          overall_insights?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          reviewed_by?: string | null
+          score_band_recommendations?: Json
+          status?: string
+          student_recommendations?: Json
+          teacher_notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          analysis_report_id?: string
+          created_at?: string
+          difficult_points?: Json
+          generated_by?: string | null
+          id?: string
+          overall_insights?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          reviewed_by?: string | null
+          score_band_recommendations?: Json
+          status?: string
+          student_recommendations?: Json
+          teacher_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_deep_analysis_reports_analysis_report_id_fkey"
+            columns: ["analysis_report_id"]
+            isOneToOne: true
+            referencedRelation: "exam_analysis_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_item_reviews: {
         Row: {
           created_at: string | null
