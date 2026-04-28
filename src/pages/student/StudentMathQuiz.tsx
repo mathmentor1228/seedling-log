@@ -431,7 +431,7 @@ export default function StudentMathQuiz() {
                   ) : null;
                 })}
               </div>
-              <HomeworkImageUploader images={resubmitImages} onImagesChange={setResubmitImages} disabled={uploading || grading} />
+              <HomeworkImageUploader images={resubmitImages} onImagesChange={setResubmitImages} disabled={uploading || grading} maxFiles={6} maxDimension={1000} quality={0.62} />
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -505,7 +505,7 @@ export default function StudentMathQuiz() {
               <Card>
                 <CardContent className="pt-4 space-y-2">
                   <p className="text-sm font-medium">📸 다시 제출하기</p>
-                  <HomeworkImageUploader images={images} onImagesChange={setImages} disabled={uploading || grading} />
+                  <HomeworkImageUploader images={images} onImagesChange={setImages} disabled={uploading || grading} maxFiles={8} maxDimension={1000} quality={0.62} />
                   <Button className="w-full" onClick={handleSubmit} disabled={images.length === 0 || uploading || grading}>
                     {uploading ? (
                       <><Loader2 className="w-4 h-4 animate-spin mr-2" /> 업로드 중...</>
@@ -585,7 +585,7 @@ export default function StudentMathQuiz() {
 
               <div className="border-t pt-4">
                 <p className="text-sm font-medium mb-2">📸 내 풀이 사진 올리기</p>
-                <HomeworkImageUploader images={images} onImagesChange={setImages} disabled={uploading || grading} />
+                <HomeworkImageUploader images={images} onImagesChange={setImages} disabled={uploading || grading} maxFiles={8} maxDimension={1000} quality={0.62} />
                 <Button className="w-full mt-2" onClick={handleSubmit} disabled={images.length === 0 || uploading || grading}>
                   {uploading ? (
                     <><Loader2 className="w-4 h-4 animate-spin mr-2" /> 업로드 중...</>
