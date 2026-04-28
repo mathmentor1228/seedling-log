@@ -80,6 +80,17 @@ interface SchoolExamReport {
   ai_report?: string | null;
 }
 
+interface DeepExamReport {
+  id: string;
+  overall_insights: string | null;
+  difficult_points: Array<{ title?: string; reason?: string; study_tip?: string; items?: number[] }>;
+  score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string; actions?: string[] }>;
+  student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; focus_items?: number[]; recommended_actions?: string[] }>;
+  my_recommendation?: { score_band?: string; summary?: string; focus_items?: number[]; recommended_actions?: string[] } | null;
+  published_at: string | null;
+  exam_analysis_reports?: { school_name?: string; subject?: string; exam_year?: number; exam_period?: string; exam_type?: string; exam_scope?: string | null };
+}
+
 interface SelfCheckTarget {
   row: ExamReviewRow;
   review: ReviewData;
@@ -165,6 +176,11 @@ function ExamReportOverview({
   );
 }
 
+function DeepExamReportSection({ reports }: { reports: DeepExamReport[] }) {
+  if (reports.length === 0) return null;
+  return <section className="space-y-3"><h2 className="text-base font-bold text-foreground">시험지 분석 & 점수대별 학습 추천</h2>{reports.map((report) => { const meta = report.exam_analysis_reports; return <Card key={report.id} className="rounded-2xl border-primary/20"><CardContent className="space-y-4 p-5"><div><Badge variant="outline">{meta?.subject || '내신'}</Badge><h3 className="mt-2 text-lg font-bold text-foreground">{meta?.school_name} {meta?.exam_year}년 {meta?.exam_period} {meta?.exam_type}</h3>{meta?.exam_scope ? <p className="mt-1 text-xs text-muted-foreground">범위: {meta.exam_scope}</p> : null}</div><p className="whitespace-pre-wrap rounded-xl bg-primary/10 p-3 text-sm leading-7 text-foreground">{report.overall_insights}</p>{report.my_recommendation ? <div className="rounded-xl bg-success/10 p-3"><p className="text-sm font-semibold text-success">내 점수대 추천</p><p className="mt-1 text-xs leading-5 text-foreground">{report.my_recommendation.summary}</p>{report.my_recommendation.recommended_actions?.length ? <p className="mt-2 text-xs text-primary">{report.my_recommendation.recommended_actions.join(' · ')}</p> : null}</div> : null}<div className="space-y-2"><p className="text-sm font-semibold text-foreground">학생들이 어려웠을 부분</p>{report.difficult_points.slice(0, 3).map((item, index) => <div key={index} className="rounded-xl bg-warning/10 p-3"><p className="text-sm font-semibold text-warning">{item.title}</p><p className="mt-1 text-xs leading-5 text-foreground">{item.reason}</p>{item.study_tip ? <p className="mt-2 text-xs text-primary">추천: {item.study_tip}</p> : null}</div>)}</div><div className="space-y-2"><p className="text-sm font-semibold text-foreground">점수대별 학습 방향</p>{report.score_band_recommendations.map((band, index) => <div key={index} className="rounded-xl border bg-card p-3"><p className="text-sm font-bold text-primary">{band.band}</p><p className="mt-1 text-xs text-muted-foreground">{band.diagnosis}</p><p className="mt-1 text-xs text-foreground">{band.priority}</p></div>)}</div></CardContent></Card>; })}</section>;
+}
+
 function MetricCard({ value, label, tone }: { value: string; label: string; tone: 'success' | 'warning' | 'destructive' }) {
   const toneClass = tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : 'text-destructive';
   return <div className="rounded-xl bg-primary-foreground/10 p-3 text-center"><p className={`text-2xl font-bold ${toneClass}`}>{value}</p><p className="text-[11px] text-primary-foreground/65">{label}</p></div>;
@@ -231,6 +247,7 @@ export default function StudentExamReview() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
   const [schoolReport, setSchoolReport] = useState<SchoolExamReport | null>(null);
+  const [deepReports, setDeepReports] = useState<DeepExamReport[]>([]);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
   const [selfCheckTarget, setSelfCheckTarget] = useState<SelfCheckTarget | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -241,6 +258,7 @@ export default function StudentExamReview() {
     const { data } = await studentApi.getExamReviews();
     setRows((data?.reviews || []) as ExamReviewRow[]);
     setSchoolReport((data?.school_report || null) as SchoolExamReport | null);
+    setDeepReports((data?.deep_reports || []) as DeepExamReport[]);
     setLoading(false);
   }, []);
 
@@ -274,6 +292,7 @@ export default function StudentExamReview() {
       </div>
 
       {!loading ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} onOpenSelfCheck={openSelfCheck} /> : null}
+      {!loading ? <DeepExamReportSection reports={deepReports} /> : null}
 
       {loading ? (
         <div className="space-y-3">

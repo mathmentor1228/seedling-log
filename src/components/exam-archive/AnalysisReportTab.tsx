@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { FileText, Loader2, Lock, Pencil, Plus, Save, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
+import { Eye, FileText, Loader2, Lock, Pencil, Plus, Save, Send, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { getCachedSignedUrl } from '@/lib/signedUrlCache';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,6 +61,18 @@ type AnalysisItem = {
   content?: string | null;
   area?: string | null;
   sort_order?: number | null;
+};
+
+type DeepAnalysisReport = {
+  id: string;
+  analysis_report_id: string;
+  status: 'draft' | 'published';
+  overall_insights: string | null;
+  difficult_points: Array<{ title?: string; reason?: string; items?: number[]; study_tip?: string }>;
+  score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string; actions?: string[] }>;
+  student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; focus_items?: number[]; recommended_actions?: string[] }>;
+  teacher_notes: string | null;
+  published_at: string | null;
 };
 
 type ParseResult = { total_items: number; total_points: number };
@@ -153,6 +166,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isExtractingAnswers, setIsExtractingAnswers] = useState(false);
+  const [deepAnalysis, setDeepAnalysis] = useState<DeepAnalysisReport | null>(null);
+  const [isGeneratingDeepAnalysis, setIsGeneratingDeepAnalysis] = useState(false);
+  const [isPublishingDeepAnalysis, setIsPublishingDeepAnalysis] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
 
@@ -188,6 +204,11 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     void refreshSignedUrls(form.originalPdfPath, form.answerPdfPath, form.answerImagePaths);
   }, [form.originalPdfPath, form.answerPdfPath, form.answerImagePaths]);
 
+  useEffect(() => {
+    if (selectedReportId) void fetchDeepAnalysis(selectedReportId);
+    else setDeepAnalysis(null);
+  }, [selectedReportId]);
+
   async function fetchReports() {
     setLoading(true);
     const { data, error } = await (supabase as any)
@@ -221,6 +242,21 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       }));
       setAnswerImageUrls(urls.filter(Boolean));
     }
+  }
+
+  async function fetchDeepAnalysis(reportId: string) {
+    const { data, error } = await (supabase as any)
+      .from('exam_deep_analysis_reports')
+      .select('*')
+      .eq('analysis_report_id', reportId)
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      setDeepAnalysis(null);
+      return;
+    }
+    setDeepAnalysis((data ?? null) as DeepAnalysisReport | null);
   }
 
   async function selectReport(report: AnalysisReport) {
@@ -679,6 +715,57 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     toast.success(newLocked ? '보고서를 잠금 처리했습니다.' : '잠금을 해제했습니다.');
   }
 
+  async function handleGenerateDeepAnalysis() {
+    if (!selectedReportId) {
+      toast.error('먼저 분석보고서를 저장해주세요.');
+      return;
+    }
+    setIsGeneratingDeepAnalysis(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-deep-exam-analysis', { body: { report_id: selectedReportId } });
+      if (error || data?.error) throw new Error(error?.message || data?.error || '고도화 분석 생성 실패');
+      setDeepAnalysis((data.report ?? null) as DeepAnalysisReport | null);
+      toast.success('고도화 분석 초안이 생성됐어요. 검토 후 게시해주세요.');
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : '고도화 분석 생성 실패');
+    } finally {
+      setIsGeneratingDeepAnalysis(false);
+    }
+  }
+
+  async function handleUpdateDeepAnalysis(patch: Partial<DeepAnalysisReport>) {
+    if (!deepAnalysis) return;
+    setDeepAnalysis((prev) => (prev ? { ...prev, ...patch } : prev));
+    const { error } = await (supabase as any).from('exam_deep_analysis_reports').update(patch).eq('id', deepAnalysis.id);
+    if (error) {
+      toast.error('고도화 분석 저장에 실패했습니다.');
+      console.error(error);
+      await fetchDeepAnalysis(deepAnalysis.analysis_report_id);
+    }
+  }
+
+  async function handlePublishDeepAnalysis() {
+    if (!deepAnalysis || !user) return;
+    setIsPublishingDeepAnalysis(true);
+    const nextStatus = deepAnalysis.status === 'published' ? 'draft' : 'published';
+    const patch = {
+      status: nextStatus,
+      reviewed_by: user.id,
+      published_by: nextStatus === 'published' ? user.id : null,
+      published_at: nextStatus === 'published' ? new Date().toISOString() : null,
+    };
+    const { error } = await (supabase as any).from('exam_deep_analysis_reports').update(patch).eq('id', deepAnalysis.id);
+    if (error) {
+      toast.error('게시 상태 변경에 실패했습니다.');
+      console.error(error);
+    } else {
+      setDeepAnalysis((prev) => (prev ? { ...prev, status: nextStatus, published_at: patch.published_at } : prev));
+      toast.success(nextStatus === 'published' ? '학부모·학생웹에 게시됐어요.' : '게시를 해제했습니다.');
+    }
+    setIsPublishingDeepAnalysis(false);
+  }
+
   async function handleDelete(report: AnalysisReport) {
     if (report.is_locked) return;
     const confirmed = window.confirm(`"${report.subject} ${report.exam_type}" 보고서를\n삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
@@ -896,6 +983,15 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               </div>
               </FormSection>
                 <AnalysisInsightCharts items={items} subject={form.subject} pointTotal={pointTotal} />
+                <DeepAnalysisSection
+                  report={deepAnalysis}
+                  disabled={!selectedReportId || isLocked}
+                  isGenerating={isGeneratingDeepAnalysis}
+                  isPublishing={isPublishingDeepAnalysis}
+                  onGenerate={() => void handleGenerateDeepAnalysis()}
+                  onPublish={() => void handlePublishDeepAnalysis()}
+                  onChange={(patch) => void handleUpdateDeepAnalysis(patch)}
+                />
               </div>
             </fieldset>
           </div>
@@ -959,6 +1055,16 @@ function MetricBox({ label, value }: { label: string; value: string }) {
 
 function ChartBox({ title, children }: { title: string; children: React.ReactNode }) {
   return <div className="rounded-lg border bg-card p-4"><p className="mb-2 text-sm font-semibold text-foreground">{title}</p>{children}</div>;
+}
+
+function DeepAnalysisSection({ report, disabled, isGenerating, isPublishing, onGenerate, onPublish, onChange }: { report: DeepAnalysisReport | null; disabled: boolean; isGenerating: boolean; isPublishing: boolean; onGenerate: () => void; onPublish: () => void; onChange: (patch: Partial<DeepAnalysisReport>) => void }) {
+  return <FormSection title="공개용 고도화 분석" action={<div className="flex gap-2"><Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" disabled={disabled || isGenerating} onClick={onGenerate}>{isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}AI 초안 생성</Button>{report ? <Button type="button" variant={report.status === 'published' ? 'secondary' : 'default'} size="sm" className="h-8 gap-1 text-xs" disabled={isPublishing} onClick={onPublish}>{isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : report.status === 'published' ? <Eye className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}{report.status === 'published' ? '게시 해제' : '게시'}</Button> : null}</div>}>
+    {!report ? <div className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">채점 완료 데이터가 쌓이면 AI 초안을 생성해 학부모·학생웹에 게시할 수 있습니다.</div> : <div className="space-y-4 rounded-lg border bg-card p-4"><div className="flex items-center justify-between"><Badge variant={report.status === 'published' ? 'success' : 'secondary'}>{report.status === 'published' ? '게시됨' : '검토중'}</Badge>{report.published_at ? <span className="text-xs text-muted-foreground">게시일 {new Date(report.published_at).toLocaleDateString('ko-KR')}</span> : null}</div><Field label="시험 전체 인사이트"><Textarea rows={5} value={report.overall_insights ?? ''} onChange={(e) => onChange({ overall_insights: e.target.value })} className="resize-y leading-7" /></Field><div className="grid gap-3 lg:grid-cols-3"><DeepJsonBox title="학생들이 어려웠을 부분" items={report.difficult_points} render={(item) => <><p className="font-semibold text-foreground">{item.title || '포인트'}</p><p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>{item.study_tip ? <p className="mt-2 text-xs text-primary">→ {item.study_tip}</p> : null}</>} /><DeepJsonBox title="점수대별 추천" items={report.score_band_recommendations} render={(item) => <><p className="font-semibold text-foreground">{item.band || '점수대'}</p><p className="mt-1 text-xs text-muted-foreground">{item.diagnosis}</p><p className="mt-2 text-xs text-primary">{item.priority}</p></>} /><DeepJsonBox title="학생별 추천" items={report.student_recommendations} render={(item) => <><p className="font-semibold text-foreground">{item.student_name || '학생'} · {item.score_band || '-'}</p><p className="mt-1 text-xs text-muted-foreground">{item.summary}</p><p className="mt-2 text-xs text-primary">{(item.recommended_actions || []).slice(0, 2).join(' · ')}</p></>} /></div><Field label="내부 검토 메모"><Textarea rows={3} value={report.teacher_notes ?? ''} onChange={(e) => onChange({ teacher_notes: e.target.value })} placeholder="게시 전 확인할 메모" /></Field></div>}
+  </FormSection>;
+}
+
+function DeepJsonBox<T>({ title, items, render }: { title: string; items: T[]; render: (item: T) => React.ReactNode }) {
+  return <div className="rounded-lg border bg-background p-3"><p className="mb-2 text-sm font-semibold text-foreground">{title}</p><div className="max-h-72 space-y-2 overflow-y-auto pr-1">{items.length === 0 ? <p className="text-xs text-muted-foreground">내용 없음</p> : items.map((item, index) => <div key={index} className="rounded-md bg-muted/40 p-3 text-sm">{render(item)}</div>)}</div></div>;
 }
 
 function AnswerSheetSection({ mode, onModeChange, items, answers, setAnswer, imageUrls, onImageUpload, onRemoveImage, pdfUrl, onPdfUpload, onRemovePdf, isExtracting }: { mode: ReportForm['answerMode']; onModeChange: (mode: ReportForm['answerMode']) => void; items: AnalysisItem[]; answers: Record<string, string>; setAnswer: (itemNumber: number, value: string) => void; imageUrls: string[]; onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemoveImage: (index: number) => void; pdfUrl: string | null; onPdfUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onRemovePdf: () => void; isExtracting: boolean }) {
