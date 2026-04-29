@@ -25,6 +25,13 @@ const SUBJECT_COLORS: Record<string, string> = {
 
 const PIE_COLORS = ['hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))', 'hsl(var(--muted))'];
 
+const EXAM_TYPE_LABELS: Record<string, string> = {
+  midterm: '중간',
+  final: '기말',
+  performance: '수행',
+  other: '기타',
+};
+
 interface StudentBasic {
   id: string;
   name: string;
@@ -54,6 +61,10 @@ function fmtDur(mins: number | null) {
   return h > 0 ? `${h}시간${m > 0 ? ` ${m}분` : ''}` : `${m}분`;
 }
 
+function getScoreValue(result: any) {
+  return result.actual_score ?? result.expected_score ?? null;
+}
+
 export function StudentProfileOverview({ student, data }: { student: StudentBasic; data: any }) {
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
@@ -66,6 +77,25 @@ export function StudentProfileOverview({ student, data }: { student: StudentBasi
   const lastMonthEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd');
 
   const submitted = (data.lessons || []).filter((l: any) => l.submitted);
+  const examResults = data.examResults || [];
+  const scoredExamResults = examResults.filter((r: any) => getScoreValue(r) != null);
+  const latestExamResult = scoredExamResults[0] || null;
+
+  const examTrendBySubject = useMemo(() => {
+    const grouped: Record<string, any[]> = {};
+    scoredExamResults.forEach((r: any) => {
+      grouped[r.subject] = grouped[r.subject] || [];
+      grouped[r.subject].push(r);
+    });
+    return Object.entries(grouped).map(([subject, rows]) => {
+      const ordered = [...rows].sort((a, b) => String(a.exam_date || a.submitted_at).localeCompare(String(b.exam_date || b.submitted_at)));
+      const latest = ordered[ordered.length - 1];
+      const previous = ordered[ordered.length - 2];
+      const latestScore = getScoreValue(latest);
+      const previousScore = previous ? getScoreValue(previous) : null;
+      return { subject, latest, latestScore, diff: latestScore != null && previousScore != null ? latestScore - previousScore : null };
+    }).sort((a, b) => String(b.latest.exam_year || '').localeCompare(String(a.latest.exam_year || '')));
+  }, [scoredExamResults]);
 
   // This month & last month lessons
   const thisMonthLessons = submitted.filter((l: any) => l.lesson_date >= thisMonthStart && l.lesson_date <= thisMonthEnd);
@@ -172,7 +202,7 @@ export function StudentProfileOverview({ student, data }: { student: StudentBasi
       </Card>
 
       {/* Clickable Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="cursor-pointer" onClick={() => toggle('lessons')}>
           <StatCard
             title="이번 달 수업"
@@ -211,6 +241,14 @@ export function StudentProfileOverview({ student, data }: { student: StudentBasi
             value={`${data.monthCounts.clinic}회`}
             icon={<Stethoscope className="w-5 h-5" />}
             iconColor="destructive"
+          />
+        </div>
+        <div className="cursor-pointer" onClick={() => toggle('schoolExams')}>
+          <StatCard
+            title="최근 내신 성적"
+            value={latestExamResult ? `${getScoreValue(latestExamResult)}점` : '-'}
+            icon={<TestTube className="w-5 h-5" />}
+            iconColor="primary"
           />
         </div>
       </div>
@@ -334,6 +372,51 @@ export function StudentProfileOverview({ student, data }: { student: StudentBasi
                 ))
               );
             })()}
+          </CardContent>
+        </Card>
+      )}
+
+      {expandedCard === 'schoolExams' && (
+        <Card className="border-primary/30 animate-in fade-in slide-in-from-top-2 duration-200">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">📌 입력된 내신 성적</CardTitle></CardHeader>
+          <CardContent className="p-4">
+            {examResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-2">입력된 내신 성적이 없습니다</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {examTrendBySubject.map((item) => (
+                    <div key={item.subject} className="rounded-lg border bg-card/50 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant="outline" className="text-xs">{item.subject}</Badge>
+                        <span className="text-sm font-semibold">{item.latestScore}점</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{item.latest.exam_year ? `${item.latest.exam_year}년 ` : ''}{EXAM_TYPE_LABELS[item.latest.exam_type] || item.latest.exam_type}</span>
+                        {item.diff != null && (
+                          <span className={item.diff >= 0 ? 'text-success' : 'text-destructive'}>
+                            {item.diff >= 0 ? '▲' : '▼'} {Math.abs(item.diff)}점
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Table>
+                  <TableHeader><TableRow><TableHead>연도</TableHead><TableHead>과목</TableHead><TableHead>시험</TableHead><TableHead>점수</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {examResults.slice(0, 8).map((r: any) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="text-xs">{r.exam_year ? `${r.exam_year}년` : '-'}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-[10px]">{r.subject}</Badge></TableCell>
+                        <TableCell className="text-xs">{EXAM_TYPE_LABELS[r.exam_type] || r.exam_type}{r.exam_period ? ` · ${r.exam_period}` : ''}</TableCell>
+                        <TableCell className="text-xs font-medium">{getScoreValue(r) != null ? `${getScoreValue(r)}점` : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
