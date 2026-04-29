@@ -18,7 +18,7 @@ function LiveClock() {
 }
 
 /* ------------------------------------------------------------------ */
-const TEACHER_TABS = ['📊 수업 관리', '📋 출결 현황'] as const;
+const TEACHER_TABS = ['📋 출결 현황', '📊 수업 관리'] as const;
 
 function TeacherSideBySide() {
   const [mobileTab, setMobileTab] = useState<number>(0);
@@ -43,11 +43,7 @@ function TeacherSideBySide() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4">
-        <div className={cn("lg:w-[60%] min-w-0", mobileTab !== 0 && "hidden lg:block")}>
-          <Dashboard />
-        </div>
-
-        <div className={cn("lg:w-[40%] min-w-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto", mobileTab !== 1 && "hidden lg:block")}>
+        <div className={cn("lg:w-[40%] min-w-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto", mobileTab !== 0 && "hidden lg:block")}>
           <Card className="border-primary/20">
             <div className="flex items-center justify-between p-4 pb-2">
               <div className="flex items-center gap-2">
@@ -60,6 +56,10 @@ function TeacherSideBySide() {
               <TeacherAttendanceView />
             </CardContent>
           </Card>
+        </div>
+
+        <div className={cn("lg:w-[60%] min-w-0", mobileTab !== 1 && "hidden lg:block")}>
+          <Dashboard />
         </div>
       </div>
     </div>

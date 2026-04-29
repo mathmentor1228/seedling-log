@@ -3,11 +3,15 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn, getTodayKST } from '@/lib/utils';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Clock, Users, Sparkles, CheckCircle2, Loader2 } from 'lucide-react';
+import { Clock, Users, Sparkles, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { toast as sonnerToast } from 'sonner';
 
 /* ------------------------------------------------------------------ */
@@ -110,6 +114,22 @@ export function TeacherAttendanceView() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
   const [markingAll, setMarkingAll] = useState(false);
+
+  const [absenceDialog, setAbsenceDialog] = useState<{
+    open: boolean;
+    studentId: string;
+    studentName: string;
+    reason: string;
+    isExcused: boolean;
+    hasSupplementary: boolean;
+    supplementaryDate: string;
+    supplementaryTime: string;
+    submitting: boolean;
+  }>({
+    open: false, studentId: '', studentName: '', reason: '',
+    isExcused: false, hasSupplementary: false,
+    supplementaryDate: '', supplementaryTime: '미정', submitting: false,
+  });
 
   const today = useMemo(() => getTodayKST(), []);
 
@@ -274,20 +294,13 @@ export function TeacherAttendanceView() {
       let supplementaryTime = '미정';
 
       if (newStatus === '결석') {
-        const absenceReason = window.prompt(`${student.name} 학생의 결석 사유를 입력해주세요.`)?.trim();
-        if (!absenceReason) return;
-
-        const isExcused = window.confirm('인정결석으로 처리할까요?\n취소를 누르면 무단결석으로 기록됩니다.');
-        lessonAttendanceStatus = [isExcused ? '인정결석' : '무단결석'];
-        lessonRangeText = `결석 사유: ${absenceReason}`;
-
-        if (window.confirm('보강 일정이 있나요?\n확인 = 보강 일정 입력 / 취소 = 일정 없음')) {
-          const pickedDate = window.prompt('보강 날짜를 YYYY-MM-DD 형식으로 입력해주세요.', today)?.trim();
-          if (pickedDate) {
-            supplementaryDate = pickedDate;
-            supplementaryTime = window.prompt('보강 시간을 입력해주세요.\n예: 19:00 또는 미정', '미정')?.trim() || '미정';
-          }
-        }
+        setAbsenceDialog(d => ({
+          ...d, open: true, studentId, studentName: student.name,
+          reason: '', isExcused: false, hasSupplementary: false,
+          supplementaryDate: today, supplementaryTime: '미정',
+        }));
+        setActionLoading(prev => { const s = new Set(prev); s.delete(studentId); return s; });
+        return;
       } else if (newStatus === '지각') {
         lessonAttendanceStatus = ['지각'];
       } else if (newStatus === '미등원') {
@@ -401,6 +414,70 @@ export function TeacherAttendanceView() {
     }
   }, [activeSlot, activeStudents, fetchStudents, teacherId, today]);
 
+  const handleAbsenceConfirm = useCallback(async () => {
+    const { studentId, reason, isExcused, hasSupplementary, supplementaryDate, supplementaryTime } = absenceDialog;
+    if (!reason.trim() || !activeSlot) return;
+
+    setAbsenceDialog(d => ({ ...d, submitting: true }));
+
+    try {
+      const student = activeStudents.find(s => s.id === studentId);
+      if (!student) return;
+
+      const nowIso = new Date().toISOString();
+      const lessonAttendanceStatus = [isExcused ? '인정결석' : '무단결석'];
+      const lessonRangeText = `결석 사유: ${reason.trim()}`;
+
+      setStudentMap(prev => {
+        const updated = { ...prev };
+        updated[activeSlot.id] = (updated[activeSlot.id] || []).map(s =>
+          s.id === studentId ? { ...s, status: '결석' as AttendanceStatus, checkedInAt: null } : s
+        );
+        return updated;
+      });
+
+      await supabase.from('students').update({ status: '결석' } as any).eq('id', studentId);
+      await supabase.from('attendance_logs').update({ checked_in_at: null, checked_out_at: null }).eq('student_id', studentId).eq('date', today);
+
+      const { data: existingLesson } = await supabase.from('lesson_records').select('id, lesson_range').eq('student_id', studentId).eq('class_id', activeSlot.classId).eq('lesson_date', today).eq('subject', activeSlot.subject as any).maybeSingle();
+
+      const mergedRange = existingLesson?.lesson_range?.includes(lessonRangeText)
+        ? existingLesson.lesson_range
+        : [existingLesson?.lesson_range?.trim(), lessonRangeText].filter(Boolean).join('\n');
+
+      const lessonPayload = { attendance_status: lessonAttendanceStatus, lesson_range: mergedRange, submitted: false };
+      if (existingLesson) {
+        await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
+      } else {
+        await supabase.from('lesson_records').insert({
+          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
+          subject: activeSlot.subject as any, lesson_date: today,
+          lesson_range: lessonRangeText, understanding_score: null,
+          homework_status: 'none_assigned', learning_issues: [],
+          attendance_status: lessonAttendanceStatus, submitted: false,
+        } as any);
+      }
+
+      if (hasSupplementary && supplementaryDate) {
+        await supabase.from('lesson_records').insert({
+          teacher_id: teacherId, student_id: studentId, class_id: activeSlot.classId,
+          subject: activeSlot.subject as any, lesson_date: supplementaryDate,
+          lesson_range: '보충수업 예정', homework_status: 'none_assigned',
+          lesson_types: ['보충수업'], attendance_status: ['정상등원'],
+          notes: `[보충 시간: ${supplementaryTime}]`, submitted: false,
+        } as any);
+      }
+
+      sonnerToast.success(`${student.name} → 결석 처리 완료`, { duration: 1500 });
+      setAbsenceDialog(d => ({ ...d, open: false, submitting: false }));
+    } catch (err) {
+      console.error('handleAbsenceConfirm error:', err);
+      await fetchStudents();
+      sonnerToast.error('출결 처리 중 오류가 발생했습니다');
+      setAbsenceDialog(d => ({ ...d, submitting: false }));
+    }
+  }, [absenceDialog, activeSlot, activeStudents, teacherId, today, fetchStudents]);
+
   const handleMarkAllPresent = async () => {
     const pending = activeStudents.filter(s => s.status === '미등원');
     if (pending.length === 0) { toast({ title: '전원 등원 상태입니다' }); return; }
@@ -494,6 +571,87 @@ export function TeacherAttendanceView() {
           ))
         )}
       </div>
+
+      {/* 결석 처리 Dialog */}
+      <Dialog open={absenceDialog.open} onOpenChange={open => !absenceDialog.submitting && setAbsenceDialog(d => ({ ...d, open }))}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-4 h-4" />
+              결석 처리 — {absenceDialog.studentName}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">결석 사유 *</Label>
+              <Input
+                placeholder="예: 병원, 가족행사, 개인사정..."
+                value={absenceDialog.reason}
+                onChange={e => setAbsenceDialog(d => ({ ...d, reason: e.target.value }))}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">인정결석</p>
+                <p className="text-xs text-muted-foreground">끄면 무단결석으로 기록됩니다</p>
+              </div>
+              <Switch
+                checked={absenceDialog.isExcused}
+                onCheckedChange={v => setAbsenceDialog(d => ({ ...d, isExcused: v }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">보강 일정 있음</p>
+                <p className="text-xs text-muted-foreground">날짜와 시간을 입력합니다</p>
+              </div>
+              <Switch
+                checked={absenceDialog.hasSupplementary}
+                onCheckedChange={v => setAbsenceDialog(d => ({ ...d, hasSupplementary: v }))}
+              />
+            </div>
+
+            {absenceDialog.hasSupplementary && (
+              <div className="grid grid-cols-2 gap-3 pl-1">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">보강 날짜</Label>
+                  <Input
+                    type="date"
+                    value={absenceDialog.supplementaryDate}
+                    onChange={e => setAbsenceDialog(d => ({ ...d, supplementaryDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">보강 시간</Label>
+                  <Input
+                    placeholder="예: 19:00"
+                    value={absenceDialog.supplementaryTime}
+                    onChange={e => setAbsenceDialog(d => ({ ...d, supplementaryTime: e.target.value }))}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => setAbsenceDialog(d => ({ ...d, open: false }))} disabled={absenceDialog.submitting}>
+              취소
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleAbsenceConfirm}
+              disabled={!absenceDialog.reason.trim() || absenceDialog.submitting}
+            >
+              {absenceDialog.submitting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+              결석 처리
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
