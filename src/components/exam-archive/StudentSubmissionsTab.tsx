@@ -89,6 +89,7 @@ interface Result {
   uploaded_by_staff_name: string | null;
   student_name?: string;
   student_grade?: string | null;
+  student_current_grade?: string | null;
   student_enrollment_status?: string | null;
   photos: Photo[];
   pdfs: PdfRow[];
@@ -147,6 +148,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
           ...r,
           student_name: s?.name || '알 수 없음',
           student_grade: getGradeAtExamYear(s, r.exam_year, r.grade_at_exam),
+          student_current_grade: formatStudentGrade(s?.grade, s?.school_level) || null,
           student_enrollment_status: s?.enrollment_status || null,
           photos, pdfs,
         } as Result;
@@ -194,7 +196,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
     return Array.from(map.entries()).map(([sid, items]) => ({
       student_id: sid,
       student_name: items[0].student_name!,
-      student_grade: items[0].student_grade,
+      student_current_grade: items[0].student_current_grade,
       items,
     }));
   }, [filtered]);
