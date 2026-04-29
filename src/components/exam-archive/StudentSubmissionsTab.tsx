@@ -47,6 +47,7 @@ interface Result {
   score_locked: boolean;
   exam_year: number | null;
   exam_period: string | null;
+  grade_at_exam: string | null;
   note: string | null;
   exam_date: string | null;
   submitted_at: string;
@@ -89,7 +90,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
 
       const studentIds = Array.from(new Set((rows || []).map((r: any) => r.student_id)));
       const { data: students } = studentIds.length > 0
-        ? await supabase.from('students').select('id, name, grade').in('id', studentIds)
+        ? await supabase.from('students').select('id, name').in('id', studentIds)
         : { data: [] as any[] };
       const studentMap = new Map((students || []).map((s: any) => [s.id, s]));
 
@@ -110,7 +111,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
         return {
           ...r,
           student_name: s?.name || '알 수 없음',
-          student_grade: s?.grade || null,
+          student_grade: r.grade_at_exam || null,
           photos, pdfs,
         } as Result;
       }));
