@@ -117,6 +117,137 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 /* ------------------------------------------------------------------ */
+/*  Classroom View                                                     */
+/* ------------------------------------------------------------------ */
+function SlotCard({ slot, state }: { slot: ClassroomSlot; state: 'active' | 'upcoming' | 'past' }) {
+  const present = slot.students.filter(s => s.status === '정상등원' || s.status === '지각').length;
+  const total = slot.students.length;
+
+  return (
+    <Card className={cn(
+      'border transition-all duration-200',
+      state === 'active' && 'border-emerald-400 shadow-md ring-1 ring-emerald-300/50',
+      state === 'upcoming' && 'border-border',
+      state === 'past' && 'border-border/40 opacity-45',
+    )}>
+      <CardContent className="p-3 space-y-2">
+        {/* 헤더 */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {state === 'active' && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white leading-tight">진행중</span>
+              )}
+              {state === 'past' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground leading-tight">종료</span>
+              )}
+              <span className={cn('text-xs font-semibold truncate', state === 'past' && 'text-muted-foreground')}>
+                {slot.className}
+              </span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 leading-tight">{slot.subject}</Badge>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {slot.teacherName}T · {slot.startTime}~{slot.endTime}
+            </p>
+          </div>
+          <span className={cn(
+            'text-xs font-mono shrink-0',
+            state === 'active' ? 'text-emerald-600 font-bold' : 'text-muted-foreground'
+          )}>
+            {present}/{total}명
+          </span>
+        </div>
+
+        {/* 학생 목록 */}
+        {total === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-1">배정된 학생 없음</p>
+        ) : (
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5 max-h-28 overflow-y-auto">
+            {slot.students.map(s => {
+              const isPresent = s.status === '정상등원';
+              const isLate = s.status === '지각';
+              const isAbsent = s.status === '인정결석' || s.status === '무단결석' || s.status === '결석';
+              const info = s.status ? (STATUS_LABEL[s.status] || { label: s.status, color: 'text-muted-foreground' }) : null;
+              return (
+                <span
+                  key={s.id}
+                  title={info?.label || '수업 전'}
+                  className={cn(
+                    'text-[11px] font-medium',
+                    isPresent && 'text-emerald-600',
+                    isLate && 'text-amber-600',
+                    isAbsent && 'text-muted-foreground line-through',
+                    !s.status && state === 'active' && 'text-foreground',
+                    !s.status && state !== 'active' && 'text-muted-foreground',
+                  )}
+                >
+                  {s.name}
+                  {isLate && <span className="text-[9px] ml-0.5">지각</span>}
+                  {isAbsent && <span className="text-[9px] ml-0.5">결</span>}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ClassroomView({ slots }: { slots: ClassroomSlot[] }) {
+  const nowStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(11, 16);
+
+  const active   = slots.filter(s => nowStr >= s.startTime && nowStr <= s.endTime);
+  const upcoming = slots.filter(s => nowStr < s.startTime);
+  const past     = slots.filter(s => nowStr > s.endTime);
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-sm font-semibold flex items-center gap-1.5">
+        <Users className="w-4 h-4 text-primary" />
+        오늘 강의실 현황
+      </h2>
+
+      {slots.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">오늘 등록된 수업이 없습니다.</p>
+      ) : (
+        <div className="space-y-3">
+          {/* 진행중 */}
+          {active.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide">⬤ 진행중</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {active.map(s => <SlotCard key={s.scheduleId} slot={s} state="active" />)}
+              </div>
+            </div>
+          )}
+
+          {/* 예정 */}
+          {upcoming.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">예정</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {upcoming.map(s => <SlotCard key={s.scheduleId} slot={s} state="upcoming" />)}
+              </div>
+            </div>
+          )}
+
+          {/* 종료 */}
+          {past.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wide">종료</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {past.map(s => <SlotCard key={s.scheduleId} slot={s} state="past" />)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main Dashboard Content                                             */
 /* ------------------------------------------------------------------ */
 function PrincipalContent() {
@@ -284,75 +415,7 @@ function PrincipalContent() {
           </div>
 
           {/* 강의실 수업 현황 */}
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-primary" />
-              오늘 강의실 현황
-            </h2>
-          {classroomSlots.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">오늘 등록된 수업이 없습니다.</p>
-          ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {classroomSlots.map(slot => {
-                  const present = slot.students.filter(s => s.status === '정상등원' || s.status === '지각');
-                  const absent = slot.students.filter(s => s.status === '인정결석' || s.status === '무단결석' || s.status === '결석');
-                  const pending = slot.students.filter(s => !s.status || s.status === '미등원');
-                  const now = new Date().toTimeString().slice(0, 5);
-                  const isNow = now >= slot.startTime && now <= slot.endTime;
-                  const isPast = now > slot.endTime;
-
-                  return (
-                    <Card key={slot.scheduleId} className={cn('border transition-all', isNow && 'border-primary/40 bg-primary/[0.02]')}>
-                      <CardContent className="p-3 space-y-2">
-                        {/* 헤더 */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {isNow && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">진행중</span>}
-                              {isPast && <span className="text-[10px] text-muted-foreground">종료</span>}
-                              <span className="text-xs font-semibold truncate">{slot.className}</span>
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{slot.subject}</Badge>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">{slot.teacherName}T · {slot.startTime}~{slot.endTime}</p>
-                          </div>
-                          <span className="text-xs font-mono text-muted-foreground shrink-0">
-                            {present.length}/{slot.students.length}명
-                          </span>
-                        </div>
-
-                        {/* 학생 목록 */}
-                        {slot.students.length === 0 ? (
-                          <p className="text-xs text-muted-foreground text-center py-1">배정된 학생 없음</p>
-                        ) : (
-                          <div className="space-y-0.5 max-h-36 overflow-y-auto">
-                            {slot.students.map(s => {
-                              const info = s.status ? (STATUS_LABEL[s.status] || { label: s.status, color: 'text-muted-foreground' }) : null;
-                              return (
-                                <div key={s.id} className="flex items-center justify-between text-xs">
-                                  <span className={cn(
-                                    'font-medium',
-                                    s.status === '정상등원' ? 'text-emerald-600' :
-                                    s.status === '지각' ? 'text-amber-600' :
-                                    (s.status === '인정결석' || s.status === '무단결석' || s.status === '결석') ? 'text-muted-foreground line-through' :
-                                    'text-foreground'
-                                  )}>
-                                    {s.name}
-                                  </span>
-                                  <span className={cn('text-[10px]', info?.color || 'text-muted-foreground')}>
-                                    {info ? info.label : '수업 전'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-          )}
-          </div>
+          <ClassroomView slots={classroomSlots} />
 
           {/* 일정 + 코멘트/요청 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
