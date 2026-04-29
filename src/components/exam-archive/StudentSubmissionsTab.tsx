@@ -34,6 +34,34 @@ const formatStudentGrade = (grade: string | null | undefined) => {
   return /^\d+$/.test(value) ? `${value}학년` : value;
 };
 
+const toAbsoluteGrade = (grade: string | null | undefined, schoolLevel: string | null | undefined) => {
+  const value = String(grade ?? '').trim();
+  const numeric = Number(value.match(/\d+/)?.[0]);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  if (value.includes('고')) return numeric + 9;
+  if (value.includes('중')) return numeric + 6;
+  if (value.includes('초')) return numeric;
+  if (schoolLevel === 'high') return numeric + 9;
+  if (schoolLevel === 'middle') return numeric + 6;
+  return numeric;
+};
+
+const formatAbsoluteGrade = (absoluteGrade: number | null) => {
+  if (!absoluteGrade || absoluteGrade < 1) return '';
+  if (absoluteGrade <= 6) return `초${absoluteGrade}`;
+  if (absoluteGrade <= 9) return `중${absoluteGrade - 6}`;
+  if (absoluteGrade <= 12) return `고${absoluteGrade - 9}`;
+  return '';
+};
+
+const getGradeAtExamYear = (student: any, examYear: number | null, fallback: string | null | undefined) => {
+  if (!examYear) return fallback || null;
+  const currentAbsoluteGrade = toAbsoluteGrade(student?.grade, student?.school_level);
+  if (!currentAbsoluteGrade) return fallback || null;
+  const currentYear = new Date().getFullYear();
+  return formatAbsoluteGrade(currentAbsoluteGrade - (currentYear - examYear)) || fallback || null;
+};
+
 interface Photo { id: string; storage_path: string; signedUrl?: string | null; }
 interface PdfRow { id: string; display_title: string; signedUrl?: string | null; generated_at: string; generated_by_name?: string | null; }
 interface Result {
@@ -55,6 +83,7 @@ interface Result {
   uploaded_by_staff_name: string | null;
   student_name?: string;
   student_grade?: string | null;
+  student_enrollment_status?: string | null;
   photos: Photo[];
   pdfs: PdfRow[];
 }
@@ -90,7 +119,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
 
       const studentIds = Array.from(new Set((rows || []).map((r: any) => r.student_id)));
       const { data: students } = studentIds.length > 0
-        ? await supabase.from('students').select('id, name').in('id', studentIds)
+        ? await supabase.from('students').select('id, name, grade, school_level, enrollment_status').in('id', studentIds)
         : { data: [] as any[] };
       const studentMap = new Map((students || []).map((s: any) => [s.id, s]));
 
@@ -111,7 +140,8 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
         return {
           ...r,
           student_name: s?.name || '알 수 없음',
-          student_grade: r.grade_at_exam || null,
+          student_grade: getGradeAtExamYear(s, r.exam_year, r.grade_at_exam),
+          student_enrollment_status: s?.enrollment_status || null,
           photos, pdfs,
         } as Result;
       }));
@@ -126,6 +156,8 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
   useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => results.filter(r => {
+    const q = search.trim().toLowerCase();
+    if (!q && r.student_enrollment_status === '퇴원') return false;
     if (yearFilter !== 'all') {
       if (yearFilter === 'unknown') {
         if (r.exam_year != null) return false;
@@ -133,8 +165,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
     }
     if (examTypeFilter !== 'all' && r.exam_type !== examTypeFilter) return false;
     if (subjectFilter !== 'all' && r.subject !== subjectFilter) return false;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
+    if (q) {
       if (!r.student_name?.toLowerCase().includes(q) && !r.subject.toLowerCase().includes(q)) return false;
     }
     return true;
