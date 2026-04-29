@@ -138,7 +138,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
 
       const studentIds = Array.from(new Set((rows || []).map((r: any) => r.student_id)));
       const { data: students } = studentIds.length > 0
-        ? await supabase.from('students').select('id, name, grade, school_level, enrollment_status').in('id', studentIds)
+        ? await supabase.from('students').select('id, name, grade, school, school_level, enrollment_status').in('id', studentIds)
         : { data: [] as any[] };
       const studentMap = new Map((students || []).map((s: any) => [s.id, s]));
 
@@ -160,7 +160,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
           ...r,
           student_name: s?.name || '알 수 없음',
           student_grade: getGradeAtExamYear(s, r.exam_year, r.grade_at_exam),
-          student_current_grade: formatStudentGrade(s?.grade, s?.school_level) || null,
+          student_current_grade: formatStudentGrade(s?.grade, s?.school_level || inferSchoolLevel(s?.school)) || null,
           student_enrollment_status: s?.enrollment_status || null,
           photos, pdfs,
         } as Result;
