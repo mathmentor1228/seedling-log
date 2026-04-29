@@ -230,15 +230,23 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setAnswerPdfUrl(null);
     setAnswerImageUrls([]);
 
+    function resolveUrl(path: string): Promise<string | null> {
+      if (path.startsWith('exam-papers/') || path.startsWith('exam-pages/')) {
+        const base = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/exam-files`;
+        return Promise.resolve(`${base}/${path}`);
+      }
+      return getCachedSignedUrl('exam-analysis', path, 3600);
+    }
+
     if (originalPath) {
-      setOriginalPdfUrl(await getCachedSignedUrl('exam-analysis', originalPath, 3600));
+      setOriginalPdfUrl(await resolveUrl(originalPath));
     }
     if (answerPath) {
-      setAnswerPdfUrl(await getCachedSignedUrl('exam-analysis', answerPath, 3600));
+      setAnswerPdfUrl(await resolveUrl(answerPath));
     }
     if (answerImagePaths.length > 0) {
       const urls = await Promise.all(answerImagePaths.map(async (path) => {
-        return await getCachedSignedUrl('exam-analysis', path, 3600) ?? '';
+        return await resolveUrl(path) ?? '';
       }));
       setAnswerImageUrls(urls.filter(Boolean));
     }
