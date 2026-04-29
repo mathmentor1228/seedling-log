@@ -91,48 +91,116 @@ function StatCard({ label, value, sub, color, icon: Icon }: {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Room config (강의실 목록)                                           */
+/*  Types for classroom view                                           */
 /* ------------------------------------------------------------------ */
-const ROOMS = [
-  { id: 'room2',  label: '2강의실',  teacher: '최윤기' },
-  { id: 'room4',  label: '4강의실',  teacher: '조준희' },
-  { id: 'room5',  label: '5강의실',  teacher: '고대영' },
-  { id: 'room6',  label: '6강의실',  teacher: '이나연' },
-  { id: 'room7',  label: '7강의실',  teacher: '정선호' },
-  { id: 'room8',  label: '8강의실',  teacher: '김민희' },
-  { id: 'room9',  label: '9강의실',  teacher: '황은지' },
-];
+interface ClassroomSlot {
+  scheduleId: string;
+  classId: string;
+  className: string;
+  subject: string;
+  startTime: string;
+  endTime: string;
+  teacherName: string;
+  students: { id: string; name: string; status: string | null }[];
+}
 
 const fmtTime = (iso: string) =>
   new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' });
+
+const STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  '정상등원': { label: '등원', color: 'text-emerald-600' },
+  '지각':     { label: '지각', color: 'text-amber-600' },
+  '인정결석': { label: '인정결석', color: 'text-muted-foreground' },
+  '무단결석': { label: '무단결석', color: 'text-destructive' },
+  '결석':     { label: '결석', color: 'text-destructive' },
+  '미등원':   { label: '미등원', color: 'text-muted-foreground' },
+};
 
 /* ------------------------------------------------------------------ */
 /*  Main Dashboard Content                                             */
 /* ------------------------------------------------------------------ */
 function PrincipalContent() {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
-  const [capacities, setCapacities] = useState<Record<string, number>>({});
+  const [classroomSlots, setClassroomSlots] = useState<ClassroomSlot[]>([]);
   const [loading, setLoading] = useState(true);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayDow = useMemo(() => new Date().getDay(), []);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [logsRes, capRes] = await Promise.all([
-        supabase.from('attendance_logs').select('*').eq('date', today),
-        supabase.from('room_capacities').select('*'),
-      ]);
+      // 1. 오늘 출석 로그 (stat용)
+      const logsRes = await supabase.from('attendance_logs').select('*').eq('date', today);
       if (logsRes.data) setLogs(logsRes.data as AttendanceLog[]);
-      if (capRes.data) {
-        const map: Record<string, number> = {};
-        capRes.data.forEach((r: any) => { map[r.room_id] = r.capacity; });
-        setCapacities(map);
+
+      // 2. 오늘 수업 일정 (전체 선생님)
+      const { data: schedules } = await supabase
+        .from('class_schedules')
+        .select('id, start_time, end_time, class_id, teacher_id, classes(name, subject), profiles:teacher_id(full_name)')
+        .eq('day_of_week', todayDow)
+        .eq('is_active', true)
+        .order('start_time');
+
+      if (!schedules || schedules.length === 0) {
+        setClassroomSlots([]);
+        setLoading(false);
+        return;
       }
+
+      const classIds = schedules.map((s: any) => s.class_id).filter(Boolean);
+
+      // 3. 각 수업의 학생 목록
+      const { data: classStudents } = await supabase
+        .from('class_students')
+        .select('class_id, student_id, students(name)')
+        .in('class_id', classIds);
+
+      // 4. 오늘 lesson_records (출석 상태)
+      const { data: lessonRecords } = await supabase
+        .from('lesson_records')
+        .select('student_id, class_id, attendance_status')
+        .in('class_id', classIds)
+        .eq('lesson_date', today);
+
+      // 출석 상태 맵 (student_id:class_id → status)
+      const statusMap = new Map<string, string>();
+      (lessonRecords || []).forEach((r: any) => {
+        const arr: string[] = r.attendance_status || [];
+        const status = arr.find(s => s !== '정상등원') || arr[0] || null;
+        if (status) statusMap.set(`${r.student_id}:${r.class_id}`, status);
+      });
+
+      // 학생 맵 (class_id → students[])
+      const studentsByClass = new Map<string, { id: string; name: string }[]>();
+      (classStudents || []).forEach((cs: any) => {
+        if (!studentsByClass.has(cs.class_id)) studentsByClass.set(cs.class_id, []);
+        studentsByClass.get(cs.class_id)!.push({ id: cs.student_id, name: cs.students?.name || '-' });
+      });
+
+      const slots: ClassroomSlot[] = schedules.map((s: any) => {
+        const students = (studentsByClass.get(s.class_id) || []).map(st => ({
+          id: st.id,
+          name: st.name,
+          status: statusMap.get(`${st.id}:${s.class_id}`) || null,
+        }));
+        return {
+          scheduleId: s.id,
+          classId: s.class_id,
+          className: s.classes?.name || '-',
+          subject: s.classes?.subject || '-',
+          startTime: s.start_time?.slice(0, 5) || '',
+          endTime: s.end_time?.slice(0, 5) || '',
+          teacherName: s.profiles?.full_name || '-',
+          students,
+        };
+      });
+
+      setClassroomSlots(slots);
     } catch (err) {
       console.error('PrincipalContent fetchAll error:', err);
     }
     setLoading(false);
-  }, [today]);
+  }, [today, todayDow]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -195,89 +263,74 @@ function PrincipalContent() {
             />
           </div>
 
-          {/* 강의실 출석 현황 */}
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-              <Users className="w-4 h-4 text-primary" />
-              강의실 현황
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {ROOMS.map(room => {
-                const roomLogs = logs.filter(l => l.room_id === room.id);
-                const inRoom = roomLogs.filter(l => l.checked_in_at && !l.checked_out_at);
-                const exited = roomLogs.filter(l => l.checked_out_at);
-                const cap = capacities[room.id];
-                const pct = cap ? inRoom.length / cap : 0;
-                const barColor = pct >= 0.9 ? 'bg-destructive' : pct >= 0.7 ? 'bg-warning' : 'bg-success';
+          {/* 강의실 수업 현황 */}
+          {classroomSlots.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-primary" />
+                오늘 강의실 현황
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {classroomSlots.map(slot => {
+                  const present = slot.students.filter(s => s.status === '정상등원' || s.status === '지각');
+                  const absent = slot.students.filter(s => s.status === '인정결석' || s.status === '무단결석' || s.status === '결석');
+                  const pending = slot.students.filter(s => !s.status || s.status === '미등원');
+                  const now = new Date().toTimeString().slice(0, 5);
+                  const isNow = now >= slot.startTime && now <= slot.endTime;
+                  const isPast = now > slot.endTime;
 
-                return (
-                  <Card key={room.id} className="border">
-                    <CardContent className="p-3 space-y-2">
-                      {/* 헤더 */}
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-sm font-semibold">{room.label}</span>
-                          <span className="text-xs text-muted-foreground ml-1.5">{room.teacher}T</span>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-xs font-mono',
-                            pct >= 0.9 ? 'border-destructive/50 text-destructive' : 'border-border text-muted-foreground'
-                          )}
-                        >
-                          {inRoom.length}{cap ? `/${cap}` : ''}명
-                        </Badge>
-                      </div>
-
-                      {/* 용량 바 */}
-                      {cap && (
-                        <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${Math.min(pct * 100, 100)}%` }} />
-                        </div>
-                      )}
-
-                      {/* 입실 중 */}
-                      {inRoom.length > 0 ? (
-                        <div className="space-y-1">
-                          {inRoom.map(l => (
-                            <div key={l.id} className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-1.5">
-                                <LogIn className="w-3 h-3 text-emerald-500 shrink-0" />
-                                <span className="font-medium text-foreground">{l.student_name || '-'}</span>
-                              </div>
-                              <span className="text-muted-foreground font-mono tabular-nums">
-                                {l.checked_in_at ? fmtTime(l.checked_in_at) : ''}
-                              </span>
+                  return (
+                    <Card key={slot.scheduleId} className={cn('border transition-all', isNow && 'border-primary/40 bg-primary/[0.02]')}>
+                      <CardContent className="p-3 space-y-2">
+                        {/* 헤더 */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isNow && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">진행중</span>}
+                              {isPast && <span className="text-[10px] text-muted-foreground">종료</span>}
+                              <span className="text-xs font-semibold truncate">{slot.className}</span>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{slot.subject}</Badge>
                             </div>
-                          ))}
+                            <p className="text-[11px] text-muted-foreground mt-0.5">{slot.teacherName}T · {slot.startTime}~{slot.endTime}</p>
+                          </div>
+                          <span className="text-xs font-mono text-muted-foreground shrink-0">
+                            {present.length}/{slot.students.length}명
+                          </span>
                         </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground text-center py-1">현재 입실 학생 없음</p>
-                      )}
 
-                      {/* 퇴실 학생 */}
-                      {exited.length > 0 && (
-                        <div className="border-t pt-2 space-y-1">
-                          {exited.map(l => (
-                            <div key={l.id} className="flex items-center justify-between text-xs opacity-50">
-                              <div className="flex items-center gap-1.5">
-                                <LogOut className="w-3 h-3 text-muted-foreground shrink-0" />
-                                <span className="line-through text-muted-foreground">{l.student_name || '-'}</span>
-                              </div>
-                              <span className="text-muted-foreground font-mono tabular-nums">
-                                {l.checked_out_at ? fmtTime(l.checked_out_at) : ''}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                        {/* 학생 목록 */}
+                        {slot.students.length === 0 ? (
+                          <p className="text-xs text-muted-foreground text-center py-1">배정된 학생 없음</p>
+                        ) : (
+                          <div className="space-y-0.5 max-h-36 overflow-y-auto">
+                            {slot.students.map(s => {
+                              const info = s.status ? (STATUS_LABEL[s.status] || { label: s.status, color: 'text-muted-foreground' }) : null;
+                              return (
+                                <div key={s.id} className="flex items-center justify-between text-xs">
+                                  <span className={cn(
+                                    'font-medium',
+                                    s.status === '정상등원' ? 'text-emerald-600' :
+                                    s.status === '지각' ? 'text-amber-600' :
+                                    (s.status === '인정결석' || s.status === '무단결석' || s.status === '결석') ? 'text-muted-foreground line-through' :
+                                    'text-foreground'
+                                  )}>
+                                    {s.name}
+                                  </span>
+                                  <span className={cn('text-[10px]', info?.color || 'text-muted-foreground')}>
+                                    {info ? info.label : '수업 전'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 일정 + 코멘트/요청 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
