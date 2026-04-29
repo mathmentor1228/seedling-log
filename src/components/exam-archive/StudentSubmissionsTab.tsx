@@ -360,7 +360,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                   >
                     {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <span className="font-semibold text-sm">{g.student_name}</span>
-                    {formatStudentGrade(g.student_grade) && <Badge variant="outline" className="text-[10px] h-4 px-1.5">{formatStudentGrade(g.student_grade)}</Badge>}
+                    {g.student_current_grade && <Badge variant="outline" className="text-[10px] h-4 px-1.5">{g.student_current_grade}</Badge>}
                     <Badge className="text-[10px] h-4 px-1.5 ml-auto bg-primary/10 text-primary border-0">{g.items.length}건</Badge>
                   </button>
                   {isOpen && (
