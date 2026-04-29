@@ -3,8 +3,9 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
-  LogOut, CheckCircle, Clock, XCircle, Loader2, ChevronLeft, ChevronRight,
+  CheckCircle, Clock, XCircle, Loader2, ChevronLeft, ChevronRight, LogIn, LogOut, Users,
 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
@@ -90,21 +91,38 @@ function StatCard({ label, value, sub, color, icon: Icon }: {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Room config (강의실 목록)                                           */
+/* ------------------------------------------------------------------ */
+const ROOMS = [
+  { id: 'room10', label: '10강의실' },
+  { id: 'glass', label: '유리문강의실' },
+];
+
+const fmtTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' });
+
+/* ------------------------------------------------------------------ */
 /*  Main Dashboard Content                                             */
 /* ------------------------------------------------------------------ */
 function PrincipalContent() {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [capacities, setCapacities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const fetchAll = useCallback(async () => {
     try {
-      const { data } = await supabase
-        .from('attendance_logs')
-        .select('*')
-        .eq('date', today);
-      if (data) setLogs(data as AttendanceLog[]);
+      const [logsRes, capRes] = await Promise.all([
+        supabase.from('attendance_logs').select('*').eq('date', today),
+        supabase.from('room_capacities').select('*'),
+      ]);
+      if (logsRes.data) setLogs(logsRes.data as AttendanceLog[]);
+      if (capRes.data) {
+        const map: Record<string, number> = {};
+        capRes.data.forEach((r: any) => { map[r.room_id] = r.capacity; });
+        setCapacities(map);
+      }
     } catch (err) {
       console.error('PrincipalContent fetchAll error:', err);
     }
@@ -170,6 +188,87 @@ function PrincipalContent() {
               sub="미등원 학생"
               color="red"
             />
+          </div>
+
+          {/* 강의실 출석 현황 */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+              <Users className="w-4 h-4 text-primary" />
+              강의실 현황
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {ROOMS.map(room => {
+                const roomLogs = logs.filter(l => l.room_id === room.id);
+                const inRoom = roomLogs.filter(l => l.checked_in_at && !l.checked_out_at);
+                const exited = roomLogs.filter(l => l.checked_out_at);
+                const cap = capacities[room.id];
+                const pct = cap ? inRoom.length / cap : 0;
+                const barColor = pct >= 0.9 ? 'bg-destructive' : pct >= 0.7 ? 'bg-warning' : 'bg-success';
+
+                return (
+                  <Card key={room.id} className="border">
+                    <CardContent className="p-3 space-y-2">
+                      {/* 헤더 */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">{room.label}</span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-xs font-mono',
+                            pct >= 0.9 ? 'border-destructive/50 text-destructive' : 'border-border text-muted-foreground'
+                          )}
+                        >
+                          {inRoom.length}{cap ? `/${cap}` : ''}명
+                        </Badge>
+                      </div>
+
+                      {/* 용량 바 */}
+                      {cap && (
+                        <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${Math.min(pct * 100, 100)}%` }} />
+                        </div>
+                      )}
+
+                      {/* 입실 중 */}
+                      {inRoom.length > 0 ? (
+                        <div className="space-y-1">
+                          {inRoom.map(l => (
+                            <div key={l.id} className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <LogIn className="w-3 h-3 text-emerald-500 shrink-0" />
+                                <span className="font-medium text-foreground">{l.student_name || '-'}</span>
+                              </div>
+                              <span className="text-muted-foreground font-mono tabular-nums">
+                                {l.checked_in_at ? fmtTime(l.checked_in_at) : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground text-center py-1">현재 입실 학생 없음</p>
+                      )}
+
+                      {/* 퇴실 학생 */}
+                      {exited.length > 0 && (
+                        <div className="border-t pt-2 space-y-1">
+                          {exited.map(l => (
+                            <div key={l.id} className="flex items-center justify-between text-xs opacity-50">
+                              <div className="flex items-center gap-1.5">
+                                <LogOut className="w-3 h-3 text-muted-foreground shrink-0" />
+                                <span className="line-through text-muted-foreground">{l.student_name || '-'}</span>
+                              </div>
+                              <span className="text-muted-foreground font-mono tabular-nums">
+                                {l.checked_out_at ? fmtTime(l.checked_out_at) : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
 
           {/* 일정 + 코멘트/요청 */}
