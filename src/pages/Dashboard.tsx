@@ -355,7 +355,7 @@ function getAttendanceStatusBadge(attendanceStatus: unknown) {
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean } = {}) {
   const { role, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -3725,7 +3725,7 @@ export default function Dashboard() {
       )}
 
       {/* ━━━ 섹션 5: 도구 & 분석 ━━━ */}
-      {(isAdmin(role) || isTeacher(role)) && (
+      {!hideAdminTools && (isAdmin(role) || isTeacher(role)) && (
         <div className="space-y-3">
           <SectionHeader 
             icon={<Wrench className="w-4 h-4" />}
@@ -3742,7 +3742,7 @@ export default function Dashboard() {
       )}
 
       {/* ━━━ 섹션 6: 학원 관리 (Admin only) ━━━ */}
-      {isAdmin(role) && (
+      {!hideAdminTools && isAdmin(role) && (
         <div className="space-y-3 pt-1">
           <SectionHeader 
             icon={<Settings2 className="w-4 h-4" />}

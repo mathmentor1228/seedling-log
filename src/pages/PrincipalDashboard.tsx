@@ -460,7 +460,7 @@ function SwipeablePrincipal() {
             <PrincipalContent />
           </div>
           <div className="flex-[0_0_100%] min-w-0 space-y-4">
-            <Dashboard />
+            <Dashboard hideAdminTools />
             <div className="p-2">
               <AttendanceCardSafe />
             </div>
