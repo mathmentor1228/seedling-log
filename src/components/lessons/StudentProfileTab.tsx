@@ -37,6 +37,18 @@ interface StudentBasic {
   created_at: string;
 }
 
+interface ExamResultSummary {
+  id: string;
+  subject: string;
+  exam_type: string;
+  exam_year: number | null;
+  exam_period: string | null;
+  expected_score: number | null;
+  actual_score: number | null;
+  exam_date: string | null;
+  submitted_at: string;
+}
+
 // ─── Helpers ────────────────────────────────────────────────
 function derivePassed(epf: string | null, tr: string | null): boolean | null {
   if (epf === 'pass' || tr === 'pass') return true;
@@ -232,7 +244,7 @@ function StudentDetail({ student }: { student: StudentBasic }) {
       const ms = format(startOfMonth(now), 'yyyy-MM-dd');
       const me = format(endOfMonth(now), 'yyyy-MM-dd');
 
-      const [lessons, tests, selfStudy, clinic, schedules, subjectTeachers] = await Promise.all([
+      const [lessons, tests, selfStudy, clinic, schedules, subjectTeachers, examResults] = await Promise.all([
         supabase.from('lesson_records').select('*').eq('student_id', student.id).order('lesson_date', { ascending: false }),
         supabase.from('lesson_records')
           .select('id, lesson_date, subject, test_content, test_title, test_result_text, english_pass_fail, test_result')
@@ -246,6 +258,11 @@ function StudentDetail({ student }: { student: StudentBasic }) {
         supabase.from('student_subject_teachers')
           .select('subject, profiles!teacher_id(full_name)')
           .eq('student_id', student.id),
+        supabase.from('student_exam_results')
+          .select('id, subject, exam_type, exam_year, exam_period, expected_score, actual_score, exam_date, submitted_at')
+          .eq('student_id', student.id)
+          .order('exam_year', { ascending: false, nullsFirst: false })
+          .order('submitted_at', { ascending: false }),
       ]);
 
       // Month counts
@@ -279,6 +296,7 @@ function StudentDetail({ student }: { student: StudentBasic }) {
         tests: tests.data || [],
         selfStudy: selfStudy.data || [],
         clinic: clinic.data || [],
+        examResults: (examResults.data || []) as ExamResultSummary[],
         monthCounts: {
           lessons: monthLessons.length,
           tests: monthTests.length,
