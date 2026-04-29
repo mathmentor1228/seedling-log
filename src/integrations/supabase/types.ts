@@ -570,6 +570,7 @@ export type Database = {
           teacher_check_memo: string | null
           teacher_checked: boolean
           teacher_checked_at: string | null
+          teacher_display_name: string | null
           teacher_id: string
           teacher_note: string | null
           teacher_note_shown: boolean
@@ -597,6 +598,7 @@ export type Database = {
           teacher_check_memo?: string | null
           teacher_checked?: boolean
           teacher_checked_at?: string | null
+          teacher_display_name?: string | null
           teacher_id: string
           teacher_note?: string | null
           teacher_note_shown?: boolean
@@ -624,6 +626,7 @@ export type Database = {
           teacher_check_memo?: string | null
           teacher_checked?: boolean
           teacher_checked_at?: string | null
+          teacher_display_name?: string | null
           teacher_id?: string
           teacher_note?: string | null
           teacher_note_shown?: boolean
@@ -2027,6 +2030,7 @@ export type Database = {
           subject: Database["public"]["Enums"]["subject_type"]
           submitted: boolean
           submitted_at: string | null
+          teacher_display_name: string | null
           teacher_id: string
           test_assistant: string | null
           test_assistant_2: string | null
@@ -2081,6 +2085,7 @@ export type Database = {
           subject: Database["public"]["Enums"]["subject_type"]
           submitted?: boolean
           submitted_at?: string | null
+          teacher_display_name?: string | null
           teacher_id: string
           test_assistant?: string | null
           test_assistant_2?: string | null
@@ -2135,6 +2140,7 @@ export type Database = {
           subject?: Database["public"]["Enums"]["subject_type"]
           submitted?: boolean
           submitted_at?: string | null
+          teacher_display_name?: string | null
           teacher_id?: string
           test_assistant?: string | null
           test_assistant_2?: string | null
@@ -3780,6 +3786,7 @@ export type Database = {
           teacher_check_memo: string | null
           teacher_checked: boolean
           teacher_checked_at: string | null
+          teacher_display_name: string | null
           teacher_id: string
           updated_at: string
         }
@@ -3806,6 +3813,7 @@ export type Database = {
           teacher_check_memo?: string | null
           teacher_checked?: boolean
           teacher_checked_at?: string | null
+          teacher_display_name?: string | null
           teacher_id: string
           updated_at?: string
         }
@@ -3832,6 +3840,7 @@ export type Database = {
           teacher_check_memo?: string | null
           teacher_checked?: boolean
           teacher_checked_at?: string | null
+          teacher_display_name?: string | null
           teacher_id?: string
           updated_at?: string
         }
@@ -4935,6 +4944,7 @@ export type Database = {
           teacher_check_memo: string | null
           teacher_checked: boolean
           teacher_checked_at: string | null
+          teacher_display_name: string | null
           teacher_id: string
           test_date: string
           test_type: string
@@ -4966,6 +4976,7 @@ export type Database = {
           teacher_check_memo?: string | null
           teacher_checked?: boolean
           teacher_checked_at?: string | null
+          teacher_display_name?: string | null
           teacher_id: string
           test_date: string
           test_type?: string
@@ -4997,6 +5008,7 @@ export type Database = {
           teacher_check_memo?: string | null
           teacher_checked?: boolean
           teacher_checked_at?: string | null
+          teacher_display_name?: string | null
           teacher_id?: string
           test_date?: string
           test_type?: string
@@ -6320,6 +6332,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin_staff: { Args: never; Returns: boolean }
+      resolve_teacher_display_name_for_record: {
+        Args: { _record_date?: string; _teacher_id: string }
+        Returns: string
+      }
       teacher_owns_student: {
         Args: { _student_id: string; _teacher_id: string }
         Returns: boolean
