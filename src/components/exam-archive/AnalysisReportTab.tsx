@@ -179,11 +179,42 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const isLocked = !!selectedReport?.is_locked;
   const canManageLock = role === 'admin';
 
+  const SUBJECT_COLORS: Record<string, string> = {
+    '수학': 'bg-blue-100 text-blue-700',
+    '영어': 'bg-green-100 text-green-700',
+    '국어': 'bg-orange-100 text-orange-700',
+    '과학': 'bg-purple-100 text-purple-700',
+    '통합과학': 'bg-purple-100 text-purple-700',
+    '지구과학': 'bg-purple-100 text-purple-700',
+    '화학': 'bg-purple-100 text-purple-700',
+    '생명과학': 'bg-purple-100 text-purple-700',
+    '미적분': 'bg-blue-100 text-blue-700',
+    '기타': 'bg-gray-100 text-gray-600',
+  };
+
+  const SCHOOL_ORDER = ['신길고', '선부고', '원곡고', '초지고', '신길중', '군자중'];
+
   const filteredReports = useMemo(() => {
     return reports
       .filter((report) => selectedSubject === '전체' || report.subject === selectedSubject)
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      .sort((a, b) => {
+        const schoolA = SCHOOL_ORDER.indexOf(a.school_name);
+        const schoolB = SCHOOL_ORDER.indexOf(b.school_name);
+        if (schoolA !== schoolB) return (schoolA === -1 ? 99 : schoolA) - (schoolB === -1 ? 99 : schoolB);
+        if (a.grade !== b.grade) return a.grade.localeCompare(b.grade);
+        return a.subject.localeCompare(b.subject);
+      });
   }, [reports, selectedSubject]);
+
+  const groupedReports = useMemo(() => {
+    const groups: Record<string, typeof filteredReports> = {};
+    for (const report of filteredReports) {
+      const key = report.school_name;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(report);
+    }
+    return groups;
+  }, [filteredReports]);
 
   const pointTotal = useMemo(
     () => items.reduce((sum, item) => sum + (Number(item.points) || 0), 0),
@@ -821,7 +852,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
           ))}
         </div>
 
-        <div className="space-y-2 pr-1">
+        <div className="space-y-4 pr-1">
           {loading ? (
             <div className="flex h-28 items-center justify-center text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -829,36 +860,48 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
           ) : filteredReports.length === 0 ? (
             <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">보고서가 없습니다.</div>
           ) : (
-            filteredReports.map((report) => (
-              <button
-                key={report.id}
-                onClick={() => void selectReport(report)}
-                onMouseEnter={() => setHoverId(report.id)}
-                onMouseLeave={() => setHoverId(null)}
-                className={cn(
-                   'relative w-full rounded-lg border bg-card p-3.5 text-left transition-colors hover:bg-accent',
-                  selectedReportId === report.id && 'border-primary bg-primary/5',
-                )}
-              >
-                {hoverId === report.id ? (
-                  <span className="absolute right-2 top-2 flex gap-1">
-                    <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleEdit(report); }} className="inline-flex items-center rounded bg-info/10 px-2 py-1 text-[11px] font-medium text-info"><Pencil className="mr-1 h-3 w-3" />수정</span>
-                    <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); void handleDelete(report); }} className={cn('inline-flex items-center rounded px-2 py-1 text-[11px] font-medium', report.is_locked ? 'cursor-not-allowed bg-muted text-muted-foreground' : 'bg-destructive/10 text-destructive')}>
-                      {report.is_locked ? <Lock className="h-3 w-3" /> : '삭제'}
-                    </span>
-                  </span>
-                ) : null}
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1 truncate text-sm font-semibold">{report.subject}{report.is_locked ? <Lock className="h-3 w-3 text-muted-foreground" /> : null}</span>
-                  <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground">{report.exam_type}</span>
+            Object.entries(groupedReports).map(([schoolName, schoolReports]) => (
+              <div key={schoolName}>
+                <div className="mb-1.5 flex items-center gap-2 px-1">
+                  <span className="text-xs font-bold text-foreground">{schoolName}</span>
+                  <span className="text-[10px] text-muted-foreground">{schoolReports.length}개</span>
+                  <div className="flex-1 border-t border-border" />
                 </div>
-                <div className="text-xs text-muted-foreground">{report.school_name} · {report.grade}학년</div>
-                <div className="mt-1 text-[11px] text-muted-foreground">{report.exam_year}년 {report.exam_period} · {report.created_by_name || '작성자 미상'}</div>
-                <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                  <span className="truncate">{report.textbook || '교과서 미입력'}</span>
-                  <span>{format(new Date(report.updated_at || report.created_at), 'MM/dd')}</span>
+                <div className="space-y-1.5">
+                  {schoolReports.map((report) => (
+                    <button
+                      key={report.id}
+                      onClick={() => void selectReport(report)}
+                      onMouseEnter={() => setHoverId(report.id)}
+                      onMouseLeave={() => setHoverId(null)}
+                      className={cn(
+                        'relative w-full rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:bg-accent',
+                        selectedReportId === report.id && 'border-primary bg-primary/5',
+                      )}
+                    >
+                      {hoverId === report.id ? (
+                        <span className="absolute right-2 top-2 flex gap-1">
+                          <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleEdit(report); }} className="inline-flex items-center rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info"><Pencil className="mr-1 h-2.5 w-2.5" />수정</span>
+                          <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); void handleDelete(report); }} className={cn('inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium', report.is_locked ? 'cursor-not-allowed bg-muted text-muted-foreground' : 'bg-destructive/10 text-destructive')}>
+                            {report.is_locked ? <Lock className="h-2.5 w-2.5" /> : '삭제'}
+                          </span>
+                        </span>
+                      ) : null}
+                      <div className="flex items-center gap-2">
+                        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold', SUBJECT_COLORS[report.subject] ?? 'bg-gray-100 text-gray-600')}>{report.subject}</span>
+                        <span className="text-xs font-semibold text-foreground">{report.grade}학년</span>
+                        {report.is_locked ? <Lock className="h-3 w-3 text-muted-foreground" /> : null}
+                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{report.exam_type}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className="truncate text-[11px] text-muted-foreground">{report.exam_year}년 · {report.created_by_name || '작성자 미상'}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">{format(new Date(report.updated_at || report.created_at), 'MM/dd')}</span>
+                      </div>
+                      {report.exam_scope ? <div className="mt-0.5 truncate text-[10px] text-muted-foreground/70">{report.exam_scope}</div> : null}
+                    </button>
+                  ))}
                 </div>
-              </button>
+              </div>
             ))
           )}
         </div>
