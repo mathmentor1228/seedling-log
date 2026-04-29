@@ -273,6 +273,14 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
             {Object.entries(EXAM_TYPE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={yearFilter} onValueChange={setYearFilter}>
+          <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 연도</SelectItem>
+            {yearOptions.map(year => <SelectItem key={year} value={String(year)}>{year}년</SelectItem>)}
+            {hasUnknownYear && <SelectItem value="unknown">연도 미지정</SelectItem>}
+          </SelectContent>
+        </Select>
         <Select value={subjectFilter} onValueChange={setSubjectFilter}>
           <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -312,7 +320,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                   >
                     {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <span className="font-semibold text-sm">{g.student_name}</span>
-                    {g.student_grade && <Badge variant="outline" className="text-[10px] h-4 px-1.5">{g.student_grade}학년</Badge>}
+                    {formatStudentGrade(g.student_grade) && <Badge variant="outline" className="text-[10px] h-4 px-1.5">{formatStudentGrade(g.student_grade)}</Badge>}
                     <Badge className="text-[10px] h-4 px-1.5 ml-auto bg-primary/10 text-primary border-0">{g.items.length}건</Badge>
                   </button>
                   {isOpen && (
@@ -347,6 +355,9 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-medium text-sm">{r.subject}</span>
+                              <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                                {r.exam_year ? `${r.exam_year}년` : '연도 미지정'}
+                              </Badge>
                               <Badge className={`text-[10px] h-4 px-1.5 border ${EXAM_TYPE_COLORS[r.exam_type] || ''}`}>
                                 {EXAM_TYPE_LABELS[r.exam_type]}
                               </Badge>
