@@ -232,8 +232,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
     function resolveUrl(path: string): Promise<string | null> {
       if (path.startsWith('exam-papers/') || path.startsWith('exam-pages/')) {
-        const base = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/exam-files`;
-        return Promise.resolve(`${base}/${path}`);
+        const { data } = supabase.storage.from('exam-files').getPublicUrl(path);
+        return Promise.resolve(data.publicUrl ?? null);
       }
       return getCachedSignedUrl('exam-analysis', path, 3600);
     }
