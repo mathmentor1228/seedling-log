@@ -287,19 +287,21 @@ export function ExamReviewPanel() {
       if (!res.ok) throw new Error(payload?.error || '목록 조회에 실패했습니다.');
 
       const rawRows = Array.isArray(payload?.results) ? payload.results : [];
-      const nextRows: ExamResultRow[] = rawRows.map((row: any) => {
-        const photos = Array.isArray(row.photos) ? row.photos : (row.student_exam_result_photos ?? []);
-        const normalizedPhotos: OverlayPhoto[] = photos.map((p: any) => ({
-          id: p.id,
-          storage_path: p.storage_path,
-          sort_order: p.sort_order ?? 0,
-          signedUrl: p.signedUrl ?? null,
-        }));
-        return {
-          ...row,
-          student_exam_result_photos: normalizedPhotos,
-        } as ExamResultRow;
-      });
+      const nextRows: ExamResultRow[] = rawRows
+        .map((row: any) => {
+          const photos = Array.isArray(row.photos) ? row.photos : (row.student_exam_result_photos ?? []);
+          const normalizedPhotos: OverlayPhoto[] = photos.map((p: any) => ({
+            id: p.id,
+            storage_path: p.storage_path,
+            sort_order: p.sort_order ?? 0,
+            signedUrl: p.signedUrl ?? null,
+          }));
+          return {
+            ...row,
+            student_exam_result_photos: normalizedPhotos,
+          } as ExamResultRow;
+        })
+        .filter((row) => (row.student_exam_result_photos?.length ?? 0) > 0);
 
       // Pre-populate URL map from edge-function-provided signed URLs
       const urlMap: Record<string, string> = {};
