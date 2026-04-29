@@ -214,6 +214,7 @@ export default function Lessons() {
   const { toast } = useToast();
   
   const [isNewEntryDialogOpen, setIsNewEntryDialogOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   
   const isAssistant = checkIsAssistant(role);
   const isTeacher = checkIsTeacher(role);
@@ -826,34 +827,30 @@ export default function Lessons() {
       </div>
 
       <Tabs defaultValue="lessons" className="w-full">
-        <div className="flex items-center justify-between mb-4">
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="lessons">수업 기록</TabsTrigger>
-            {(isAdmin || isTeacher || isAssistant) && (
-              <TabsTrigger value="daily-hw">데일리숙제</TabsTrigger>
-            )}
-            {(isAdmin || isTeacher) && (
-              <TabsTrigger value="exam-prep">내신특강</TabsTrigger>
-            )}
-            {(isAdmin || isTeacher || isAssistant) && (
-              <>
-                <TabsTrigger value="test">🔬 테스트</TabsTrigger>
-                <TabsTrigger value="self_study">📚 자습</TabsTrigger>
-                <TabsTrigger value="clinic">🏥 클리닉</TabsTrigger>
-              </>
-            )}
-            {(isAdmin || isTeacher) && (
-              <>
-                <TabsTrigger value="student-profile">👤 학생 캐릭터</TabsTrigger>
-                <TabsTrigger value="math-questions" className="relative">
-                  📚 수학질문방
-                </TabsTrigger>
-                <TabsTrigger value="math-analytics">📊 질문분석</TabsTrigger>
-              </>
-            )}
-          </TabsList>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="overflow-x-auto flex-1 min-w-0">
+            <TabsList className="flex-nowrap w-max">
+              <TabsTrigger value="lessons">수업 기록</TabsTrigger>
+              {(isAdmin || isTeacher) && (
+                <TabsTrigger value="exam-prep">내신특강</TabsTrigger>
+              )}
+              {(isAdmin || isTeacher || isAssistant) && (
+                <>
+                  <TabsTrigger value="test">🔬 테스트</TabsTrigger>
+                  <TabsTrigger value="self_study">📚 자습</TabsTrigger>
+                </>
+              )}
+              {(isAdmin || isTeacher) && (
+                <>
+                  <TabsTrigger value="student-profile">👤 학생</TabsTrigger>
+                  <TabsTrigger value="math-questions">📚 수학질문방</TabsTrigger>
+                  <TabsTrigger value="math-analytics">📊 질문분석</TabsTrigger>
+                </>
+              )}
+            </TabsList>
+          </div>
           {canManage && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <Button onClick={openBatchLessonWindow} size="sm" variant="outline" className="gap-1.5">
                 <Users className="w-4 h-4" />일괄 작성
               </Button>
@@ -963,113 +960,125 @@ export default function Lessons() {
       {/* Filters */}
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Filter className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">필터</span>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">기간</Label>
-              <div className="flex items-center gap-1">
-                <Input
-                  type="date"
-                  value={filterStartDate}
-                  onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
-                  className="text-sm h-9"
-                />
-                <span className="text-muted-foreground">~</span>
-                <Input
-                  type="date"
-                  value={filterEndDate}
-                  onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
-                  className="text-sm h-9"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">상태</Label>
-              <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setCurrentPage(1); }}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  <SelectItem value="submitted">제출됨</SelectItem>
-                  <SelectItem value="draft">임시저장</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">숙제 상태</Label>
-              <Select value={filterHomeworkStatus} onValueChange={(v) => { setFilterHomeworkStatus(v); setCurrentPage(1); }}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  <SelectItem value="completed">완료</SelectItem>
-                  <SelectItem value="partial">부분 완료</SelectItem>
-                  <SelectItem value="not_done">미완료</SelectItem>
-                  <SelectItem value="none_assigned">미배정</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">과목</Label>
-              <Select value={filterSubject} onValueChange={(v) => { setFilterSubject(v); setCurrentPage(1); }}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  <SelectItem value="수학">수학</SelectItem>
-                  <SelectItem value="과학">과학</SelectItem>
-                  <SelectItem value="영어">영어</SelectItem>
-                  <SelectItem value="국어">국어</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {(isAdmin || isAssistant) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">선생님</Label>
-                <Select value={filterTeacherId} onValueChange={(v) => { setFilterTeacherId(v); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">전체</SelectItem>
-                    {teachers.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">검색</Label>
-                <Input
-                  placeholder="학생 이름 검색..."
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="h-9"
-                />
-              </div>
-            </div>
-          )}
-          
-          {hasActiveFilters && (
-            <div className="flex justify-end mt-3">
-              <Button variant="ghost" size="sm" onClick={resetFilters} className="text-muted-foreground">
-                <X className="w-4 h-4 mr-1" />
-                필터 초기화
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors"
+              onClick={() => setShowFilters(v => !v)}
+            >
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              필터
+              {hasActiveFilters && (
+                <span className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                  !
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground">{showFilters ? '▲' : '▼'}</span>
+            </button>
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="text-muted-foreground h-7 text-xs">
+                <X className="w-3.5 h-3.5 mr-1" />초기화
               </Button>
+            )}
+          </div>
+
+          {showFilters && (
+            <div className="mt-3 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">기간</Label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
+                      className="text-sm h-9"
+                    />
+                    <span className="text-muted-foreground">~</span>
+                    <Input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
+                      className="text-sm h-9"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">상태</Label>
+                  <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체</SelectItem>
+                      <SelectItem value="submitted">제출됨</SelectItem>
+                      <SelectItem value="draft">임시저장</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">숙제 상태</Label>
+                  <Select value={filterHomeworkStatus} onValueChange={(v) => { setFilterHomeworkStatus(v); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체</SelectItem>
+                      <SelectItem value="completed">완료</SelectItem>
+                      <SelectItem value="partial">부분 완료</SelectItem>
+                      <SelectItem value="not_done">미완료</SelectItem>
+                      <SelectItem value="none_assigned">미배정</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">과목</Label>
+                  <Select value={filterSubject} onValueChange={(v) => { setFilterSubject(v); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체</SelectItem>
+                      <SelectItem value="수학">수학</SelectItem>
+                      <SelectItem value="과학">과학</SelectItem>
+                      <SelectItem value="영어">영어</SelectItem>
+                      <SelectItem value="국어">국어</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {(isAdmin || isAssistant) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">선생님</Label>
+                    <Select value={filterTeacherId} onValueChange={(v) => { setFilterTeacherId(v); setCurrentPage(1); }}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">전체</SelectItem>
+                        {teachers.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">검색</Label>
+                    <Input
+                      placeholder="학생 이름 검색..."
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardHeader>
