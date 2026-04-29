@@ -377,15 +377,17 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                   </button>
                   {isOpen && (
                     <div className="space-y-1.5 pl-5">
-                      {g.items.map(r => (
-                        <div key={r.id} className="flex items-start gap-2 p-2 rounded border bg-card/50">
+                      {g.items.map(r => {
+                        const isPastYear = !!r.exam_year && r.exam_year < CURRENT_YEAR;
+                        return (
+                        <div key={r.id} className={`flex gap-2 p-2 rounded border bg-card/50 ${isPastYear ? 'items-center' : 'items-start'}`}>
                           <div className="relative flex gap-1 flex-shrink-0">
-                            {sortingIds[r.id] && (
+                            {!isPastYear && sortingIds[r.id] && (
                               <div className="absolute inset-0 z-10 rounded bg-background/80 flex items-center justify-center">
                                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
                               </div>
                             )}
-                            {r.photos.slice(0, 2).map(p => (
+                            {!isPastYear && r.photos.slice(0, 2).map(p => (
                               p.signedUrl ? (
                                 <button key={p.id} onClick={() => setPreviewPhotos(r.photos)}
                                   className="w-12 h-12 rounded overflow-hidden border hover:ring-2 hover:ring-primary">
@@ -397,12 +399,13 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                                 </div>
                               )
                             ))}
-                            {r.photos.length > 2 && (
+                            {!isPastYear && r.photos.length > 2 && (
                               <button onClick={() => setPreviewPhotos(r.photos)}
                                 className="w-12 h-12 rounded border bg-muted text-xs font-medium hover:bg-muted/80">
                                 +{r.photos.length - 2}
                               </button>
                             )}
+                            {isPastYear && <div className="w-8 h-8 rounded border bg-muted/60 flex items-center justify-center"><FileText className="w-4 h-4 text-muted-foreground" /></div>}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -436,11 +439,11 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                                 {format(new Date(r.submitted_at), 'M/d HH:mm', { locale: ko })}
                               </span>
                             </div>
-                            {r.exam_date && (
+                             {!isPastYear && r.exam_date && (
                               <p className="text-[10px] text-muted-foreground mt-0.5">시험일: {format(new Date(r.exam_date), 'yyyy-MM-dd')}</p>
                             )}
-                            {r.note && <p className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{r.note}</p>}
-                            {r.pdfs.length > 0 && (
+                            {!isPastYear && r.note && <p className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{r.note}</p>}
+                            {!isPastYear && r.pdfs.length > 0 && (
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {r.pdfs.map(p => (
                                   <span key={p.id} className="inline-flex items-center gap-1 text-[10px] bg-muted/80 rounded px-1.5 py-0.5">
@@ -451,7 +454,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-1.5 flex flex-wrap gap-1">
+                            {!isPastYear && <div className="mt-1.5 flex flex-wrap gap-1">
                               <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => handleConvertToPdf(r)} disabled={busyIds[r.id] || r.photos.length === 0}>
                                 {busyIds[r.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} PDF 변환
                               </Button>
@@ -471,10 +474,11 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                               <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] gap-1 text-destructive hover:text-destructive" onClick={() => handleDelete(r)}>
                                 <Trash2 className="w-3 h-3" /> 삭제
                               </Button>
-                            </div>
+                            </div>}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
