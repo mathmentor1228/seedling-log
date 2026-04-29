@@ -27,28 +27,40 @@ const EXAM_TYPE_COLORS: Record<string, string> = {
   other: 'bg-muted text-muted-foreground',
 };
 
+const CURRENT_YEAR = new Date().getFullYear();
+
+const inferSchoolLevel = (value: string | null | undefined) => {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  if (text.includes('고') || text === 'high') return 'high';
+  if (text.includes('중') || text === 'middle') return 'middle';
+  if (text.includes('초') || text === 'elementary') return 'elementary';
+  return null;
+};
+
 const formatStudentGrade = (grade: string | null | undefined, schoolLevel?: string | null) => {
   const value = String(grade ?? '').trim();
   if (!value) return '';
   if (/^(초|중|고)\s*\d+$/.test(value)) return value.replace(/\s+/g, '');
   const numeric = value.match(/\d+/)?.[0];
   if (!numeric) return value.replace(/학년/g, '');
-  if (value.includes('초') || schoolLevel?.includes('초') || schoolLevel === 'elementary') return `초${numeric}`;
-  if (value.includes('중') || schoolLevel?.includes('중') || schoolLevel === 'middle') return `중${numeric}`;
-  if (value.includes('고') || schoolLevel?.includes('고') || schoolLevel === 'high') return `고${numeric}`;
+  const inferredLevel = inferSchoolLevel(schoolLevel) || inferSchoolLevel(value);
+  if (inferredLevel === 'elementary') return `초${numeric}`;
+  if (inferredLevel === 'middle') return `중${numeric}`;
+  if (inferredLevel === 'high') return `고${numeric}`;
   return value.replace(/학년/g, '');
 };
 
 const toAbsoluteGrade = (grade: string | null | undefined, schoolLevel: string | null | undefined) => {
   const value = String(grade ?? '').trim();
-  const level = String(schoolLevel ?? '').trim();
+  const level = inferSchoolLevel(schoolLevel);
   const numeric = Number(value.match(/\d+/)?.[0]);
   if (!Number.isFinite(numeric) || numeric <= 0) return null;
   if (value.includes('고')) return numeric + 9;
   if (value.includes('중')) return numeric + 6;
   if (value.includes('초')) return numeric;
-  if (level === 'high' || level.includes('고')) return numeric + 9;
-  if (level === 'middle' || level.includes('중')) return numeric + 6;
+  if (level === 'high') return numeric + 9;
+  if (level === 'middle') return numeric + 6;
   return numeric;
 };
 
@@ -61,11 +73,11 @@ const formatAbsoluteGrade = (absoluteGrade: number | null) => {
 };
 
 const getGradeAtExamYear = (student: any, examYear: number | null, fallback: string | null | undefined) => {
-  if (!examYear) return formatStudentGrade(fallback, student?.school_level) || null;
-  const currentAbsoluteGrade = toAbsoluteGrade(student?.grade, student?.school_level);
-  if (!currentAbsoluteGrade) return formatStudentGrade(fallback, student?.school_level) || null;
-  const currentYear = new Date().getFullYear();
-  return formatAbsoluteGrade(currentAbsoluteGrade - (currentYear - examYear)) || formatStudentGrade(fallback, student?.school_level) || null;
+  const levelContext = student?.school_level || inferSchoolLevel(student?.school);
+  if (!examYear) return formatStudentGrade(fallback, levelContext) || null;
+  const currentAbsoluteGrade = toAbsoluteGrade(student?.grade, levelContext);
+  if (!currentAbsoluteGrade) return formatStudentGrade(fallback, levelContext) || null;
+  return formatAbsoluteGrade(currentAbsoluteGrade - (CURRENT_YEAR - examYear)) || formatStudentGrade(fallback, levelContext) || null;
 };
 
 interface Photo { id: string; storage_path: string; signedUrl?: string | null; }
@@ -126,7 +138,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
 
       const studentIds = Array.from(new Set((rows || []).map((r: any) => r.student_id)));
       const { data: students } = studentIds.length > 0
-        ? await supabase.from('students').select('id, name, grade, school_level, enrollment_status').in('id', studentIds)
+        ? await supabase.from('students').select('id, name, grade, school, school_level, enrollment_status').in('id', studentIds)
         : { data: [] as any[] };
       const studentMap = new Map((students || []).map((s: any) => [s.id, s]));
 
@@ -148,7 +160,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
           ...r,
           student_name: s?.name || '알 수 없음',
           student_grade: getGradeAtExamYear(s, r.exam_year, r.grade_at_exam),
-          student_current_grade: formatStudentGrade(s?.grade, s?.school_level) || null,
+          student_current_grade: formatStudentGrade(s?.grade, s?.school_level || inferSchoolLevel(s?.school)) || null,
           student_enrollment_status: s?.enrollment_status || null,
           photos, pdfs,
         } as Result;
@@ -365,15 +377,17 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                   </button>
                   {isOpen && (
                     <div className="space-y-1.5 pl-5">
-                      {g.items.map(r => (
-                        <div key={r.id} className="flex items-start gap-2 p-2 rounded border bg-card/50">
+                      {g.items.map(r => {
+                        const isPastYear = !!r.exam_year && r.exam_year < CURRENT_YEAR;
+                        return (
+                        <div key={r.id} className={`flex gap-2 p-2 rounded border bg-card/50 ${isPastYear ? 'items-center' : 'items-start'}`}>
                           <div className="relative flex gap-1 flex-shrink-0">
-                            {sortingIds[r.id] && (
+                            {!isPastYear && sortingIds[r.id] && (
                               <div className="absolute inset-0 z-10 rounded bg-background/80 flex items-center justify-center">
                                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
                               </div>
                             )}
-                            {r.photos.slice(0, 2).map(p => (
+                            {!isPastYear && r.photos.slice(0, 2).map(p => (
                               p.signedUrl ? (
                                 <button key={p.id} onClick={() => setPreviewPhotos(r.photos)}
                                   className="w-12 h-12 rounded overflow-hidden border hover:ring-2 hover:ring-primary">
@@ -385,12 +399,13 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                                 </div>
                               )
                             ))}
-                            {r.photos.length > 2 && (
+                            {!isPastYear && r.photos.length > 2 && (
                               <button onClick={() => setPreviewPhotos(r.photos)}
                                 className="w-12 h-12 rounded border bg-muted text-xs font-medium hover:bg-muted/80">
                                 +{r.photos.length - 2}
                               </button>
                             )}
+                            {isPastYear && <div className="w-8 h-8 rounded border bg-muted/60 flex items-center justify-center"><FileText className="w-4 h-4 text-muted-foreground" /></div>}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -424,11 +439,11 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                                 {format(new Date(r.submitted_at), 'M/d HH:mm', { locale: ko })}
                               </span>
                             </div>
-                            {r.exam_date && (
+                             {!isPastYear && r.exam_date && (
                               <p className="text-[10px] text-muted-foreground mt-0.5">시험일: {format(new Date(r.exam_date), 'yyyy-MM-dd')}</p>
                             )}
-                            {r.note && <p className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{r.note}</p>}
-                            {r.pdfs.length > 0 && (
+                            {!isPastYear && r.note && <p className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{r.note}</p>}
+                            {!isPastYear && r.pdfs.length > 0 && (
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {r.pdfs.map(p => (
                                   <span key={p.id} className="inline-flex items-center gap-1 text-[10px] bg-muted/80 rounded px-1.5 py-0.5">
@@ -439,7 +454,7 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                                 ))}
                               </div>
                             )}
-                            <div className="mt-1.5 flex flex-wrap gap-1">
+                            {!isPastYear && <div className="mt-1.5 flex flex-wrap gap-1">
                               <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1" onClick={() => handleConvertToPdf(r)} disabled={busyIds[r.id] || r.photos.length === 0}>
                                 {busyIds[r.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} PDF 변환
                               </Button>
@@ -459,10 +474,11 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                               <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] gap-1 text-destructive hover:text-destructive" onClick={() => handleDelete(r)}>
                                 <Trash2 className="w-3 h-3" /> 삭제
                               </Button>
-                            </div>
+                            </div>}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
