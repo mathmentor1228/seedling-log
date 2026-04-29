@@ -231,11 +231,17 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     setAnswerImageUrls([]);
 
     function resolveUrl(path: string): Promise<string | null> {
+
       if (path.startsWith('exam-papers/') || path.startsWith('exam-pages/')) {
+
         const { data } = supabase.storage.from('exam-files').getPublicUrl(path);
+
         return Promise.resolve(data.publicUrl ?? null);
+
       }
+
       return getCachedSignedUrl('exam-analysis', path, 3600);
+
     }
 
     if (originalPath) {
