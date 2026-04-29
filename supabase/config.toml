@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.scan-exam-schedule]
 verify_jwt = false
+
+[functions.upload-exam-file]
+verify_jwt = false
