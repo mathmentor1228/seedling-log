@@ -140,13 +140,15 @@ function PrincipalContent() {
       const logsRes = await supabase.from('attendance_logs').select('*').eq('date', today);
       if (logsRes.data) setLogs(logsRes.data as AttendanceLog[]);
 
-      // 2. 오늘 수업 일정 (전체 선생님)
-      const { data: schedules } = await supabase
+      // 2. 오늘 수업 일정 (profiles 별도 조회 — class_schedules에 profiles FK 없음)
+      const { data: schedules, error: schedErr } = await supabase
         .from('class_schedules')
-        .select('id, start_time, end_time, class_id, teacher_id, classes(name, subject), profiles:teacher_id(full_name)')
+        .select('id, start_time, end_time, class_id, teacher_id, classes(name, subject)')
         .eq('day_of_week', todayDow)
         .eq('is_active', true)
         .order('start_time');
+
+      if (schedErr) console.error('[PrincipalDash] schedules error:', schedErr);
 
       if (!schedules || schedules.length === 0) {
         setClassroomSlots([]);
@@ -155,6 +157,17 @@ function PrincipalContent() {
       }
 
       const classIds = schedules.map((s: any) => s.class_id).filter(Boolean);
+      const teacherIds = [...new Set(schedules.map((s: any) => s.teacher_id).filter(Boolean))];
+
+      // 2b. 선생님 이름 별도 조회
+      let teacherMap: Record<string, string> = {};
+      if (teacherIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', teacherIds);
+        (profiles || []).forEach((p: any) => { teacherMap[p.id] = p.full_name; });
+      }
 
       // 3. 각 수업의 학생 목록
       const { data: classStudents } = await supabase
@@ -197,7 +210,7 @@ function PrincipalContent() {
           subject: s.classes?.subject || '-',
           startTime: s.start_time?.slice(0, 5) || '',
           endTime: s.end_time?.slice(0, 5) || '',
-          teacherName: s.profiles?.full_name || '-',
+          teacherName: teacherMap[s.teacher_id] || '-',
           students,
         };
       });
