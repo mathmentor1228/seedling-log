@@ -54,6 +54,17 @@ interface ExamResultRow {
   exam_reviews: ReviewSummary[] | null;
 }
 
+interface RawExamResultPhoto {
+  id: string;
+  storage_path: string;
+  sort_order?: number | null;
+  signedUrl?: string | null;
+}
+
+type RawExamResultRow = ExamResultRow & {
+  photos?: RawExamResultPhoto[] | null;
+};
+
 interface ScoreTemplateRow {
   id: string;
   total_items: number;
@@ -287,10 +298,10 @@ export function ExamReviewPanel() {
       if (!res.ok) throw new Error(payload?.error || '목록 조회에 실패했습니다.');
 
       const rawRows = Array.isArray(payload?.results) ? payload.results : [];
-      const nextRows: ExamResultRow[] = rawRows
-        .map((row: any) => {
+      const nextRows: ExamResultRow[] = (rawRows as RawExamResultRow[])
+        .map((row) => {
           const photos = Array.isArray(row.photos) ? row.photos : (row.student_exam_result_photos ?? []);
-          const normalizedPhotos: OverlayPhoto[] = photos.map((p: any) => ({
+          const normalizedPhotos: OverlayPhoto[] = photos.map((p) => ({
             id: p.id,
             storage_path: p.storage_path,
             sort_order: p.sort_order ?? 0,
