@@ -27,28 +27,40 @@ const EXAM_TYPE_COLORS: Record<string, string> = {
   other: 'bg-muted text-muted-foreground',
 };
 
+const CURRENT_YEAR = new Date().getFullYear();
+
+const inferSchoolLevel = (value: string | null | undefined) => {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  if (text.includes('고') || text === 'high') return 'high';
+  if (text.includes('중') || text === 'middle') return 'middle';
+  if (text.includes('초') || text === 'elementary') return 'elementary';
+  return null;
+};
+
 const formatStudentGrade = (grade: string | null | undefined, schoolLevel?: string | null) => {
   const value = String(grade ?? '').trim();
   if (!value) return '';
   if (/^(초|중|고)\s*\d+$/.test(value)) return value.replace(/\s+/g, '');
   const numeric = value.match(/\d+/)?.[0];
   if (!numeric) return value.replace(/학년/g, '');
-  if (value.includes('초') || schoolLevel?.includes('초') || schoolLevel === 'elementary') return `초${numeric}`;
-  if (value.includes('중') || schoolLevel?.includes('중') || schoolLevel === 'middle') return `중${numeric}`;
-  if (value.includes('고') || schoolLevel?.includes('고') || schoolLevel === 'high') return `고${numeric}`;
+  const inferredLevel = inferSchoolLevel(schoolLevel) || inferSchoolLevel(value);
+  if (inferredLevel === 'elementary') return `초${numeric}`;
+  if (inferredLevel === 'middle') return `중${numeric}`;
+  if (inferredLevel === 'high') return `고${numeric}`;
   return value.replace(/학년/g, '');
 };
 
 const toAbsoluteGrade = (grade: string | null | undefined, schoolLevel: string | null | undefined) => {
   const value = String(grade ?? '').trim();
-  const level = String(schoolLevel ?? '').trim();
+  const level = inferSchoolLevel(schoolLevel);
   const numeric = Number(value.match(/\d+/)?.[0]);
   if (!Number.isFinite(numeric) || numeric <= 0) return null;
   if (value.includes('고')) return numeric + 9;
   if (value.includes('중')) return numeric + 6;
   if (value.includes('초')) return numeric;
-  if (level === 'high' || level.includes('고')) return numeric + 9;
-  if (level === 'middle' || level.includes('중')) return numeric + 6;
+  if (level === 'high') return numeric + 9;
+  if (level === 'middle') return numeric + 6;
   return numeric;
 };
 
@@ -61,11 +73,11 @@ const formatAbsoluteGrade = (absoluteGrade: number | null) => {
 };
 
 const getGradeAtExamYear = (student: any, examYear: number | null, fallback: string | null | undefined) => {
-  if (!examYear) return formatStudentGrade(fallback, student?.school_level) || null;
-  const currentAbsoluteGrade = toAbsoluteGrade(student?.grade, student?.school_level);
-  if (!currentAbsoluteGrade) return formatStudentGrade(fallback, student?.school_level) || null;
-  const currentYear = new Date().getFullYear();
-  return formatAbsoluteGrade(currentAbsoluteGrade - (currentYear - examYear)) || formatStudentGrade(fallback, student?.school_level) || null;
+  const levelContext = student?.school_level || inferSchoolLevel(student?.school);
+  if (!examYear) return formatStudentGrade(fallback, levelContext) || null;
+  const currentAbsoluteGrade = toAbsoluteGrade(student?.grade, levelContext);
+  if (!currentAbsoluteGrade) return formatStudentGrade(fallback, levelContext) || null;
+  return formatAbsoluteGrade(currentAbsoluteGrade - (CURRENT_YEAR - examYear)) || formatStudentGrade(fallback, levelContext) || null;
 };
 
 interface Photo { id: string; storage_path: string; signedUrl?: string | null; }
