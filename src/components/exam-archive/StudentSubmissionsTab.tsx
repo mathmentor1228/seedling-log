@@ -390,6 +390,11 @@ export function StudentSubmissionsTab({ schoolName }: Props) {
                               <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                                 {r.exam_year ? `${r.exam_year}년` : '연도 미지정'}
                               </Badge>
+                              {formatStudentGrade(r.student_grade) && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                                  {formatStudentGrade(r.student_grade)}
+                                </Badge>
+                              )}
                               <Badge className={`text-[10px] h-4 px-1.5 border ${EXAM_TYPE_COLORS[r.exam_type] || ''}`}>
                                 {EXAM_TYPE_LABELS[r.exam_type]}
                               </Badge>
