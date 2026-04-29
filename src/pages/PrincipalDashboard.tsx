@@ -94,8 +94,13 @@ function StatCard({ label, value, sub, color, icon: Icon }: {
 /*  Room config (강의실 목록)                                           */
 /* ------------------------------------------------------------------ */
 const ROOMS = [
-  { id: 'room10', label: '10강의실' },
-  { id: 'glass', label: '유리문강의실' },
+  { id: 'room2',  label: '2강의실',  teacher: '최윤기' },
+  { id: 'room4',  label: '4강의실',  teacher: '조준희' },
+  { id: 'room5',  label: '5강의실',  teacher: '고대영' },
+  { id: 'room6',  label: '6강의실',  teacher: '이나연' },
+  { id: 'room7',  label: '7강의실',  teacher: '정선호' },
+  { id: 'room8',  label: '8강의실',  teacher: '김민희' },
+  { id: 'room9',  label: '9강의실',  teacher: '황은지' },
 ];
 
 const fmtTime = (iso: string) =>
@@ -210,7 +215,10 @@ function PrincipalContent() {
                     <CardContent className="p-3 space-y-2">
                       {/* 헤더 */}
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold">{room.label}</span>
+                        <div>
+                          <span className="text-sm font-semibold">{room.label}</span>
+                          <span className="text-xs text-muted-foreground ml-1.5">{room.teacher}T</span>
+                        </div>
                         <Badge
                           variant="outline"
                           className={cn(

@@ -11,8 +11,13 @@ import { cn, getTodayKST } from '@/lib/utils';
 import { LogIn, LogOut, AlertTriangle, Users } from 'lucide-react';
 
 const ROOMS = [
-  { id: 'room10', label: '10강의실' },
-  { id: 'glass', label: '유리문강의실' },
+  { id: 'room2', label: '2강의실' },
+  { id: 'room4', label: '4강의실' },
+  { id: 'room5', label: '5강의실' },
+  { id: 'room6', label: '6강의실' },
+  { id: 'room7', label: '7강의실' },
+  { id: 'room8', label: '8강의실' },
+  { id: 'room9', label: '9강의실' },
 ] as const;
 
 const getDayOfWeek = (dateStr: string): string => {
@@ -58,7 +63,7 @@ interface AssignedStudent {
 export function AttendanceTab() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedRoom, setSelectedRoom] = useState<string>('room10');
+  const [selectedRoom, setSelectedRoom] = useState<string>('room2');
   const [selectedDate, setSelectedDate] = useState(getTodayKST());
   const [assignedStudents, setAssignedStudents] = useState<AssignedStudent[]>([]);
   const [attendance, setAttendance] = useState<AttendanceLog[]>([]);
