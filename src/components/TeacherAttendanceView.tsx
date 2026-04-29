@@ -386,7 +386,7 @@ export function TeacherAttendanceView() {
         if (clearLogsError) throw clearLogsError;
       }
 
-      if (newStatus === '결석' && supplementaryDate) {
+      if (supplementaryDate) {
         const notesContent = `[보충 시간: ${supplementaryTime}]`;
         const { error: supplementaryInsertError } = await supabase.from('lesson_records').insert({
           teacher_id: teacherId,

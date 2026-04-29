@@ -65,6 +65,7 @@ interface LessonRecord {
   submitted_at: string | null;
   draft_created_at: string;
   teacher_id?: string;
+  teacher_display_name?: string | null;
   teacher_name?: string;
 }
 
@@ -383,7 +384,7 @@ export default function Lessons() {
       let formattedLessons = (data || []).map((l: any) => ({
         ...l,
         student_name: l.students?.name,
-        teacher_name: teacherNameMap[l.teacher_id] || '',
+        teacher_name: l.teacher_display_name || teacherNameMap[l.teacher_id] || '',
       }));
 
       if (searchQuery) {
