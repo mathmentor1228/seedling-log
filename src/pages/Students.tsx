@@ -399,8 +399,8 @@ export default function Students() {
       <UnvisitedParentsList />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Students</h1>
-          <p className="text-muted-foreground mt-1">Manage your student directory</p>
+          <h1 className="text-2xl font-bold text-foreground">학생 관리</h1>
+          <p className="text-muted-foreground mt-1">학생 정보를 등록하고 관리합니다</p>
         </div>
 
         {isAdmin(role) && (
@@ -416,29 +416,29 @@ export default function Students() {
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Student
+                  학생 추가
                 </Button>
               </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>
-                  {editingStudent ? 'Edit Student' : 'Add New Student'}
+                  {editingStudent ? '학생 정보 수정' : '학생 추가'}
                 </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2 col-span-2">
-                    <Label htmlFor="name">Name *</Label>
+                    <Label htmlFor="name">이름 *</Label>
                     <Input
                       id="name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Student name"
+                      placeholder="학생 이름"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="grade">Grade/Level (기존)</Label>
+                    <Label htmlFor="grade">학년 텍스트 (기존)</Label>
                     <Input
                       id="grade"
                       value={formData.grade}
@@ -508,16 +508,16 @@ export default function Students() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="school">School</Label>
+                    <Label htmlFor="school">학교</Label>
                     <Input
                       id="school"
                       value={formData.school}
                       onChange={(e) => setFormData({ ...formData, school: e.target.value })}
-                      placeholder="e.g., 서울고등학교"
+                      placeholder="예: 신길고등학교"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="student_phone">Student Phone</Label>
+                    <Label htmlFor="student_phone">학생 연락처</Label>
                     <Input
                       id="student_phone"
                       value={formData.student_phone}
@@ -526,7 +526,7 @@ export default function Students() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="parent_phone">Parent Phone</Label>
+                    <Label htmlFor="parent_phone">학부모 연락처</Label>
                     <Input
                       id="parent_phone"
                       value={formData.parent_phone}
@@ -544,7 +544,7 @@ export default function Students() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">이메일</Label>
                     <Input
                       id="email"
                       type="email"
@@ -554,16 +554,16 @@ export default function Students() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Other Phone</Label>
+                    <Label htmlFor="phone">기타 연락처</Label>
                     <Input
                       id="phone"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="Optional"
+                      placeholder="선택 입력"
                     />
                   </div>
                   <div className="space-y-2 col-span-2">
-                    <Label htmlFor="notes">Notes</Label>
+                    <Label htmlFor="notes">메모</Label>
                     <Input
                       id="notes"
                       value={formData.notes}
@@ -578,11 +578,11 @@ export default function Students() {
                     variant="outline"
                     onClick={() => setIsAddDialogOpen(false)}
                   >
-                    Cancel
+                    취소
                   </Button>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    {editingStudent ? 'Update' : 'Add'} Student
+                    {editingStudent ? '수정 완료' : '학생 추가'}
                   </Button>
                 </div>
               </form>
@@ -680,21 +680,19 @@ export default function Students() {
                          />
                        </TableHead>
                      )}
-                     <TableHead>Name</TableHead>
+                     <TableHead>이름</TableHead>
                      <TableHead
                        className="cursor-pointer select-none"
                        onClick={() => setSortByDueDay(!sortByDueDay)}
                      >
                        납부일 {sortByDueDay ? '▲' : ''}
                      </TableHead>
-                     <TableHead>학생코드</TableHead>
                      <TableHead>상태</TableHead>
-                     <TableHead>Grade</TableHead>
-                     <TableHead>School</TableHead>
-                     <TableHead>Phone</TableHead>
+                     <TableHead>학년</TableHead>
+                     <TableHead>학교</TableHead>
+                     <TableHead>연락처</TableHead>
                      <TableHead>수강료</TableHead>
-                     <TableHead>Added</TableHead>
-                     <TableHead className="w-[120px]">Actions</TableHead>
+                     <TableHead className="w-[100px]">관리</TableHead>
                    </TableRow>
                  </TableHeader>
                  <TableBody>
@@ -727,15 +725,6 @@ export default function Students() {
                           )}
                         </TableCell>
                       <TableCell>
-                        {student.student_code ? (
-                          <code className="bg-muted px-2 py-0.5 rounded text-xs font-mono">
-                            {student.student_code}
-                          </code>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
                         <Badge
                           variant={
                             student.enrollment_status === '재학' ? 'default' :
@@ -752,11 +741,15 @@ export default function Students() {
                           {student.enrollment_status || '재학'}
                         </Badge>
                       </TableCell>
-                      <TableCell>{student.grade || '-'}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-sm">
+                        {student.school_level && student.grade_year
+                          ? `${student.school_level}${student.grade_year}`
+                          : student.grade || '-'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
                         {student.school || '-'}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-sm">
                         {student.student_phone || student.phone || '-'}
                       </TableCell>
                       <TableCell>
@@ -771,9 +764,6 @@ export default function Students() {
                             </div>
                           );
                         })()}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {format(new Date(student.created_at), 'MMM d, yyyy')}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
