@@ -124,8 +124,15 @@ function PrincipalContent() {
   const [classroomSlots, setClassroomSlots] = useState<ClassroomSlot[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const todayDow = useMemo(() => new Date().getDay(), []);
+  // KST 기준 오늘 날짜 및 요일 (UTC+9)
+  const today = useMemo(() => {
+    const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    return kst.toISOString().split('T')[0];
+  }, []);
+  const todayDow = useMemo(() => {
+    const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    return kst.getUTCDay();
+  }, []);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -264,12 +271,14 @@ function PrincipalContent() {
           </div>
 
           {/* 강의실 수업 현황 */}
-          {classroomSlots.length > 0 && (
-            <div className="space-y-2">
-              <h2 className="text-sm font-semibold flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-primary" />
-                오늘 강의실 현황
-              </h2>
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-primary" />
+              오늘 강의실 현황
+            </h2>
+          {classroomSlots.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">오늘 등록된 수업이 없습니다.</p>
+          ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {classroomSlots.map(slot => {
                   const present = slot.students.filter(s => s.status === '정상등원' || s.status === '지각');
@@ -329,8 +338,8 @@ function PrincipalContent() {
                   );
                 })}
               </div>
-            </div>
           )}
+          </div>
 
           {/* 일정 + 코멘트/요청 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
