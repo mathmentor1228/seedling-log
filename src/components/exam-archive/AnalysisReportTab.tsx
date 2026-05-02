@@ -661,7 +661,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     });
   }
 
-  async function runAIParse(fileDataUrl: string, fileName: string, fileMimeType: string | null) {
+  async function runAIParse(fileDataUrl: string, fileName: string, fileMimeType: string | null, mode: AIParseMode) {
     const { data: result, error } = await supabase.functions.invoke('analyze-school-document', {
       body: {
         fileDataUrl,
@@ -673,19 +673,37 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       },
     });
     if (error || result?.error) throw new Error(error?.message || result?.error || 'AI 분석 실패');
-    applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis);
+    applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis, mode);
   }
 
-  async function handleAIParse(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
+  // AI_PARSE_OPTIONIZATION_V1
+  async function handleAIParseFile(file: File, mode: AIParseMode) {
     if (isLocked) {
-      toast.error('잠금 상태에서는 AI 분석을 실행할 수 없습니다.');
+      toast.error('잠금 상태에서는 파일을 변경할 수 없습니다.');
       return;
     }
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
       toast.error('이미지 또는 PDF 파일만 업로드할 수 있습니다.');
+      return;
+    }
+
+    // Always upload the file
+    const safeId = selectedReportId ?? crypto.randomUUID();
+    const extension = file.name.split('.').pop()?.toLowerCase() || (file.type === 'application/pdf' ? 'pdf' : 'png');
+    const path = `exam-analysis/${safeId}/original-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from('exam-analysis').upload(path, file, {
+      contentType: file.type || undefined,
+      upsert: true,
+    });
+    if (uploadError) {
+      toast.error('시험지 업로드에 실패했습니다.');
+      console.error(uploadError);
+      return;
+    }
+    updateForm('originalPdfPath', path);
+
+    if (mode === 'skip') {
+      toast.success('시험지를 업로드했어요. (AI 자동 분석은 건너뜀)');
       return;
     }
 
@@ -698,19 +716,8 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-
-      await runAIParse(fileDataUrl, file.name, file.type || null);
-
-      const safeId = selectedReportId ?? crypto.randomUUID();
-      const extension = file.name.split('.').pop()?.toLowerCase() || (file.type === 'application/pdf' ? 'pdf' : 'png');
-      const path = `exam-analysis/${safeId}/original-${Date.now()}.${extension}`;
-      const { error: uploadError } = await supabase.storage.from('exam-analysis').upload(path, file, {
-        contentType: file.type || undefined,
-        upsert: true,
-      });
-      if (!uploadError) updateForm('originalPdfPath', path);
-
-      toast.success('AI 분석이 완료됐어요.');
+      await runAIParse(fileDataUrl, file.name, file.type || null, mode);
+      toast.success(mode === 'replace' ? 'AI 분석으로 시험 총평을 대체했어요.' : 'AI 분석을 추가했어요.');
     } catch (error) {
       console.error(error);
       toast.error(error instanceof Error ? error.message : 'AI 분석 실패. 다시 시도해주세요.');
@@ -719,7 +726,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     }
   }
 
-  async function parseExistingPdf() {
+  async function parseExistingPdf(mode: Exclude<AIParseMode, 'skip'> = 'append') {
     if (isLocked) {
       toast.error('잠금 상태에서는 AI 분석을 실행할 수 없습니다.');
       return;
@@ -742,7 +749,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
         },
       });
       if (error || result?.error) throw new Error(error?.message || result?.error || 'AI 분석 실패');
-      applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis);
+      applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis, mode);
       toast.success('AI 분석이 완료됐어요.');
     } catch (error) {
       console.error(error);
