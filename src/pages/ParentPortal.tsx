@@ -2,8 +2,9 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar, Camera, MessageSquare, TrendingUp } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar, Camera, MessageSquare, TrendingUp, Sparkles } from 'lucide-react';
 import { ExamDdayBannerStatic } from '@/components/ExamDdayBanner';
+import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 /* ═══════ Types ═══════ */
@@ -19,7 +20,7 @@ interface UpcomingSupplement { id: string; date: string; subject: string; range:
 interface UnpaidTextbook { id: string; textbook_name: string; subject: string; total_amount: number; created_at: string; }
 interface ExamPrepScheduleItem { course_id: string; subject: string; title: string; description: string | null; status: string; sessions: Array<{ session_label: string; schedule_date: string; start_time: string; end_time: string }>; }
 interface DeepExamReport { id: string; overall_insights: string | null; difficult_points: Array<{ title?: string; reason?: string; study_tip?: string }>; score_band_recommendations: Array<{ band?: string; diagnosis?: string; priority?: string }>; student_recommendations: Array<{ student_id?: string; student_name?: string; score_band?: string; summary?: string; recommended_actions?: string[] }>; published_at: string | null; exam_analysis_reports?: { school_name?: string; subject?: string; exam_year?: number; exam_period?: string; exam_type?: string; exam_scope?: string | null }; }
-interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; }
+interface PortalData { student: StudentInfo; homework: Homework[]; lessons: LessonRecord[]; attendance: Attendance[]; reports: WeeklyReport[]; vocab_schedules?: VocabScheduleItem[]; vocab_results?: VocabResultItem[]; class_schedule?: ClassScheduleItem[]; upcoming_supplements?: UpcomingSupplement[]; exam_events?: Array<{ id: string; title: string; start_at: string; end_at: string | null }>; unpaid_textbooks?: UnpaidTextbook[]; account_info?: string | null; exam_prep_schedules?: ExamPrepScheduleItem[]; deep_exam_reports?: DeepExamReport[]; published_analysis_reports?: any[]; }
 
 /* ═══════ Constants ═══════ */
 const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -163,6 +164,21 @@ export default function ParentPortal() {
         {/* Exam Prep Schedules for Parent */}
         {data.exam_prep_schedules && data.exam_prep_schedules.length > 0 && (
           <ExamPrepParentSection schedules={data.exam_prep_schedules} />
+        )}
+
+        {(data.published_analysis_reports && data.published_analysis_reports.length > 0) && (
+          <section className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-semibold text-muted-foreground">새로 도착한 시험 분석</h3>
+              <Badge variant="outline" className="text-[10px]">{data.published_analysis_reports.length}건</Badge>
+            </div>
+            <div className="space-y-3">
+              {(data.published_analysis_reports as PublishedReportLite[]).map((r) => (
+                <PublishedReportCard key={r.id} report={r} audience="parent" logView />
+              ))}
+            </div>
+          </section>
         )}
 
         {deepExamReports.length > 0 && <DeepExamParentSection reports={deepExamReports} studentName={student.name} />}

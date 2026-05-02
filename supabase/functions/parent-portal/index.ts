@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     // D-day: no date cap — always show nearest upcoming exam
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes, deepExamRes, examResultYearsRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes, deepExamRes, examResultYearsRes, publishedAnalysisRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url")
@@ -200,6 +200,8 @@ Deno.serve(async (req) => {
         .from("student_exam_results")
         .select("id, exam_year, student_exam_result_photos(id)")
         .eq("student_id", studentId),
+      // EXAM-ANALYSIS-PUBLIC-V1: published analysis reports for this child
+      supabase.rpc("get_published_analysis_for_parent_token", { _parent_token: token }),
     ]);
 
     // Fetch class schedules for the student's classes
@@ -304,6 +306,25 @@ Deno.serve(async (req) => {
         })(),
         unpaid_textbooks: unpaidTextbooks,
         account_info: unpaidTextbooks.length > 0 ? '카카오 3333156191775 최윤기' : null,
+        published_analysis_reports: (publishedAnalysisRes.data || []).map((r: any) => ({
+          id: r.id,
+          school_name: r.school_name,
+          grade: r.grade,
+          subject: r.subject,
+          exam_type: r.exam_type,
+          exam_year: r.exam_year,
+          exam_period: r.exam_period,
+          exam_scope: r.exam_scope,
+          textbook: r.textbook,
+          avg_score: r.avg_score,
+          exam_difficulty: r.exam_difficulty,
+          overall_review: r.overall_review,
+          card_image_paths: Array.isArray(r.card_image_paths) ? r.card_image_paths : [],
+          student_message: r.student_message,
+          parent_message: r.parent_message,
+          published_at: r.published_at,
+          updated_at: r.updated_at,
+        })),
         deep_exam_reports: (deepExamRes.data || [])
           .filter((report: any) => submittedExamYears.has(report.exam_analysis_reports?.exam_year))
           .slice(0, 6),

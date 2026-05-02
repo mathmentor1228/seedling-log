@@ -8,7 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 import { SelfCheckTab } from '@/components/student/exam-review/SelfCheckTab';
-import { CheckCircle2, ClipboardCheck, Image as ImageIcon, School } from 'lucide-react';
+import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
+import { useStudentAuth } from '@/lib/studentAuth';
+import { CheckCircle2, ClipboardCheck, Image as ImageIcon, School, Sparkles } from 'lucide-react';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
 type ItemResult = 'correct' | 'wrong' | 'partial' | null;
@@ -245,10 +247,12 @@ function MiniStat({ value, label, variant }: { value: string; label: string; var
 }
 
 export default function StudentExamReview() {
+  const { student } = useStudentAuth();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
   const [schoolReport, setSchoolReport] = useState<SchoolExamReport | null>(null);
   const [deepReports, setDeepReports] = useState<DeepExamReport[]>([]);
+  const [publishedReports, setPublishedReports] = useState<PublishedReportLite[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
@@ -262,6 +266,7 @@ export default function StudentExamReview() {
     setRows((data?.reviews || []) as ExamReviewRow[]);
     setSchoolReport((data?.school_report || null) as SchoolExamReport | null);
     setDeepReports((data?.deep_reports || []) as DeepExamReport[]);
+    setPublishedReports(((data as any)?.published_analysis_reports || []) as PublishedReportLite[]);
     setAvailableYears((data?.available_years || []) as number[]);
     setSelectedYear((data?.selected_exam_year ?? null) as number | null);
     setLoading(false);
@@ -312,6 +317,26 @@ export default function StudentExamReview() {
             </SelectContent>
           </Select>
         </div>
+      ) : null}
+
+      {!loading && publishedReports.length > 0 ? (
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-pink-500" />
+            <h2 className="text-base font-bold text-foreground">새로 도착한 시험 분석</h2>
+            <Badge variant="outline" className="text-[10px]">{publishedReports.length}건</Badge>
+          </div>
+          <div className="space-y-3">
+            {publishedReports.map((report) => (
+              <PublishedReportCard
+                key={report.id}
+                report={report}
+                audience="student"
+                studentId={student?.id ?? null}
+              />
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {!loading && hasSubmittedExamPhotos ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} onOpenSelfCheck={openSelfCheck} /> : null}

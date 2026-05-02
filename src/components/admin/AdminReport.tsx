@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { LessonModal } from '@/components/lessons/LessonModal';
 import { OpsChangelogSection } from './OpsChangelogSection';
+import { AnalysisReportViewsSection } from './AnalysisReportViewsSection';
 import { 
   CalendarIcon, 
   ChevronLeft, 
@@ -473,6 +474,10 @@ export function AdminReport() {
             <Users className="h-4 w-4" />
             교사별 현황
           </TabsTrigger>
+          <TabsTrigger value="analysis-views" className="gap-1">
+            <Eye className="h-4 w-4" />
+            분석보고서 노출
+          </TabsTrigger>
           <TabsTrigger value="changelog" className="gap-1">
             <History className="h-4 w-4" />
             운영 변경 이력
@@ -724,6 +729,11 @@ export function AdminReport() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Analysis Report Views Tab - EXAM-ANALYSIS-PUBLIC-V1 */}
+        <TabsContent value="analysis-views">
+          <AnalysisReportViewsSection />
         </TabsContent>
 
         {/* Ops Changelog Tab - OPS_CHANGELOG_V1 */}
