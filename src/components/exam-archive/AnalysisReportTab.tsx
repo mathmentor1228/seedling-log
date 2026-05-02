@@ -258,6 +258,54 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     else setDeepAnalysis(null);
   }, [selectedReportId]);
 
+  // EXAM-ANALYSIS-PUBLIC-V1: refresh card image signed URLs
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const urls = await Promise.all(
+        (form.cardImagePaths || []).map(async (p) =>
+          (await getCachedSignedUrl('exam-analysis', p, 3600)) ?? '',
+        ),
+      );
+      if (!cancelled) setCardImageUrls(urls);
+    })();
+    return () => { cancelled = true; };
+  }, [form.cardImagePaths]);
+
+  // EXAM-ANALYSIS-PUBLIC-V1: count matching students for audience preview
+  useEffect(() => {
+    if (!form.schoolName || !form.grade || !form.subject) {
+      setMatchedAudienceCount({ students: 0, loading: false });
+      return;
+    }
+    let cancelled = false;
+    setMatchedAudienceCount((s) => ({ ...s, loading: true }));
+    (async () => {
+      try {
+        // Match school + grade label (e.g. "고1") + subject via class enrollment
+        const gradeLabelMatch = form.grade.match(/(\d+)/);
+        const gradeYear = gradeLabelMatch ? Number(gradeLabelMatch[1]) : null;
+        const { data, error } = await (supabase as any)
+          .from('students')
+          .select('id, class_students!inner(classes!inner(subject))')
+          .eq('school', form.schoolName)
+          .eq('grade_year', gradeYear)
+          .eq('enrollment_status', '재학')
+          .eq('class_students.classes.subject', form.subject);
+        if (!cancelled && !error) {
+          const unique = new Set((data || []).map((s: any) => s.id));
+          setMatchedAudienceCount({ students: unique.size, loading: false });
+        } else if (!cancelled) {
+          setMatchedAudienceCount({ students: 0, loading: false });
+        }
+      } catch {
+        if (!cancelled) setMatchedAudienceCount({ students: 0, loading: false });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [form.schoolName, form.grade, form.subject]);
+
+
   async function fetchReports() {
     setLoading(true);
     const { data, error } = await (supabase as any)
