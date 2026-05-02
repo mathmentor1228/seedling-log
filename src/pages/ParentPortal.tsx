@@ -2,8 +2,9 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar, Camera, MessageSquare, TrendingUp } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, GraduationCap, BookOpen, ChevronLeft, ChevronRight, Calendar, Camera, MessageSquare, TrendingUp, Sparkles } from 'lucide-react';
 import { ExamDdayBannerStatic } from '@/components/ExamDdayBanner';
+import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 /* ═══════ Types ═══════ */
