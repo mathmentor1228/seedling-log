@@ -981,6 +981,45 @@ export type Database = {
           },
         ]
       }
+      exam_analysis_report_views: {
+        Row: {
+          id: string
+          report_id: string
+          student_id: string | null
+          viewed_at: string
+          viewer_type: string
+        }
+        Insert: {
+          id?: string
+          report_id: string
+          student_id?: string | null
+          viewed_at?: string
+          viewer_type: string
+        }
+        Update: {
+          id?: string
+          report_id?: string
+          student_id?: string | null
+          viewed_at?: string
+          viewer_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_analysis_report_views_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "exam_analysis_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_analysis_report_views_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exam_analysis_reports: {
         Row: {
           answer_image_paths: Json | null
@@ -988,6 +1027,7 @@ export type Database = {
           answer_pdf_path: string | null
           answers: Json | null
           avg_score: number | null
+          card_image_paths: Json
           created_at: string | null
           created_by: string | null
           created_by_name: string | null
@@ -999,12 +1039,16 @@ export type Database = {
           grade: string
           id: string
           is_locked: boolean | null
+          is_published: boolean
           locked_at: string | null
           locked_by: string | null
           locked_by_name: string | null
           original_pdf_path: string | null
           overall_review: string | null
+          parent_message: string | null
+          published_at: string | null
           school_name: string
+          student_message: string | null
           study_links: Json | null
           subject: string
           textbook: string | null
@@ -1016,6 +1060,7 @@ export type Database = {
           answer_pdf_path?: string | null
           answers?: Json | null
           avg_score?: number | null
+          card_image_paths?: Json
           created_at?: string | null
           created_by?: string | null
           created_by_name?: string | null
@@ -1027,12 +1072,16 @@ export type Database = {
           grade: string
           id?: string
           is_locked?: boolean | null
+          is_published?: boolean
           locked_at?: string | null
           locked_by?: string | null
           locked_by_name?: string | null
           original_pdf_path?: string | null
           overall_review?: string | null
+          parent_message?: string | null
+          published_at?: string | null
           school_name: string
+          student_message?: string | null
           study_links?: Json | null
           subject: string
           textbook?: string | null
@@ -1044,6 +1093,7 @@ export type Database = {
           answer_pdf_path?: string | null
           answers?: Json | null
           avg_score?: number | null
+          card_image_paths?: Json
           created_at?: string | null
           created_by?: string | null
           created_by_name?: string | null
@@ -1055,12 +1105,16 @@ export type Database = {
           grade?: string
           id?: string
           is_locked?: boolean | null
+          is_published?: boolean
           locked_at?: string | null
           locked_by?: string | null
           locked_by_name?: string | null
           original_pdf_path?: string | null
           overall_review?: string | null
+          parent_message?: string | null
+          published_at?: string | null
           school_name?: string
+          student_message?: string | null
           study_links?: Json | null
           subject?: string
           textbook?: string | null
@@ -6269,6 +6323,10 @@ export type Database = {
         }
         Returns: Json
       }
+      format_student_grade_label: {
+        Args: { _grade_year: number; _school_level: string }
+        Returns: string
+      }
       generate_parent_token: { Args: never; Returns: string }
       generate_share_token: { Args: never; Returns: string }
       generate_vocab_test_token: { Args: never; Returns: string }
@@ -6318,6 +6376,90 @@ export type Database = {
           student_id: string
           subject: string
         }[]
+      }
+      get_published_analysis_for_parent_token: {
+        Args: { _parent_token: string }
+        Returns: {
+          answer_image_paths: Json | null
+          answer_mode: string | null
+          answer_pdf_path: string | null
+          answers: Json | null
+          avg_score: number | null
+          card_image_paths: Json
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          exam_difficulty: string | null
+          exam_period: string
+          exam_scope: string | null
+          exam_type: string
+          exam_year: number
+          grade: string
+          id: string
+          is_locked: boolean | null
+          is_published: boolean
+          locked_at: string | null
+          locked_by: string | null
+          locked_by_name: string | null
+          original_pdf_path: string | null
+          overall_review: string | null
+          parent_message: string | null
+          published_at: string | null
+          school_name: string
+          student_message: string | null
+          study_links: Json | null
+          subject: string
+          textbook: string | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "exam_analysis_reports"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_published_analysis_for_student: {
+        Args: { _student_id: string }
+        Returns: {
+          answer_image_paths: Json | null
+          answer_mode: string | null
+          answer_pdf_path: string | null
+          answers: Json | null
+          avg_score: number | null
+          card_image_paths: Json
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          exam_difficulty: string | null
+          exam_period: string
+          exam_scope: string | null
+          exam_type: string
+          exam_year: number
+          grade: string
+          id: string
+          is_locked: boolean | null
+          is_published: boolean
+          locked_at: string | null
+          locked_by: string | null
+          locked_by_name: string | null
+          original_pdf_path: string | null
+          overall_review: string | null
+          parent_message: string | null
+          published_at: string | null
+          school_name: string
+          student_message: string | null
+          study_links: Json | null
+          subject: string
+          textbook: string | null
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "exam_analysis_reports"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_teacher_roster_sheet: { Args: { _date: string }; Returns: Json }
       grade_at_year: {

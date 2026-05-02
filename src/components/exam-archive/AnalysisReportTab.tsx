@@ -44,6 +44,11 @@ type AnalysisReport = {
   locked_by: string | null;
   locked_by_name: string | null;
   locked_at: string | null;
+  card_image_paths: string[] | null;
+  student_message: string | null;
+  parent_message: string | null;
+  is_published: boolean | null;
+  published_at: string | null;
 };
 
 type AnalysisItem = {
@@ -105,6 +110,11 @@ type ReportForm = {
   answerImagePaths: string[];
   answerPdfPath: string;
   studyLinks: StudyLink[];
+  cardImagePaths: string[];
+  studentMessage: string;
+  parentMessage: string;
+  isPublished: boolean;
+  publishedAt: string;
 };
 
 const SUBJECTS = ['수학', '영어', '국어', '과학', '기타'];
@@ -142,6 +152,11 @@ const emptyForm = (schoolName = ''): ReportForm => ({
   answerImagePaths: [],
   answerPdfPath: '',
   studyLinks: [],
+  cardImagePaths: [],
+  studentMessage: '',
+  parentMessage: '',
+  isPublished: false,
+  publishedAt: '',
 });
 
 const createDefaultItems = (): AnalysisItem[] =>
@@ -164,6 +179,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [originalPdfUrl, setOriginalPdfUrl] = useState<string | null>(null);
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
   const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
+  const [cardImageUrls, setCardImageUrls] = useState<string[]>([]);
+  const [uploadingCards, setUploadingCards] = useState(false);
+  const [matchedAudienceCount, setMatchedAudienceCount] = useState<{ students: number; loading: boolean }>({ students: 0, loading: false });
   const [isParsing, setIsParsing] = useState(false);
   const [isExtractingAnswers, setIsExtractingAnswers] = useState(false);
   const [deepAnalysis, setDeepAnalysis] = useState<DeepAnalysisReport | null>(null);
@@ -239,6 +257,54 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (selectedReportId) void fetchDeepAnalysis(selectedReportId);
     else setDeepAnalysis(null);
   }, [selectedReportId]);
+
+  // EXAM-ANALYSIS-PUBLIC-V1: refresh card image signed URLs
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const urls = await Promise.all(
+        (form.cardImagePaths || []).map(async (p) =>
+          (await getCachedSignedUrl('exam-analysis', p, 3600)) ?? '',
+        ),
+      );
+      if (!cancelled) setCardImageUrls(urls);
+    })();
+    return () => { cancelled = true; };
+  }, [form.cardImagePaths]);
+
+  // EXAM-ANALYSIS-PUBLIC-V1: count matching students for audience preview
+  useEffect(() => {
+    if (!form.schoolName || !form.grade || !form.subject) {
+      setMatchedAudienceCount({ students: 0, loading: false });
+      return;
+    }
+    let cancelled = false;
+    setMatchedAudienceCount((s) => ({ ...s, loading: true }));
+    (async () => {
+      try {
+        // Match school + grade label (e.g. "고1") + subject via class enrollment
+        const gradeLabelMatch = form.grade.match(/(\d+)/);
+        const gradeYear = gradeLabelMatch ? Number(gradeLabelMatch[1]) : null;
+        const { data, error } = await (supabase as any)
+          .from('students')
+          .select('id, class_students!inner(classes!inner(subject))')
+          .eq('school', form.schoolName)
+          .eq('grade_year', gradeYear)
+          .eq('enrollment_status', '재학')
+          .eq('class_students.classes.subject', form.subject);
+        if (!cancelled && !error) {
+          const unique = new Set((data || []).map((s: any) => s.id));
+          setMatchedAudienceCount({ students: unique.size, loading: false });
+        } else if (!cancelled) {
+          setMatchedAudienceCount({ students: 0, loading: false });
+        }
+      } catch {
+        if (!cancelled) setMatchedAudienceCount({ students: 0, loading: false });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [form.schoolName, form.grade, form.subject]);
+
 
   async function fetchReports() {
     setLoading(true);
@@ -324,6 +390,11 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       answerImagePaths: Array.isArray(report.answer_image_paths) ? report.answer_image_paths : [],
       answerPdfPath: report.answer_pdf_path ?? '',
       studyLinks: Array.isArray(report.study_links) ? report.study_links : [],
+      cardImagePaths: Array.isArray(report.card_image_paths) ? report.card_image_paths : [],
+      studentMessage: report.student_message ?? '',
+      parentMessage: report.parent_message ?? '',
+      isPublished: !!report.is_published,
+      publishedAt: report.published_at ?? '',
     });
 
     const { data, error } = await (supabase as any)
@@ -440,6 +511,64 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     if (isLocked) return;
     updateForm('answerImagePaths', form.answerImagePaths.filter((_, i) => i !== index));
   }
+
+  // EXAM-ANALYSIS-PUBLIC-V1
+  async function handleCardImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    if (isLocked) {
+      toast.error('잠금 상태에서는 카드뉴스를 변경할 수 없습니다.');
+      return;
+    }
+    const remaining = 10 - form.cardImagePaths.length;
+    if (remaining <= 0) {
+      toast.error('카드뉴스는 최대 10장까지 업로드 가능합니다.');
+      return;
+    }
+    const toUpload = files.slice(0, remaining).filter((f) => f.type.startsWith('image/'));
+    if (!toUpload.length) {
+      toast.error('이미지 파일만 업로드할 수 있습니다.');
+      return;
+    }
+    setUploadingCards(true);
+    try {
+      const safeId = selectedReportId ?? crypto.randomUUID();
+      const uploadedPaths: string[] = [];
+      for (const file of toUpload) {
+        const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
+        const path = `exam-analysis/${safeId}/cardnews-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+        const { error } = await supabase.storage.from('exam-analysis').upload(path, file, {
+          contentType: file.type,
+          upsert: true,
+        });
+        if (!error) uploadedPaths.push(path);
+      }
+      if (uploadedPaths.length > 0) {
+        updateForm('cardImagePaths', [...form.cardImagePaths, ...uploadedPaths]);
+        toast.success(`카드뉴스 ${uploadedPaths.length}장 업로드 완료`);
+      } else {
+        toast.error('카드뉴스 업로드에 실패했습니다.');
+      }
+    } finally {
+      setUploadingCards(false);
+    }
+  }
+
+  function removeCardImage(index: number) {
+    if (isLocked) return;
+    updateForm('cardImagePaths', form.cardImagePaths.filter((_, i) => i !== index));
+  }
+
+  function moveCardImage(index: number, direction: -1 | 1) {
+    if (isLocked) return;
+    const next = [...form.cardImagePaths];
+    const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    updateForm('cardImagePaths', next);
+  }
+
 
   async function handleAnswerImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -670,6 +799,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       answer_image_paths: form.answerImagePaths,
       answer_pdf_path: form.answerPdfPath || null,
       study_links: form.studyLinks.filter((link) => link.title || link.url),
+      card_image_paths: form.cardImagePaths,
+      student_message: form.studentMessage || null,
+      parent_message: form.parentMessage || null,
+      is_published: form.isPublished,
+      published_at: form.isPublished
+        ? (form.publishedAt ? new Date(form.publishedAt).toISOString() : new Date().toISOString())
+        : null,
       created_by_name: fullName || user.email || '',
       updated_at: new Date().toISOString(),
     };
@@ -1008,6 +1144,108 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                     <Button variant="destructive" size="icon" onClick={() => removeLink(index)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 ))}
+              </div>
+            </FormSection>
+
+            {/* EXAM-ANALYSIS-PUBLIC-V1: Public-facing materials */}
+            <FormSection
+              title="공개용 자료 (학생·학부모 웹)"
+              action={
+                <Badge variant={form.isPublished ? 'success' : 'secondary'} className="text-[10px]">
+                  {form.isPublished ? '공개됨' : '비공개'}
+                </Badge>
+              }
+            >
+              <div className="space-y-4 rounded-lg border bg-card p-4">
+                {/* A. Card news */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">📸 카드뉴스 이미지 (권장 6장, 최대 10장 / 1080×1080)</Label>
+                    <span className="text-[11px] text-muted-foreground">{form.cardImagePaths.length}/10</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                    {cardImageUrls.map((url, idx) => (
+                      <div key={form.cardImagePaths[idx]} className="group relative aspect-square overflow-hidden rounded-md border bg-muted">
+                        {url ? <img src={url} alt={`카드 ${idx + 1}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
+                        <span className="absolute left-1 top-1 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-bold">{idx + 1}</span>
+                        <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 bg-background/80 p-1 opacity-0 transition group-hover:opacity-100">
+                          <button type="button" disabled={isLocked || idx === 0} onClick={() => moveCardImage(idx, -1)} className="rounded bg-muted px-1.5 py-0.5 text-[10px] disabled:opacity-30">◀</button>
+                          <button type="button" disabled={isLocked || idx === form.cardImagePaths.length - 1} onClick={() => moveCardImage(idx, 1)} className="rounded bg-muted px-1.5 py-0.5 text-[10px] disabled:opacity-30">▶</button>
+                          <button type="button" disabled={isLocked} onClick={() => removeCardImage(idx)} className="rounded bg-destructive/90 px-1.5 py-0.5 text-[10px] text-destructive-foreground"><Trash2 className="h-3 w-3" /></button>
+                        </div>
+                      </div>
+                    ))}
+                    {form.cardImagePaths.length < 10 ? (
+                      <label className={cn('flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed text-xs text-muted-foreground transition hover:border-primary hover:bg-primary/5', (isLocked || uploadingCards) && 'pointer-events-none opacity-50')}>
+                        {uploadingCards ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                        <span>이미지 추가</span>
+                        <input type="file" accept="image/png,image/jpeg" multiple className="hidden" onChange={(e) => void handleCardImageUpload(e)} disabled={isLocked || uploadingCards} />
+                      </label>
+                    ) : null}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">PNG / JPG · 1080×1080 권장 · 업로드 순서대로 표시됩니다 (◀▶ 으로 재정렬)</p>
+                </div>
+
+                {/* B. Student message */}
+                <Field label="🎯 학생용 메시지 (페이스메이커 톤, 권장 3~5문장 / 200자 이내)">
+                  <Textarea
+                    value={form.studentMessage}
+                    onChange={(e) => updateForm('studentMessage', e.target.value.slice(0, 400))}
+                    rows={4}
+                    maxLength={400}
+                    placeholder="이 시험을 본 학생에게 직접 전하는 짧은 메시지 (수업 중 인상 깊었던 행동 1가지 → 그 의미 → 다음 챌린지)"
+                    className="resize-y leading-7"
+                  />
+                  <p className="mt-1 text-right text-[10px] text-muted-foreground">{form.studentMessage.length} / 400</p>
+                </Field>
+
+                {/* C. Parent message */}
+                <Field label="📊 학부모용 메시지 (학습 컨설턴트 톤, 권장 5~7문장 / 300자 이내)">
+                  <Textarea
+                    value={form.parentMessage}
+                    onChange={(e) => updateForm('parentMessage', e.target.value.slice(0, 600))}
+                    rows={5}
+                    maxLength={600}
+                    placeholder="학부모에게 전달되는 분석 요지 (데이터 기반·담백·과장 금지)"
+                    className="resize-y leading-7"
+                  />
+                  <p className="mt-1 text-right text-[10px] text-muted-foreground">{form.parentMessage.length} / 600</p>
+                </Field>
+
+                {/* D. Publish controls */}
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">공개 토글</p>
+                      <p className="text-[11px] text-muted-foreground">ON 시 해당 학교·학년·과목 학생/학부모 웹에 노출됩니다.</p>
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center gap-2">
+                      <input type="checkbox" checked={form.isPublished} disabled={isLocked} onChange={(e) => updateForm('isPublished', e.target.checked)} className="h-4 w-4" />
+                      <span className="text-sm font-medium">{form.isPublished ? '공개' : '비공개'}</span>
+                    </label>
+                  </div>
+                  <Field label="📅 공개 시작 일시 (비워두면 즉시 공개)">
+                    <Input
+                      type="datetime-local"
+                      value={form.publishedAt ? form.publishedAt.slice(0, 16) : ''}
+                      onChange={(e) => updateForm('publishedAt', e.target.value)}
+                      disabled={isLocked || !form.isPublished}
+                    />
+                  </Field>
+                  <div className="rounded-md bg-background p-3 text-xs">
+                    <p className="font-semibold text-foreground">🏫 자동 매핑 미리보기</p>
+                    <p className="mt-1 text-muted-foreground">
+                      이 보고서는{' '}
+                      <span className="font-semibold text-foreground">[{form.schoolName || '?'} / {form.grade}학년 / {form.subject}]</span>{' '}
+                      수강생{' '}
+                      {matchedAudienceCount.loading
+                        ? <Loader2 className="inline h-3 w-3 animate-spin" />
+                        : <span className="font-bold text-primary">{matchedAudienceCount.students}명</span>
+                      }
+                      의 학생·학부모에게 노출됩니다.
+                    </p>
+                  </div>
+                </div>
               </div>
             </FormSection>
               </div>
