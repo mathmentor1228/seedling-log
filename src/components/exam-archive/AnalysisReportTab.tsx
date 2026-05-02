@@ -1017,72 +1017,26 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden bg-background">
-      <aside className="w-[340px] min-w-[340px] shrink-0 overflow-y-auto border-r bg-muted/30 p-4">
-        <Button className="mb-3 h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
-          <Plus className="h-4 w-4" /> 새 보고서 작성
-        </Button>
-
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {['전체', ...SUBJECTS].map((subject) => (
-            <Button key={subject} size="sm" variant={selectedSubject === subject ? 'default' : 'outline'} className="h-7 px-2 text-[11px]" onClick={() => setSelectedSubject(subject)}>
-              {subject}
-            </Button>
-          ))}
+      <aside className="flex w-[440px] min-w-[440px] shrink-0 flex-col border-r bg-muted/30">
+        <div className="shrink-0 px-3 pt-3">
+          <Button className="h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
+            <Plus className="h-4 w-4" /> 새 보고서 작성
+          </Button>
         </div>
-
-        <div className="space-y-4 pr-1">
-          {loading ? (
-            <div className="flex h-28 items-center justify-center text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-            </div>
-          ) : filteredReports.length === 0 ? (
-            <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">보고서가 없습니다.</div>
-          ) : (
-            Object.entries(groupedReports).map(([schoolName, schoolReports]) => (
-              <div key={schoolName}>
-                <div className="mb-1.5 flex items-center gap-2 px-1">
-                  <span className="text-xs font-bold text-foreground">{schoolName}</span>
-                  <span className="text-[10px] text-muted-foreground">{schoolReports.length}개</span>
-                  <div className="flex-1 border-t border-border" />
-                </div>
-                <div className="space-y-1.5">
-                  {schoolReports.map((report) => (
-                    <button
-                      key={report.id}
-                      onClick={() => void selectReport(report)}
-                      onMouseEnter={() => setHoverId(report.id)}
-                      onMouseLeave={() => setHoverId(null)}
-                      className={cn(
-                        'relative w-full rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:bg-accent',
-                        selectedReportId === report.id && 'border-primary bg-primary/5',
-                      )}
-                    >
-                      {hoverId === report.id ? (
-                        <span className="absolute right-2 top-2 flex gap-1">
-                          <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleEdit(report); }} className="inline-flex items-center rounded bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info"><Pencil className="mr-1 h-2.5 w-2.5" />수정</span>
-                          <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); void handleDelete(report); }} className={cn('inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium', report.is_locked ? 'cursor-not-allowed bg-muted text-muted-foreground' : 'bg-destructive/10 text-destructive')}>
-                            {report.is_locked ? <Lock className="h-2.5 w-2.5" /> : '삭제'}
-                          </span>
-                        </span>
-                      ) : null}
-                      <div className="flex items-center gap-2">
-                        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold', SUBJECT_COLORS[report.subject] ?? 'bg-gray-100 text-gray-600')}>{report.subject}</span>
-                        <span className="text-xs font-semibold text-foreground">{report.grade}학년</span>
-                        {report.is_locked ? <Lock className="h-3 w-3 text-muted-foreground" /> : null}
-                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{report.exam_type}</span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <span className="truncate text-[11px] text-muted-foreground">{report.exam_year}년 · {report.created_by_name || '작성자 미상'}</span>
-                        <span className="shrink-0 text-[10px] text-muted-foreground">{format(new Date(report.updated_at || report.created_at), 'MM/dd')}</span>
-                      </div>
-                      {report.exam_scope ? <div className="mt-0.5 truncate text-[10px] text-muted-foreground/70">{report.exam_scope}</div> : null}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : (
+          <ReportBrowser
+            reports={reports as unknown as ReportRow[]}
+            selectedReportId={selectedReportId}
+            onSelect={(r) => void selectReport(r as unknown as AnalysisReport)}
+            onEdit={(r) => handleEdit(r as unknown as AnalysisReport)}
+            onDelete={(r) => void handleDelete(r as unknown as AnalysisReport)}
+            viewCounts={viewCounts}
+          />
+        )}
       </aside>
 
       <section className="min-w-0 flex-1 overflow-y-auto px-4 py-4 xl:px-6">
