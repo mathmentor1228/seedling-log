@@ -957,10 +957,36 @@ Deno.serve(async (req) => {
           : { data: [], error: null };
         if (deepReportError) throw deepReportError;
 
+        // EXAM-ANALYSIS-PUBLIC-V1: published analysis reports for this student (school + grade + subject)
+        let publishedAnalysis: any[] = [];
+        try {
+          const { data: pubRows } = await supabase.rpc('get_published_analysis_for_student', { _student_id: student_id });
+          publishedAnalysis = (pubRows || []).map((r: any) => ({
+            id: r.id,
+            school_name: r.school_name,
+            grade: r.grade,
+            subject: r.subject,
+            exam_type: r.exam_type,
+            exam_year: r.exam_year,
+            exam_period: r.exam_period,
+            exam_scope: r.exam_scope,
+            textbook: r.textbook,
+            avg_score: r.avg_score,
+            exam_difficulty: r.exam_difficulty,
+            overall_review: r.overall_review,
+            card_image_paths: Array.isArray(r.card_image_paths) ? r.card_image_paths : [],
+            student_message: r.student_message,
+            parent_message: r.parent_message,
+            published_at: r.published_at,
+            updated_at: r.updated_at,
+          }));
+        } catch (_e) { publishedAnalysis = []; }
+
         result = {
           available_years: submittedExamYears,
           selected_exam_year: selectedExamYear,
           school_report: schoolReport || null,
+          published_analysis_reports: publishedAnalysis,
           deep_reports: (deepReports || []).map((report: any) => ({
             ...report,
             my_recommendation: Array.isArray(report.student_recommendations)
