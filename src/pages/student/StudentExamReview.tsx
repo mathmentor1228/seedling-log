@@ -8,7 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStudyTabs } from '@/components/student/StudentStudyTabs';
 import { SelfCheckTab } from '@/components/student/exam-review/SelfCheckTab';
-import { CheckCircle2, ClipboardCheck, Image as ImageIcon, School } from 'lucide-react';
+import { PublishedReportCard, type PublishedReportLite } from '@/components/exam-analysis/PublishedReportCard';
+import { studentAuth } from '@/lib/studentAuth';
+import { CheckCircle2, ClipboardCheck, Image as ImageIcon, School, Sparkles } from 'lucide-react';
 
 type ReviewStatus = 'pending' | 'in_review' | 'done';
 type ItemResult = 'correct' | 'wrong' | 'partial' | null;
