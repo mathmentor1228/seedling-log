@@ -319,6 +319,26 @@ export default function StudentExamReview() {
         </div>
       ) : null}
 
+      {!loading && publishedReports.length > 0 ? (
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-pink-500" />
+            <h2 className="text-base font-bold text-foreground">새로 도착한 시험 분석</h2>
+            <Badge variant="outline" className="text-[10px]">{publishedReports.length}건</Badge>
+          </div>
+          <div className="space-y-3">
+            {publishedReports.map((report) => (
+              <PublishedReportCard
+                key={report.id}
+                report={report}
+                audience="student"
+                studentId={student?.id ?? null}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {!loading && hasSubmittedExamPhotos ? <ExamReportOverview schoolReport={schoolReport} reviews={completedReviews} onOpenSelfCheck={openSelfCheck} /> : null}
       {!loading && hasSubmittedExamPhotos ? <DeepExamReportSection reports={deepReports} /> : null}
 
