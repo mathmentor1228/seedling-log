@@ -637,12 +637,22 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     toast.success('PDF 업로드 완료');
   }
 
-  function applyParsedAnalysis(parsed: ParsedExamAnalysis) {
-    if (parsed.textbook) updateForm('textbook', parsed.textbook);
-    if (parsed.exam_scope) updateForm('examScope', parsed.exam_scope);
-    if (parsed.exam_difficulty) updateForm('difficulty', parsed.exam_difficulty);
-    if (parsed.overall_review) updateForm('overallReview', parsed.overall_review);
-    if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+  function applyParsedAnalysis(parsed: ParsedExamAnalysis, mode: AIParseMode = 'append') {
+    if (mode === 'skip') return;
+    if (parsed.textbook && !form.textbook) updateForm('textbook', parsed.textbook);
+    if (parsed.exam_scope && (!form.examScope || mode === 'replace')) updateForm('examScope', parsed.exam_scope);
+    if (parsed.exam_difficulty && mode === 'replace') updateForm('difficulty', parsed.exam_difficulty);
+    if (parsed.overall_review) {
+      const aiText = parsed.overall_review.trim();
+      if (mode === 'replace' || !form.overallReview.trim()) {
+        updateForm('overallReview', aiText);
+      } else {
+        // append
+        updateForm('overallReview', `${form.overallReview.trim()}\n\n— AI 자동 분석 —\n${aiText}`);
+      }
+      setAiResultMarker({ active: true, at: Date.now() });
+    }
+    if (Array.isArray(parsed.items) && parsed.items.length > 0 && (mode === 'replace' || items.length <= 5)) {
       setItems(parsed.items.map((item, index) => ({ ...item, item_number: item.item_number || index + 1, sort_order: index })));
     }
     setParseResult({
