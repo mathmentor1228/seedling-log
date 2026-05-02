@@ -1108,8 +1108,10 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
               </div>
             </FormSection>
 
-            <FormSection title="시험 총평">
-              <Textarea value={form.overallReview} onChange={(e) => updateForm('overallReview', e.target.value)} rows={5} placeholder="시험 특징, 출제 경향, 학습 방향 등을 자유롭게 작성" className="resize-y leading-7" />
+            <FormSection title="시험 총평" action={aiResultMarker.active ? <Badge variant="secondary" className="gap-1 text-[10px]"><Sparkles className="h-2.5 w-2.5" />AI 자동 분석 결과 포함</Badge> : null}>
+              <div className={cn('relative', aiResultMarker.active && 'border-l-4 border-info pl-3')}>
+                <Textarea value={form.overallReview} onChange={(e) => { updateForm('overallReview', e.target.value); if (aiResultMarker.active) setAiResultMarker({ active: false, at: 0 }); }} rows={5} placeholder="시험 특징, 출제 경향, 학습 방향 등을 자유롭게 작성" className="resize-y leading-7" />
+              </div>
             </FormSection>
 
             <FormSection title="파일 첨부">
