@@ -512,6 +512,64 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
     updateForm('answerImagePaths', form.answerImagePaths.filter((_, i) => i !== index));
   }
 
+  // EXAM-ANALYSIS-PUBLIC-V1
+  async function handleCardImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    if (isLocked) {
+      toast.error('잠금 상태에서는 카드뉴스를 변경할 수 없습니다.');
+      return;
+    }
+    const remaining = 10 - form.cardImagePaths.length;
+    if (remaining <= 0) {
+      toast.error('카드뉴스는 최대 10장까지 업로드 가능합니다.');
+      return;
+    }
+    const toUpload = files.slice(0, remaining).filter((f) => f.type.startsWith('image/'));
+    if (!toUpload.length) {
+      toast.error('이미지 파일만 업로드할 수 있습니다.');
+      return;
+    }
+    setUploadingCards(true);
+    try {
+      const safeId = selectedReportId ?? crypto.randomUUID();
+      const uploadedPaths: string[] = [];
+      for (const file of toUpload) {
+        const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
+        const path = `exam-analysis/${safeId}/cardnews-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+        const { error } = await supabase.storage.from('exam-analysis').upload(path, file, {
+          contentType: file.type,
+          upsert: true,
+        });
+        if (!error) uploadedPaths.push(path);
+      }
+      if (uploadedPaths.length > 0) {
+        updateForm('cardImagePaths', [...form.cardImagePaths, ...uploadedPaths]);
+        toast.success(`카드뉴스 ${uploadedPaths.length}장 업로드 완료`);
+      } else {
+        toast.error('카드뉴스 업로드에 실패했습니다.');
+      }
+    } finally {
+      setUploadingCards(false);
+    }
+  }
+
+  function removeCardImage(index: number) {
+    if (isLocked) return;
+    updateForm('cardImagePaths', form.cardImagePaths.filter((_, i) => i !== index));
+  }
+
+  function moveCardImage(index: number, direction: -1 | 1) {
+    if (isLocked) return;
+    const next = [...form.cardImagePaths];
+    const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    updateForm('cardImagePaths', next);
+  }
+
+
   async function handleAnswerImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
