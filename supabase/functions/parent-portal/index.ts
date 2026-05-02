@@ -200,6 +200,8 @@ Deno.serve(async (req) => {
         .from("student_exam_results")
         .select("id, exam_year, student_exam_result_photos(id)")
         .eq("student_id", studentId),
+      // EXAM-ANALYSIS-PUBLIC-V1: published analysis reports for this child
+      supabase.rpc("get_published_analysis_for_parent_token", { _parent_token: token }),
     ]);
 
     // Fetch class schedules for the student's classes
