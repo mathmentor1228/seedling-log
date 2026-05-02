@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     // D-day: no date cap — always show nearest upcoming exam
 
     // Fetch all data in parallel
-    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes, deepExamRes, examResultYearsRes] = await Promise.all([
+    const [hwRes, lessonRes, attendanceRes, reportRes, vocabSchedRes, vocabResultRes, classStudentsRes, supplRes, examEventsRes, textbookRes, examPrepRes, deepExamRes, examResultYearsRes, publishedAnalysisRes] = await Promise.all([
       supabase
         .from("homework_assignments")
         .select("id, content, subject, assigned_date, check_status, result, notes, submitted_at, submission_image_url")
