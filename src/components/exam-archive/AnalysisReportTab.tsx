@@ -1146,6 +1146,108 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 ))}
               </div>
             </FormSection>
+
+            {/* EXAM-ANALYSIS-PUBLIC-V1: Public-facing materials */}
+            <FormSection
+              title="공개용 자료 (학생·학부모 웹)"
+              action={
+                <Badge variant={form.isPublished ? 'success' : 'secondary'} className="text-[10px]">
+                  {form.isPublished ? '공개됨' : '비공개'}
+                </Badge>
+              }
+            >
+              <div className="space-y-4 rounded-lg border bg-card p-4">
+                {/* A. Card news */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">📸 카드뉴스 이미지 (권장 6장, 최대 10장 / 1080×1080)</Label>
+                    <span className="text-[11px] text-muted-foreground">{form.cardImagePaths.length}/10</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                    {cardImageUrls.map((url, idx) => (
+                      <div key={form.cardImagePaths[idx]} className="group relative aspect-square overflow-hidden rounded-md border bg-muted">
+                        {url ? <img src={url} alt={`카드 ${idx + 1}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
+                        <span className="absolute left-1 top-1 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-bold">{idx + 1}</span>
+                        <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 bg-background/80 p-1 opacity-0 transition group-hover:opacity-100">
+                          <button type="button" disabled={isLocked || idx === 0} onClick={() => moveCardImage(idx, -1)} className="rounded bg-muted px-1.5 py-0.5 text-[10px] disabled:opacity-30">◀</button>
+                          <button type="button" disabled={isLocked || idx === form.cardImagePaths.length - 1} onClick={() => moveCardImage(idx, 1)} className="rounded bg-muted px-1.5 py-0.5 text-[10px] disabled:opacity-30">▶</button>
+                          <button type="button" disabled={isLocked} onClick={() => removeCardImage(idx)} className="rounded bg-destructive/90 px-1.5 py-0.5 text-[10px] text-destructive-foreground"><Trash2 className="h-3 w-3" /></button>
+                        </div>
+                      </div>
+                    ))}
+                    {form.cardImagePaths.length < 10 ? (
+                      <label className={cn('flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed text-xs text-muted-foreground transition hover:border-primary hover:bg-primary/5', (isLocked || uploadingCards) && 'pointer-events-none opacity-50')}>
+                        {uploadingCards ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                        <span>이미지 추가</span>
+                        <input type="file" accept="image/png,image/jpeg" multiple className="hidden" onChange={(e) => void handleCardImageUpload(e)} disabled={isLocked || uploadingCards} />
+                      </label>
+                    ) : null}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">PNG / JPG · 1080×1080 권장 · 업로드 순서대로 표시됩니다 (◀▶ 으로 재정렬)</p>
+                </div>
+
+                {/* B. Student message */}
+                <Field label="🎯 학생용 메시지 (페이스메이커 톤, 권장 3~5문장 / 200자 이내)">
+                  <Textarea
+                    value={form.studentMessage}
+                    onChange={(e) => updateForm('studentMessage', e.target.value.slice(0, 400))}
+                    rows={4}
+                    maxLength={400}
+                    placeholder="이 시험을 본 학생에게 직접 전하는 짧은 메시지 (수업 중 인상 깊었던 행동 1가지 → 그 의미 → 다음 챌린지)"
+                    className="resize-y leading-7"
+                  />
+                  <p className="mt-1 text-right text-[10px] text-muted-foreground">{form.studentMessage.length} / 400</p>
+                </Field>
+
+                {/* C. Parent message */}
+                <Field label="📊 학부모용 메시지 (학습 컨설턴트 톤, 권장 5~7문장 / 300자 이내)">
+                  <Textarea
+                    value={form.parentMessage}
+                    onChange={(e) => updateForm('parentMessage', e.target.value.slice(0, 600))}
+                    rows={5}
+                    maxLength={600}
+                    placeholder="학부모에게 전달되는 분석 요지 (데이터 기반·담백·과장 금지)"
+                    className="resize-y leading-7"
+                  />
+                  <p className="mt-1 text-right text-[10px] text-muted-foreground">{form.parentMessage.length} / 600</p>
+                </Field>
+
+                {/* D. Publish controls */}
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">공개 토글</p>
+                      <p className="text-[11px] text-muted-foreground">ON 시 해당 학교·학년·과목 학생/학부모 웹에 노출됩니다.</p>
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center gap-2">
+                      <input type="checkbox" checked={form.isPublished} disabled={isLocked} onChange={(e) => updateForm('isPublished', e.target.checked)} className="h-4 w-4" />
+                      <span className="text-sm font-medium">{form.isPublished ? '공개' : '비공개'}</span>
+                    </label>
+                  </div>
+                  <Field label="📅 공개 시작 일시 (비워두면 즉시 공개)">
+                    <Input
+                      type="datetime-local"
+                      value={form.publishedAt ? form.publishedAt.slice(0, 16) : ''}
+                      onChange={(e) => updateForm('publishedAt', e.target.value)}
+                      disabled={isLocked || !form.isPublished}
+                    />
+                  </Field>
+                  <div className="rounded-md bg-background p-3 text-xs">
+                    <p className="font-semibold text-foreground">🏫 자동 매핑 미리보기</p>
+                    <p className="mt-1 text-muted-foreground">
+                      이 보고서는{' '}
+                      <span className="font-semibold text-foreground">[{form.schoolName || '?'} / {form.grade}학년 / {form.subject}]</span>{' '}
+                      수강생{' '}
+                      {matchedAudienceCount.loading
+                        ? <Loader2 className="inline h-3 w-3 animate-spin" />
+                        : <span className="font-bold text-primary">{matchedAudienceCount.students}명</span>
+                      }
+                      의 학생·학부모에게 노출됩니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </FormSection>
               </div>
 
               <div className="min-w-0 space-y-4">
