@@ -44,6 +44,11 @@ type AnalysisReport = {
   locked_by: string | null;
   locked_by_name: string | null;
   locked_at: string | null;
+  card_image_paths: string[] | null;
+  student_message: string | null;
+  parent_message: string | null;
+  is_published: boolean | null;
+  published_at: string | null;
 };
 
 type AnalysisItem = {
@@ -105,6 +110,11 @@ type ReportForm = {
   answerImagePaths: string[];
   answerPdfPath: string;
   studyLinks: StudyLink[];
+  cardImagePaths: string[];
+  studentMessage: string;
+  parentMessage: string;
+  isPublished: boolean;
+  publishedAt: string;
 };
 
 const SUBJECTS = ['수학', '영어', '국어', '과학', '기타'];
@@ -142,6 +152,11 @@ const emptyForm = (schoolName = ''): ReportForm => ({
   answerImagePaths: [],
   answerPdfPath: '',
   studyLinks: [],
+  cardImagePaths: [],
+  studentMessage: '',
+  parentMessage: '',
+  isPublished: false,
+  publishedAt: '',
 });
 
 const createDefaultItems = (): AnalysisItem[] =>
@@ -324,6 +339,11 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       answerImagePaths: Array.isArray(report.answer_image_paths) ? report.answer_image_paths : [],
       answerPdfPath: report.answer_pdf_path ?? '',
       studyLinks: Array.isArray(report.study_links) ? report.study_links : [],
+      cardImagePaths: Array.isArray(report.card_image_paths) ? report.card_image_paths : [],
+      studentMessage: report.student_message ?? '',
+      parentMessage: report.parent_message ?? '',
+      isPublished: !!report.is_published,
+      publishedAt: report.published_at ?? '',
     });
 
     const { data, error } = await (supabase as any)
@@ -670,6 +690,13 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       answer_image_paths: form.answerImagePaths,
       answer_pdf_path: form.answerPdfPath || null,
       study_links: form.studyLinks.filter((link) => link.title || link.url),
+      card_image_paths: form.cardImagePaths,
+      student_message: form.studentMessage || null,
+      parent_message: form.parentMessage || null,
+      is_published: form.isPublished,
+      published_at: form.isPublished
+        ? (form.publishedAt ? new Date(form.publishedAt).toISOString() : new Date().toISOString())
+        : null,
       created_by_name: fullName || user.email || '',
       updated_at: new Date().toISOString(),
     };
