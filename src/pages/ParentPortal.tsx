@@ -166,6 +166,21 @@ export default function ParentPortal() {
           <ExamPrepParentSection schedules={data.exam_prep_schedules} />
         )}
 
+        {(data.published_analysis_reports && data.published_analysis_reports.length > 0) && (
+          <section className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-semibold text-muted-foreground">새로 도착한 시험 분석</h3>
+              <Badge variant="outline" className="text-[10px]">{data.published_analysis_reports.length}건</Badge>
+            </div>
+            <div className="space-y-3">
+              {(data.published_analysis_reports as PublishedReportLite[]).map((r) => (
+                <PublishedReportCard key={r.id} report={r} audience="parent" logView />
+              ))}
+            </div>
+          </section>
+        )}
+
         {deepExamReports.length > 0 && <DeepExamParentSection reports={deepExamReports} studentName={student.name} />}
 
         {/* Summary Stats */}
