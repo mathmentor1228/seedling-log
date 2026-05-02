@@ -329,6 +329,22 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       setReports((data ?? []) as AnalysisReport[]);
     }
     setLoading(false);
+
+    // ANALYSIS_REPORT_BROWSER_V1: aggregate view counts (best effort)
+    try {
+      const { data: views } = await (supabase as any)
+        .from('exam_analysis_report_views')
+        .select('report_id');
+      if (Array.isArray(views)) {
+        const counts: Record<string, number> = {};
+        for (const v of views) {
+          if (v.report_id) counts[v.report_id] = (counts[v.report_id] || 0) + 1;
+        }
+        setViewCounts(counts);
+      }
+    } catch (e) {
+      // table may not exist or no permission — ignore
+    }
   }
 
   async function refreshSignedUrls(originalPath: string, answerPath: string, answerImagePaths: string[]) {
