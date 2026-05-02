@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { format } from 'date-fns';
-import { Eye, FileText, Loader2, Lock, Pencil, Plus, Save, Send, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Eye, FileText, Loader2, Lock, Plus, Save, Send, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +13,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { SchoolInfo } from './types';
+import { AIParsePanel, type AIParseMode } from './AIParseDialog';
+import { ReportBrowser, type ReportRow } from './ReportBrowser';
 
 type StudyLink = { title: string; url: string };
 
