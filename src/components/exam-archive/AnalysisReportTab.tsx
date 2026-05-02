@@ -1081,8 +1081,11 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
                 isParsing={isParsing}
                 parseResult={parseResult}
                 originalPdfPath={form.originalPdfPath}
-                onUpload={handleAIParse}
-                onParseExisting={() => void parseExistingPdf()}
+                autoAnalyze={aiAutoAnalyze}
+                onAutoAnalyzeChange={setAiAutoAnalyze}
+                onFileSelected={(file, mode) => void handleAIParseFile(file, mode)}
+                onParseExisting={(mode) => void parseExistingPdf(mode)}
+                hasExistingReview={!!form.overallReview.trim()}
               />
 
             <FormSection title="기본정보">
