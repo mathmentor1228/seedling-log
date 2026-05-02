@@ -189,7 +189,15 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [isGeneratingDeepAnalysis, setIsGeneratingDeepAnalysis] = useState(false);
   const [isPublishingDeepAnalysis, setIsPublishingDeepAnalysis] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
-  const [hoverId, setHoverId] = useState<string | null>(null);
+  // AI_PARSE_OPTIONIZATION_V1
+  const [aiAutoAnalyze, setAiAutoAnalyze] = useState<boolean>(() => {
+    try { return localStorage.getItem('examArchive.aiParse.toggle') === 'true'; } catch { return false; }
+  });
+  const [aiResultMarker, setAiResultMarker] = useState<{ active: boolean; at: number }>({ active: false, at: 0 });
+  const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    try { localStorage.setItem('examArchive.aiParse.toggle', String(aiAutoAnalyze)); } catch {}
+  }, [aiAutoAnalyze]);
 
   const selectedReport = useMemo(
     () => reports.find((report) => report.id === selectedReportId) ?? null,
