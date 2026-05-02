@@ -247,10 +247,12 @@ function MiniStat({ value, label, variant }: { value: string; label: string; var
 }
 
 export default function StudentExamReview() {
+  const { student } = useStudentAuth();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ExamReviewRow[]>([]);
   const [schoolReport, setSchoolReport] = useState<SchoolExamReport | null>(null);
   const [deepReports, setDeepReports] = useState<DeepExamReport[]>([]);
+  const [publishedReports, setPublishedReports] = useState<PublishedReportLite[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selected, setSelected] = useState<ExamReviewRow | null>(null);
@@ -264,6 +266,7 @@ export default function StudentExamReview() {
     setRows((data?.reviews || []) as ExamReviewRow[]);
     setSchoolReport((data?.school_report || null) as SchoolExamReport | null);
     setDeepReports((data?.deep_reports || []) as DeepExamReport[]);
+    setPublishedReports(((data as any)?.published_analysis_reports || []) as PublishedReportLite[]);
     setAvailableYears((data?.available_years || []) as number[]);
     setSelectedYear((data?.selected_exam_year ?? null) as number | null);
     setLoading(false);
