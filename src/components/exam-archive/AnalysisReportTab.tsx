@@ -1397,28 +1397,6 @@ function NativeSelect({ value, options, suffix = '', onChange }: { value: string
   );
 }
 
-function AIParsePanel({ isParsing, parseResult, originalPdfPath, onUpload, onParseExisting }: { isParsing: boolean; parseResult: ParseResult | null; originalPdfPath: string; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; onParseExisting: () => void }) {
-  return (
-    <section className="rounded-xl bg-gradient-to-br from-info/10 to-primary/10 p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="mb-1 flex items-center gap-2 text-sm font-bold text-info"><Sparkles className="h-4 w-4" /> AI 자동 분석</p>
-          <p className="text-xs text-info/80">시험지 이미지나 PDF를 업로드하면 AI가 문항/배점/단원을 자동으로 채워줍니다</p>
-        </div>
-        {isParsing ? <div className="flex items-center gap-2 text-sm text-primary"><Loader2 className="h-4 w-4 animate-spin" /> AI 분석 중...</div> : null}
-      </div>
-      <div className="flex gap-2">
-        <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-primary bg-background px-4 py-3 text-sm font-medium text-primary hover:bg-primary/5">
-          <Upload className="h-4 w-4" /> 시험지 업로드 (이미지/PDF)
-          <input type="file" accept="image/*,.pdf,application/pdf" className="hidden" onChange={onUpload} disabled={isParsing} />
-        </label>
-        {originalPdfPath ? <Button variant="outline" className="h-auto flex-1 border-primary text-primary" onClick={onParseExisting} disabled={isParsing}>업로드된 시험지로 AI 분석</Button> : null}
-      </div>
-      {parseResult ? <div className="mt-3 rounded-lg bg-background/70 px-3 py-2 text-xs font-medium text-emerald-700">✓ 분석 완료 — 문항 {parseResult.total_items}개, 총점 {parseResult.total_points}점 추출됨. 아래 내용을 확인하고 수정해주세요.</div> : null}
-    </section>
-  );
-}
-
 function PdfBox({ title, url, linkLabel, onRemove, onUpload }: { title: string; url: string | null; linkLabel: string; onRemove: () => void; onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
   return (
     <div className="rounded-lg border border-dashed p-4 text-center">
