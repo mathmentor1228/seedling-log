@@ -179,6 +179,9 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [originalPdfUrl, setOriginalPdfUrl] = useState<string | null>(null);
   const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
   const [answerImageUrls, setAnswerImageUrls] = useState<string[]>([]);
+  const [cardImageUrls, setCardImageUrls] = useState<string[]>([]);
+  const [uploadingCards, setUploadingCards] = useState(false);
+  const [matchedAudienceCount, setMatchedAudienceCount] = useState<{ students: number; loading: boolean }>({ students: 0, loading: false });
   const [isParsing, setIsParsing] = useState(false);
   const [isExtractingAnswers, setIsExtractingAnswers] = useState(false);
   const [deepAnalysis, setDeepAnalysis] = useState<DeepAnalysisReport | null>(null);
