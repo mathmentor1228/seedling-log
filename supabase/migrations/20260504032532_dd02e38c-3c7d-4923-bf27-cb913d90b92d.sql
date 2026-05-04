@@ -1,0 +1,1 @@
+ALTER VIEW public.student_accounts_safe SET (security_invoker = true);

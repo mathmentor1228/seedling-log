@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import katex from 'katex';
+import DOMPurify from 'dompurify';
 import 'katex/dist/katex.min.css';
 
 interface Props {
@@ -177,7 +178,11 @@ export function MathRenderer({ text, autoSubBreak = false }: Props) {
       }
     });
 
-    return result;
+    // ── Step 5: Sanitize final HTML to prevent XSS ──
+    return DOMPurify.sanitize(result, {
+      ADD_TAGS: ['math', 'semantics', 'annotation', 'mrow', 'mi', 'mn', 'mo', 'ms', 'mtext', 'msup', 'msub', 'mfrac', 'msqrt', 'mroot', 'munder', 'mover', 'munderover'],
+      ADD_ATTR: ['class', 'style', 'aria-hidden', 'xmlns'],
+    });
   }, [text, autoSubBreak]);
 
   return (
