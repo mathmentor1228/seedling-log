@@ -83,7 +83,7 @@ function SchoolExamArchiveInner() {
     refetch,
   } = useExamArchiveData();
 
-  const canViewReview = role === 'admin';
+  const canViewReview = role === 'admin' || role === 'teacher';
   const canViewPrep = role === 'admin' || role === 'teacher';
   const requestedTab = normalizeTab(searchParams.get('tab'));
   const currentTab = requestedTab === 'review' && !canViewReview
