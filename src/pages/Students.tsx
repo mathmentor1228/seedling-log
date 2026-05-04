@@ -114,7 +114,10 @@ export default function Students() {
         .select('*')
         .order('name');
       
-      if (statusFilter !== 'all') {
+      if (statusFilter === '재학') {
+        // 재학 탭에서는 재등원 학생도 함께 표시 (모두 재원생)
+        query = query.in('enrollment_status', ['재학', '재등원']);
+      } else if (statusFilter !== 'all') {
         query = query.eq('enrollment_status', statusFilter);
       }
 
@@ -508,8 +511,9 @@ export default function Students() {
                         <SelectValue placeholder="선택" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="재원">재원</SelectItem>
-                        <SelectItem value="휴원">휴원</SelectItem>
+                        <SelectItem value="재학">재학</SelectItem>
+                        <SelectItem value="재등원">재등원</SelectItem>
+                        <SelectItem value="휴학">휴학</SelectItem>
                         <SelectItem value="퇴원">퇴원</SelectItem>
                       </SelectContent>
                     </Select>
@@ -623,7 +627,7 @@ export default function Students() {
             {/* Filters row */}
             <div className="flex items-center gap-2 flex-wrap">
               {/* Status filter chips */}
-              {['재학', '휴학', '퇴원', 'all'].map((s) => (
+              {['재학', '재등원', '휴학', '퇴원', 'all'].map((s) => (
                 <Button
                   key={s}
                   variant={statusFilter === s ? 'default' : 'outline'}
@@ -744,6 +748,7 @@ export default function Students() {
                         <Badge
                           variant={
                             student.enrollment_status === '재학' ? 'default' :
+                            student.enrollment_status === '재등원' ? 'default' :
                             student.enrollment_status === '휴학' ? 'secondary' : 'outline'
                           }
                           className={
@@ -751,6 +756,8 @@ export default function Students() {
                               ? 'text-muted-foreground border-muted-foreground/30'
                               : student.enrollment_status === '휴학'
                               ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                              : student.enrollment_status === '재등원'
+                              ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
                               : ''
                           }
                         >

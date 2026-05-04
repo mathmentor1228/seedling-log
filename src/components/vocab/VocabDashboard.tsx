@@ -56,7 +56,7 @@ export function VocabDashboard({ onTabChange }: Props) {
       supabase.from('vocab_test_results').select('*').gte('test_date', monthStart).lte('test_date', monthEnd),
       supabase.from('vocab_card_completions').select('*').gte('completed_at', monthStart + 'T00:00:00').lte('completed_at', monthEnd + 'T23:59:59'),
       supabase.from('vocab_settings').select('*, students(name, grade)').eq('is_active', true),
-      supabase.from('students').select('id, name, grade').in('enrollment_status', ['재학']),
+      supabase.from('students').select('id, name, grade').in('enrollment_status', ['재학', '재등원']),
     ]);
     setSchedules(schedRes.data || []);
     setResults(resultsRes.data || []);

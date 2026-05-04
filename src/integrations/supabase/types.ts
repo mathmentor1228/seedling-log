@@ -3974,6 +3974,7 @@ export type Database = {
         Row: {
           course_policy_id: string
           created_at: string
+          custom_monthly_fee: number | null
           end_date: string | null
           enrollment_date: string
           id: string
@@ -3986,6 +3987,7 @@ export type Database = {
         Insert: {
           course_policy_id: string
           created_at?: string
+          custom_monthly_fee?: number | null
           end_date?: string | null
           enrollment_date: string
           id?: string
@@ -3998,6 +4000,7 @@ export type Database = {
         Update: {
           course_policy_id?: string
           created_at?: string
+          custom_monthly_fee?: number | null
           end_date?: string | null
           enrollment_date?: string
           id?: string
@@ -4436,6 +4439,7 @@ export type Database = {
         Row: {
           course_status: string
           created_at: string
+          deposit_name: string | null
           email: string | null
           emergency_contact: string | null
           enrollment_status: string
@@ -4464,6 +4468,7 @@ export type Database = {
         Insert: {
           course_status?: string
           created_at?: string
+          deposit_name?: string | null
           email?: string | null
           emergency_contact?: string | null
           enrollment_status?: string
@@ -4492,6 +4497,7 @@ export type Database = {
         Update: {
           course_status?: string
           created_at?: string
+          deposit_name?: string | null
           email?: string | null
           emergency_contact?: string | null
           enrollment_status?: string
@@ -6302,6 +6308,38 @@ export type Database = {
             foreignKeyName: "lesson_records_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_accounts_safe: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          last_login_at: string | null
+          student_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          last_login_at?: string | null
+          student_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          last_login_at?: string | null
+          student_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_accounts_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: true
             referencedRelation: "students"
             referencedColumns: ["id"]
           },
