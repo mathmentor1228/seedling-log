@@ -610,7 +610,7 @@ export default function Students() {
             {/* Filters row */}
             <div className="flex items-center gap-2 flex-wrap">
               {/* Status filter chips */}
-              {['재학', '휴학', '퇴원', 'all'].map((s) => (
+              {['재학', '재등원', '휴학', '퇴원', 'all'].map((s) => (
                 <Button
                   key={s}
                   variant={statusFilter === s ? 'default' : 'outline'}
