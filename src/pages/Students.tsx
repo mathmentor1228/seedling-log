@@ -504,8 +504,9 @@ export default function Students() {
                         <SelectValue placeholder="선택" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="재원">재원</SelectItem>
-                        <SelectItem value="휴원">휴원</SelectItem>
+                        <SelectItem value="재학">재학</SelectItem>
+                        <SelectItem value="재등원">재등원</SelectItem>
+                        <SelectItem value="휴학">휴학</SelectItem>
                         <SelectItem value="퇴원">퇴원</SelectItem>
                       </SelectContent>
                     </Select>
