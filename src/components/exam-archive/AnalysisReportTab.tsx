@@ -299,7 +299,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
           .select('id, class_students!inner(classes!inner(subject))')
           .eq('school', form.schoolName)
           .eq('grade_year', gradeYear)
-          .eq('enrollment_status', '재학')
+          .in('enrollment_status', ['재학', '재등원'])
           .eq('class_students.classes.subject', form.subject);
         if (!cancelled && !error) {
           const unique = new Set((data || []).map((s: any) => s.id));

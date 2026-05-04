@@ -95,7 +95,7 @@ export function TextbookDistributionTab() {
     const [distRes, orderRes, studentRes] = await Promise.all([
       supabase.from('textbook_distributions').select('*, textbook_orders(textbook_name, unit_price, subject)').order('created_at', { ascending: false }),
       supabase.from('textbook_orders').select('*').order('created_at', { ascending: false }),
-      supabase.from('students').select('id, name, parent_name, parent_phone').in('enrollment_status', ['재학']).order('name'),
+      supabase.from('students').select('id, name, parent_name, parent_phone').in('enrollment_status', ['재학', '재등원']).order('name'),
     ]);
 
     const dists = (distRes.data as any[]) || [];

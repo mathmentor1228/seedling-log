@@ -246,7 +246,7 @@ export default function Reports() {
       const { data, error } = await supabase
         .from('students')
         .select('id, name, grade')
-        .in('enrollment_status', ['재학'])
+        .in('enrollment_status', ['재학', '재등원'])
         .order('name');
       
       if (error) throw error;

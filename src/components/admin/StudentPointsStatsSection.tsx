@@ -40,7 +40,7 @@ export default function StudentPointsStatsSection() {
 
     // Fetch students and recent point history in parallel
     const [studentsRes, historyRes] = await Promise.all([
-      supabase.from('students').select('id, name, grade, total_points').in('enrollment_status', ['재학']),
+      supabase.from('students').select('id, name, grade, total_points').in('enrollment_status', ['재학', '재등원']),
       supabase.from('student_point_history').select('student_id, points').gte('created_at', sinceStr),
     ]);
 
