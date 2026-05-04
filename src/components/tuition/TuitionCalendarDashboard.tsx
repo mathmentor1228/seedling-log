@@ -77,12 +77,14 @@ export function TuitionCalendarDashboard() {
     if (studentIds.length > 0) {
       const { data: courses } = await supabase
         .from('student_courses')
-        .select('student_id, course_policies(monthly_fee)')
+        .select('student_id, custom_monthly_fee, course_policies(monthly_fee)')
         .in('student_id', studentIds)
         .eq('is_active', true);
       if (courses) {
         for (const c of courses as any[]) {
-          const fee = Number((c as any).course_policies?.monthly_fee || 0);
+          // custom_monthly_fee가 있으면 우선 사용 (학생별 다과목/형제할인 반영된 실제 금액)
+          const customFee = (c as any).custom_monthly_fee;
+          const fee = customFee != null ? Number(customFee) : Number((c as any).course_policies?.monthly_fee || 0);
           courseFees[c.student_id] = (courseFees[c.student_id] || 0) + fee;
         }
       }

@@ -138,7 +138,7 @@ export default function Students() {
     const studentIds = students.map(s => s.id);
     const [coursesRes, billingsRes] = await Promise.all([
       supabase.from('student_courses')
-        .select('student_id, is_active, course_policies(monthly_fee)')
+        .select('student_id, is_active, custom_monthly_fee, course_policies(monthly_fee)')
         .in('student_id', studentIds),
       supabase.from('billing_schedules')
         .select('student_id, status')
@@ -151,7 +151,10 @@ export default function Students() {
       if (!summary[c.student_id]) summary[c.student_id] = { courses: 0, monthlyFee: 0, unpaid: 0 };
       if (c.is_active) {
         summary[c.student_id].courses++;
-        summary[c.student_id].monthlyFee += Number((c as any).course_policies?.monthly_fee || 0);
+        // custom_monthly_fee가 있으면 우선 사용 (학생별 다과목/형제할인 반영된 실제 금액)
+        const customFee = (c as any).custom_monthly_fee;
+        const fee = customFee != null ? Number(customFee) : Number((c as any).course_policies?.monthly_fee || 0);
+        summary[c.student_id].monthlyFee += fee;
       }
     }
     for (const b of (billingsRes.data || [])) {
