@@ -5,12 +5,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent } from 'lucide-react';
+import { Plus, Trash2, CalendarIcon, BookOpen, Receipt, Loader2, Users, Percent, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -47,6 +48,11 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // 수강료 직접지정(custom_monthly_fee) 편집용 state
+  const [feeEditCourse, setFeeEditCourse] = useState<any | null>(null);
+  const [feeEditValue, setFeeEditValue] = useState('');
+  const [feeSaving, setFeeSaving] = useState(false);
+
   // Quick-add state
   const [selectedPolicyId, setSelectedPolicyId] = useState('');
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
@@ -61,7 +67,7 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
     setLoading(true);
     const [coursesRes, billingsRes, paymentsRes, policiesRes, teachersRes, studentRes] = await Promise.all([
       supabase.from('student_courses')
-        .select('*, course_policies(course_name, subject, grade_target, monthly_fee)')
+        .select('*, custom_monthly_fee, course_policies(course_name, subject, grade_target, monthly_fee)')
         .eq('student_id', studentId)
         .order('is_active', { ascending: false }),
       supabase.from('billing_schedules')
@@ -126,8 +132,16 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
   const multiSubjectDiscount = MULTI_SUBJECT_DISCOUNT[Math.min(subjectCount, 4)] || (subjectCount > 4 ? 100000 : 0);
   const siblingDiscount = siblingCount > 1 ? SIBLING_DISCOUNT : 0;
 
-  const monthlyGross = activeCourses.reduce((sum, c) => sum + (Number((c as any).course_policies?.monthly_fee) || 0), 0);
-  const totalDiscount = multiSubjectDiscount + siblingDiscount;
+  // custom_monthly_fee가 있으면 그 값을 우선 사용 (학생별 다과목/형제할인 반영된 실제 금액)
+  const courseFee = (c: any): number => {
+    const custom = c.custom_monthly_fee;
+    if (custom != null) return Number(custom);
+    return Number(c.course_policies?.monthly_fee || 0);
+  };
+  const hasAnyCustomFee = activeCourses.some(c => (c as any).custom_monthly_fee != null);
+  const monthlyGross = activeCourses.reduce((sum, c) => sum + courseFee(c), 0);
+  // custom 금액은 이미 할인 반영된 값이므로 추가 할인 적용하지 않음
+  const totalDiscount = hasAnyCustomFee ? 0 : (multiSubjectDiscount + siblingDiscount);
   const monthlyNet = Math.max(0, monthlyGross - totalDiscount);
 
   const unpaidCount = billings.filter(b => b.status === 'pending' || b.status === 'overdue').length;
@@ -170,6 +184,31 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
     loadAll();
   };
 
+  const openFeeEdit = (c: any) => {
+    setFeeEditCourse(c);
+    setFeeEditValue(c.custom_monthly_fee != null ? String(c.custom_monthly_fee) : '');
+  };
+
+  const saveCustomFee = async () => {
+    if (!feeEditCourse) return;
+    const trimmed = feeEditValue.trim();
+    const newVal = trimmed === '' ? null : Number(trimmed);
+    if (newVal != null && (Number.isNaN(newVal) || newVal < 0)) {
+      toast.error('올바른 금액을 입력해주세요');
+      return;
+    }
+    setFeeSaving(true);
+    const { error } = await supabase
+      .from('student_courses')
+      .update({ custom_monthly_fee: newVal } as any)
+      .eq('id', feeEditCourse.id);
+    setFeeSaving(false);
+    if (error) { toast.error('수강료 수정 실패'); return; }
+    toast.success(newVal == null ? '직접지정 해제 완료 (정책 금액 사용)' : '수강료 수정 완료');
+    setFeeEditCourse(null);
+    loadAll();
+  };
+
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
   return (
@@ -191,9 +230,15 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
         <Card><CardContent className="p-3">
           <p className="text-xs text-muted-foreground flex items-center gap-1"><Percent className="w-3 h-3" />할인 내역</p>
           <div className="text-xs mt-0.5 space-y-0.5">
-            {multiSubjectDiscount > 0 && <p className="text-green-600">{subjectCount}과목: -{multiSubjectDiscount.toLocaleString()}</p>}
-            {siblingDiscount > 0 && <p className="text-green-600 flex items-center gap-0.5"><Users className="w-3 h-3" />형제: -{siblingDiscount.toLocaleString()}</p>}
-            {totalDiscount === 0 && <p className="text-muted-foreground">없음</p>}
+            {hasAnyCustomFee ? (
+              <p className="text-blue-600">직접지정 금액 사용</p>
+            ) : (
+              <>
+                {multiSubjectDiscount > 0 && <p className="text-green-600">{subjectCount}과목: -{multiSubjectDiscount.toLocaleString()}</p>}
+                {siblingDiscount > 0 && <p className="text-green-600 flex items-center gap-0.5"><Users className="w-3 h-3" />형제: -{siblingDiscount.toLocaleString()}</p>}
+                {totalDiscount === 0 && <p className="text-muted-foreground">없음</p>}
+              </>
+            )}
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-3">
@@ -226,6 +271,9 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
             <div className="space-y-2">
               {courses.map(c => {
                 const cp = (c as any).course_policies;
+                const customFee = (c as any).custom_monthly_fee;
+                const policyFee = Number(cp?.monthly_fee || 0);
+                const effectiveFee = customFee != null ? Number(customFee) : policyFee;
                 return (
                   <Card key={c.id} className={cn(!c.is_active && "opacity-60")}>
                     <CardContent className="p-3">
@@ -236,11 +284,23 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
                             <Badge variant={c.is_active ? 'default' : 'secondary'} className="text-[10px]">
                               {c.is_active ? '수강중' : '종료'}
                             </Badge>
+                            {customFee != null && (
+                              <Badge variant="outline" className="text-[10px] border-blue-500 text-blue-600">
+                                직접지정
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
                             <span>{cp?.subject}</span><span>·</span>
                             <span>{cp?.grade_target}</span><span>·</span>
-                            <span>{Number(cp?.monthly_fee || 0).toLocaleString()}원/월</span>
+                            <span className={cn(customFee != null && "font-semibold text-blue-600")}>
+                              {effectiveFee.toLocaleString()}원/월
+                            </span>
+                            {customFee != null && policyFee > 0 && (
+                              <span className="line-through opacity-60">
+                                정책 {policyFee.toLocaleString()}
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             시작: {c.enrollment_date}
@@ -248,6 +308,11 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
                           </div>
                         </div>
                         <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                            onClick={() => openFeeEdit(c)}
+                            title="수강료 직접지정">
+                            <Pencil className="w-3 h-3" />
+                          </Button>
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
                             onClick={() => toggleCourseActive(c.id, c.is_active)}>
                             {c.is_active ? '종료' : '재개'}
@@ -377,6 +442,44 @@ export function StudentCoursesTuitionTab({ studentId, studentName }: Props) {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* 수강료 직접지정 다이얼로그 */}
+      <Dialog open={!!feeEditCourse} onOpenChange={(o) => { if (!o) setFeeEditCourse(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>수강료 직접지정 — {studentName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">
+              과정: <span className="font-medium text-foreground">
+                {(feeEditCourse as any)?.course_policies?.course_name || '-'}
+              </span>
+              <span className="ml-2">
+                정책 금액: {Number((feeEditCourse as any)?.course_policies?.monthly_fee || 0).toLocaleString()}원
+              </span>
+            </div>
+            <div>
+              <Label className="text-sm">월 수강료 (직접지정)</Label>
+              <Input
+                type="number"
+                placeholder="비우면 정책 금액 사용"
+                value={feeEditValue}
+                onChange={e => setFeeEditValue(e.target.value)}
+                className="h-9"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                * 다과목/형제 할인 등 이미 반영된 실제 청구 금액을 입력하세요. 비우면 정책 금액(다과목·형제 할인 자동 적용)으로 돌아갑니다.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setFeeEditCourse(null)}>취소</Button>
+            <Button onClick={saveCustomFee} disabled={feeSaving}>
+              {feeSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

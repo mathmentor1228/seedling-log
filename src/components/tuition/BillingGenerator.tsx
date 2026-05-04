@@ -56,7 +56,7 @@ export function BillingGenerator() {
       // Get all active student_courses with course_policies
       const { data: courses } = await supabase
         .from('student_courses')
-        .select('id, student_id, course_policy_id, course_policies(monthly_fee, course_name)')
+        .select('id, student_id, course_policy_id, custom_monthly_fee, course_policies(monthly_fee, course_name)')
         .eq('is_active', true);
 
       if (!courses || courses.length === 0) {
@@ -84,7 +84,9 @@ export function BillingGenerator() {
       const inserts = courses
         .filter(c => !existingSet.has(`${c.student_id}-${c.id}`))
         .map(c => {
-          const fee = (c as any).course_policies?.monthly_fee || 0;
+          // custom_monthly_fee가 있으면 우선 사용 (학생별 다과목/형제할인 반영된 실제 금액)
+          const customFee = (c as any).custom_monthly_fee;
+          const fee = customFee != null ? Number(customFee) : Number((c as any).course_policies?.monthly_fee || 0);
           const dueDay = studentMap[c.student_id]?.payment_due_day || 1;
           const lastDay = new Date(year, month, 0).getDate();
           const adjustedDay = Math.min(dueDay, lastDay);

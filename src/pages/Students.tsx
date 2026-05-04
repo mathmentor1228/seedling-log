@@ -95,6 +95,7 @@ export default function Students() {
     parent_phone: '',
     parent_name: '',
     student_phone: '',
+    deposit_name: '',
   });
   const { toast } = useToast();
 
@@ -217,6 +218,7 @@ export default function Students() {
         parent_phone: normalizedParentPhone || null,
         parent_name: formData.parent_name.trim() || null,
         student_phone: normalizedStudentPhone || null,
+        deposit_name: formData.deposit_name.trim() || null,
         student_code: studentCode,
       };
 
@@ -277,6 +279,7 @@ export default function Students() {
       parent_phone: '',
       parent_name: '',
       student_phone: '',
+      deposit_name: '',
     });
   };
 
@@ -295,6 +298,7 @@ export default function Students() {
       parent_phone: student.parent_phone || '',
       parent_name: (student as any).parent_name || '',
       student_phone: student.student_phone || '',
+      deposit_name: (student as any).deposit_name || '',
     });
     setIsAddDialogOpen(true);
   };
@@ -541,6 +545,15 @@ export default function Students() {
                       value={formData.parent_name}
                       onChange={(e) => setFormData({ ...formData, parent_name: e.target.value })}
                       placeholder="학부모 이름"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="deposit_name">입금자명</Label>
+                    <Input
+                      id="deposit_name"
+                      value={formData.deposit_name}
+                      onChange={(e) => setFormData({ ...formData, deposit_name: e.target.value })}
+                      placeholder="통장에 찍히는 이름 (학생명과 다를 때)"
                     />
                   </div>
                   <div className="space-y-2">
