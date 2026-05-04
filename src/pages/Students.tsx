@@ -113,7 +113,10 @@ export default function Students() {
         .select('*')
         .order('name');
       
-      if (statusFilter !== 'all') {
+      if (statusFilter === '재학') {
+        // 재학 탭에서는 재등원 학생도 함께 표시 (모두 재원생)
+        query = query.in('enrollment_status', ['재학', '재등원']);
+      } else if (statusFilter !== 'all') {
         query = query.eq('enrollment_status', statusFilter);
       }
 
