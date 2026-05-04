@@ -9,11 +9,12 @@ export const GRADE_TARGETS = ['초', '중', '고1', '고2', '고등', '고등수
 export type GradeTarget = (typeof GRADE_TARGETS)[number];
 
 /** Option Set 3: Student Status (재학상태) — maps to enrollment_status column */
-export const STUDENT_STATUSES = ['재학', '휴학', '퇴원'] as const;
+export const STUDENT_STATUSES = ['재학', '재등원', '휴학', '퇴원'] as const;
 export type StudentStatus = (typeof STUDENT_STATUSES)[number];
 
-/** Active student statuses (used for roster filtering — excludes 퇴원/휴학) */
-export const ACTIVE_STUDENT_STATUSES: StudentStatus[] = ['재학'];
+/** Active student statuses (used for roster filtering — excludes 퇴원/휴학).
+ * '재등원' = 퇴원 후 재등원한 학생, 재원생으로 카운팅됨. */
+export const ACTIVE_STUDENT_STATUSES: StudentStatus[] = ['재학', '재등원'];
 
 /** Option Set 4: Enrollment Status (수강상태) */
 export const ENROLLMENT_STATUSES = ['활성', '중단', '종료'] as const;
