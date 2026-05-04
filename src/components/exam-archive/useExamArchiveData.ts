@@ -83,7 +83,7 @@ export function useExamArchiveData() {
       supabase.from('school_textbooks').select('*').order('grade'),
       supabase.from('school_files').select('*').order('created_at', { ascending: false }),
       supabase.from('school_exam_archives').select('*').order('updated_at', { ascending: false }),
-      supabase.from('students').select('id, school').eq('enrollment_status', '재학'),
+      supabase.from('students').select('id, school').in('enrollment_status', ['재학', '재등원']),
       supabase.from('academy_events').select('id, title, start_at, end_at, category').eq('category', 'exam').order('start_at', { ascending: true }),
     ]);
 

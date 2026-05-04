@@ -132,7 +132,7 @@ export default function DailyHomeworkManager() {
 
         (studentsRes.data || []).forEach((cs: any) => {
           const student = cs.students;
-          if (!student || student.enrollment_status !== '재학') return;
+          if (!student || !['재학', '재등원'].includes(student.enrollment_status)) return;
           const teacherId = classTeacherMap[cs.class_id] || 'unknown';
           if (!groups[teacherId]) {
             groups[teacherId] = {
@@ -176,7 +176,7 @@ export default function DailyHomeworkManager() {
           .from('students')
           .select('id, name, grade, school, enrollment_status')
           .in('id', studentIds)
-          .in('enrollment_status', ['재학']),
+          .in('enrollment_status', ['재학', '재등원']),
         supabase.from('profiles').select('id, full_name').in('id', teacherIds),
       ]);
 

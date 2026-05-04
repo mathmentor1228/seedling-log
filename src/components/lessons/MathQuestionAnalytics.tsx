@@ -86,7 +86,7 @@ export default function MathQuestionAnalytics() {
     const [qRes, aRes, sRes, tRes] = await Promise.all([
       supabase.from('math_questions').select('id, student_id, grade, subject, status, created_at, date, view_count, is_shared, title').gte('date', since).order('created_at', { ascending: false }),
       supabase.from('math_answers').select('id, question_id, teacher_id, answer_type, created_at').gte('created_at', since + 'T00:00:00'),
-      supabase.from('students').select('id, name').eq('enrollment_status', '재학'),
+      supabase.from('students').select('id, name').in('enrollment_status', ['재학', '재등원']),
       supabase.from('profiles').select('id, full_name'),
     ]);
 

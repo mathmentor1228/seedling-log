@@ -94,7 +94,7 @@ export async function fetchStudentsByIds(studentIds?: string[] | null) {
   let query = supabase
     .from('students')
     .select('id, name, school, school_level, grade_year')
-    .eq('enrollment_status', '재학');
+    .in('enrollment_status', ['재학', '재등원']);
 
   if (studentIds) {
     query = query.in('id', studentIds);

@@ -59,7 +59,7 @@ export function TuitionCalendarDashboard() {
     const [studentsRes, paymentsRes] = await Promise.all([
       supabase.from('students')
         .select('id, name, payment_due_day, school, grade, parent_phone, tuition_memo')
-        .eq('enrollment_status', '재학')
+        .in('enrollment_status', ['재학', '재등원'])
         .not('payment_due_day', 'is', null)
         .order('name'),
       supabase.from('payment_records')

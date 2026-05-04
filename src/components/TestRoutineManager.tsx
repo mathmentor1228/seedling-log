@@ -100,7 +100,7 @@ export function TestRoutineManager() {
       const [routinesRes, routineStudentsRes, studentsRes] = await Promise.all([
         supabase.from('test_routines').select('*').order('day_of_week'),
         supabase.from('test_routine_students').select('*'),
-        supabase.from('students').select('id, name, grade, school').in('enrollment_status', ['재학']).order('name'),
+        supabase.from('students').select('id, name, grade, school').in('enrollment_status', ['재학', '재등원']).order('name'),
       ]);
       
       let teachersData: Teacher[] = [];
