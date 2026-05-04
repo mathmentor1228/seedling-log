@@ -732,6 +732,7 @@ export default function Students() {
                         <Badge
                           variant={
                             student.enrollment_status === '재학' ? 'default' :
+                            student.enrollment_status === '재등원' ? 'default' :
                             student.enrollment_status === '휴학' ? 'secondary' : 'outline'
                           }
                           className={
@@ -739,6 +740,8 @@ export default function Students() {
                               ? 'text-muted-foreground border-muted-foreground/30'
                               : student.enrollment_status === '휴학'
                               ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                              : student.enrollment_status === '재등원'
+                              ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
                               : ''
                           }
                         >
