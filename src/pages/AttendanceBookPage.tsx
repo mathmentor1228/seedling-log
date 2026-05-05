@@ -143,28 +143,31 @@ function AttendanceBookContent() {
           const roster = studentsByClass.get(s.class_id) || [];
           const recorded = recordedStudentsByClass.get(s.class_id) || [];
           const seen = new Set<string>();
-          const students = [...roster, ...recorded]
+          const students: SlotRow['students'] = [...roster, ...recorded]
             .filter((st) => {
               if (seen.has(st.id)) return false;
               seen.add(st.id);
               return true;
             })
-            .map((st) => ({
-              id: st.id,
-              name: st.name,
-              status: statusMap.get(`${st.id}:${s.class_id}`) || ('status' in st ? st.status : null) || null,
-            }));
+            .map((st) => {
+              const existingStatus = (st as { status?: string | null }).status || null;
+              return {
+                id: st.id,
+                name: st.name,
+                status: statusMap.get(`${st.id}:${s.class_id}`) || existingStatus,
+              };
+            });
 
           return {
-          scheduleId: s.id,
-          classId: s.class_id,
-          className: s.classes?.name || '-',
-          subject: s.classes?.subject || '-',
-          startTime: s.start_time?.slice(0, 5) || '',
-          endTime: s.end_time?.slice(0, 5) || '',
-          teacherId: s.teacher_id,
-          teacherName: teacherMap[s.teacher_id] || '미배정',
-          students,
+            scheduleId: s.id,
+            classId: s.class_id,
+            className: s.classes?.name || '-',
+            subject: s.classes?.subject || '-',
+            startTime: s.start_time?.slice(0, 5) || '',
+            endTime: s.end_time?.slice(0, 5) || '',
+            teacherId: s.teacher_id,
+            teacherName: teacherMap[s.teacher_id] || '미배정',
+            students,
           };
         });
 
