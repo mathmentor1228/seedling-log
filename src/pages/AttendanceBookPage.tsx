@@ -39,6 +39,23 @@ const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
   '미등원': { label: '미등원', tone: 'text-muted-foreground' },
 };
 
+const getPrimaryStatus = (attendanceStatus: string[] | null | undefined) => {
+  const arr = attendanceStatus || [];
+  return arr.find((s) => s !== '정상등원') || arr[0] || null;
+};
+
+const inferTimeFromClassName = (className: string) => {
+  const match = className.match(/(\d{1,2})(?::(\d{2}))?/);
+  if (!match) return { startTime: '', endTime: '' };
+
+  let hour = Number(match[1]);
+  const minute = match[2] || '00';
+  if (hour > 0 && hour < 8) hour += 12;
+  const startTime = `${String(hour).padStart(2, '0')}:${minute}`;
+  const endTime = `${String((hour + 1) % 24).padStart(2, '0')}:${minute}`;
+  return { startTime, endTime };
+};
+
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <div className="rounded-lg border p-2.5">
@@ -68,41 +85,52 @@ function AttendanceBookContent() {
     (async () => {
       setLoading(true);
       try {
-        const { data: schedules } = await supabase
-          .from('class_schedules')
-          .select('id, start_time, end_time, class_id, teacher_id, classes(name, subject)')
-          .eq('day_of_week', dow)
-          .eq('is_active', true)
-          .order('start_time');
+        const [{ data: schedules }, { data: lessonRecords }] = await Promise.all([
+          supabase
+            .from('class_schedules')
+            .select('id, start_time, end_time, class_id, teacher_id, classes(name, subject)')
+            .eq('day_of_week', dow)
+            .eq('is_active', true)
+            .order('start_time'),
+          supabase
+            .from('lesson_records')
+            .select('id, student_id, class_id, subject, attendance_status, teacher_id, teacher_display_name, students(name), classes(name, subject)')
+            .eq('lesson_date', dateStr),
+        ]);
 
-        if (!schedules || schedules.length === 0) {
-          if (!cancelled) setSlots([]);
-          return;
-        }
+        const scheduleRows = (schedules || []) as any[];
+        const recordRows = (lessonRecords || []) as any[];
+        const scheduledClassIds = scheduleRows.map((s) => s.class_id).filter(Boolean);
+        const teacherIds = [...new Set([
+          ...scheduleRows.map((s) => s.teacher_id).filter(Boolean),
+          ...recordRows.map((r) => r.teacher_id).filter(Boolean),
+        ])] as string[];
 
-        const classIds = schedules.map((s: any) => s.class_id).filter(Boolean);
-        const teacherIds = [...new Set(schedules.map((s: any) => s.teacher_id).filter(Boolean))] as string[];
-
-        const [{ data: profiles }, { data: classStudents }, { data: lessonRecords }] = await Promise.all([
+        const [{ data: profiles }, { data: classStudents }] = await Promise.all([
           teacherIds.length > 0
             ? supabase.from('profiles').select('id, full_name').in('id', teacherIds)
             : Promise.resolve({ data: [] as any[] }),
-          supabase.from('class_students').select('class_id, student_id, students(name)').in('class_id', classIds),
-          supabase
-            .from('lesson_records')
-            .select('student_id, class_id, attendance_status, teacher_id, teacher_display_name')
-            .in('class_id', classIds)
-            .eq('lesson_date', dateStr),
+          scheduledClassIds.length > 0
+            ? supabase.from('class_students').select('class_id, student_id, students(name)').in('class_id', scheduledClassIds)
+            : Promise.resolve({ data: [] as any[] }),
         ]);
 
         const teacherMap: Record<string, string> = {};
         (profiles || []).forEach((p: any) => { teacherMap[p.id] = p.full_name; });
 
         const statusMap = new Map<string, string>();
-        (lessonRecords || []).forEach((r: any) => {
-          const arr: string[] = r.attendance_status || [];
-          const status = arr.find((s) => s !== '정상등원') || arr[0] || null;
+        const recordedStudentsByClass = new Map<string, { id: string; name: string; status: string | null }[]>();
+        recordRows.forEach((r: any) => {
+          const status = getPrimaryStatus(r.attendance_status);
           if (status) statusMap.set(`${r.student_id}:${r.class_id}`, status);
+          if (r.class_id) {
+            if (!recordedStudentsByClass.has(r.class_id)) recordedStudentsByClass.set(r.class_id, []);
+            recordedStudentsByClass.get(r.class_id)!.push({
+              id: r.student_id,
+              name: r.students?.name || '-',
+              status,
+            });
+          }
         });
 
         const studentsByClass = new Map<string, { id: string; name: string }[]>();
@@ -111,21 +139,67 @@ function AttendanceBookContent() {
           studentsByClass.get(cs.class_id)!.push({ id: cs.student_id, name: cs.students?.name || '-' });
         });
 
-        const result: SlotRow[] = (schedules as any[]).map((s) => ({
-          scheduleId: s.id,
-          classId: s.class_id,
-          className: s.classes?.name || '-',
-          subject: s.classes?.subject || '-',
-          startTime: s.start_time?.slice(0, 5) || '',
-          endTime: s.end_time?.slice(0, 5) || '',
-          teacherId: s.teacher_id,
-          teacherName: teacherMap[s.teacher_id] || '미배정',
-          students: (studentsByClass.get(s.class_id) || []).map((st) => ({
-            id: st.id,
-            name: st.name,
-            status: statusMap.get(`${st.id}:${s.class_id}`) || null,
-          })),
-        }));
+        const result: SlotRow[] = scheduleRows.map((s) => {
+          const roster = studentsByClass.get(s.class_id) || [];
+          const recorded = recordedStudentsByClass.get(s.class_id) || [];
+          const seen = new Set<string>();
+          const students: SlotRow['students'] = [...roster, ...recorded]
+            .filter((st) => {
+              if (seen.has(st.id)) return false;
+              seen.add(st.id);
+              return true;
+            })
+            .map((st) => {
+              const existingStatus = (st as { status?: string | null }).status || null;
+              return {
+                id: st.id,
+                name: st.name,
+                status: statusMap.get(`${st.id}:${s.class_id}`) || existingStatus,
+              };
+            });
+
+          return {
+            scheduleId: s.id,
+            classId: s.class_id,
+            className: s.classes?.name || '-',
+            subject: s.classes?.subject || '-',
+            startTime: s.start_time?.slice(0, 5) || '',
+            endTime: s.end_time?.slice(0, 5) || '',
+            teacherId: s.teacher_id,
+            teacherName: teacherMap[s.teacher_id] || '미배정',
+            students,
+          };
+        });
+
+        const scheduledClassIdSet = new Set(scheduledClassIds);
+        const historicalClassIds = [...new Set(recordRows.map((r) => r.class_id).filter(Boolean))]
+          .filter((classId) => !scheduledClassIdSet.has(classId));
+
+        historicalClassIds.forEach((classId) => {
+          const records = recordRows.filter((r) => r.class_id === classId);
+          const first = records[0];
+          const className = first?.classes?.name || '-';
+          const { startTime, endTime } = inferTimeFromClassName(className);
+          const teacherId = first?.teacher_id || null;
+          result.push({
+            scheduleId: `record-${dateStr}-${classId}`,
+            classId,
+            className,
+            subject: first?.classes?.subject || first?.subject || '-',
+            startTime,
+            endTime,
+            teacherId,
+            teacherName: (teacherId && teacherMap[teacherId]) || first?.teacher_display_name || '미배정',
+            students: records.map((r) => ({
+              id: r.student_id,
+              name: r.students?.name || '-',
+              status: getPrimaryStatus(r.attendance_status),
+            })),
+          });
+        });
+
+        result.sort((a, b) => (a.startTime || '99:99').localeCompare(b.startTime || '99:99')
+          || a.className.localeCompare(b.className, 'ko'));
 
         if (!cancelled) setSlots(result);
       } catch (err) {
