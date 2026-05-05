@@ -17,7 +17,7 @@ export function TuitionDashboard() {
         <h1 className="text-2xl font-bold">수강료 관리</h1>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="w-full grid grid-cols-4">
+          <TabsList className="w-full grid grid-cols-5">
             <TabsTrigger value="calendar" className="gap-1.5">
               <CalendarDays className="w-4 h-4" />달력
             </TabsTrigger>
@@ -27,6 +27,9 @@ export function TuitionDashboard() {
             <TabsTrigger value="overdue" className="gap-1.5">
               <AlertTriangle className="w-4 h-4" />미납
             </TabsTrigger>
+            <TabsTrigger value="siblings" className="gap-1.5">
+              <Users className="w-4 h-4" />형제연결
+            </TabsTrigger>
             <TabsTrigger value="billing" className="gap-1.5">
               <Settings className="w-4 h-4" />청구설정
             </TabsTrigger>
@@ -35,6 +38,7 @@ export function TuitionDashboard() {
           <TabsContent value="calendar"><TuitionCalendarDashboard /></TabsContent>
           <TabsContent value="payments"><PaymentRecords /></TabsContent>
           <TabsContent value="overdue"><OverdueList /></TabsContent>
+          <TabsContent value="siblings"><SiblingGroupManager /></TabsContent>
           <TabsContent value="billing"><BillingGenerator /></TabsContent>
         </Tabs>
       </div>
