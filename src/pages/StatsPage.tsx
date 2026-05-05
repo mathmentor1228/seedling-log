@@ -26,6 +26,7 @@ import { Users, BookOpen, GraduationCap, UserCheck, RefreshCw, BarChart3 } from 
 import HomeworkStatsSection from '@/components/admin/HomeworkStatsSection';
 import StudentPointsStatsSection from '@/components/admin/StudentPointsStatsSection';
 import MonthlyTeacherStudentStats from '@/components/admin/MonthlyTeacherStudentStats';
+import TeacherRevenueSection from '@/components/admin/TeacherRevenueSection';
 
 interface EnrollmentStats {
   totals: {
