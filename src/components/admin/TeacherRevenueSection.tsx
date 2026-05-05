@@ -85,13 +85,13 @@ export default function TeacherRevenueSection() {
         teacherMap.set(p.id, { name: p.full_name || '미배정', revenue: 0, students: new Set() }),
       );
 
+      const UNASSIGNED = '__unassigned__';
       let usedPayments = false;
       if (payments && payments.length > 0) {
         usedPayments = true;
         for (const pr of payments as any[]) {
-          const tid = pr.billing_schedules?.student_courses?.teacher_id;
+          const tid = pr.billing_schedules?.student_courses?.teacher_id || UNASSIGNED;
           const sid = pr.billing_schedules?.student_courses?.student_id;
-          if (!tid) continue;
           if (!teacherMap.has(tid)) teacherMap.set(tid, { name: '미배정', revenue: 0, students: new Set() });
           const e = teacherMap.get(tid)!;
           e.revenue += Number(pr.amount || 0);
@@ -102,8 +102,7 @@ export default function TeacherRevenueSection() {
       // Always also compute "expected" from active courses for active students
       const expected = new Map<string, { revenue: number; students: Set<string> }>();
       for (const c of (courses || []) as any[]) {
-        const tid = c.teacher_id;
-        if (!tid) continue;
+        const tid = c.teacher_id || UNASSIGNED;
         const status = c.students?.enrollment_status;
         if (status !== '재학' && status !== '재등원') continue;
         const fee = Number(c.custom_monthly_fee ?? c.course_policies?.monthly_fee ?? 0);
