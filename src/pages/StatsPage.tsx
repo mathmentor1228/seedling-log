@@ -27,6 +27,7 @@ import HomeworkStatsSection from '@/components/admin/HomeworkStatsSection';
 import StudentPointsStatsSection from '@/components/admin/StudentPointsStatsSection';
 import MonthlyTeacherStudentStats from '@/components/admin/MonthlyTeacherStudentStats';
 import TeacherRevenueSection from '@/components/admin/TeacherRevenueSection';
+import HistoricalClassAttendance from '@/components/admin/HistoricalClassAttendance';
 
 interface EnrollmentStats {
   totals: {
