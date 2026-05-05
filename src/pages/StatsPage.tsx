@@ -438,8 +438,7 @@ function StatsContent() {
           )}
         </CardContent>
       </Card>
-      {/* Historical Class Attendance */}
-      <HistoricalClassAttendance />
+      {/* 출석부는 별도 탭(/admin/attendance-book)으로 분리됨 */}
       {/* Teacher Revenue Section */}
       <TeacherRevenueSection />
       {/* Homework Stats Section */}
