@@ -4727,6 +4727,44 @@ export type Database = {
           },
         ]
       }
+      teacher_monthly_compensation: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          notes: string | null
+          salary: number
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          notes?: string | null
+          salary?: number
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          notes?: string | null
+          salary?: number
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teacher_monthly_compensation_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teacher_notifications: {
         Row: {
           created_at: string
