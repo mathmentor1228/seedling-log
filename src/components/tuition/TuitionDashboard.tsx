@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { CalendarDays, Receipt, AlertTriangle, Settings } from 'lucide-react';
+import { CalendarDays, Receipt, AlertTriangle, Settings, Users } from 'lucide-react';
 import { TuitionCalendarDashboard } from './TuitionCalendarDashboard';
 import { PaymentRecords } from './PaymentRecords';
 import { OverdueList } from './OverdueList';
 import { BillingGenerator } from './BillingGenerator';
+import { SiblingGroupManager } from './SiblingGroupManager';
 
 export function TuitionDashboard() {
   const [tab, setTab] = useState('calendar');
