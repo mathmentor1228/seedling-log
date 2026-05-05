@@ -438,6 +438,8 @@ function StatsContent() {
           )}
         </CardContent>
       </Card>
+      {/* Historical Class Attendance */}
+      <HistoricalClassAttendance />
       {/* Teacher Revenue Section */}
       <TeacherRevenueSection />
       {/* Homework Stats Section */}
