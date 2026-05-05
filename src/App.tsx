@@ -33,6 +33,7 @@ const TimetablePage = lazy(() => import("./pages/TimetablePage"));
 const AssistantRequestsPage = lazy(() => import("./pages/AssistantRequestsPage"));
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
+const AttendanceBookPage = lazy(() => import("./pages/AttendanceBookPage"));
 const AdminBriefingPage = lazy(() => import("./pages/AdminBriefingPage"));
 const AdminReportPage = lazy(() => import("./pages/AdminReportPage"));
 const AdminDailyOpsPage = lazy(() => import("./pages/AdminDailyOpsPage"));
