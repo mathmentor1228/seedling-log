@@ -162,6 +162,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
       label: '원장',
       items: [
         { label: '통계', href: '/stats', icon: <BarChart3 className="w-4 h-4" />, adminOnly: true },
+        { label: '출석부', href: '/admin/attendance-book', icon: <ClipboardList className="w-4 h-4" />, adminOnly: true },
         { label: '일일 현황', href: '/admin/daily', icon: <CalendarDays className="w-4 h-4" />, adminOnly: true },
         { label: '원장 보고', href: '/admin/briefing', icon: <FileBarChart2 className="w-4 h-4" />, adminOnly: true },
         { label: '원장 보고서', href: '/admin/report', icon: <FileText className="w-4 h-4" />, adminOnly: true },

@@ -33,6 +33,7 @@ const TimetablePage = lazy(() => import("./pages/TimetablePage"));
 const AssistantRequestsPage = lazy(() => import("./pages/AssistantRequestsPage"));
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 const StatsPage = lazy(() => import("./pages/StatsPage"));
+const AttendanceBookPage = lazy(() => import("./pages/AttendanceBookPage"));
 const AdminBriefingPage = lazy(() => import("./pages/AdminBriefingPage"));
 const AdminReportPage = lazy(() => import("./pages/AdminReportPage"));
 const AdminDailyOpsPage = lazy(() => import("./pages/AdminDailyOpsPage"));
@@ -152,6 +153,7 @@ const App = () => (
                 <Route path="/assistant-requests" element={<AssistantRequestsPage />} />
                 <Route path="/assistant-tasks" element={<AssistantPage />} />
                 <Route path="/stats" element={<StatsPage />} />
+                <Route path="/admin/attendance-book" element={<AttendanceBookPage />} />
                 <Route path="/admin/briefing" element={<AdminBriefingPage />} />
                 <Route path="/admin/report" element={<AdminReportPage />} />
                 <Route path="/admin/daily" element={<AdminDailyOpsPage />} />

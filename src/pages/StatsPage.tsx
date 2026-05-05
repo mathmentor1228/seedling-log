@@ -27,7 +27,7 @@ import HomeworkStatsSection from '@/components/admin/HomeworkStatsSection';
 import StudentPointsStatsSection from '@/components/admin/StudentPointsStatsSection';
 import MonthlyTeacherStudentStats from '@/components/admin/MonthlyTeacherStudentStats';
 import TeacherRevenueSection from '@/components/admin/TeacherRevenueSection';
-import HistoricalClassAttendance from '@/components/admin/HistoricalClassAttendance';
+
 
 interface EnrollmentStats {
   totals: {
@@ -438,8 +438,7 @@ function StatsContent() {
           )}
         </CardContent>
       </Card>
-      {/* Historical Class Attendance */}
-      <HistoricalClassAttendance />
+      {/* 출석부는 별도 탭(/admin/attendance-book)으로 분리됨 */}
       {/* Teacher Revenue Section */}
       <TeacherRevenueSection />
       {/* Homework Stats Section */}
