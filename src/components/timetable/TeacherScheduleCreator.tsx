@@ -49,6 +49,9 @@ interface NewScheduleEntry {
   endTime: string;
   groupId: string;
   classroomId: string;
+  studentIds: string[];
+  studentNames: string[];
+  assignMode: 'group' | 'students';
 }
 
 interface Classroom {
