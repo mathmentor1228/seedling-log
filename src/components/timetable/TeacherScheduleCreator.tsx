@@ -461,15 +461,24 @@ export function TeacherScheduleCreator() {
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{dayLabel} {pe.startTime}~{pe.endTime}</span>
-                        {group && <span className="flex items-center gap-1"><FolderOpen className="w-3 h-3" />{group.name} ({group.members.length}명)</span>}
+                        {pe.assignMode === 'group' && group && <span className="flex items-center gap-1"><FolderOpen className="w-3 h-3" />{group.name} ({group.members.length}명)</span>}
+                        {pe.assignMode === 'students' && pe.studentIds.length > 0 && <span className="flex items-center gap-1"><Users className="w-3 h-3" />학생 {pe.studentIds.length}명</span>}
                         {classroom && <span className="flex items-center gap-1">🏫 {classroom.name}</span>}
                       </div>
-                      {group && (
+                      {pe.assignMode === 'group' && group && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {group.members.slice(0, 10).map(m => (
                             <span key={m.id} className="text-[11px] bg-muted px-1.5 py-0.5 rounded">{m.name}</span>
                           ))}
                           {group.members.length > 10 && <span className="text-[11px] text-muted-foreground">+{group.members.length - 10}명</span>}
+                        </div>
+                      )}
+                      {pe.assignMode === 'students' && pe.studentNames.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {pe.studentNames.slice(0, 10).map((n, i) => (
+                            <span key={i} className="text-[11px] bg-muted px-1.5 py-0.5 rounded">{n}</span>
+                          ))}
+                          {pe.studentNames.length > 10 && <span className="text-[11px] text-muted-foreground">+{pe.studentNames.length - 10}명</span>}
                         </div>
                       )}
                     </div>
