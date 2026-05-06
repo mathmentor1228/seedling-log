@@ -85,8 +85,14 @@ export function TeacherScheduleCreator() {
   const [entry, setEntry] = useState<NewScheduleEntry>({
     id: '', className: '', subject: SUBJECTS[0], dayOfWeek: 1,
     startTime: '16:00', endTime: '19:00', groupId: '', classroomId: '',
+    studentIds: [], studentNames: [], assignMode: 'students',
   });
   const [pendingEntries, setPendingEntries] = useState<NewScheduleEntry[]>([]);
+
+  // Student picker (for direct assignment in entry dialog)
+  const [entryStudentSearch, setEntryStudentSearch] = useState('');
+  const [myStudents, setMyStudents] = useState<StudentItem[]>([]);
+  const [myStudentsLoading, setMyStudentsLoading] = useState(false);
 
   // Group management
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
