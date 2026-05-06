@@ -182,12 +182,55 @@ export function TeacherScheduleCreator() {
   }
 
   // ── Schedule Logic ──
+  async function loadMyStudents() {
+    if (!user?.id || myStudents.length > 0) return;
+    setMyStudentsLoading(true);
+    try {
+      // Fetch students taught by this teacher (via teacher_student_links + class_students of own classes)
+      const { data: ownClasses } = await supabase
+        .from('classes').select('id').eq('teacher_id', user.id);
+      const classIds = (ownClasses || []).map((c: any) => c.id);
+
+      const studentIdSet = new Set<string>();
+      if (classIds.length > 0) {
+        const { data: cs } = await supabase
+          .from('class_students').select('student_id').in('class_id', classIds);
+        (cs || []).forEach((r: any) => studentIdSet.add(r.student_id));
+      }
+      const { data: links } = await supabase
+        .from('teacher_student_links').select('student_id').eq('teacher_id', user.id);
+      (links || []).forEach((r: any) => studentIdSet.add(r.student_id));
+
+      let list: StudentItem[] = [];
+      if (studentIdSet.size > 0) {
+        const { data: studs } = await supabase
+          .from('students').select('id, name, school, grade')
+          .in('id', Array.from(studentIdSet))
+          .neq('enrollment_status', '퇴원')
+          .order('name');
+        list = (studs || []) as StudentItem[];
+      }
+      // Fallback: if teacher has no links yet, show all active students so they can pick
+      if (list.length === 0) {
+        const { data: studs } = await supabase
+          .from('students').select('id, name, school, grade')
+          .neq('enrollment_status', '퇴원').order('name');
+        list = (studs || []) as StudentItem[];
+      }
+      setMyStudents(list);
+    } catch (e) { console.error(e); }
+    finally { setMyStudentsLoading(false); }
+  }
+
   function openAddDialog() {
     setEntry({
       id: '', className: '', subject: SUBJECTS[0], dayOfWeek: 1,
       startTime: '16:00', endTime: '19:00', groupId: '',
       classroomId: matchedClassroom?.id || '',
+      studentIds: [], studentNames: [], assignMode: 'students',
     });
+    setEntryStudentSearch('');
+    void loadMyStudents();
     setDialogOpen(true);
   }
 
@@ -239,7 +282,8 @@ export function TeacherScheduleCreator() {
         });
         if (schedErr) throw schedErr;
 
-        if (pe.groupId && pe.groupId !== 'none') {
+        // Assign students: either by group or by direct selection
+        if (pe.assignMode === 'group' && pe.groupId && pe.groupId !== 'none') {
           const group = groups.find(g => g.id === pe.groupId);
           if (group && group.members.length > 0) {
             const inserts = group.members.map(m => ({ class_id: classId, student_id: m.id }));
@@ -256,6 +300,10 @@ export function TeacherScheduleCreator() {
                   { onConflict: 'schedule_id,group_id', ignoreDuplicates: true });
             }
           }
+        } else if (pe.assignMode === 'students' && pe.studentIds.length > 0) {
+          const inserts = pe.studentIds.map(sid => ({ class_id: classId, student_id: sid }));
+          await supabase.from('class_students')
+            .upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
         }
       }
 
