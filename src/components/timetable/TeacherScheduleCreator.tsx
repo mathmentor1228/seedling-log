@@ -608,28 +608,124 @@ export function TeacherScheduleCreator() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>그룹(반) 배정</Label>
-              <Select value={entry.groupId || 'none'} onValueChange={v => setEntry({ ...entry, groupId: v === 'none' ? '' : v })}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="그룹 선택 (선택)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">그룹 없음</SelectItem>
-                  {groups.map(g => (
-                    <SelectItem key={g.id} value={g.id}>{g.name} ({g.members.length}명)</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {entry.groupId && entry.groupId !== 'none' && (() => {
-                const group = groups.find(g => g.id === entry.groupId);
-                if (!group) return null;
-                return (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {group.members.map(m => (
-                      <span key={m.id} className="text-[11px] bg-muted px-1.5 py-0.5 rounded">{m.name}</span>
+              <Label>학생 배정 방식</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button" variant={entry.assignMode === 'students' ? 'default' : 'outline'}
+                  size="sm" className="flex-1 h-8 text-xs"
+                  onClick={() => setEntry({ ...entry, assignMode: 'students' })}
+                >
+                  <Users className="w-3 h-3 mr-1" />학생 직접 선택
+                </Button>
+                <Button
+                  type="button" variant={entry.assignMode === 'group' ? 'default' : 'outline'}
+                  size="sm" className="flex-1 h-8 text-xs"
+                  onClick={() => setEntry({ ...entry, assignMode: 'group' })}
+                >
+                  <FolderOpen className="w-3 h-3 mr-1" />그룹(반)으로 배정
+                </Button>
+              </div>
+            </div>
+
+            {entry.assignMode === 'group' ? (
+              <div className="space-y-2">
+                <Label>그룹(반) 선택</Label>
+                <Select value={entry.groupId || 'none'} onValueChange={v => setEntry({ ...entry, groupId: v === 'none' ? '' : v })}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="그룹 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">그룹 없음</SelectItem>
+                    {groups.map(g => (
+                      <SelectItem key={g.id} value={g.id}>{g.name} ({g.members.length}명)</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {entry.groupId && entry.groupId !== 'none' && (() => {
+                  const group = groups.find(g => g.id === entry.groupId);
+                  if (!group) return null;
+                  return (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {group.members.map(m => (
+                        <span key={m.id} className="text-[11px] bg-muted px-1.5 py-0.5 rounded">{m.name}</span>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>담당 학생 선택 ({entry.studentIds.length}명)</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="학생 이름 검색..."
+                    value={entryStudentSearch}
+                    onChange={e => setEntryStudentSearch(e.target.value)}
+                    className="pl-10 h-9"
+                  />
+                </div>
+                {entry.studentIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {entry.studentNames.map((n, i) => (
+                      <button
+                        key={entry.studentIds[i]} type="button"
+                        onClick={() => {
+                          const sid = entry.studentIds[i];
+                          setEntry({
+                            ...entry,
+                            studentIds: entry.studentIds.filter(x => x !== sid),
+                            studentNames: entry.studentNames.filter((_, idx) => idx !== i),
+                          });
+                        }}
+                        className="text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded hover:bg-primary/20"
+                      >
+                        {n} ✕
+                      </button>
                     ))}
                   </div>
-                );
-              })()}
-            </div>
+                )}
+                <div className="max-h-[180px] overflow-y-auto border rounded-md divide-y">
+                  {myStudentsLoading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin" /></div>
+                  ) : (
+                    myStudents
+                      .filter(s => !entryStudentSearch.trim() || s.name.toLowerCase().includes(entryStudentSearch.toLowerCase()))
+                      .slice(0, 50)
+                      .map(s => {
+                        const selected = entry.studentIds.includes(s.id);
+                        return (
+                          <button
+                            key={s.id} type="button"
+                            onClick={() => {
+                              if (selected) {
+                                setEntry({
+                                  ...entry,
+                                  studentIds: entry.studentIds.filter(x => x !== s.id),
+                                  studentNames: entry.studentNames.filter((_, i) => entry.studentIds[i] !== s.id),
+                                });
+                              } else {
+                                setEntry({
+                                  ...entry,
+                                  studentIds: [...entry.studentIds, s.id],
+                                  studentNames: [...entry.studentNames, s.name],
+                                });
+                              }
+                            }}
+                            className={cn(
+                              'w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 flex items-center justify-between',
+                              selected && 'bg-primary/5'
+                            )}
+                          >
+                            <span>{s.name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {[s.school, s.grade].filter(Boolean).join(' · ')}
+                            </span>
+                          </button>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Classroom - auto-filled */}
             <div className="space-y-2">
