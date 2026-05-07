@@ -789,7 +789,7 @@ export function Timetable() {
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
-          {isAdminUser && !isExamPrep && (
+          {(isAdminUser || (user && row.teacherId === user.id)) && !isExamPrep && (
             <button
               onClick={async (e) => {
                 e.stopPropagation();
@@ -806,7 +806,7 @@ export function Timetable() {
                 }
               }}
               className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-              title="시간표 삭제 (원장 전용)"
+              title={isAdminUser ? '시간표 삭제 (원장 전용)' : '내 시간표 삭제'}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
