@@ -134,6 +134,7 @@ export function Timetable() {
   } | null>(null);
   const [editForm, setEditForm] = useState({ className: '', startTime: '', endTime: '', teacherId: '', classroomId: '' });
   const [editSaving, setEditSaving] = useState(false);
+  const [editDeleting, setEditDeleting] = useState(false);
   const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
 
   // Student lookup
