@@ -549,6 +549,8 @@ export function Timetable() {
       setEditDeleting(false);
     }
   }
+
+  function openEditSlot(row: ScheduleRow) {
     setEditSlot({
       scheduleId: row.scheduleId,
       classId: row.classId,
