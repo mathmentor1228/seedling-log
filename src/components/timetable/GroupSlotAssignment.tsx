@@ -283,6 +283,45 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
     return schedules.filter(s => s.teacherId === selectedTeacherId);
   }, [schedules, selectedTeacherId]);
 
+  async function ensureScheduleOwnClass(schedule: ScheduleSlot): Promise<ScheduleSlot> {
+    const { data: siblingSchedules, error: siblingErr } = await supabase
+      .from('class_schedules')
+      .select('id')
+      .eq('class_id', schedule.classId)
+      .eq('is_active', true);
+    if (siblingErr) throw siblingErr;
+    if (!siblingSchedules || siblingSchedules.length <= 1) return schedule;
+
+    const { data: newClass, error: classErr } = await supabase
+      .from('classes')
+      .insert({ name: schedule.className, subject: schedule.subject as any, teacher_id: schedule.teacherId || null })
+      .select('id')
+      .single();
+    if (classErr) throw classErr;
+
+    const { data: existingStudents, error: studentsErr } = await supabase
+      .from('class_students')
+      .select('student_id')
+      .eq('class_id', schedule.classId);
+    if (studentsErr) throw studentsErr;
+
+    if (existingStudents && existingStudents.length > 0) {
+      const copied = existingStudents.map((row: any) => ({ class_id: newClass.id, student_id: row.student_id }));
+      const { error: copyErr } = await supabase
+        .from('class_students')
+        .upsert(copied, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
+      if (copyErr) throw copyErr;
+    }
+
+    const { error: scheduleErr } = await supabase
+      .from('class_schedules')
+      .update({ class_id: newClass.id })
+      .eq('id', schedule.id);
+    if (scheduleErr) throw scheduleErr;
+
+    return { ...schedule, classId: newClass.id };
+  }
+
   // Assign group to schedule
   async function handleAssign() {
     if (!selectedGroupId || !selectedScheduleId) return;
@@ -323,6 +362,7 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
       }
 
       const schedule = schedules.find(s => s.id === selectedScheduleId);
+      const ownedSchedule = schedule ? await ensureScheduleOwnClass(schedule) : null;
 
       // Save exceptions for excluded members
       if (excludedMembers.length > 0) {
@@ -336,9 +376,9 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
       }
 
       // Only enroll included members in class_students
-      if (schedule && includedMembers.length > 0) {
+      if (ownedSchedule && includedMembers.length > 0) {
         const inserts = includedMembers.map(m => ({
-          class_id: schedule.classId,
+          class_id: ownedSchedule.classId,
           student_id: m.id,
         }));
         await supabase.from('class_students').upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
