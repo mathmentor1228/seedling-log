@@ -240,7 +240,18 @@ export function TeacherScheduleCreator() {
       toast({ title: '수업명을 입력해주세요', variant: 'destructive' });
       return;
     }
-    setPendingEntries(prev => [...prev, { ...entry, id: crypto.randomUUID() }]);
+    const days = entry.dayOfWeeks.length > 0 ? entry.dayOfWeeks : [entry.dayOfWeek];
+    if (days.length === 0) {
+      toast({ title: '요일을 1개 이상 선택해주세요', variant: 'destructive' });
+      return;
+    }
+    const newEntries = days.map(d => ({
+      ...entry,
+      id: crypto.randomUUID(),
+      dayOfWeek: d,
+      dayOfWeeks: [d],
+    }));
+    setPendingEntries(prev => [...prev, ...newEntries]);
     setDialogOpen(false);
   }
 
