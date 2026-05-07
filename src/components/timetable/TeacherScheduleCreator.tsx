@@ -45,6 +45,7 @@ interface NewScheduleEntry {
   className: string;
   subject: string;
   dayOfWeek: number;
+  dayOfWeeks: number[];
   startTime: string;
   endTime: string;
   groupId: string;
@@ -83,7 +84,7 @@ export function TeacherScheduleCreator() {
   // Schedule form
   const [dialogOpen, setDialogOpen] = useState(false);
   const [entry, setEntry] = useState<NewScheduleEntry>({
-    id: '', className: '', subject: SUBJECTS[0], dayOfWeek: 1,
+    id: '', className: '', subject: SUBJECTS[0], dayOfWeek: 1, dayOfWeeks: [1],
     startTime: '16:00', endTime: '19:00', groupId: '', classroomId: '',
     studentIds: [], studentNames: [], assignMode: 'students',
   });
@@ -224,7 +225,7 @@ export function TeacherScheduleCreator() {
 
   function openAddDialog() {
     setEntry({
-      id: '', className: '', subject: SUBJECTS[0], dayOfWeek: 1,
+      id: '', className: '', subject: SUBJECTS[0], dayOfWeek: 1, dayOfWeeks: [1],
       startTime: '16:00', endTime: '19:00', groupId: '',
       classroomId: matchedClassroom?.id || '',
       studentIds: [], studentNames: [], assignMode: 'students',
@@ -239,7 +240,18 @@ export function TeacherScheduleCreator() {
       toast({ title: '수업명을 입력해주세요', variant: 'destructive' });
       return;
     }
-    setPendingEntries(prev => [...prev, { ...entry, id: crypto.randomUUID() }]);
+    const days = entry.dayOfWeeks.length > 0 ? entry.dayOfWeeks : [entry.dayOfWeek];
+    if (days.length === 0) {
+      toast({ title: '요일을 1개 이상 선택해주세요', variant: 'destructive' });
+      return;
+    }
+    const newEntries = days.map(d => ({
+      ...entry,
+      id: crypto.randomUUID(),
+      dayOfWeek: d,
+      dayOfWeeks: [d],
+    }));
+    setPendingEntries(prev => [...prev, ...newEntries]);
     setDialogOpen(false);
   }
 
@@ -577,25 +589,46 @@ export function TeacherScheduleCreator() {
               <Input placeholder="예: 고2 수학 A반" value={entry.className}
                 onChange={e => setEntry({ ...entry, className: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>과목</Label>
-                <Select value={entry.subject} onValueChange={v => setEntry({ ...entry, subject: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-2">
+              <Label>과목</Label>
+              <Select value={entry.subject} onValueChange={v => setEntry({ ...entry, subject: v })}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>요일 (여러 개 선택 가능)</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {DAYS_OF_WEEK.map(d => {
+                  const checked = entry.dayOfWeeks.includes(d.value);
+                  return (
+                    <button
+                      key={d.value} type="button"
+                      onClick={() => {
+                        const next = checked
+                          ? entry.dayOfWeeks.filter(x => x !== d.value)
+                          : [...entry.dayOfWeeks, d.value].sort((a, b) => a - b);
+                        setEntry({ ...entry, dayOfWeeks: next, dayOfWeek: next[0] ?? 1 });
+                      }}
+                      className={cn(
+                        'px-3 py-1.5 rounded-md text-xs border transition-colors',
+                        checked
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background hover:bg-muted border-input'
+                      )}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="space-y-2">
-                <Label>요일</Label>
-                <Select value={String(entry.dayOfWeek)} onValueChange={v => setEntry({ ...entry, dayOfWeek: Number(v) })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DAYS_OF_WEEK.map(d => <SelectItem key={d.value} value={String(d.value)}>{d.label}요일</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {entry.dayOfWeeks.length > 1 && (
+                <p className="text-[11px] text-muted-foreground">
+                  선택한 {entry.dayOfWeeks.length}개 요일에 동일한 수업이 각각 추가됩니다.
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
