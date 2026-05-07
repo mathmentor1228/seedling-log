@@ -105,6 +105,7 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
+  const [includedMemberIds, setIncludedMemberIds] = useState<Set<string>>(new Set());
 
   // Move dialog
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
