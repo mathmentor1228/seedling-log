@@ -225,7 +225,7 @@ export function TeacherScheduleCreator() {
 
   function openAddDialog() {
     setEntry({
-      id: '', className: '', subject: SUBJECTS[0], dayOfWeek: 1,
+      id: '', className: '', subject: SUBJECTS[0], dayOfWeek: 1, dayOfWeeks: [1],
       startTime: '16:00', endTime: '19:00', groupId: '',
       classroomId: matchedClassroom?.id || '',
       studentIds: [], studentNames: [], assignMode: 'students',
