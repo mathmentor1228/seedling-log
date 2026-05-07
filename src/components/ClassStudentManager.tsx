@@ -204,6 +204,7 @@ export function ClassStudentManager({ classId, scheduleId, onStudentCountChange 
           const { data: otherSchedules, error: otherSchedulesError } = await supabase
             .from('class_schedules')
             .select(`
+              id,
               class_id,
               day_of_week,
               start_time,
@@ -224,6 +225,7 @@ export function ClassStudentManager({ classId, scheduleId, onStudentCountChange 
           const scheduleMap = new Map<string, ScheduleInfo>();
           (otherSchedules || []).forEach((s: any) => {
             scheduleMap.set(s.class_id, {
+              scheduleId: s.id,
               classId: s.class_id,
               className: s.classes.name,
               dayOfWeek: s.day_of_week,
