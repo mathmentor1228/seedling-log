@@ -789,6 +789,28 @@ export function Timetable() {
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
+          {isAdminUser && !isExamPrep && (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                const ok = window.confirm(`'${row.className}' (${DAYS_OF_WEEK.find(d => d.value === row.dayOfWeek)?.full} ${fmt(row.startTime)}–${fmt(row.endTime)}) 시간표 슬롯을 삭제하시겠습니까?\n(해당 요일/시간 슬롯만 삭제되며, 수업 자체는 유지됩니다)`);
+                if (!ok) return;
+                try {
+                  const { error } = await supabase.from('class_schedules').delete().eq('id', row.scheduleId);
+                  if (error) throw error;
+                  toast({ title: '삭제 완료', description: '시간표 슬롯이 삭제되었습니다' });
+                  fetchScheduleData();
+                } catch (err: any) {
+                  console.error('[TIMETABLE_INLINE_DELETE] Error:', err);
+                  toast({ title: '오류', description: err.message || '삭제에 실패했습니다', variant: 'destructive' });
+                }
+              }}
+              className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              title="시간표 삭제 (원장 전용)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
       {/* Classroom & teacher info */}
