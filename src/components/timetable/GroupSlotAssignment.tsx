@@ -105,6 +105,7 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
+  const [includedMemberIds, setIncludedMemberIds] = useState<Set<string>>(new Set());
 
   // Move dialog
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -286,21 +287,32 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
   async function handleAssign() {
     if (!selectedGroupId || !selectedScheduleId) return;
 
-    // Warn about conflicts
-    if (conflicts.length > 0) {
-      const uniqueStudents = [...new Set(conflicts.map(c => c.studentName))];
+    const group = groups.find(g => g.id === selectedGroupId);
+    if (!group) return;
+
+    const includedMembers = group.members.filter(m => includedMemberIds.has(m.id));
+    const excludedMembers = group.members.filter(m => !includedMemberIds.has(m.id));
+
+    if (includedMembers.length === 0) {
+      toast({ title: '학생을 1명 이상 선택해주세요', variant: 'destructive' });
+      return;
+    }
+
+    // Warn about conflicts (only for included members)
+    const includedConflicts = conflicts.filter(c => includedMemberIds.has(c.studentId));
+    if (includedConflicts.length > 0) {
+      const uniqueStudents = [...new Set(includedConflicts.map(c => c.studentName))];
       const msg = `${uniqueStudents.join(', ')} 학생이 같은 시간대에 이미 다른 수업이 있습니다. 그래도 배정하시겠습니까?`;
       if (!confirm(msg)) return;
     }
 
     setSaving(true);
     try {
-      const group = groups.find(g => g.id === selectedGroupId);
-      if (!group) throw new Error('그룹을 찾을 수 없습니다');
-
-      const { error: assignErr } = await supabase
+      const { data: assignRow, error: assignErr } = await supabase
         .from('schedule_group_assignments')
-        .insert({ schedule_id: selectedScheduleId, group_id: selectedGroupId });
+        .insert({ schedule_id: selectedScheduleId, group_id: selectedGroupId })
+        .select('id')
+        .single();
       if (assignErr) {
         if (assignErr.code === '23505') {
           toast({ title: '이미 배정됨', description: '이 그룹은 이미 해당 슬롯에 배정되어 있습니다.', variant: 'destructive' });
@@ -311,19 +323,36 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
       }
 
       const schedule = schedules.find(s => s.id === selectedScheduleId);
-      if (schedule && group.members.length > 0) {
-        const inserts = group.members.map(m => ({
+
+      // Save exceptions for excluded members
+      if (excludedMembers.length > 0) {
+        const excInserts = excludedMembers.map(m => ({
+          schedule_id: selectedScheduleId,
+          group_id: selectedGroupId,
+          student_id: m.id,
+          reason: '슬롯 배정 시 제외',
+        }));
+        await supabase.from('schedule_group_exceptions').insert(excInserts);
+      }
+
+      // Only enroll included members in class_students
+      if (schedule && includedMembers.length > 0) {
+        const inserts = includedMembers.map(m => ({
           class_id: schedule.classId,
           student_id: m.id,
         }));
         await supabase.from('class_students').upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
       }
 
-      toast({ title: '그룹 배정 완료', description: `${group.name} → ${schedule?.className}` });
+      toast({
+        title: '그룹 배정 완료',
+        description: `${group.name} → ${schedule?.className} (${includedMembers.length}명${excludedMembers.length > 0 ? `, ${excludedMembers.length}명 제외` : ''})`,
+      });
       setAssignDialogOpen(false);
       setSelectedGroupId('');
       setSelectedScheduleId('');
       setSelectedTeacherId('all');
+      setIncludedMemberIds(new Set());
       fetchAll();
       onDataChange?.();
     } catch (error: any) {
@@ -501,6 +530,7 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
             setSelectedGroupId('');
             setSelectedTeacherId('all');
             setSelectedScheduleId('');
+            setIncludedMemberIds(new Set());
             setAssignDialogOpen(true);
           }}
           disabled={groups.length === 0}
@@ -595,7 +625,15 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
             {/* Group selection */}
             <div className="space-y-2">
               <Label>그룹 선택</Label>
-              <Select value={selectedGroupId} onValueChange={(v) => { setSelectedGroupId(v); setSelectedScheduleId(''); }}>
+              <Select
+                value={selectedGroupId}
+                onValueChange={(v) => {
+                  setSelectedGroupId(v);
+                  setSelectedScheduleId('');
+                  const g = groups.find(gr => gr.id === v);
+                  setIncludedMemberIds(new Set((g?.members || []).map(m => m.id)));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="그룹 선택..." />
                 </SelectTrigger>
@@ -610,14 +648,51 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
               {selectedGroupId && (() => {
                 const group = groups.find(g => g.id === selectedGroupId);
                 if (!group) return null;
+                const allChecked = includedMemberIds.size === group.members.length;
                 return (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {group.members.slice(0, 10).map(m => (
-                      <span key={m.id} className="text-xs bg-muted px-1.5 py-0.5 rounded">{m.name}</span>
-                    ))}
-                    {group.members.length > 10 && (
-                      <span className="text-xs text-muted-foreground">+{group.members.length - 10}명</span>
-                    )}
+                  <div className="space-y-2 mt-2 border rounded-md p-2 bg-muted/20">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">이 슬롯에 포함할 학생 ({includedMemberIds.size}/{group.members.length}명)</Label>
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() => {
+                          setIncludedMemberIds(allChecked ? new Set() : new Set(group.members.map(m => m.id)));
+                        }}
+                      >
+                        {allChecked ? '전체 해제' : '전체 선택'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 max-h-[180px] overflow-y-auto">
+                      {group.members.map(m => {
+                        const checked = includedMemberIds.has(m.id);
+                        return (
+                          <label
+                            key={m.id}
+                            className={cn(
+                              'flex items-center gap-2 p-1.5 rounded cursor-pointer hover:bg-muted/50 text-xs',
+                              !checked && 'opacity-60'
+                            )}
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={() => {
+                                setIncludedMemberIds(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(m.id)) next.delete(m.id);
+                                  else next.add(m.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span className={cn(!checked && 'line-through')}>{m.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      체크한 학생만 이 슬롯에 등록되며, 해제한 학생은 자동으로 예외 처리됩니다.
+                    </p>
                   </div>
                 );
               })()}
