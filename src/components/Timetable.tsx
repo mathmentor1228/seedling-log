@@ -118,6 +118,7 @@ export function Timetable() {
   const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'congestion'>('list');
   const [matrixDay, setMatrixDay] = useState<number>(new Date().getDay());
   const [editClassId, setEditClassId] = useState<string | null>(null);
+  const [editScheduleId, setEditScheduleId] = useState<string | null>(null);
   const [editClassName, setEditClassName] = useState('');
   const [teacherViewMode, setTeacherViewMode] = useState<'list' | 'timeline'>('list');
 
@@ -763,7 +764,7 @@ export function Timetable() {
         capStatus?.isOver ? 'border-l-destructive bg-destructive/5' : DAY_ACCENT[row.dayOfWeek],
         editable && !isExamPrep && 'cursor-pointer ring-transparent hover:ring-1 hover:ring-primary/30'
       )}
-      onClick={editable && !isExamPrep ? () => { setEditClassId(row.classId); setEditClassName(row.className); } : undefined}
+      onClick={editable && !isExamPrep ? () => { setEditClassId(row.classId); setEditScheduleId(row.scheduleId); setEditClassName(row.className); } : undefined}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-wrap">
@@ -1019,7 +1020,7 @@ export function Timetable() {
         </CardContent>
 
         {/* Student/Group management dialog for teachers */}
-        <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) setEditClassId(null); }}>
+        <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) { setEditClassId(null); setEditScheduleId(null); fetchScheduleData(); } }}>
           <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1042,6 +1043,7 @@ export function Timetable() {
                 <TabsContent value="students">
                   <ClassStudentManager
                     classId={editClassId}
+                    scheduleId={editScheduleId || undefined}
                     onStudentCountChange={() => fetchScheduleData()}
                   />
                 </TabsContent>
@@ -1474,7 +1476,7 @@ export function Timetable() {
       </CardContent>
 
       {/* Student management dialog */}
-      <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) { setEditClassId(null); fetchScheduleData(); } }}>
+      <Dialog open={!!editClassId} onOpenChange={(open) => { if (!open) { setEditClassId(null); setEditScheduleId(null); fetchScheduleData(); } }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1482,7 +1484,7 @@ export function Timetable() {
               {editClassName} — 학생 배정
             </DialogTitle>
           </DialogHeader>
-          {editClassId && <ClassStudentManager classId={editClassId} />}
+          {editClassId && <ClassStudentManager classId={editClassId} scheduleId={editScheduleId || undefined} />}
         </DialogContent>
       </Dialog>
 
