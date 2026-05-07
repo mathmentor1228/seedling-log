@@ -277,6 +277,20 @@ export function TeacherGroupAssignment({ classId, scheduleId, className, onDataC
       .single();
     if (classErr) throw classErr;
 
+    const { data: existingStudents, error: studentsErr } = await supabase
+      .from('class_students')
+      .select('student_id')
+      .eq('class_id', sched.classId);
+    if (studentsErr) throw studentsErr;
+
+    if (existingStudents && existingStudents.length > 0) {
+      const copied = existingStudents.map((row) => ({ class_id: newClass.id, student_id: row.student_id }));
+      const { error: copyErr } = await supabase
+        .from('class_students')
+        .upsert(copied, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
+      if (copyErr) throw copyErr;
+    }
+
     const { error: scheduleErr } = await supabase
       .from('class_schedules')
       .update({ class_id: newClass.id })
@@ -352,12 +366,14 @@ export function TeacherGroupAssignment({ classId, scheduleId, className, onDataC
       }
 
       // Remove members from class_students
-      for (const member of ag.group.members) {
-        if (!ag.exceptions.includes(member.id)) {
-          await supabase.from('class_students')
-            .delete()
-            .eq('class_id', classId)
-            .eq('student_id', member.id);
+      for (const sched of classSchedules) {
+        for (const member of ag.group.members) {
+          if (!ag.exceptions.includes(member.id)) {
+            await supabase.from('class_students')
+              .delete()
+              .eq('class_id', sched.classId)
+              .eq('student_id', member.id);
+          }
         }
       }
 
