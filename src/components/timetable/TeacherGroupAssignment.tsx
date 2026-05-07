@@ -45,11 +45,12 @@ interface AssignedGroup {
 
 interface TeacherGroupAssignmentProps {
   classId: string;
+  scheduleId?: string;
   className: string;
   onDataChange?: () => void;
 }
 
-export function TeacherGroupAssignment({ classId, className, onDataChange }: TeacherGroupAssignmentProps) {
+export function TeacherGroupAssignment({ classId, scheduleId, className, onDataChange }: TeacherGroupAssignmentProps) {
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [assignedGroups, setAssignedGroups] = useState<AssignedGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,7 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
   // For conflict detection
   const [classSchedules, setClassSchedules] = useState<{
     scheduleId: string;
+    classId: string;
     dayOfWeek: number;
     startTime: string;
     endTime: string;
@@ -74,7 +76,7 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
 
   useEffect(() => {
     fetchData();
-  }, [classId]);
+  }, [classId, scheduleId]);
 
   async function fetchData() {
     setLoading(true);
@@ -107,14 +109,16 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
       })));
 
       // 2. Get schedules for this class (for conflict detection)
-      const { data: schedData } = await supabase
+      let scheduleQuery = supabase
         .from('class_schedules')
-        .select('id, day_of_week, start_time, end_time')
-        .eq('class_id', classId)
+        .select('id, class_id, day_of_week, start_time, end_time')
         .eq('is_active', true);
+      scheduleQuery = scheduleId ? scheduleQuery.eq('id', scheduleId) : scheduleQuery.eq('class_id', classId);
+      const { data: schedData } = await scheduleQuery;
 
       const parsedClassSchedules = (schedData || []).map((s: any) => ({
         scheduleId: s.id,
+        classId: s.class_id,
         dayOfWeek: s.day_of_week,
         startTime: s.start_time,
         endTime: s.end_time,
@@ -250,6 +254,52 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
   const alreadyAssignedGroupIds = new Set(assignedGroups.map(ag => ag.group.id));
   const availableGroups = groups.filter(g => !alreadyAssignedGroupIds.has(g.id));
 
+  async function ensureScheduleOwnClass(sched: { scheduleId: string; classId: string }) {
+    const { data: siblings, error: siblingErr } = await supabase
+      .from('class_schedules')
+      .select('id')
+      .eq('class_id', sched.classId)
+      .eq('is_active', true);
+    if (siblingErr) throw siblingErr;
+    if (!siblings || siblings.length <= 1) return sched.classId;
+
+    const { data: sourceClass, error: sourceErr } = await supabase
+      .from('classes')
+      .select('name, subject, teacher_id')
+      .eq('id', sched.classId)
+      .single();
+    if (sourceErr) throw sourceErr;
+
+    const { data: newClass, error: classErr } = await supabase
+      .from('classes')
+      .insert(sourceClass)
+      .select('id')
+      .single();
+    if (classErr) throw classErr;
+
+    const { data: existingStudents, error: studentsErr } = await supabase
+      .from('class_students')
+      .select('student_id')
+      .eq('class_id', sched.classId);
+    if (studentsErr) throw studentsErr;
+
+    if (existingStudents && existingStudents.length > 0) {
+      const copied = existingStudents.map((row) => ({ class_id: newClass.id, student_id: row.student_id }));
+      const { error: copyErr } = await supabase
+        .from('class_students')
+        .upsert(copied, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
+      if (copyErr) throw copyErr;
+    }
+
+    const { error: scheduleErr } = await supabase
+      .from('class_schedules')
+      .update({ class_id: newClass.id })
+      .eq('id', sched.scheduleId);
+    if (scheduleErr) throw scheduleErr;
+
+    return newClass.id;
+  }
+
   async function handleAssign() {
     if (!selectedGroupId || classSchedules.length === 0) return;
 
@@ -264,8 +314,12 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
       const group = groups.find(g => g.id === selectedGroupId);
       if (!group) throw new Error('그룹을 찾을 수 없습니다');
 
-      // Assign to all schedules of this class
+      const targetClassIds: string[] = [];
+
+      // Assign to the opened slot (or all schedules when no slot context is provided)
       for (const sched of classSchedules) {
+        const targetClassId = await ensureScheduleOwnClass(sched);
+        targetClassIds.push(targetClassId);
         await supabase
           .from('schedule_group_assignments')
           .upsert(
@@ -276,10 +330,10 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
 
       // Add members to class_students
       if (group.members.length > 0) {
-        const inserts = group.members.map(m => ({
-          class_id: classId,
+        const inserts = targetClassIds.flatMap(targetClassId => group.members.map(m => ({
+          class_id: targetClassId,
           student_id: m.id,
-        }));
+        })));
         await supabase.from('class_students').upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
       }
 
@@ -312,12 +366,14 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
       }
 
       // Remove members from class_students
-      for (const member of ag.group.members) {
-        if (!ag.exceptions.includes(member.id)) {
-          await supabase.from('class_students')
-            .delete()
-            .eq('class_id', classId)
-            .eq('student_id', member.id);
+      for (const sched of classSchedules) {
+        for (const member of ag.group.members) {
+          if (!ag.exceptions.includes(member.id)) {
+            await supabase.from('class_students')
+              .delete()
+              .eq('class_id', sched.classId)
+              .eq('student_id', member.id);
+          }
         }
       }
 

@@ -20,6 +20,7 @@ interface Student {
 }
 
 interface ScheduleInfo {
+  scheduleId: string;
   classId: string;
   className: string;
   dayOfWeek: number;
@@ -34,6 +35,7 @@ interface ConflictInfo {
 
 interface ClassStudentManagerProps {
   classId: string;
+  scheduleId?: string;
   onStudentCountChange?: (count: number) => void;
 }
 
@@ -47,7 +49,7 @@ const DAYS_OF_WEEK = [
   { value: 6, label: '토' },
 ];
 
-export function ClassStudentManager({ classId, onStudentCountChange }: ClassStudentManagerProps) {
+export function ClassStudentManager({ classId, scheduleId, onStudentCountChange }: ClassStudentManagerProps) {
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [assignedStudentIds, setAssignedStudentIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,13 +64,61 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
 
   useEffect(() => {
     fetchData();
-  }, [classId]);
+  }, [classId, scheduleId]);
+
+  async function ensureCurrentScheduleOwnClass(schedule: ScheduleInfo): Promise<ScheduleInfo> {
+    const { data: siblingSchedules, error: siblingErr } = await supabase
+      .from('class_schedules')
+      .select('id')
+      .eq('class_id', schedule.classId)
+      .eq('is_active', true);
+    if (siblingErr) throw siblingErr;
+    if (!siblingSchedules || siblingSchedules.length <= 1) return schedule;
+
+    const { data: sourceClass, error: sourceErr } = await supabase
+      .from('classes')
+      .select('name, subject, teacher_id')
+      .eq('id', schedule.classId)
+      .single();
+    if (sourceErr) throw sourceErr;
+
+    const { data: newClass, error: classErr } = await supabase
+      .from('classes')
+      .insert(sourceClass)
+      .select('id')
+      .single();
+    if (classErr) throw classErr;
+
+    const { data: existingStudents, error: studentsErr } = await supabase
+      .from('class_students')
+      .select('student_id')
+      .eq('class_id', schedule.classId);
+    if (studentsErr) throw studentsErr;
+
+    if (existingStudents && existingStudents.length > 0) {
+      const copied = existingStudents.map((row) => ({ class_id: newClass.id, student_id: row.student_id }));
+      const { error: copyErr } = await supabase
+        .from('class_students')
+        .upsert(copied, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
+      if (copyErr) throw copyErr;
+    }
+
+    const { error: scheduleErr } = await supabase
+      .from('class_schedules')
+      .update({ class_id: newClass.id })
+      .eq('id', schedule.scheduleId);
+    if (scheduleErr) throw scheduleErr;
+
+    const nextSchedule = { ...schedule, classId: newClass.id };
+    setCurrentSchedule(nextSchedule);
+    return nextSchedule;
+  }
 
   async function fetchData() {
     setLoading(true);
     try {
       // Fetch the current class schedule info
-      const { data: currentClassSchedule, error: scheduleError } = await supabase
+      let scheduleQuery = supabase
         .from('class_schedules')
         .select(`
           id,
@@ -81,10 +131,11 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
             name
           )
         `)
-        .eq('class_id', classId)
-        .eq('is_active', true)
-        .limit(1)
-        .single();
+        .eq('is_active', true);
+
+      scheduleQuery = scheduleId ? scheduleQuery.eq('id', scheduleId) : scheduleQuery.eq('class_id', classId).limit(1);
+
+      const { data: currentClassSchedule, error: scheduleError } = await scheduleQuery.single();
 
       if (scheduleError && scheduleError.code !== 'PGRST116') {
         console.error('Error fetching schedule:', scheduleError);
@@ -92,6 +143,7 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
 
       if (currentClassSchedule) {
         setCurrentSchedule({
+          scheduleId: currentClassSchedule.id,
           classId: currentClassSchedule.class_id,
           className: (currentClassSchedule.classes as any).name,
           dayOfWeek: currentClassSchedule.day_of_week,
@@ -115,7 +167,7 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
       const { data: assignedData, error: assignedError } = await supabase
         .from('class_students')
         .select('student_id')
-        .eq('class_id', classId);
+        .eq('class_id', currentClassSchedule?.class_id || classId);
 
       if (assignedError) throw assignedError;
 
@@ -139,7 +191,7 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
             )
           `)
           .in('student_id', studentIds)
-          .neq('class_id', classId); // Exclude current class
+          .neq('class_id', currentClassSchedule.class_id); // Exclude current slot's class
 
         if (assignmentsError) {
           console.error('Error fetching assignments:', assignmentsError);
@@ -152,6 +204,7 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
           const { data: otherSchedules, error: otherSchedulesError } = await supabase
             .from('class_schedules')
             .select(`
+              id,
               class_id,
               day_of_week,
               start_time,
@@ -172,6 +225,7 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
           const scheduleMap = new Map<string, ScheduleInfo>();
           (otherSchedules || []).forEach((s: any) => {
             scheduleMap.set(s.class_id, {
+              scheduleId: s.id,
               classId: s.class_id,
               className: s.classes.name,
               dayOfWeek: s.day_of_week,
@@ -243,12 +297,15 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
 
     setUpdating(studentId);
     try {
+      const ownedSchedule = currentSchedule ? await ensureCurrentScheduleOwnClass(currentSchedule) : null;
+      const targetClassId = ownedSchedule?.classId || classId;
+
       if (isCurrentlyAssigned) {
         // Remove student from class
         const { error } = await supabase
           .from('class_students')
           .delete()
-          .eq('class_id', classId)
+          .eq('class_id', targetClassId)
           .eq('student_id', studentId);
 
         if (error) throw error;
@@ -268,7 +325,7 @@ export function ClassStudentManager({ classId, onStudentCountChange }: ClassStud
         // Add student to class
         const { error } = await supabase
           .from('class_students')
-          .insert({ class_id: classId, student_id: studentId });
+          .insert({ class_id: targetClassId, student_id: studentId });
 
         if (error) {
           if (error.code === '23505') {

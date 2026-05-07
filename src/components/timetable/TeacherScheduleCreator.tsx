@@ -269,29 +269,19 @@ export function TeacherScheduleCreator() {
     setSaving(true);
     try {
       for (const pe of pendingEntries) {
-        let classId: string;
-        const { data: existingClass } = await supabase
-          .from('classes').select('id')
-          .eq('name', pe.className).eq('teacher_id', user.id)
-          .eq('subject', pe.subject as any).maybeSingle();
-
-        if (existingClass) {
-          classId = existingClass.id;
-        } else {
-          const { data: newClass, error: classErr } = await supabase
-            .from('classes')
-            .insert({ name: pe.className, subject: pe.subject as any, teacher_id: user.id })
-            .select('id').single();
-          if (classErr) throw classErr;
-          classId = newClass.id;
-        }
+        const { data: newClass, error: classErr } = await supabase
+          .from('classes')
+          .insert({ name: pe.className, subject: pe.subject as any, teacher_id: user.id })
+          .select('id').single();
+        if (classErr) throw classErr;
+        const classId = newClass.id;
 
         const cId = pe.classroomId && pe.classroomId !== 'none' ? pe.classroomId : null;
-        const { error: schedErr } = await supabase.from('class_schedules').insert({
+        const { data: schedData, error: schedErr } = await supabase.from('class_schedules').insert({
           class_id: classId, day_of_week: pe.dayOfWeek,
           start_time: pe.startTime, end_time: pe.endTime,
           teacher_id: user.id, classroom_id: cId,
-        });
+        }).select('id').single();
         if (schedErr) throw schedErr;
 
         // Assign students: either by group or by direct selection
@@ -301,10 +291,6 @@ export function TeacherScheduleCreator() {
             const inserts = group.members.map(m => ({ class_id: classId, student_id: m.id }));
             await supabase.from('class_students')
               .upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
-
-            const { data: schedData } = await supabase.from('class_schedules')
-              .select('id').eq('class_id', classId)
-              .eq('day_of_week', pe.dayOfWeek).eq('start_time', pe.startTime).single();
 
             if (schedData) {
               await supabase.from('schedule_group_assignments')
