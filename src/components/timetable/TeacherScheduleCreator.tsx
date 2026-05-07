@@ -609,6 +609,38 @@ export function TeacherScheduleCreator() {
                 </Select>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>요일 (여러 개 선택 가능)</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {DAYS_OF_WEEK.map(d => {
+                  const checked = entry.dayOfWeeks.includes(d.value);
+                  return (
+                    <button
+                      key={d.value} type="button"
+                      onClick={() => {
+                        const next = checked
+                          ? entry.dayOfWeeks.filter(x => x !== d.value)
+                          : [...entry.dayOfWeeks, d.value].sort((a, b) => a - b);
+                        setEntry({ ...entry, dayOfWeeks: next, dayOfWeek: next[0] ?? 1 });
+                      }}
+                      className={cn(
+                        'px-3 py-1.5 rounded-md text-xs border transition-colors',
+                        checked
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background hover:bg-muted border-input'
+                      )}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {entry.dayOfWeeks.length > 1 && (
+                <p className="text-[11px] text-muted-foreground">
+                  선택한 {entry.dayOfWeeks.length}개 요일에 동일한 수업이 각각 추가됩니다.
+                </p>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>시작 시간</Label>
