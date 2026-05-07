@@ -401,26 +401,38 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentNextGoal(perGoal);
     setPerStudentAttendance(perAtt);
 
-    // Load existing homework_assignments for selected records
+    // Load existing homework_assignments for selected records (content + result)
     try {
       const recordIds = selectedDrafts.map(d => d.id);
       const { data: hwData } = await supabase
         .from('homework_assignments')
-        .select('id, lesson_record_id, content, homework_type')
+        .select('id, lesson_record_id, content, homework_type, result, check_status')
         .in('lesson_record_id', recordIds);
 
       if (hwData && hwData.length > 0) {
         const perHwItems: Record<string, HomeworkItem[]> = {};
+        const perResult: Record<string, string> = {};
         for (const hw of hwData) {
           if (!hw.lesson_record_id) continue;
           if (!perHwItems[hw.lesson_record_id]) perHwItems[hw.lesson_record_id] = [];
           perHwItems[hw.lesson_record_id].push({
-            tempId: hw.id, // use real id as tempId for existing
+            tempId: hw.id,
             content: hw.content || '',
             homework_type: hw.homework_type || 'daily',
           });
+          // capture latest extended result if checked
+          if (hw.check_status === 'checked' && hw.result) {
+            perResult[hw.lesson_record_id] = hw.result;
+          }
         }
         setPerStudentHomeworkItems(perHwItems);
+        // Prefill extended homework status with assignment.result when available;
+        // fall back to the lesson_records enum
+        setPerStudentHomework(prev => {
+          const next = { ...prev };
+          for (const id of Object.keys(perResult)) next[id] = perResult[id];
+          return next;
+        });
       }
     } catch (e) {
       console.error('Failed to load homework assignments:', e);
