@@ -45,11 +45,12 @@ interface AssignedGroup {
 
 interface TeacherGroupAssignmentProps {
   classId: string;
+  scheduleId?: string;
   className: string;
   onDataChange?: () => void;
 }
 
-export function TeacherGroupAssignment({ classId, className, onDataChange }: TeacherGroupAssignmentProps) {
+export function TeacherGroupAssignment({ classId, scheduleId, className, onDataChange }: TeacherGroupAssignmentProps) {
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [assignedGroups, setAssignedGroups] = useState<AssignedGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,7 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
   // For conflict detection
   const [classSchedules, setClassSchedules] = useState<{
     scheduleId: string;
+    classId: string;
     dayOfWeek: number;
     startTime: string;
     endTime: string;
@@ -74,7 +76,7 @@ export function TeacherGroupAssignment({ classId, className, onDataChange }: Tea
 
   useEffect(() => {
     fetchData();
-  }, [classId]);
+  }, [classId, scheduleId]);
 
   async function fetchData() {
     setLoading(true);
