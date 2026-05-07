@@ -538,14 +538,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (updateError) throw updateError;
       }
 
-      // Homework status sync
+      // Homework status sync (extended result values stored on homework_assignments.result)
       if (activeFields.has('homework_status')) {
-        const statusToResult: Record<string, string> = {
-          completed: 'completed',
-          partial: 'partial',
-          not_done: 'not_done',
-        };
-
         for (const id of ids) {
           const record = drafts.find(d => d.id === id);
           if (!record) continue;
@@ -554,8 +548,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             ? (perStudentHomework[id] || homeworkStatus)
             : homeworkStatus;
 
-          if (effectiveStatus === 'none_assigned') continue;
-          const resultValue = statusToResult[effectiveStatus] || 'completed';
+          if (effectiveStatus === 'none_assigned' || effectiveStatus === 'unable_to_verify') continue;
+          const resultValue = effectiveStatus; // store the granular result as-is
 
           await supabase
             .from('homework_assignments')
