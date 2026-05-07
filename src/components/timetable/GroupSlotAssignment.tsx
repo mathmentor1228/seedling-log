@@ -530,6 +530,7 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
             setSelectedGroupId('');
             setSelectedTeacherId('all');
             setSelectedScheduleId('');
+            setIncludedMemberIds(new Set());
             setAssignDialogOpen(true);
           }}
           disabled={groups.length === 0}
