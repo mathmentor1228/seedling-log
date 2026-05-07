@@ -277,8 +277,6 @@ export function ClassStudentManager({ classId, scheduleId, onStudentCountChange 
   }
 
   async function handleToggleStudent(studentId: string, isCurrentlyAssigned: boolean, forceOverride: boolean = false) {
-    const ownedSchedule = currentSchedule ? await ensureCurrentScheduleOwnClass(currentSchedule) : null;
-    const targetClassId = ownedSchedule?.classId || classId;
     const hasConflict = studentConflicts.has(studentId);
 
     // Block assignment if conflict exists and not admin override
@@ -299,6 +297,9 @@ export function ClassStudentManager({ classId, scheduleId, onStudentCountChange 
 
     setUpdating(studentId);
     try {
+      const ownedSchedule = currentSchedule ? await ensureCurrentScheduleOwnClass(currentSchedule) : null;
+      const targetClassId = ownedSchedule?.classId || classId;
+
       if (isCurrentlyAssigned) {
         // Remove student from class
         const { error } = await supabase
