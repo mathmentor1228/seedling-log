@@ -287,21 +287,32 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
   async function handleAssign() {
     if (!selectedGroupId || !selectedScheduleId) return;
 
-    // Warn about conflicts
-    if (conflicts.length > 0) {
-      const uniqueStudents = [...new Set(conflicts.map(c => c.studentName))];
+    const group = groups.find(g => g.id === selectedGroupId);
+    if (!group) return;
+
+    const includedMembers = group.members.filter(m => includedMemberIds.has(m.id));
+    const excludedMembers = group.members.filter(m => !includedMemberIds.has(m.id));
+
+    if (includedMembers.length === 0) {
+      toast({ title: '학생을 1명 이상 선택해주세요', variant: 'destructive' });
+      return;
+    }
+
+    // Warn about conflicts (only for included members)
+    const includedConflicts = conflicts.filter(c => includedMemberIds.has(c.studentId));
+    if (includedConflicts.length > 0) {
+      const uniqueStudents = [...new Set(includedConflicts.map(c => c.studentName))];
       const msg = `${uniqueStudents.join(', ')} 학생이 같은 시간대에 이미 다른 수업이 있습니다. 그래도 배정하시겠습니까?`;
       if (!confirm(msg)) return;
     }
 
     setSaving(true);
     try {
-      const group = groups.find(g => g.id === selectedGroupId);
-      if (!group) throw new Error('그룹을 찾을 수 없습니다');
-
-      const { error: assignErr } = await supabase
+      const { data: assignRow, error: assignErr } = await supabase
         .from('schedule_group_assignments')
-        .insert({ schedule_id: selectedScheduleId, group_id: selectedGroupId });
+        .insert({ schedule_id: selectedScheduleId, group_id: selectedGroupId })
+        .select('id')
+        .single();
       if (assignErr) {
         if (assignErr.code === '23505') {
           toast({ title: '이미 배정됨', description: '이 그룹은 이미 해당 슬롯에 배정되어 있습니다.', variant: 'destructive' });
@@ -312,19 +323,36 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
       }
 
       const schedule = schedules.find(s => s.id === selectedScheduleId);
-      if (schedule && group.members.length > 0) {
-        const inserts = group.members.map(m => ({
+
+      // Save exceptions for excluded members
+      if (excludedMembers.length > 0) {
+        const excInserts = excludedMembers.map(m => ({
+          schedule_id: selectedScheduleId,
+          group_id: selectedGroupId,
+          student_id: m.id,
+          reason: '슬롯 배정 시 제외',
+        }));
+        await supabase.from('schedule_group_exceptions').insert(excInserts);
+      }
+
+      // Only enroll included members in class_students
+      if (schedule && includedMembers.length > 0) {
+        const inserts = includedMembers.map(m => ({
           class_id: schedule.classId,
           student_id: m.id,
         }));
         await supabase.from('class_students').upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
       }
 
-      toast({ title: '그룹 배정 완료', description: `${group.name} → ${schedule?.className}` });
+      toast({
+        title: '그룹 배정 완료',
+        description: `${group.name} → ${schedule?.className} (${includedMembers.length}명${excludedMembers.length > 0 ? `, ${excludedMembers.length}명 제외` : ''})`,
+      });
       setAssignDialogOpen(false);
       setSelectedGroupId('');
       setSelectedScheduleId('');
       setSelectedTeacherId('all');
+      setIncludedMemberIds(new Set());
       fetchAll();
       onDataChange?.();
     } catch (error: any) {
