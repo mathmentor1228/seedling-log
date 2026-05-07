@@ -322,9 +322,10 @@ function PrincipalContent() {
         if (status) statusMap.set(`${r.student_id}:${r.class_id}`, status);
       });
 
-      // 학생 맵 (class_id → students[])
+      // 학생 맵 (class_id → students[]) — students가 null이면 퇴원/휴학으로 간주하여 제외
       const studentsByClass = new Map<string, { id: string; name: string }[]>();
       (classStudents || []).forEach((cs: any) => {
+        if (!cs.students) return; // enrollment_status 필터로 누락된 학생
         if (!studentsByClass.has(cs.class_id)) studentsByClass.set(cs.class_id, []);
         studentsByClass.get(cs.class_id)!.push({ id: cs.student_id, name: cs.students?.name || '-' });
       });
