@@ -1050,6 +1050,7 @@ export function Timetable() {
                 <TabsContent value="groups">
                   <TeacherGroupAssignment
                     classId={editClassId}
+                    scheduleId={editScheduleId || undefined}
                     className={editClassName}
                     onDataChange={() => fetchScheduleData()}
                   />
