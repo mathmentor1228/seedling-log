@@ -1546,12 +1546,24 @@ export function Timetable() {
                 </>
               )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setEditSlot(null)}>취소</Button>
-                <Button onClick={handleEditSave} disabled={editSaving || !editForm.className.trim()}>
-                  {editSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                  저장
-                </Button>
+              <div className="flex justify-between gap-2 pt-2">
+                {isAdminUser ? (
+                  <Button
+                    variant="destructive"
+                    onClick={handleEditDelete}
+                    disabled={editDeleting || editSaving}
+                  >
+                    {editDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                    삭제
+                  </Button>
+                ) : <span />}
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setEditSlot(null)}>취소</Button>
+                  <Button onClick={handleEditSave} disabled={editSaving || !editForm.className.trim()}>
+                    {editSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    저장
+                  </Button>
+                </div>
               </div>
             </div>
           )}
