@@ -524,7 +524,31 @@ export function Timetable() {
     }
   }
 
-  function openEditSlot(row: ScheduleRow) {
+  async function handleEditDelete() {
+    if (!editSlot) return;
+    if (!isAdminUser) {
+      toast({ title: '권한 없음', description: '원장만 삭제할 수 있습니다', variant: 'destructive' });
+      return;
+    }
+    const ok = window.confirm(`'${editSlot.className}' 시간표 슬롯을 삭제하시겠습니까?\n(해당 요일/시간 슬롯만 삭제되며, 수업 자체는 유지됩니다)`);
+    if (!ok) return;
+    setEditDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('class_schedules')
+        .delete()
+        .eq('id', editSlot.scheduleId);
+      if (error) throw error;
+      toast({ title: '삭제 완료', description: '시간표 슬롯이 삭제되었습니다' });
+      setEditSlot(null);
+      fetchScheduleData();
+    } catch (error: any) {
+      console.error('[TIMETABLE_DELETE] Error:', error);
+      toast({ title: '오류', description: error.message || '삭제에 실패했습니다', variant: 'destructive' });
+    } finally {
+      setEditDeleting(false);
+    }
+  }
     setEditSlot({
       scheduleId: row.scheduleId,
       classId: row.classId,
