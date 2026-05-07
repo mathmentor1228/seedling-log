@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle, List, LayoutGrid, Thermometer, DoorOpen, LogIn } from 'lucide-react';
+import { Copy, Check, Search, Calendar, Clock, Users, User, ChevronLeft, ChevronRight, UserPlus, ArrowUpDown, Pencil, Loader2, Save, FolderOpen, Building2, AlertTriangle, List, LayoutGrid, Thermometer, DoorOpen, LogIn, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ClassStudentManager } from '@/components/ClassStudentManager';
@@ -134,6 +134,7 @@ export function Timetable() {
   } | null>(null);
   const [editForm, setEditForm] = useState({ className: '', startTime: '', endTime: '', teacherId: '', classroomId: '' });
   const [editSaving, setEditSaving] = useState(false);
+  const [editDeleting, setEditDeleting] = useState(false);
   const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
 
   // Student lookup
@@ -520,6 +521,32 @@ export function Timetable() {
       toast({ title: '오류', description: error.message || '수정에 실패했습니다', variant: 'destructive' });
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  async function handleEditDelete() {
+    if (!editSlot) return;
+    if (!isAdminUser) {
+      toast({ title: '권한 없음', description: '원장만 삭제할 수 있습니다', variant: 'destructive' });
+      return;
+    }
+    const ok = window.confirm(`'${editSlot.className}' 시간표 슬롯을 삭제하시겠습니까?\n(해당 요일/시간 슬롯만 삭제되며, 수업 자체는 유지됩니다)`);
+    if (!ok) return;
+    setEditDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('class_schedules')
+        .delete()
+        .eq('id', editSlot.scheduleId);
+      if (error) throw error;
+      toast({ title: '삭제 완료', description: '시간표 슬롯이 삭제되었습니다' });
+      setEditSlot(null);
+      fetchScheduleData();
+    } catch (error: any) {
+      console.error('[TIMETABLE_DELETE] Error:', error);
+      toast({ title: '오류', description: error.message || '삭제에 실패했습니다', variant: 'destructive' });
+    } finally {
+      setEditDeleting(false);
     }
   }
 
@@ -1519,12 +1546,24 @@ export function Timetable() {
                 </>
               )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setEditSlot(null)}>취소</Button>
-                <Button onClick={handleEditSave} disabled={editSaving || !editForm.className.trim()}>
-                  {editSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                  저장
-                </Button>
+              <div className="flex justify-between gap-2 pt-2">
+                {isAdminUser ? (
+                  <Button
+                    variant="destructive"
+                    onClick={handleEditDelete}
+                    disabled={editDeleting || editSaving}
+                  >
+                    {editDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                    삭제
+                  </Button>
+                ) : <span />}
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setEditSlot(null)}>취소</Button>
+                  <Button onClick={handleEditSave} disabled={editSaving || !editForm.className.trim()}>
+                    {editSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    저장
+                  </Button>
+                </div>
               </div>
             </div>
           )}
