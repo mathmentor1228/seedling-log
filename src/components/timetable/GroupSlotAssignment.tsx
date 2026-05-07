@@ -625,7 +625,15 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
             {/* Group selection */}
             <div className="space-y-2">
               <Label>그룹 선택</Label>
-              <Select value={selectedGroupId} onValueChange={(v) => { setSelectedGroupId(v); setSelectedScheduleId(''); }}>
+              <Select
+                value={selectedGroupId}
+                onValueChange={(v) => {
+                  setSelectedGroupId(v);
+                  setSelectedScheduleId('');
+                  const g = groups.find(gr => gr.id === v);
+                  setIncludedMemberIds(new Set((g?.members || []).map(m => m.id)));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="그룹 선택..." />
                 </SelectTrigger>
@@ -640,14 +648,51 @@ export function GroupSlotAssignment({ onDataChange }: GroupSlotAssignmentProps) 
               {selectedGroupId && (() => {
                 const group = groups.find(g => g.id === selectedGroupId);
                 if (!group) return null;
+                const allChecked = includedMemberIds.size === group.members.length;
                 return (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {group.members.slice(0, 10).map(m => (
-                      <span key={m.id} className="text-xs bg-muted px-1.5 py-0.5 rounded">{m.name}</span>
-                    ))}
-                    {group.members.length > 10 && (
-                      <span className="text-xs text-muted-foreground">+{group.members.length - 10}명</span>
-                    )}
+                  <div className="space-y-2 mt-2 border rounded-md p-2 bg-muted/20">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">이 슬롯에 포함할 학생 ({includedMemberIds.size}/{group.members.length}명)</Label>
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() => {
+                          setIncludedMemberIds(allChecked ? new Set() : new Set(group.members.map(m => m.id)));
+                        }}
+                      >
+                        {allChecked ? '전체 해제' : '전체 선택'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 max-h-[180px] overflow-y-auto">
+                      {group.members.map(m => {
+                        const checked = includedMemberIds.has(m.id);
+                        return (
+                          <label
+                            key={m.id}
+                            className={cn(
+                              'flex items-center gap-2 p-1.5 rounded cursor-pointer hover:bg-muted/50 text-xs',
+                              !checked && 'opacity-60'
+                            )}
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={() => {
+                                setIncludedMemberIds(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(m.id)) next.delete(m.id);
+                                  else next.add(m.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span className={cn(!checked && 'line-through')}>{m.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      체크한 학생만 이 슬롯에 등록되며, 해제한 학생은 자동으로 예외 처리됩니다.
+                    </p>
                   </div>
                 );
               })()}
