@@ -300,11 +300,12 @@ function PrincipalContent() {
         (profiles || []).forEach((p: any) => { teacherMap[p.id] = p.full_name; });
       }
 
-      // 3. 각 수업의 학생 목록
+      // 3. 각 수업의 학생 목록 (재학/재등원만 — 퇴원/휴학 제외)
       const { data: classStudents } = await supabase
         .from('class_students')
-        .select('class_id, student_id, students(name)')
-        .in('class_id', classIds);
+        .select('class_id, student_id, students(name, enrollment_status)')
+        .in('class_id', classIds)
+        .in('students.enrollment_status', ['재학', '재등원']);
 
       // 4. 오늘 lesson_records (출석 상태)
       const { data: lessonRecords } = await supabase
@@ -321,9 +322,10 @@ function PrincipalContent() {
         if (status) statusMap.set(`${r.student_id}:${r.class_id}`, status);
       });
 
-      // 학생 맵 (class_id → students[])
+      // 학생 맵 (class_id → students[]) — students가 null이면 퇴원/휴학으로 간주하여 제외
       const studentsByClass = new Map<string, { id: string; name: string }[]>();
       (classStudents || []).forEach((cs: any) => {
+        if (!cs.students) return; // enrollment_status 필터로 누락된 학생
         if (!studentsByClass.has(cs.class_id)) studentsByClass.set(cs.class_id, []);
         studentsByClass.get(cs.class_id)!.push({ id: cs.student_id, name: cs.students?.name || '-' });
       });
