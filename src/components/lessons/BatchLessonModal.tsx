@@ -469,9 +469,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             : understandingScore;
         }
         if (activeFields.has('homework_status')) {
-          p.homework_status = (usePerStudentHomework && recordId)
+          const ext = (usePerStudentHomework && recordId)
             ? (perStudentHomework[recordId] || homeworkStatus)
             : homeworkStatus;
+          // lesson_records.homework_status is a constrained enum, so map extended value
+          p.homework_status = mapResultToStatus(ext);
         }
         if (activeFields.has('notes')) {
           const val = (usePerStudentMemo && recordId)
