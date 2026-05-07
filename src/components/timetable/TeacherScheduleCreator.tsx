@@ -45,6 +45,7 @@ interface NewScheduleEntry {
   className: string;
   subject: string;
   dayOfWeek: number;
+  dayOfWeeks: number[];
   startTime: string;
   endTime: string;
   groupId: string;
