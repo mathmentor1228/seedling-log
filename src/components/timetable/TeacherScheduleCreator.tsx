@@ -589,25 +589,14 @@ export function TeacherScheduleCreator() {
               <Input placeholder="예: 고2 수학 A반" value={entry.className}
                 onChange={e => setEntry({ ...entry, className: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>과목</Label>
-                <Select value={entry.subject} onValueChange={v => setEntry({ ...entry, subject: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>요일</Label>
-                <Select value={String(entry.dayOfWeek)} onValueChange={v => setEntry({ ...entry, dayOfWeek: Number(v) })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DAYS_OF_WEEK.map(d => <SelectItem key={d.value} value={String(d.value)}>{d.label}요일</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label>과목</Label>
+              <Select value={entry.subject} onValueChange={v => setEntry({ ...entry, subject: v })}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>요일 (여러 개 선택 가능)</Label>
