@@ -990,16 +990,28 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                 <PerStudentToggle checked={usePerStudentHomework} onChange={setUsePerStudentHomework} />
                 {usePerStudentHomework ? (
                   <PerStudentContainer>
-                    {selectedDraftsList.map(d => (
-                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                        <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </StudentBlock>
-                    ))}
+                    {selectedDraftsList.map(d => {
+                      const items = perStudentHomeworkItems[d.id] || [];
+                      return (
+                        <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                          {items.length > 0 && (
+                            <div className="mb-1.5 space-y-0.5">
+                              {items.map(it => (
+                                <p key={it.tempId} className="text-[11px] text-muted-foreground leading-tight">
+                                  • {it.content || '(내용 없음)'}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </StudentBlock>
+                      );
+                    })}
                   </PerStudentContainer>
                 ) : (
                   <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
