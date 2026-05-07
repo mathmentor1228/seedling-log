@@ -80,12 +80,38 @@ interface BatchLessonModalProps {
   standalone?: boolean;
 }
 
+// HOMEWORK-RESULT-OPTIONS-EXTENDED-V1: align with LessonRecordForm/RosterActionModal
+// Stores extended UI value on homework_assignments.result while
+// mapping to one of the 4 lesson_records.homework_status enum values
 const HOMEWORK_STATUS_OPTIONS = [
   { value: 'completed', label: '완료' },
-  { value: 'partial', label: '일부완료' },
-  { value: 'not_done', label: '미이행' },
+  { value: 'partial', label: '부분완료' },
+  { value: 'not_done', label: '미완' },
+  { value: 'lost', label: '분실' },
+  { value: 'low_effort', label: '성의부족' },
+  { value: 'low_effort_completed', label: '성의부족+완료' },
+  { value: 'unable_to_verify', label: '확인불가' },
   { value: 'none_assigned', label: '없음' },
 ];
+
+// Map extended UI result -> lesson_records.homework_status enum
+function mapResultToStatus(v: string): string {
+  switch (v) {
+    case 'completed':
+    case 'low_effort_completed':
+      return 'completed';
+    case 'partial':
+      return 'partial';
+    case 'not_done':
+    case 'lost':
+    case 'low_effort':
+      return 'not_done';
+    case 'unable_to_verify':
+    case 'none_assigned':
+    default:
+      return 'none_assigned';
+  }
+}
 
 const ATTENDANCE_STATUS_OPTIONS = [
   { value: '출석', label: '출석' },
@@ -375,26 +401,38 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentNextGoal(perGoal);
     setPerStudentAttendance(perAtt);
 
-    // Load existing homework_assignments for selected records
+    // Load existing homework_assignments for selected records (content + result)
     try {
       const recordIds = selectedDrafts.map(d => d.id);
       const { data: hwData } = await supabase
         .from('homework_assignments')
-        .select('id, lesson_record_id, content, homework_type')
+        .select('id, lesson_record_id, content, homework_type, result, check_status')
         .in('lesson_record_id', recordIds);
 
       if (hwData && hwData.length > 0) {
         const perHwItems: Record<string, HomeworkItem[]> = {};
+        const perResult: Record<string, string> = {};
         for (const hw of hwData) {
           if (!hw.lesson_record_id) continue;
           if (!perHwItems[hw.lesson_record_id]) perHwItems[hw.lesson_record_id] = [];
           perHwItems[hw.lesson_record_id].push({
-            tempId: hw.id, // use real id as tempId for existing
+            tempId: hw.id,
             content: hw.content || '',
             homework_type: hw.homework_type || 'daily',
           });
+          // capture latest extended result if checked
+          if (hw.check_status === 'checked' && hw.result) {
+            perResult[hw.lesson_record_id] = hw.result;
+          }
         }
         setPerStudentHomeworkItems(perHwItems);
+        // Prefill extended homework status with assignment.result when available;
+        // fall back to the lesson_records enum
+        setPerStudentHomework(prev => {
+          const next = { ...prev };
+          for (const id of Object.keys(perResult)) next[id] = perResult[id];
+          return next;
+        });
       }
     } catch (e) {
       console.error('Failed to load homework assignments:', e);
@@ -443,9 +481,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             : understandingScore;
         }
         if (activeFields.has('homework_status')) {
-          p.homework_status = (usePerStudentHomework && recordId)
+          const ext = (usePerStudentHomework && recordId)
             ? (perStudentHomework[recordId] || homeworkStatus)
             : homeworkStatus;
+          // lesson_records.homework_status is a constrained enum, so map extended value
+          p.homework_status = mapResultToStatus(ext);
         }
         if (activeFields.has('notes')) {
           const val = (usePerStudentMemo && recordId)
@@ -510,14 +550,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (updateError) throw updateError;
       }
 
-      // Homework status sync
+      // Homework status sync (extended result values stored on homework_assignments.result)
       if (activeFields.has('homework_status')) {
-        const statusToResult: Record<string, string> = {
-          completed: 'completed',
-          partial: 'partial',
-          not_done: 'not_done',
-        };
-
         for (const id of ids) {
           const record = drafts.find(d => d.id === id);
           if (!record) continue;
@@ -526,8 +560,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             ? (perStudentHomework[id] || homeworkStatus)
             : homeworkStatus;
 
-          if (effectiveStatus === 'none_assigned') continue;
-          const resultValue = statusToResult[effectiveStatus] || 'completed';
+          if (effectiveStatus === 'none_assigned' || effectiveStatus === 'unable_to_verify') continue;
+          const resultValue = effectiveStatus; // store the granular result as-is
 
           await supabase
             .from('homework_assignments')
@@ -956,16 +990,28 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                 <PerStudentToggle checked={usePerStudentHomework} onChange={setUsePerStudentHomework} />
                 {usePerStudentHomework ? (
                   <PerStudentContainer>
-                    {selectedDraftsList.map(d => (
-                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                        <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </StudentBlock>
-                    ))}
+                    {selectedDraftsList.map(d => {
+                      const items = perStudentHomeworkItems[d.id] || [];
+                      return (
+                        <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                          {items.length > 0 && (
+                            <div className="mb-1.5 space-y-0.5">
+                              {items.map(it => (
+                                <p key={it.tempId} className="text-[11px] text-muted-foreground leading-tight">
+                                  • {it.content || '(내용 없음)'}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </StudentBlock>
+                      );
+                    })}
                   </PerStudentContainer>
                 ) : (
                   <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
