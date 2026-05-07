@@ -80,12 +80,38 @@ interface BatchLessonModalProps {
   standalone?: boolean;
 }
 
+// HOMEWORK-RESULT-OPTIONS-EXTENDED-V1: align with LessonRecordForm/RosterActionModal
+// Stores extended UI value on homework_assignments.result while
+// mapping to one of the 4 lesson_records.homework_status enum values
 const HOMEWORK_STATUS_OPTIONS = [
   { value: 'completed', label: '완료' },
-  { value: 'partial', label: '일부완료' },
-  { value: 'not_done', label: '미이행' },
+  { value: 'partial', label: '부분완료' },
+  { value: 'not_done', label: '미완' },
+  { value: 'lost', label: '분실' },
+  { value: 'low_effort', label: '성의부족' },
+  { value: 'low_effort_completed', label: '성의부족+완료' },
+  { value: 'unable_to_verify', label: '확인불가' },
   { value: 'none_assigned', label: '없음' },
 ];
+
+// Map extended UI result -> lesson_records.homework_status enum
+function mapResultToStatus(v: string): string {
+  switch (v) {
+    case 'completed':
+    case 'low_effort_completed':
+      return 'completed';
+    case 'partial':
+      return 'partial';
+    case 'not_done':
+    case 'lost':
+    case 'low_effort':
+      return 'not_done';
+    case 'unable_to_verify':
+    case 'none_assigned':
+    default:
+      return 'none_assigned';
+  }
+}
 
 const ATTENDANCE_STATUS_OPTIONS = [
   { value: '출석', label: '출석' },
