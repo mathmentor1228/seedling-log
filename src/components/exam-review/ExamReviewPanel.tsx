@@ -34,6 +34,9 @@ interface ReviewSummary {
   total_score?: number | null;
   earned_score?: number | null;
   template_id?: string | null;
+  is_published?: boolean | null;
+  published_at?: string | null;
+  published_by_name?: string | null;
 }
 
 interface ExamResultRow {
