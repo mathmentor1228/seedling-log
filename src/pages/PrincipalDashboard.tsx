@@ -274,19 +274,20 @@ function PrincipalContent() {
 
   const fetchAll = useCallback(async () => {
     try {
-      // 1. 오늘 출석 로그 (stat용)
-      const logsRes = await supabase.from('attendance_logs').select('*').eq('date', today);
+      // 1+2 병렬: 출석 로그 + 오늘 수업 일정
+      const [logsRes, schedRes] = await Promise.all([
+        supabase.from('attendance_logs').select('*').eq('date', today),
+        supabase
+          .from('class_schedules')
+          .select('id, start_time, end_time, class_id, teacher_id, classes(name, subject)')
+          .eq('day_of_week', todayDow)
+          .eq('is_active', true)
+          .order('start_time'),
+      ]);
+
       if (logsRes.data) setLogs(logsRes.data as AttendanceLog[]);
-
-      // 2. 오늘 수업 일정 (profiles 별도 조회 — class_schedules에 profiles FK 없음)
-      const { data: schedules, error: schedErr } = await supabase
-        .from('class_schedules')
-        .select('id, start_time, end_time, class_id, teacher_id, classes(name, subject)')
-        .eq('day_of_week', todayDow)
-        .eq('is_active', true)
-        .order('start_time');
-
-      if (schedErr) console.error('[PrincipalDash] schedules error:', schedErr);
+      const schedules = schedRes.data;
+      if (schedRes.error) console.error('[PrincipalDash] schedules error:', schedRes.error);
 
       if (!schedules || schedules.length === 0) {
         setClassroomSlots([]);
@@ -297,37 +298,37 @@ function PrincipalContent() {
       const classIds = schedules.map((s: any) => s.class_id).filter(Boolean);
       const teacherIds = [...new Set(schedules.map((s: any) => s.teacher_id).filter(Boolean))];
 
-      // 2b. 선생님 이름 별도 조회
-      let teacherMap: Record<string, string> = {};
-      if (teacherIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', teacherIds);
-        (profiles || []).forEach((p: any) => { teacherMap[p.id] = p.full_name; });
-      }
+      // 2b+3+4 병렬: profiles, class_students, lesson_records
+      const [profilesRes, classStudentsRes, lessonRecordsRes] = await Promise.all([
+        teacherIds.length > 0
+          ? supabase.from('profiles').select('id, full_name').in('id', teacherIds)
+          : Promise.resolve({ data: [] as any[] } as any),
+        supabase
+          .from('class_students')
+          .select('class_id, student_id, students(name, enrollment_status)')
+          .in('class_id', classIds)
+          .in('students.enrollment_status', ['재학', '재등원']),
+        supabase
+          .from('lesson_records')
+          .select('student_id, class_id, attendance_status')
+          .in('class_id', classIds)
+          .eq('lesson_date', today),
+      ]);
 
-      // 3. 각 수업의 학생 목록 (재학/재등원만 — 퇴원/휴학 제외)
-      const { data: classStudents } = await supabase
-        .from('class_students')
-        .select('class_id, student_id, students(name, enrollment_status)')
-        .in('class_id', classIds)
-        .in('students.enrollment_status', ['재학', '재등원']);
+      const teacherMap: Record<string, string> = {};
+      (profilesRes.data || []).forEach((p: any) => { teacherMap[p.id] = p.full_name; });
 
-      // 4. 오늘 lesson_records (출석 상태)
-      const { data: lessonRecords } = await supabase
-        .from('lesson_records')
-        .select('student_id, class_id, attendance_status')
-        .in('class_id', classIds)
-        .eq('lesson_date', today);
+      const classStudents = classStudentsRes.data;
+      const lessonRecords = lessonRecordsRes.data;
 
-      // 출석 상태 맵 (student_id:class_id → status)
+      // 출석 상태 맵
       const statusMap = new Map<string, string>();
       (lessonRecords || []).forEach((r: any) => {
         const arr: string[] = r.attendance_status || [];
         const status = arr.find(s => s !== '정상등원') || arr[0] || null;
         if (status) statusMap.set(`${r.student_id}:${r.class_id}`, status);
       });
+
 
       // 학생 맵 (class_id → students[]) — students가 null이면 퇴원/휴학으로 간주하여 제외
       const studentsByClass = new Map<string, { id: string; name: string }[]>();
