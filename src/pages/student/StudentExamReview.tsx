@@ -199,7 +199,8 @@ function InsightBox({ title, items, tone }: { title: string; items: string[]; to
 function PersonalReportCard({ row, onOpenSelfCheck }: { row: ExamReviewRow; onOpenSelfCheck: (target: SelfCheckTarget) => void }) {
   const review = row.exam_reviews[0];
   const items = review?.exam_item_reviews || [];
-  const isDone = row.review_status === 'done' && !!review?.reviewed_at;
+  const teacherDone = row.review_status === 'done' && !!review?.reviewed_at;
+  const isPublished = !!review?.is_published;
   const selfChecks = review?.self_checks || [];
   const correct = items.filter((item) => item.result === 'correct').length;
   const wrong = items.filter((item) => item.result === 'wrong').length;
@@ -215,29 +216,43 @@ function PersonalReportCard({ row, onOpenSelfCheck }: { row: ExamReviewRow; onOp
             <Badge variant="success">{row.subject}</Badge>
             <span className="text-sm text-muted-foreground">{row.exam_year ?? '-'}년 {row.exam_period ?? '-'} {EXAM_TYPE_LABELS[row.exam_type] ?? row.exam_type}</span>
           </div>
-          <div className="text-right"><p className="text-2xl font-bold text-primary">{review?.earned_score ?? row.actual_score ?? '-'}점</p><p className="text-[11px] text-muted-foreground">/ {review?.total_score ?? '-'}점 만점</p></div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-primary">{isPublished ? (review?.earned_score ?? row.actual_score ?? '-') : '-'}점</p>
+            <p className="text-[11px] text-muted-foreground">/ {isPublished ? (review?.total_score ?? '-') : '-'}점 만점</p>
+          </div>
         </div>
         <div className="mb-4 flex items-center justify-end gap-2">
-          {isDone ? (
+          {teacherDone ? (
             <>
-              <span className="text-xs font-medium text-success">✓ 리뷰 완료</span>
               {!review?.self_check_completed ? (
                 <button type="button" onClick={() => review && onOpenSelfCheck({ row, review })} className="rounded-full border-0 bg-success/15 px-3 py-1 text-xs font-medium text-success">자가진단 하기 (+15P) 🎯</button>
               ) : (
                 <span className="text-xs text-primary">✦ 자가진단 완료</span>
               )}
+              {isPublished
+                ? <span className="text-xs font-medium text-success">✓ 리뷰 공개됨</span>
+                : <span className="text-xs font-medium text-warning">⏳ 원장 검토중</span>}
             </>
           ) : (
             <span className="text-xs text-muted-foreground">리뷰 준비중</span>
           )}
         </div>
-        <div className="mb-4 grid grid-cols-3 gap-2">
-          <MiniStat value={String(correct)} label="맞음" variant="success" />
-          <MiniStat value={String(wrong)} label="틀림" variant="destructive" />
-          <MiniStat value={helpedRate} label="학원도움" variant="primary" />
-        </div>
-        {review?.overall_comment ? <div className="mb-3 rounded-xl border border-success/20 bg-success/10 p-3"><p className="mb-1 text-xs font-semibold text-success">선생님 코멘트</p><p className="whitespace-pre-wrap text-sm leading-7 text-foreground">{review.overall_comment}</p></div> : null}
-        {selfChecks.length > 0 ? <div className="grid gap-2 md:grid-cols-2"><div className="rounded-xl bg-success/10 p-3"><p className="mb-2 text-xs font-semibold text-success">✅ 학원이 도움준 부분</p>{selfChecks.filter((check) => check.q_academy_helped).slice(0, 3).map((check) => <p key={check.item_number} className="text-xs text-success">· {check.item_number}번 문항 관련 학습</p>) || null}{helped === 0 ? <p className="text-xs text-muted-foreground">자가진단 완료 후 표시됩니다</p> : null}</div><div className="rounded-xl bg-warning/10 p-3"><p className="mb-2 text-xs font-semibold text-warning">🎯 앞으로 집중할 부분</p>{needMore.map((check) => <p key={check.item_number} className="text-xs text-warning">· {check.q_need_more}</p>)}{needMore.length === 0 ? <p className="text-xs text-muted-foreground">자가진단 완료 후 표시됩니다</p> : null}</div></div> : null}
+        {isPublished ? (
+          <>
+            <div className="mb-4 grid grid-cols-3 gap-2">
+              <MiniStat value={String(correct)} label="맞음" variant="success" />
+              <MiniStat value={String(wrong)} label="틀림" variant="destructive" />
+              <MiniStat value={helpedRate} label="학원도움" variant="primary" />
+            </div>
+            {review?.overall_comment ? <div className="mb-3 rounded-xl border border-success/20 bg-success/10 p-3"><p className="mb-1 text-xs font-semibold text-success">선생님 코멘트</p><p className="whitespace-pre-wrap text-sm leading-7 text-foreground">{review.overall_comment}</p></div> : null}
+            {selfChecks.length > 0 ? <div className="grid gap-2 md:grid-cols-2"><div className="rounded-xl bg-success/10 p-3"><p className="mb-2 text-xs font-semibold text-success">✅ 학원이 도움준 부분</p>{selfChecks.filter((check) => check.q_academy_helped).slice(0, 3).map((check) => <p key={check.item_number} className="text-xs text-success">· {check.item_number}번 문항 관련 학습</p>) || null}{helped === 0 ? <p className="text-xs text-muted-foreground">자가진단 완료 후 표시됩니다</p> : null}</div><div className="rounded-xl bg-warning/10 p-3"><p className="mb-2 text-xs font-semibold text-warning">🎯 앞으로 집중할 부분</p>{needMore.map((check) => <p key={check.item_number} className="text-xs text-warning">· {check.q_need_more}</p>)}{needMore.length === 0 ? <p className="text-xs text-muted-foreground">자가진단 완료 후 표시됩니다</p> : null}</div></div> : null}
+          </>
+        ) : (
+          <div className="rounded-xl bg-warning/10 p-4 text-center">
+            <p className="text-sm font-semibold text-warning">⏳ 원장 선생님 검토 후 공개됩니다</p>
+            <p className="mt-1 text-xs text-muted-foreground">자가진단을 먼저 완료하면 더 정확한 리뷰를 받을 수 있어요</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
