@@ -492,7 +492,9 @@ function SwipeablePrincipal() {
 
   const onSelect = useCallback(() => {
     if (!emblaApi) return;
-    setActiveIndex(emblaApi.selectedScrollSnap());
+    const idx = emblaApi.selectedScrollSnap();
+    setActiveIndex(idx);
+    if (idx === 1) setSecondPanelMounted(true);
   }, [emblaApi]);
 
   useEffect(() => {
