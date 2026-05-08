@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, Component, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, Component, lazy, Suspense, type ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -12,11 +12,18 @@ import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { PageTransition } from '@/components/ui/page-transition';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import useEmblaCarousel from 'embla-carousel-react';
-import Dashboard from './Dashboard';
 import { cn } from '@/lib/utils';
-import { TeamNotesBoard } from '@/components/TeamNotesBoard';
-import { AcademyCalendar } from '@/components/AcademyCalendar';
-import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
+
+const Dashboard = lazy(() => import('./Dashboard'));
+const TeamNotesBoard = lazy(() =>
+  import('@/components/TeamNotesBoard').then((m) => ({ default: m.TeamNotesBoard }))
+);
+const AcademyCalendar = lazy(() =>
+  import('@/components/AcademyCalendar').then((m) => ({ default: m.AcademyCalendar }))
+);
+const TeacherAttendanceView = lazy(() =>
+  import('@/components/TeacherAttendanceView').then((m) => ({ default: m.TeacherAttendanceView }))
+);
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
