@@ -581,6 +581,48 @@ ${subjectInstruction}
       );
     }
 
+    // exam_analysis 후처리: item_type 정규화 + 배점 합 검증/보정
+    if (fileType === "exam_analysis" && extractedData && Array.isArray(extractedData.items)) {
+      const normalizeType = (t: any): string => {
+        const s = String(t ?? "").trim();
+        if (!s) return "객관식";
+        if (/객관|선택|multiple|choice|MC/i.test(s)) return "객관식";
+        if (/논술|서술|essay|long/i.test(s)) return "논술형";
+        if (/단답|short|fill|빈칸/i.test(s)) return "단답형";
+        return "객관식";
+      };
+      extractedData.items = extractedData.items.map((it: any, idx: number) => ({
+        ...it,
+        item_number: Number(it?.item_number) || idx + 1,
+        item_type: normalizeType(it?.item_type),
+        points: Number.isFinite(Number(it?.points)) ? Number(it.points) : 0,
+      }));
+      extractedData.items.sort((a: any, b: any) => (a.item_number || 0) - (b.item_number || 0));
+
+      const sumPoints = extractedData.items.reduce((s: number, it: any) => s + (Number(it.points) || 0), 0);
+      const declaredTotal = Number(extractedData.total_points) || 0;
+      const declaredItems = Number(extractedData.total_items) || 0;
+
+      extractedData.total_items = extractedData.items.length;
+
+      // 배점 합과 총점이 다르면 경고 플래그 (UI에서 알림 표시 가능)
+      if (declaredTotal && Math.abs(sumPoints - declaredTotal) > 0.01) {
+        extractedData._warnings = [
+          ...(extractedData._warnings || []),
+          `배점 합계(${sumPoints})가 명시된 총점(${declaredTotal})과 일치하지 않습니다. 검토가 필요합니다.`,
+        ];
+      } else if (!declaredTotal) {
+        extractedData.total_points = sumPoints;
+      }
+
+      if (declaredItems && declaredItems !== extractedData.items.length) {
+        extractedData._warnings = [
+          ...(extractedData._warnings || []),
+          `명시된 문항 수(${declaredItems})와 추출된 문항 수(${extractedData.items.length})가 다릅니다.`,
+        ];
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: true, data: extractedData }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
