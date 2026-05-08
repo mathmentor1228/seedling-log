@@ -218,11 +218,25 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'create') {
-      const { school_name, subject, exam_type, expected_score, note, exam_date, photos } = body;
+      const { school_name, subject, exam_type, expected_score, note, exam_date, exam_year, exam_period, photos } = body;
       if (!school_name || !subject) return json({ error: '학교/과목은 필수입니다.' }, 400);
       const type = VALID_TYPES.includes(exam_type) ? exam_type : 'midterm';
       const score = expected_score === '' || expected_score == null ? null : Number(expected_score);
       if (score !== null && (isNaN(score) || score < 0 || score > 100)) return json({ error: '예상 점수는 0~100 사이여야 합니다.' }, 400);
+      // Auto-derive year/period from exam_date if not explicitly provided
+      let yr: number | null = exam_year ? Number(exam_year) : null;
+      let period: string | null = exam_period || null;
+      if ((!yr || !period) && exam_date) {
+        const d = new Date(exam_date);
+        if (!isNaN(d.getTime())) {
+          if (!yr) yr = d.getFullYear();
+          if (!period) period = d.getMonth() + 1 <= 7 ? '1학기' : '2학기';
+        }
+      }
+      if (!yr) yr = new Date().getFullYear();
+      if (!period) period = (type === 'midterm' || type === 'final')
+        ? (new Date().getMonth() + 1 <= 7 ? '1학기' : '2학기')
+        : null;
       const { data: inserted, error: insErr } = await supabase.from('student_exam_results').insert({
         student_id,
         school_name: String(school_name).slice(0, 100),
@@ -231,6 +245,8 @@ Deno.serve(async (req) => {
         expected_score: score,
         note: note ? String(note).slice(0, 1000) : null,
         exam_date: exam_date || null,
+        exam_year: yr,
+        exam_period: period,
       }).select().single();
       if (insErr) return json({ error: insErr.message }, 500);
       // Photos are optional in create; clients may upload them separately via 'add_photos'

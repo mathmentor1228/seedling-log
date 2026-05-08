@@ -51,6 +51,8 @@ interface ExamResult {
   school_name: string;
   subject: string;
   exam_type: string;
+  exam_year?: number | null;
+  exam_period?: string | null;
   expected_score: number | null;
   actual_score?: number | null;
   score_locked?: boolean;
@@ -59,6 +61,7 @@ interface ExamResult {
   submitted_at: string;
   photos: Array<{ id: string; signedUrl: string | null }>;
 }
+
 
 interface FileItem {
   name: string;
@@ -81,6 +84,10 @@ export function ExamResultSubmitCard() {
   const [school, setSchool] = useState('');
   const [subject, setSubject] = useState('');
   const [examType, setExamType] = useState('midterm');
+  const currentYear = new Date().getFullYear();
+  const defaultPeriod = new Date().getMonth() + 1 <= 7 ? '1학기' : '2학기';
+  const [examYear, setExamYear] = useState<string>(String(currentYear));
+  const [examPeriod, setExamPeriod] = useState<string>(defaultPeriod);
   const [score, setScore] = useState('');
   const [note, setNote] = useState('');
   const [examDate, setExamDate] = useState('');
@@ -176,6 +183,8 @@ export function ExamResultSubmitCard() {
           expected_score: score,
           note,
           exam_date: examDate || null,
+          exam_year: examYear ? Number(examYear) : null,
+          exam_period: examPeriod || null,
           photos: [],
         },
       });
@@ -242,6 +251,7 @@ export function ExamResultSubmitCard() {
         toast({ title: '제출 완료', description: '담당 선생님께 자료가 전달되었습니다.' });
       }
       setSubject(''); setExamType('midterm'); setScore(''); setNote(''); setExamDate(''); setFiles([]);
+      setExamYear(String(currentYear)); setExamPeriod(defaultPeriod);
       setOpen(false);
       fetchResults();
     } catch (e: any) {
@@ -330,6 +340,29 @@ export function ExamResultSubmitCard() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
+                    <Label className="text-xs">시험 연도 *</Label>
+                    <Select value={examYear} onValueChange={setExamYear}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[currentYear + 1, currentYear, currentYear - 1, currentYear - 2].map(y => (
+                          <SelectItem key={y} value={String(y)}>{y}년</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">학기 *</Label>
+                    <Select value={examPeriod} onValueChange={setExamPeriod}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1학기">1학기</SelectItem>
+                        <SelectItem value="2학기">2학기</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
                     <Label className="text-xs">예상 점수</Label>
                     <Input type="number" min={0} max={100} step={0.5} value={score}
                       onChange={e => setScore(e.target.value)} placeholder="예: 85" />
@@ -408,6 +441,11 @@ export function ExamResultSubmitCard() {
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
                       {EXAM_TYPES.find(t => t.value === r.exam_type)?.label}
                     </Badge>
+                    {(r.exam_year || r.exam_period) && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                        {r.exam_year ? `${r.exam_year}년` : ''}{r.exam_period ? ` ${r.exam_period}` : ''}
+                      </Badge>
+                    )}
                     {r.expected_score != null && (
                       <Badge className={`text-[10px] px-1.5 py-0 h-4 border-0 ${r.score_locked ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>
                         {r.score_locked && <Lock className="w-2.5 h-2.5 mr-0.5 inline" />}
