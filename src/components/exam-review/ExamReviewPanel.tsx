@@ -224,13 +224,14 @@ function getStatusClasses(status: ReviewStatus, selected: boolean) {
   };
 }
 
-type ReviewPhase = 'scoring' | 'waiting_self_check' | 'ai_comment' | 'done';
+type ReviewPhase = 'scoring' | 'waiting_self_check' | 'ai_comment' | 'pending_publish' | 'published';
 
 const REVIEW_PHASE_STEPS: Array<{ key: ReviewPhase; label: string }> = [
   { key: 'scoring', label: '① 채점' },
   { key: 'waiting_self_check', label: '② 학생자가진단' },
   { key: 'ai_comment', label: '③ AI코멘트' },
-  { key: 'done', label: '④ 완료' },
+  { key: 'pending_publish', label: '④ 원장 승인' },
+  { key: 'published', label: '⑤ 공개' },
 ];
 
 function ReviewPhaseBar({ phase }: { phase: ReviewPhase }) {
