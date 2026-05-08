@@ -567,10 +567,18 @@ function SwipeablePrincipal() {
             <PrincipalContent />
           </div>
           <div className="flex-[0_0_100%] min-w-0 space-y-4">
-            <Dashboard hideAdminTools />
-            <div className="p-2">
-              <AttendanceCardSafe />
-            </div>
+            {secondPanelMounted ? (
+              <Suspense fallback={<DashboardSkeleton variant="stats" />}>
+                <Dashboard hideAdminTools />
+                <div className="p-2">
+                  <AttendanceCardSafe />
+                </div>
+              </Suspense>
+            ) : (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                스와이프하여 수업 관리 패널 열기
+              </div>
+            )}
           </div>
         </div>
       </div>
