@@ -251,6 +251,7 @@ export function ExamResultSubmitCard() {
         toast({ title: '제출 완료', description: '담당 선생님께 자료가 전달되었습니다.' });
       }
       setSubject(''); setExamType('midterm'); setScore(''); setNote(''); setExamDate(''); setFiles([]);
+      setExamYear(String(currentYear)); setExamPeriod(defaultPeriod);
       setOpen(false);
       fetchResults();
     } catch (e: any) {
