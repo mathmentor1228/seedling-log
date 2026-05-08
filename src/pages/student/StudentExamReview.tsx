@@ -371,38 +371,51 @@ export default function StudentExamReview() {
       ) : (
         <div className="space-y-3">
           {rows.map((row) => {
-            const done = (row.review_status ?? 'pending') === 'done';
+            const review = row.exam_reviews?.[0];
+            const teacherDone = (row.review_status ?? 'pending') === 'done' && !!review?.reviewed_at;
+            const published = !!review?.is_published;
+            const needsSelfCheck = teacherDone && !review?.self_check_completed;
+            const statusLabel = !teacherDone
+              ? '리뷰 준비중'
+              : !published
+                ? (needsSelfCheck ? '자가진단 후 공개대기' : '원장 검토중')
+                : '리뷰 공개';
+            const statusVariant: 'muted' | 'warning' | 'success' = !teacherDone
+              ? 'muted'
+              : !published ? 'warning' : 'success';
             return (
               <button
                 key={row.id}
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (done) {
+                  if (needsSelfCheck && review) {
+                    openSelfCheck({ row, review });
+                    return;
+                  }
+                  if (published) {
                     setActiveTab('teacher');
                     setSelected(row);
                   }
                 }}
                 className="w-full text-left"
               >
-                <Card className={done ? 'border-success/30' : 'border-border'}>
+                <Card className={published ? 'border-success/30' : teacherDone ? 'border-warning/30' : 'border-border'}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="truncate font-semibold text-foreground">{row.subject} · {EXAM_TYPE_LABELS[row.exam_type] ?? row.exam_type}</p>
-                          {done ? <span className="h-2 w-2 rounded-full bg-destructive" /> : null}
+                          {needsSelfCheck ? <span className="h-2 w-2 rounded-full bg-destructive" /> : null}
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {row.exam_date ?? row.submitted_at.slice(0, 10)} · {row.exam_year ?? '-'} / {row.exam_period ?? '-'}
                         </p>
                         <p className="mt-2 text-sm text-foreground">
-                          점수 {row.actual_score ?? row.expected_score ?? '-'}
+                          점수 {published ? (row.actual_score ?? row.expected_score ?? '-') : '-'}
                         </p>
                       </div>
-                      <Badge variant={done ? 'success' : 'muted'}>
-                        {done ? '리뷰 완료!' : '리뷰 준비중'}
-                      </Badge>
+                      <Badge variant={statusVariant}>{statusLabel}</Badge>
                     </div>
                   </CardContent>
                 </Card>
