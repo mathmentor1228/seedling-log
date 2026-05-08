@@ -908,17 +908,35 @@ Deno.serve(async (req) => {
         for (const review of reviewRows || []) {
           if (!latestReviewByResult.has(review.result_id)) {
             const tpl = review.template_id ? templateMap.get(review.template_id) : null;
+            const isPublished = !!review.is_published;
+            // Only expose teacher analysis (per-item results, error types, comments) AFTER principal published.
+            // Self-check is always available so the student can fill it in.
+            const rawItems = itemMap.get(review.id) || [];
+            const sanitizedItems = isPublished
+              ? rawItems
+              : rawItems.map((item: any) => ({
+                  id: item.id,
+                  item_number: item.item_number,
+                  result: null,
+                  error_types: [],
+                  item_comment: null,
+                  score_earned: null,
+                  page_number: item.page_number,
+                  custom_reason: null,
+                }));
             latestReviewByResult.set(review.result_id, {
               id: review.id,
-              earned_score: review.earned_score,
-              total_score: review.total_score,
-              overall_comment: review.overall_comment,
+              earned_score: isPublished ? review.earned_score : null,
+              total_score: isPublished ? review.total_score : null,
+              overall_comment: isPublished ? review.overall_comment : null,
               reviewed_at: review.reviewed_at,
               reviewed_by_name: review.reviewed_by_name,
+              is_published: isPublished,
+              published_at: review.published_at,
               self_check_completed: review.self_check_completed || false,
               self_check_completed_at: review.self_check_completed_at,
               self_check_points_given: review.self_check_points_given || false,
-              exam_item_reviews: itemMap.get(review.id) || [],
+              exam_item_reviews: sanitizedItems,
               self_checks: selfCheckMap.get(review.id) || [],
               template: tpl ? {
                 id: tpl.id,
