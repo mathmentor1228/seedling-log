@@ -340,6 +340,29 @@ export function ExamResultSubmitCard() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
+                    <Label className="text-xs">시험 연도 *</Label>
+                    <Select value={examYear} onValueChange={setExamYear}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[currentYear + 1, currentYear, currentYear - 1, currentYear - 2].map(y => (
+                          <SelectItem key={y} value={String(y)}>{y}년</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">학기 *</Label>
+                    <Select value={examPeriod} onValueChange={setExamPeriod}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1학기">1학기</SelectItem>
+                        <SelectItem value="2학기">2학기</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
                     <Label className="text-xs">예상 점수</Label>
                     <Input type="number" min={0} max={100} step={0.5} value={score}
                       onChange={e => setScore(e.target.value)} placeholder="예: 85" />
