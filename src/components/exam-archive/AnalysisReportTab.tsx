@@ -689,7 +689,11 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
       },
     });
     if (error || result?.error) throw new Error(error?.message || result?.error || 'AI 분석 실패');
-    applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis, mode);
+    const parsed = (result?.data ?? {}) as ParsedExamAnalysis & { _warnings?: string[] };
+    applyParsedAnalysis(parsed, mode);
+    if (Array.isArray(parsed._warnings) && parsed._warnings.length > 0) {
+      parsed._warnings.forEach((w) => toast.warning(w));
+    }
   }
 
   // AI_PARSE_OPTIONIZATION_V1
