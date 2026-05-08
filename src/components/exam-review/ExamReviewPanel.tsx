@@ -424,7 +424,7 @@ export function ExamReviewPanel() {
     try {
       const { data: reviews, error: reviewError } = await supabase
         .from('exam_reviews')
-        .select('id, overall_comment, reviewed_at, self_check_completed, created_at, template_id, total_score, earned_score')
+        .select('id, overall_comment, reviewed_at, self_check_completed, created_at, template_id, total_score, earned_score, is_published, published_at, published_by_name')
         .eq('result_id', resultId)
         .order('created_at', { ascending: false })
         .limit(1);
