@@ -51,9 +51,16 @@ interface ExamResult {
   school_name: string;
   subject: string;
   exam_type: string;
+  exam_year?: number | null;
+  exam_period?: string | null;
   expected_score: number | null;
   actual_score?: number | null;
   score_locked?: boolean;
+  note: string | null;
+  exam_date: string | null;
+  submitted_at: string;
+  photos: Array<{ id: string; signedUrl: string | null }>;
+}
   note: string | null;
   exam_date: string | null;
   submitted_at: string;
