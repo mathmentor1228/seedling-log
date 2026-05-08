@@ -6,18 +6,21 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/lib/auth";
 import Index from "./pages/Index";
-import VocabTestViewPage from "./pages/VocabTestViewPage";
 import Auth from "./pages/Auth";
 import { Loader2 } from "lucide-react";
-import QuizPrintPage from "./pages/QuizPrintPage";
-import QuizSubmitPage from "./pages/QuizSubmitPage";
-import NotFound from "./pages/NotFound";
-import TrialSignup from "./pages/TrialSignup";
-import PublicReport from "./pages/PublicReport";
-import ParentPortal from "./pages/ParentPortal";
-import ParentNotifications from "./pages/ParentNotifications";
 import { StudentAuthProvider } from "@/lib/studentAuth";
-import { StudentLayout } from "@/components/student/StudentLayout";
+
+const VocabTestViewPage = lazy(() => import("./pages/VocabTestViewPage"));
+const QuizPrintPage = lazy(() => import("./pages/QuizPrintPage"));
+const QuizSubmitPage = lazy(() => import("./pages/QuizSubmitPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const TrialSignup = lazy(() => import("./pages/TrialSignup"));
+const PublicReport = lazy(() => import("./pages/PublicReport"));
+const ParentPortal = lazy(() => import("./pages/ParentPortal"));
+const ParentNotifications = lazy(() => import("./pages/ParentNotifications"));
+const StudentLayout = lazy(() =>
+  import("@/components/student/StudentLayout").then((m) => ({ default: m.StudentLayout }))
+);
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const PrincipalDashboard = lazy(() => import("./pages/PrincipalDashboard"));
