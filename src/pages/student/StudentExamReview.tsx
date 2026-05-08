@@ -47,6 +47,8 @@ interface ReviewData {
   exam_item_reviews: ReviewItem[];
   self_check_completed?: boolean;
   self_checks?: SelfCheckRow[];
+  is_published?: boolean;
+  published_at?: string | null;
   template?: { id: string; error_types: string[]; items: Array<{ no: number; points: number }> } | null;
 }
 
