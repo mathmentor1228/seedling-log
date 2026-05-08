@@ -429,8 +429,12 @@ function PrincipalContent() {
 
           {/* 일정 + 코멘트/요청 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <AcademyCalendar />
-            <TeamNotesBoard />
+            <Suspense fallback={<DashboardSkeleton variant="list" count={2} />}>
+              <AcademyCalendar />
+            </Suspense>
+            <Suspense fallback={<DashboardSkeleton variant="list" count={2} />}>
+              <TeamNotesBoard />
+            </Suspense>
           </div>
         </div>
       </PageTransition>
