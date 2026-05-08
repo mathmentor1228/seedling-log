@@ -922,7 +922,7 @@ export function ExamReviewPanel() {
     }
   }, [fullName, isAdminUser, loadReviewDetail, reviewId, selectedRow, toast, user]);
 
-
+  const handleGenerateAI = useCallback(async () => {
     if (!selectedRow || !template || !hasItems || reviewPhase !== 'ai_comment') return;
 
     if (overallComment.trim()) {
