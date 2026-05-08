@@ -519,10 +519,11 @@ ${subjectInstruction}
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",   
+          // exam_analysis는 객관식/서술형 판별과 배점 정밀 추출이 중요해 Pro 모델 사용
+          model: fileType === "exam_analysis" ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash",
           messages,
-          max_tokens: 16384,
-          temperature: 0.1,
+          max_tokens: fileType === "exam_analysis" ? 32768 : 16384,
+          temperature: 0.05,
           response_format: { type: "json_object" },
         }),
       }
