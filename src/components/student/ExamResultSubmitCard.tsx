@@ -84,6 +84,10 @@ export function ExamResultSubmitCard() {
   const [school, setSchool] = useState('');
   const [subject, setSubject] = useState('');
   const [examType, setExamType] = useState('midterm');
+  const currentYear = new Date().getFullYear();
+  const defaultPeriod = new Date().getMonth() + 1 <= 7 ? '1학기' : '2학기';
+  const [examYear, setExamYear] = useState<string>(String(currentYear));
+  const [examPeriod, setExamPeriod] = useState<string>(defaultPeriod);
   const [score, setScore] = useState('');
   const [note, setNote] = useState('');
   const [examDate, setExamDate] = useState('');
