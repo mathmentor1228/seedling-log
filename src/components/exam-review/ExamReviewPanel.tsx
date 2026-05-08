@@ -381,7 +381,8 @@ export function ExamReviewPanel() {
 
   const reviewPhase: ReviewPhase = useMemo(() => {
     if (!reviewMeta?.reviewed_at && selectedRow?.review_status !== 'done') return 'scoring';
-    if (reviewMeta?.overall_comment?.trim()) return 'done';
+    if (reviewMeta?.is_published) return 'published';
+    if (reviewMeta?.overall_comment?.trim()) return 'pending_publish';
     if (wrongItems.length > 0 && !reviewMeta?.self_check_completed) return 'waiting_self_check';
     return 'ai_comment';
   }, [reviewMeta, selectedRow?.review_status, wrongItems.length]);
