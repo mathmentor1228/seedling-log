@@ -1566,7 +1566,11 @@ export type Database = {
           created_at: string | null
           earned_score: number | null
           id: string
+          is_published: boolean
           overall_comment: string | null
+          published_at: string | null
+          published_by: string | null
+          published_by_name: string | null
           result_id: string
           reviewed_at: string | null
           reviewed_by: string | null
@@ -1582,7 +1586,11 @@ export type Database = {
           created_at?: string | null
           earned_score?: number | null
           id?: string
+          is_published?: boolean
           overall_comment?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          published_by_name?: string | null
           result_id: string
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1598,7 +1606,11 @@ export type Database = {
           created_at?: string | null
           earned_score?: number | null
           id?: string
+          is_published?: boolean
           overall_comment?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          published_by_name?: string | null
           result_id?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1611,6 +1623,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "exam_reviews_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "exam_reviews_result_id_fkey"
             columns: ["result_id"]
