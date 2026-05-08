@@ -769,7 +769,11 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
         },
       });
       if (error || result?.error) throw new Error(error?.message || result?.error || 'AI 분석 실패');
-      applyParsedAnalysis((result?.data ?? {}) as ParsedExamAnalysis, mode);
+      const parsed = (result?.data ?? {}) as ParsedExamAnalysis & { _warnings?: string[] };
+      applyParsedAnalysis(parsed, mode);
+      if (Array.isArray(parsed._warnings) && parsed._warnings.length > 0) {
+        parsed._warnings.forEach((w) => toast.warning(w));
+      }
       toast.success('AI 분석이 완료됐어요.');
     } catch (error) {
       console.error(error);
