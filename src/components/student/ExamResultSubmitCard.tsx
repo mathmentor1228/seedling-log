@@ -441,6 +441,11 @@ export function ExamResultSubmitCard() {
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
                       {EXAM_TYPES.find(t => t.value === r.exam_type)?.label}
                     </Badge>
+                    {(r.exam_year || r.exam_period) && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                        {r.exam_year ? `${r.exam_year}년` : ''}{r.exam_period ? ` ${r.exam_period}` : ''}
+                      </Badge>
+                    )}
                     {r.expected_score != null && (
                       <Badge className={`text-[10px] px-1.5 py-0 h-4 border-0 ${r.score_locked ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>
                         {r.score_locked && <Lock className="w-2.5 h-2.5 mr-0.5 inline" />}
