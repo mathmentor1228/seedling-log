@@ -504,7 +504,10 @@ function SwipeablePrincipal() {
     return () => { emblaApi.off('select', onSelect); };
   }, [emblaApi, onSelect]);
 
-  const scrollTo = (idx: number) => emblaApi?.scrollTo(idx);
+  const scrollTo = (idx: number) => {
+    if (idx === 1) setSecondPanelMounted(true);
+    emblaApi?.scrollTo(idx);
+  };
 
   return (
     <div className="space-y-3">
