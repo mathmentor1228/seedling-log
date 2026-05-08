@@ -476,7 +476,9 @@ function AttendanceCardSafe() {
           <LiveClock />
         </div>
         <CardContent className="pt-0 px-3 pb-4">
-          <TeacherAttendanceView />
+          <Suspense fallback={<DashboardSkeleton variant="list" count={3} />}>
+            <TeacherAttendanceView />
+          </Suspense>
         </CardContent>
       </Card>
     </AttendanceErrorBoundary>
