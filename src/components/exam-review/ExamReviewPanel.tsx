@@ -894,7 +894,35 @@ export function ExamReviewPanel() {
     }
   }, [fullName, loadReviewDetail, overallComment, reviewId, selectedRow, toast, user]);
 
-  const handleGenerateAI = useCallback(async () => {
+  const handlePublishToggle = useCallback(async (publish: boolean) => {
+    if (!reviewId || !user) return;
+    if (!isAdminUser) {
+      toast({ title: '권한 부족', description: '원장만 공개 권한을 변경할 수 있습니다.', variant: 'destructive' });
+      return;
+    }
+    setPublishing(true);
+    try {
+      const { error } = await supabase
+        .from('exam_reviews')
+        .update({
+          is_published: publish,
+          published_at: publish ? new Date().toISOString() : null,
+          published_by: publish ? user.id : null,
+          published_by_name: publish ? (fullName || user.email || '원장') : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', reviewId);
+      if (error) throw error;
+      if (selectedRow) await loadReviewDetail(selectedRow.id);
+      toast({ title: publish ? '학생/학부모에게 공개되었습니다' : '공개가 해제되었습니다' });
+    } catch (error: any) {
+      toast({ title: '공개 처리 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setPublishing(false);
+    }
+  }, [fullName, isAdminUser, loadReviewDetail, reviewId, selectedRow, toast, user]);
+
+
     if (!selectedRow || !template || !hasItems || reviewPhase !== 'ai_comment') return;
 
     if (overallComment.trim()) {
