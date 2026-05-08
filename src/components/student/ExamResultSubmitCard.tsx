@@ -183,6 +183,8 @@ export function ExamResultSubmitCard() {
           expected_score: score,
           note,
           exam_date: examDate || null,
+          exam_year: examYear ? Number(examYear) : null,
+          exam_period: examPeriod || null,
           photos: [],
         },
       });
