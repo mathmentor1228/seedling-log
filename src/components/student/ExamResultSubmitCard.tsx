@@ -61,11 +61,7 @@ interface ExamResult {
   submitted_at: string;
   photos: Array<{ id: string; signedUrl: string | null }>;
 }
-  note: string | null;
-  exam_date: string | null;
-  submitted_at: string;
-  photos: Array<{ id: string; signedUrl: string | null }>;
-}
+
 
 interface FileItem {
   name: string;
