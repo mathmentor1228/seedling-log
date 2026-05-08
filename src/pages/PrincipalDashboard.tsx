@@ -488,6 +488,7 @@ function AttendanceCardSafe() {
 function SwipeablePrincipal() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, skipSnaps: false });
   const [activeIndex, setActiveIndex] = useState(0);
+  const [secondPanelMounted, setSecondPanelMounted] = useState(false);
 
   const onSelect = useCallback(() => {
     if (!emblaApi) return;
