@@ -818,7 +818,7 @@ Deno.serve(async (req) => {
           resultIds.length > 0
             ? supabase
                 .from('exam_reviews')
-                .select('id, result_id, earned_score, total_score, overall_comment, reviewed_at, reviewed_by_name, created_at, template_id, self_check_completed, self_check_completed_at, self_check_points_given')
+                .select('id, result_id, earned_score, total_score, overall_comment, reviewed_at, reviewed_by_name, created_at, template_id, self_check_completed, self_check_completed_at, self_check_points_given, is_published, published_at')
                 .in('result_id', resultIds)
                 .order('created_at', { ascending: false })
             : Promise.resolve({ data: [], error: null }),
