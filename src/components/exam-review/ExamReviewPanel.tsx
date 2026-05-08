@@ -1145,11 +1145,11 @@ export function ExamReviewPanel() {
                 </div>
               ) : null}
 
-              {reviewPhase === 'ai_comment' || reviewPhase === 'done' ? (
+              {reviewPhase === 'ai_comment' || reviewPhase === 'pending_publish' || reviewPhase === 'published' ? (
                 <div className="mb-6">
                   <div className="mb-3 flex items-center justify-between gap-3 border-b-2 pb-2" style={{ borderColor: 'hsl(var(--review-correct-surface))' }}>
                     <div className="text-[15px] font-semibold text-foreground">선생님 코멘트</div>
-                    {reviewPhase === 'ai_comment' ? (
+                    {reviewPhase === 'ai_comment' || reviewPhase === 'pending_publish' ? (
                       <Button
                         type="button"
                         variant="outline"
@@ -1162,31 +1162,63 @@ export function ExamReviewPanel() {
                       </Button>
                     ) : null}
                   </div>
+
                 {selfChecks.length > 0 ? (
-                  <div className="mb-3 rounded-[10px] border border-sky-200 bg-sky-50 p-3">
-                    <p className="mb-2 text-xs font-semibold text-sky-900">
-                      학생 자가진단 결과 ({selfChecks.length}문항)
-                    </p>
-                    <div className="flex flex-col gap-1.5">
-                      {selfChecks.map((check) => (
-                        <div key={check.id} className="rounded-md bg-background p-2 text-[11px]">
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span className="font-semibold text-foreground">{check.item_number}번</span>
-                            <span className="text-sky-700">
-                              기억 {check.q_remembered ? '✓' : '✗'}
-                            </span>
-                            <span className="text-amber-700">
-                              개념혼동 {check.q_concept_confused ? '✓' : '✗'}
-                            </span>
-                            <span className="text-emerald-700">
-                              학원도움 {check.q_academy_helped ? '✓' : '✗'}
-                            </span>
+                  <div className="mb-3 rounded-[10px] border-2 border-sky-200 bg-sky-50/60 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-sm font-bold text-sky-900">
+                        🧑‍🎓 학생이 직접 고른 오답 이유 ({selfChecks.length}/{wrongItems.length}문항)
+                      </p>
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                        선생님이 꼭 확인해주세요
+                      </span>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {wrongItems.map((wrong) => {
+                        const check = selfChecks.find((c) => c.item_number === wrong.item_number);
+                        if (!check) {
+                          return (
+                            <div key={wrong.item_number} className="rounded-md border border-dashed border-sky-200 bg-background/60 p-3 text-[12px] text-muted-foreground">
+                              <span className="font-bold text-foreground">{wrong.item_number}번</span> · 학생 자가진단 미제출
+                            </div>
+                          );
+                        }
+                        const reasons = Array.isArray(check.self_error_types)
+                          ? (check.self_error_types as unknown as string[]).filter((r) => typeof r === 'string')
+                          : [];
+                        return (
+                          <div key={check.id} className="rounded-md border border-sky-200 bg-background p-3 text-[12px]">
+                            <div className="mb-1.5 flex items-center justify-between">
+                              <span className="text-sm font-bold text-foreground">{check.item_number}번 문항</span>
+                              <div className="flex gap-1.5 text-[10px]">
+                                {check.q_concept_confused ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">개념혼동</span> : null}
+                                {check.q_remembered === false ? <span className="rounded bg-rose-100 px-1.5 py-0.5 text-rose-800">기억안남</span> : null}
+                                {check.q_academy_helped ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-800">학원도움</span> : null}
+                              </div>
+                            </div>
+                            {reasons.length > 0 ? (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {reasons.map((reason) => (
+                                  <span key={reason} className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-800">
+                                    {reason}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                            {check.self_custom_reason ? (
+                              <p className="mt-1.5 rounded bg-muted/60 p-1.5 text-[11px] leading-5 text-foreground">
+                                💬 {check.self_custom_reason}
+                              </p>
+                            ) : null}
+                            {check.q_need_more ? (
+                              <p className="mt-1 text-[11px] text-amber-700">📌 더 배우고 싶음: {check.q_need_more}</p>
+                            ) : null}
+                            {check.q_my_mistake ? (
+                              <p className="mt-1 text-[11px] text-muted-foreground">🙋 나의 실수: {check.q_my_mistake}</p>
+                            ) : null}
                           </div>
-                          {check.q_need_more ? (
-                            <p className="mt-1 text-muted-foreground">💬 {check.q_need_more}</p>
-                          ) : null}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
@@ -1210,7 +1242,7 @@ export function ExamReviewPanel() {
                   }}
                   placeholder="전체적인 피드백을 입력하거나 AI 초안을 생성해보세요"
                   rows={8}
-                  disabled={reviewPhase === 'done'}
+                  disabled={reviewPhase === 'published'}
                   className="min-h-[176px] resize-y"
                 />
                 </div>
@@ -1226,14 +1258,57 @@ export function ExamReviewPanel() {
               {reviewPhase === 'ai_comment' ? (
                 <Button onClick={() => void handleFinalSave()} disabled={saving || !overallComment.trim()} className="w-full py-3">
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  최종 저장 및 리뷰 완료
+                  최종 저장 — 원장 검토 요청
                 </Button>
               ) : null}
 
-              {reviewPhase === 'done' ? (
-                <div className="rounded-[10px] bg-success/10 p-4 text-center">
-                  <p className="mb-1 text-base font-bold text-success">✅ 리뷰 완료</p>
-                  <p className="text-xs text-success/80">학생과 학부모에게 공개됐어요</p>
+              {reviewPhase === 'pending_publish' ? (
+                <div className="space-y-3">
+                  <div className="rounded-[10px] bg-warning/10 p-4 text-center">
+                    <p className="mb-1 text-base font-bold text-warning">⏳ 원장 검토 대기중</p>
+                    <p className="text-xs text-warning/80">원장님이 '공개' 권한을 열어주면 학생/학부모에게 표시됩니다</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => void handleFinalSave()}
+                      variant="outline"
+                      disabled={saving || !overallComment.trim()}
+                      className="flex-1"
+                    >
+                      코멘트 다시 저장
+                    </Button>
+                    {isAdminUser ? (
+                      <Button
+                        onClick={() => void handlePublishToggle(true)}
+                        disabled={publishing}
+                        className="flex-1 bg-success text-success-foreground hover:bg-success/90"
+                      >
+                        {publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        ✅ 공개 승인 (원장)
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {reviewPhase === 'published' ? (
+                <div className="space-y-3">
+                  <div className="rounded-[10px] bg-success/10 p-4 text-center">
+                    <p className="mb-1 text-base font-bold text-success">✅ 공개 완료</p>
+                    <p className="text-xs text-success/80">
+                      {reviewMeta?.published_by_name ? `${reviewMeta.published_by_name} 원장` : '원장'}이 공개했어요 · 학생/학부모에게 표시됨
+                    </p>
+                  </div>
+                  {isAdminUser ? (
+                    <Button
+                      onClick={() => void handlePublishToggle(false)}
+                      variant="outline"
+                      disabled={publishing}
+                      className="w-full"
+                    >
+                      공개 해제 (원장)
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
