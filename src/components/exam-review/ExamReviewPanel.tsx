@@ -260,7 +260,9 @@ function ReviewPhaseBar({ phase }: { phase: ReviewPhase }) {
 }
 
 export function ExamReviewPanel() {
-  const { user, fullName } = useAuth();
+  const { user, fullName, role } = useAuth();
+  const isAdminUser = role === 'admin';
+  const [publishing, setPublishing] = useState(false);
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
