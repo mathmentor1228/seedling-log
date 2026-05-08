@@ -390,15 +390,34 @@ JSON만 반환하고 다른 텍스트는 포함하지 마세요.`;
 
     if (fileType === "exam_analysis") {
       extractionPrompt = `
-당신은 한국 중고등학교 내신 시험지를 분석하는 전문가입니다.
-업로드된 ${subjectFilter || "선택 과목"} 시험지를 분석해서 아래 JSON 형식으로만 응답하세요.
+당신은 한국 중고등학교 내신 시험지를 정밀 분석하는 전문가입니다.
+업로드된 ${subjectFilter || "선택 과목"} 시험지(이미지/PDF) **모든 페이지**를 처음부터 끝까지 빠짐없이 읽어서 아래 JSON 형식으로만 응답하세요.
 
-${subjectFilter === "영어" ? `영어 과목 분석 기준:
+[문항 유형(item_type) 판정 규칙 — 매우 중요]
+1) 객관식: 보기 ①②③④⑤ 또는 1)2)3)4)5) 또는 (1)(2)(3)(4)(5) 형태의 선택지가 명확히 보이는 문항.
+2) 단답형: 선택지 없이 빈 칸/괄호/짧은 답란이 1~2줄 정도이고 단어·기호·짧은 문장으로 답하는 문항. (예: "_______에 들어갈 말을 쓰시오", "한 단어로 쓰시오")
+3) 논술형(서술형): 답란이 여러 줄(보통 3줄 이상)이거나 "서술하시오/논하시오/설명하시오/그 이유를 쓰시오/조건에 맞게 쓰시오" 등의 발문이 있는 문항. 영작·풀이 과정 작성·근거 서술 포함.
+* 헷갈리면 "선택지 ①~⑤ 보임 → 객관식", "답란 길이/발문이 서술 요구 → 논술형", "그 외 짧은 답 → 단답형"
+* 동일 시험지 내에 객관식과 서술형이 섞여 있는 경우가 흔합니다. 절대 전부 같은 유형으로 통일하지 마세요.
+* '서술형 답안지'·'서답형 답안란'이 별도 페이지로 있으면 그 번호들은 모두 논술형/단답형입니다.
+
+[배점(points) 추출 규칙 — 매우 중요]
+1) 각 문항 옆/아래에 [3점], [3.5점], (4점), <5점>, ※5점 등의 표기를 우선 사용. 0.5점 단위까지 정확히 추출하세요.
+2) 시험지 상단/하단 안내문에 "별표 표시는 4점, 나머지는 모두 3점" 같은 규칙이 있으면 그 규칙을 적용하세요. ★, ◎, * 표식이 붙은 문항을 식별해 가산하세요.
+3) 표기가 전혀 없을 때만 총점/문항수로 균등 분배. 균등 분배 시 note에 "배점 미표기 - 균등분배"로 기록.
+4) 모든 문항의 points 합계가 total_points와 정확히 일치해야 합니다. 불일치 시 시험지를 다시 검토해 보정하세요(보통 100점, 가끔 50/200점).
+5) 서술형은 부분점수가 있을 수 있어 보통 4~10점입니다. 객관식만 있는데 합이 안 맞으면 표기 누락 가능성을 점검하세요.
+
+[문항 번호(item_number) 규칙]
+- 1번부터 마지막 번호까지 빠짐없이. 페이지 넘어가도 누락 금지.
+- 번호 옆에 "(서술형 1)"처럼 별도 번호가 있어도 시험지 상의 일련번호를 기준으로 사용하고 note에 보조번호 기록.
+- total_items는 실제 추출한 items 배열 길이와 일치해야 합니다.
+
+${subjectFilter === "영어" ? `[영어 과목 분석 기준]
 - 단순히 "어휘/문법이 어렵다"처럼 쓰지 말고, 지문 유형·문항 설계·선지 함정·근거 위치·문법 포인트를 구체화하세요.
-- source_type은 가능한 한 "교과서 본문", "외부지문", "어법", "어휘", "순서배열", "문장삽입", "빈칸추론", "내용일치", "요약", "서술형"처럼 학습 처방에 바로 쓰일 명칭으로 정리하세요.
-- question_type/problem_desc에는 학생이 실제로 막혔을 사고 과정(근거 찾기, 문맥 추론, 대명사/접속사 단서, 변형 문장 대응 등)이 드러나게 쓰세요.
-- classification에는 "독해-추론", "독해-세부정보", "어법-동사/준동사", "어휘-문맥", "쓰기-문장전환"처럼 영역과 세부기능을 함께 적으세요.
-- overall_review는 출제 경향, 체감 난도, 상위권 변별 포인트, 중하위권 취약 포인트, 다음 학습 우선순위를 5~7문장으로 전문적으로 작성하세요.` : ""}
+- source_type은 "교과서 본문", "외부지문", "어법", "어휘", "순서배열", "문장삽입", "빈칸추론", "내용일치", "요약", "서술형"처럼 학습 처방에 바로 쓰일 명칭으로 정리하세요.
+- classification에는 "독해-추론", "독해-세부정보", "어법-동사/준동사", "어휘-문맥", "쓰기-문장전환"처럼 영역+세부기능을 함께 적으세요.` : ""}
+
 {
   "textbook": "교과서명 또는 null",
   "exam_scope": "시험범위",
@@ -421,10 +440,11 @@ ${subjectFilter === "영어" ? `영어 과목 분석 기준:
     "note": "특이사항 또는 null"
   }]
 }
-공통 규칙:
-1. 배점 합계가 총점과 일치하는지 확인하세요.
-2. 보이지 않는 정보는 추측하지 말고 null로 두되, 문항 유형과 학습 포인트는 시험지 근거로 최대한 구체화하세요.
-3. JSON만 반환하세요.`;
+출력 전 자가 검증:
+- items.length == total_items
+- sum(items[].points) == total_points (불일치 시 다시 스캔하여 보정)
+- 한 시험지 안에서 객관식과 서술형이 섞여 있는지 다시 확인
+JSON만 반환하세요.`;
     }
 
     if (fileType === "other") {
@@ -499,10 +519,11 @@ ${subjectInstruction}
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",   
+          // exam_analysis는 객관식/서술형 판별과 배점 정밀 추출이 중요해 Pro 모델 사용
+          model: fileType === "exam_analysis" ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash",
           messages,
-          max_tokens: 16384,
-          temperature: 0.1,
+          max_tokens: fileType === "exam_analysis" ? 32768 : 16384,
+          temperature: 0.05,
           response_format: { type: "json_object" },
         }),
       }
@@ -558,6 +579,48 @@ ${subjectInstruction}
         JSON.stringify({ error: "데이터 파싱 실패", raw: responseText }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // exam_analysis 후처리: item_type 정규화 + 배점 합 검증/보정
+    if (fileType === "exam_analysis" && extractedData && Array.isArray(extractedData.items)) {
+      const normalizeType = (t: any): string => {
+        const s = String(t ?? "").trim();
+        if (!s) return "객관식";
+        if (/객관|선택|multiple|choice|MC/i.test(s)) return "객관식";
+        if (/논술|서술|essay|long/i.test(s)) return "논술형";
+        if (/단답|short|fill|빈칸/i.test(s)) return "단답형";
+        return "객관식";
+      };
+      extractedData.items = extractedData.items.map((it: any, idx: number) => ({
+        ...it,
+        item_number: Number(it?.item_number) || idx + 1,
+        item_type: normalizeType(it?.item_type),
+        points: Number.isFinite(Number(it?.points)) ? Number(it.points) : 0,
+      }));
+      extractedData.items.sort((a: any, b: any) => (a.item_number || 0) - (b.item_number || 0));
+
+      const sumPoints = extractedData.items.reduce((s: number, it: any) => s + (Number(it.points) || 0), 0);
+      const declaredTotal = Number(extractedData.total_points) || 0;
+      const declaredItems = Number(extractedData.total_items) || 0;
+
+      extractedData.total_items = extractedData.items.length;
+
+      // 배점 합과 총점이 다르면 경고 플래그 (UI에서 알림 표시 가능)
+      if (declaredTotal && Math.abs(sumPoints - declaredTotal) > 0.01) {
+        extractedData._warnings = [
+          ...(extractedData._warnings || []),
+          `배점 합계(${sumPoints})가 명시된 총점(${declaredTotal})과 일치하지 않습니다. 검토가 필요합니다.`,
+        ];
+      } else if (!declaredTotal) {
+        extractedData.total_points = sumPoints;
+      }
+
+      if (declaredItems && declaredItems !== extractedData.items.length) {
+        extractedData._warnings = [
+          ...(extractedData._warnings || []),
+          `명시된 문항 수(${declaredItems})와 추출된 문항 수(${extractedData.items.length})가 다릅니다.`,
+        ];
+      }
     }
 
     return new Response(
