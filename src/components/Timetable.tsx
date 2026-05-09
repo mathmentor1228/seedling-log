@@ -1103,9 +1103,27 @@ export function Timetable() {
           >
             <Thermometer className="w-3.5 h-3.5" /> 혼잡도 뷰
           </button>
+          <button
+            onClick={() => setViewMode('bold')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+              viewMode === 'bold' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" /> 매트릭스 (NEW)
+          </button>
         </div>
 
-        {viewMode === 'timeline' || viewMode === 'congestion' ? (
+        {viewMode === 'bold' ? (
+          <BoldMatrixView
+            scheduleRows={allRows}
+            classrooms={classrooms}
+            selectedDay={matrixDay}
+            onDayChange={setMatrixDay}
+            mode="congestion"
+            onDataChange={fetchScheduleData}
+          />
+        ) : viewMode === 'timeline' || viewMode === 'congestion' ? (
           <TimetableMatrixView
             scheduleRows={allRows}
             classrooms={classrooms}
