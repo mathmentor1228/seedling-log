@@ -56,8 +56,20 @@ Deno.serve(async (req) => {
         const { data: results, error } = await query;
         if (error) return json({ error: error.message }, 500);
 
+        // Teacher scope: restrict to (student, subject) pairs assigned to this teacher.
+        // Admin & assistant see all.
+        let scoped = results || [];
+        if (!roleSet.has('admin') && !roleSet.has('assistant') && roleSet.has('teacher')) {
+          const { data: links } = await supabase
+            .from('student_subject_teachers')
+            .select('student_id, subject')
+            .eq('teacher_id', user.id);
+          const allowed = new Set((links || []).map((l: any) => `${l.student_id}::${l.subject}`));
+          scoped = scoped.filter((r: any) => allowed.has(`${r.student_id}::${r.subject}`));
+        }
+
         const enriched = await Promise.all(
-          (results || []).map(async (r: any) => {
+          scoped.map(async (r: any) => {
             const photos = await Promise.all(
               (r.student_exam_result_photos || [])
                 .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
