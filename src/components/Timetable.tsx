@@ -116,7 +116,7 @@ export function Timetable() {
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'time' | 'teacher_time'>('time');
-  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'congestion'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'congestion' | 'bold'>('list');
   const [matrixDay, setMatrixDay] = useState<number>(new Date().getDay());
   const [editClassId, setEditClassId] = useState<string | null>(null);
   const [editScheduleId, setEditScheduleId] = useState<string | null>(null);
