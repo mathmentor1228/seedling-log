@@ -912,15 +912,17 @@ Deno.serve(async (req) => {
             // Only expose teacher analysis (per-item results, error types, comments) AFTER principal published.
             // Self-check is always available so the student can fill it in.
             const rawItems = itemMap.get(review.id) || [];
+            // Student always needs to know which items are wrong/partial so they can do self-check.
+            // Hide only teacher's analysis (error_types, item_comment, custom_reason) until principal publishes.
             const sanitizedItems = isPublished
               ? rawItems
               : rawItems.map((item: any) => ({
                   id: item.id,
                   item_number: item.item_number,
-                  result: null,
+                  result: item.result,
                   error_types: [],
                   item_comment: null,
-                  score_earned: null,
+                  score_earned: item.score_earned,
                   page_number: item.page_number,
                   custom_reason: null,
                 }));
