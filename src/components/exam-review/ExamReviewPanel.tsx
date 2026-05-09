@@ -273,6 +273,7 @@ export function ExamReviewPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
+  const [nameQuery, setNameQuery] = useState('');
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
   const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
