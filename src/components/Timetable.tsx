@@ -25,6 +25,7 @@ import { TeacherGroupAssignment } from '@/components/timetable/TeacherGroupAssig
 import { TeacherScheduleCreator } from '@/components/timetable/TeacherScheduleCreator';
 import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
 import { TimetableMatrixView } from '@/components/timetable/TimetableMatrixView';
+import { BoldMatrixView } from '@/components/timetable/BoldMatrixView';
 import { RoomAssignmentTab } from '@/components/timetable/RoomAssignmentTab';
 import { AttendanceTab } from '@/components/timetable/AttendanceTab';
 
@@ -115,7 +116,7 @@ export function Timetable() {
   const [selectedDayFilter, setSelectedDayFilter] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'time' | 'teacher_time'>('time');
-  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'congestion'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'congestion' | 'bold'>('list');
   const [matrixDay, setMatrixDay] = useState<number>(new Date().getDay());
   const [editClassId, setEditClassId] = useState<string | null>(null);
   const [editScheduleId, setEditScheduleId] = useState<string | null>(null);
@@ -1102,9 +1103,27 @@ export function Timetable() {
           >
             <Thermometer className="w-3.5 h-3.5" /> 혼잡도 뷰
           </button>
+          <button
+            onClick={() => setViewMode('bold')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+              viewMode === 'bold' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" /> 매트릭스 (NEW)
+          </button>
         </div>
 
-        {viewMode === 'timeline' || viewMode === 'congestion' ? (
+        {viewMode === 'bold' ? (
+          <BoldMatrixView
+            scheduleRows={allRows}
+            classrooms={classrooms}
+            selectedDay={matrixDay}
+            onDayChange={setMatrixDay}
+            mode="congestion"
+            onDataChange={fetchScheduleData}
+          />
+        ) : viewMode === 'timeline' || viewMode === 'congestion' ? (
           <TimetableMatrixView
             scheduleRows={allRows}
             classrooms={classrooms}
