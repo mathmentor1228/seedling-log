@@ -25,6 +25,7 @@ import { TeacherGroupAssignment } from '@/components/timetable/TeacherGroupAssig
 import { TeacherScheduleCreator } from '@/components/timetable/TeacherScheduleCreator';
 import { ClassroomCapacityDashboard } from '@/components/timetable/ClassroomCapacityDashboard';
 import { TimetableMatrixView } from '@/components/timetable/TimetableMatrixView';
+import { BoldMatrixView } from '@/components/timetable/BoldMatrixView';
 import { RoomAssignmentTab } from '@/components/timetable/RoomAssignmentTab';
 import { AttendanceTab } from '@/components/timetable/AttendanceTab';
 
