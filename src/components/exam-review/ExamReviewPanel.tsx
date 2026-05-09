@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, HelpCircle } from 'lucide-react';
+import { ExamReviewTutorial, useExamReviewTutorialAutoOpen } from '@/components/exam-review/ExamReviewTutorial';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { displayExamType, normalizeExamType, normalizeGrade, normalizeTextValue } from '@/lib/examTemplateUtils';
@@ -1006,11 +1007,23 @@ export function ExamReviewPanel() {
     }
   }, [hasItems, itemReviews, overallComment, reviewPhase, selectedRow, selfChecks, template, toast]);
 
+  const [tutorialOpen, setTutorialOpen] = useExamReviewTutorialAutoOpen();
+
   return (
     <>
+      <ExamReviewTutorial open={tutorialOpen} onOpenChange={setTutorialOpen} />
       <div className="flex h-full w-full overflow-hidden [white-space:normal] [word-break:keep-all]">
         <div className="w-[360px] min-w-[360px] border-r border-border p-4">
           <div className="mb-3 space-y-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2 text-xs"
+              onClick={() => setTutorialOpen(true)}
+            >
+              <HelpCircle className="h-4 w-4 text-primary" />
+              사용 가이드 / 튜토리얼 보기
+            </Button>
             <select
               value={subjectFilter}
               onChange={(event) => setSubjectFilter(event.target.value)}
