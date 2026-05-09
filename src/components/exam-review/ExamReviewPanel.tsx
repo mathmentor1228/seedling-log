@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Sparkles, HelpCircle } from 'lucide-react';
+import { Loader2, Sparkles, HelpCircle, Search, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { ExamReviewTutorial, useExamReviewTutorialAutoOpen } from '@/components/exam-review/ExamReviewTutorial';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
