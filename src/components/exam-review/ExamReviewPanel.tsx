@@ -1130,9 +1130,19 @@ export function ExamReviewPanel() {
                       </span>
                       <span className="text-[13px] font-semibold text-foreground">{record.subject}</span>
                     </div>
-                    <div className="mb-1 text-[15px] font-bold text-foreground">{record.students?.name ?? '이름 없음'}</div>
+                    <div className="mb-1 flex items-baseline gap-1.5 text-[15px] font-bold text-foreground">
+                      <span>{record.students?.name ?? '이름 없음'}</span>
+                      {record.students?.grade && (
+                        <span className="text-[11px] font-normal text-muted-foreground">{record.students.grade}</span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">
-                      {record.school_name} · {displayExamType(record.exam_type)} · 예상 {formatScoreLabel(record.expected_score)}
+                      {record.school_name} · {displayExamType(record.exam_type)}
+                      {record.exam_year ? ` · ${record.exam_year}` : ''}
+                      {record.exam_period ? ` ${record.exam_period}` : ''}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground/90">
+                      예상 {formatScoreLabel(record.expected_score)}
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground/80">
                       사진 {record.student_exam_result_photos?.length ?? 0}장 · {formatDateTimeLabel(record.submitted_at)}
