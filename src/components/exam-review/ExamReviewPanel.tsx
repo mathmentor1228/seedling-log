@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Sparkles, HelpCircle } from 'lucide-react';
+import { Loader2, Sparkles, HelpCircle, Search, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { ExamReviewTutorial, useExamReviewTutorialAutoOpen } from '@/components/exam-review/ExamReviewTutorial';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
@@ -272,6 +273,7 @@ export function ExamReviewPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
+  const [nameQuery, setNameQuery] = useState('');
   const [resolvedPhotoUrls, setResolvedPhotoUrls] = useState<Record<string, string>>({});
   const [templateSetupOpen, setTemplateSetupOpen] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
@@ -352,11 +354,28 @@ export function ExamReviewPanel() {
 
   const subjectOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.subject))).sort(), [rows]);
 
-  const filteredRows = useMemo(() => rows.filter((row) => {
-    if (subjectFilter !== 'all' && row.subject !== subjectFilter) return false;
-    if (statusFilter !== 'all' && (row.review_status ?? 'pending') !== statusFilter) return false;
-    return true;
-  }), [rows, statusFilter, subjectFilter]);
+  const filteredRows = useMemo(() => {
+    const q = nameQuery.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (subjectFilter !== 'all' && row.subject !== subjectFilter) return false;
+      if (statusFilter !== 'all' && (row.review_status ?? 'pending') !== statusFilter) return false;
+      if (q) {
+        const name = (row.students?.name ?? '').toLowerCase();
+        const school = (row.school_name ?? '').toLowerCase();
+        if (!name.includes(q) && !school.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rows, statusFilter, subjectFilter, nameQuery]);
+
+  const statusCounts = useMemo(() => {
+    const base = { all: rows.length, pending: 0, in_review: 0, done: 0 } as Record<string, number>;
+    rows.forEach((r) => {
+      const s = (r.review_status ?? 'pending') as ReviewStatus;
+      base[s] = (base[s] ?? 0) + 1;
+    });
+    return base;
+  }, [rows]);
 
   const counts = useMemo(() => {
     const correct = itemReviews.filter((item) => item.result === 'correct').length;
@@ -1034,31 +1053,65 @@ export function ExamReviewPanel() {
                 <option key={subject} value={subject}>{subject}</option>
               ))}
             </select>
-            <div className="flex gap-1.5">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={nameQuery}
+                onChange={(e) => setNameQuery(e.target.value)}
+                placeholder="학생 이름·학교 검색"
+                className="h-9 pl-8 pr-8 text-[13px]"
+              />
+              {nameQuery && (
+                <button
+                  type="button"
+                  onClick={() => setNameQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label="검색 지우기"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-1">
               {STATUS_OPTIONS.map((option) => {
                 const active = statusFilter === option.value;
+                const count = statusCounts[option.value] ?? 0;
                 return (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => setStatusFilter(option.value)}
-                    className={`flex-1 rounded-md px-0 py-1.5 text-xs transition ${active ? 'bg-primary text-primary-foreground font-semibold' : 'bg-muted text-muted-foreground'}`}
+                    className={`flex flex-col items-center justify-center rounded-md py-1.5 text-[11px] leading-tight transition ${active ? 'bg-primary text-primary-foreground font-semibold' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
                   >
-                    {option.label}
+                    <span>{option.label}</span>
+                    <span className="text-[10px] opacity-80">{count}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="h-[calc(100vh-18rem)] overflow-y-auto pr-1">
+          <div className="mb-2 flex items-center justify-between px-1 text-[11px] text-muted-foreground">
+            <span>{filteredRows.length}건 표시</span>
+            {(nameQuery || subjectFilter !== 'all' || statusFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => { setNameQuery(''); setSubjectFilter('all'); setStatusFilter('all'); }}
+                className="rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
+              >
+                필터 초기화
+              </button>
+            )}
+          </div>
+
+          <div className="h-[calc(100vh-22rem)] overflow-y-auto pr-1">
             {loading ? (
               <div className="flex items-center justify-center py-12 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
             ) : filteredRows.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                조건에 맞는 시험지가 없습니다.
+                {nameQuery ? `"${nameQuery}"에 해당하는 시험지가 없습니다.` : '조건에 맞는 시험지가 없습니다.'}
               </div>
             ) : (
               filteredRows.map((record) => {
@@ -1069,7 +1122,7 @@ export function ExamReviewPanel() {
                     key={record.id}
                     type="button"
                     onClick={() => setSelectedId(record.id)}
-                    className={`mb-2 block w-full rounded-[10px] p-[14px_16px] text-left ${styles.card}`}
+                    className={`mb-2 block w-full rounded-[10px] p-3 text-left transition hover:brightness-95 ${styles.card}`}
                   >
                     <div className="mb-1.5 flex items-center justify-between gap-2">
                       <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${styles.badge}`}>
@@ -1077,9 +1130,19 @@ export function ExamReviewPanel() {
                       </span>
                       <span className="text-[13px] font-semibold text-foreground">{record.subject}</span>
                     </div>
-                    <div className="mb-1 text-[15px] font-bold text-foreground">{record.students?.name ?? '이름 없음'}</div>
+                    <div className="mb-1 flex items-baseline gap-1.5 text-[15px] font-bold text-foreground">
+                      <span>{record.students?.name ?? '이름 없음'}</span>
+                      {record.students?.grade && (
+                        <span className="text-[11px] font-normal text-muted-foreground">{record.students.grade}</span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">
-                      {record.school_name} · {displayExamType(record.exam_type)} · 예상 {formatScoreLabel(record.expected_score)}
+                      {record.school_name} · {displayExamType(record.exam_type)}
+                      {record.exam_year ? ` · ${record.exam_year}` : ''}
+                      {record.exam_period ? ` ${record.exam_period}` : ''}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground/90">
+                      예상 {formatScoreLabel(record.expected_score)}
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground/80">
                       사진 {record.student_exam_result_photos?.length ?? 0}장 · {formatDateTimeLabel(record.submitted_at)}
