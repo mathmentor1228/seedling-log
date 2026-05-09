@@ -354,11 +354,28 @@ export function ExamReviewPanel() {
 
   const subjectOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.subject))).sort(), [rows]);
 
-  const filteredRows = useMemo(() => rows.filter((row) => {
-    if (subjectFilter !== 'all' && row.subject !== subjectFilter) return false;
-    if (statusFilter !== 'all' && (row.review_status ?? 'pending') !== statusFilter) return false;
-    return true;
-  }), [rows, statusFilter, subjectFilter]);
+  const filteredRows = useMemo(() => {
+    const q = nameQuery.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (subjectFilter !== 'all' && row.subject !== subjectFilter) return false;
+      if (statusFilter !== 'all' && (row.review_status ?? 'pending') !== statusFilter) return false;
+      if (q) {
+        const name = (row.students?.name ?? '').toLowerCase();
+        const school = (row.school_name ?? '').toLowerCase();
+        if (!name.includes(q) && !school.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rows, statusFilter, subjectFilter, nameQuery]);
+
+  const statusCounts = useMemo(() => {
+    const base = { all: rows.length, pending: 0, in_review: 0, done: 0 } as Record<string, number>;
+    rows.forEach((r) => {
+      const s = (r.review_status ?? 'pending') as ReviewStatus;
+      base[s] = (base[s] ?? 0) + 1;
+    });
+    return base;
+  }, [rows]);
 
   const counts = useMemo(() => {
     const correct = itemReviews.filter((item) => item.result === 'correct').length;
