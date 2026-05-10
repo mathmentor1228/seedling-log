@@ -1040,7 +1040,7 @@ export default function Students() {
         flashSection={flashTab}
         role={role}
         onClose={() => setDetailStudent(null)}
-        onNavigate={(s) => { setDetailDefaultTab('overview'); setDetailStudent(s); }}
+        onNavigate={(s) => { setDetailDefaultTab('overview'); setDetailStudent(s as Student); }}
         onEdit={handleEditFromDetail}
         onDelete={() => detailStudent && handleDelete(detailStudent.id)}
         onCopyParentLink={() => detailStudent && generateParentLink(detailStudent.id)}
