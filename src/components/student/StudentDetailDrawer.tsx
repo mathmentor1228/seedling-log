@@ -31,7 +31,9 @@ interface StudentLite {
   parent_name?: string | null;
   student_phone: string | null;
   student_code: string | null;
+  payment_due_day?: number | null;
   created_at: string;
+  [key: string]: any;
 }
 
 interface FlagShape {
