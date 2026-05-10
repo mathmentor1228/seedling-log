@@ -37,6 +37,16 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
+    /* ── Unified status palette (matches sidebar tone) ── */
+    --danger: 0 72% 51%;          /* #dc2626 */
+    --danger-foreground: 0 0% 100%;
+    --warn: 21 90% 48%;           /* #ea580c */
+    --warn-foreground: 0 0% 100%;
+    --info: 221 83% 53%;          /* #2563eb */
+    --info-foreground: 0 0% 100%;
+    --violet: 262 83% 58%;        /* #7c3aed */
+    --violet-foreground: 0 0% 100%;
+
     --border: 214 32% 91%;
     --input: 214 32% 91%;
     --ring: 239 84% 67%;
@@ -141,6 +151,15 @@
 
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+
+    --danger: 0 72% 51%;
+    --danger-foreground: 0 0% 100%;
+    --warn: 21 90% 48%;
+    --warn-foreground: 0 0% 100%;
+    --info: 221 83% 53%;
+    --info-foreground: 0 0% 100%;
+    --violet: 262 83% 58%;
+    --violet-foreground: 0 0% 100%;
 
     --border: 240 6% 16%;
     --input: 240 6% 16%;
