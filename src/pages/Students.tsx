@@ -868,144 +868,157 @@ export default function Students() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                   <TableRow>
-                     {isAdmin(role) && (
-                       <TableHead className="w-10">
-                         <Checkbox
-                           checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.has(s.id))}
-                           onCheckedChange={(checked) => {
-                             if (checked) {
-                               setSelectedIds(new Set(filteredStudents.map(s => s.id)));
-                             } else {
-                               setSelectedIds(new Set());
-                             }
-                           }}
-                         />
-                       </TableHead>
-                     )}
-                     <TableHead>이름</TableHead>
-                     <TableHead
-                       className="cursor-pointer select-none"
-                       onClick={() => setSortByDueDay(!sortByDueDay)}
-                     >
-                       납부일 {sortByDueDay ? '▲' : ''}
-                     </TableHead>
-                     <TableHead>상태</TableHead>
-                     <TableHead>학년</TableHead>
-                     <TableHead>학교</TableHead>
-                     <TableHead>연락처</TableHead>
-                     <TableHead>수강료</TableHead>
-                     <TableHead className="w-[100px]">관리</TableHead>
-                   </TableRow>
-                 </TableHeader>
-                 <TableBody>
-                   {filteredStudents.map((student) => (
-                     <TableRow 
-                       key={student.id}
-                       className="cursor-pointer hover:bg-muted/50"
-                       onClick={() => setDetailStudent(student)}
-                     >
-                       {isAdmin(role) && (
-                         <TableCell onClick={e => e.stopPropagation()}>
-                           <Checkbox
-                             checked={selectedIds.has(student.id)}
-                             onCheckedChange={(checked) => {
-                               setSelectedIds(prev => {
-                                 const next = new Set(prev);
-                                 if (checked) next.add(student.id); else next.delete(student.id);
-                                 return next;
-                               });
-                             }}
-                           />
-                         </TableCell>
-                       )}
-                        <TableCell className="font-medium">{student.name}</TableCell>
+                  <TableRow>
+                    {isAdmin(role) && (
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.has(s.id))}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedIds(new Set(filteredStudents.map(s => s.id)));
+                            } else {
+                              setSelectedIds(new Set());
+                            }
+                          }}
+                        />
+                      </TableHead>
+                    )}
+                    <TableHead>학생</TableHead>
+                    <TableHead>상태</TableHead>
+                    <TableHead>학교 / 학년</TableHead>
+                    <TableHead>수강 과목</TableHead>
+                    <TableHead>배정 슬롯</TableHead>
+                    <TableHead>연락처</TableHead>
+                    <TableHead className="w-[140px] text-right">이슈 / 관리</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredStudents.map((student) => {
+                    const flag = studentFlags[student.id];
+                    const issues: { key: 'no-slot' | 'no-teacher' | 'no-course' | 'unvisited'; label: string }[] = [];
+                    if (flag?.noSlot) issues.push({ key: 'no-slot', label: '시간표 미배정' });
+                    if (flag?.noTeacher) issues.push({ key: 'no-teacher', label: '담당 미지정' });
+                    if (flag?.noCourse) issues.push({ key: 'no-course', label: '미수강' });
+                    if (flag?.unvisited) issues.push({ key: 'unvisited', label: '학부모 미열람' });
+                    const subjects = flag?.subjects || [];
+                    const slotCount = flag?.slotCount ?? 0;
+                    const subjectColor: Record<string, string> = {
+                      '수학': 'bg-blue-500/15 text-blue-500 border-blue-500/30',
+                      '영어': 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
+                      '국어': 'bg-rose-500/15 text-rose-500 border-rose-500/30',
+                      '과학': 'bg-purple-500/15 text-purple-500 border-purple-500/30',
+                    };
+                    return (
+                      <TableRow
+                        key={student.id}
+                        className="group cursor-pointer hover:bg-muted/40"
+                        onClick={() => { setDetailDefaultTab('info'); setDetailStudent(student); }}
+                      >
+                        {isAdmin(role) && (
+                          <TableCell onClick={e => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.has(student.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedIds(prev => {
+                                  const next = new Set(prev);
+                                  if (checked) next.add(student.id); else next.delete(student.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>
-                          {student.payment_due_day ? (
-                            <Badge variant="outline" className="text-xs font-mono">{student.payment_due_day}일</Badge>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                              {student.name.slice(0, 1)}
+                            </div>
+                            <span className="font-medium">{student.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              student.enrollment_status === '재학' || student.enrollment_status === '재등원' ? 'default' :
+                              student.enrollment_status === '휴학' ? 'secondary' : 'outline'
+                            }
+                            className={
+                              student.enrollment_status === '퇴원'
+                                ? 'text-muted-foreground border-muted-foreground/30'
+                                : student.enrollment_status === '휴학'
+                                ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                                : student.enrollment_status === '재등원'
+                                ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
+                                : ''
+                            }
+                          >
+                            {student.enrollment_status || '재학'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="text-foreground">{student.school || '-'}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {student.school_level && student.grade_year
+                              ? `${student.school_level}${student.grade_year}`
+                              : student.grade || '-'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {subjects.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">-</span>
                           ) : (
-                            <span className="text-muted-foreground text-xs">-</span>
+                            <div className="flex flex-wrap gap-1">
+                              {subjects.map((s) => (
+                                <span key={s} className={cn('text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap', subjectColor[s] || 'bg-muted text-muted-foreground border-border')}>
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
                           )}
                         </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            student.enrollment_status === '재학' ? 'default' :
-                            student.enrollment_status === '재등원' ? 'default' :
-                            student.enrollment_status === '휴학' ? 'secondary' : 'outline'
-                          }
-                          className={
-                            student.enrollment_status === '퇴원'
-                              ? 'text-muted-foreground border-muted-foreground/30'
-                              : student.enrollment_status === '휴학'
-                              ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
-                              : student.enrollment_status === '재등원'
-                              ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
-                              : ''
-                          }
-                        >
-                          {student.enrollment_status || '재학'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {student.school_level && student.grade_year
-                          ? `${student.school_level}${student.grade_year}`
-                          : student.grade || '-'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {student.school || '-'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {student.student_phone || student.phone || '-'}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const t = tuitionSummary[student.id];
-                          if (!t || t.courses === 0) return <span className="text-xs text-muted-foreground">-</span>;
-                          return (
-                            <div className="text-xs">
-                              <span className="font-medium">{t.monthlyFee.toLocaleString()}원</span>
-                              <span className="text-muted-foreground">/{t.courses}과목</span>
-                              {t.unpaid > 0 && <Badge variant="destructive" className="ml-1 text-[9px] px-1 py-0">{t.unpaid}미납</Badge>}
-                            </div>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDetailStudent(student)}
-                            title="상세/편집"
-                          >
-                            <User className="w-4 h-4" />
-                          </Button>
-                          {isAdmin(role) && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(student)}
-                                title="Edit"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(student.id)}
-                                className="text-destructive hover:text-destructive"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </>
+                        <TableCell>
+                          {slotCount > 0 ? (
+                            <span className="text-xs font-medium text-foreground">주 {slotCount}회</span>
+                          ) : (
+                            <span className="text-xs text-destructive">미배정</span>
                           )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {student.student_phone || student.phone || '-'}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {issues.length > 0 && (
+                              <button
+                                type="button"
+                                title={issues.map(i => i.label).join(' · ')}
+                                onClick={() => openIssueDetail(student, issues[0].key)}
+                                className="relative flex items-center gap-1 px-2 h-7 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors"
+                              >
+                                <span className="relative flex h-2 w-2">
+                                  <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-60 animate-ping" />
+                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                                </span>
+                                <span className="text-[11px] font-semibold">{issues.length}</span>
+                              </button>
+                            )}
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                              {isAdmin(role) && (
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(student)} title="편집">
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(student.id)} title="삭제">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
