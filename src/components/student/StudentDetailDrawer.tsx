@@ -105,8 +105,8 @@ export function StudentDetailDrawer({
 
   const statusBadgeClass =
     student.enrollment_status === '퇴원' ? 'text-muted-foreground border-muted-foreground/30'
-      : student.enrollment_status === '휴학' ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
-      : student.enrollment_status === '재등원' ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
+      : student.enrollment_status === '휴학' ? 'bg-warn/15 text-warn border-warn/30'
+      : student.enrollment_status === '재등원' ? 'bg-info/15 text-info border-info/30'
       : '';
 
   return (
