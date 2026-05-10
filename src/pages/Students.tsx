@@ -447,6 +447,14 @@ export default function Students() {
     if (!matchesSearch) return false;
     if (schoolLevelFilter !== 'all' && student.school_level !== schoolLevelFilter) return false;
     if (gradeYearFilter !== 'all' && student.grade_year?.toString() !== gradeYearFilter) return false;
+    if (quickFilter) {
+      const f = studentFlags[student.id];
+      if (!f) return false;
+      if (quickFilter === 'no-slot' && !f.noSlot) return false;
+      if (quickFilter === 'no-teacher' && !f.noTeacher) return false;
+      if (quickFilter === 'no-course' && !f.noCourse) return false;
+      if (quickFilter === 'new' && !f.isNew) return false;
+    }
     return true;
   }).sort((a, b) => {
     if (sortByDueDay) {
