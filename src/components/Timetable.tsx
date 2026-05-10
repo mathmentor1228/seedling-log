@@ -1115,14 +1115,16 @@ export function Timetable() {
         </div>
 
         {viewMode === 'bold' ? (
-          <BoldMatrixView
-            scheduleRows={allRows}
-            classrooms={classrooms}
-            selectedDay={matrixDay}
-            onDayChange={setMatrixDay}
-            mode="congestion"
-            onDataChange={fetchScheduleData}
-          />
+          <div className="w-full max-w-none -mx-5 lg:-mx-8">
+            <BoldMatrixView
+              scheduleRows={allRows}
+              classrooms={classrooms}
+              selectedDay={matrixDay}
+              onDayChange={setMatrixDay}
+              mode="congestion"
+              onDataChange={fetchScheduleData}
+            />
+          </div>
         ) : viewMode === 'timeline' || viewMode === 'congestion' ? (
           <TimetableMatrixView
             scheduleRows={allRows}

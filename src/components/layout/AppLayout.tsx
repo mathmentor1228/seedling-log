@@ -275,7 +275,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Show shared components (TeamNotesBoard, AcademyCalendar) on dashboard routes
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/teacher';
-  const isWideWorkspace = location.pathname === '/exam-archive';
+  const isWideWorkspace = location.pathname === '/exam-archive' || location.pathname === '/timetable';
 
   const renderNavItem = (item: NavItem, indent = false) => {
     const isActive = location.pathname === item.href;
