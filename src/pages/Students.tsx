@@ -123,21 +123,35 @@ export default function Students() {
   }, [students]);
 
   async function fetchStatsAndFlags() {
-    const { data: activeStudents } = await supabase
+    const { data: allStudents } = await supabase
       .from('students')
-      .select('id, created_at, enrollment_status')
-      .in('enrollment_status', ['재학', '재등원']);
-    if (!activeStudents) return;
+      .select('id, name, created_at, enrollment_status, school');
+    if (!allStudents) return;
+
+    // Status counts (전체 = 재학+재등원, 또는 모두?)
+    const counts: Record<string, number> = { all: allStudents.length, 재학: 0, 재등원: 0, 휴학: 0, 퇴원: 0 };
+    const schools = new Set<string>();
+    for (const s of allStudents as any[]) {
+      counts[s.enrollment_status] = (counts[s.enrollment_status] || 0) + 1;
+      if (s.school) schools.add(s.school);
+    }
+    setStatusCounts(counts);
+    setSchoolOptions([...schools].sort((a, b) => a.localeCompare(b, 'ko')));
+
+    const activeStudents = (allStudents as any[]).filter(
+      (s) => s.enrollment_status === '재학' || s.enrollment_status === '재등원'
+    );
     const ids = activeStudents.map((s) => s.id);
     if (ids.length === 0) {
       setStudentFlags({});
       setStats({ noSlot: 0, noTeacher: 0, noCourse: 0, newWeek: 0 });
       return;
     }
-    const [coursesRes, teachersRes, slotsRes] = await Promise.all([
+    const [coursesRes, teachersRes, slotsRes, visitsRes] = await Promise.all([
       supabase.from('student_courses').select('student_id, is_active, course_policies(subject)').in('student_id', ids),
       supabase.from('student_subject_teachers').select('student_id, subject').in('student_id', ids),
       supabase.from('class_students').select('student_id').in('student_id', ids),
+      supabase.from('parent_portal_visits').select('student_id').in('student_id', ids),
     ]);
     const courseSubjects: Record<string, Set<string>> = {};
     for (const c of (coursesRes.data || []) as any[]) {
@@ -152,7 +166,10 @@ export default function Students() {
     }
     const slotCounts: Record<string, number> = {};
     for (const r of (slotsRes.data || []) as any[]) slotCounts[r.student_id] = (slotCounts[r.student_id] || 0) + 1;
-    const flags: Record<string, { noSlot: boolean; noTeacher: boolean; noCourse: boolean; isNew: boolean }> = {};
+    const visited = new Set<string>();
+    for (const v of (visitsRes.data || []) as any[]) visited.add(v.student_id);
+
+    const flags: Record<string, any> = {};
     let noSlot = 0, noTeacher = 0, noCourse = 0, newWeek = 0;
     const weekAgo = Date.now() - 7 * 86400000;
     for (const s of activeStudents) {
@@ -164,7 +181,15 @@ export default function Students() {
       const fNoSlot = hasCourse && slots === 0;
       const fNoCourse = !hasCourse;
       const fIsNew = new Date(s.created_at).getTime() >= weekAgo;
-      flags[s.id] = { noSlot: fNoSlot, noTeacher: missingTeacher, noCourse: fNoCourse, isNew: fIsNew };
+      flags[s.id] = {
+        noSlot: fNoSlot,
+        noTeacher: missingTeacher,
+        noCourse: fNoCourse,
+        isNew: fIsNew,
+        unvisited: !visited.has(s.id),
+        subjects: [...subs],
+        slotCount: slots,
+      };
       if (fNoSlot) noSlot++;
       if (missingTeacher) noTeacher++;
       if (fNoCourse) noCourse++;
@@ -177,6 +202,20 @@ export default function Students() {
   function applyQuickFilter(qf: 'no-slot' | 'no-teacher' | 'no-course' | 'new') {
     setQuickFilter((prev) => (prev === qf ? null : qf));
     setStatusFilter('재학');
+  }
+
+  function openIssueDetail(student: Student, issue: 'no-slot' | 'no-teacher' | 'no-course' | 'unvisited') {
+    const tabMap: Record<string, string> = {
+      'no-slot': 'slots',
+      'no-teacher': 'subject-teachers',
+      'no-course': 'tuition',
+      'unvisited': 'info',
+    };
+    const tab = tabMap[issue];
+    setDetailDefaultTab(tab);
+    setDetailStudent(student);
+    setFlashTab(tab);
+    setTimeout(() => setFlashTab(null), 1600);
   }
 
   async function fetchStudents() {
