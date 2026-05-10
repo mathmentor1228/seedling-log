@@ -477,12 +477,15 @@ export default function Students() {
     <div className="space-y-6">
       {/* New Student Onboarding Checklist */}
       <NewStudentOnboarding />
-      {/* Unvisited Parents List */}
-      <UnvisitedParentsList />
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="space-y-1">
+          <nav className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span>관리</span>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-foreground">학생 관리</span>
+          </nav>
           <h1 className="text-2xl font-bold text-foreground">학생 관리</h1>
-          <p className="text-muted-foreground mt-1">학생 정보를 등록하고 관리합니다</p>
+          <p className="text-sm text-muted-foreground">학생 정보 등록·수강·슬롯·납부를 한 곳에서 관리합니다</p>
         </div>
 
         {isAdmin(role) && (
