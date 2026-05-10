@@ -14,7 +14,7 @@ import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentPinManager from '@/components/StudentPinManager';
 import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTuitionTab';
-import { isAdmin, isTeacher } from '@/lib/auth';
+import { isAdmin, isTeacher, type AppRole } from '@/lib/auth';
 
 interface StudentLite {
   id: string;
