@@ -916,7 +916,7 @@ export default function Students() {
                       <TableRow
                         key={student.id}
                         className="group cursor-pointer hover:bg-muted/40"
-                        onClick={() => { setDetailDefaultTab('info'); setDetailStudent(student); }}
+                        onClick={() => { setDetailDefaultTab('overview'); setDetailStudent(student); }}
                       >
                         {isAdmin(role) && (
                           <TableCell onClick={e => e.stopPropagation()}>
