@@ -1136,7 +1136,7 @@ export default function Students() {
               )}
               
               {(isAdmin(role) || isTeacher(role)) && (
-                <TabsContent value="slots" className="mt-4">
+                <TabsContent value="slots" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'slots' && "ring-2 ring-primary bg-primary/5")}>
                   <StudentSlotAssignment
                     studentId={detailStudent.id}
                     studentName={detailStudent.name}
