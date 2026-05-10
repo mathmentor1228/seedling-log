@@ -1070,7 +1070,7 @@ export default function Students() {
                 )}
               </TabsList>
               
-              <TabsContent value="info" className="space-y-4 mt-4">
+              <TabsContent value="info" className={cn("space-y-4 mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'info' && "ring-2 ring-primary bg-primary/5")}>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">이름</Label>
