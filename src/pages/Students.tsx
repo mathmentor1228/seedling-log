@@ -747,10 +747,10 @@ export default function Students() {
       {/* Action stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {([
-          { key: 'no-slot', label: '시간표 미배정', value: stats.noSlot, icon: CalendarX, accent: 'bg-destructive/15 text-destructive', ring: 'ring-destructive/40 border-destructive/60' },
-          { key: 'no-teacher', label: '담당 선생님 미지정', value: stats.noTeacher, icon: UserX, accent: 'bg-amber-500/15 text-amber-500', ring: 'ring-amber-500/40 border-amber-500/60' },
-          { key: 'no-course', label: '미수강', value: stats.noCourse, icon: BookX, accent: 'bg-purple-500/15 text-purple-500', ring: 'ring-purple-500/40 border-purple-500/60' },
-          { key: 'new', label: '이번 주 신규 등록', value: stats.newWeek, icon: Sparkles, accent: 'bg-blue-500/15 text-blue-500', ring: 'ring-blue-500/40 border-blue-500/60' },
+          { key: 'no-slot', label: '시간표 미배정', value: stats.noSlot, icon: CalendarX, accent: 'bg-danger/15 text-danger', ring: 'ring-danger/40 border-danger/60' },
+          { key: 'no-teacher', label: '담당 선생님 미지정', value: stats.noTeacher, icon: UserX, accent: 'bg-warn/15 text-warn', ring: 'ring-warn/40 border-warn/60' },
+          { key: 'no-course', label: '미수강', value: stats.noCourse, icon: BookX, accent: 'bg-violet/15 text-violet', ring: 'ring-violet/40 border-violet/60' },
+          { key: 'new', label: '이번 주 신규 등록', value: stats.newWeek, icon: Sparkles, accent: 'bg-info/15 text-info', ring: 'ring-info/40 border-info/60' },
         ] as const).map((c) => {
           const Icon = c.icon;
           const active = quickFilter === c.key;
