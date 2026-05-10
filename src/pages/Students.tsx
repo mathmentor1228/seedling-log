@@ -189,6 +189,7 @@ export default function Students() {
 
       if (error) throw error;
       setStudents(data || []);
+      fetchStatsAndFlags();
     } catch (error) {
       console.error('Error fetching students:', error);
       toast({
