@@ -83,7 +83,15 @@ export default function Students() {
   const [tuitionSummary, setTuitionSummary] = useState<Record<string, { courses: number; monthlyFee: number; unpaid: number }>>({});
   const [quickFilter, setQuickFilter] = useState<null | 'no-slot' | 'no-teacher' | 'no-course' | 'new'>(null);
   const [stats, setStats] = useState({ noSlot: 0, noTeacher: 0, noCourse: 0, newWeek: 0 });
-  const [studentFlags, setStudentFlags] = useState<Record<string, { noSlot: boolean; noTeacher: boolean; noCourse: boolean; isNew: boolean }>>({});
+  const [studentFlags, setStudentFlags] = useState<Record<string, {
+    noSlot: boolean; noTeacher: boolean; noCourse: boolean; isNew: boolean; unvisited: boolean;
+    subjects: string[]; slotCount: number;
+  }>>({});
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [schoolFilter, setSchoolFilter] = useState<string>('all');
+  const [schoolOptions, setSchoolOptions] = useState<string[]>([]);
+  const [detailDefaultTab, setDetailDefaultTab] = useState<string>('info');
+  const [flashTab, setFlashTab] = useState<string | null>(null);
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
     name: '',
@@ -115,21 +123,35 @@ export default function Students() {
   }, [students]);
 
   async function fetchStatsAndFlags() {
-    const { data: activeStudents } = await supabase
+    const { data: allStudents } = await supabase
       .from('students')
-      .select('id, created_at, enrollment_status')
-      .in('enrollment_status', ['재학', '재등원']);
-    if (!activeStudents) return;
+      .select('id, name, created_at, enrollment_status, school');
+    if (!allStudents) return;
+
+    // Status counts (전체 = 재학+재등원, 또는 모두?)
+    const counts: Record<string, number> = { all: allStudents.length, 재학: 0, 재등원: 0, 휴학: 0, 퇴원: 0 };
+    const schools = new Set<string>();
+    for (const s of allStudents as any[]) {
+      counts[s.enrollment_status] = (counts[s.enrollment_status] || 0) + 1;
+      if (s.school) schools.add(s.school);
+    }
+    setStatusCounts(counts);
+    setSchoolOptions([...schools].sort((a, b) => a.localeCompare(b, 'ko')));
+
+    const activeStudents = (allStudents as any[]).filter(
+      (s) => s.enrollment_status === '재학' || s.enrollment_status === '재등원'
+    );
     const ids = activeStudents.map((s) => s.id);
     if (ids.length === 0) {
       setStudentFlags({});
       setStats({ noSlot: 0, noTeacher: 0, noCourse: 0, newWeek: 0 });
       return;
     }
-    const [coursesRes, teachersRes, slotsRes] = await Promise.all([
+    const [coursesRes, teachersRes, slotsRes, visitsRes] = await Promise.all([
       supabase.from('student_courses').select('student_id, is_active, course_policies(subject)').in('student_id', ids),
       supabase.from('student_subject_teachers').select('student_id, subject').in('student_id', ids),
       supabase.from('class_students').select('student_id').in('student_id', ids),
+      supabase.from('parent_portal_visits').select('student_id').in('student_id', ids),
     ]);
     const courseSubjects: Record<string, Set<string>> = {};
     for (const c of (coursesRes.data || []) as any[]) {
@@ -144,7 +166,10 @@ export default function Students() {
     }
     const slotCounts: Record<string, number> = {};
     for (const r of (slotsRes.data || []) as any[]) slotCounts[r.student_id] = (slotCounts[r.student_id] || 0) + 1;
-    const flags: Record<string, { noSlot: boolean; noTeacher: boolean; noCourse: boolean; isNew: boolean }> = {};
+    const visited = new Set<string>();
+    for (const v of (visitsRes.data || []) as any[]) visited.add(v.student_id);
+
+    const flags: Record<string, any> = {};
     let noSlot = 0, noTeacher = 0, noCourse = 0, newWeek = 0;
     const weekAgo = Date.now() - 7 * 86400000;
     for (const s of activeStudents) {
@@ -156,7 +181,15 @@ export default function Students() {
       const fNoSlot = hasCourse && slots === 0;
       const fNoCourse = !hasCourse;
       const fIsNew = new Date(s.created_at).getTime() >= weekAgo;
-      flags[s.id] = { noSlot: fNoSlot, noTeacher: missingTeacher, noCourse: fNoCourse, isNew: fIsNew };
+      flags[s.id] = {
+        noSlot: fNoSlot,
+        noTeacher: missingTeacher,
+        noCourse: fNoCourse,
+        isNew: fIsNew,
+        unvisited: !visited.has(s.id),
+        subjects: [...subs],
+        slotCount: slots,
+      };
       if (fNoSlot) noSlot++;
       if (missingTeacher) noTeacher++;
       if (fNoCourse) noCourse++;
@@ -169,6 +202,20 @@ export default function Students() {
   function applyQuickFilter(qf: 'no-slot' | 'no-teacher' | 'no-course' | 'new') {
     setQuickFilter((prev) => (prev === qf ? null : qf));
     setStatusFilter('재학');
+  }
+
+  function openIssueDetail(student: Student, issue: 'no-slot' | 'no-teacher' | 'no-course' | 'unvisited') {
+    const tabMap: Record<string, string> = {
+      'no-slot': 'slots',
+      'no-teacher': 'subject-teachers',
+      'no-course': 'tuition',
+      'unvisited': 'info',
+    };
+    const tab = tabMap[issue];
+    setDetailDefaultTab(tab);
+    setDetailStudent(student);
+    setFlashTab(tab);
+    setTimeout(() => setFlashTab(null), 1600);
   }
 
   async function fetchStudents() {
@@ -448,6 +495,7 @@ export default function Students() {
     if (!matchesSearch) return false;
     if (schoolLevelFilter !== 'all' && student.school_level !== schoolLevelFilter) return false;
     if (gradeYearFilter !== 'all' && student.grade_year?.toString() !== gradeYearFilter) return false;
+    if (schoolFilter !== 'all' && student.school !== schoolFilter) return false;
     if (quickFilter) {
       const f = studentFlags[student.id];
       if (!f) return false;
@@ -722,61 +770,88 @@ export default function Students() {
 
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            {/* Status segmented control */}
+            <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5 self-start">
+              {([
+                { v: 'all', label: '전체' },
+                { v: '재학', label: '재학' },
+                { v: '재등원', label: '재등원' },
+                { v: '휴학', label: '휴학' },
+                { v: '퇴원', label: '퇴원' },
+              ] as const).map((s) => {
+                const active = statusFilter === s.v;
+                const count = statusCounts[s.v] ?? 0;
+                return (
+                  <button
+                    key={s.v}
+                    onClick={() => setStatusFilter(s.v)}
+                    className={cn(
+                      'px-3 h-7 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5',
+                      active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {s.label}
+                    <span className={cn('text-[10px] px-1.5 rounded-full', active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground/70')}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search */}
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="이름, 전화번호, 학교 검색..."
+                placeholder="이름·연락처·학교 검색"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-9"
               />
             </div>
-            {/* Filters row */}
+
+            {/* Right side: filters */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Status filter chips */}
-              {['재학', '재등원', '휴학', '퇴원', 'all'].map((s) => (
-                <Button
-                  key={s}
-                  variant={statusFilter === s ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setStatusFilter(s)}
-                >
-                  {s === 'all' ? '전체' : s}
-                </Button>
-              ))}
-              <span className="w-px h-5 bg-border mx-1" />
-              {/* School level filter */}
               <Select value={schoolLevelFilter} onValueChange={setSchoolLevelFilter}>
-                <SelectTrigger className="h-7 w-[90px] text-xs">
+                <SelectTrigger className="h-9 w-[100px] text-xs">
                   <SelectValue placeholder="학교급" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="all">전체 학교급</SelectItem>
                   <SelectItem value="초">초등</SelectItem>
                   <SelectItem value="중">중등</SelectItem>
                   <SelectItem value="고">고등</SelectItem>
                 </SelectContent>
               </Select>
-              {/* Grade year filter */}
               <Select value={gradeYearFilter} onValueChange={setGradeYearFilter}>
-                <SelectTrigger className="h-7 w-[90px] text-xs">
+                <SelectTrigger className="h-9 w-[90px] text-xs">
                   <SelectValue placeholder="학년" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="all">전체 학년</SelectItem>
                   {(schoolLevelFilter === '초' ? [1,2,3,4,5,6] : [1,2,3]).map((y) => (
                     <SelectItem key={y} value={y.toString()}>{y}학년</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+                <SelectTrigger className="h-9 w-[140px] text-xs">
+                  <SelectValue placeholder="학교" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 학교</SelectItem>
+                  {schoolOptions.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {isAdmin(role) && selectedIds.size > 0 && (
-                <Button size="sm" className="h-7 text-xs" onClick={() => setBulkEditOpen(true)}>
+                <Button size="sm" className="h-9 text-xs" onClick={() => setBulkEditOpen(true)}>
                   일괄 편집 ({selectedIds.size}명)
                 </Button>
               )}
-              <span className="ml-auto text-xs text-muted-foreground">
+              <span className="text-xs font-medium text-muted-foreground px-2">
                 {filteredStudents.length}명
               </span>
             </div>
@@ -793,144 +868,157 @@ export default function Students() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                   <TableRow>
-                     {isAdmin(role) && (
-                       <TableHead className="w-10">
-                         <Checkbox
-                           checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.has(s.id))}
-                           onCheckedChange={(checked) => {
-                             if (checked) {
-                               setSelectedIds(new Set(filteredStudents.map(s => s.id)));
-                             } else {
-                               setSelectedIds(new Set());
-                             }
-                           }}
-                         />
-                       </TableHead>
-                     )}
-                     <TableHead>이름</TableHead>
-                     <TableHead
-                       className="cursor-pointer select-none"
-                       onClick={() => setSortByDueDay(!sortByDueDay)}
-                     >
-                       납부일 {sortByDueDay ? '▲' : ''}
-                     </TableHead>
-                     <TableHead>상태</TableHead>
-                     <TableHead>학년</TableHead>
-                     <TableHead>학교</TableHead>
-                     <TableHead>연락처</TableHead>
-                     <TableHead>수강료</TableHead>
-                     <TableHead className="w-[100px]">관리</TableHead>
-                   </TableRow>
-                 </TableHeader>
-                 <TableBody>
-                   {filteredStudents.map((student) => (
-                     <TableRow 
-                       key={student.id}
-                       className="cursor-pointer hover:bg-muted/50"
-                       onClick={() => setDetailStudent(student)}
-                     >
-                       {isAdmin(role) && (
-                         <TableCell onClick={e => e.stopPropagation()}>
-                           <Checkbox
-                             checked={selectedIds.has(student.id)}
-                             onCheckedChange={(checked) => {
-                               setSelectedIds(prev => {
-                                 const next = new Set(prev);
-                                 if (checked) next.add(student.id); else next.delete(student.id);
-                                 return next;
-                               });
-                             }}
-                           />
-                         </TableCell>
-                       )}
-                        <TableCell className="font-medium">{student.name}</TableCell>
+                  <TableRow>
+                    {isAdmin(role) && (
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.has(s.id))}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedIds(new Set(filteredStudents.map(s => s.id)));
+                            } else {
+                              setSelectedIds(new Set());
+                            }
+                          }}
+                        />
+                      </TableHead>
+                    )}
+                    <TableHead>학생</TableHead>
+                    <TableHead>상태</TableHead>
+                    <TableHead>학교 / 학년</TableHead>
+                    <TableHead>수강 과목</TableHead>
+                    <TableHead>배정 슬롯</TableHead>
+                    <TableHead>연락처</TableHead>
+                    <TableHead className="w-[140px] text-right">이슈 / 관리</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredStudents.map((student) => {
+                    const flag = studentFlags[student.id];
+                    const issues: { key: 'no-slot' | 'no-teacher' | 'no-course' | 'unvisited'; label: string }[] = [];
+                    if (flag?.noSlot) issues.push({ key: 'no-slot', label: '시간표 미배정' });
+                    if (flag?.noTeacher) issues.push({ key: 'no-teacher', label: '담당 미지정' });
+                    if (flag?.noCourse) issues.push({ key: 'no-course', label: '미수강' });
+                    if (flag?.unvisited) issues.push({ key: 'unvisited', label: '학부모 미열람' });
+                    const subjects = flag?.subjects || [];
+                    const slotCount = flag?.slotCount ?? 0;
+                    const subjectColor: Record<string, string> = {
+                      '수학': 'bg-blue-500/15 text-blue-500 border-blue-500/30',
+                      '영어': 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
+                      '국어': 'bg-rose-500/15 text-rose-500 border-rose-500/30',
+                      '과학': 'bg-purple-500/15 text-purple-500 border-purple-500/30',
+                    };
+                    return (
+                      <TableRow
+                        key={student.id}
+                        className="group cursor-pointer hover:bg-muted/40"
+                        onClick={() => { setDetailDefaultTab('info'); setDetailStudent(student); }}
+                      >
+                        {isAdmin(role) && (
+                          <TableCell onClick={e => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.has(student.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedIds(prev => {
+                                  const next = new Set(prev);
+                                  if (checked) next.add(student.id); else next.delete(student.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>
-                          {student.payment_due_day ? (
-                            <Badge variant="outline" className="text-xs font-mono">{student.payment_due_day}일</Badge>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                              {student.name.slice(0, 1)}
+                            </div>
+                            <span className="font-medium">{student.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              student.enrollment_status === '재학' || student.enrollment_status === '재등원' ? 'default' :
+                              student.enrollment_status === '휴학' ? 'secondary' : 'outline'
+                            }
+                            className={
+                              student.enrollment_status === '퇴원'
+                                ? 'text-muted-foreground border-muted-foreground/30'
+                                : student.enrollment_status === '휴학'
+                                ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                                : student.enrollment_status === '재등원'
+                                ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
+                                : ''
+                            }
+                          >
+                            {student.enrollment_status || '재학'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="text-foreground">{student.school || '-'}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {student.school_level && student.grade_year
+                              ? `${student.school_level}${student.grade_year}`
+                              : student.grade || '-'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {subjects.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">-</span>
                           ) : (
-                            <span className="text-muted-foreground text-xs">-</span>
+                            <div className="flex flex-wrap gap-1">
+                              {subjects.map((s) => (
+                                <span key={s} className={cn('text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap', subjectColor[s] || 'bg-muted text-muted-foreground border-border')}>
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
                           )}
                         </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            student.enrollment_status === '재학' ? 'default' :
-                            student.enrollment_status === '재등원' ? 'default' :
-                            student.enrollment_status === '휴학' ? 'secondary' : 'outline'
-                          }
-                          className={
-                            student.enrollment_status === '퇴원'
-                              ? 'text-muted-foreground border-muted-foreground/30'
-                              : student.enrollment_status === '휴학'
-                              ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
-                              : student.enrollment_status === '재등원'
-                              ? 'bg-blue-500/15 text-blue-600 border-blue-500/30'
-                              : ''
-                          }
-                        >
-                          {student.enrollment_status || '재학'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {student.school_level && student.grade_year
-                          ? `${student.school_level}${student.grade_year}`
-                          : student.grade || '-'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {student.school || '-'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {student.student_phone || student.phone || '-'}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const t = tuitionSummary[student.id];
-                          if (!t || t.courses === 0) return <span className="text-xs text-muted-foreground">-</span>;
-                          return (
-                            <div className="text-xs">
-                              <span className="font-medium">{t.monthlyFee.toLocaleString()}원</span>
-                              <span className="text-muted-foreground">/{t.courses}과목</span>
-                              {t.unpaid > 0 && <Badge variant="destructive" className="ml-1 text-[9px] px-1 py-0">{t.unpaid}미납</Badge>}
-                            </div>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDetailStudent(student)}
-                            title="상세/편집"
-                          >
-                            <User className="w-4 h-4" />
-                          </Button>
-                          {isAdmin(role) && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(student)}
-                                title="Edit"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(student.id)}
-                                className="text-destructive hover:text-destructive"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </>
+                        <TableCell>
+                          {slotCount > 0 ? (
+                            <span className="text-xs font-medium text-foreground">주 {slotCount}회</span>
+                          ) : (
+                            <span className="text-xs text-destructive">미배정</span>
                           )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {student.student_phone || student.phone || '-'}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {issues.length > 0 && (
+                              <button
+                                type="button"
+                                title={issues.map(i => i.label).join(' · ')}
+                                onClick={() => openIssueDetail(student, issues[0].key)}
+                                className="relative flex items-center gap-1 px-2 h-7 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/15 transition-colors"
+                              >
+                                <span className="relative flex h-2 w-2">
+                                  <span className="absolute inline-flex h-full w-full rounded-full bg-destructive opacity-60 animate-ping" />
+                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-destructive" />
+                                </span>
+                                <span className="text-[11px] font-semibold">{issues.length}</span>
+                              </button>
+                            )}
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                              {isAdmin(role) && (
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(student)} title="편집">
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(student.id)} title="삭제">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -957,7 +1045,7 @@ export default function Students() {
           </DialogHeader>
           
           {detailStudent && (
-            <Tabs defaultValue="info" className="mt-4">
+            <Tabs key={detailStudent.id} defaultValue={detailDefaultTab} className="mt-4">
               <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-5' : 'grid-cols-2'}`}>
                 <TabsTrigger value="info">기본정보</TabsTrigger>
                 {isAdmin(role) && (
@@ -982,7 +1070,7 @@ export default function Students() {
                 )}
               </TabsList>
               
-              <TabsContent value="info" className="space-y-4 mt-4">
+              <TabsContent value="info" className={cn("space-y-4 mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'info' && "ring-2 ring-primary bg-primary/5")}>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">이름</Label>
@@ -1039,7 +1127,7 @@ export default function Students() {
               </TabsContent>
               
               {isAdmin(role) && (
-                <TabsContent value="tuition" className="mt-4">
+                <TabsContent value="tuition" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'tuition' && "ring-2 ring-primary bg-primary/5")}>
                   <StudentCoursesTuitionTab
                     studentId={detailStudent.id}
                     studentName={detailStudent.name}
@@ -1048,7 +1136,7 @@ export default function Students() {
               )}
               
               {(isAdmin(role) || isTeacher(role)) && (
-                <TabsContent value="slots" className="mt-4">
+                <TabsContent value="slots" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'slots' && "ring-2 ring-primary bg-primary/5")}>
                   <StudentSlotAssignment
                     studentId={detailStudent.id}
                     studentName={detailStudent.name}
@@ -1057,7 +1145,7 @@ export default function Students() {
                 </TabsContent>
               )}
               {isAdmin(role) && (
-                <TabsContent value="subject-teachers" className="mt-4">
+                <TabsContent value="subject-teachers" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'subject-teachers' && "ring-2 ring-primary bg-primary/5")}>
                   <StudentSubjectTeacherMapping
                     studentId={detailStudent.id}
                     studentName={detailStudent.name}
