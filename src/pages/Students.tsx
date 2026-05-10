@@ -81,6 +81,9 @@ export default function Students() {
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [sortByDueDay, setSortByDueDay] = useState(true);
   const [tuitionSummary, setTuitionSummary] = useState<Record<string, { courses: number; monthlyFee: number; unpaid: number }>>({});
+  const [quickFilter, setQuickFilter] = useState<null | 'no-slot' | 'no-teacher' | 'no-course' | 'new'>(null);
+  const [stats, setStats] = useState({ noSlot: 0, noTeacher: 0, noCourse: 0, newWeek: 0 });
+  const [studentFlags, setStudentFlags] = useState<Record<string, { noSlot: boolean; noTeacher: boolean; noCourse: boolean; isNew: boolean }>>({});
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
     name: '',
