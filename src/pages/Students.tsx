@@ -1145,7 +1145,7 @@ export default function Students() {
                 </TabsContent>
               )}
               {isAdmin(role) && (
-                <TabsContent value="subject-teachers" className="mt-4">
+                <TabsContent value="subject-teachers" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'subject-teachers' && "ring-2 ring-primary bg-primary/5")}>
                   <StudentSubjectTeacherMapping
                     studentId={detailStudent.id}
                     studentName={detailStudent.name}
