@@ -415,209 +415,24 @@ export function BoldMatrixView({
         </div>
       </div>
 
-      {timeSlots.length === 0 ? (
+      {dayRows.length === 0 ? (
         <div className="rounded-xl border border-border/40 bg-muted/10 py-16 text-center text-sm text-muted-foreground">
           이 요일에 등록된 수업이 없습니다
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border/40 bg-card/50">
-          <table className="w-full min-w-[960px] border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-20 w-[130px] border-b border-r border-border/40 bg-muted/40 px-3.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Clock className="mr-1 inline h-3.5 w-3.5" /> 교시
-                </th>
-                {columns.map((col) => {
-                  const total = columnTotals.get(col.id);
-                  const peak = total?.peak || 0;
-                  const max = col.capacity || 0;
-                  const ratio = max > 0 ? Math.min(peak / max, 1.4) : 0;
-                  return (
-                    <th
-                      key={col.id}
-                      className="min-w-[210px] border-b border-r border-border/40 bg-muted/20 px-3.5 py-3 text-left align-top"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <div className="text-sm font-semibold text-foreground">{col.label}</div>
-                        <div className="font-mono text-[11px] text-muted-foreground">
-                          {peak}/{max || '–'}
-                        </div>
-                      </div>
-                      {col.subLabel && (
-                        <div className="mt-0.5 truncate text-[11px] font-normal text-muted-foreground">
-                          {col.subLabel}
-                        </div>
-                      )}
-                      {/* mini occupancy bar */}
-                      <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted/60">
-                        <div
-                          className={cn(
-                            'h-full rounded-full transition-all',
-                            ratio > 1
-                              ? 'bg-rose-500'
-                              : ratio > 0.8
-                                ? 'bg-amber-400'
-                                : ratio > 0.5
-                                  ? 'bg-emerald-400'
-                                  : 'bg-sky-400'
-                          )}
-                          style={{ width: `${Math.min(ratio, 1) * 100}%` }}
-                        />
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {timeSlots.map((slot, idx) => {
-                const [s, e] = slot.split('-');
-                return (
-                  <tr key={slot} className={idx % 2 === 0 ? '' : 'bg-muted/[0.03]'}>
-                    <td className="sticky left-0 z-10 whitespace-nowrap border-b border-r border-border/40 bg-card px-3.5 py-3 align-top">
-                      <div className="font-mono text-[13px] font-bold tracking-tight text-foreground">
-                        {s}
-                      </div>
-                      <div className="font-mono text-[11px] text-muted-foreground">→ {e}</div>
-                      <div className="mt-1.5 inline-block rounded-full bg-muted/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {toMin(e) - toMin(s)}분
-                      </div>
-                    </td>
-                    {columns.map((col) => {
-                      const cellRows = getCellRows(col.id, slot);
-                      const occ = getOccupancy(col.id, slot);
-                      const isCongestion = mode === 'congestion';
-                      const heat = isCongestion
-                        ? occ.ratio > 1
-                          ? 'bg-rose-500/10'
-                          : occ.ratio > 0.8
-                            ? 'bg-amber-400/8'
-                            : occ.ratio > 0
-                              ? 'bg-emerald-400/[0.05]'
-                              : ''
-                        : '';
-                      return (
-                        <td
-                          key={col.id}
-                          onDragOver={handleDragOver}
-                          onDrop={(ev) => handleDrop(ev, col.id, slot)}
-                          className={cn(
-                            'min-h-[112px] border-b border-r border-border/40 p-2 align-top transition-colors',
-                            heat,
-                            dragItem && 'hover:bg-primary/5 hover:ring-1 hover:ring-primary/30'
-                          )}
-                        >
-                          {cellRows.length === 0 ? (
-                            <div
-                              className={cn(
-                                'flex min-h-[96px] items-center justify-center rounded-md text-[11px] text-muted-foreground/40',
-                                dragItem &&
-                                  'border border-dashed border-primary/30 bg-primary/5 text-primary/60'
-                              )}
-                            >
-                              {dragItem ? '여기로 이동' : ''}
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {cellRows.map((row) => {
-                                const accent = getAccent(row.subject);
-                                const room = row.classroomId
-                                  ? classrooms.find((c) => c.id === row.classroomId)
-                                  : null;
-                                const isOver = !!room && row.students.length > room.capacity;
-                                return (
-                                  <button
-                                    key={row.scheduleId}
-                                    draggable
-                                    onDragStart={(ev) => handleDragStart(ev, row)}
-                                    onClick={() => setDetailRow(row)}
-                                    className={cn(
-                                      'group relative flex w-full flex-col gap-2 overflow-hidden rounded-md border-l-[3px] bg-card/80 px-3 py-2.5 text-left transition-all',
-                                      'hover:-translate-y-px hover:shadow-md hover:ring-1 hover:ring-primary/30 active:translate-y-0',
-                                      accent.ring,
-                                      isOver && 'bg-rose-500/8 ring-1 ring-rose-400/30'
-                                    )}
-                                  >
-                                    {/* Head row */}
-                                    <div className="flex items-center gap-2 text-[11px]">
-                                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 opacity-0 group-hover:opacity-100" />
-                                      <span
-                                        className={cn(
-                                          'whitespace-nowrap rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider',
-                                          accent.chip
-                                        )}
-                                      >
-                                        {row.subject}
-                                      </span>
-                                      <span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
-                                        {row.startTime.slice(0, 5)}–{row.endTime.slice(0, 5)}
-                                      </span>
-                                      <span
-                                        className={cn(
-                                          'ml-auto whitespace-nowrap rounded px-2 py-0.5 font-mono text-[11px] font-bold',
-                                          isOver
-                                            ? 'bg-rose-500/15 text-rose-300'
-                                            : 'bg-muted/60 text-muted-foreground'
-                                        )}
-                                      >
-                                        {row.students.length}/{room?.capacity ?? '–'}
-                                        {isOver && (
-                                          <AlertTriangle className="ml-0.5 inline h-3 w-3" />
-                                        )}
-                                      </span>
-                                    </div>
-                                    {/* Teacher + students */}
-                                    <div className="flex flex-wrap gap-1.5">
-                                      <span
-                                        className={cn(
-                                          'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                                          accent.chip
-                                        )}
-                                      >
-                                        <span
-                                          className={cn(
-                                            'h-1.5 w-1.5 rounded-full',
-                                            accent.bar
-                                          )}
-                                        />
-                                        {row.teacherName}
-                                      </span>
-                                      {row.students.length === 0 ? (
-                                        <span className="text-[11px] italic text-muted-foreground/60">
-                                          학생 미배정
-                                        </span>
-                                      ) : (
-                                        <>
-                                          {row.students.slice(0, 6).map((st) => (
-                                            <span
-                                              key={st.id}
-                                              className="whitespace-nowrap rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-foreground/80 ring-1 ring-border/50"
-                                            >
-                                              {st.name}
-                                            </span>
-                                          ))}
-                                          {row.students.length > 6 && (
-                                            <span className="px-1 font-mono text-[11px] font-bold text-primary">
-                                              +{row.students.length - 6}
-                                            </span>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ContinuousTimeGrid
+          columns={columns}
+          dayRows={dayRows}
+          classrooms={classrooms}
+          columnTotals={columnTotals}
+          mode={mode}
+          dragItem={dragItem}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          hasClassroomAssignments={hasClassroomAssignments}
+          onSelect={setDetailRow}
+        />
       )}
 
       {/* Legend */}
