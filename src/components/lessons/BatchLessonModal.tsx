@@ -653,7 +653,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         payload.understanding_score = score;
 
         const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
-        payload.homework_status = hw;
+        payload.homework_status = mapResultToStatus(hw);
 
         const types = usePerStudentLessonTypes ? (perStudentLessonTypes[id] ?? batchLessonTypes) : batchLessonTypes;
         payload.lesson_types = types;
@@ -686,9 +686,48 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (error) throw error;
       }
 
+      // Draft save must publish homework assignments immediately so students can submit
+      // even before the lesson journal itself is formally submitted.
+      if (activeFields.has('homework_items')) {
+        const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
+
+        for (const record of selectedRecords) {
+          const sourceItems = usePerStudentHomeworkItems
+            ? (perStudentHomeworkItems[record.id] || [])
+            : homeworkItems;
+          const validItems = sourceItems.filter(hw => hw.content.trim());
+
+          const { error: deleteError } = await supabase
+            .from('homework_assignments')
+            .delete()
+            .eq('lesson_record_id', record.id);
+          if (deleteError) throw deleteError;
+
+          if (validItems.length === 0) continue;
+
+          const assignments = validItems.map(hw => ({
+            student_id: record.student_id,
+            subject: record.subject as SubjectType,
+            lesson_record_id: record.id,
+            assigned_date: searchDate,
+            content: hw.content.trim(),
+            homework_type: hw.homework_type,
+            check_status: 'unchecked' as const,
+            created_by: user!.id,
+          }));
+
+          const { error: insertError } = await supabase
+            .from('homework_assignments')
+            .insert(assignments);
+          if (insertError) throw insertError;
+        }
+      }
+
       toast({
         title: '전체 임시저장 완료',
-        description: `${ids.length}명의 일지가 임시저장되었습니다.`,
+        description: activeFields.has('homework_items')
+          ? `${ids.length}명의 일지와 숙제 배정이 임시저장되었습니다.`
+          : `${ids.length}명의 일지가 임시저장되었습니다.`,
       });
 
       // Refresh the list
