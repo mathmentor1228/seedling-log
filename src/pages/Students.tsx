@@ -1045,7 +1045,7 @@ export default function Students() {
           </DialogHeader>
           
           {detailStudent && (
-            <Tabs defaultValue="info" className="mt-4">
+            <Tabs key={detailStudent.id} defaultValue={detailDefaultTab} className="mt-4">
               <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-5' : 'grid-cols-2'}`}>
                 <TabsTrigger value="info">기본정보</TabsTrigger>
                 {isAdmin(role) && (
