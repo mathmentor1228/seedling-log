@@ -209,16 +209,16 @@ export default function Students() {
   }
 
   function openIssueDetail(student: Student, issue: 'no-slot' | 'no-teacher' | 'no-course' | 'unvisited') {
-    const tabMap: Record<string, string> = {
+    const sectionMap: Record<string, string> = {
       'no-slot': 'slots',
-      'no-teacher': 'subject-teachers',
-      'no-course': 'tuition',
+      'no-teacher': 'teachers',
+      'no-course': 'courses',
       'unvisited': 'info',
     };
-    const tab = tabMap[issue];
-    setDetailDefaultTab(tab);
+    const section = sectionMap[issue];
+    setDetailDefaultTab('overview');
     setDetailStudent(student);
-    setFlashTab(tab);
+    setFlashTab(section);
     setTimeout(() => setFlashTab(null), 1600);
   }
 
