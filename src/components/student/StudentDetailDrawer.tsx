@@ -45,7 +45,7 @@ interface Props {
   flag?: FlagShape;
   defaultTab: string;
   flashSection: string | null;
-  role: string | null | undefined;
+  role: AppRole | null | undefined;
   onClose: () => void;
   onNavigate: (s: StudentLite) => void;
   onEdit: () => void;
