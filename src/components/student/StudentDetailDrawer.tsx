@@ -297,7 +297,7 @@ const Section = forwardRef<
   <div
     ref={ref}
     className={cn(
-      'mt-4 rounded-xl border border-border bg-card p-4 transition-all',
+      'mt-4 rounded-xl border border-border bg-card p-4 shadow-card transition-all',
       flash && 'ring-2 ring-primary bg-primary/5'
     )}
   >
