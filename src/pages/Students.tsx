@@ -182,7 +182,10 @@ export default function Students() {
       const tsubs = teacherSubjects[s.id] || new Set<string>();
       const slots = slotCounts[s.id] || 0;
       const hasCourse = subs.size > 0;
-      const missingTeacher = ['수학', '영어'].some((sub) => subs.has(sub) && !tsubs.has(sub));
+      // Only "selectable" subjects (multi-candidate) get the missing-teacher warning.
+      // Single-candidate subjects (영어/국어/과학) auto-assign, so never warn.
+      const SELECTABLE_SUBJECTS = ['수학'];
+      const missingTeacher = SELECTABLE_SUBJECTS.some((sub) => subs.has(sub) && !tsubs.has(sub));
       const fNoSlot = hasCourse && slots === 0;
       const fNoCourse = !hasCourse;
       const fIsNew = new Date(s.created_at).getTime() >= weekAgo;
