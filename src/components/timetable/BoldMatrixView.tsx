@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -415,209 +415,24 @@ export function BoldMatrixView({
         </div>
       </div>
 
-      {timeSlots.length === 0 ? (
+      {dayRows.length === 0 ? (
         <div className="rounded-xl border border-border/40 bg-muted/10 py-16 text-center text-sm text-muted-foreground">
           이 요일에 등록된 수업이 없습니다
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border/40 bg-card/50">
-          <table className="w-full min-w-[960px] border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-20 w-[130px] border-b border-r border-border/40 bg-muted/40 px-3.5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Clock className="mr-1 inline h-3.5 w-3.5" /> 교시
-                </th>
-                {columns.map((col) => {
-                  const total = columnTotals.get(col.id);
-                  const peak = total?.peak || 0;
-                  const max = col.capacity || 0;
-                  const ratio = max > 0 ? Math.min(peak / max, 1.4) : 0;
-                  return (
-                    <th
-                      key={col.id}
-                      className="min-w-[210px] border-b border-r border-border/40 bg-muted/20 px-3.5 py-3 text-left align-top"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <div className="text-sm font-semibold text-foreground">{col.label}</div>
-                        <div className="font-mono text-[11px] text-muted-foreground">
-                          {peak}/{max || '–'}
-                        </div>
-                      </div>
-                      {col.subLabel && (
-                        <div className="mt-0.5 truncate text-[11px] font-normal text-muted-foreground">
-                          {col.subLabel}
-                        </div>
-                      )}
-                      {/* mini occupancy bar */}
-                      <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted/60">
-                        <div
-                          className={cn(
-                            'h-full rounded-full transition-all',
-                            ratio > 1
-                              ? 'bg-rose-500'
-                              : ratio > 0.8
-                                ? 'bg-amber-400'
-                                : ratio > 0.5
-                                  ? 'bg-emerald-400'
-                                  : 'bg-sky-400'
-                          )}
-                          style={{ width: `${Math.min(ratio, 1) * 100}%` }}
-                        />
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {timeSlots.map((slot, idx) => {
-                const [s, e] = slot.split('-');
-                return (
-                  <tr key={slot} className={idx % 2 === 0 ? '' : 'bg-muted/[0.03]'}>
-                    <td className="sticky left-0 z-10 whitespace-nowrap border-b border-r border-border/40 bg-card px-3.5 py-3 align-top">
-                      <div className="font-mono text-[13px] font-bold tracking-tight text-foreground">
-                        {s}
-                      </div>
-                      <div className="font-mono text-[11px] text-muted-foreground">→ {e}</div>
-                      <div className="mt-1.5 inline-block rounded-full bg-muted/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {toMin(e) - toMin(s)}분
-                      </div>
-                    </td>
-                    {columns.map((col) => {
-                      const cellRows = getCellRows(col.id, slot);
-                      const occ = getOccupancy(col.id, slot);
-                      const isCongestion = mode === 'congestion';
-                      const heat = isCongestion
-                        ? occ.ratio > 1
-                          ? 'bg-rose-500/10'
-                          : occ.ratio > 0.8
-                            ? 'bg-amber-400/8'
-                            : occ.ratio > 0
-                              ? 'bg-emerald-400/[0.05]'
-                              : ''
-                        : '';
-                      return (
-                        <td
-                          key={col.id}
-                          onDragOver={handleDragOver}
-                          onDrop={(ev) => handleDrop(ev, col.id, slot)}
-                          className={cn(
-                            'min-h-[112px] border-b border-r border-border/40 p-2 align-top transition-colors',
-                            heat,
-                            dragItem && 'hover:bg-primary/5 hover:ring-1 hover:ring-primary/30'
-                          )}
-                        >
-                          {cellRows.length === 0 ? (
-                            <div
-                              className={cn(
-                                'flex min-h-[96px] items-center justify-center rounded-md text-[11px] text-muted-foreground/40',
-                                dragItem &&
-                                  'border border-dashed border-primary/30 bg-primary/5 text-primary/60'
-                              )}
-                            >
-                              {dragItem ? '여기로 이동' : ''}
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {cellRows.map((row) => {
-                                const accent = getAccent(row.subject);
-                                const room = row.classroomId
-                                  ? classrooms.find((c) => c.id === row.classroomId)
-                                  : null;
-                                const isOver = !!room && row.students.length > room.capacity;
-                                return (
-                                  <button
-                                    key={row.scheduleId}
-                                    draggable
-                                    onDragStart={(ev) => handleDragStart(ev, row)}
-                                    onClick={() => setDetailRow(row)}
-                                    className={cn(
-                                      'group relative flex w-full flex-col gap-2 overflow-hidden rounded-md border-l-[3px] bg-card/80 px-3 py-2.5 text-left transition-all',
-                                      'hover:-translate-y-px hover:shadow-md hover:ring-1 hover:ring-primary/30 active:translate-y-0',
-                                      accent.ring,
-                                      isOver && 'bg-rose-500/8 ring-1 ring-rose-400/30'
-                                    )}
-                                  >
-                                    {/* Head row */}
-                                    <div className="flex items-center gap-2 text-[11px]">
-                                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 opacity-0 group-hover:opacity-100" />
-                                      <span
-                                        className={cn(
-                                          'whitespace-nowrap rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider',
-                                          accent.chip
-                                        )}
-                                      >
-                                        {row.subject}
-                                      </span>
-                                      <span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
-                                        {row.startTime.slice(0, 5)}–{row.endTime.slice(0, 5)}
-                                      </span>
-                                      <span
-                                        className={cn(
-                                          'ml-auto whitespace-nowrap rounded px-2 py-0.5 font-mono text-[11px] font-bold',
-                                          isOver
-                                            ? 'bg-rose-500/15 text-rose-300'
-                                            : 'bg-muted/60 text-muted-foreground'
-                                        )}
-                                      >
-                                        {row.students.length}/{room?.capacity ?? '–'}
-                                        {isOver && (
-                                          <AlertTriangle className="ml-0.5 inline h-3 w-3" />
-                                        )}
-                                      </span>
-                                    </div>
-                                    {/* Teacher + students */}
-                                    <div className="flex flex-wrap gap-1.5">
-                                      <span
-                                        className={cn(
-                                          'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                                          accent.chip
-                                        )}
-                                      >
-                                        <span
-                                          className={cn(
-                                            'h-1.5 w-1.5 rounded-full',
-                                            accent.bar
-                                          )}
-                                        />
-                                        {row.teacherName}
-                                      </span>
-                                      {row.students.length === 0 ? (
-                                        <span className="text-[11px] italic text-muted-foreground/60">
-                                          학생 미배정
-                                        </span>
-                                      ) : (
-                                        <>
-                                          {row.students.slice(0, 6).map((st) => (
-                                            <span
-                                              key={st.id}
-                                              className="whitespace-nowrap rounded-full bg-muted/60 px-2 py-0.5 text-[11px] text-foreground/80 ring-1 ring-border/50"
-                                            >
-                                              {st.name}
-                                            </span>
-                                          ))}
-                                          {row.students.length > 6 && (
-                                            <span className="px-1 font-mono text-[11px] font-bold text-primary">
-                                              +{row.students.length - 6}
-                                            </span>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ContinuousTimeGrid
+          columns={columns}
+          dayRows={dayRows}
+          classrooms={classrooms}
+          columnTotals={columnTotals}
+          mode={mode}
+          dragItem={dragItem}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          hasClassroomAssignments={hasClassroomAssignments}
+          onSelect={setDetailRow}
+        />
       )}
 
       {/* Legend */}
@@ -909,5 +724,324 @@ function Swatch({ color, label }: { color: string; label: string }) {
       <span className={cn('h-2 w-2 rounded-full', color)} />
       {label}
     </span>
+  );
+}
+
+// ───── Continuous time-axis grid (Google Calendar style) ──────────────────
+
+const HOUR_HEIGHT = 80; // px per hour
+const DEFAULT_START_HOUR = 14;
+const DEFAULT_END_HOUR = 23;
+
+interface GridProps {
+  columns: MatrixColumn[];
+  dayRows: ScheduleRow[];
+  classrooms: Classroom[];
+  columnTotals: Map<string, { peak: number; classes: number; max: number }>;
+  mode: 'timeline' | 'congestion';
+  dragItem: ScheduleRow | null;
+  hasClassroomAssignments: boolean;
+  onDragStart: (e: React.DragEvent, row: ScheduleRow) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, columnId: string, timeSlot: string) => void;
+  onSelect: (row: ScheduleRow) => void;
+}
+
+function ContinuousTimeGrid({
+  columns,
+  dayRows,
+  classrooms,
+  columnTotals,
+  mode,
+  dragItem,
+  hasClassroomAssignments,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onSelect,
+}: GridProps) {
+  // Compute hour range from data
+  const { startHour, endHour } = useMemo(() => {
+    if (dayRows.length === 0) return { startHour: DEFAULT_START_HOUR, endHour: DEFAULT_END_HOUR };
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    dayRows.forEach((r) => {
+      minStart = Math.min(minStart, toMin(r.startTime.slice(0, 5)));
+      maxEnd = Math.max(maxEnd, toMin(r.endTime.slice(0, 5)));
+    });
+    const sH = Math.min(DEFAULT_START_HOUR, Math.floor(minStart / 60));
+    const eH = Math.max(DEFAULT_END_HOUR, Math.ceil(maxEnd / 60));
+    return { startHour: sH, endHour: eH };
+  }, [dayRows]);
+
+  const totalHours = endHour - startHour;
+  const totalHeight = totalHours * HOUR_HEIGHT;
+  const hours = useMemo(
+    () => Array.from({ length: totalHours + 1 }, (_, i) => startHour + i),
+    [startHour, totalHours]
+  );
+  const halfHours = useMemo(
+    () => Array.from({ length: totalHours }, (_, i) => i),
+    [totalHours]
+  );
+
+  // Current time indicator (only if within range)
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const gridStartMin = startHour * 60;
+  const gridEndMin = endHour * 60;
+  const showNowLine = nowMin >= gridStartMin && nowMin <= gridEndMin;
+  const nowTop = ((nowMin - gridStartMin) / 60) * HOUR_HEIGHT;
+
+  // Build per-column classes with overlap layout
+  const columnBlocks = useMemo(() => {
+    const map = new Map<string, Array<ScheduleRow & { _lane: number; _lanes: number }>>();
+    columns.forEach((col) => {
+      const colRows = dayRows.filter((r) => {
+        if (col.id === '__unassigned__') return !r.classroomId;
+        return hasClassroomAssignments ? r.classroomId === col.id : r.teacherId === col.id;
+      });
+      // Sort by start
+      const sorted = [...colRows].sort(
+        (a, b) => toMin(a.startTime.slice(0, 5)) - toMin(b.startTime.slice(0, 5))
+      );
+      // Lane assignment via greedy
+      const laneEnd: number[] = [];
+      const assigned = sorted.map((r) => {
+        const s = toMin(r.startTime.slice(0, 5));
+        const e = toMin(r.endTime.slice(0, 5));
+        let lane = laneEnd.findIndex((end) => end <= s);
+        if (lane === -1) {
+          lane = laneEnd.length;
+          laneEnd.push(e);
+        } else {
+          laneEnd[lane] = e;
+        }
+        return { ...r, _lane: lane, _lanes: 0 };
+      });
+      // Compute lane count per overlap cluster
+      const lanes = laneEnd.length || 1;
+      assigned.forEach((a) => (a._lanes = lanes));
+      map.set(col.id, assigned);
+    });
+    return map;
+  }, [columns, dayRows, hasClassroomAssignments]);
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border/40 bg-card/50">
+      <div
+        className="grid min-w-[960px]"
+        style={{
+          gridTemplateColumns: `90px repeat(${columns.length}, minmax(180px, 1fr))`,
+        }}
+      >
+        {/* Header row: time corner + classroom headers */}
+        <div className="sticky top-0 left-0 z-30 border-b border-r border-border/40 bg-muted/40 px-3 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Clock className="mr-1 inline h-3.5 w-3.5" /> 시간
+        </div>
+        {columns.map((col) => {
+          const total = columnTotals.get(col.id);
+          const peak = total?.peak || 0;
+          const max = col.capacity || 0;
+          const ratio = max > 0 ? Math.min(peak / max, 1.4) : 0;
+          return (
+            <div
+              key={`h-${col.id}`}
+              className="border-b border-r border-border/40 bg-muted/20 px-3 py-3"
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-sm font-semibold text-foreground">{col.label}</div>
+                <div className="font-mono text-[11px] text-muted-foreground">
+                  {peak}/{max || '–'}
+                </div>
+              </div>
+              {col.subLabel && (
+                <div className="mt-0.5 truncate text-[11px] font-normal text-muted-foreground">
+                  {col.subLabel}
+                </div>
+              )}
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted/60">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all',
+                    ratio > 1
+                      ? 'bg-rose-500'
+                      : ratio > 0.8
+                        ? 'bg-amber-400'
+                        : ratio > 0.5
+                          ? 'bg-emerald-400'
+                          : 'bg-sky-400'
+                  )}
+                  style={{ width: `${Math.min(ratio, 1) * 100}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Time labels column */}
+        <div
+          className="sticky left-0 z-20 border-r border-border/40 bg-card"
+          style={{ height: totalHeight }}
+        >
+          <div className="relative h-full">
+            {hours.slice(0, -1).map((h, i) => (
+              <div
+                key={h}
+                className="absolute left-0 right-0 px-2 pt-1 text-right font-mono text-[11px] font-semibold text-muted-foreground"
+                style={{ top: i * HOUR_HEIGHT }}
+              >
+                {String(h).padStart(2, '0')}:00
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Classroom columns */}
+        {columns.map((col) => {
+          const blocks = columnBlocks.get(col.id) || [];
+          return (
+            <div
+              key={`c-${col.id}`}
+              className="relative border-r border-border/40"
+              style={{ height: totalHeight }}
+              onDragOver={onDragOver}
+              onDrop={(e) => {
+                // snap to nearest 30-min slot for the dropped class
+                if (!dragItem) return;
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                const minutesFromStart = Math.max(
+                  0,
+                  Math.round((y / HOUR_HEIGHT) * 60 / 30) * 30
+                );
+                const newStartMin = gridStartMin + minutesFromStart;
+                const dur =
+                  toMin(dragItem.endTime.slice(0, 5)) - toMin(dragItem.startTime.slice(0, 5));
+                const newEndMin = newStartMin + dur;
+                const fmt = (m: number) =>
+                  `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+                onDrop(e, col.id, `${fmt(newStartMin)}-${fmt(newEndMin)}`);
+              }}
+            >
+              {/* Hour grid lines */}
+              {hours.map((_, i) => (
+                <div
+                  key={`hl-${i}`}
+                  className="pointer-events-none absolute left-0 right-0 border-t border-border/40"
+                  style={{ top: i * HOUR_HEIGHT }}
+                />
+              ))}
+              {/* Half-hour dashed lines */}
+              {halfHours.map((i) => (
+                <div
+                  key={`hh-${i}`}
+                  className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-border/20"
+                  style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }}
+                />
+              ))}
+              {/* Now line */}
+              {showNowLine && (
+                <div
+                  className="pointer-events-none absolute left-0 right-0 z-10 border-t-2 border-rose-500"
+                  style={{ top: nowTop }}
+                >
+                  <span className="absolute -top-1.5 -left-1 h-2.5 w-2.5 rounded-full bg-rose-500" />
+                </div>
+              )}
+              {/* Class blocks */}
+              {blocks.map((row) => {
+                const accent = getAccent(row.subject);
+                const sMin = toMin(row.startTime.slice(0, 5));
+                const eMin = toMin(row.endTime.slice(0, 5));
+                const top = ((sMin - gridStartMin) / 60) * HOUR_HEIGHT;
+                const height = Math.max(28, ((eMin - sMin) / 60) * HOUR_HEIGHT - 2);
+                const widthPct = 100 / row._lanes;
+                const leftPct = widthPct * row._lane;
+                const room = row.classroomId
+                  ? classrooms.find((c) => c.id === row.classroomId)
+                  : null;
+                const isOver = !!room && row.students.length > room.capacity;
+                const dense = height < 60;
+                return (
+                  <button
+                    key={row.scheduleId}
+                    draggable
+                    onDragStart={(e) => onDragStart(e, row)}
+                    onClick={() => onSelect(row)}
+                    style={{
+                      top,
+                      height,
+                      left: `calc(${leftPct}% + 2px)`,
+                      width: `calc(${widthPct}% - 4px)`,
+                    }}
+                    className={cn(
+                      'group absolute z-[1] flex flex-col gap-1 overflow-hidden rounded-md border-l-[3px] bg-card/95 px-2 py-1.5 text-left shadow-sm transition-all',
+                      'hover:z-[2] hover:shadow-md hover:ring-1 hover:ring-primary/40',
+                      accent.ring,
+                      isOver && 'bg-rose-500/10 ring-1 ring-rose-400/40'
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span
+                        className={cn(
+                          'whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                          accent.chip
+                        )}
+                      >
+                        {row.subject}
+                      </span>
+                      <span className="whitespace-nowrap font-mono text-[10px] text-muted-foreground">
+                        {row.startTime.slice(0, 5)}–{row.endTime.slice(0, 5)}
+                      </span>
+                      <span
+                        className={cn(
+                          'ml-auto whitespace-nowrap rounded px-1.5 py-0.5 font-mono text-[10px] font-bold',
+                          isOver
+                            ? 'bg-rose-500/15 text-rose-300'
+                            : 'bg-muted/60 text-muted-foreground'
+                        )}
+                      >
+                        {row.students.length}/{room?.capacity ?? '–'}
+                      </span>
+                    </div>
+                    {!dense && (
+                      <div className="flex flex-wrap gap-1">
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+                            accent.chip
+                          )}
+                        >
+                          <span className={cn('h-1.5 w-1.5 rounded-full', accent.bar)} />
+                          {row.teacherName}
+                        </span>
+                        {row.students.slice(0, height > 100 ? 6 : 3).map((st) => (
+                          <span
+                            key={st.id}
+                            className="whitespace-nowrap rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] text-foreground/80 ring-1 ring-border/50"
+                          >
+                            {st.name}
+                          </span>
+                        ))}
+                        {row.students.length > (height > 100 ? 6 : 3) && (
+                          <span className="px-1 font-mono text-[10px] font-bold text-primary">
+                            +{row.students.length - (height > 100 ? 6 : 3)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
