@@ -1127,7 +1127,7 @@ export default function Students() {
               </TabsContent>
               
               {isAdmin(role) && (
-                <TabsContent value="tuition" className="mt-4">
+                <TabsContent value="tuition" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'tuition' && "ring-2 ring-primary bg-primary/5")}>
                   <StudentCoursesTuitionTab
                     studentId={detailStudent.id}
                     studentName={detailStudent.name}
