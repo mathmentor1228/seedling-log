@@ -770,61 +770,88 @@ export default function Students() {
 
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            {/* Status segmented control */}
+            <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5 self-start">
+              {([
+                { v: 'all', label: '전체' },
+                { v: '재학', label: '재학' },
+                { v: '재등원', label: '재등원' },
+                { v: '휴학', label: '휴학' },
+                { v: '퇴원', label: '퇴원' },
+              ] as const).map((s) => {
+                const active = statusFilter === s.v;
+                const count = statusCounts[s.v] ?? 0;
+                return (
+                  <button
+                    key={s.v}
+                    onClick={() => setStatusFilter(s.v)}
+                    className={cn(
+                      'px-3 h-7 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5',
+                      active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {s.label}
+                    <span className={cn('text-[10px] px-1.5 rounded-full', active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground/70')}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search */}
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="이름, 전화번호, 학교 검색..."
+                placeholder="이름·연락처·학교 검색"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-9"
               />
             </div>
-            {/* Filters row */}
+
+            {/* Right side: filters */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Status filter chips */}
-              {['재학', '재등원', '휴학', '퇴원', 'all'].map((s) => (
-                <Button
-                  key={s}
-                  variant={statusFilter === s ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setStatusFilter(s)}
-                >
-                  {s === 'all' ? '전체' : s}
-                </Button>
-              ))}
-              <span className="w-px h-5 bg-border mx-1" />
-              {/* School level filter */}
               <Select value={schoolLevelFilter} onValueChange={setSchoolLevelFilter}>
-                <SelectTrigger className="h-7 w-[90px] text-xs">
+                <SelectTrigger className="h-9 w-[100px] text-xs">
                   <SelectValue placeholder="학교급" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="all">전체 학교급</SelectItem>
                   <SelectItem value="초">초등</SelectItem>
                   <SelectItem value="중">중등</SelectItem>
                   <SelectItem value="고">고등</SelectItem>
                 </SelectContent>
               </Select>
-              {/* Grade year filter */}
               <Select value={gradeYearFilter} onValueChange={setGradeYearFilter}>
-                <SelectTrigger className="h-7 w-[90px] text-xs">
+                <SelectTrigger className="h-9 w-[90px] text-xs">
                   <SelectValue placeholder="학년" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="all">전체 학년</SelectItem>
                   {(schoolLevelFilter === '초' ? [1,2,3,4,5,6] : [1,2,3]).map((y) => (
                     <SelectItem key={y} value={y.toString()}>{y}학년</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={schoolFilter} onValueChange={setSchoolFilter}>
+                <SelectTrigger className="h-9 w-[140px] text-xs">
+                  <SelectValue placeholder="학교" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 학교</SelectItem>
+                  {schoolOptions.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {isAdmin(role) && selectedIds.size > 0 && (
-                <Button size="sm" className="h-7 text-xs" onClick={() => setBulkEditOpen(true)}>
+                <Button size="sm" className="h-9 text-xs" onClick={() => setBulkEditOpen(true)}>
                   일괄 편집 ({selectedIds.size}명)
                 </Button>
               )}
-              <span className="ml-auto text-xs text-muted-foreground">
+              <span className="text-xs font-medium text-muted-foreground px-2">
                 {filteredStudents.length}명
               </span>
             </div>
