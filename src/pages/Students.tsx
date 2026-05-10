@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,11 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet, ChevronRight, CalendarX, UserX, BookX, Sparkles } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet, ChevronRight, CalendarX, UserX, BookX, Sparkles, ChevronUp, ChevronDown, AlertCircle, Phone, GraduationCap, BookOpen, Users as UsersIcon } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+} from '@/components/ui/sheet';
 import { format } from 'date-fns';
 import { NewStudentOnboarding } from '@/components/admin/NewStudentOnboarding';
 import { cn } from '@/lib/utils';
@@ -43,6 +47,7 @@ import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTui
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { StudentDetailDrawer } from '@/components/student/StudentDetailDrawer';
 
 // STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1, STUDENT-PIN-MANAGER-V1
 interface Student {
@@ -205,16 +210,16 @@ export default function Students() {
   }
 
   function openIssueDetail(student: Student, issue: 'no-slot' | 'no-teacher' | 'no-course' | 'unvisited') {
-    const tabMap: Record<string, string> = {
+    const sectionMap: Record<string, string> = {
       'no-slot': 'slots',
-      'no-teacher': 'subject-teachers',
-      'no-course': 'tuition',
+      'no-teacher': 'teachers',
+      'no-course': 'courses',
       'unvisited': 'info',
     };
-    const tab = tabMap[issue];
-    setDetailDefaultTab(tab);
+    const section = sectionMap[issue];
+    setDetailDefaultTab('overview');
     setDetailStudent(student);
-    setFlashTab(tab);
+    setFlashTab(section);
     setTimeout(() => setFlashTab(null), 1600);
   }
 
@@ -912,7 +917,7 @@ export default function Students() {
                       <TableRow
                         key={student.id}
                         className="group cursor-pointer hover:bg-muted/40"
-                        onClick={() => { setDetailDefaultTab('info'); setDetailStudent(student); }}
+                        onClick={() => { setDetailDefaultTab('overview'); setDetailStudent(student); }}
                       >
                         {isAdmin(role) && (
                           <TableCell onClick={e => e.stopPropagation()}>
@@ -1026,145 +1031,21 @@ export default function Students() {
         </CardContent>
       </Card>
 
-      {/* Student Detail Modal */}
-      <Dialog open={!!detailStudent} onOpenChange={(open) => !open && setDetailStudent(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                학생 상세 - {detailStudent?.name}
-              </div>
-              {isAdmin(role) && detailStudent && (
-                <Button variant="outline" size="sm" onClick={handleEditFromDetail}>
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  편집
-                </Button>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          
-          {detailStudent && (
-            <Tabs key={detailStudent.id} defaultValue={detailDefaultTab} className="mt-4">
-              <TabsList className={`grid w-full ${isAdmin(role) ? 'grid-cols-5' : 'grid-cols-2'}`}>
-                <TabsTrigger value="info">기본정보</TabsTrigger>
-                {isAdmin(role) && (
-                  <TabsTrigger value="tuition" className="gap-1">
-                    <Wallet className="w-3.5 h-3.5" />수강/수강료
-                  </TabsTrigger>
-                )}
-                {(isAdmin(role) || isTeacher(role)) && (
-                  <TabsTrigger value="slots">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    슬롯
-                  </TabsTrigger>
-                )}
-                {isAdmin(role) && (
-                  <TabsTrigger value="subject-teachers">과목담당</TabsTrigger>
-                )}
-                {isAdmin(role) && (
-                  <TabsTrigger value="pin-manager">
-                    <Key className="w-3.5 h-3.5 mr-1" />
-                    앱계정
-                  </TabsTrigger>
-                )}
-              </TabsList>
-              
-              <TabsContent value="info" className={cn("space-y-4 mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'info' && "ring-2 ring-primary bg-primary/5")}>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">이름</Label>
-                    <p className="font-medium">{detailStudent.name}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">학년</Label>
-                    <p className="font-medium">{detailStudent.grade || '-'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">학교</Label>
-                    <p className="font-medium">{detailStudent.school || '-'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">학생 연락처</Label>
-                    <p className="font-medium">{detailStudent.student_phone || '-'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">학부모 연락처</Label>
-                    <p className="font-medium">{detailStudent.parent_phone || '-'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">이메일</Label>
-                    <p className="font-medium">{detailStudent.email || '-'}</p>
-                  </div>
-                  <div className="space-y-1 col-span-2">
-                    <Label className="text-xs text-muted-foreground">메모</Label>
-                    <p className="font-medium">{detailStudent.notes || '-'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">등록일</Label>
-                    <p className="font-medium text-muted-foreground">
-                      {format(new Date(detailStudent.created_at), 'yyyy년 MM월 dd일')}
-                    </p>
-                  </div>
-                </div>
-                {/* Parent portal link button */}
-                {isAdmin(role) && (
-                  <div className="pt-4 border-t">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => generateParentLink(detailStudent.id)}
-                    >
-                      <Link2 className="w-4 h-4 mr-2" />
-                      학부모 포털 링크 복사
-                    </Button>
-                    <p className="text-[10px] text-muted-foreground mt-1 text-center">
-                      로그인 없이 숙제·테스트·리포트를 볼 수 있는 링크입니다
-                    </p>
-                  </div>
-                )}
-              </TabsContent>
-              
-              {isAdmin(role) && (
-                <TabsContent value="tuition" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'tuition' && "ring-2 ring-primary bg-primary/5")}>
-                  <StudentCoursesTuitionTab
-                    studentId={detailStudent.id}
-                    studentName={detailStudent.name}
-                  />
-                </TabsContent>
-              )}
-              
-              {(isAdmin(role) || isTeacher(role)) && (
-                <TabsContent value="slots" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'slots' && "ring-2 ring-primary bg-primary/5")}>
-                  <StudentSlotAssignment
-                    studentId={detailStudent.id}
-                    studentName={detailStudent.name}
-                    readOnly={!isAdmin(role)}
-                  />
-                </TabsContent>
-              )}
-              {isAdmin(role) && (
-                <TabsContent value="subject-teachers" className={cn("mt-4 rounded-xl p-2 -m-2 transition-all", flashTab === 'subject-teachers' && "ring-2 ring-primary bg-primary/5")}>
-                  <StudentSubjectTeacherMapping
-                    studentId={detailStudent.id}
-                    studentName={detailStudent.name}
-                  />
-                </TabsContent>
-              )}
-              {isAdmin(role) && (
-                <TabsContent value="pin-manager" className="mt-4">
-                  <StudentPinManager
-                    studentId={detailStudent.id}
-                    studentName={detailStudent.name}
-                    studentCode={detailStudent.student_code}
-                  />
-                </TabsContent>
-              )}
-            </Tabs>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Student Detail Side Drawer */}
+      <StudentDetailDrawer
+        student={detailStudent}
+        students={filteredStudents}
+        flag={detailStudent ? studentFlags[detailStudent.id] : undefined}
+        defaultTab={detailDefaultTab}
+        flashSection={flashTab}
+        role={role}
+        onClose={() => setDetailStudent(null)}
+        onNavigate={(s) => { setDetailDefaultTab('overview'); setDetailStudent(s as Student); }}
+        onEdit={handleEditFromDetail}
+        onDelete={() => detailStudent && handleDelete(detailStudent.id)}
+        onCopyParentLink={() => detailStudent && generateParentLink(detailStudent.id)}
+      />
+
       {isAdmin(role) && (
         <BulkEditStudents
           open={bulkEditOpen}
