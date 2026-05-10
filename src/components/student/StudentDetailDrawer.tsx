@@ -288,38 +288,33 @@ function QuickStat({ icon, label, value, tone }: { icon: React.ReactNode; label:
   );
 }
 
-const Section = (() => {
-  const Inner = (
-    { title, children, flash, subjects, subjectColor }:
-    { title: string; children: React.ReactNode; flash?: boolean; subjects?: string[]; subjectColor?: Record<string, string> },
-    ref: React.Ref<HTMLDivElement>,
-  ) => (
-    <div
-      ref={ref}
-      className={cn(
-        'mt-4 rounded-xl border border-border bg-card p-4 transition-all',
-        flash && 'ring-2 ring-primary bg-primary/5'
+const Section = forwardRef<
+  HTMLDivElement,
+  { title: string; children: React.ReactNode; flash?: boolean; subjects?: string[]; subjectColor?: Record<string, string> }
+>(({ title, children, flash, subjects, subjectColor }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      'mt-4 rounded-xl border border-border bg-card p-4 transition-all',
+      flash && 'ring-2 ring-primary bg-primary/5'
+    )}
+  >
+    <div className="flex items-center justify-between mb-3">
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      {subjects && subjects.length > 0 && (
+        <div className="flex gap-1">
+          {subjects.map((s) => (
+            <span key={s} className={cn('text-[10px] px-1.5 py-0.5 rounded border', subjectColor?.[s] || 'bg-muted text-muted-foreground border-border')}>
+              {s}
+            </span>
+          ))}
+        </div>
       )}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        {subjects && subjects.length > 0 && (
-          <div className="flex gap-1">
-            {subjects.map((s) => (
-              <span key={s} className={cn('text-[10px] px-1.5 py-0.5 rounded border', subjectColor?.[s] || 'bg-muted text-muted-foreground border-border')}>
-                {s}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      {children}
     </div>
-  );
-  return require('react').forwardRef(Inner);
-})() as React.ForwardRefExoticComponent<
-  { title: string; children: React.ReactNode; flash?: boolean; subjects?: string[]; subjectColor?: Record<string, string> } & React.RefAttributes<HTMLDivElement>
->;
+    {children}
+  </div>
+));
+Section.displayName = 'Section';
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
