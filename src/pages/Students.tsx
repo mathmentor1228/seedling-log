@@ -495,6 +495,7 @@ export default function Students() {
     if (!matchesSearch) return false;
     if (schoolLevelFilter !== 'all' && student.school_level !== schoolLevelFilter) return false;
     if (gradeYearFilter !== 'all' && student.grade_year?.toString() !== gradeYearFilter) return false;
+    if (schoolFilter !== 'all' && student.school !== schoolFilter) return false;
     if (quickFilter) {
       const f = studentFlags[student.id];
       if (!f) return false;
