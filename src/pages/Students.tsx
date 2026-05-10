@@ -47,6 +47,7 @@ import { StudentCoursesTuitionTab } from '@/components/tuition/StudentCoursesTui
 import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { StudentDetailDrawer } from '@/components/student/StudentDetailDrawer';
 
 // STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1, STUDENT-PIN-MANAGER-V1
 interface Student {
