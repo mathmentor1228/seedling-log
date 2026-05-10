@@ -759,7 +759,7 @@ export default function Students() {
               key={c.key}
               onClick={() => applyQuickFilter(c.key)}
               className={cn(
-                'text-left rounded-2xl border bg-card p-4 transition-all hover:shadow-card-hover hover:scale-[1.01]',
+                'text-left rounded-xl border bg-card p-4 shadow-card transition-all hover:shadow-card-hover hover:scale-[1.01]',
                 active ? `ring-2 ${c.ring}` : 'border-border'
               )}
             >
