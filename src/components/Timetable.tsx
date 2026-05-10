@@ -1115,7 +1115,7 @@ export function Timetable() {
         </div>
 
         {viewMode === 'bold' ? (
-          <div className="w-full max-w-none -mx-5 lg:-mx-8">
+          <div className="w-full max-w-none -mx-3 lg:-mx-4 px-2">
             <BoldMatrixView
               scheduleRows={allRows}
               classrooms={classrooms}
