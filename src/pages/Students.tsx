@@ -30,10 +30,10 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Loader2, User, Calendar, Key, Link2, Wallet, ChevronRight, CalendarX, UserX, BookX, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { NewStudentOnboarding } from '@/components/admin/NewStudentOnboarding';
-import { UnvisitedParentsList } from '@/components/admin/UnvisitedParentsList';
+import { cn } from '@/lib/utils';
 import StudentSlotAssignment from '@/components/StudentSlotAssignment';
 import StudentSubjectTeacherMapping from '@/components/StudentSubjectTeacherMapping';
 import StudentCsvImport from '@/components/StudentCsvImport';
@@ -81,6 +81,9 @@ export default function Students() {
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [sortByDueDay, setSortByDueDay] = useState(true);
   const [tuitionSummary, setTuitionSummary] = useState<Record<string, { courses: number; monthlyFee: number; unpaid: number }>>({});
+  const [quickFilter, setQuickFilter] = useState<null | 'no-slot' | 'no-teacher' | 'no-course' | 'new'>(null);
+  const [stats, setStats] = useState({ noSlot: 0, noTeacher: 0, noCourse: 0, newWeek: 0 });
+  const [studentFlags, setStudentFlags] = useState<Record<string, { noSlot: boolean; noTeacher: boolean; noCourse: boolean; isNew: boolean }>>({});
   // STUDENT-ENROLLMENT-STATUS-V1: Add enrollment_status to form
   const [formData, setFormData] = useState({
     name: '',
@@ -104,8 +107,69 @@ export default function Students() {
   }, [statusFilter]);
 
   useEffect(() => {
+    fetchStatsAndFlags();
+  }, []);
+
+  useEffect(() => {
     if (students.length > 0) fetchTuitionSummary();
   }, [students]);
+
+  async function fetchStatsAndFlags() {
+    const { data: activeStudents } = await supabase
+      .from('students')
+      .select('id, created_at, enrollment_status')
+      .in('enrollment_status', ['재학', '재등원']);
+    if (!activeStudents) return;
+    const ids = activeStudents.map((s) => s.id);
+    if (ids.length === 0) {
+      setStudentFlags({});
+      setStats({ noSlot: 0, noTeacher: 0, noCourse: 0, newWeek: 0 });
+      return;
+    }
+    const [coursesRes, teachersRes, slotsRes] = await Promise.all([
+      supabase.from('student_courses').select('student_id, is_active, course_policies(subject)').in('student_id', ids),
+      supabase.from('student_subject_teachers').select('student_id, subject').in('student_id', ids),
+      supabase.from('class_students').select('student_id').in('student_id', ids),
+    ]);
+    const courseSubjects: Record<string, Set<string>> = {};
+    for (const c of (coursesRes.data || []) as any[]) {
+      if (!c.is_active) continue;
+      const sub = c.course_policies?.subject;
+      if (!sub) continue;
+      (courseSubjects[c.student_id] ??= new Set()).add(sub);
+    }
+    const teacherSubjects: Record<string, Set<string>> = {};
+    for (const t of (teachersRes.data || []) as any[]) {
+      (teacherSubjects[t.student_id] ??= new Set()).add(t.subject);
+    }
+    const slotCounts: Record<string, number> = {};
+    for (const r of (slotsRes.data || []) as any[]) slotCounts[r.student_id] = (slotCounts[r.student_id] || 0) + 1;
+    const flags: Record<string, { noSlot: boolean; noTeacher: boolean; noCourse: boolean; isNew: boolean }> = {};
+    let noSlot = 0, noTeacher = 0, noCourse = 0, newWeek = 0;
+    const weekAgo = Date.now() - 7 * 86400000;
+    for (const s of activeStudents) {
+      const subs = courseSubjects[s.id] || new Set<string>();
+      const tsubs = teacherSubjects[s.id] || new Set<string>();
+      const slots = slotCounts[s.id] || 0;
+      const hasCourse = subs.size > 0;
+      const missingTeacher = ['수학', '영어'].some((sub) => subs.has(sub) && !tsubs.has(sub));
+      const fNoSlot = hasCourse && slots === 0;
+      const fNoCourse = !hasCourse;
+      const fIsNew = new Date(s.created_at).getTime() >= weekAgo;
+      flags[s.id] = { noSlot: fNoSlot, noTeacher: missingTeacher, noCourse: fNoCourse, isNew: fIsNew };
+      if (fNoSlot) noSlot++;
+      if (missingTeacher) noTeacher++;
+      if (fNoCourse) noCourse++;
+      if (fIsNew) newWeek++;
+    }
+    setStudentFlags(flags);
+    setStats({ noSlot, noTeacher, noCourse, newWeek });
+  }
+
+  function applyQuickFilter(qf: 'no-slot' | 'no-teacher' | 'no-course' | 'new') {
+    setQuickFilter((prev) => (prev === qf ? null : qf));
+    setStatusFilter('재학');
+  }
 
   async function fetchStudents() {
     try {
@@ -125,6 +189,7 @@ export default function Students() {
 
       if (error) throw error;
       setStudents(data || []);
+      fetchStatsAndFlags();
     } catch (error) {
       console.error('Error fetching students:', error);
       toast({
@@ -383,6 +448,14 @@ export default function Students() {
     if (!matchesSearch) return false;
     if (schoolLevelFilter !== 'all' && student.school_level !== schoolLevelFilter) return false;
     if (gradeYearFilter !== 'all' && student.grade_year?.toString() !== gradeYearFilter) return false;
+    if (quickFilter) {
+      const f = studentFlags[student.id];
+      if (!f) return false;
+      if (quickFilter === 'no-slot' && !f.noSlot) return false;
+      if (quickFilter === 'no-teacher' && !f.noTeacher) return false;
+      if (quickFilter === 'no-course' && !f.noCourse) return false;
+      if (quickFilter === 'new' && !f.isNew) return false;
+    }
     return true;
   }).sort((a, b) => {
     if (sortByDueDay) {
@@ -405,12 +478,15 @@ export default function Students() {
     <div className="space-y-6">
       {/* New Student Onboarding Checklist */}
       <NewStudentOnboarding />
-      {/* Unvisited Parents List */}
-      <UnvisitedParentsList />
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="space-y-1">
+          <nav className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span>관리</span>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-foreground">학생 관리</span>
+          </nav>
           <h1 className="text-2xl font-bold text-foreground">학생 관리</h1>
-          <p className="text-muted-foreground mt-1">학생 정보를 등록하고 관리합니다</p>
+          <p className="text-sm text-muted-foreground">학생 정보 등록·수강·슬롯·납부를 한 곳에서 관리합니다</p>
         </div>
 
         {isAdmin(role) && (
@@ -610,6 +686,38 @@ export default function Students() {
           </Dialog>
           </div>
         )}
+      </div>
+
+      {/* Action stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {([
+          { key: 'no-slot', label: '시간표 미배정', value: stats.noSlot, icon: CalendarX, accent: 'bg-destructive/15 text-destructive', ring: 'ring-destructive/40 border-destructive/60' },
+          { key: 'no-teacher', label: '담당 선생님 미지정', value: stats.noTeacher, icon: UserX, accent: 'bg-amber-500/15 text-amber-500', ring: 'ring-amber-500/40 border-amber-500/60' },
+          { key: 'no-course', label: '미수강', value: stats.noCourse, icon: BookX, accent: 'bg-purple-500/15 text-purple-500', ring: 'ring-purple-500/40 border-purple-500/60' },
+          { key: 'new', label: '이번 주 신규 등록', value: stats.newWeek, icon: Sparkles, accent: 'bg-blue-500/15 text-blue-500', ring: 'ring-blue-500/40 border-blue-500/60' },
+        ] as const).map((c) => {
+          const Icon = c.icon;
+          const active = quickFilter === c.key;
+          return (
+            <button
+              key={c.key}
+              onClick={() => applyQuickFilter(c.key)}
+              className={cn(
+                'text-left rounded-2xl border bg-card p-4 transition-all hover:shadow-card-hover hover:scale-[1.01]',
+                active ? `ring-2 ${c.ring}` : 'border-border'
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className={cn('w-9 h-9 rounded-xl flex items-center justify-center', c.accent)}>
+                  <Icon className="w-4 h-4" />
+                </span>
+                <span className="text-2xl font-bold text-foreground tracking-tight">{c.value}</span>
+              </div>
+              <p className="text-xs font-medium text-muted-foreground mt-2">{c.label}</p>
+              {active && <p className="text-[10px] text-primary mt-1">필터 적용 중 · 다시 클릭해 해제</p>}
+            </button>
+          );
+        })}
       </div>
 
       <Card>
