@@ -1263,7 +1263,10 @@ Deno.serve(async (req) => {
       }
 
       case 'submit_vocab_completion': {
-        const { word_set_ids, correct_count, wrong_count, total_count, mode, is_self_test, test_source } = params;
+        const {
+          word_set_ids, correct_count, wrong_count, total_count, mode, is_self_test, test_source,
+          started_at, finished_at, duration_seconds, expected_seconds, self_test_options,
+        } = params;
         if (!word_set_ids || !Array.isArray(word_set_ids)) {
           return new Response(
             JSON.stringify({ error: 'Missing word_set_ids' }),
@@ -1294,6 +1297,11 @@ Deno.serve(async (req) => {
             is_self_test: is_self_test || false,
             test_source: test_source || 'assigned',
             notified_teacher_id: teacherId,
+            started_at: started_at || null,
+            finished_at: finished_at || null,
+            duration_seconds: duration_seconds ?? null,
+            expected_seconds: expected_seconds ?? null,
+            self_test_options: self_test_options || null,
           });
 
         if (insertErr) throw insertErr;
@@ -1310,8 +1318,12 @@ Deno.serve(async (req) => {
         if (teacherId) {
           const scorePercent = total_count > 0 ? Math.round(((correct_count || 0) / total_count) * 100) : 0;
           const sourceLabel = (is_self_test || test_source === 'self') ? '셀프' : '배정';
+          const overTime = duration_seconds && expected_seconds && duration_seconds > expected_seconds;
+          const timeLabel = duration_seconds
+            ? ` | ⏱ ${duration_seconds}s/${expected_seconds || '-'}s${overTime ? ' 🚨초과' : ''}`
+            : '';
           const notifTitle = `📝 ${studentName} 단어 테스트 완료 (${sourceLabel})`;
-          const notifMessage = `${correct_count}/${total_count} (${scorePercent}%) | 모드: ${mode || 'eng_to_kor'}`;
+          const notifMessage = `${correct_count}/${total_count} (${scorePercent}%) | 모드: ${mode || 'eng_to_kor'}${timeLabel}`;
 
           await supabase.from('teacher_notifications').insert({
             teacher_id: teacherId,
@@ -1328,6 +1340,12 @@ Deno.serve(async (req) => {
               is_self_test: is_self_test || false,
               test_source: test_source || 'assigned',
               word_set_ids,
+              started_at: started_at || null,
+              finished_at: finished_at || null,
+              duration_seconds: duration_seconds ?? null,
+              expected_seconds: expected_seconds ?? null,
+              over_time: !!overTime,
+              self_test_options: self_test_options || null,
             },
           });
         }

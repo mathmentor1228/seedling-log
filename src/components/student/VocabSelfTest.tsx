@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,12 +19,16 @@ interface TestResult {
   status: ResultStatus;
 }
 
+type QMode = 'eng_to_kor' | 'kor_to_eng' | 'listening';
+
 interface VocabSelfTestProps {
   words: VocabWord[];
-  mode: 'eng_to_kor' | 'kor_to_eng' | 'listening';
+  mode: QMode;
   testLevel?: number; // 1=3choices/4s, 2=5choices/4s, 3=typing/6s
   testTimeLimit?: number | null; // total seconds
-  onFinish: (correct: number, wrong: number, total: number) => void;
+  /** When provided, each question will randomly pick a mode from this pool (self-test only). */
+  modePool?: QMode[];
+  onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number }) => void;
   onBack: () => void;
 }
 
@@ -89,7 +93,7 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
   return 'wrong';
 }
 
-export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, onFinish, onBack }: VocabSelfTestProps) {
+export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
@@ -103,17 +107,25 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
   const [perQuestionTimer, setPerQuestionTimer] = useState(0);
   const [globalTimeLeft, setGlobalTimeLeft] = useState<number | null>(testTimeLimit || null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const startedAtRef = useRef<string>(new Date().toISOString());
 
-  const isListening = mode === 'listening';
+  // Per-question mode (random pick if pool, else fixed)
+  const perQuestionModes = useMemo<QMode[]>(() => {
+    if (!modePool || modePool.length === 0) return words.map(() => mode);
+    return words.map(() => modePool[Math.floor(Math.random() * modePool.length)]);
+  }, [words, mode, modePool]);
+
+  const activeMode: QMode = perQuestionModes[currentIdx] ?? mode;
+  const isListening = activeMode === 'listening';
   const isLevelMode = testLevel >= 1 && testLevel <= 3;
-  const isChoiceMode = isLevelMode && (testLevel === 1 || testLevel === 2);
-  const isTypingLevel = isLevelMode && testLevel === 3;
+  const isChoiceMode = isLevelMode && (testLevel === 1 || testLevel === 2) && !isListening;
+  const isTypingLevel = isLevelMode && (testLevel === 3 || isListening);
   const choiceCount = testLevel === 1 ? 3 : testLevel === 2 ? 5 : 0;
   const perQuestionSeconds = testLevel === 3 ? 6 : 4;
   const currentWord = words[currentIdx];
   // In listening mode: student hears English, types Korean meaning
-  const question = isListening ? '' : (mode === 'eng_to_kor' ? currentWord?.english : currentWord?.meaning);
-  const answer = isListening ? currentWord?.meaning : (mode === 'eng_to_kor' ? currentWord?.meaning : currentWord?.english);
+  const question = isListening ? '' : (activeMode === 'eng_to_kor' ? currentWord?.english : currentWord?.meaning);
+  const answer = isListening ? currentWord?.meaning : (activeMode === 'eng_to_kor' ? currentWord?.meaning : currentWord?.english);
 
   // Generate choices for level mode
   useEffect(() => {
@@ -121,7 +133,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       const correctAnswer = answer;
       const otherAnswers = words
         .filter(w => w.english !== currentWord.english)
-        .map(w => mode === 'eng_to_kor' ? w.meaning : w.english)
+        .map(w => activeMode === 'eng_to_kor' ? w.meaning : w.english)
         .sort(() => Math.random() - 0.5)
         .slice(0, choiceCount - 1);
       const allChoices = [...otherAnswers, correctAnswer].sort(() => Math.random() - 0.5);
@@ -162,8 +174,10 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
           // Force finish
           const correct = results.filter(r => r.status === 'correct').length;
           const wrong = words.length - correct;
+          const finishedAt = new Date().toISOString();
+          const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
           setFinished(true);
-          onFinish(correct, wrong, words.length);
+          onFinish(correct, wrong, words.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration });
           return 0;
         }
         return prev - 1;
@@ -214,8 +228,10 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
     } else {
       const correct = results.filter(r => r.status === 'correct').length;
       const wrong = results.filter(r => r.status !== 'correct').length;
+      const finishedAt = new Date().toISOString();
+      const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
       setFinished(true);
-      onFinish(correct, wrong, words.length);
+      onFinish(correct, wrong, words.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration });
     }
   };
 
@@ -254,6 +270,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       mode={mode}
       onBack={onBack}
       onRetry={() => {
+        startedAtRef.current = new Date().toISOString();
         setCurrentIdx(0);
         setUserAnswer('');
         setResults([]);
@@ -319,11 +336,11 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
           ) : (
             <>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                {mode === 'eng_to_kor' ? '뜻을 입력하세요' : '영어 단어를 입력하세요'}
+                {activeMode === 'eng_to_kor' ? '뜻을 입력하세요' : '영어 단어를 입력하세요'}
               </p>
               <div className="flex items-center justify-center gap-2">
                 <p className="text-2xl font-bold">{question}</p>
-                {mode === 'eng_to_kor' && (
+                {activeMode === 'eng_to_kor' && (
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => speakEnglish(currentWord.english)}>
                     <Volume2 className="w-4 h-4" />
                   </Button>
@@ -373,7 +390,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
                     value={userAnswer}
                     onChange={e => setUserAnswer(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={isListening ? '한글 뜻 입력...' : (mode === 'eng_to_kor' ? '한글 뜻 입력...' : 'Type in English...')}
+                    placeholder={isListening ? '한글 뜻 입력...' : (activeMode === 'eng_to_kor' ? '한글 뜻 입력...' : 'Type in English...')}
                     className="text-center text-lg"
                     autoComplete="off"
                     autoCapitalize="off"

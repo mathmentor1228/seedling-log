@@ -130,7 +130,22 @@ export const studentApi = {
 
   getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[]; test_level?: number; test_time_limit?: number | null; active_test_assignment?: any | null }>('vocab_cards'),
 
-  submitVocabCompletion: (wordSetIds: string[], correctCount: number, wrongCount: number, totalCount: number, mode: string, isSelfTest: boolean = false, testSource: string = 'assigned') =>
+  submitVocabCompletion: (
+    wordSetIds: string[],
+    correctCount: number,
+    wrongCount: number,
+    totalCount: number,
+    mode: string,
+    isSelfTest: boolean = false,
+    testSource: string = 'assigned',
+    extra?: {
+      startedAt?: string;
+      finishedAt?: string;
+      durationSeconds?: number;
+      expectedSeconds?: number;
+      options?: Record<string, any>;
+    }
+  ) =>
     studentApiCall<{ success: boolean }>('submit_vocab_completion', {
       word_set_ids: wordSetIds,
       correct_count: correctCount,
@@ -139,6 +154,11 @@ export const studentApi = {
       mode,
       is_self_test: isSelfTest,
       test_source: testSource,
+      started_at: extra?.startedAt ?? null,
+      finished_at: extra?.finishedAt ?? null,
+      duration_seconds: extra?.durationSeconds ?? null,
+      expected_seconds: extra?.expectedSeconds ?? null,
+      self_test_options: extra?.options ?? null,
     }),
 
   getMathQuizzes: () => studentApiCall<{ quizzes: any[]; submissions: any[] }>('math_quizzes'),

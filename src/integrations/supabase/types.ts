@@ -5632,10 +5632,15 @@ export type Database = {
         Row: {
           completed_at: string
           correct_count: number
+          duration_seconds: number | null
+          expected_seconds: number | null
+          finished_at: string | null
           id: string
           is_self_test: boolean
           mode: string
           notified_teacher_id: string | null
+          self_test_options: Json | null
+          started_at: string | null
           student_id: string
           test_source: string
           total_count: number
@@ -5645,10 +5650,15 @@ export type Database = {
         Insert: {
           completed_at?: string
           correct_count?: number
+          duration_seconds?: number | null
+          expected_seconds?: number | null
+          finished_at?: string | null
           id?: string
           is_self_test?: boolean
           mode?: string
           notified_teacher_id?: string | null
+          self_test_options?: Json | null
+          started_at?: string | null
           student_id: string
           test_source?: string
           total_count?: number
@@ -5658,10 +5668,15 @@ export type Database = {
         Update: {
           completed_at?: string
           correct_count?: number
+          duration_seconds?: number | null
+          expected_seconds?: number | null
+          finished_at?: string | null
           id?: string
           is_self_test?: boolean
           mode?: string
           notified_teacher_id?: string | null
+          self_test_options?: Json | null
+          started_at?: string | null
           student_id?: string
           test_source?: string
           total_count?: number
