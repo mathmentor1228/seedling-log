@@ -270,6 +270,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       mode={mode}
       onBack={onBack}
       onRetry={() => {
+        startedAtRef.current = new Date().toISOString();
         setCurrentIdx(0);
         setUserAnswer('');
         setResults([]);
