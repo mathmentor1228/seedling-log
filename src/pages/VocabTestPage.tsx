@@ -109,6 +109,10 @@ function VocabTestContent() {
         <TabsContent value="test-assign">
           <VocabTestAssignManager />
         </TabsContent>
+
+        <TabsContent value="self-test">
+          <VocabSelfTestResults />
+        </TabsContent>
       </Tabs>
     </div>
   );
