@@ -464,28 +464,57 @@ export default function StudentVocab() {
                         <Input
                           type="number"
                           min={5}
-                          max={100}
+                          max={200}
                           value={selfTestWordCount}
-                          onChange={e => setSelfTestWordCount(Math.max(5, Math.min(100, Number(e.target.value) || 20)))}
+                          onChange={e => setSelfTestWordCount(Math.max(5, Math.min(200, Number(e.target.value) || 20)))}
                           className="h-8 text-sm"
                         />
                       </div>
                       <div>
-                        <Label className="text-[11px] text-muted-foreground">난이도</Label>
+                        <Label className="text-[11px] text-muted-foreground">난이도(문항당 시간)</Label>
                         <Select value={String(selfTestLevel)} onValueChange={v => setSelfTestLevel(Number(v))}>
                           <SelectTrigger className="h-8 text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="1">Lv.1 (3지선다)</SelectItem>
-                            <SelectItem value="2">Lv.2 (5지선다)</SelectItem>
-                            <SelectItem value="3">Lv.3 (주관식)</SelectItem>
+                            <SelectItem value="1">Lv.1 · 3지선다 · 4초</SelectItem>
+                            <SelectItem value="2">Lv.2 · 5지선다 · 4초</SelectItem>
+                            <SelectItem value="3">Lv.3 · 주관식 · 6초</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
+                    <div>
+                      <Label className="text-[11px] text-muted-foreground block mb-1">출제 방식 (복수 선택 시 랜덤 혼합)</Label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={selfModeEK ? 'default' : 'outline'}
+                          className="h-8 text-[11px]"
+                          onClick={() => setSelfModeEK(v => !v)}
+                        >영→한</Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={selfModeKE ? 'default' : 'outline'}
+                          className="h-8 text-[11px]"
+                          onClick={() => setSelfModeKE(v => !v)}
+                        >한→영(스펠)</Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={selfModeListen ? 'default' : 'outline'}
+                          className="h-8 text-[11px]"
+                          onClick={() => setSelfModeListen(v => !v)}
+                        >듣기→뜻</Button>
+                      </div>
+                      {!selfModeEK && !selfModeKE && !selfModeListen && (
+                        <p className="text-[10px] text-red-500 mt-1">최소 1개 출제 방식을 선택해주세요</p>
+                      )}
+                    </div>
                     <p className="text-[10px] text-muted-foreground">
-                      ⚡ 셀프 테스트 결과는 담당 선생님에게 자동 보고되며, 수업일지에도 기록됩니다.
+                      ⚡ 결과(소요 시간 포함)는 담당 선생님에게 자동 보고되며, 무제한 재응시 가능합니다.
                     </p>
                   </CardContent>
                 </Card>
