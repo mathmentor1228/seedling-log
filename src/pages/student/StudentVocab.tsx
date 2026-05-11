@@ -522,12 +522,12 @@ export default function StudentVocab() {
 
               <Button
                 onClick={startFlashcards}
-                disabled={selectedSetIds.length === 0}
+                disabled={selectedSetIds.length === 0 || (studyType === 'self_test' && !selfModeEK && !selfModeKE && !selfModeListen)}
                 className="w-full"
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                {studyType === 'self_test' ? `셀프 테스트 시작 (${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0))}단어)`
+                {studyType === 'self_test' ? `셀프 테스트 시작 (${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0))}단어 · 기준 ${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)) * (selfTestLevel === 3 ? 6 : 4)}초)`
                   : studyType === 'test' ? '테스트 시작'
                   : studyType === 'listening' ? '듣기 테스트 시작'
                   : studyType === 'eng_eng_mc' ? '영영 객관식 시작'
