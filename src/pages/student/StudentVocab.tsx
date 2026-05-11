@@ -595,25 +595,50 @@ export default function StudentVocab() {
 
   // Self-test mode (student-initiated random test)
   if (testMode && studyType === 'self_test') {
+    const modePool: Array<'eng_to_kor' | 'kor_to_eng' | 'listening'> = [];
+    if (selfModeEK) modePool.push('eng_to_kor');
+    if (selfModeKE) modePool.push('kor_to_eng');
+    if (selfModeListen) modePool.push('listening');
+    const safePool = modePool.length > 0 ? modePool : ['eng_to_kor' as const];
+    const perQSec = selfTestLevel === 3 ? 6 : 4;
+    const expectedSec = cards.length * perQSec;
     return (
       <VocabSelfTest
         words={cards}
-        mode={mode}
+        mode={safePool[0]}
+        modePool={safePool}
         testLevel={selfTestLevel}
         testTimeLimit={null}
-        onFinish={async (correct, wrong, total) => {
+        onFinish={async (correct, wrong, total, meta) => {
+          const modeStr = (safePool.length > 1 ? 'mixed' : safePool[0]) + '_self_test';
           const { error } = await studentApi.submitVocabCompletion(
-            selectedSetIds, correct, wrong, total, mode + '_self_test', true, 'self'
+            selectedSetIds, correct, wrong, total, modeStr, true, 'self',
+            {
+              startedAt: meta?.startedAt,
+              finishedAt: meta?.finishedAt,
+              durationSeconds: meta?.durationSeconds,
+              expectedSeconds: expectedSec,
+              options: {
+                level: selfTestLevel,
+                per_question_seconds: perQSec,
+                modes: safePool,
+                word_count: total,
+              },
+            }
           );
           if (!error) {
-            toast({ title: '셀프 테스트 기록 저장 완료! ✅', description: '담당 선생님에게 결과가 자동 전달됩니다.' });
+            const overTime = (meta?.durationSeconds ?? 0) > expectedSec;
+            toast({
+              title: '셀프 테스트 기록 저장 완료! ✅',
+              description: `소요 ${meta?.durationSeconds ?? 0}초 / 기준 ${expectedSec}초${overTime ? ' (초과)' : ''} · 담당 선생님에게 결과 전달`,
+            });
             setCompletions(prev => [{
               id: crypto.randomUUID(),
               word_set_ids: selectedSetIds,
               correct_count: correct,
               wrong_count: wrong,
               total_count: total,
-              mode: mode + '_self_test',
+              mode: modeStr,
               completed_at: new Date().toISOString(),
             }, ...prev]);
           }
