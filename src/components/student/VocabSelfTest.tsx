@@ -93,7 +93,7 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
   return 'wrong';
 }
 
-export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, onFinish, onBack }: VocabSelfTestProps) {
+export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
@@ -107,17 +107,25 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
   const [perQuestionTimer, setPerQuestionTimer] = useState(0);
   const [globalTimeLeft, setGlobalTimeLeft] = useState<number | null>(testTimeLimit || null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const startedAtRef = useRef<string>(new Date().toISOString());
 
-  const isListening = mode === 'listening';
+  // Per-question mode (random pick if pool, else fixed)
+  const perQuestionModes = useMemo<QMode[]>(() => {
+    if (!modePool || modePool.length === 0) return words.map(() => mode);
+    return words.map(() => modePool[Math.floor(Math.random() * modePool.length)]);
+  }, [words, mode, modePool]);
+
+  const activeMode: QMode = perQuestionModes[currentIdx] ?? mode;
+  const isListening = activeMode === 'listening';
   const isLevelMode = testLevel >= 1 && testLevel <= 3;
-  const isChoiceMode = isLevelMode && (testLevel === 1 || testLevel === 2);
-  const isTypingLevel = isLevelMode && testLevel === 3;
+  const isChoiceMode = isLevelMode && (testLevel === 1 || testLevel === 2) && !isListening;
+  const isTypingLevel = isLevelMode && (testLevel === 3 || isListening);
   const choiceCount = testLevel === 1 ? 3 : testLevel === 2 ? 5 : 0;
   const perQuestionSeconds = testLevel === 3 ? 6 : 4;
   const currentWord = words[currentIdx];
   // In listening mode: student hears English, types Korean meaning
-  const question = isListening ? '' : (mode === 'eng_to_kor' ? currentWord?.english : currentWord?.meaning);
-  const answer = isListening ? currentWord?.meaning : (mode === 'eng_to_kor' ? currentWord?.meaning : currentWord?.english);
+  const question = isListening ? '' : (activeMode === 'eng_to_kor' ? currentWord?.english : currentWord?.meaning);
+  const answer = isListening ? currentWord?.meaning : (activeMode === 'eng_to_kor' ? currentWord?.meaning : currentWord?.english);
 
   // Generate choices for level mode
   useEffect(() => {
