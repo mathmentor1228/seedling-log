@@ -174,8 +174,10 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
           // Force finish
           const correct = results.filter(r => r.status === 'correct').length;
           const wrong = words.length - correct;
+          const finishedAt = new Date().toISOString();
+          const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
           setFinished(true);
-          onFinish(correct, wrong, words.length);
+          onFinish(correct, wrong, words.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration });
           return 0;
         }
         return prev - 1;
