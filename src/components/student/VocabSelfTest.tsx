@@ -228,8 +228,10 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
     } else {
       const correct = results.filter(r => r.status === 'correct').length;
       const wrong = results.filter(r => r.status !== 'correct').length;
+      const finishedAt = new Date().toISOString();
+      const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
       setFinished(true);
-      onFinish(correct, wrong, words.length);
+      onFinish(correct, wrong, words.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration });
     }
   };
 
