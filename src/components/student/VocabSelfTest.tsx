@@ -133,7 +133,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       const correctAnswer = answer;
       const otherAnswers = words
         .filter(w => w.english !== currentWord.english)
-        .map(w => mode === 'eng_to_kor' ? w.meaning : w.english)
+        .map(w => activeMode === 'eng_to_kor' ? w.meaning : w.english)
         .sort(() => Math.random() - 0.5)
         .slice(0, choiceCount - 1);
       const allChoices = [...otherAnswers, correctAnswer].sort(() => Math.random() - 0.5);
