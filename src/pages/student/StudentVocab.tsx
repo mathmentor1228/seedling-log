@@ -63,6 +63,9 @@ export default function StudentVocab() {
   // Self-test settings
   const [selfTestWordCount, setSelfTestWordCount] = useState(20);
   const [selfTestLevel, setSelfTestLevel] = useState(2);
+  const [selfModeEK, setSelfModeEK] = useState(true);   // 영→한
+  const [selfModeKE, setSelfModeKE] = useState(true);   // 한→영
+  const [selfModeListen, setSelfModeListen] = useState(false); // 듣고 스펠/뜻
 
   useEffect(() => {
     loadVocabSets();
