@@ -9,7 +9,8 @@ import { VocabTestGenerator } from '@/components/vocab/VocabTestGenerator';
 import { TestScheduleManager } from '@/components/TestScheduleManager';
 import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
 import { VocabTestAssignManager } from '@/components/vocab/VocabTestAssignManager';
-import { BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings, BookOpen, Languages, CalendarDays, ClipboardList, Send } from 'lucide-react';
+import { VocabSelfTestResults } from '@/components/vocab/VocabSelfTestResults';
+import { BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings, BookOpen, Languages, CalendarDays, ClipboardList, Send, Zap } from 'lucide-react';
 
 function VocabTestContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
