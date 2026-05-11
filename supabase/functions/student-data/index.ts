@@ -1216,11 +1216,23 @@ Deno.serve(async (req) => {
           }
         }
 
-        const { data: allWords } = await supabase
-          .from('vocab_word_items')
-          .select('set_id, english, meaning, english_definition, sort_order')
-          .in('set_id', setIds)
-          .order('sort_order');
+        // Paginate to bypass PostgREST 1000-row default limit
+        const allWords: any[] = [];
+        const PAGE = 1000;
+        let from = 0;
+        while (true) {
+          const { data: pageData, error: wErr } = await supabase
+            .from('vocab_word_items')
+            .select('set_id, english, meaning, english_definition, sort_order')
+            .in('set_id', setIds)
+            .order('sort_order')
+            .range(from, from + PAGE - 1);
+          if (wErr) throw wErr;
+          if (!pageData || pageData.length === 0) break;
+          allWords.push(...pageData);
+          if (pageData.length < PAGE) break;
+          from += PAGE;
+        }
 
         const sets = (setsData || []).map((s: any) => ({
           set_id: s.id,
