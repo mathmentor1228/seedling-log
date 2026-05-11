@@ -336,11 +336,11 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
           ) : (
             <>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                {mode === 'eng_to_kor' ? '뜻을 입력하세요' : '영어 단어를 입력하세요'}
+                {activeMode === 'eng_to_kor' ? '뜻을 입력하세요' : '영어 단어를 입력하세요'}
               </p>
               <div className="flex items-center justify-center gap-2">
                 <p className="text-2xl font-bold">{question}</p>
-                {mode === 'eng_to_kor' && (
+                {activeMode === 'eng_to_kor' && (
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => speakEnglish(currentWord.english)}>
                     <Volume2 className="w-4 h-4" />
                   </Button>
