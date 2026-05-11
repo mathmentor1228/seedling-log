@@ -390,7 +390,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
                     value={userAnswer}
                     onChange={e => setUserAnswer(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={isListening ? '한글 뜻 입력...' : (mode === 'eng_to_kor' ? '한글 뜻 입력...' : 'Type in English...')}
+                    placeholder={isListening ? '한글 뜻 입력...' : (activeMode === 'eng_to_kor' ? '한글 뜻 입력...' : 'Type in English...')}
                     className="text-center text-lg"
                     autoComplete="off"
                     autoCapitalize="off"
