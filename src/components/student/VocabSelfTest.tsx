@@ -19,12 +19,16 @@ interface TestResult {
   status: ResultStatus;
 }
 
+type QMode = 'eng_to_kor' | 'kor_to_eng' | 'listening';
+
 interface VocabSelfTestProps {
   words: VocabWord[];
-  mode: 'eng_to_kor' | 'kor_to_eng' | 'listening';
+  mode: QMode;
   testLevel?: number; // 1=3choices/4s, 2=5choices/4s, 3=typing/6s
   testTimeLimit?: number | null; // total seconds
-  onFinish: (correct: number, wrong: number, total: number) => void;
+  /** When provided, each question will randomly pick a mode from this pool (self-test only). */
+  modePool?: QMode[];
+  onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number }) => void;
   onBack: () => void;
 }
 
