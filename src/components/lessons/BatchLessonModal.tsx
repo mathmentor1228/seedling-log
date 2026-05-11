@@ -480,9 +480,17 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             : lessonRange.trim();
         }
         if (activeFields.has('understanding_score')) {
-          p.understanding_score = (usePerStudentScore && recordId)
-            ? (perStudentScore[recordId] ?? understandingScore)
-            : understandingScore;
+          // Skip understanding score for absent students
+          const effAtt = activeFields.has('attendance_status')
+            ? ((usePerStudentAttendance && recordId) ? (perStudentAttendance[recordId] ?? attendanceStatus) : attendanceStatus)
+            : (recordId ? drafts.find(d => d.id === recordId)?.attendance_status : null);
+          if (isAbsentStatus(effAtt as string[] | null)) {
+            p.understanding_score = null;
+          } else {
+            p.understanding_score = (usePerStudentScore && recordId)
+              ? (perStudentScore[recordId] ?? understandingScore)
+              : understandingScore;
+          }
         }
         if (activeFields.has('homework_status')) {
           const ext = (usePerStudentHomework && recordId)
