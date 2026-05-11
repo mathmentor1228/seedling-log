@@ -57,6 +57,8 @@ Deno.serve(async (req) => {
         if (error) return json({ error: error.message }, 500);
 
         // Teacher scope: restrict to (student, subject) pairs assigned to this teacher.
+        // Exception: if this teacher is the sole teacher for a subject (auto-assigned subject),
+        // they see ALL submissions for that subject regardless of explicit mapping.
         // Admin & assistant see all.
         let scoped = results || [];
         if (!roleSet.has('admin') && !roleSet.has('assistant') && roleSet.has('teacher')) {
@@ -65,7 +67,28 @@ Deno.serve(async (req) => {
             .select('student_id, subject')
             .eq('teacher_id', user.id);
           const allowed = new Set((links || []).map((l: any) => `${l.student_id}::${l.subject}`));
-          scoped = scoped.filter((r: any) => allowed.has(`${r.student_id}::${r.subject}`));
+          const mySubjects = Array.from(new Set((links || []).map((l: any) => l.subject)));
+
+          // Find subjects where this teacher is the ONLY teacher across the whole subject
+          const soleSubjects = new Set<string>();
+          if (mySubjects.length > 0) {
+            const { data: subjectTeachers } = await supabase
+              .from('student_subject_teachers')
+              .select('subject, teacher_id')
+              .in('subject', mySubjects);
+            const subjectTeacherMap = new Map<string, Set<string>>();
+            (subjectTeachers || []).forEach((row: any) => {
+              if (!subjectTeacherMap.has(row.subject)) subjectTeacherMap.set(row.subject, new Set());
+              subjectTeacherMap.get(row.subject)!.add(row.teacher_id);
+            });
+            subjectTeacherMap.forEach((teachers, subj) => {
+              if (teachers.size === 1 && teachers.has(user.id)) soleSubjects.add(subj);
+            });
+          }
+
+          scoped = scoped.filter((r: any) =>
+            soleSubjects.has(r.subject) || allowed.has(`${r.student_id}::${r.subject}`)
+          );
         }
 
         const enriched = await Promise.all(
