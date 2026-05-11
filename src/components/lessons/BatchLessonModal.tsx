@@ -661,8 +661,19 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         const range = usePerStudentLessonRange ? (perStudentLessonRange[id] ?? lessonRange) : lessonRange;
         if (range.trim()) payload.lesson_range = range.trim();
 
-        const score = usePerStudentScore ? (perStudentScore[id] ?? understandingScore) : understandingScore;
-        payload.understanding_score = score;
+        // Determine effective attendance for this student (active edit > existing draft value)
+        const effAttendance: string[] = activeFields.has('attendance_status')
+          ? (usePerStudentAttendance ? (perStudentAttendance[id] ?? attendanceStatus) : attendanceStatus)
+          : (drafts.find(d => d.id === id)?.attendance_status ?? []);
+        const absent = isAbsentStatus(effAttendance);
+
+        if (absent) {
+          // Absent students cannot have an understanding score
+          payload.understanding_score = null;
+        } else {
+          const score = usePerStudentScore ? (perStudentScore[id] ?? understandingScore) : understandingScore;
+          payload.understanding_score = score;
+        }
 
         const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
         payload.homework_status = mapResultToStatus(hw);
