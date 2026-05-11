@@ -1170,7 +1170,7 @@ Deno.serve(async (req) => {
           .select('id, word_set_ids, test_level, test_time_limit, test_direction, notes, due_date, assigned_at')
           .eq('student_id', student_id)
           .eq('test_mode', 'web')
-          .eq('status', 'in_progress')
+          .in('status', ['assigned', 'in_progress'])
           .order('updated_at', { ascending: false })
           .limit(1);
 
