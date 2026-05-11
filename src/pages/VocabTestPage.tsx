@@ -70,6 +70,10 @@ function VocabTestContent() {
             <Send className="w-3.5 h-3.5" />
             테스트 배정
           </TabsTrigger>
+          <TabsTrigger value="self-test" className="text-xs shrink-0 gap-1">
+            <Zap className="w-3.5 h-3.5" />
+            셀프 테스트
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
