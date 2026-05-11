@@ -113,6 +113,10 @@ function mapResultToStatus(v: string): string {
   }
 }
 
+const ABSENCE_STATUSES = ['인정결석', '무단결석', '보충불가'];
+const isAbsentStatus = (att: string[] | null | undefined): boolean =>
+  Array.isArray(att) && att.some(s => ABSENCE_STATUSES.includes(s));
+
 const ATTENDANCE_STATUS_OPTIONS = [
   { value: '출석', label: '출석' },
   { value: '지각', label: '지각' },
