@@ -48,6 +48,7 @@ import { useAuth, isAdmin, isTeacher } from '@/lib/auth';
 import { generateStudentCode, normalizePhone } from '@/lib/phoneUtils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StudentDetailDrawer } from '@/components/student/StudentDetailDrawer';
+import StudentsByTeacherView from '@/components/StudentsByTeacherView';
 
 // STUDENT-ENROLLMENT-STATUS-V1, STATS-SCHOOL-GRADE-V1, STUDENT-PIN-MANAGER-V1
 interface Student {
@@ -776,6 +777,12 @@ export default function Students() {
         })}
       </div>
 
+      <Tabs defaultValue="all" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="all">전체 학생</TabsTrigger>
+          <TabsTrigger value="by-teacher">담당 선생님별</TabsTrigger>
+        </TabsList>
+        <TabsContent value="all" className="space-y-4 mt-0">
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col lg:flex-row lg:items-center gap-3">
@@ -1033,6 +1040,16 @@ export default function Students() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="by-teacher" className="mt-0">
+          <StudentsByTeacherView
+            onSelectStudent={(sid) => {
+              const stu = students.find((s) => s.id === sid);
+              if (stu) { setDetailDefaultTab('overview'); setDetailStudent(stu); }
+            }}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Student Detail Side Drawer */}
       <StudentDetailDrawer
