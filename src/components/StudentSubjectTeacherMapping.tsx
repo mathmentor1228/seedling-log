@@ -28,7 +28,7 @@ const SUBJECTS = ['수학', '영어', '국어', '과학'] as const;
 // Allowed teacher names per subject. Subjects with 1 candidate auto-assign.
 const SUBJECT_TEACHERS: Record<string, string[]> = {
   '수학': ['이나연', '정선호', '최윤기', '황은지'],
-  '영어': ['김민희'],
+  '영어': ['김민희', '김다빈'],
   '국어': ['조준희'],
   '과학': ['최윤기'],
 };
