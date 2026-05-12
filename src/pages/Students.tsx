@@ -1040,6 +1040,16 @@ export default function Students() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="by-teacher" className="mt-0">
+          <StudentsByTeacherView
+            onSelectStudent={(sid) => {
+              const stu = students.find((s) => s.id === sid);
+              if (stu) { setDetailDefaultTab('overview'); setDetailStudent(stu); }
+            }}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Student Detail Side Drawer */}
       <StudentDetailDrawer
