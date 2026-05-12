@@ -86,9 +86,23 @@ Deno.serve(async (req) => {
             });
           }
 
-          scoped = scoped.filter((r: any) =>
-            soleSubjects.has(r.subject) || allowed.has(`${r.student_id}::${r.subject}`)
-          );
+          // Normalize subject: '수학- 공통수학1' / '수학-공통수학1' / '영어I' → base '수학'/'영어'
+          // student_subject_teachers stores only base subjects (수학/영어/국어/과학)
+          const normalizeSubject = (s: string) => {
+            const raw = String(s || '').trim();
+            // Split on '-' or whitespace, take first chunk
+            const base = raw.split(/[-\s]/)[0];
+            // Map common variants to base
+            if (base.startsWith('수학')) return '수학';
+            if (base.startsWith('영어')) return '영어';
+            if (base.startsWith('국어')) return '국어';
+            if (base.startsWith('과학')) return '과학';
+            return base;
+          };
+          scoped = scoped.filter((r: any) => {
+            const subj = normalizeSubject(r.subject);
+            return soleSubjects.has(subj) || allowed.has(`${r.student_id}::${subj}`);
+          });
         }
 
         const enriched = await Promise.all(
