@@ -777,6 +777,12 @@ export default function Students() {
         })}
       </div>
 
+      <Tabs defaultValue="all" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="all">전체 학생</TabsTrigger>
+          <TabsTrigger value="by-teacher">담당 선생님별</TabsTrigger>
+        </TabsList>
+        <TabsContent value="all" className="space-y-4 mt-0">
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col lg:flex-row lg:items-center gap-3">
