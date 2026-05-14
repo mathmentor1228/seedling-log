@@ -49,42 +49,61 @@ function stripPosTag(s: string): string {
   return stripped;
 }
 
+// Strip parenthetical glosses, e.g. "사과(과일)" -> "사과"
+function stripParens(s: string): string {
+  return s.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
+}
+
 function normalize(s: string): string {
-  return s
+  return stripParens(s)
     .trim()
     .toLowerCase()
-    .replace(/[\s]+/g, ' ')
-    .replace(/[.,;:!?'"()[\]{}]/g, '');
+    .replace(/\s+/g, ' ')
+    .replace(/[.:!?'"\[\]{}]/g, '');
+}
+
+// Split a meaning string into individual acceptable answers.
+// Supports: , / ; · 、 | ~또는~ and Korean middle dot.
+function splitMeanings(s: string): string[] {
+  return stripParens(s)
+    .split(/[,/;·、|]|\s또는\s|\sor\s/i)
+    .map(a => a.trim())
+    .filter(a => a.length > 0);
 }
 
 function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultStatus {
   const normalizedUser = normalize(userAnswer);
-  const normalizedAnswer = normalize(correctAnswer);
-
   if (!normalizedUser) return 'skipped';
 
-  const possibleAnswers = normalizedAnswer
-    .split(/[,/]/)
-    .map(a => normalize(a))
-    .filter(a => a.length > 0);
+  // Build candidate answers: full string + each split piece, both raw and pos-stripped
+  const rawPieces = splitMeanings(correctAnswer);
+  const candidates = new Set<string>();
+  candidates.add(normalize(correctAnswer));
+  for (const p of rawPieces) {
+    const n = normalize(p);
+    if (n) candidates.add(n);
+    const ns = normalize(stripPosTag(p));
+    if (ns) candidates.add(ns);
+  }
 
-  if (possibleAnswers.some(a => a === normalizedUser) || normalizedAnswer === normalizedUser) {
+  // Exact match against any candidate => fully correct
+  for (const c of candidates) {
+    if (c === normalizedUser) return 'correct';
+  }
+
+  // Also accept if user typed multiple meanings: split user's input too and accept
+  // when every user piece matches a candidate (any order).
+  const userPieces = splitMeanings(userAnswer).map(p => normalize(p)).filter(Boolean);
+  if (userPieces.length > 1 && userPieces.every(up => Array.from(candidates).some(c => c === up))) {
     return 'correct';
   }
 
   const userCore = normalize(stripPosTag(userAnswer));
-  const answerCores = correctAnswer
-    .split(/[,/]/)
-    .map(a => normalize(stripPosTag(a)))
-    .filter(a => a.length > 0);
 
-  if (userCore && answerCores.some(a => a === userCore)) {
-    return 'partial';
-  }
-
+  // Substring containment => partial (avoid 1-char false positives)
   if (userCore.length >= 2) {
-    for (const ac of answerCores) {
-      if (ac.includes(userCore) || userCore.includes(ac)) {
+    for (const c of candidates) {
+      if (c.length >= 2 && (c.includes(userCore) || userCore.includes(c))) {
         return 'partial';
       }
     }
