@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VocabSettingsPanel } from '@/components/vocab/VocabSettingsPanel';
@@ -10,79 +10,170 @@ import { TestScheduleManager } from '@/components/TestScheduleManager';
 import { VocabTestResultsPanel } from '@/components/vocab/VocabTestResultsPanel';
 import { VocabTestAssignManager } from '@/components/vocab/VocabTestAssignManager';
 import { VocabSelfTestResults } from '@/components/vocab/VocabSelfTestResults';
-import { BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings, BookOpen, Languages, CalendarDays, ClipboardList, Send, Zap } from 'lucide-react';
+import {
+  BarChart3, FileText, Shuffle, Printer, FolderOpen, Settings,
+  BookOpen, Languages, CalendarDays, ClipboardList, Send, Zap,
+  LayoutDashboard, FilePlus2, Users2, LineChart, Cog,
+} from 'lucide-react';
+
+type SubTab = {
+  value: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description?: string;
+};
+
+type Section = {
+  value: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  subs: SubTab[];
+};
+
+const SECTIONS: Section[] = [
+  {
+    value: 'overview',
+    label: '대시보드',
+    icon: LayoutDashboard,
+    description: '단어 학습 현황을 한눈에 확인합니다',
+    subs: [
+      { value: 'dashboard', label: '학습 현황', icon: BarChart3 },
+    ],
+  },
+  {
+    value: 'create',
+    label: '시험지 제작',
+    icon: FilePlus2,
+    description: '단어를 입력하고 시험지를 출제·인쇄합니다',
+    subs: [
+      { value: 'edit', label: '단어 입력', icon: FileText },
+      { value: 'generate', label: '시험 출제', icon: Shuffle },
+      { value: 'result', label: '시험지/답지', icon: Printer },
+      { value: 'saved', label: '저장된 시험지', icon: FolderOpen },
+    ],
+  },
+  {
+    value: 'assign',
+    label: '배정 & 일정',
+    icon: Users2,
+    description: '학생별 단어/테스트 배정과 시험 일정을 관리합니다',
+    subs: [
+      { value: 'vocab-assign', label: '단어 배정', icon: Languages },
+      { value: 'test-assign', label: '테스트 배정', icon: Send },
+      { value: 'schedule', label: '스케줄 관리', icon: BookOpen },
+      { value: 'test-schedule', label: '시험 일정', icon: CalendarDays },
+    ],
+  },
+  {
+    value: 'results',
+    label: '결과 분석',
+    icon: LineChart,
+    description: '오프라인 시험과 셀프 테스트 결과를 확인합니다',
+    subs: [
+      { value: 'results', label: '시험 결과', icon: ClipboardList },
+      { value: 'self-test', label: '셀프 테스트', icon: Zap },
+    ],
+  },
+  {
+    value: 'config',
+    label: '설정',
+    icon: Cog,
+    description: '학생별 단어 학습 설정을 관리합니다',
+    subs: [
+      { value: 'settings', label: '학생 설정', icon: Settings },
+    ],
+  },
+];
+
+const GENERATOR_TABS = ['edit', 'generate', 'result', 'saved'];
 
 function VocabTestContent() {
+  const [section, setSection] = useState('overview');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const generatorTabs = ['edit', 'generate', 'result', 'saved'];
-  const isGeneratorTab = generatorTabs.includes(activeTab);
+
+  const currentSection = useMemo(
+    () => SECTIONS.find(s => s.value === section) ?? SECTIONS[0],
+    [section]
+  );
+
+  const handleSectionChange = (val: string) => {
+    setSection(val);
+    const next = SECTIONS.find(s => s.value === val);
+    if (next && !next.subs.some(t => t.value === activeTab)) {
+      setActiveTab(next.subs[0].value);
+    }
+  };
+
+  // Allow inner components (e.g., dashboard cards) to jump anywhere
+  const jumpToTab = (val: string) => {
+    const owner = SECTIONS.find(s => s.subs.some(t => t.value === val));
+    if (owner) setSection(owner.value);
+    setActiveTab(val);
+  };
+
+  const isGeneratorTab = GENERATOR_TABS.includes(activeTab);
 
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
         <h1 className="text-lg font-semibold">단어시험관리</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">단어 시험 설정, 스케줄, 결과를 관리합니다</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          단어 학습부터 출제·배정·결과까지 한 곳에서 관리합니다
+        </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="w-full overflow-x-auto flex-nowrap whitespace-nowrap scrollbar-hide h-auto gap-1 justify-start">
-          <TabsTrigger value="dashboard" className="text-xs shrink-0 gap-1">
-            <BarChart3 className="w-3.5 h-3.5" />
-            대시보드
-          </TabsTrigger>
-          <TabsTrigger value="edit" className="text-xs shrink-0 gap-1">
-            <FileText className="w-3.5 h-3.5" />
-            단어 입력
-          </TabsTrigger>
-          <TabsTrigger value="generate" className="text-xs shrink-0 gap-1">
-            <Shuffle className="w-3.5 h-3.5" />
-            시험 출제
-          </TabsTrigger>
-          <TabsTrigger value="result" className="text-xs shrink-0 gap-1">
-            <Printer className="w-3.5 h-3.5" />
-            시험지/답지
-          </TabsTrigger>
-          <TabsTrigger value="saved" className="text-xs shrink-0 gap-1">
-            <FolderOpen className="w-3.5 h-3.5" />
-            저장된 시험지
-          </TabsTrigger>
-          <TabsTrigger value="results" className="text-xs shrink-0 gap-1">
-            <ClipboardList className="w-3.5 h-3.5" />
-            시험 결과
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="text-xs shrink-0 gap-1">
-            <Settings className="w-3.5 h-3.5" />
-            학생 설정
-          </TabsTrigger>
-          <TabsTrigger value="schedule" className="text-xs shrink-0 gap-1">
-            <BookOpen className="w-3.5 h-3.5" />
-            스케줄 관리
-          </TabsTrigger>
-          <TabsTrigger value="vocab-assign" className="text-xs shrink-0 gap-1">
-            <Languages className="w-3.5 h-3.5" />
-            단어 배정
-          </TabsTrigger>
-          <TabsTrigger value="test-schedule" className="text-xs shrink-0 gap-1">
-            <CalendarDays className="w-3.5 h-3.5" />
-            시험 일정
-          </TabsTrigger>
-          <TabsTrigger value="test-assign" className="text-xs shrink-0 gap-1">
-            <Send className="w-3.5 h-3.5" />
-            테스트 배정
-          </TabsTrigger>
-          <TabsTrigger value="self-test" className="text-xs shrink-0 gap-1">
-            <Zap className="w-3.5 h-3.5" />
-            셀프 테스트
-          </TabsTrigger>
+      {/* 1차: 섹션 */}
+      <Tabs value={section} onValueChange={handleSectionChange}>
+        <TabsList className="w-full overflow-x-auto flex-nowrap whitespace-nowrap scrollbar-hide h-auto gap-1 justify-start p-1">
+          {SECTIONS.map(s => {
+            const Icon = s.icon;
+            return (
+              <TabsTrigger
+                key={s.value}
+                value={s.value}
+                className="text-sm shrink-0 gap-1.5 px-3 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              >
+                <Icon className="w-4 h-4" />
+                {s.label}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
+      </Tabs>
+
+      {/* 섹션 설명 */}
+      <div className="rounded-md border bg-muted/30 px-3 py-2">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{currentSection.label}</span>
+          <span className="mx-2 text-muted-foreground/50">·</span>
+          {currentSection.description}
+        </p>
+      </div>
+
+      {/* 2차: 하위 탭 */}
+      <Tabs value={activeTab} onValueChange={jumpToTab} className="space-y-4">
+        {currentSection.subs.length > 1 && (
+          <TabsList className="w-full overflow-x-auto flex-nowrap whitespace-nowrap scrollbar-hide h-auto gap-1 justify-start bg-muted/40">
+            {currentSection.subs.map(t => {
+              const Icon = t.icon;
+              return (
+                <TabsTrigger key={t.value} value={t.value} className="text-xs shrink-0 gap-1">
+                  <Icon className="w-3.5 h-3.5" />
+                  {t.label}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        )}
 
         <TabsContent value="dashboard">
-          <VocabDashboard onTabChange={setActiveTab} />
+          <VocabDashboard onTabChange={jumpToTab} />
         </TabsContent>
 
         {isGeneratorTab && (
           <div className="mt-2">
-            <VocabTestGenerator controlledTab={activeTab} onTabChange={setActiveTab} />
+            <VocabTestGenerator controlledTab={activeTab} onTabChange={jumpToTab} />
           </div>
         )}
 
