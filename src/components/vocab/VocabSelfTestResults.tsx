@@ -3,10 +3,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Zap, AlertTriangle, Clock } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Loader2, Zap, AlertTriangle, Clock, Pencil, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 interface Row {
   id: string;
@@ -21,6 +27,10 @@ interface Row {
   expected_seconds: number | null;
   notified_teacher_id: string | null;
   self_test_options: any;
+  teacher_corrected_at: string | null;
+  teacher_correction_note: string | null;
+  original_correct_count: number | null;
+  original_wrong_count: number | null;
 }
 
 const RANGES = [
@@ -31,10 +41,48 @@ const RANGES = [
 
 export function VocabSelfTestResults() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
   const [days, setDays] = useState('14');
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [editCorrect, setEditCorrect] = useState<string>('0');
+  const [editNote, setEditNote] = useState<string>('');
+  const [saving, setSaving] = useState(false);
+
+  function openEdit(r: Row) {
+    setEditing(r);
+    setEditCorrect(String(r.correct_count));
+    setEditNote(r.teacher_correction_note || '');
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    const newCorrect = Math.max(0, Math.min(editing.total_count, parseInt(editCorrect, 10) || 0));
+    const newWrong = editing.total_count - newCorrect;
+    setSaving(true);
+    const { error } = await supabase
+      .from('vocab_card_completions')
+      .update({
+        correct_count: newCorrect,
+        wrong_count: newWrong,
+        original_correct_count: editing.original_correct_count ?? editing.correct_count,
+        original_wrong_count: editing.original_wrong_count ?? editing.wrong_count,
+        teacher_correction_note: editNote || null,
+        teacher_corrected_at: new Date().toISOString(),
+        teacher_corrected_by: user?.id ?? null,
+      } as any)
+      .eq('id', editing.id);
+    setSaving(false);
+    if (error) {
+      toast({ title: '저장 실패', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: '결과 보정 완료', description: `${editing.student_name} → ${newCorrect}/${editing.total_count}` });
+    setEditing(null);
+    void load();
+  }
 
   useEffect(() => {
     void load();
@@ -47,7 +95,7 @@ export function VocabSelfTestResults() {
 
     let query = supabase
       .from('vocab_card_completions')
-      .select('id, student_id, completed_at, correct_count, wrong_count, total_count, mode, duration_seconds, expected_seconds, notified_teacher_id, self_test_options, students(name)')
+      .select('id, student_id, completed_at, correct_count, wrong_count, total_count, mode, duration_seconds, expected_seconds, notified_teacher_id, self_test_options, teacher_corrected_at, teacher_correction_note, original_correct_count, original_wrong_count, students(name)')
       .eq('is_self_test', true)
       .gte('completed_at', since.toISOString())
       .order('completed_at', { ascending: false })
@@ -75,6 +123,10 @@ export function VocabSelfTestResults() {
         expected_seconds: r.expected_seconds,
         notified_teacher_id: r.notified_teacher_id,
         self_test_options: r.self_test_options,
+        teacher_corrected_at: r.teacher_corrected_at,
+        teacher_correction_note: r.teacher_correction_note,
+        original_correct_count: r.original_correct_count,
+        original_wrong_count: r.original_wrong_count,
       })));
     }
     setLoading(false);
@@ -135,6 +187,7 @@ export function VocabSelfTestResults() {
                   <TableHead className="text-xs text-center">점수</TableHead>
                   <TableHead className="text-xs text-center">소요 / 기준</TableHead>
                   <TableHead className="text-xs">옵션</TableHead>
+                  <TableHead className="text-xs text-center">보정</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -145,6 +198,7 @@ export function VocabSelfTestResults() {
                   const overTime = !!(dur && exp && dur > exp);
                   const opts = r.self_test_options || {};
                   const modes = Array.isArray(opts.modes) ? opts.modes : null;
+                  const corrected = !!r.teacher_corrected_at;
                   return (
                     <TableRow key={r.id} className={overTime ? 'bg-destructive/5' : ''}>
                       <TableCell className="text-xs whitespace-nowrap">{format(new Date(r.completed_at), 'MM/dd HH:mm')}</TableCell>
@@ -153,6 +207,12 @@ export function VocabSelfTestResults() {
                         <span className={pct >= 80 ? 'text-green-600 font-semibold' : pct >= 60 ? 'text-amber-600' : 'text-red-500 font-semibold'}>
                           {r.correct_count}/{r.total_count} ({pct}%)
                         </span>
+                        {corrected && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5 inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-blue-500" />
+                            보정됨 (원본 {r.original_correct_count}/{r.total_count})
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-center">
                         {dur != null ? (
@@ -179,6 +239,11 @@ export function VocabSelfTestResults() {
                           )}
                         </div>
                       </TableCell>
+                      <TableCell className="text-center">
+                        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => openEdit(r)}>
+                          <Pencil className="w-3 h-3 mr-1" /> 보정
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -186,6 +251,53 @@ export function VocabSelfTestResults() {
             </Table>
           </div>
         )}
+
+        <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>테스트 결과 보정</DialogTitle>
+            </DialogHeader>
+            {editing && (
+              <div className="space-y-3">
+                <div className="text-sm">
+                  <span className="font-medium">{editing.student_name}</span>
+                  <span className="text-muted-foreground ml-2">
+                    {format(new Date(editing.completed_at), 'MM/dd HH:mm')}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  자동 채점 결과: <span className="font-semibold">{editing.original_correct_count ?? editing.correct_count}/{editing.total_count}</span>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">실제 정답 개수 (0–{editing.total_count})</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={editing.total_count}
+                    value={editCorrect}
+                    onChange={e => setEditCorrect(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">보정 사유 (선택)</Label>
+                  <Textarea
+                    rows={2}
+                    placeholder="예: '사과/미안함'에서 '사과'만 적었지만 정답으로 인정"
+                    value={editNote}
+                    onChange={e => setEditNote(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>취소</Button>
+              <Button onClick={saveEdit} disabled={saving}>
+                {saving && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+                저장
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

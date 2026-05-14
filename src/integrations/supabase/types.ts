@@ -5639,9 +5639,14 @@ export type Database = {
           is_self_test: boolean
           mode: string
           notified_teacher_id: string | null
+          original_correct_count: number | null
+          original_wrong_count: number | null
           self_test_options: Json | null
           started_at: string | null
           student_id: string
+          teacher_corrected_at: string | null
+          teacher_corrected_by: string | null
+          teacher_correction_note: string | null
           test_source: string
           total_count: number
           word_set_ids: string[]
@@ -5657,9 +5662,14 @@ export type Database = {
           is_self_test?: boolean
           mode?: string
           notified_teacher_id?: string | null
+          original_correct_count?: number | null
+          original_wrong_count?: number | null
           self_test_options?: Json | null
           started_at?: string | null
           student_id: string
+          teacher_corrected_at?: string | null
+          teacher_corrected_by?: string | null
+          teacher_correction_note?: string | null
           test_source?: string
           total_count?: number
           word_set_ids?: string[]
@@ -5675,9 +5685,14 @@ export type Database = {
           is_self_test?: boolean
           mode?: string
           notified_teacher_id?: string | null
+          original_correct_count?: number | null
+          original_wrong_count?: number | null
           self_test_options?: Json | null
           started_at?: string | null
           student_id?: string
+          teacher_corrected_at?: string | null
+          teacher_corrected_by?: string | null
+          teacher_correction_note?: string | null
           test_source?: string
           total_count?: number
           word_set_ids?: string[]
