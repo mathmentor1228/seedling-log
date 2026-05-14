@@ -3,10 +3,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Zap, AlertTriangle, Clock } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Loader2, Zap, AlertTriangle, Clock, Pencil, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 interface Row {
   id: string;
@@ -21,6 +27,10 @@ interface Row {
   expected_seconds: number | null;
   notified_teacher_id: string | null;
   self_test_options: any;
+  teacher_corrected_at: string | null;
+  teacher_correction_note: string | null;
+  original_correct_count: number | null;
+  original_wrong_count: number | null;
 }
 
 const RANGES = [
