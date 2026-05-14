@@ -57,7 +57,7 @@ export function VocabSelfTestResults() {
 
     let query = supabase
       .from('vocab_card_completions')
-      .select('id, student_id, completed_at, correct_count, wrong_count, total_count, mode, duration_seconds, expected_seconds, notified_teacher_id, self_test_options, students(name)')
+      .select('id, student_id, completed_at, correct_count, wrong_count, total_count, mode, duration_seconds, expected_seconds, notified_teacher_id, self_test_options, teacher_corrected_at, teacher_correction_note, original_correct_count, original_wrong_count, students(name)')
       .eq('is_self_test', true)
       .gte('completed_at', since.toISOString())
       .order('completed_at', { ascending: false })
@@ -85,6 +85,10 @@ export function VocabSelfTestResults() {
         expected_seconds: r.expected_seconds,
         notified_teacher_id: r.notified_teacher_id,
         self_test_options: r.self_test_options,
+        teacher_corrected_at: r.teacher_corrected_at,
+        teacher_correction_note: r.teacher_correction_note,
+        original_correct_count: r.original_correct_count,
+        original_wrong_count: r.original_wrong_count,
       })));
     }
     setLoading(false);
