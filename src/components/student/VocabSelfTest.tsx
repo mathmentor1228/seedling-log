@@ -222,6 +222,8 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
 
   const doCheck = useCallback((answerText: string, isSkip: boolean) => {
     if (!currentWord) return;
+    if (answeredRef.current) return; // prevent double-record from timer races
+    answeredRef.current = true;
     const status = isSkip ? 'skipped' as ResultStatus : checkAnswerResult(answerText, answer);
     setCurrentStatus(status);
     setShowResult(true);
