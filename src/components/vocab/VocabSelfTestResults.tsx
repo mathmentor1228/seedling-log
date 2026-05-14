@@ -41,10 +41,48 @@ const RANGES = [
 
 export function VocabSelfTestResults() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
   const [days, setDays] = useState('14');
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [editCorrect, setEditCorrect] = useState<string>('0');
+  const [editNote, setEditNote] = useState<string>('');
+  const [saving, setSaving] = useState(false);
+
+  function openEdit(r: Row) {
+    setEditing(r);
+    setEditCorrect(String(r.correct_count));
+    setEditNote(r.teacher_correction_note || '');
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    const newCorrect = Math.max(0, Math.min(editing.total_count, parseInt(editCorrect, 10) || 0));
+    const newWrong = editing.total_count - newCorrect;
+    setSaving(true);
+    const { error } = await supabase
+      .from('vocab_card_completions')
+      .update({
+        correct_count: newCorrect,
+        wrong_count: newWrong,
+        original_correct_count: editing.original_correct_count ?? editing.correct_count,
+        original_wrong_count: editing.original_wrong_count ?? editing.wrong_count,
+        teacher_correction_note: editNote || null,
+        teacher_corrected_at: new Date().toISOString(),
+        teacher_corrected_by: user?.id ?? null,
+      } as any)
+      .eq('id', editing.id);
+    setSaving(false);
+    if (error) {
+      toast({ title: '저장 실패', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: '결과 보정 완료', description: `${editing.student_name} → ${newCorrect}/${editing.total_count}` });
+    setEditing(null);
+    void load();
+  }
 
   useEffect(() => {
     void load();
