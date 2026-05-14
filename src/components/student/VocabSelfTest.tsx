@@ -165,13 +165,14 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
   // Per-question timer
   useEffect(() => {
     if (finished || showResult) return;
+    answeredRef.current = false;
     setPerQuestionTimer(perQuestionSeconds);
     const interval = setInterval(() => {
       setPerQuestionTimer(prev => {
         if (prev <= 1) {
           clearInterval(interval);
-          // Auto-skip on timeout
-          if (!showResult) {
+          // Auto-skip on timeout — but ONLY if not already answered
+          if (!answeredRef.current) {
             doCheck('', true);
           }
           return 0;
