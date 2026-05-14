@@ -127,6 +127,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
   const [globalTimeLeft, setGlobalTimeLeft] = useState<number | null>(testTimeLimit || null);
   const inputRef = useRef<HTMLInputElement>(null);
   const startedAtRef = useRef<string>(new Date().toISOString());
+  const answeredRef = useRef(false);
 
   // Per-question mode (random pick if pool, else fixed)
   const perQuestionModes = useMemo<QMode[]>(() => {
