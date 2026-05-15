@@ -56,10 +56,45 @@ function stripParens(s: string): string {
 
 function normalize(s: string): string {
   return stripParens(s)
-    .trim()
     .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[.:!?'"\[\]{}]/g, '');
+    // Strip all whitespace (spacing-insensitive comparison)
+    .replace(/\s+/g, '')
+    // Strip punctuation/symbols commonly typed by mistake on mobile
+    .replace(/[.,:!?'"\[\]{}()\-_~`*…·、|/\\]/g, '')
+    .trim();
+}
+
+// Levenshtein distance for typo tolerance
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const prev = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    let curr = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const next = Math.min(curr + 1, prev[j] + 1, prev[j - 1] + cost);
+      prev[j - 1] = curr;
+      curr = next;
+    }
+    prev[b.length] = curr;
+  }
+  return prev[b.length];
+}
+
+// Allow small typos: ~1 edit for short answers, scales with length.
+function isFuzzyMatch(user: string, candidate: string): boolean {
+  if (!user || !candidate) return false;
+  const len = Math.max(user.length, candidate.length);
+  // Too short — require exact match to avoid false positives
+  if (len <= 2) return user === candidate;
+  let threshold: number;
+  if (len <= 4) threshold = 1;
+  else if (len <= 8) threshold = 2;
+  else threshold = Math.floor(len * 0.25);
+  return levenshtein(user, candidate) <= threshold;
 }
 
 // Split a meaning string into individual acceptable answers.
