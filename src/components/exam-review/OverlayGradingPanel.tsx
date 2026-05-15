@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2, RotateCcw, RotateCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Maximize2, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -92,6 +92,7 @@ interface OverlayGradingPanelProps {
   items: OverlayReviewItem[];
   saving: boolean;
   onSaveItem: (payload: OverlaySavePayload) => Promise<void>;
+  onDeleteItem?: (payload: { id?: string; item_number: number }) => Promise<void>;
   onOpenTemplateSetup: () => void;
   answerDisplay?: OverlayAnswerDisplay | null;
 }
@@ -332,6 +333,7 @@ export function OverlayGradingPanel({
   items,
   saving,
   onSaveItem,
+  onDeleteItem,
   onOpenTemplateSetup,
   answerDisplay,
 }: OverlayGradingPanelProps) {
@@ -467,6 +469,13 @@ export function OverlayGradingPanel({
     await onSaveItem(payload);
   };
 
+  const handleTooltipDelete = async () => {
+    if (!tooltip || !onDeleteItem) return;
+    if (!window.confirm(`${tooltip.item_number}번 채점 마커를 삭제할까요? (위치와 O/X 모두 지워집니다)`)) return;
+    setTooltip(null);
+    await onDeleteItem({ id: tooltip.id, item_number: tooltip.item_number });
+  };
+
   const renderGradeTooltip = () => tooltip ? (
     <div
       className="absolute z-20 flex min-w-[120px] -translate-x-1/2 -translate-y-[110%] flex-col items-center gap-1.5 rounded-[10px] border border-border bg-card px-2.5 py-2 shadow-lg"
@@ -508,9 +517,22 @@ export function OverlayGradingPanel({
           <span className="text-[11px] text-muted-foreground">/{displayScore(tooltip.points)}점</span>
         </div>
       ) : null}
-      <button type="button" onClick={() => setTooltip(null)} className="text-[10px] text-muted-foreground/70 hover:text-muted-foreground">
-        취소
-      </button>
+      <div className="flex items-center gap-2 pt-0.5">
+        {tooltip.id && onDeleteItem ? (
+          <button
+            type="button"
+            onClick={() => void handleTooltipDelete()}
+            disabled={saving}
+            className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[10px] font-semibold text-destructive hover:bg-destructive/20 disabled:opacity-50"
+            aria-label={`${tooltip.item_number}번 마커 삭제`}
+          >
+            <Trash2 className="h-3 w-3" /> 마커 삭제
+          </button>
+        ) : null}
+        <button type="button" onClick={() => setTooltip(null)} className="text-[10px] text-muted-foreground/70 hover:text-muted-foreground">
+          취소
+        </button>
+      </div>
     </div>
   ) : null;
 
@@ -640,7 +662,7 @@ export function OverlayGradingPanel({
         <div className="mt-3 rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
           <div className="flex items-start gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 text-[hsl(var(--review-done-badge))]" />
-            <p>사진을 클릭하면 다음 미채점 문항이 자동 배정되고, 기존 마커를 누르면 해당 문항을 다시 수정할 수 있습니다.</p>
+            <p>사진을 클릭하면 다음 미채점 문항이 자동 배정되고, <b>기존 마커(O/X/△)를 누르면</b> 다시 수정하거나 <b>마커 삭제</b> 버튼으로 잘못 찍은 위치를 지울 수 있습니다.</p>
           </div>
         </div>
       </div>

@@ -862,6 +862,59 @@ export function ExamReviewPanel() {
     }
   }, [fullName, itemReviews, loadReviewDetail, overallComment, reviewId, selectedRow, template, toast, user]);
 
+  const deleteOverlayItem = useCallback(async (payload: { id?: string; item_number: number }) => {
+    if (!selectedRow || !template) return;
+    const previousItems = itemReviews;
+    const mergedItems = previousItems.filter((item) => item.item_number !== payload.item_number);
+    setItemReviews(mergedItems);
+    setSaving(true);
+    try {
+      let currentReviewId = reviewId;
+      if (!currentReviewId) {
+        const { data: existingReview, error: existingReviewError } = await supabase
+          .from('exam_reviews')
+          .select('id')
+          .eq('result_id', selectedRow.id)
+          .maybeSingle();
+        if (existingReviewError) throw existingReviewError;
+        currentReviewId = existingReview?.id ?? null;
+      }
+
+      if (currentReviewId) {
+        if (payload.id) {
+          const { error: deleteByIdError } = await supabase
+            .from('exam_item_reviews')
+            .delete()
+            .eq('id', payload.id);
+          if (deleteByIdError) throw deleteByIdError;
+        } else {
+          const { error: deleteByNumberError } = await supabase
+            .from('exam_item_reviews')
+            .delete()
+            .eq('review_id', currentReviewId)
+            .eq('item_number', payload.item_number);
+          if (deleteByNumberError) throw deleteByNumberError;
+        }
+
+        const earnedScore = Math.round(mergedItems.reduce((sum, item) => sum + (item.score_earned ?? 0), 0) * 100) / 100;
+        const totalScore = Math.round(template.items.reduce((sum, item) => sum + (item.points || 0), 0) * 100) / 100;
+        const { error: scoreError } = await supabase
+          .from('exam_reviews')
+          .update({ earned_score: earnedScore, total_score: totalScore, updated_at: new Date().toISOString() })
+          .eq('id', currentReviewId);
+        if (scoreError) throw scoreError;
+      }
+
+      await loadReviewDetail(selectedRow.id);
+      toast({ title: `${payload.item_number}번 채점이 삭제되었습니다` });
+    } catch (error: any) {
+      setItemReviews(previousItems);
+      toast({ title: '문항 삭제 실패', description: error.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }, [itemReviews, loadReviewDetail, reviewId, selectedRow, template, toast]);
+
   const resetComment = useCallback(() => {
     setOverallComment('');
     setAiGenerated(false);
@@ -1193,6 +1246,7 @@ export function ExamReviewPanel() {
                   items={itemReviews}
                   saving={saving}
                   onSaveItem={saveOverlayItem}
+                  onDeleteItem={deleteOverlayItem}
                   onOpenTemplateSetup={() => setTemplateSetupOpen(true)}
                   answerDisplay={answerDisplay}
                 />
