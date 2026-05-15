@@ -1246,6 +1246,7 @@ export function ExamReviewPanel() {
                   items={itemReviews}
                   saving={saving}
                   onSaveItem={saveOverlayItem}
+                  onDeleteItem={deleteOverlayItem}
                   onOpenTemplateSetup={() => setTemplateSetupOpen(true)}
                   answerDisplay={answerDisplay}
                 />
