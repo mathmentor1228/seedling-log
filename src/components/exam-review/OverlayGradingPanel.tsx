@@ -662,7 +662,7 @@ export function OverlayGradingPanel({
         <div className="mt-3 rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
           <div className="flex items-start gap-2">
             <CheckCircle2 className="mt-0.5 h-4 w-4 text-[hsl(var(--review-done-badge))]" />
-            <p>사진을 클릭하면 다음 미채점 문항이 자동 배정되고, 기존 마커를 누르면 해당 문항을 다시 수정할 수 있습니다.</p>
+            <p>사진을 클릭하면 다음 미채점 문항이 자동 배정되고, <b>기존 마커(O/X/△)를 누르면</b> 다시 수정하거나 <b>마커 삭제</b> 버튼으로 잘못 찍은 위치를 지울 수 있습니다.</p>
           </div>
         </div>
       </div>
