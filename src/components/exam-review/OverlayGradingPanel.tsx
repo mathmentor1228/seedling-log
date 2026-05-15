@@ -92,6 +92,7 @@ interface OverlayGradingPanelProps {
   items: OverlayReviewItem[];
   saving: boolean;
   onSaveItem: (payload: OverlaySavePayload) => Promise<void>;
+  onDeleteItem?: (payload: { id?: string; item_number: number }) => Promise<void>;
   onOpenTemplateSetup: () => void;
   answerDisplay?: OverlayAnswerDisplay | null;
 }
