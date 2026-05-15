@@ -126,10 +126,18 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
     if (c === normalizedUser) return 'correct';
   }
 
+  // Typo-tolerant match (mobile typing)
+  for (const c of candidates) {
+    if (isFuzzyMatch(normalizedUser, c)) return 'correct';
+  }
+
   // Also accept if user typed multiple meanings: split user's input too and accept
   // when every user piece matches a candidate (any order).
   const userPieces = splitMeanings(userAnswer).map(p => normalize(p)).filter(Boolean);
-  if (userPieces.length > 1 && userPieces.every(up => Array.from(candidates).some(c => c === up))) {
+  if (
+    userPieces.length > 1 &&
+    userPieces.every(up => Array.from(candidates).some(c => c === up || isFuzzyMatch(up, c)))
+  ) {
     return 'correct';
   }
 
