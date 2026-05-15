@@ -333,6 +333,7 @@ export function OverlayGradingPanel({
   items,
   saving,
   onSaveItem,
+  onDeleteItem,
   onOpenTemplateSetup,
   answerDisplay,
 }: OverlayGradingPanelProps) {
