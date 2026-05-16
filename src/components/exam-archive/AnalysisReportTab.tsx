@@ -1026,27 +1026,51 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
 
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden bg-background">
-      <aside className="flex w-[440px] min-w-[440px] shrink-0 flex-col border-r bg-muted/30">
-        <div className="shrink-0 px-3 pt-3">
-          <Button className="h-10 w-full gap-2 text-sm font-semibold" onClick={startNewReport}>
-            <Plus className="h-4 w-4" /> 새 보고서 작성
+      {sidebarCollapsed ? (
+        <div className="flex w-10 shrink-0 flex-col items-center border-r bg-muted/30 pt-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setSidebarCollapsed(false)}
+            title="보고서 목록 펼치기"
+          >
+            <ChevronRight className="h-4 w-4" />
           </Button>
+          <div className="mt-3 [writing-mode:vertical-rl] text-xs text-muted-foreground">보고서 목록</div>
         </div>
-        {loading ? (
-          <div className="flex flex-1 items-center justify-center text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
+      ) : (
+        <aside className="flex w-[300px] min-w-[300px] shrink-0 flex-col border-r bg-muted/30 xl:w-[360px] xl:min-w-[360px]">
+          <div className="flex shrink-0 items-center gap-2 px-3 pt-3">
+            <Button className="h-10 flex-1 gap-2 text-sm font-semibold" onClick={startNewReport}>
+              <Plus className="h-4 w-4" /> 새 보고서 작성
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-9 shrink-0"
+              onClick={() => setSidebarCollapsed(true)}
+              title="목록 접기"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
           </div>
-        ) : (
-          <ReportBrowser
-            reports={reports as unknown as ReportRow[]}
-            selectedReportId={selectedReportId}
-            onSelect={(r) => void selectReport(r as unknown as AnalysisReport)}
-            onEdit={(r) => handleEdit(r as unknown as AnalysisReport)}
-            onDelete={(r) => void handleDelete(r as unknown as AnalysisReport)}
-            viewCounts={viewCounts}
-          />
-        )}
-      </aside>
+          {loading ? (
+            <div className="flex flex-1 items-center justify-center text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : (
+            <ReportBrowser
+              reports={reports as unknown as ReportRow[]}
+              selectedReportId={selectedReportId}
+              onSelect={(r) => void selectReport(r as unknown as AnalysisReport)}
+              onEdit={(r) => handleEdit(r as unknown as AnalysisReport)}
+              onDelete={(r) => void handleDelete(r as unknown as AnalysisReport)}
+              viewCounts={viewCounts}
+            />
+          )}
+        </aside>
+      )}
 
       <section className="min-w-0 flex-1 overflow-y-auto px-4 py-4 xl:px-6">
         {!selectedReportId && reports.length > 0 && form.schoolName === '' ? (
