@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, FileText, Loader2, Lock, Plus, Save, Send, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, FileText, Loader2, Lock, Plus, Save, Send, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
