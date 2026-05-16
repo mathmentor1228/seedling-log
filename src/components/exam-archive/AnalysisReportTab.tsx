@@ -189,6 +189,7 @@ export function AnalysisReportTab({ schools, selectedSchool }: Props) {
   const [isGeneratingDeepAnalysis, setIsGeneratingDeepAnalysis] = useState(false);
   const [isPublishingDeepAnalysis, setIsPublishingDeepAnalysis] = useState(false);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // AI_PARSE_OPTIONIZATION_V1
   const [aiAutoAnalyze, setAiAutoAnalyze] = useState<boolean>(() => {
     try { return localStorage.getItem('examArchive.aiParse.toggle') === 'true'; } catch { return false; }
