@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
     );
     const { error } = await admin.auth.admin.updateUserById(user_id, { password });
     if (error) throw error;
-    return new Response(JSON.stringify({ ok: true, user_id: user.id }), {
+    return new Response(JSON.stringify({ ok: true, user_id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
