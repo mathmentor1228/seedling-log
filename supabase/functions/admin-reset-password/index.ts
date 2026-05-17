@@ -14,14 +14,19 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (listErr) throw listErr;
-    const user = list.users.find((u) => (u.email ?? "").toLowerCase() === email.toLowerCase());
-    if (!user) {
+    const { data: found, error: findErr } = await admin
+      .schema("auth" as any)
+      .from("users")
+      .select("id")
+      .ilike("email", email)
+      .maybeSingle();
+    if (findErr) throw findErr;
+    if (!found) {
       return new Response(JSON.stringify({ error: "user not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const user = { id: (found as any).id };
     const { error } = await admin.auth.admin.updateUserById(user.id, { password });
     if (error) throw error;
     return new Response(JSON.stringify({ ok: true, user_id: user.id }), {
