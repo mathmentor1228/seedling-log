@@ -1,0 +1,1 @@
+UPDATE public.classrooms SET manager_name='김다빈' WHERE manager_name='서미정';
