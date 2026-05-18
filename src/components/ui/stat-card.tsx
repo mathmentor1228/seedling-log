@@ -42,11 +42,11 @@ export function StatCard({ title, value, subtitle, icon, trend, className, iconC
 
   return (
     <div className={cn(
-      'relative bg-card rounded-2xl border border-border border-l-[3px] p-5 shadow-card transition-all duration-200 hover:shadow-card-hover',
+      'relative bg-card rounded-2xl border border-border border-l-[3px] p-4 shadow-card transition-all duration-200 hover:shadow-card-hover min-w-0',
       accent.border,
       className
     )}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         {icon && (
           <div className={cn(
             'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
@@ -55,15 +55,15 @@ export function StatCard({ title, value, subtitle, icon, trend, className, iconC
             {icon}
           </div>
         )}
-        <div className="flex-1 text-right">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70 mb-1">{title}</p>
-          <p className="text-2xl font-bold text-foreground tracking-tight leading-none">{value}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold text-muted-foreground mb-1 truncate whitespace-nowrap">{title}</p>
+          <p className="text-2xl font-bold text-foreground tracking-tight leading-none whitespace-nowrap">{value}</p>
           {subtitle && (
-            <p className="text-[11px] text-muted-foreground mt-1.5">{subtitle}</p>
+            <p className="text-[11px] text-muted-foreground mt-1.5 truncate">{subtitle}</p>
           )}
           {trend && (
             <p className={cn(
-              'text-xs font-semibold mt-1.5 flex items-center gap-0.5 justify-end',
+              'text-xs font-semibold mt-1.5 flex items-center gap-0.5',
               trend.isPositive ? 'text-success' : 'text-destructive'
             )}>
               {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
