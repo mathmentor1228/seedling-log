@@ -29,7 +29,8 @@ import {
   Briefcase,
   BookCopy,
   Brain,
-  Wallet
+  Wallet,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -133,6 +134,7 @@ const getNavStructure = (assignedSubject: string | null, role: string | null, us
         { label: '단어시험관리', href: '/vocab-test', icon: <BookOpenCheck className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '개념 퀴즈', href: '/math-concepts', icon: <Brain className="w-4 h-4" />, allowedRoles: ['admin', 'teacher', 'assistant'] },
         { label: '내신 자료실', href: '/exam-archive', icon: <School className="w-4 h-4" /> },
+        { label: '내신 성적 추이', href: '/exam-trends', icon: <TrendingUp className="w-4 h-4" />, allowedRoles: ['admin', 'teacher'] },
       ],
     },
     ...materialGroup,
