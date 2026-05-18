@@ -823,9 +823,10 @@ export function TeacherScheduleCreator() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
-              <Button onClick={addEntry} disabled={!entry.className.trim()}>
-                <Plus className="w-4 h-4 mr-1" />추가
+              <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>취소</Button>
+              <Button onClick={addEntry} disabled={!entry.className.trim() || saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                {saving ? '저장 중...' : '저장'}
               </Button>
             </div>
           </div>
