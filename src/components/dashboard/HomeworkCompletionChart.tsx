@@ -235,9 +235,9 @@ export function HomeworkCompletionChart() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col @[420px]:flex-row items-center @[420px]:items-center gap-4 @[420px]:gap-6 @container">
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
             {/* Donut Chart */}
-            <div className="relative w-32 h-32 @[420px]:w-40 @[420px]:h-40 shrink-0">
+            <div className="relative w-32 h-32 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -274,13 +274,13 @@ export function HomeworkCompletionChart() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-xl @[420px]:text-2xl font-extrabold text-foreground">{completionRate}%</span>
+                <span className="text-xl font-extrabold text-foreground">{completionRate}%</span>
                 <span className="text-[10px] text-muted-foreground font-medium">완료율</span>
               </div>
             </div>
 
             {/* Legend - clickable */}
-            <div className="w-full @[420px]:flex-1 min-w-0 space-y-1.5">
+            <div className="w-full sm:flex-1 min-w-0 space-y-1.5">
               {STATUS_CONFIG.map((config, i) => {
                 const value = stats[config.key as keyof HomeworkStats];
                 const pct = total > 0 ? Math.round((value / total) * 100) : 0;
@@ -295,11 +295,11 @@ export function HomeworkCompletionChart() {
                     <div className="flex items-center gap-1.5 min-w-0">
                       <div className="w-2 h-2 rounded-full shrink-0" style={{ background: CHART_COLORS[i] }} />
                       <Icon className={`w-3.5 h-3.5 shrink-0 ${config.colorClass}`} />
-                      <span className="text-foreground font-medium whitespace-nowrap text-xs @[420px]:text-sm">{config.label}</span>
+                      <span className="text-foreground font-medium whitespace-nowrap text-xs">{config.label}</span>
                     </div>
                     <div className="flex items-baseline gap-1.5 shrink-0">
-                      <span className="text-foreground tabular-nums text-xs @[420px]:text-sm whitespace-nowrap">{value}건</span>
-                      <span className="text-muted-foreground/70 tabular-nums text-[10px] @[420px]:text-xs whitespace-nowrap">{pct}%</span>
+                      <span className="text-foreground tabular-nums text-xs whitespace-nowrap">{value}건</span>
+                      <span className="text-muted-foreground/70 tabular-nums text-[10px] whitespace-nowrap">{pct}%</span>
                     </div>
                   </button>
                 );
