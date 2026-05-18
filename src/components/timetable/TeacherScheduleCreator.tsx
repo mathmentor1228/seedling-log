@@ -235,7 +235,7 @@ export function TeacherScheduleCreator() {
     setDialogOpen(true);
   }
 
-  function addEntry() {
+  async function addEntry() {
     if (!entry.className.trim()) {
       toast({ title: '수업명을 입력해주세요', variant: 'destructive' });
       return;
@@ -245,14 +245,69 @@ export function TeacherScheduleCreator() {
       toast({ title: '요일을 1개 이상 선택해주세요', variant: 'destructive' });
       return;
     }
+    if (!user?.id) {
+      toast({ title: '로그인 정보를 확인할 수 없습니다', variant: 'destructive' });
+      return;
+    }
+
     const newEntries = days.map(d => ({
       ...entry,
       id: crypto.randomUUID(),
       dayOfWeek: d,
       dayOfWeeks: [d],
     }));
-    setPendingEntries(prev => [...prev, ...newEntries]);
-    setDialogOpen(false);
+
+    // 즉시 DB에 저장 (대기 목록 단계 제거)
+    setSaving(true);
+    try {
+      for (const pe of newEntries) {
+        const { data: newClass, error: classErr } = await supabase
+          .from('classes')
+          .insert({ name: pe.className, subject: pe.subject as any, teacher_id: user.id })
+          .select('id').single();
+        if (classErr) throw classErr;
+        const classId = newClass.id;
+
+        const cId = pe.classroomId && pe.classroomId !== 'none' ? pe.classroomId : null;
+        const { data: schedData, error: schedErr } = await supabase.from('class_schedules').insert({
+          class_id: classId, day_of_week: pe.dayOfWeek,
+          start_time: pe.startTime, end_time: pe.endTime,
+          teacher_id: user.id, classroom_id: cId,
+        }).select('id').single();
+        if (schedErr) throw schedErr;
+
+        if (pe.assignMode === 'group' && pe.groupId && pe.groupId !== 'none') {
+          const group = groups.find(g => g.id === pe.groupId);
+          if (group && group.members.length > 0) {
+            const inserts = group.members.map(m => ({ class_id: classId, student_id: m.id }));
+            await supabase.from('class_students')
+              .upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
+            if (schedData) {
+              await supabase.from('schedule_group_assignments')
+                .upsert({ schedule_id: schedData.id, group_id: pe.groupId },
+                  { onConflict: 'schedule_id,group_id', ignoreDuplicates: true });
+            }
+          }
+        } else if (pe.assignMode === 'students' && pe.studentIds.length > 0) {
+          const inserts = pe.studentIds.map(sid => ({ class_id: classId, student_id: sid }));
+          await supabase.from('class_students')
+            .upsert(inserts, { onConflict: 'class_id,student_id', ignoreDuplicates: true });
+        }
+      }
+
+      toast({ title: `${newEntries.length}개 수업 일정 저장 완료` });
+      setDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      console.error('수업 저장 오류:', error);
+      toast({
+        title: '저장 실패',
+        description: error?.message || '알 수 없는 오류가 발생했습니다',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   function removeEntry(id: string) {
