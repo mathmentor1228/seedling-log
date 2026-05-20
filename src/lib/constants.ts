@@ -35,7 +35,7 @@ export function getGradeYearsForLevel(level: string) {
 export const TEACHERS = [
   { name: '최윤기', room: '4층 2강의실' },
   { name: '조준희', room: '4층 4강의실' },
-  { name: '김미정', room: '4층 5강의실' },
+  { name: '김다빈', room: '4층 5강의실' },
   { name: '이나연', room: '3층 6강의실' },
   { name: '정선호', room: '3층 7강의실' },
   { name: '김민희', room: '3층 8강의실' },
