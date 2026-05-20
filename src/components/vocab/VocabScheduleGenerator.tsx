@@ -89,7 +89,7 @@ export function VocabScheduleGenerator() {
   const [deletingIndividual, setDeletingIndividual] = useState(false);
 
   const TEACHER_CATEGORIES = [
-    { label: '서미정', key: 'seo' },
+    { label: '김미정', key: 'seo' },
     { label: '김민희', key: 'kim' },
   ];
 
