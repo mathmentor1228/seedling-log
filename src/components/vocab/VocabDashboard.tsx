@@ -16,7 +16,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine, Cell, Respon
 import { cn } from '@/lib/utils';
 
 const TEACHER_CATEGORIES = [
-  { label: '서미정', key: 'seo' },
+  { label: '김미정', key: 'seo' },
   { label: '김민희', key: 'kim' },
 ];
 

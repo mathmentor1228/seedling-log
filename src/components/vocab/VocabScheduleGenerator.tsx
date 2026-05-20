@@ -89,7 +89,7 @@ export function VocabScheduleGenerator() {
   const [deletingIndividual, setDeletingIndividual] = useState(false);
 
   const TEACHER_CATEGORIES = [
-    { label: '서미정', key: 'seo' },
+    { label: '김미정', key: 'seo' },
     { label: '김민희', key: 'kim' },
   ];
 
@@ -702,7 +702,7 @@ export function VocabScheduleGenerator() {
                         />
                       </TableCell>
                       <TableCell className="text-xs">
-                        {info.assignedTeacher === 'seo' ? '서미정' : info.assignedTeacher === 'kim' ? '김민희' : '—'}
+                        {info.assignedTeacher === 'seo' ? '김미정' : info.assignedTeacher === 'kim' ? '김민희' : '—'}
                       </TableCell>
                       <TableCell className="font-medium text-sm">
                         {info.studentName}

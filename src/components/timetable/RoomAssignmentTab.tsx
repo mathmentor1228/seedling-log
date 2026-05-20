@@ -35,7 +35,7 @@ const DEFAULT_TEACHER_COLOR = { bg: '#D3D1C7', border: '#5F5E5A', text: '#444441
 
 function getTeacherColor(teacherName: string | null) {
   if (!teacherName) return DEFAULT_TEACHER_COLOR;
-  if (teacherName.includes('서미정') || teacherName === '서미정')
+  if (teacherName.includes('김미정') || teacherName === '김미정')
     return { bg: '#9FE1CB', border: '#085041', text: '#085041' };
   if (teacherName.includes('김민희') || teacherName === '김민희')
     return { bg: '#CECBF6', border: '#534AB7', text: '#3C3489' };
@@ -44,7 +44,7 @@ function getTeacherColor(teacherName: string | null) {
 
 function getTeacherInitial(teacherName: string | null): string {
   if (!teacherName) return '';
-  if (teacherName.includes('서미정') || teacherName === '서미정') return '서';
+  if (teacherName.includes('김미정') || teacherName === '김미정') return '김';
   if (teacherName.includes('김민희') || teacherName === '김민희') return '김';
   return teacherName.charAt(0);
 }
@@ -715,7 +715,7 @@ export function RoomAssignmentTab() {
               <p className="font-semibold text-foreground text-xs">범례</p>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded border-2" style={{ backgroundColor: '#9FE1CB', borderColor: '#085041' }} />
-                <span>서미정T</span>
+                <span>김미정T</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded border-2" style={{ backgroundColor: '#CECBF6', borderColor: '#534AB7' }} />
