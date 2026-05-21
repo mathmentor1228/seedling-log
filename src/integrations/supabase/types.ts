@@ -5748,6 +5748,7 @@ export type Database = {
           created_at: string
           created_by: string
           eng_to_kor_percent: number
+          grading_strictness: string
           id: string
           notes: string | null
           question_count: number
@@ -5762,6 +5763,7 @@ export type Database = {
           created_at?: string
           created_by: string
           eng_to_kor_percent?: number
+          grading_strictness?: string
           id?: string
           notes?: string | null
           question_count?: number
@@ -5776,6 +5778,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           eng_to_kor_percent?: number
+          grading_strictness?: string
           id?: string
           notes?: string | null
           question_count?: number
@@ -6117,6 +6120,75 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vocab_test_submissions: {
+        Row: {
+          answers: Json
+          auto_score: number
+          corrected_at: string | null
+          corrected_by: string | null
+          created_at: string
+          final_score: number
+          id: string
+          image_urls: string[]
+          status: string
+          strictness_used: string
+          student_id: string
+          submission_type: string
+          test_id: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          answers?: Json
+          auto_score?: number
+          corrected_at?: string | null
+          corrected_by?: string | null
+          created_at?: string
+          final_score?: number
+          id?: string
+          image_urls?: string[]
+          status?: string
+          strictness_used?: string
+          student_id: string
+          submission_type?: string
+          test_id: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          answers?: Json
+          auto_score?: number
+          corrected_at?: string | null
+          corrected_by?: string | null
+          created_at?: string
+          final_score?: number
+          id?: string
+          image_urls?: string[]
+          status?: string
+          strictness_used?: string
+          student_id?: string
+          submission_type?: string
+          test_id?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocab_test_submissions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vocab_test_submissions_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "vocab_generated_tests"
             referencedColumns: ["id"]
           },
         ]
