@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Printer } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Question {
   questionNumber: number;
@@ -11,10 +12,16 @@ interface Question {
   answer: string;
 }
 
+const STRICT_LABEL: Record<string, string> = {
+  strict: '🌶️ 매운맛',
+  normal: '🍜 보통맛',
+  lenient: '🍦 순한맛',
+};
+
 export default function VocabTestViewPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
-  const [test, setTest] = useState<{ title: string; test_data: Question[] } | null>(null);
+  const [test, setTest] = useState<{ title: string; test_data: Question[]; grading_strictness: string } | null>(null);
   const [showAnswers, setShowAnswers] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,12 +30,16 @@ export default function VocabTestViewPage() {
     if (!token) { setError('토큰이 없습니다'); setLoading(false); return; }
     supabase
       .from('vocab_generated_tests')
-      .select('title, test_data')
+      .select('title, test_data, grading_strictness')
       .eq('share_token', token)
       .single()
       .then(({ data, error: err }) => {
         if (err || !data) setError('시험지를 찾을 수 없습니다');
-        else setTest({ title: data.title, test_data: data.test_data as unknown as Question[] });
+        else setTest({
+          title: data.title,
+          test_data: data.test_data as unknown as Question[],
+          grading_strictness: (data as any).grading_strictness || 'normal',
+        });
         setLoading(false);
       });
   }, [token]);
@@ -37,6 +48,7 @@ export default function VocabTestViewPage() {
   if (error || !test) return <div className="flex items-center justify-center min-h-screen text-destructive">{error}</div>;
 
   const questions = test.test_data;
+  const submitUrl = `${window.location.origin}/vocab-submit?token=${token}`;
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -53,12 +65,18 @@ export default function VocabTestViewPage() {
       </div>
 
       <div className="print-area">
-        <div className="text-center mb-6 border-b pb-4">
-          <h2 className="text-lg font-bold">{test.title}</h2>
-          <div className="flex justify-center gap-8 mt-2 text-sm text-muted-foreground">
-            <span>이름: ________________</span>
-            <span>날짜: ________________</span>
-            <span>점수: _______ / {questions.length}</span>
+        <div className="flex items-start justify-between mb-4 border-b pb-3 gap-4">
+          <div className="flex-1">
+            <h2 className="text-lg font-bold">{test.title}</h2>
+            <div className="flex gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
+              <span>이름: ________________</span>
+              <span>점수: _______ / {questions.length}</span>
+              <span>채점: {STRICT_LABEL[test.grading_strictness] || '🍜 보통맛'}</span>
+            </div>
+          </div>
+          <div className="text-center shrink-0">
+            <QRCodeSVG value={submitUrl} size={72} level="M" />
+            <div className="text-[9px] text-muted-foreground mt-0.5">QR로 셀프 채점</div>
           </div>
         </div>
 

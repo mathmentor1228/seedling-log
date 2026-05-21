@@ -10,10 +10,12 @@ import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Sparkles, Loader2, ClipboardCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { QRCodeSVG } from 'qrcode.react';
+import { VocabSubmissionsReview } from './VocabSubmissionsReview';
 
 interface WordItem {
   id?: string;
@@ -55,6 +57,7 @@ interface SavedTest {
   share_token: string | null;
   created_at: string;
   notes: string | null;
+  grading_strictness?: string;
 }
 
 interface VocabTestGeneratorProps {
@@ -95,6 +98,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [generated, setGenerated] = useState<GeneratedQuestion[]>([]);
   const [showAnswers, setShowAnswers] = useState(false);
   const [testTitle, setTestTitle] = useState('');
+  const [gradingStrictness, setGradingStrictness] = useState<'strict' | 'normal' | 'lenient'>('normal');
 
   // Saved tests
   const [savedTests, setSavedTests] = useState<SavedTest[]>([]);
@@ -514,8 +518,9 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
         question_count: generated.length,
         source_set_ids: selectedSetIds,
         share_token: token,
+        grading_strictness: gradingStrictness,
         created_by: user!.id,
-      }).select().single();
+      } as any).select().single();
       if (error) throw error;
       setCurrentTestId(data.id);
       toast({ title: '시험지 저장 완료' });
@@ -548,6 +553,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     setGenerated(test.test_data);
     setTestTitle(test.title);
     setCurrentTestId(test.id);
+    setGradingStrictness((test.grading_strictness as any) || 'normal');
     setShowAnswers(false);
     setTab('result');
   };
@@ -711,7 +717,10 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
               <FolderOpen className="w-3.5 h-3.5" />
               저장된 시험지
             </TabsTrigger>
-          </TabsList>
+            <TabsTrigger value="submissions" className="gap-1.5 text-xs">
+              <ClipboardCheck className="w-3.5 h-3.5" />
+              제출 결과
+            </TabsTrigger>
         )}
 
         {/* === TAB: Word Input === */}
@@ -889,6 +898,26 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                     <span>한→영 100%</span><span>영→한 100%</span>
                   </div>
                 </div>
+                <div>
+                  <Label className="text-xs mb-2 block">채점 강도 (QR 셀프 채점 시)</Label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([
+                      { v: 'strict', label: '🌶️ 매운맛', desc: '모든 뜻 일치' },
+                      { v: 'normal', label: '🍜 보통맛', desc: '뜻 하나만 일치' },
+                      { v: 'lenient', label: '🍦 순한맛', desc: '유사 의미 인정' },
+                    ] as const).map(o => (
+                      <button
+                        key={o.v}
+                        type="button"
+                        onClick={() => setGradingStrictness(o.v)}
+                        className={`p-2 rounded-md border text-xs transition-colors ${gradingStrictness === o.v ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted'}`}
+                      >
+                        <div>{o.label}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">{o.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {selectedSetIds.length > 0 && (
                   <p className="text-xs text-muted-foreground">선택된 회차: {selectedSetIds.length}개 · 총 단어: <span className="font-semibold text-foreground">{totalWordCount}개</span></p>
                 )}
@@ -921,13 +950,25 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
                 )}
               </div>
               <div ref={printRef} className="print-area">
-                <div className="text-center mb-6 border-b pb-4">
-                  <h2 className="text-lg font-bold">{testTitle || '단어 시험'}</h2>
-                  <div className="flex justify-center gap-8 mt-2 text-sm text-muted-foreground">
-                    <span>이름: ________________</span>
-                    <span>날짜: ________________</span>
-                    <span>점수: _______ / {generated.length}</span>
+                <div className="flex items-start justify-between mb-4 border-b pb-3 gap-4">
+                  <div className="flex-1">
+                    <h2 className="text-lg font-bold">{testTitle || '단어 시험'}</h2>
+                    <div className="flex gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
+                      <span>이름: ________________</span>
+                      <span>점수: _______ / {generated.length}</span>
+                      <span>채점: {gradingStrictness === 'strict' ? '🌶️ 매운맛' : gradingStrictness === 'lenient' ? '🍦 순한맛' : '🍜 보통맛'}</span>
+                    </div>
                   </div>
+                  {currentTestId && savedTests.find(t => t.id === currentTestId)?.share_token && (
+                    <div className="text-center shrink-0">
+                      <QRCodeSVG
+                        value={`${window.location.origin}/vocab-submit?token=${savedTests.find(t => t.id === currentTestId)?.share_token}`}
+                        size={72}
+                        level="M"
+                      />
+                      <div className="text-[9px] text-muted-foreground mt-0.5">QR로 셀프 채점</div>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                   {generated.map(q => (
@@ -976,6 +1017,12 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+        </TabsContent>
+
+        {/* === TAB: Submissions === */}
+        <TabsContent value="submissions">
+          <VocabSubmissionsReview />
         </TabsContent>
       </Tabs>
 
