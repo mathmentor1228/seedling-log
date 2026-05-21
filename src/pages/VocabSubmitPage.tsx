@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import bcrypt from 'bcryptjs';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, CheckCircle2, XCircle, Upload, Keyboard, Camera } from 'lucide-react';
 import HomeworkImageUploader, { type ImageItem } from '@/components/student/HomeworkImageUploader';
 import logoImg from '@/assets/logo-thementor.png';
@@ -48,16 +46,13 @@ export default function VocabSubmitPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Student identification (PIN-based, similar to StudentLogin)
-  const [step, setStep] = useState<'identify' | 'choose' | 'typing' | 'photo' | 'submitting' | 'result'>('identify');
-  const [studentName, setStudentName] = useState('');
-  const [pinDigits, setPinDigits] = useState('');
-  const [matchedStudents, setMatchedStudents] = useState<Array<{ id: string; name: string; pin_hash: string }>>([]);
+  const [step, setStep] = useState<'identify' | 'choose' | 'typing' | 'photo' | 'result'>('identify');
+  const [studentCode, setStudentCode] = useState('');
+  const [pin, setPin] = useState('');
   const [studentId, setStudentId] = useState('');
   const [confirmedName, setConfirmedName] = useState('');
   const [identifying, setIdentifying] = useState(false);
 
-  // Answer state
   const [typedAnswers, setTypedAnswers] = useState<Record<number, string>>({});
   const [images, setImages] = useState<ImageItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -87,63 +82,27 @@ export default function VocabSubmitPage() {
   }, [token]);
 
   const handleIdentify = async () => {
-    if (!studentName.trim() || pinDigits.length !== 4) {
-      setError('이름과 4자리 PIN을 입력해주세요');
+    if (!studentCode.trim() || pin.length !== 4) {
+      setError('학생코드와 4자리 PIN을 입력해주세요');
       return;
     }
     setError('');
     setIdentifying(true);
     try {
-      // Search students by name (with possible suffixes _M, _H)
-      const { data: students } = await supabase
-        .from('students')
-        .select('id, name')
-        .ilike('name', `${studentName.trim()}%`);
-
-      if (!students || students.length === 0) {
-        setError('학생을 찾을 수 없습니다');
-        setIdentifying(false);
-        return;
-      }
-
-      const ids = students.map(s => s.id);
-      const { data: accts } = await supabase
-        .from('student_accounts')
-        .select('student_id, pin_hash')
-        .in('student_id', ids);
-
-      const candidates: Array<{ id: string; name: string; pin_hash: string }> = [];
-      for (const s of students) {
-        const acct = accts?.find(a => a.student_id === s.id);
-        if (acct && bcrypt.compareSync(pinDigits, acct.pin_hash)) {
-          candidates.push({ id: s.id, name: s.name, pin_hash: acct.pin_hash });
-        }
-      }
-
-      if (candidates.length === 0) {
-        setError('PIN이 일치하지 않습니다');
-        setIdentifying(false);
-        return;
-      }
-
-      if (candidates.length === 1) {
-        setStudentId(candidates[0].id);
-        setConfirmedName(candidates[0].name);
-        setStep('choose');
-      } else {
-        setMatchedStudents(candidates);
-      }
+      const { data, error: authErr } = await supabase.functions.invoke('student-auth', {
+        body: { action: 'login', student_code: studentCode.trim().toUpperCase(), pin },
+      });
+      if (authErr) throw authErr;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const s = (data as any).student;
+      if (!s?.id) throw new Error('학생 정보가 없습니다');
+      setStudentId(s.id);
+      setConfirmedName(s.name);
+      setStep('choose');
     } catch (e: any) {
       setError(e.message || '확인 실패');
     }
     setIdentifying(false);
-  };
-
-  const handlePickStudent = (s: { id: string; name: string }) => {
-    setStudentId(s.id);
-    setConfirmedName(s.name);
-    setMatchedStudents([]);
-    setStep('choose');
   };
 
   const handleSubmitTyping = async () => {
@@ -152,12 +111,7 @@ export default function VocabSubmitPage() {
     setError('');
     try {
       const { data, error: invErr } = await supabase.functions.invoke('grade-vocab-submission', {
-        body: {
-          token,
-          student_id: studentId,
-          submission_type: 'typing',
-          typed_answers: typedAnswers,
-        },
+        body: { token, student_id: studentId, submission_type: 'typing', typed_answers: typedAnswers },
       });
       if (invErr) throw invErr;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -174,16 +128,9 @@ export default function VocabSubmitPage() {
     setSubmitting(true);
     setError('');
     try {
-      const urls = await Promise.all(
-        images.map((img, i) => uploadImage(img.file, studentId, test.id, i))
-      );
+      const urls = await Promise.all(images.map((img, i) => uploadImage(img.file, studentId, test.id, i)));
       const { data, error: invErr } = await supabase.functions.invoke('grade-vocab-submission', {
-        body: {
-          token,
-          student_id: studentId,
-          submission_type: 'photo',
-          image_urls: urls,
-        },
+        body: { token, student_id: studentId, submission_type: 'photo', image_urls: urls },
       });
       if (invErr) throw invErr;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -195,12 +142,8 @@ export default function VocabSubmitPage() {
     setSubmitting(false);
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen text-muted-foreground">로딩 중...</div>;
-  }
-  if (error && !test) {
-    return <div className="flex items-center justify-center min-h-screen text-destructive">{error}</div>;
-  }
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">로딩 중...</div>;
+  if (error && !test) return <div className="flex items-center justify-center min-h-screen text-destructive">{error}</div>;
   if (!test) return null;
 
   const strictBadge = STRICTNESS_LABEL[test.grading_strictness] || STRICTNESS_LABEL.normal;
@@ -222,45 +165,23 @@ export default function VocabSubmitPage() {
           <CardContent className="space-y-4">
             {step === 'identify' && (
               <>
-                {matchedStudents.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">같은 이름의 학생이 여러 명입니다. 본인을 선택해주세요:</p>
-                    {matchedStudents.map(s => (
-                      <Button key={s.id} variant="outline" className="w-full justify-start" onClick={() => handlePickStudent(s)}>
-                        {s.name}
-                      </Button>
-                    ))}
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <Label>이름</Label>
-                      <Input
-                        value={studentName}
-                        onChange={e => setStudentName(e.target.value)}
-                        placeholder="홍길동"
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>4자리 PIN</Label>
-                      <Input
-                        type="tel"
-                        inputMode="numeric"
-                        maxLength={4}
-                        value={pinDigits}
-                        onChange={e => setPinDigits(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        placeholder="••••"
-                        className="text-center text-2xl tracking-[0.5em]"
-                      />
-                    </div>
-                    {error && <p className="text-sm text-destructive">{error}</p>}
-                    <Button className="w-full" onClick={handleIdentify} disabled={identifying}>
-                      {identifying ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                      확인
-                    </Button>
-                  </>
-                )}
+                <div className="space-y-2">
+                  <Label>학생 코드</Label>
+                  <Input value={studentCode} onChange={e => setStudentCode(e.target.value)} placeholder="예: AB1234" autoComplete="off" />
+                </div>
+                <div className="space-y-2">
+                  <Label>4자리 PIN</Label>
+                  <Input
+                    type="tel" inputMode="numeric" maxLength={4} value={pin}
+                    onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="••••" className="text-center text-2xl tracking-[0.5em]"
+                  />
+                </div>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <Button className="w-full" onClick={handleIdentify} disabled={identifying}>
+                  {identifying ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  확인
+                </Button>
               </>
             )}
 
@@ -278,24 +199,26 @@ export default function VocabSubmitPage() {
             )}
 
             {step === 'typing' && (
-              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                {test.test_data.map(q => (
-                  <div key={q.questionNumber} className="flex items-center gap-2 border-b pb-2">
-                    <span className="text-xs text-muted-foreground w-6 text-right">{q.questionNumber}.</span>
-                    <span className="font-medium text-sm flex-1 min-w-0 truncate">{q.prompt}</span>
-                    <Input
-                      className="w-40 h-9"
-                      value={typedAnswers[q.questionNumber] || ''}
-                      onChange={e => setTypedAnswers(prev => ({ ...prev, [q.questionNumber]: e.target.value }))}
-                      placeholder="답"
-                    />
-                  </div>
-                ))}
+              <div className="space-y-3">
+                <div className="max-h-[55vh] overflow-y-auto pr-1 space-y-2">
+                  {test.test_data.map(q => (
+                    <div key={q.questionNumber} className="flex items-center gap-2 border-b pb-2">
+                      <span className="text-xs text-muted-foreground w-6 text-right">{q.questionNumber}.</span>
+                      <span className="font-medium text-sm flex-1 min-w-0 truncate">{q.prompt}</span>
+                      <Input
+                        className="w-36 h-9"
+                        value={typedAnswers[q.questionNumber] || ''}
+                        onChange={e => setTypedAnswers(prev => ({ ...prev, [q.questionNumber]: e.target.value }))}
+                        placeholder="답"
+                      />
+                    </div>
+                  ))}
+                </div>
                 {error && <p className="text-sm text-destructive">{error}</p>}
-                <div className="flex gap-2 pt-2 sticky bottom-0 bg-background/95 backdrop-blur">
+                <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setStep('choose')} className="flex-1">뒤로</Button>
                   <Button className="flex-1" onClick={handleSubmitTyping} disabled={submitting}>
-                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> 채점 중...</> : '제출'}
+                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />채점 중...</> : '제출'}
                   </Button>
                 </div>
               </div>
@@ -305,18 +228,14 @@ export default function VocabSubmitPage() {
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">답안지 사진을 1~4장 찍어 올리세요 (번호가 잘 보이게)</p>
                 <HomeworkImageUploader
-                  images={images}
-                  onImagesChange={setImages}
-                  maxFiles={4}
-                  disabled={submitting}
-                  maxDimension={1400}
-                  quality={0.72}
+                  images={images} onImagesChange={setImages} maxFiles={4}
+                  disabled={submitting} maxDimension={1400} quality={0.72}
                 />
                 {error && <p className="text-sm text-destructive">{error}</p>}
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setStep('choose')} className="flex-1">뒤로</Button>
                   <Button className="flex-1" onClick={handleSubmitPhotos} disabled={images.length === 0 || submitting}>
-                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> 채점 중...</> : (<><Upload className="w-4 h-4 mr-2" />제출</>)}
+                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />채점 중...</> : (<><Upload className="w-4 h-4 mr-2" />제출</>)}
                   </Button>
                 </div>
               </div>
@@ -346,7 +265,7 @@ function ResultView({ result, onRetry }: { result: any; onRetry: () => void }) {
       </div>
 
       {wrongs.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
           <p className="text-sm font-medium text-muted-foreground">틀린 문항 ({wrongs.length}개)</p>
           {wrongs.map(w => (
             <div key={w.n} className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-sm">
