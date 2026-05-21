@@ -721,6 +721,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
               <ClipboardCheck className="w-3.5 h-3.5" />
               제출 결과
             </TabsTrigger>
+          </TabsList>
         )}
 
         {/* === TAB: Word Input === */}
@@ -1017,7 +1018,6 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
               )}
             </CardContent>
           </Card>
-        </TabsContent>
         </TabsContent>
 
         {/* === TAB: Submissions === */}
