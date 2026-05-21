@@ -10,10 +10,12 @@ import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Sparkles, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Save, Shuffle, FileText, Printer, X, Upload, Share2, Copy, FolderOpen, Link, Folder, FolderPlus, ChevronRight, ChevronDown, Edit2, Sparkles, Loader2, ClipboardCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { QRCodeSVG } from 'qrcode.react';
+import { VocabSubmissionsReview } from './VocabSubmissionsReview';
 
 interface WordItem {
   id?: string;
@@ -55,6 +57,7 @@ interface SavedTest {
   share_token: string | null;
   created_at: string;
   notes: string | null;
+  grading_strictness?: string;
 }
 
 interface VocabTestGeneratorProps {
@@ -95,6 +98,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
   const [generated, setGenerated] = useState<GeneratedQuestion[]>([]);
   const [showAnswers, setShowAnswers] = useState(false);
   const [testTitle, setTestTitle] = useState('');
+  const [gradingStrictness, setGradingStrictness] = useState<'strict' | 'normal' | 'lenient'>('normal');
 
   // Saved tests
   const [savedTests, setSavedTests] = useState<SavedTest[]>([]);
@@ -514,8 +518,9 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
         question_count: generated.length,
         source_set_ids: selectedSetIds,
         share_token: token,
+        grading_strictness: gradingStrictness,
         created_by: user!.id,
-      }).select().single();
+      } as any).select().single();
       if (error) throw error;
       setCurrentTestId(data.id);
       toast({ title: '시험지 저장 완료' });
@@ -548,6 +553,7 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
     setGenerated(test.test_data);
     setTestTitle(test.title);
     setCurrentTestId(test.id);
+    setGradingStrictness((test.grading_strictness as any) || 'normal');
     setShowAnswers(false);
     setTab('result');
   };
