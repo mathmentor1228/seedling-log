@@ -1019,7 +1019,6 @@ export function VocabTestGenerator({ controlledTab, onTabChange }: VocabTestGene
             </CardContent>
           </Card>
         </TabsContent>
-        </TabsContent>
 
         {/* === TAB: Submissions === */}
         <TabsContent value="submissions">
