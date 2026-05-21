@@ -55,8 +55,16 @@ import {
   Wrench,
   MessageSquare,
   ArrowLeftRight,
-  Mic
+  Mic,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ScheduleOverrideModal } from '@/components/ScheduleOverrideModal';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
