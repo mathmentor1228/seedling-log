@@ -296,6 +296,24 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     }
   }
 
+  async function deleteDraft(id: string, name: string) {
+    if (!confirm(`${name} 학생의 일지를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    try {
+      const { error } = await supabase.from('lesson_records').delete().eq('id', id);
+      if (error) throw error;
+      setDrafts(prev => prev.filter(d => d.id !== id));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      toast({ title: '일지 삭제 완료', description: `${name} 학생의 일지가 삭제되었습니다.` });
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '삭제 실패', description: err.message, variant: 'destructive' });
+    }
+  }
+
   function toggleDraft(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -808,18 +826,30 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                   </div>
                   <div className="border rounded-lg overflow-hidden divide-y divide-border">
                     {draftOnly.map(d => (
-                      <label key={d.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 cursor-pointer transition-colors">
-                        <Checkbox checked={selectedIds.has(d.id)} onCheckedChange={() => toggleDraft(d.id)} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium truncate">{d.student_name}</span>
-                            {d.student_grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{d.student_grade}</Badge>}
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                      <div key={d.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-accent/50 transition-colors">
+                        <label className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                          <Checkbox checked={selectedIds.has(d.id)} onCheckedChange={() => toggleDraft(d.id)} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium truncate">{d.student_name}</span>
+                              {d.student_grade && <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">{d.student_grade}</Badge>}
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">{d.subject}</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">{d.lesson_range || '(내용 없음)'}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">{d.lesson_range || '(내용 없음)'}</p>
-                        </div>
-                        {d.understanding_score && <ScoreBadge score={d.understanding_score} />}
-                      </label>
+                          {d.understanding_score && <ScoreBadge score={d.understanding_score} />}
+                        </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                          onClick={(e) => { e.stopPropagation(); deleteDraft(d.id, d.student_name); }}
+                          title="일지 삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     ))}
                   </div>
                 </div>

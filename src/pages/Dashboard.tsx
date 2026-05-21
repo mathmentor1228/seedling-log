@@ -55,8 +55,16 @@ import {
   Wrench,
   MessageSquare,
   ArrowLeftRight,
-  Mic
+  Mic,
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ScheduleOverrideModal } from '@/components/ScheduleOverrideModal';
 import { format, subDays, startOfDay, getDay } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
@@ -790,6 +798,40 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         description: '미제출 기록을 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
+    }
+  }
+
+  async function deleteOverdueDraft(id: string, studentName: string) {
+    if (!confirm(`${studentName} 학생의 미제출 일지를 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    try {
+      const { error } = await supabase.from('lesson_records').delete().eq('id', id);
+      if (error) throw error;
+      toast({ title: '일지 삭제 완료', description: `${studentName} 학생의 일지가 삭제되었습니다.` });
+      await fetchOverdueDrafts();
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '삭제 실패', description: err.message || '일지 삭제에 실패했습니다.', variant: 'destructive' });
+    }
+  }
+
+  async function submitAttendanceOnly(id: string, studentName: string, status: string) {
+    try {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('lesson_records')
+        .update({
+          attendance_status: [status],
+          submitted: true,
+          submitted_at: now,
+          updated_at: now,
+        })
+        .eq('id', id);
+      if (error) throw error;
+      toast({ title: '출결만 제출 완료', description: `${studentName} - ${status}로 제출되었습니다.` });
+      await fetchOverdueDrafts();
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '제출 실패', description: err.message || '출결 제출에 실패했습니다.', variant: 'destructive' });
     }
   }
 
@@ -2656,34 +2698,75 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                       </div>
                       <div className="space-y-1">
                         {(group?.drafts || []).map((draft) => (
-                          <button
+                          <div
                             key={draft?.id || Math.random()}
-                            className="flex items-center justify-between w-full p-2 bg-background hover:bg-accent/50 rounded-md text-sm transition-colors cursor-pointer text-left"
-                            onClick={() => {
-                              if (!draft) return;
-                              setAdminLessonModalContext({
-                                student_id: draft.student_id,
-                                class_id: draft.class_id || '',
-                                subject: draft.subject as any,
-                                lesson_date: draft.lesson_date,
-                              });
-                              setAdminLessonModalRecordId(draft.id);
-                              setAdminLessonModalForceNew(false);
-                              setAdminLessonModalOpen(true);
-                            }}
+                            className="flex items-center gap-1 w-full p-2 bg-background hover:bg-accent/50 rounded-md text-sm transition-colors"
                           >
-                            <div className="flex items-center gap-2">
-                              <FileEdit className="w-3.5 h-3.5 text-amber-500" />
-                              <span className="font-medium">{draft?.student_name || '알 수 없음'}</span>
-                              <span className="text-muted-foreground">{draft?.subject || '-'}</span>
-                              <span className="text-muted-foreground">
-                                {draft?.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
+                            <button
+                              type="button"
+                              className="flex items-center justify-between flex-1 min-w-0 text-left cursor-pointer"
+                              onClick={() => {
+                                if (!draft) return;
+                                setAdminLessonModalContext({
+                                  student_id: draft.student_id,
+                                  class_id: draft.class_id || '',
+                                  subject: draft.subject as any,
+                                  lesson_date: draft.lesson_date,
+                                });
+                                setAdminLessonModalRecordId(draft.id);
+                                setAdminLessonModalForceNew(false);
+                                setAdminLessonModalOpen(true);
+                              }}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <FileEdit className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                <span className="font-medium truncate">{draft?.student_name || '알 수 없음'}</span>
+                                <span className="text-muted-foreground shrink-0">{draft?.subject || '-'}</span>
+                                <span className="text-muted-foreground shrink-0">
+                                  {draft?.lesson_date ? format(new Date(draft.lesson_date), 'MM/dd') : '-'}
+                                </span>
+                              </div>
+                              <span className="text-amber-600 font-medium text-xs shrink-0 ml-2">
+                                {draft?.overdue_hours || 0}시간
                               </span>
-                            </div>
-                            <span className="text-amber-600 font-medium text-xs">
-                              {draft?.overdue_hours || 0}시간 경과
-                            </span>
-                          </button>
+                            </button>
+                            {draft && (
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                                      title="출결만 체크하고 제출"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5 mr-0.5" />
+                                      출결만
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-40">
+                                    {['출석', '지각', '조퇴', '인정결석', '무단결석'].map((s) => (
+                                      <DropdownMenuItem
+                                        key={s}
+                                        onClick={() => submitAttendanceOnly(draft.id, draft.student_name, s)}
+                                      >
+                                        {s}으로 제출
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => deleteOverdueDraft(draft.id, draft.student_name)}
+                                  title="일지 삭제"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
