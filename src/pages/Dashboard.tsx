@@ -798,6 +798,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         description: '미제출 기록을 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
+    }
   }
 
   async function deleteOverdueDraft(id: string, studentName: string) {
@@ -832,7 +833,6 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
       console.error(err);
       toast({ title: '제출 실패', description: err.message || '출결 제출에 실패했습니다.', variant: 'destructive' });
     }
-  }
   }
 
   // TEACHER-OVERDUE-WARN-V1: Fetch teacher's own overdue lessons
