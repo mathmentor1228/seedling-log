@@ -798,7 +798,41 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         description: '미제출 기록을 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
+  }
+
+  async function deleteOverdueDraft(id: string, studentName: string) {
+    if (!confirm(`${studentName} 학생의 미제출 일지를 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    try {
+      const { error } = await supabase.from('lesson_records').delete().eq('id', id);
+      if (error) throw error;
+      toast({ title: '일지 삭제 완료', description: `${studentName} 학생의 일지가 삭제되었습니다.` });
+      await fetchOverdueDrafts();
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '삭제 실패', description: err.message || '일지 삭제에 실패했습니다.', variant: 'destructive' });
     }
+  }
+
+  async function submitAttendanceOnly(id: string, studentName: string, status: string) {
+    try {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('lesson_records')
+        .update({
+          attendance_status: [status],
+          submitted: true,
+          submitted_at: now,
+          updated_at: now,
+        })
+        .eq('id', id);
+      if (error) throw error;
+      toast({ title: '출결만 제출 완료', description: `${studentName} - ${status}로 제출되었습니다.` });
+      await fetchOverdueDrafts();
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '제출 실패', description: err.message || '출결 제출에 실패했습니다.', variant: 'destructive' });
+    }
+  }
   }
 
   // TEACHER-OVERDUE-WARN-V1: Fetch teacher's own overdue lessons
