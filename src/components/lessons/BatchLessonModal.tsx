@@ -296,6 +296,24 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     }
   }
 
+  async function deleteDraft(id: string, name: string) {
+    if (!confirm(`${name} 학생의 일지를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    try {
+      const { error } = await supabase.from('lesson_records').delete().eq('id', id);
+      if (error) throw error;
+      setDrafts(prev => prev.filter(d => d.id !== id));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      toast({ title: '일지 삭제 완료', description: `${name} 학생의 일지가 삭제되었습니다.` });
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '삭제 실패', description: err.message, variant: 'destructive' });
+    }
+  }
+
   function toggleDraft(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev);
