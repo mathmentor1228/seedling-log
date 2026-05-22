@@ -393,7 +393,9 @@ export function LessonRecordForm({
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
   const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
   // MULTI-HW-ASSIGN-V1: Multiple homework items support
-  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
+  // HW-DAILY-OPT-IN-V1: is_daily=false by default → homework_type='regular' (one-off, due next lesson).
+  // Daily recurring homework is only created when the teacher explicitly toggles 데일리체크 on.
+  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string; is_daily?: boolean }[]>([{ content: '', is_daily: false }]);
   // Legacy alias for compatibility
   const newHomeworkContent = newHomeworkItems[0]?.content || '';
   
@@ -1421,6 +1423,8 @@ export function LessonRecordForm({
             lesson_record_id: finalDraftId,
             assigned_date: formData.lesson_date,
             content: item.content.trim(),
+            // HW-DAILY-OPT-IN-V1: default to 'regular' unless teacher opted in
+            homework_type: item.is_daily ? 'daily' : 'regular',
             created_by: user?.id || null,
           });
         }
@@ -1485,6 +1489,8 @@ export function LessonRecordForm({
             lesson_record_id: finalRecordId,
             assigned_date: formData.lesson_date,
             content: item.content.trim(),
+            // HW-DAILY-OPT-IN-V1: default to 'regular' unless teacher opted in
+            homework_type: item.is_daily ? 'daily' : 'regular',
             created_by: user?.id || null,
           });
         }
@@ -2048,7 +2054,18 @@ export function LessonRecordForm({
                                 const carryNote = `[이월사유: ${reasonLabel}] 다음시간 검사예정으로 이월`;
                                 const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
                                 const nextDate = format(tomorrow, 'yyyy-MM-dd');
-                                await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: contentWithReason, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
+                                // HW-CARRY-FORWARD-DEDUP-V1: skip insert if an identical carried-forward row already exists
+                                const { data: dupHw } = await supabase
+                                  .from('homework_assignments')
+                                  .select('id')
+                                  .eq('student_id', hwItem.student_id)
+                                  .eq('subject', hwItem.subject as any)
+                                  .eq('assigned_date', nextDate)
+                                  .eq('content', contentWithReason)
+                                  .maybeSingle();
+                                if (!dupHw) {
+                                  await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: contentWithReason, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
+                                }
                                 await supabase.from('homework_assignments').update({ check_status: 'checked', checked_by: user.id, checked_at: new Date().toISOString(), result: selectedResult, notes: carryNote }).eq('id', hwItem.id);
                                 toast({ title: '다음시간으로 이월됨', description: `사유: ${reasonLabel} / ${hwItem.content}` });
                                 if (formData.student_id && formData.subject) { await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date); }
@@ -2530,7 +2547,7 @@ export function LessonRecordForm({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => setNewHomeworkItems(prev => [...prev, { content: '' }])}
+            onClick={() => setNewHomeworkItems(prev => [...prev, { content: '', is_daily: false }])}
             className="text-xs gap-1 h-7"
           >
             <Plus className="w-3 h-3" />
@@ -2562,6 +2579,18 @@ export function LessonRecordForm({
                 rows={2}
                 className="text-sm"
               />
+              {/* HW-DAILY-OPT-IN-V1: explicit daily-check toggle. Default OFF → homework_type='regular' (다음수업까지 1회성) */}
+              <label className="flex items-center gap-2 mt-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!!item.is_daily}
+                  onChange={(e) => setNewHomeworkItems(prev => prev.map((it, i) => i === idx ? { ...it, is_daily: e.target.checked } : it))}
+                  className="w-3.5 h-3.5 rounded border-border"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  데일리체크 (매일 반복 인증) — 체크 안 하면 <strong>다음 수업까지 1회성</strong>으로 저장됩니다.
+                </span>
+              </label>
             </div>
           ))}
         </div>

@@ -199,6 +199,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentParentMsg, setPerStudentParentMsg] = useState<Record<string, string>>({});
   const [perStudentAttendance, setPerStudentAttendance] = useState<Record<string, string[]>>({});
 
+  // HW-PER-ITEM-CHECK-V1: Previous-lesson unchecked homework loaded per draft, for explicit per-item confirmation
+  const [prevUncheckedByDraft, setPrevUncheckedByDraft] = useState<Record<string, Array<{ id: string; content: string; assigned_date: string; homework_type: string }>>>({});
+  const [perStudentPrevHwResults, setPerStudentPrevHwResults] = useState<Record<string, Record<string, string>>>({});
+  const [perStudentPrevHwNotes, setPerStudentPrevHwNotes] = useState<Record<string, Record<string, string>>>({});
+
   useEffect(() => {
     if (open) {
       setStep('search');
@@ -250,6 +255,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentHomeworkItems({});
     setPerStudentParentMsg({});
     setPerStudentAttendance({});
+    setPrevUncheckedByDraft({});
+    setPerStudentPrevHwResults({});
+    setPerStudentPrevHwNotes({});
   }
 
   async function searchDrafts() {
@@ -331,7 +339,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   }
 
   function addHomework(studentId?: string) {
-    const newItem = { tempId: crypto.randomUUID(), content: '', homework_type: 'daily' };
+    // HW-DEFAULT-REGULAR-V1: Default homework_type is 'regular' (one-off, due next lesson).
+    // Switch to 'daily' only explicitly via the dropdown.
+    const newItem = { tempId: crypto.randomUUID(), content: '', homework_type: 'regular' };
     if (studentId) {
       setPerStudentHomeworkItems(prev => ({
         ...prev,
@@ -440,7 +450,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           perHwItems[hw.lesson_record_id].push({
             tempId: hw.id,
             content: hw.content || '',
-            homework_type: hw.homework_type || 'daily',
+            homework_type: hw.homework_type || 'regular',
           });
           // capture latest extended result if checked
           if (hw.check_status === 'checked' && hw.result) {
@@ -458,6 +468,29 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       }
     } catch (e) {
       console.error('Failed to load homework assignments:', e);
+    }
+
+    // HW-PER-ITEM-CHECK-V1: Load previous-lesson unchecked homework per (student, subject)
+    // so the teacher can confirm each previous homework item explicitly from the bulk editor.
+    try {
+      const prevMap: Record<string, Array<{ id: string; content: string; assigned_date: string; homework_type: string }>> = {};
+      for (const d of selectedDrafts) {
+        const { data: prevHw } = await supabase
+          .from('homework_assignments')
+          .select('id, content, assigned_date, homework_type')
+          .eq('student_id', d.student_id)
+          .eq('subject', d.subject as SubjectType)
+          .eq('check_status', 'unchecked')
+          .lt('assigned_date', searchDate)
+          .not('content', 'eq', '')
+          .order('assigned_date', { ascending: false });
+        if (prevHw && prevHw.length > 0) {
+          prevMap[d.id] = prevHw as any;
+        }
+      }
+      setPrevUncheckedByDraft(prevMap);
+    } catch (e) {
+      console.error('Failed to load previous unchecked homework:', e);
     }
 
     setStep('edit');
@@ -580,44 +613,32 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (updateError) throw updateError;
       }
 
-      // Homework status sync (extended result values stored on homework_assignments.result)
+      // HW-NO-AUTO-CONFIRM-V1: Only mark explicitly-selected previous homework items as checked.
+      // Previously this fanned out check_status='checked' to ALL unchecked homework for the
+      // student+subject, which caused homework to appear "confirmed" without the user pressing
+      // a per-item confirm. Now we ONLY write per-item results that the user explicitly chose
+      // in perStudentPrevHwResults (see goToEdit pre-load + UI in homework_status section).
       if (activeFields.has('homework_status')) {
         for (const id of ids) {
-          const record = drafts.find(d => d.id === id);
-          if (!record) continue;
-
-          const effectiveStatus = usePerStudentHomework
-            ? (perStudentHomework[id] || homeworkStatus)
-            : homeworkStatus;
-
-          if (effectiveStatus === 'none_assigned' || effectiveStatus === 'unable_to_verify') continue;
-          const resultValue = effectiveStatus; // store the granular result as-is
-
-          await supabase
-            .from('homework_assignments')
-            .update({
-              check_status: 'checked',
-              result: resultValue,
-              checked_at: now,
-              checked_by: user!.id,
-            })
-            .eq('lesson_record_id', id)
-            .eq('check_status', 'unchecked');
-
-          await supabase
-            .from('homework_assignments')
-            .update({
-              check_status: 'checked',
-              result: resultValue,
-              checked_at: now,
-              checked_by: user!.id,
-            })
-            .eq('student_id', record.student_id)
-            .eq('subject', record.subject as any)
-            .eq('check_status', 'unchecked')
-            .lt('assigned_date', searchDate);
+          const itemResults = perStudentPrevHwResults[id] || {};
+          const itemNotes = perStudentPrevHwNotes[id] || {};
+          for (const [hwId, resultRaw] of Object.entries(itemResults)) {
+            const resultValue = resultRaw as string;
+            if (!resultValue) continue;
+            await supabase
+              .from('homework_assignments')
+              .update({
+                check_status: 'checked',
+                result: resultValue,
+                notes: (itemNotes[hwId] || '').trim() || null,
+                checked_at: now,
+                checked_by: user!.id,
+              })
+              .eq('id', hwId);
+          }
         }
       }
+
 
       // Homework assignment creation
       if (activeFields.has('homework_items')) {
@@ -694,8 +715,12 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           payload.understanding_score = score;
         }
 
-        const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
-        payload.homework_status = mapResultToStatus(hw);
+        // HW-NO-AUTO-CONFIRM-V1: Only write homework_status when the teacher explicitly toggled this field on.
+        // Otherwise we would silently overwrite (and effectively confirm/reset) the existing status on every bulk draft save.
+        if (activeFields.has('homework_status')) {
+          const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
+          payload.homework_status = mapResultToStatus(hw);
+        }
 
         const types = usePerStudentLessonTypes ? (perStudentLessonTypes[id] ?? batchLessonTypes) : batchLessonTypes;
         payload.lesson_types = types;
@@ -727,6 +752,30 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         const { error } = await supabase.from('lesson_records').update(payload).eq('id', id);
         if (error) throw error;
       }
+
+      // HW-PER-ITEM-CHECK-V1: Persist explicit per-item previous-homework checks on draft save as well.
+      if (activeFields.has('homework_status')) {
+        const now2 = new Date().toISOString();
+        for (const id of ids) {
+          const itemResults = perStudentPrevHwResults[id] || {};
+          const itemNotes = perStudentPrevHwNotes[id] || {};
+          for (const [hwId, resultRaw] of Object.entries(itemResults)) {
+            const resultValue = resultRaw as string;
+            if (!resultValue) continue;
+            await supabase
+              .from('homework_assignments')
+              .update({
+                check_status: 'checked',
+                result: resultValue,
+                notes: (itemNotes[hwId] || '').trim() || null,
+                checked_at: now2,
+                checked_by: user!.id,
+              })
+              .eq('id', hwId);
+          }
+        }
+      }
+
 
       // Draft save must publish homework assignments immediately so students can submit
       // even before the lesson journal itself is formally submitted.
@@ -1108,45 +1157,70 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
               </div>
             </FieldToggleBlock>
 
-            {/* Homework Status */}
+            {/* Homework Status - HW-PER-ITEM-CHECK-V1: show previous unchecked HW per student with explicit per-item result selectors */}
             <FieldToggleBlock field="homework_status" active={activeFields.has('homework_status')} onToggle={() => toggleField('homework_status')}>
               <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  ⚠️ 학생별로 <strong>지난 수업의 숙제 항목을 직접 확인</strong>해야 반영됩니다. 항목별 결과를 선택하지 않으면 확인 처리되지 않습니다.
+                </p>
                 <PerStudentToggle checked={usePerStudentHomework} onChange={setUsePerStudentHomework} />
                 {usePerStudentHomework ? (
                   <PerStudentContainer>
                     {selectedDraftsList.map(d => {
-                      const items = perStudentHomeworkItems[d.id] || [];
+                      const prevItems = prevUncheckedByDraft[d.id] || [];
+                      const itemResults = perStudentPrevHwResults[d.id] || {};
+                      const itemNotes = perStudentPrevHwNotes[d.id] || {};
                       return (
                         <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                          {items.length > 0 && (
-                            <div className="mb-1.5 space-y-0.5">
-                              {items.map(it => (
-                                <p key={it.tempId} className="text-[11px] text-muted-foreground leading-tight">
-                                  • {it.content || '(내용 없음)'}
-                                </p>
+                          {prevItems.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground italic">미확인된 지난 숙제가 없습니다.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {prevItems.map(hw => (
+                                <div key={hw.id} className="rounded-md border border-border/50 bg-background/60 p-2 space-y-1.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs text-foreground leading-snug flex-1 whitespace-pre-wrap">{hw.content}</p>
+                                    <span className="text-[10px] text-muted-foreground shrink-0">{hw.assigned_date}</span>
+                                  </div>
+                                  <Select
+                                    value={itemResults[hw.id] || ''}
+                                    onValueChange={v => setPerStudentPrevHwResults(prev => ({
+                                      ...prev,
+                                      [d.id]: { ...(prev[d.id] || {}), [hw.id]: v },
+                                    }))}
+                                  >
+                                    <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="결과 선택 (미선택 시 확인 안됨)" /></SelectTrigger>
+                                    <SelectContent>
+                                      {HOMEWORK_STATUS_OPTIONS.filter(o => o.value !== 'none_assigned').map(o => (
+                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Input
+                                    value={itemNotes[hw.id] || ''}
+                                    onChange={e => setPerStudentPrevHwNotes(prev => ({
+                                      ...prev,
+                                      [d.id]: { ...(prev[d.id] || {}), [hw.id]: e.target.value },
+                                    }))}
+                                    placeholder="확인 메모 (선택)"
+                                    className="h-7 text-xs"
+                                  />
+                                </div>
                               ))}
                             </div>
                           )}
-                          <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
                         </StudentBlock>
                       );
                     })}
                   </PerStudentContainer>
                 ) : (
-                  <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-foreground/80 space-y-1">
+                    <p>지난 숙제는 학생마다 다르므로, <strong>"학생별 설정"을 켜고</strong> 각 학생의 숙제 항목별로 결과를 선택해주세요.</p>
+                  </div>
                 )}
               </div>
             </FieldToggleBlock>
+
 
             {/* Learning Issues */}
             <FieldToggleBlock field="learning_issues" active={activeFields.has('learning_issues')} onToggle={() => toggleField('learning_issues')}>
@@ -1311,7 +1385,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                                 <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v, d.id)}>
                                   <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="daily">매일</SelectItem>
+                                    <SelectItem value="regular">다음수업까지</SelectItem>
+                                    <SelectItem value="daily">데일리체크</SelectItem>
                                     <SelectItem value="weekly">주간</SelectItem>
                                     <SelectItem value="long_term">장기</SelectItem>
                                   </SelectContent>
@@ -1342,7 +1417,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                         <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
                           <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="daily">매일</SelectItem>
+                            <SelectItem value="regular">다음수업까지</SelectItem>
+                            <SelectItem value="daily">데일리체크</SelectItem>
                             <SelectItem value="weekly">주간</SelectItem>
                             <SelectItem value="long_term">장기</SelectItem>
                           </SelectContent>

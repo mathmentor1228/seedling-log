@@ -1,70 +1,56 @@
-# 단어시험 QR 셀프 채점 시스템
+# 숙제 확인 로직 재정비
 
-기존 `vocab_generated_tests` 시험지 위에 **QR 인쇄 → 학생 답안 제출 → AI 채점 → 선생님 보정** 워크플로우를 얹습니다.
+## 문제 요약
 
-## 1. DB 변경
+1. **일괄입력의 숙제 확인이 빈약함** — `BatchLessonModal`은 오늘 배정될 숙제(`lesson_record_id` = 오늘 draft)만 불러옴. 개별 일지처럼 "지난 수업의 숙제 내용 + 결과 옵션 7가지(완료/부분/미완/분실/성의부족/완료+성의부족/확인불가)"를 학생별로 보여주지 않음.
 
-**`vocab_generated_tests`에 컬럼 추가**
-- `grading_strictness` text default `'normal'` — `'strict'` (매운맛) / `'normal'` (보통맛) / `'lenient'` (순한맛). 선생님이 시험 생성 시 기본값 지정, 사후 변경 가능.
+2. **'확인 버튼 안 눌러도 확인됨' 버그** — `BatchLessonModal.handleApply` (line 596-618)에서 '숙제상태' 필드만 체크해도 해당 학생·과목의 **이전 모든 unchecked homework_assignments**를 자동으로 `check_status='checked'`로 일괄 업데이트함. 또한 `handleBulkDraftSave` (line 697-698)는 activeFields에 'homework_status'가 없어도 항상 `payload.homework_status = mapResultToStatus('none_assigned')`로 덮어쓰기 → 이전 확인된 상태 파괴.
 
-**새 테이블 `vocab_test_submissions`**
-- `test_id` (→ vocab_generated_tests)
-- `student_id` (→ students)
-- `answers` jsonb — `[{n, prompt, answer, student_answer, is_correct, reason}]`
-- `auto_score` int, `final_score` int, `total` int
-- `strictness_used` text (제출 시점 기준 스냅샷)
-- `submission_type` text — `'typing'` | `'photo'`
-- `image_urls` text[]
-- `status` text — `'graded'` | `'corrected'`
-- `corrected_by`, `corrected_at`
-- RLS: 본인 학생/담당 교사/관리자만 select·update, 토큰 기반 insert는 edge function이 service-role로 처리
+3. **동일 숙제 중복 INSERT** — `LessonRecordForm.handleSubmit` (line 1476-1491)와 `handleSaveDraft` (line 1412-1427)는 매 저장마다 `delete().eq('lesson_record_id')` 후 전부 재INSERT. lesson_record_id가 없는 동일 내용 carry-forward 숙제와 별개로, draft → submit 흐름에서 같은 lesson_record에 attach된 숙제 외에 다른 경로(예: BatchLessonModal에서도 동일 record에 add)에서 추가 INSERT 시 중복.  또한 **carry-forward** 로직(line 2051)은 `lesson_record_id` 없이 INSERT → 다음 수업에서 또 carry-forward되면 또 새 row.
 
-**Storage 버킷 `vocab-submissions`** (private) + 정책
+4. **데일리숙제 자동생성** — 현재 `BatchLessonModal`의 새 숙제 항목 기본 `homework_type: 'daily'` (line 334), `addHomework`도 default `'daily'`. 사용자 정책: **기본은 'regular'(1회성)**, 데일리는 명시 옵트인할 때만.
 
-## 2. Edge Function `grade-vocab-submission`
-- 입력: `{ token, student_id, submission_type, typed_answers? , image_urls? }`
-- 토큰으로 시험 조회 → 정답·strictness 로딩
-- `submission_type='photo'`이면 Lovable AI(`google/gemini-2.5-flash`) 멀티모달로 OCR해서 번호별 답안 추출
-- AI 채점 프롬프트:
-  - **매운맛**: 정답에 적힌 뜻이 여러 개(쉼표 구분)일 때 모두 포함되어야 정답
-  - **보통맛**: 하나라도 일치하면 정답
-  - **순한맛**: 유사·근접 의미도 정답으로 인정
-- 각 문항별 `is_correct` + 짧은 `reason`(한국어) 반환
-- DB에 submission 저장 후 결과 반환
+## 변경 사항
 
-## 3. 프론트 변경
+### A. `src/components/lessons/BatchLessonModal.tsx`
 
-**`VocabTestGenerator.tsx`**
-- 시험 저장/생성 시 채점 강도(매운맛/보통맛/순한맛) 선택 UI 추가
+**A1. 숙제 확인 자동화 제거 (auto-confirm 버그 차단)**
+- `handleApply` (line 583-620): `activeFields.has('homework_status')`일 때 student/subject의 모든 unchecked를 자동 checked로 덮어쓰는 두 번째 update(line 607-618) **삭제**. lesson_record_id로 연결된 항목만 결과 기록(첫 번째 update만 유지)하되, `check_status='checked'`로 일괄 설정하지 말고 **per-item 결과**가 명시된 경우만 처리하도록 변경.
+- `handleBulkDraftSave` (line 697-698): `if (activeFields.has('homework_status'))` 가드 추가 — 사용자가 명시적으로 변경한 경우에만 `homework_status` payload에 포함.
 
-**`VocabTestViewPage.tsx` (인쇄 시험지)**
-- 우측 상단에 제출 페이지 QR 추가 (`/vocab-submit?token=...`)
-- "이름" 칸 옆에 채점 강도 라벨 표기
+**A2. 학생별 지난숙제 표시 (per-student previous homework UI)**
+- 학생 선택 후 step='edit' 진입 시 (currently in `searchDrafts`/handleNextStep 부분), 각 학생/과목에 대해 **lesson_date < today** & `check_status='unchecked'` & `content<>''` 인 `homework_assignments`를 별도 fetch → `prevUncheckedByDraft: Record<draftId, HomeworkAssignment[]>` 상태 추가.
+- '숙제 상태' 섹션(FieldToggleBlock field="homework_status", line 1111-1149) UI 확장:
+  - `usePerStudentHomework=true`일 때, 각 학생 블록에 **지난 숙제 내용 목록** + 항목별 결과 7-옵션 셀렉트(`HOMEWORK_STATUS_OPTIONS`) 표시.
+  - 새 상태: `perStudentPrevHwResults: Record<draftId, Record<hwAssignmentId, result>>` 와 메모 `perStudentPrevHwNotes`.
+  - 저장 시 항목별 `homework_assignments.update({check_status:'checked', result, notes, checked_at, checked_by})` 호출 — **버튼이 명시적으로 선택된 항목만**.
 
-**`/vocab-submit` 새 페이지 `VocabSubmitPage.tsx`**
-1. 학생 PIN(4자리) 입력 → 본인 확인
-2. 입력 방식 선택: **타이핑** / **답안 사진 업로드**
-3. 타이핑: 번호별 input 자동 생성 / 사진: 다중 업로드(HomeworkImageUploader 재사용)
-4. 제출 → `grade-vocab-submission` 호출
-5. 즉시 결과 화면: 점수, **틀린 번호 + 학생 답안 + 정답 + 오답 사유**
+**A3. 신규 숙제 default `homework_type` → 'regular'**
+- Line 334: `homework_type: 'daily'` → `'regular'`.
+- Line 443 (load): fallback `'regular'` (기존 daily로 저장된 건 유지).
+- Select dropdown(line 1311-1318, 1342-1349) 옵션 순서: regular(다음수업까지) 먼저, daily(데일리체크), weekly, long_term.
 
-**`VocabSubmissionsReview.tsx` (선생님용) — VocabTestGenerator의 새 탭 "제출 결과"**
-- 시험별 제출 목록(학생/점수/시각)
-- 행 클릭 시 상세 패널: 문항별 표(번호·정답·학생답·자동판정·사유)
-- 각 행에 **정답으로 인정** / **오답으로 변경** 토글 → `final_score` 즉시 재계산 및 저장
-- 시험 헤더에 strictness 변경 + 전체 재채점 버튼
+### B. `src/components/lessons/LessonRecordForm.tsx`
 
-## 기술 메모
-- QR 라이브러리 `qrcode.react` 이미 설치됨
-- AI는 Lovable AI Gateway 사용 (API 키 불필요)
-- 사진 업로드 경로: ASCII-safe (`{student_id}/{test_id}/{ts}_{idx}.jpg`)
-- 학생 본인 확인은 기존 `student_accounts.student_code` 패턴 재사용
+**B1. 중복 INSERT 방지 (idempotent upsert)**
+- Line 1412-1427 (handleSaveDraft) & 1476-1491 (handleSubmit): `delete` 직전에 트랜잭션 없으니, **선 fetch 후 diff** 방식으로 변경하거나, 적어도 `delete` + `insert`를 `Promise.all` 묶지 않고 await 순서대로 유지. **추가**: insert payload에 `homework_type: 'regular'` 명시(현재 미지정으로 DB default 'regular' 의존). 더 중요: **carry-forward 시 동일 (student_id, subject, content, assigned_date) 중복 방지** — line 2051 INSERT 전에 동일 row 존재 여부 maybeSingle 체크.
 
-## 변경/생성 파일
-- 마이그레이션 (컬럼 추가 + 테이블 + 버킷 + RLS)
-- `supabase/functions/grade-vocab-submission/index.ts` 생성
-- `src/pages/VocabSubmitPage.tsx` 생성
-- `src/components/vocab/VocabSubmissionsReview.tsx` 생성
-- `src/components/vocab/VocabTestGenerator.tsx` 편집 (강도 선택 + 새 탭)
-- `src/pages/VocabTestViewPage.tsx` 편집 (QR + 강도)
-- `src/App.tsx` 편집 (라우트 추가)
+**B2. 신규 숙제 항목에 명시적 type 옵션 UI (옵트인)**
+- 현재 `newHomeworkItems` 타입은 `{ content: string }[]`만 — 'daily' 옵트인 토글이 없음. 각 항목 옆에 작은 토글/뱃지 "데일리 체크" 추가 → 켜진 경우만 `homework_type: 'daily'` 그 외 `'regular'`. State 타입을 `{ content: string; is_daily: boolean }[]`로 확장.
+- handleSaveDraft/handleSubmit insert payload에 `homework_type: item.is_daily ? 'daily' : 'regular'` 명시.
+
+### C. 데일리 자동 생성 안 함 (확인)
+- 현재 코드베이스 grep 결과, lesson_record 저장이 daily homework를 자동 생성하는 트리거/엣지함수는 없음 (DailyHomeworkManager/Checklist는 사용자가 명시 페이지에서 생성). 추가 작업 없음.
+
+## 비변경 (스코프 외)
+- `homework_assignments` 스키마, RLS, trigger 변경 없음.
+- 개별 일지의 '확인 저장' 버튼 동작 자체(handleSaveHomeworkCheckForItem)는 정상이라 유지.
+- DailyHomeworkChecklist UI 변경 없음.
+
+## 검증
+- 빌드 통과 확인.
+- 빠른 수동 시나리오 가이드:
+  1. 일괄입력에서 '숙제상태'만 토글하지 않고 저장 → 이전 숙제가 자동확인되지 않음.
+  2. 일괄입력에서 학생별 모드로 지난숙제 항목별 결과 선택 → 선택한 항목만 checked.
+  3. 개별 일지에서 숙제 1건 입력 → 저장 2회 반복 → homework_assignments 1행만 존재.
+  4. 신규 숙제에 '데일리 체크' 토글 OFF → `homework_type='regular'`로 저장.
