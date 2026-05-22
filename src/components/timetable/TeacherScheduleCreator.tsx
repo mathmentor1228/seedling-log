@@ -70,8 +70,9 @@ interface StudentItem {
 }
 
 export function TeacherScheduleCreator() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { toast } = useToast();
+  const isAdminUser = role === 'admin';
 
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
@@ -131,8 +132,16 @@ export function TeacherScheduleCreator() {
         setTeacherName(tName);
       }
 
+      // TEACHER-OWN-GROUPS-V1: 비관리자는 자신이 생성한 그룹만 표시
+      const groupsQuery = supabase
+        .from('student_groups')
+        .select('id, name, description, created_by')
+        .order('name');
+      if (!isAdminUser && user?.id) {
+        groupsQuery.eq('created_by', user.id);
+      }
       const [groupsRes, membersRes, classroomsRes, schedulesRes] = await Promise.all([
-        supabase.from('student_groups').select('id, name, description').order('name'),
+        groupsQuery,
         supabase.from('student_group_members').select('group_id, student_id'),
         supabase.from('classrooms').select('id, name, manager_name, capacity').eq('is_active', true).order('sort_order'),
         supabase.from('class_schedules')
@@ -383,7 +392,7 @@ export function TeacherScheduleCreator() {
         toast({ title: '그룹 수정 완료' });
       } else {
         const { error } = await supabase.from('student_groups')
-          .insert({ name: groupName.trim(), description: groupDesc.trim() || null });
+          .insert({ name: groupName.trim(), description: groupDesc.trim() || null, created_by: user?.id ?? null });
         if (error) throw error;
         toast({ title: '그룹 생성 완료' });
       }
