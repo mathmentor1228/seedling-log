@@ -273,7 +273,7 @@ export function TeacherScheduleCreator() {
       entry.studentIds.forEach((sid, i) => { targetStudentNames[sid] = entry.studentNames[i] || ''; });
     }
 
-    // SCHEDULE-CONFLICT-CHECK-V1: 학생별 다른 과목 시간 겹침 검사
+    // SCHEDULE-CONFLICT-CHECK-V2: 학생별 시간 겹침 검사 (중복 시 저장 차단)
     if (targetStudentIds.length > 0) {
       try {
         const { data: csRows } = await supabase
@@ -300,22 +300,27 @@ export function TeacherScheduleCreator() {
             for (const sch of overlapping) {
               const match = studentClasses.find((c) => c.class_id === sch.class_id);
               if (!match) continue;
-              if (match.subject === entry.subject) continue; // 동일 과목은 제외
               const dayLabel = DAYS_OF_WEEK.find((x) => x.value === d)?.label || '';
+              const tag = match.subject === entry.subject ? '[동일과목 선배정]' : `[${match.subject}]`;
               conflicts.push(
-                `${targetStudentNames[sid] || sid}: ${dayLabel} ${sch.start_time?.slice(0, 5)}–${sch.end_time?.slice(0, 5)} ${match.subject} (${match.name})`,
+                `• ${targetStudentNames[sid] || sid} — ${dayLabel} ${sch.start_time?.slice(0, 5)}–${sch.end_time?.slice(0, 5)} ${tag} ${match.name}`,
               );
             }
           }
         }
 
         if (conflicts.length > 0) {
-          const preview = conflicts.slice(0, 5).join('\n');
-          const more = conflicts.length > 5 ? `\n외 ${conflicts.length - 5}건` : '';
-          const proceed = window.confirm(
-            `다음 학생들에게 다른 과목 시간과 겹침이 있습니다:\n\n${preview}${more}\n\n그래도 저장하시겠습니까?`,
+          const preview = conflicts.slice(0, 10).join('\n');
+          const more = conflicts.length > 10 ? `\n외 ${conflicts.length - 10}건` : '';
+          window.alert(
+            `⚠️ 시간표 중복 감지 — 저장이 취소되었습니다.\n\n다음 학생이 이미 같은 시간대에 배정되어 있습니다:\n\n${preview}${more}\n\n시간이나 학생 구성을 변경한 뒤 다시 시도해주세요.`,
           );
-          if (!proceed) return;
+          toast({
+            title: '시간표 중복으로 저장이 취소되었습니다',
+            description: `${conflicts.length}건의 충돌이 있습니다.`,
+            variant: 'destructive',
+          });
+          return;
         }
       } catch (e) {
         console.warn('conflict check failed', e);
