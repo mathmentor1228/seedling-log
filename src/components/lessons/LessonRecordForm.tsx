@@ -393,7 +393,9 @@ export function LessonRecordForm({
   const [homeworkCheckNotes, setHomeworkCheckNotes] = useState<string>('');
   const [isSavingHomeworkCheck, setIsSavingHomeworkCheck] = useState(false);
   // MULTI-HW-ASSIGN-V1: Multiple homework items support
-  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string }[]>([{ content: '' }]);
+  // HW-DAILY-OPT-IN-V1: is_daily=false by default → homework_type='regular' (one-off, due next lesson).
+  // Daily recurring homework is only created when the teacher explicitly toggles 데일리체크 on.
+  const [newHomeworkItems, setNewHomeworkItems] = useState<{ content: string; is_daily?: boolean }[]>([{ content: '', is_daily: false }]);
   // Legacy alias for compatibility
   const newHomeworkContent = newHomeworkItems[0]?.content || '';
   
