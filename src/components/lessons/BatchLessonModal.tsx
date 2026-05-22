@@ -753,6 +753,30 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (error) throw error;
       }
 
+      // HW-PER-ITEM-CHECK-V1: Persist explicit per-item previous-homework checks on draft save as well.
+      if (activeFields.has('homework_status')) {
+        const now2 = new Date().toISOString();
+        for (const id of ids) {
+          const itemResults = perStudentPrevHwResults[id] || {};
+          const itemNotes = perStudentPrevHwNotes[id] || {};
+          for (const [hwId, resultRaw] of Object.entries(itemResults)) {
+            const resultValue = resultRaw as string;
+            if (!resultValue) continue;
+            await supabase
+              .from('homework_assignments')
+              .update({
+                check_status: 'checked',
+                result: resultValue,
+                notes: (itemNotes[hwId] || '').trim() || null,
+                checked_at: now2,
+                checked_by: user!.id,
+              })
+              .eq('id', hwId);
+          }
+        }
+      }
+
+
       // Draft save must publish homework assignments immediately so students can submit
       // even before the lesson journal itself is formally submitted.
       if (activeFields.has('homework_items')) {
