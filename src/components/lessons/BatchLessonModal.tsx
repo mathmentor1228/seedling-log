@@ -1157,45 +1157,70 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
               </div>
             </FieldToggleBlock>
 
-            {/* Homework Status */}
+            {/* Homework Status - HW-PER-ITEM-CHECK-V1: show previous unchecked HW per student with explicit per-item result selectors */}
             <FieldToggleBlock field="homework_status" active={activeFields.has('homework_status')} onToggle={() => toggleField('homework_status')}>
               <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  ⚠️ 학생별로 <strong>지난 수업의 숙제 항목을 직접 확인</strong>해야 반영됩니다. 항목별 결과를 선택하지 않으면 확인 처리되지 않습니다.
+                </p>
                 <PerStudentToggle checked={usePerStudentHomework} onChange={setUsePerStudentHomework} />
                 {usePerStudentHomework ? (
                   <PerStudentContainer>
                     {selectedDraftsList.map(d => {
-                      const items = perStudentHomeworkItems[d.id] || [];
+                      const prevItems = prevUncheckedByDraft[d.id] || [];
+                      const itemResults = perStudentPrevHwResults[d.id] || {};
+                      const itemNotes = perStudentPrevHwNotes[d.id] || {};
                       return (
                         <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                          {items.length > 0 && (
-                            <div className="mb-1.5 space-y-0.5">
-                              {items.map(it => (
-                                <p key={it.tempId} className="text-[11px] text-muted-foreground leading-tight">
-                                  • {it.content || '(내용 없음)'}
-                                </p>
+                          {prevItems.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground italic">미확인된 지난 숙제가 없습니다.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {prevItems.map(hw => (
+                                <div key={hw.id} className="rounded-md border border-border/50 bg-background/60 p-2 space-y-1.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs text-foreground leading-snug flex-1 whitespace-pre-wrap">{hw.content}</p>
+                                    <span className="text-[10px] text-muted-foreground shrink-0">{hw.assigned_date}</span>
+                                  </div>
+                                  <Select
+                                    value={itemResults[hw.id] || ''}
+                                    onValueChange={v => setPerStudentPrevHwResults(prev => ({
+                                      ...prev,
+                                      [d.id]: { ...(prev[d.id] || {}), [hw.id]: v },
+                                    }))}
+                                  >
+                                    <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="결과 선택 (미선택 시 확인 안됨)" /></SelectTrigger>
+                                    <SelectContent>
+                                      {HOMEWORK_STATUS_OPTIONS.filter(o => o.value !== 'none_assigned').map(o => (
+                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Input
+                                    value={itemNotes[hw.id] || ''}
+                                    onChange={e => setPerStudentPrevHwNotes(prev => ({
+                                      ...prev,
+                                      [d.id]: { ...(prev[d.id] || {}), [hw.id]: e.target.value },
+                                    }))}
+                                    placeholder="확인 메모 (선택)"
+                                    className="h-7 text-xs"
+                                  />
+                                </div>
                               ))}
                             </div>
                           )}
-                          <Select value={perStudentHomework[d.id] || homeworkStatus} onValueChange={v => setPerStudentHomework(prev => ({ ...prev, [d.id]: v }))}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
                         </StudentBlock>
                       );
                     })}
                   </PerStudentContainer>
                 ) : (
-                  <Select value={homeworkStatus} onValueChange={setHomeworkStatus}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {HOMEWORK_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-foreground/80 space-y-1">
+                    <p>지난 숙제는 학생마다 다르므로, <strong>"학생별 설정"을 켜고</strong> 각 학생의 숙제 항목별로 결과를 선택해주세요.</p>
+                  </div>
                 )}
               </div>
             </FieldToggleBlock>
+
 
             {/* Learning Issues */}
             <FieldToggleBlock field="learning_issues" active={activeFields.has('learning_issues')} onToggle={() => toggleField('learning_issues')}>
