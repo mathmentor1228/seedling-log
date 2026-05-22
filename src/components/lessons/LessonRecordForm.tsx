@@ -2568,6 +2568,18 @@ export function LessonRecordForm({
                 rows={2}
                 className="text-sm"
               />
+              {/* HW-DAILY-OPT-IN-V1: explicit daily-check toggle. Default OFF → homework_type='regular' (다음수업까지 1회성) */}
+              <label className="flex items-center gap-2 mt-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!!item.is_daily}
+                  onChange={(e) => setNewHomeworkItems(prev => prev.map((it, i) => i === idx ? { ...it, is_daily: e.target.checked } : it))}
+                  className="w-3.5 h-3.5 rounded border-border"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  데일리체크 (매일 반복 인증) — 체크 안 하면 <strong>다음 수업까지 1회성</strong>으로 저장됩니다.
+                </span>
+              </label>
             </div>
           ))}
         </div>
