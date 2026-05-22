@@ -2054,7 +2054,18 @@ export function LessonRecordForm({
                                 const carryNote = `[이월사유: ${reasonLabel}] 다음시간 검사예정으로 이월`;
                                 const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
                                 const nextDate = format(tomorrow, 'yyyy-MM-dd');
-                                await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: contentWithReason, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
+                                // HW-CARRY-FORWARD-DEDUP-V1: skip insert if an identical carried-forward row already exists
+                                const { data: dupHw } = await supabase
+                                  .from('homework_assignments')
+                                  .select('id')
+                                  .eq('student_id', hwItem.student_id)
+                                  .eq('subject', hwItem.subject as any)
+                                  .eq('assigned_date', nextDate)
+                                  .eq('content', contentWithReason)
+                                  .maybeSingle();
+                                if (!dupHw) {
+                                  await supabase.from('homework_assignments').insert({ student_id: hwItem.student_id, subject: hwItem.subject as any, content: contentWithReason, assigned_date: nextDate, homework_type: 'regular', created_by: user.id });
+                                }
                                 await supabase.from('homework_assignments').update({ check_status: 'checked', checked_by: user.id, checked_at: new Date().toISOString(), result: selectedResult, notes: carryNote }).eq('id', hwItem.id);
                                 toast({ title: '다음시간으로 이월됨', description: `사유: ${reasonLabel} / ${hwItem.content}` });
                                 if (formData.student_id && formData.subject) { await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date); }
