@@ -1423,6 +1423,8 @@ export function LessonRecordForm({
             lesson_record_id: finalDraftId,
             assigned_date: formData.lesson_date,
             content: item.content.trim(),
+            // HW-DAILY-OPT-IN-V1: default to 'regular' unless teacher opted in
+            homework_type: item.is_daily ? 'daily' : 'regular',
             created_by: user?.id || null,
           });
         }
