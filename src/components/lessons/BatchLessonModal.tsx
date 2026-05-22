@@ -470,6 +470,29 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       console.error('Failed to load homework assignments:', e);
     }
 
+    // HW-PER-ITEM-CHECK-V1: Load previous-lesson unchecked homework per (student, subject)
+    // so the teacher can confirm each previous homework item explicitly from the bulk editor.
+    try {
+      const prevMap: Record<string, Array<{ id: string; content: string; assigned_date: string; homework_type: string }>> = {};
+      for (const d of selectedDrafts) {
+        const { data: prevHw } = await supabase
+          .from('homework_assignments')
+          .select('id, content, assigned_date, homework_type')
+          .eq('student_id', d.student_id)
+          .eq('subject', d.subject as SubjectType)
+          .eq('check_status', 'unchecked')
+          .lt('assigned_date', searchDate)
+          .not('content', 'eq', '')
+          .order('assigned_date', { ascending: false });
+        if (prevHw && prevHw.length > 0) {
+          prevMap[d.id] = prevHw as any;
+        }
+      }
+      setPrevUncheckedByDraft(prevMap);
+    } catch (e) {
+      console.error('Failed to load previous unchecked homework:', e);
+    }
+
     setStep('edit');
   }
 
