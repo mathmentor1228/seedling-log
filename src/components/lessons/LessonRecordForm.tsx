@@ -2536,7 +2536,7 @@ export function LessonRecordForm({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => setNewHomeworkItems(prev => [...prev, { content: '' }])}
+            onClick={() => setNewHomeworkItems(prev => [...prev, { content: '', is_daily: false }])}
             className="text-xs gap-1 h-7"
           >
             <Plus className="w-3 h-3" />
