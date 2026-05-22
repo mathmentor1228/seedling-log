@@ -331,7 +331,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   }
 
   function addHomework(studentId?: string) {
-    const newItem = { tempId: crypto.randomUUID(), content: '', homework_type: 'daily' };
+    // HW-DEFAULT-REGULAR-V1: Default homework_type is 'regular' (one-off, due next lesson).
+    // Switch to 'daily' only explicitly via the dropdown.
+    const newItem = { tempId: crypto.randomUUID(), content: '', homework_type: 'regular' };
     if (studentId) {
       setPerStudentHomeworkItems(prev => ({
         ...prev,
