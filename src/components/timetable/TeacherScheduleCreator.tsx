@@ -392,7 +392,7 @@ export function TeacherScheduleCreator() {
         toast({ title: '그룹 수정 완료' });
       } else {
         const { error } = await supabase.from('student_groups')
-          .insert({ name: groupName.trim(), description: groupDesc.trim() || null });
+          .insert({ name: groupName.trim(), description: groupDesc.trim() || null, created_by: user?.id ?? null });
         if (error) throw error;
         toast({ title: '그룹 생성 완료' });
       }
