@@ -70,8 +70,9 @@ interface StudentItem {
 }
 
 export function TeacherScheduleCreator() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { toast } = useToast();
+  const isAdminUser = role === 'admin';
 
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
