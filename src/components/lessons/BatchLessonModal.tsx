@@ -442,7 +442,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           perHwItems[hw.lesson_record_id].push({
             tempId: hw.id,
             content: hw.content || '',
-            homework_type: hw.homework_type || 'daily',
+            homework_type: hw.homework_type || 'regular',
           });
           // capture latest extended result if checked
           if (hw.check_status === 'checked' && hw.result) {
