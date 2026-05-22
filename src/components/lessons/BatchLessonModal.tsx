@@ -582,44 +582,31 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (updateError) throw updateError;
       }
 
-      // Homework status sync (extended result values stored on homework_assignments.result)
+      // HW-NO-AUTO-CONFIRM-V1: Only mark explicitly-selected previous homework items as checked.
+      // Previously this fanned out check_status='checked' to ALL unchecked homework for the
+      // student+subject, which caused homework to appear "confirmed" without the user pressing
+      // a per-item confirm. Now we ONLY write per-item results that the user explicitly chose
+      // in perStudentPrevHwResults (see goToEdit pre-load + UI in homework_status section).
       if (activeFields.has('homework_status')) {
         for (const id of ids) {
-          const record = drafts.find(d => d.id === id);
-          if (!record) continue;
-
-          const effectiveStatus = usePerStudentHomework
-            ? (perStudentHomework[id] || homeworkStatus)
-            : homeworkStatus;
-
-          if (effectiveStatus === 'none_assigned' || effectiveStatus === 'unable_to_verify') continue;
-          const resultValue = effectiveStatus; // store the granular result as-is
-
-          await supabase
-            .from('homework_assignments')
-            .update({
-              check_status: 'checked',
-              result: resultValue,
-              checked_at: now,
-              checked_by: user!.id,
-            })
-            .eq('lesson_record_id', id)
-            .eq('check_status', 'unchecked');
-
-          await supabase
-            .from('homework_assignments')
-            .update({
-              check_status: 'checked',
-              result: resultValue,
-              checked_at: now,
-              checked_by: user!.id,
-            })
-            .eq('student_id', record.student_id)
-            .eq('subject', record.subject as any)
-            .eq('check_status', 'unchecked')
-            .lt('assigned_date', searchDate);
+          const itemResults = perStudentPrevHwResults[id] || {};
+          const itemNotes = perStudentPrevHwNotes[id] || {};
+          for (const [hwId, resultValue] of Object.entries(itemResults)) {
+            if (!resultValue) continue;
+            await supabase
+              .from('homework_assignments')
+              .update({
+                check_status: 'checked',
+                result: resultValue,
+                notes: (itemNotes[hwId] || '').trim() || null,
+                checked_at: now,
+                checked_by: user!.id,
+              })
+              .eq('id', hwId);
+          }
         }
       }
+
 
       // Homework assignment creation
       if (activeFields.has('homework_items')) {
