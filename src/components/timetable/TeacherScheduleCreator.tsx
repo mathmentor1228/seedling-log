@@ -259,6 +259,69 @@ export function TeacherScheduleCreator() {
       return;
     }
 
+    // Resolve student list for this entry
+    let targetStudentIds: string[] = [];
+    let targetStudentNames: Record<string, string> = {};
+    if (entry.assignMode === 'group' && entry.groupId && entry.groupId !== 'none') {
+      const g = groups.find((x) => x.id === entry.groupId);
+      if (g) {
+        targetStudentIds = g.members.map((m) => m.id);
+        g.members.forEach((m) => { targetStudentNames[m.id] = m.name; });
+      }
+    } else if (entry.assignMode === 'students') {
+      targetStudentIds = entry.studentIds;
+      entry.studentIds.forEach((sid, i) => { targetStudentNames[sid] = entry.studentNames[i] || ''; });
+    }
+
+    // SCHEDULE-CONFLICT-CHECK-V1: 학생별 다른 과목 시간 겹침 검사
+    if (targetStudentIds.length > 0) {
+      try {
+        const { data: csRows } = await supabase
+          .from('class_students')
+          .select('student_id, class_id, classes(subject, name)')
+          .in('student_id', targetStudentIds);
+        const studentClassMap = new Map<string, { class_id: string; subject: string; name: string }[]>();
+        (csRows || []).forEach((r: any) => {
+          const arr = studentClassMap.get(r.student_id) || [];
+          arr.push({ class_id: r.class_id, subject: r.classes?.subject || '', name: r.classes?.name || '' });
+          studentClassMap.set(r.student_id, arr);
+        });
+
+        const conflicts: string[] = [];
+        for (const d of days) {
+          const overlapping = existingSchedules.filter((s: any) => {
+            if (s.day_of_week !== d) return false;
+            const sStart = (s.start_time || '').slice(0, 5);
+            const sEnd = (s.end_time || '').slice(0, 5);
+            return entry.startTime < sEnd && sStart < entry.endTime;
+          });
+          for (const sid of targetStudentIds) {
+            const studentClasses = studentClassMap.get(sid) || [];
+            for (const sch of overlapping) {
+              const match = studentClasses.find((c) => c.class_id === sch.class_id);
+              if (!match) continue;
+              if (match.subject === entry.subject) continue; // 동일 과목은 제외
+              const dayLabel = DAYS_OF_WEEK.find((x) => x.value === d)?.label || '';
+              conflicts.push(
+                `${targetStudentNames[sid] || sid}: ${dayLabel} ${sch.start_time?.slice(0, 5)}–${sch.end_time?.slice(0, 5)} ${match.subject} (${match.name})`,
+              );
+            }
+          }
+        }
+
+        if (conflicts.length > 0) {
+          const preview = conflicts.slice(0, 5).join('\n');
+          const more = conflicts.length > 5 ? `\n외 ${conflicts.length - 5}건` : '';
+          const proceed = window.confirm(
+            `다음 학생들에게 다른 과목 시간과 겹침이 있습니다:\n\n${preview}${more}\n\n그래도 저장하시겠습니까?`,
+          );
+          if (!proceed) return;
+        }
+      } catch (e) {
+        console.warn('conflict check failed', e);
+      }
+    }
+
     const newEntries = days.map(d => ({
       ...entry,
       id: crypto.randomUUID(),
