@@ -715,8 +715,12 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
           payload.understanding_score = score;
         }
 
-        const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
-        payload.homework_status = mapResultToStatus(hw);
+        // HW-NO-AUTO-CONFIRM-V1: Only write homework_status when the teacher explicitly toggled this field on.
+        // Otherwise we would silently overwrite (and effectively confirm/reset) the existing status on every bulk draft save.
+        if (activeFields.has('homework_status')) {
+          const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
+          payload.homework_status = mapResultToStatus(hw);
+        }
 
         const types = usePerStudentLessonTypes ? (perStudentLessonTypes[id] ?? batchLessonTypes) : batchLessonTypes;
         payload.lesson_types = types;
