@@ -1417,7 +1417,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                         <Select value={hw.homework_type} onValueChange={v => updateHomework(hw.tempId, 'homework_type', v)}>
                           <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="daily">매일</SelectItem>
+                            <SelectItem value="regular">다음수업까지</SelectItem>
+                            <SelectItem value="daily">데일리체크</SelectItem>
                             <SelectItem value="weekly">주간</SelectItem>
                             <SelectItem value="long_term">장기</SelectItem>
                           </SelectContent>
