@@ -622,7 +622,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         for (const id of ids) {
           const itemResults = perStudentPrevHwResults[id] || {};
           const itemNotes = perStudentPrevHwNotes[id] || {};
-          for (const [hwId, resultValue] of Object.entries(itemResults)) {
+          for (const [hwId, resultRaw] of Object.entries(itemResults)) {
+            const resultValue = resultRaw as string;
             if (!resultValue) continue;
             await supabase
               .from('homework_assignments')
