@@ -255,6 +255,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setPerStudentHomeworkItems({});
     setPerStudentParentMsg({});
     setPerStudentAttendance({});
+    setPrevUncheckedByDraft({});
+    setPerStudentPrevHwResults({});
+    setPerStudentPrevHwNotes({});
   }
 
   async function searchDrafts() {
