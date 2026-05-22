@@ -199,6 +199,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentParentMsg, setPerStudentParentMsg] = useState<Record<string, string>>({});
   const [perStudentAttendance, setPerStudentAttendance] = useState<Record<string, string[]>>({});
 
+  // HW-PER-ITEM-CHECK-V1: Previous-lesson unchecked homework loaded per draft, for explicit per-item confirmation
+  const [prevUncheckedByDraft, setPrevUncheckedByDraft] = useState<Record<string, Array<{ id: string; content: string; assigned_date: string; homework_type: string }>>>({});
+  const [perStudentPrevHwResults, setPerStudentPrevHwResults] = useState<Record<string, Record<string, string>>>({});
+  const [perStudentPrevHwNotes, setPerStudentPrevHwNotes] = useState<Record<string, Record<string, string>>>({});
+
   useEffect(() => {
     if (open) {
       setStep('search');
