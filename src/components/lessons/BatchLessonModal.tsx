@@ -673,7 +673,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       const now = new Date().toISOString();
 
       for (const id of ids) {
-        const payload: Record<string, any> = { updated_at: now, submitted: false };
+        const original = drafts.find(d => d.id === id);
+        const payload: Record<string, any> = { updated_at: now, submitted: original?.submitted ?? false };
 
         // Save per-student or shared values for ALL fields
         const range = usePerStudentLessonRange ? (perStudentLessonRange[id] ?? lessonRange) : lessonRange;
