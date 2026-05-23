@@ -151,14 +151,14 @@ export function TeacherScheduleCreator() {
       ]);
 
       // Build teacher options (id → name) from profiles for teacher-roled users
-      const teacherIds = [...new Set(((teachersRes as any).data || []).map((r: any) => r.user_id))];
+      const teacherIds: string[] = [...new Set(((teachersRes as any).data || []).map((r: any) => r.user_id as string))];
       let teacherNameMap: Record<string, string> = {};
       if (teacherIds.length > 0) {
         const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', teacherIds);
         (profs || []).forEach((p: any) => { teacherNameMap[p.id] = p.full_name || ''; });
       }
       const tOptions: TeacherOpt[] = teacherIds
-        .map((id: string) => ({ id, name: teacherNameMap[id] || '이름없음' }))
+        .map((id) => ({ id, name: teacherNameMap[id] || '이름없음' }))
         .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
       setTeacherOptions(tOptions);
 
