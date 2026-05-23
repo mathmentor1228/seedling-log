@@ -106,6 +106,8 @@ export function TeacherScheduleCreator() {
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
   const [groupSaving, setGroupSaving] = useState(false);
+  const [groupTeacherId, setGroupTeacherId] = useState<string>('');
+  const [teacherOptions, setTeacherOptions] = useState<TeacherOpt[]>([]);
 
   // Member management
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
