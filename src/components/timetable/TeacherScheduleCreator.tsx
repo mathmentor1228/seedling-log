@@ -472,15 +472,28 @@ export function TeacherScheduleCreator() {
     if (!groupName.trim()) return;
     setGroupSaving(true);
     try {
+      const teacherIdToSave = isAdminUser
+        ? (groupTeacherId || null)
+        : (user?.id ?? null); // 비관리자는 항상 본인으로 고정
       if (editingGroup) {
         const { error } = await supabase.from('student_groups')
-          .update({ name: groupName.trim(), description: groupDesc.trim() || null, updated_at: new Date().toISOString() })
+          .update({
+            name: groupName.trim(),
+            description: groupDesc.trim() || null,
+            teacher_id: teacherIdToSave,
+            updated_at: new Date().toISOString(),
+          })
           .eq('id', editingGroup.id);
         if (error) throw error;
         toast({ title: '그룹 수정 완료' });
       } else {
         const { error } = await supabase.from('student_groups')
-          .insert({ name: groupName.trim(), description: groupDesc.trim() || null, created_by: user?.id ?? null });
+          .insert({
+            name: groupName.trim(),
+            description: groupDesc.trim() || null,
+            created_by: user?.id ?? null,
+            teacher_id: teacherIdToSave,
+          });
         if (error) throw error;
         toast({ title: '그룹 생성 완료' });
       }
@@ -488,6 +501,7 @@ export function TeacherScheduleCreator() {
       setEditingGroup(null);
       setGroupName('');
       setGroupDesc('');
+      setGroupTeacherId('');
       fetchData();
     } catch (error: any) {
       toast({ title: '오류', description: error.message, variant: 'destructive' });
