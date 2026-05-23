@@ -37,8 +37,12 @@ interface GroupInfo {
   id: string;
   name: string;
   description: string | null;
+  teacher_id: string | null;
+  teacher_name?: string | null;
   members: { id: string; name: string }[];
 }
+
+interface TeacherOpt { id: string; name: string }
 
 interface NewScheduleEntry {
   id: string;
@@ -102,6 +106,8 @@ export function TeacherScheduleCreator() {
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
   const [groupSaving, setGroupSaving] = useState(false);
+  const [groupTeacherId, setGroupTeacherId] = useState<string>('');
+  const [teacherOptions, setTeacherOptions] = useState<TeacherOpt[]>([]);
 
   // Member management
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
@@ -132,19 +138,29 @@ export function TeacherScheduleCreator() {
         setTeacherName(tName);
       }
 
-      // TEACHER-OWN-GROUPS-V3: 비관리자는 본인이 담당하는 학생(student_subject_teachers)이
-      // 멤버로 포함된 그룹만 표시. created_by 기준은 사용하지 않음(레거시 그룹 다수가 NULL).
-      const [groupsRes, membersRes, classroomsRes, schedulesRes, mySubjStudRes] = await Promise.all([
-        supabase.from('student_groups').select('id, name, description, created_by').order('name'),
+      // TEACHER-OWN-GROUPS-V4: 그룹에 명시적 teacher_id를 지정. 비관리자는 본인 담당 그룹 +
+      // 아직 담당자가 지정되지 않은 그룹(NULL)을 함께 표시(레거시 호환).
+      const [groupsRes, membersRes, classroomsRes, schedulesRes, teachersRes] = await Promise.all([
+        supabase.from('student_groups').select('id, name, description, created_by, teacher_id').order('name'),
         supabase.from('student_group_members').select('group_id, student_id'),
         supabase.from('classrooms').select('id, name, manager_name, capacity').eq('is_active', true).order('sort_order'),
         supabase.from('class_schedules')
           .select('id, class_id, day_of_week, start_time, end_time, classroom_id, classes(name, subject, teacher_id)')
           .eq('is_active', true) as any,
-        !isAdminUser && user?.id
-          ? supabase.from('student_subject_teachers').select('student_id').eq('teacher_id', user.id)
-          : Promise.resolve({ data: null } as any),
+        supabase.from('user_roles').select('user_id, role').eq('role', 'teacher' as any),
       ]);
+
+      // Build teacher options (id → name) from profiles for teacher-roled users
+      const teacherIds: string[] = Array.from(new Set(((teachersRes as any).data || []).map((r: any) => String(r.user_id))));
+      let teacherNameMap: Record<string, string> = {};
+      if (teacherIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', teacherIds);
+        (profs || []).forEach((p: any) => { teacherNameMap[p.id] = p.full_name || ''; });
+      }
+      const tOptions: TeacherOpt[] = teacherIds
+        .map((id) => ({ id, name: teacherNameMap[id] || '이름없음' }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      setTeacherOptions(tOptions);
 
       // Build student lookup
       const studentIds = [...new Set((membersRes.data || []).map((m: any) => m.student_id))];
@@ -162,23 +178,18 @@ export function TeacherScheduleCreator() {
         }
       });
 
-      // Set of student IDs taught by current teacher (non-admin only)
-      const myStudentIdSet: Set<string> | null = !isAdminUser && user?.id
-        ? new Set(((mySubjStudRes as any)?.data || []).map((r: any) => r.student_id))
-        : null;
-
-      let groupsList = (groupsRes.data || []).map((g: any) => ({
+      let groupsList: GroupInfo[] = (groupsRes.data || []).map((g: any) => ({
         id: g.id,
         name: g.name,
         description: g.description,
+        teacher_id: g.teacher_id || null,
+        teacher_name: g.teacher_id ? (teacherNameMap[g.teacher_id] || null) : null,
         members: (membersMap[g.id] || []).sort((a, b) => a.name.localeCompare(b.name)),
       }));
 
-      // Filter: keep only groups containing at least one of my students
-      if (myStudentIdSet) {
-        groupsList = groupsList.filter((g) =>
-          g.members.some((m) => myStudentIdSet.has(m.id))
-        );
+      // Filter: non-admin → groups assigned to me, or unassigned (legacy)
+      if (!isAdminUser && user?.id) {
+        groupsList = groupsList.filter((g) => g.teacher_id === user.id || g.teacher_id === null);
       }
       setGroups(groupsList);
 
@@ -461,15 +472,28 @@ export function TeacherScheduleCreator() {
     if (!groupName.trim()) return;
     setGroupSaving(true);
     try {
+      const teacherIdToSave = isAdminUser
+        ? (groupTeacherId || null)
+        : (user?.id ?? null); // 비관리자는 항상 본인으로 고정
       if (editingGroup) {
         const { error } = await supabase.from('student_groups')
-          .update({ name: groupName.trim(), description: groupDesc.trim() || null, updated_at: new Date().toISOString() })
+          .update({
+            name: groupName.trim(),
+            description: groupDesc.trim() || null,
+            teacher_id: teacherIdToSave,
+            updated_at: new Date().toISOString(),
+          })
           .eq('id', editingGroup.id);
         if (error) throw error;
         toast({ title: '그룹 수정 완료' });
       } else {
         const { error } = await supabase.from('student_groups')
-          .insert({ name: groupName.trim(), description: groupDesc.trim() || null, created_by: user?.id ?? null });
+          .insert({
+            name: groupName.trim(),
+            description: groupDesc.trim() || null,
+            created_by: user?.id ?? null,
+            teacher_id: teacherIdToSave,
+          });
         if (error) throw error;
         toast({ title: '그룹 생성 완료' });
       }
@@ -477,6 +501,7 @@ export function TeacherScheduleCreator() {
       setEditingGroup(null);
       setGroupName('');
       setGroupDesc('');
+      setGroupTeacherId('');
       fetchData();
     } catch (error: any) {
       toast({ title: '오류', description: error.message, variant: 'destructive' });
@@ -651,6 +676,7 @@ export function TeacherScheduleCreator() {
             </div>
             <Button size="sm" onClick={() => {
               setEditingGroup(null); setGroupName(''); setGroupDesc('');
+              setGroupTeacherId(isAdminUser ? '' : (user?.id ?? ''));
               setGroupDialogOpen(true);
             }}>
               <Plus className="w-3 h-3 mr-1" />그룹 생성
@@ -667,14 +693,21 @@ export function TeacherScheduleCreator() {
               {groups.map(group => (
                 <div key={group.id} className="border rounded-lg p-3 bg-card hover:shadow-sm transition-shadow">
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <h4 className="text-sm font-semibold">{group.name}</h4>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-semibold truncate">{group.name}</h4>
+                      {group.teacher_name ? (
+                        <p className="text-[11px] text-primary">담당: {group.teacher_name}</p>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground/70">담당 미지정</p>
+                      )}
                       {group.description && <p className="text-xs text-muted-foreground">{group.description}</p>}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button onClick={() => {
                         setEditingGroup(group); setGroupName(group.name);
-                        setGroupDesc(group.description || ''); setGroupDialogOpen(true);
+                        setGroupDesc(group.description || '');
+                        setGroupTeacherId(group.teacher_id || (isAdminUser ? '' : (user?.id ?? '')));
+                        setGroupDialogOpen(true);
                       }} className="p-1 rounded hover:bg-muted text-muted-foreground">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -930,6 +963,26 @@ export function TeacherScheduleCreator() {
               <Label>그룹명 *</Label>
               <Input placeholder="예: 고2 수능반, 중1 기초반" value={groupName}
                 onChange={e => setGroupName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>담당 선생님 {isAdminUser ? '(선택)' : ''}</Label>
+              {isAdminUser ? (
+                <Select value={groupTeacherId || 'none'} onValueChange={(v) => setGroupTeacherId(v === 'none' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="담당 선생님 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">미지정</SelectItem>
+                    {teacherOptions.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-xs text-muted-foreground px-1">
+                  {teacherName || '본인'} 선생님으로 자동 지정됩니다.
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>설명 (선택)</Label>
