@@ -693,14 +693,21 @@ export function TeacherScheduleCreator() {
               {groups.map(group => (
                 <div key={group.id} className="border rounded-lg p-3 bg-card hover:shadow-sm transition-shadow">
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <h4 className="text-sm font-semibold">{group.name}</h4>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-semibold truncate">{group.name}</h4>
+                      {group.teacher_name ? (
+                        <p className="text-[11px] text-primary">담당: {group.teacher_name}</p>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground/70">담당 미지정</p>
+                      )}
                       {group.description && <p className="text-xs text-muted-foreground">{group.description}</p>}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button onClick={() => {
                         setEditingGroup(group); setGroupName(group.name);
-                        setGroupDesc(group.description || ''); setGroupDialogOpen(true);
+                        setGroupDesc(group.description || '');
+                        setGroupTeacherId(group.teacher_id || (isAdminUser ? '' : (user?.id ?? '')));
+                        setGroupDialogOpen(true);
                       }} className="p-1 rounded hover:bg-muted text-muted-foreground">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
