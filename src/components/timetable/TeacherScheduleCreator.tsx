@@ -965,6 +965,26 @@ export function TeacherScheduleCreator() {
                 onChange={e => setGroupName(e.target.value)} />
             </div>
             <div className="space-y-2">
+              <Label>담당 선생님 {isAdminUser ? '(선택)' : ''}</Label>
+              {isAdminUser ? (
+                <Select value={groupTeacherId || 'none'} onValueChange={(v) => setGroupTeacherId(v === 'none' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="담당 선생님 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">미지정</SelectItem>
+                    {teacherOptions.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-xs text-muted-foreground px-1">
+                  {teacherName || '본인'} 선생님으로 자동 지정됩니다.
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
               <Label>설명 (선택)</Label>
               <Input placeholder="그룹 설명" value={groupDesc}
                 onChange={e => setGroupDesc(e.target.value)} />
