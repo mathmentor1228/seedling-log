@@ -51,8 +51,6 @@ export default function TeacherRevenueSection() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1) Active student_courses with teacher_id (assumes current monthly fees)
-      // For past months, prefer payment_records if available; fallback to active courses.
       const monthStart = `${month}-01`;
       const monthEndDate = new Date(month + '-01');
       monthEndDate.setMonth(monthEndDate.getMonth() + 1);
@@ -63,6 +61,7 @@ export default function TeacherRevenueSection() {
         { data: profiles },
         { data: comp },
         { data: subjectTeachers },
+        { data: lessons },
       ] = await Promise.all([
         supabase
           .from('student_courses')
@@ -76,6 +75,13 @@ export default function TeacherRevenueSection() {
         supabase
           .from('student_subject_teachers')
           .select('student_id, subject, teacher_id') as any,
+        supabase
+          .from('lesson_records')
+          .select('teacher_id, student_id, subject')
+          .eq('submitted', true)
+          .not('teacher_id', 'is', null)
+          .gte('lesson_date', monthStart)
+          .lt('lesson_date', monthEnd) as any,
       ]);
 
       const teacherMap = new Map<string, { name: string; revenue: number; students: Set<string> }>();
@@ -85,7 +91,16 @@ export default function TeacherRevenueSection() {
 
       const UNASSIGNED = '__unassigned__';
 
-      // Build (student_id, subject) -> teacher_ids[] map (may be 1+ teachers per subject)
+      // (student_id::subject) -> Map<teacher_id, lesson_count> from actual taught lessons this month
+      const lessonAttribMap = new Map<string, Map<string, number>>();
+      for (const l of (lessons || []) as any[]) {
+        const key = `${l.student_id}::${l.subject}`;
+        if (!lessonAttribMap.has(key)) lessonAttribMap.set(key, new Map());
+        const tm = lessonAttribMap.get(key)!;
+        tm.set(l.teacher_id, (tm.get(l.teacher_id) || 0) + 1);
+      }
+
+      // Fallback: (student_id::subject) -> teacher_ids[] from subject_teachers
       const subjTeacherMap = new Map<string, string[]>();
       for (const st of (subjectTeachers || []) as any[]) {
         const key = `${st.student_id}::${st.subject}`;
@@ -93,9 +108,11 @@ export default function TeacherRevenueSection() {
         subjTeacherMap.get(key)!.push(st.teacher_id);
       }
 
-      // Compute revenue per teacher from active courses, attributing by subject-teacher mapping.
-      // If a subject has multiple teachers for the same student, split the fee equally.
-      // Fallback: use student_courses.teacher_id, else mark as unassigned.
+      const ensure = (tid: string) => {
+        if (!teacherMap.has(tid)) teacherMap.set(tid, { name: '미배정', revenue: 0, students: new Set() });
+        return teacherMap.get(tid)!;
+      };
+
       for (const c of (courses || []) as any[]) {
         const status = c.students?.enrollment_status;
         if (status !== '재학' && status !== '재등원') continue;
@@ -104,23 +121,30 @@ export default function TeacherRevenueSection() {
 
         const subject = c.course_policies?.subject;
         const key = subject ? `${c.student_id}::${subject}` : '';
-        const assigned = key ? subjTeacherMap.get(key) : undefined;
+        const lessonShare = key ? lessonAttribMap.get(key) : undefined;
 
-        let teacherIds: string[];
-        if (assigned && assigned.length > 0) {
-          teacherIds = assigned;
-        } else if (c.teacher_id) {
-          teacherIds = [c.teacher_id];
+        if (lessonShare && lessonShare.size > 0) {
+          // Split fee by actual lesson count this month
+          const total = Array.from(lessonShare.values()).reduce((a, b) => a + b, 0);
+          for (const [tid, cnt] of lessonShare.entries()) {
+            const e = ensure(tid);
+            e.revenue += fee * (cnt / total);
+            e.students.add(c.student_id);
+          }
         } else {
-          teacherIds = [UNASSIGNED];
-        }
+          // Fallback chain: subject_teachers -> course.teacher_id -> unassigned
+          const assigned = key ? subjTeacherMap.get(key) : undefined;
+          let teacherIds: string[];
+          if (assigned && assigned.length > 0) teacherIds = assigned;
+          else if (c.teacher_id) teacherIds = [c.teacher_id];
+          else teacherIds = [UNASSIGNED];
 
-        const share = fee / teacherIds.length;
-        for (const tid of teacherIds) {
-          if (!teacherMap.has(tid)) teacherMap.set(tid, { name: tid === UNASSIGNED ? '미배정' : '미배정', revenue: 0, students: new Set() });
-          const e = teacherMap.get(tid)!;
-          e.revenue += share;
-          e.students.add(c.student_id);
+          const share = fee / teacherIds.length;
+          for (const tid of teacherIds) {
+            const e = ensure(tid);
+            e.revenue += share;
+            e.students.add(c.student_id);
+          }
         }
       }
 
