@@ -37,8 +37,12 @@ interface GroupInfo {
   id: string;
   name: string;
   description: string | null;
+  teacher_id: string | null;
+  teacher_name?: string | null;
   members: { id: string; name: string }[];
 }
+
+interface TeacherOpt { id: string; name: string }
 
 interface NewScheduleEntry {
   id: string;
