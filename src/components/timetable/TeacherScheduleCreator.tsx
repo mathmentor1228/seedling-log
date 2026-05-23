@@ -676,6 +676,7 @@ export function TeacherScheduleCreator() {
             </div>
             <Button size="sm" onClick={() => {
               setEditingGroup(null); setGroupName(''); setGroupDesc('');
+              setGroupTeacherId(isAdminUser ? '' : (user?.id ?? ''));
               setGroupDialogOpen(true);
             }}>
               <Plus className="w-3 h-3 mr-1" />그룹 생성
