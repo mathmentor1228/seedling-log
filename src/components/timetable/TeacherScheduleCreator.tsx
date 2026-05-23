@@ -138,19 +138,29 @@ export function TeacherScheduleCreator() {
         setTeacherName(tName);
       }
 
-      // TEACHER-OWN-GROUPS-V3: 비관리자는 본인이 담당하는 학생(student_subject_teachers)이
-      // 멤버로 포함된 그룹만 표시. created_by 기준은 사용하지 않음(레거시 그룹 다수가 NULL).
-      const [groupsRes, membersRes, classroomsRes, schedulesRes, mySubjStudRes] = await Promise.all([
-        supabase.from('student_groups').select('id, name, description, created_by').order('name'),
+      // TEACHER-OWN-GROUPS-V4: 그룹에 명시적 teacher_id를 지정. 비관리자는 본인 담당 그룹 +
+      // 아직 담당자가 지정되지 않은 그룹(NULL)을 함께 표시(레거시 호환).
+      const [groupsRes, membersRes, classroomsRes, schedulesRes, teachersRes] = await Promise.all([
+        supabase.from('student_groups').select('id, name, description, created_by, teacher_id').order('name'),
         supabase.from('student_group_members').select('group_id, student_id'),
         supabase.from('classrooms').select('id, name, manager_name, capacity').eq('is_active', true).order('sort_order'),
         supabase.from('class_schedules')
           .select('id, class_id, day_of_week, start_time, end_time, classroom_id, classes(name, subject, teacher_id)')
           .eq('is_active', true) as any,
-        !isAdminUser && user?.id
-          ? supabase.from('student_subject_teachers').select('student_id').eq('teacher_id', user.id)
-          : Promise.resolve({ data: null } as any),
+        supabase.from('user_roles').select('user_id, role').eq('role', 'teacher' as any),
       ]);
+
+      // Build teacher options (id → name) from profiles for teacher-roled users
+      const teacherIds = [...new Set(((teachersRes as any).data || []).map((r: any) => r.user_id))];
+      let teacherNameMap: Record<string, string> = {};
+      if (teacherIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', teacherIds);
+        (profs || []).forEach((p: any) => { teacherNameMap[p.id] = p.full_name || ''; });
+      }
+      const tOptions: TeacherOpt[] = teacherIds
+        .map((id: string) => ({ id, name: teacherNameMap[id] || '이름없음' }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      setTeacherOptions(tOptions);
 
       // Build student lookup
       const studentIds = [...new Set((membersRes.data || []).map((m: any) => m.student_id))];
@@ -168,23 +178,18 @@ export function TeacherScheduleCreator() {
         }
       });
 
-      // Set of student IDs taught by current teacher (non-admin only)
-      const myStudentIdSet: Set<string> | null = !isAdminUser && user?.id
-        ? new Set(((mySubjStudRes as any)?.data || []).map((r: any) => r.student_id))
-        : null;
-
-      let groupsList = (groupsRes.data || []).map((g: any) => ({
+      let groupsList: GroupInfo[] = (groupsRes.data || []).map((g: any) => ({
         id: g.id,
         name: g.name,
         description: g.description,
+        teacher_id: g.teacher_id || null,
+        teacher_name: g.teacher_id ? (teacherNameMap[g.teacher_id] || null) : null,
         members: (membersMap[g.id] || []).sort((a, b) => a.name.localeCompare(b.name)),
       }));
 
-      // Filter: keep only groups containing at least one of my students
-      if (myStudentIdSet) {
-        groupsList = groupsList.filter((g) =>
-          g.members.some((m) => myStudentIdSet.has(m.id))
-        );
+      // Filter: non-admin → groups assigned to me, or unassigned (legacy)
+      if (!isAdminUser && user?.id) {
+        groupsList = groupsList.filter((g) => g.teacher_id === user.id || g.teacher_id === null);
       }
       setGroups(groupsList);
 
