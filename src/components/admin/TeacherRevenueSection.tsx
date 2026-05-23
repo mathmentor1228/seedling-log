@@ -661,7 +661,7 @@ export default function TeacherRevenueSection() {
                               </TableCell>
                             </TableRow>
                           )}
-                        </>
+                        </Fragment>
                       );
                     })
                   )}
