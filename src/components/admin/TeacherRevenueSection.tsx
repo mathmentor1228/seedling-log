@@ -219,7 +219,7 @@ export default function TeacherRevenueSection() {
             선생님별 매출 / 급여 / 마진
           </CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            매출 = 재원 학생의 활성 수강 월 수강료를 과목별 담당 선생님(student_subject_teachers)에게 귀속. 한 과목에 담당 선생님이 여러 명이면 균등 분배, 미배정 과목은 수강 자체의 담당 선생님 → '미배정' 순으로 폴백.
+            매출 = 해당 월 제출된 수업일지의 (학생·과목)별 실제 수업 횟수 비율로 수강료 분배. 그 달 수업일지가 없으면 과목별 담당 선생님 → 수강 담당 → 미배정 순으로 폴백.
           </p>
         </div>
         <Select value={month} onValueChange={setMonth}>
