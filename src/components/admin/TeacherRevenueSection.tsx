@@ -549,8 +549,8 @@ export default function TeacherRevenueSection() {
                       const studentDelta = r.student_count - r.prev_student_count;
                       const revDelta = r.revenue - r.prev_revenue;
                       return (
-                        <>
-                          <TableRow key={r.teacher_id} className="cursor-pointer hover:bg-muted/40" onClick={() => toggleExpand(r.teacher_id)}>
+                        <Fragment key={r.teacher_id}>
+                          <TableRow className="cursor-pointer hover:bg-muted/40" onClick={() => toggleExpand(r.teacher_id)}>
                             <TableCell>
                               <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
                             </TableCell>
