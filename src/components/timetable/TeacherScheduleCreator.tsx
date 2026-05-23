@@ -132,13 +132,13 @@ export function TeacherScheduleCreator() {
         setTeacherName(tName);
       }
 
-      // TEACHER-OWN-GROUPS-V1: 비관리자는 자신이 생성한 그룹만 표시
+      // TEACHER-OWN-GROUPS-V2: 비관리자는 본인이 만든 그룹 + 작성자 정보가 없는 레거시(공용) 그룹 표시
       const groupsQuery = supabase
         .from('student_groups')
         .select('id, name, description, created_by')
         .order('name');
       if (!isAdminUser && user?.id) {
-        groupsQuery.eq('created_by', user.id);
+        groupsQuery.or(`created_by.eq.${user.id},created_by.is.null`);
       }
       const [groupsRes, membersRes, classroomsRes, schedulesRes] = await Promise.all([
         groupsQuery,
