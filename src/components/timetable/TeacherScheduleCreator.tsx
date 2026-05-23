@@ -151,7 +151,7 @@ export function TeacherScheduleCreator() {
       ]);
 
       // Build teacher options (id → name) from profiles for teacher-roled users
-      const teacherIds: string[] = [...new Set(((teachersRes as any).data || []).map((r: any) => r.user_id as string))];
+      const teacherIds: string[] = Array.from(new Set(((teachersRes as any).data || []).map((r: any) => String(r.user_id))));
       let teacherNameMap: Record<string, string> = {};
       if (teacherIds.length > 0) {
         const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', teacherIds);
