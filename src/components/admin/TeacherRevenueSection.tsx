@@ -59,25 +59,23 @@ export default function TeacherRevenueSection() {
       const monthEnd = monthEndDate.toISOString().slice(0, 10);
 
       const [
-        { data: payments },
         { data: courses },
         { data: profiles },
         { data: comp },
+        { data: subjectTeachers },
       ] = await Promise.all([
         supabase
-          .from('payment_records')
-          .select('amount, paid_date, billing_schedule_id, billing_schedules(student_course_id, student_courses(teacher_id, student_id))')
-          .gte('paid_date', monthStart)
-          .lt('paid_date', monthEnd) as any,
-        supabase
           .from('student_courses')
-          .select('id, teacher_id, student_id, custom_monthly_fee, is_active, course_policies(monthly_fee), students!inner(enrollment_status)')
+          .select('id, teacher_id, student_id, custom_monthly_fee, is_active, course_policies(monthly_fee, subject), students!inner(enrollment_status)')
           .eq('is_active', true) as any,
         supabase.from('profiles').select('id, full_name').eq('is_active', true),
         supabase
           .from('teacher_monthly_compensation' as any)
           .select('teacher_id, salary')
           .eq('month', month) as any,
+        supabase
+          .from('student_subject_teachers')
+          .select('student_id, subject, teacher_id') as any,
       ]);
 
       const teacherMap = new Map<string, { name: string; revenue: number; students: Set<string> }>();
@@ -86,39 +84,43 @@ export default function TeacherRevenueSection() {
       );
 
       const UNASSIGNED = '__unassigned__';
-      let usedPayments = false;
-      if (payments && payments.length > 0) {
-        usedPayments = true;
-        for (const pr of payments as any[]) {
-          const tid = pr.billing_schedules?.student_courses?.teacher_id || UNASSIGNED;
-          const sid = pr.billing_schedules?.student_courses?.student_id;
-          if (!teacherMap.has(tid)) teacherMap.set(tid, { name: '미배정', revenue: 0, students: new Set() });
-          const e = teacherMap.get(tid)!;
-          e.revenue += Number(pr.amount || 0);
-          if (sid) e.students.add(sid);
-        }
+
+      // Build (student_id, subject) -> teacher_ids[] map (may be 1+ teachers per subject)
+      const subjTeacherMap = new Map<string, string[]>();
+      for (const st of (subjectTeachers || []) as any[]) {
+        const key = `${st.student_id}::${st.subject}`;
+        if (!subjTeacherMap.has(key)) subjTeacherMap.set(key, []);
+        subjTeacherMap.get(key)!.push(st.teacher_id);
       }
 
-      // Always also compute "expected" from active courses for active students
-      const expected = new Map<string, { revenue: number; students: Set<string> }>();
+      // Compute revenue per teacher from active courses, attributing by subject-teacher mapping.
+      // If a subject has multiple teachers for the same student, split the fee equally.
+      // Fallback: use student_courses.teacher_id, else mark as unassigned.
       for (const c of (courses || []) as any[]) {
-        const tid = c.teacher_id || UNASSIGNED;
         const status = c.students?.enrollment_status;
         if (status !== '재학' && status !== '재등원') continue;
         const fee = Number(c.custom_monthly_fee ?? c.course_policies?.monthly_fee ?? 0);
-        if (!expected.has(tid)) expected.set(tid, { revenue: 0, students: new Set() });
-        const e = expected.get(tid)!;
-        e.revenue += fee;
-        e.students.add(c.student_id);
-      }
+        if (fee <= 0) continue;
 
-      // Merge: use payments when present, else expected
-      if (!usedPayments) {
-        for (const [tid, v] of expected.entries()) {
-          if (!teacherMap.has(tid)) teacherMap.set(tid, { name: '미배정', revenue: 0, students: new Set() });
+        const subject = c.course_policies?.subject;
+        const key = subject ? `${c.student_id}::${subject}` : '';
+        const assigned = key ? subjTeacherMap.get(key) : undefined;
+
+        let teacherIds: string[];
+        if (assigned && assigned.length > 0) {
+          teacherIds = assigned;
+        } else if (c.teacher_id) {
+          teacherIds = [c.teacher_id];
+        } else {
+          teacherIds = [UNASSIGNED];
+        }
+
+        const share = fee / teacherIds.length;
+        for (const tid of teacherIds) {
+          if (!teacherMap.has(tid)) teacherMap.set(tid, { name: tid === UNASSIGNED ? '미배정' : '미배정', revenue: 0, students: new Set() });
           const e = teacherMap.get(tid)!;
-          e.revenue = v.revenue;
-          e.students = v.students;
+          e.revenue += share;
+          e.students.add(c.student_id);
         }
       }
 
@@ -193,7 +195,7 @@ export default function TeacherRevenueSection() {
             선생님별 매출 / 급여 / 마진
           </CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            매출 = 결제이력 우선, 없으면 재원 학생 활성 수강의 월 수강료 합산
+            매출 = 재원 학생의 활성 수강 월 수강료를 과목별 담당 선생님(student_subject_teachers)에게 귀속. 한 과목에 담당 선생님이 여러 명이면 균등 분배, 미배정 과목은 수강 자체의 담당 선생님 → '미배정' 순으로 폴백.
           </p>
         </div>
         <Select value={month} onValueChange={setMonth}>
