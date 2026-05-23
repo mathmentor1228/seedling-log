@@ -132,21 +132,18 @@ export function TeacherScheduleCreator() {
         setTeacherName(tName);
       }
 
-      // TEACHER-OWN-GROUPS-V2: 비관리자는 본인이 만든 그룹 + 작성자 정보가 없는 레거시(공용) 그룹 표시
-      const groupsQuery = supabase
-        .from('student_groups')
-        .select('id, name, description, created_by')
-        .order('name');
-      if (!isAdminUser && user?.id) {
-        groupsQuery.or(`created_by.eq.${user.id},created_by.is.null`);
-      }
-      const [groupsRes, membersRes, classroomsRes, schedulesRes] = await Promise.all([
-        groupsQuery,
+      // TEACHER-OWN-GROUPS-V3: 비관리자는 본인이 담당하는 학생(student_subject_teachers)이
+      // 멤버로 포함된 그룹만 표시. created_by 기준은 사용하지 않음(레거시 그룹 다수가 NULL).
+      const [groupsRes, membersRes, classroomsRes, schedulesRes, mySubjStudRes] = await Promise.all([
+        supabase.from('student_groups').select('id, name, description, created_by').order('name'),
         supabase.from('student_group_members').select('group_id, student_id'),
         supabase.from('classrooms').select('id, name, manager_name, capacity').eq('is_active', true).order('sort_order'),
         supabase.from('class_schedules')
           .select('id, class_id, day_of_week, start_time, end_time, classroom_id, classes(name, subject, teacher_id)')
           .eq('is_active', true) as any,
+        !isAdminUser && user?.id
+          ? supabase.from('student_subject_teachers').select('student_id').eq('teacher_id', user.id)
+          : Promise.resolve({ data: null } as any),
       ]);
 
       // Build student lookup
@@ -165,12 +162,24 @@ export function TeacherScheduleCreator() {
         }
       });
 
-      const groupsList = (groupsRes.data || []).map((g: any) => ({
+      // Set of student IDs taught by current teacher (non-admin only)
+      const myStudentIdSet: Set<string> | null = !isAdminUser && user?.id
+        ? new Set(((mySubjStudRes as any)?.data || []).map((r: any) => r.student_id))
+        : null;
+
+      let groupsList = (groupsRes.data || []).map((g: any) => ({
         id: g.id,
         name: g.name,
         description: g.description,
         members: (membersMap[g.id] || []).sort((a, b) => a.name.localeCompare(b.name)),
       }));
+
+      // Filter: keep only groups containing at least one of my students
+      if (myStudentIdSet) {
+        groupsList = groupsList.filter((g) =>
+          g.members.some((m) => myStudentIdSet.has(m.id))
+        );
+      }
       setGroups(groupsList);
 
       const classroomsList: Classroom[] = classroomsRes.data || [];
