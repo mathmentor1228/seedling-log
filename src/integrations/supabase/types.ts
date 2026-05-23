@@ -4264,6 +4264,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          teacher_id: string | null
           updated_at: string
         }
         Insert: {
@@ -4272,6 +4273,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          teacher_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -4280,9 +4282,18 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          teacher_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "student_groups_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       student_onboarding_checks: {
         Row: {

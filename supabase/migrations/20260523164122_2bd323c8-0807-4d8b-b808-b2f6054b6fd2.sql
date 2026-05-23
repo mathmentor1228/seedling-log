@@ -1,0 +1,2 @@
+ALTER TABLE public.student_groups ADD COLUMN IF NOT EXISTS teacher_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_student_groups_teacher_id ON public.student_groups(teacher_id);
