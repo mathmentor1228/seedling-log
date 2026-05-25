@@ -556,6 +556,8 @@ interface FinishedViewProps {
   reviewFilter: 'all' | 'wrong' | 'partial';
   setReviewFilter: (f: 'all' | 'wrong' | 'partial') => void;
   mode: string;
+  levelLabel?: string;
+  scopeLabel?: string;
   onBack: () => void;
   onRetry: () => void;
 }
@@ -563,7 +565,7 @@ interface FinishedViewProps {
 function FinishedView({
   correctCount, partialCount, wrongCount, totalCount,
   wrongAndPartialWords, filteredReview, reviewFilter, setReviewFilter,
-  mode, onBack, onRetry,
+  mode, levelLabel, scopeLabel, onBack, onRetry,
 }: FinishedViewProps) {
   const score = Math.round((correctCount / totalCount) * 100);
   return (
@@ -572,6 +574,24 @@ function FinishedView({
         <CardContent className="text-center space-y-4 py-8">
           <div className="text-4xl">{score >= 80 ? '🎉' : score >= 50 ? '💪' : '📖'}</div>
           <h2 className="text-xl font-bold">테스트 완료!</h2>
+
+          {(levelLabel || scopeLabel) && (
+            <div className="flex flex-wrap items-center justify-center gap-1.5 px-2">
+              {levelLabel && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  <span className="opacity-70">레벨</span>
+                  <span>{levelLabel}</span>
+                </span>
+              )}
+              {scopeLabel && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-foreground border border-border max-w-full">
+                  <span className="opacity-70 shrink-0">범위</span>
+                  <span className="truncate">{scopeLabel}</span>
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="text-3xl font-bold flex items-center justify-center gap-2">
             <span className="text-green-600">{correctCount}</span>
             {partialCount > 0 && (
