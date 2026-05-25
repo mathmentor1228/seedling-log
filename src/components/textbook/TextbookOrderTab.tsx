@@ -145,12 +145,34 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
 
   const checkDuplicates = useCallback((inputName: string) => {
     if (inputName.trim().length < 2) { setDuplicateMatches([]); return; }
-    const lowerInput = inputName.trim().toLowerCase();
+    // 정규화 시그니처: 한글/숫자(하이픈포함)/영문 토큰으로 잘라 정렬 → 띄어쓰기·순서·기호 차이를 흡수
+    // 예) "리피트 2-2", "리피트2-2", "2-2리피트", "리피트  2 - 2" → 모두 "2-2|리피트"
+    const tokenize = (s: string): string[] => {
+      const lower = s.toLowerCase().replace(/[\s_./\\()[\]]+/g, '');
+      return lower.match(/[가-힣]+|[0-9]+(?:[-][0-9]+)*|[a-z]+/g) || [];
+    };
+    const sigOf = (s: string) => tokenize(s).slice().sort().join('|');
+    const compactOf = (s: string) => s.toLowerCase().replace(/\s+/g, '');
+
+    const inputSig = sigOf(inputName);
+    const inputTokens = tokenize(inputName);
+    const inputCompact = compactOf(inputName.trim());
+
     const matchingNames = new Set<string>();
     orders.forEach(o => {
-      if (o.textbook_name.toLowerCase().includes(lowerInput) || lowerInput.includes(o.textbook_name.toLowerCase())) {
-        matchingNames.add(o.textbook_name);
-      }
+      const oSig = sigOf(o.textbook_name);
+      const oCompact = compactOf(o.textbook_name);
+      const oTokens = tokenize(o.textbook_name);
+      // 1) 시그니처 완전 일치(순서·공백 무시) 2) 압축문자열 포함 3) 토큰 다수 겹침
+      const tokenOverlap = inputTokens.filter(t => oTokens.includes(t)).length;
+      const minTokens = Math.min(inputTokens.length, oTokens.length);
+      const overlapRatio = minTokens > 0 ? tokenOverlap / minTokens : 0;
+      const matched =
+        (inputSig && oSig && inputSig === oSig) ||
+        oCompact.includes(inputCompact) || inputCompact.includes(oCompact) ||
+        (minTokens >= 2 && overlapRatio >= 0.6) ||
+        (minTokens === 1 && tokenOverlap === 1 && Math.max(inputTokens.length, oTokens.length) <= 2);
+      if (matched) matchingNames.add(o.textbook_name);
     });
     const matches: TextbookGroup[] = Array.from(matchingNames).map(tName => {
       const matching = orders.filter(o => o.textbook_name === tName);
