@@ -45,6 +45,14 @@ interface TextbookGroup {
   totalQty: number;
   totalDistributed: number;
   status: string;
+  /** Stock available for distribution: 입고완료 qty - 배부 qty (학생용 only) */
+  remainingStock: number;
+  /** 입고완료 권수 합 (학생용) */
+  receivedQty: number;
+}
+
+interface TextbookOrderTabProps {
+  onNavigateToDistribution?: () => void;
 }
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'];
@@ -56,7 +64,7 @@ const TEXTBOOK_TYPES = [
   { value: 'teacher', label: '교사용', icon: BookOpen },
 ] as const;
 
-export function TextbookOrderTab() {
+export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabProps = {}) {
   const { user, role } = useAuth();
   const [orders, setOrders] = useState<TextbookOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,12 +154,21 @@ export function TextbookOrderTab() {
     });
     const matches: TextbookGroup[] = Array.from(matchingNames).map(tName => {
       const matching = orders.filter(o => o.textbook_name === tName);
+      const receivedQty = matching
+        .filter(o => normalizeStatus(o.status) === '입고완료' && (o.textbook_type || 'student') !== 'teacher')
+        .reduce((s, o) => s + o.quantity, 0);
+      const distributedFromReceived = matching
+        .filter(o => normalizeStatus(o.status) === '입고완료' && (o.textbook_type || 'student') !== 'teacher')
+        .reduce((s, o) => s + (o.distributed_qty || 0), 0);
+      const remainingStock = Math.max(0, receivedQty - distributedFromReceived);
       return {
         textbook_name: tName, subject: matching[0]?.subject || '', unit_price: matching[0]?.unit_price || 0,
         grade: matching[0]?.grade || null, category: matching[0]?.category || null,
         textbook_type: matching[0]?.textbook_type || 'student',
         orders: matching, totalQty: matching.reduce((s, o) => s + o.quantity, 0),
-        totalDistributed: matching.reduce((s, o) => s + (o.distributed_qty || 0), 0), status: matching[0]?.status || '교재신청',
+        totalDistributed: matching.reduce((s, o) => s + (o.distributed_qty || 0), 0),
+        status: matching[0]?.status || '교재신청',
+        receivedQty, remainingStock,
       };
     });
     setDuplicateMatches(matches);
@@ -160,7 +177,18 @@ export function TextbookOrderTab() {
   const handleCreate = async () => {
     if (!name.trim()) { toast.error('교재명을 입력해주세요'); return; }
     if (!price.trim() || isNaN(Number(price))) { toast.error('단가를 입력해주세요'); return; }
-    if (duplicateMatches.length > 0 && !duplicateWarningShown) { setShowDuplicateAlert(true); return; }
+    const requestedQty = parseInt(qty) || 1;
+    const totalAvailable = duplicateMatches.reduce((s, m) => s + m.remainingStock, 0);
+    // 재고가 남아 있으면 항상 알림 (한 번 봤어도)
+    if (duplicateMatches.length > 0 && totalAvailable > 0 && !duplicateWarningShown) {
+      setShowDuplicateAlert(true);
+      return;
+    }
+    // 유사 교재가 있으나 재고는 0 → 기존 소프트 워닝 1회만
+    if (duplicateMatches.length > 0 && totalAvailable === 0 && !duplicateWarningShown) {
+      setShowDuplicateAlert(true);
+      return;
+    }
 
     setCreating(true);
     const { error } = await supabase.from('textbook_orders').insert({
@@ -285,6 +313,7 @@ export function TextbookOrderTab() {
           textbook_name: o.textbook_name, subject: o.subject, unit_price: o.unit_price,
           grade: o.grade || null, category: o.category || null, textbook_type: o.textbook_type || 'student',
           orders: [], totalQty: 0, totalDistributed: 0, status,
+          remainingStock: 0, receivedQty: 0,
         });
       }
       const g = map.get(key)!;
@@ -300,6 +329,10 @@ export function TextbookOrderTab() {
       g.status = statusOrder[minIdx];
       const allSame = g.orders.every(o => normalizeStatus(o.status) === normalizeStatus(g.orders[0].status));
       if (allSame) g.status = normalizeStatus(g.orders[0].status);
+      // Recompute received vs remaining stock (학생용, 입고완료만 카운트)
+      const receivedOrders = g.orders.filter(o => normalizeStatus(o.status) === '입고완료' && (o.textbook_type || 'student') !== 'teacher');
+      g.receivedQty = receivedOrders.reduce((s, o) => s + o.quantity, 0);
+      g.remainingStock = Math.max(0, g.receivedQty - receivedOrders.reduce((s, o) => s + (o.distributed_qty || 0), 0));
     });
 
     return Array.from(map.values()).sort((a, b) => {
@@ -619,27 +652,87 @@ export function TextbookOrderTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Duplicate warning */}
+      {/* Duplicate / stock warning */}
       <Dialog open={showDuplicateAlert} onOpenChange={setShowDuplicateAlert}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-warning"><AlertTriangle className="w-5 h-5" />유사 교재 재고 확인</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-foreground">입력하신 교재명과 유사한 교재가 이미 등록되어 있습니다.</p>
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {duplicateMatches.map(g => (
-                <div key={g.textbook_name} className="text-[12px] px-3 py-2 rounded-md bg-muted border border-border">
-                  <span className="font-medium text-foreground">{g.textbook_name}</span>
-                  <span className="text-muted-foreground ml-1">({g.subject})</span>
+          {(() => {
+            const requestedQty = parseInt(qty) || 1;
+            const totalAvailable = duplicateMatches.reduce((s, m) => s + m.remainingStock, 0);
+            const hasStock = totalAvailable > 0;
+            const stockCoversAll = hasStock && totalAvailable >= requestedQty;
+            const shortageQty = Math.max(0, requestedQty - totalAvailable);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className={cn("flex items-center gap-2", hasStock ? "text-destructive" : "text-warning")}>
+                    <AlertTriangle className="w-5 h-5" />
+                    {hasStock ? '재고가 남아 있습니다' : '유사 교재 확인'}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm text-foreground">
+                    {hasStock
+                      ? <>이미 입고된 재고가 <b className="text-destructive">{totalAvailable}권</b> 남아 있습니다. 먼저 재고를 배포해 주세요.{!stockCoversAll && <> 부족분 <b>{shortageQty}권</b>만 새로 신청할 수 있습니다.</>}</>
+                      : '입력하신 교재명과 유사한 교재가 이미 등록되어 있습니다. 중복 신청이 아닌지 확인해 주세요.'}
+                  </p>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {duplicateMatches.map(g => (
+                      <div key={g.textbook_name} className={cn(
+                        "text-xs px-3 py-2 rounded-md border",
+                        g.remainingStock > 0 ? "bg-destructive/5 border-destructive/30" : "bg-muted border-border"
+                      )}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="font-medium text-foreground">{g.textbook_name}</span>
+                            <span className="text-muted-foreground ml-1">({g.subject})</span>
+                          </div>
+                          {g.remainingStock > 0 ? (
+                            <Badge className="bg-destructive/15 text-destructive border-destructive/30 text-[10px]">
+                              재고 {g.remainingStock}권
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px]">
+                              입고 {g.receivedQty} · 배부 {g.totalDistributed}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowDuplicateAlert(false)}>취소</Button>
-            <Button onClick={() => { setShowDuplicateAlert(false); setDuplicateWarningShown(true); setTimeout(() => handleCreate(), 100); }}>확인했습니다, 신청하기</Button>
-          </DialogFooter>
+                <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row">
+                  <Button variant="outline" onClick={() => setShowDuplicateAlert(false)}>취소</Button>
+                  {hasStock && onNavigateToDistribution && (
+                    <Button
+                      variant="default"
+                      className="gap-1.5"
+                      onClick={() => { setShowDuplicateAlert(false); setShowDialog(false); onNavigateToDistribution(); }}
+                    >
+                      <BookOpen className="w-4 h-4" />재고로 배부하러 가기
+                    </Button>
+                  )}
+                  {hasStock && !stockCoversAll && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setQty(String(shortageQty));
+                        setShowDuplicateAlert(false);
+                        setDuplicateWarningShown(true);
+                        setTimeout(() => handleCreate(), 100);
+                      }}
+                    >
+                      부족분 {shortageQty}권만 신청
+                    </Button>
+                  )}
+                  {!hasStock && (
+                    <Button onClick={() => { setShowDuplicateAlert(false); setDuplicateWarningShown(true); setTimeout(() => handleCreate(), 100); }}>
+                      확인했습니다, 신청하기
+                    </Button>
+                  )}
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
