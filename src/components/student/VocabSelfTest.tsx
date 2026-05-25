@@ -28,6 +28,10 @@ interface VocabSelfTestProps {
   testTimeLimit?: number | null; // total seconds
   /** When provided, each question will randomly pick a mode from this pool (self-test only). */
   modePool?: QMode[];
+  /** Display label for level (shown on completion screen). e.g. "Lv.2 (5지선다 · 4초)" */
+  levelLabel?: string;
+  /** Display label for scope/range (shown on completion screen). e.g. "Day 1, Day 2" */
+  scopeLabel?: string;
   onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number }) => void;
   onBack: () => void;
 }
@@ -155,7 +159,7 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
   return 'wrong';
 }
 
-export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, onFinish, onBack }: VocabSelfTestProps) {
+export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, levelLabel, scopeLabel, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
@@ -334,6 +338,8 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       reviewFilter={reviewFilter}
       setReviewFilter={setReviewFilter}
       mode={mode}
+      levelLabel={levelLabel}
+      scopeLabel={scopeLabel}
       onBack={onBack}
       onRetry={() => {
         startedAtRef.current = new Date().toISOString();
@@ -550,6 +556,8 @@ interface FinishedViewProps {
   reviewFilter: 'all' | 'wrong' | 'partial';
   setReviewFilter: (f: 'all' | 'wrong' | 'partial') => void;
   mode: string;
+  levelLabel?: string;
+  scopeLabel?: string;
   onBack: () => void;
   onRetry: () => void;
 }
@@ -557,7 +565,7 @@ interface FinishedViewProps {
 function FinishedView({
   correctCount, partialCount, wrongCount, totalCount,
   wrongAndPartialWords, filteredReview, reviewFilter, setReviewFilter,
-  mode, onBack, onRetry,
+  mode, levelLabel, scopeLabel, onBack, onRetry,
 }: FinishedViewProps) {
   const score = Math.round((correctCount / totalCount) * 100);
   return (
@@ -566,6 +574,24 @@ function FinishedView({
         <CardContent className="text-center space-y-4 py-8">
           <div className="text-4xl">{score >= 80 ? '🎉' : score >= 50 ? '💪' : '📖'}</div>
           <h2 className="text-xl font-bold">테스트 완료!</h2>
+
+          {(levelLabel || scopeLabel) && (
+            <div className="flex flex-wrap items-center justify-center gap-1.5 px-2">
+              {levelLabel && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  <span className="opacity-70">레벨</span>
+                  <span>{levelLabel}</span>
+                </span>
+              )}
+              {scopeLabel && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-foreground border border-border max-w-full">
+                  <span className="opacity-70 shrink-0">범위</span>
+                  <span className="truncate">{scopeLabel}</span>
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="text-3xl font-bold flex items-center justify-center gap-2">
             <span className="text-green-600">{correctCount}</span>
             {partialCount > 0 && (
