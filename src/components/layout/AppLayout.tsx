@@ -40,6 +40,7 @@ import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
 import { BrandFooter } from '@/components/layout/BrandFooter';
 import { FloatingAttendanceWidget } from '@/components/layout/FloatingAttendanceWidget';
+import { AttendanceAlertWatcher } from '@/components/layout/AttendanceAlertWatcher';
 
 interface AppLayoutProps {
   children: ReactNode;
