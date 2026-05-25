@@ -602,12 +602,20 @@ export default function StudentVocab() {
     const safePool = modePool.length > 0 ? modePool : ['eng_to_kor' as const];
     const perQSec = selfTestLevel === 3 ? 6 : 4;
     const expectedSec = cards.length * perQSec;
+    const levelDesc = selfTestLevel === 1 ? '3지선다·4초' : selfTestLevel === 2 ? '5지선다·4초' : '주관식·6초';
+    const selfLevelLabel = `Lv.${selfTestLevel} (${levelDesc})`;
+    const selfScopeLabel = vocabSets
+      .filter(s => selectedSetIds.includes(s.set_id))
+      .map(s => s.set_name)
+      .join(', ');
     return (
       <VocabSelfTest
         words={cards}
         mode={safePool[0]}
         modePool={safePool}
         testLevel={selfTestLevel}
+        levelLabel={selfLevelLabel}
+        scopeLabel={selfScopeLabel}
         testTimeLimit={null}
         onFinish={async (correct, wrong, total, meta) => {
           const modeStr = (safePool.length > 1 ? 'mixed' : safePool[0]) + '_self_test';
