@@ -18,6 +18,8 @@ import type { Schedule } from './types';
 import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS } from './types';
 import { buildSchoolCalendarScheduleRow, fileToDataUrl, isGlobalMockExam } from './scheduleUploadUtils';
 import { ExamTimetableGrid } from './ExamTimetableGrid';
+import { pickNearestFinals, finalsDdayLabel, finalsDdayColor } from '@/lib/finalsExamUtils';
+import { CalendarClock } from 'lucide-react';
 
 type ParsedExamScheduleItem = {
   date: string | null;
@@ -678,8 +680,32 @@ export function ScheduleTab({ schoolName, schedules, archives, onRefetch }: Prop
 
   // getDday is declared at the top of the component
 
+  // Compute 1학기 기말고사 D-Day for this school (uses merged schedules: school_schedules + academy_events)
+  const finalsExam = pickNearestFinals(
+    schoolSchedules
+      .filter((s) => s.schedule_type === 'exam' && s.start_date)
+      .map((s) => ({ title: s.title, start_date: s.start_date! })),
+    today,
+  );
+
   return (
     <div className="space-y-4">
+      {finalsExam && (
+        <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10 p-4 flex items-center gap-3">
+          <CalendarClock className="w-6 h-6 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-muted-foreground">{schoolName} · 1학기 기말고사</div>
+            <div className="text-sm font-semibold text-foreground truncate">{finalsExam.title}</div>
+            <div className="text-[11px] text-muted-foreground">
+              {format(parseISO(finalsExam.start_date), 'yyyy. MM. dd.')} 시작
+            </div>
+          </div>
+          <Badge className={cn('text-base font-bold px-3 py-1 shadow-sm', finalsDdayColor(finalsExam.daysLeft))}>
+            {finalsDdayLabel(finalsExam.daysLeft)}
+          </Badge>
+        </div>
+      )}
+
       {/* Upload + Exam Scan + Manual buttons */}
       <div className="flex gap-2 flex-wrap">
         <Dialog open={uploadOpen} onOpenChange={v => { setUploadOpen(v); if (!v) { setExtractedData(null); setEvaluationPlanData(null); setFile(null); } }}>

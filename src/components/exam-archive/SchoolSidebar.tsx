@@ -85,6 +85,7 @@ export function SchoolSidebar({ schools, selectedSchool, onSelectSchool, onAddSc
         {filtered.map(school => {
           const isSelected = selectedSchool === school.name;
           const ddayInfo = school.nextExam ? getDdayDisplay(school.nextExam.daysLeft) : null;
+          const finalsInfo = school.finalsExam ? getDdayDisplay(school.finalsExam.daysLeft) : null;
 
           return (
             <div
@@ -118,6 +119,16 @@ export function SchoolSidebar({ schools, selectedSchool, onSelectSchool, onAddSc
                   </Badge>
                   <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
                     {school.nextExam.title}
+                  </span>
+                </div>
+              )}
+              {finalsInfo && school.finalsExam && (
+                <div className="ml-6 mt-1 flex items-center gap-1.5">
+                  <Badge className={cn("text-[10px] font-bold px-1.5 py-0 h-[18px] shadow-sm", finalsInfo.color)}>
+                    기말 {finalsInfo.label}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[110px]">
+                    {school.finalsExam.title}
                   </span>
                 </div>
               )}

@@ -51,42 +51,66 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
     const kstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
     const todayStr = `${kstNow.getFullYear()}-${String(kstNow.getMonth() + 1).padStart(2, '0')}-${String(kstNow.getDate()).padStart(2, '0')}`;
     
-    // Fetch all upcoming exam events (no date cap — always show nearest exam)
-    const { data, error } = await supabase
+    // 1) Academy events (school-wide)
+    const { data: futureEvents } = await supabase
       .from('academy_events')
       .select('id, title, start_at, end_at')
       .eq('category', 'exam')
       .gte('start_at', todayStr)
       .order('start_at');
 
-    if (error || !data) return;
-
-    // Also include exams currently ongoing (started but not ended)
-    const { data: ongoingData } = await supabase
+    const { data: pastEvents } = await supabase
       .from('academy_events')
       .select('id, title, start_at, end_at')
       .eq('category', 'exam')
       .lt('start_at', todayStr)
       .order('start_at');
 
-    const ongoing = (ongoingData || []).filter((e: any) => {
+    const ongoing = (pastEvents || []).filter((e: any) => {
       const endDate = e.end_at || e.start_at;
       return endDate.split('T')[0] >= todayStr;
     });
 
-    // Merge ongoing + future, deduplicate by id
-    const allIds = new Set(data.map((e: any) => e.id));
-    const filtered = [...data];
-    for (const e of ongoing) {
-      if (!allIds.has(e.id)) filtered.push(e);
+    const eventList: ExamEvent[] = [...(futureEvents || [])];
+    const allIds = new Set(eventList.map((e) => e.id));
+    for (const e of ongoing) if (!allIds.has(e.id)) eventList.push(e as ExamEvent);
+
+    // 2) Per-school exam schedules (covers 기말고사 entered per school)
+    let schoolList: ExamEvent[] = [];
+    if (schoolFilter) {
+      const { data: schoolExams } = await supabase
+        .from('school_schedules')
+        .select('id, title, start_date, end_date, school_name')
+        .eq('schedule_type', 'exam')
+        .eq('school_name', schoolFilter)
+        .gte('start_date', todayStr)
+        .order('start_date');
+      schoolList = (schoolExams || []).map((s: any) => ({
+        id: `school-${s.id}`,
+        title: `${s.school_name} ${s.title}`,
+        start_at: s.start_date,
+        end_at: s.end_date,
+      }));
     }
 
-    // If schoolFilter is set, only show exams whose title contains the school name
-    const finalExams = schoolFilter
-      ? filtered.filter((e: any) => e.title.includes(schoolFilter))
-      : filtered;
+    // Filter academy events by school name when schoolFilter set
+    const filteredEvents = schoolFilter
+      ? eventList.filter((e) => e.title.includes(schoolFilter))
+      : eventList;
 
-    setExams(finalExams);
+    // Merge + dedupe by (title + start date)
+    const merged: ExamEvent[] = [];
+    const seen = new Set<string>();
+    for (const e of [...filteredEvents, ...schoolList]) {
+      const key = `${e.title}|${e.start_at.split('T')[0]}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(e);
+    }
+
+    // Show only the nearest upcoming exam per type label (middle / final), keep all distinct titles up to 3
+    merged.sort((a, b) => a.start_at.localeCompare(b.start_at));
+    setExams(merged.slice(0, 4));
   }
 
   if (exams.length === 0) return null;

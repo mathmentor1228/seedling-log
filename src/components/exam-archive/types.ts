@@ -4,6 +4,7 @@ export interface SchoolInfo {
   level: 'elementary' | 'middle' | 'high';
   studentCount: number;
   nextExam: { title: string; daysLeft: number } | null;
+  finalsExam: { title: string; daysLeft: number; start_date: string } | null;
 }
 
 export interface Schedule {
