@@ -983,6 +983,11 @@ export function AdminBriefing() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ============ 휴강 관리 ============ */}
+        <TabsContent value="holidays" className="mt-0">
+          <HolidayManagement />
+        </TabsContent>
       </Tabs>
 
       {/* Lesson View Modal */}
