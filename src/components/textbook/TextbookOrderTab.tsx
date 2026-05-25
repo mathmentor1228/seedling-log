@@ -154,12 +154,21 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
     });
     const matches: TextbookGroup[] = Array.from(matchingNames).map(tName => {
       const matching = orders.filter(o => o.textbook_name === tName);
+      const receivedQty = matching
+        .filter(o => normalizeStatus(o.status) === '입고완료' && (o.textbook_type || 'student') !== 'teacher')
+        .reduce((s, o) => s + o.quantity, 0);
+      const distributedFromReceived = matching
+        .filter(o => normalizeStatus(o.status) === '입고완료' && (o.textbook_type || 'student') !== 'teacher')
+        .reduce((s, o) => s + (o.distributed_qty || 0), 0);
+      const remainingStock = Math.max(0, receivedQty - distributedFromReceived);
       return {
         textbook_name: tName, subject: matching[0]?.subject || '', unit_price: matching[0]?.unit_price || 0,
         grade: matching[0]?.grade || null, category: matching[0]?.category || null,
         textbook_type: matching[0]?.textbook_type || 'student',
         orders: matching, totalQty: matching.reduce((s, o) => s + o.quantity, 0),
-        totalDistributed: matching.reduce((s, o) => s + (o.distributed_qty || 0), 0), status: matching[0]?.status || '교재신청',
+        totalDistributed: matching.reduce((s, o) => s + (o.distributed_qty || 0), 0),
+        status: matching[0]?.status || '교재신청',
+        receivedQty, remainingStock,
       };
     });
     setDuplicateMatches(matches);
@@ -168,7 +177,18 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
   const handleCreate = async () => {
     if (!name.trim()) { toast.error('교재명을 입력해주세요'); return; }
     if (!price.trim() || isNaN(Number(price))) { toast.error('단가를 입력해주세요'); return; }
-    if (duplicateMatches.length > 0 && !duplicateWarningShown) { setShowDuplicateAlert(true); return; }
+    const requestedQty = parseInt(qty) || 1;
+    const totalAvailable = duplicateMatches.reduce((s, m) => s + m.remainingStock, 0);
+    // 재고가 남아 있으면 항상 알림 (한 번 봤어도)
+    if (duplicateMatches.length > 0 && totalAvailable > 0 && !duplicateWarningShown) {
+      setShowDuplicateAlert(true);
+      return;
+    }
+    // 유사 교재가 있으나 재고는 0 → 기존 소프트 워닝 1회만
+    if (duplicateMatches.length > 0 && totalAvailable === 0 && !duplicateWarningShown) {
+      setShowDuplicateAlert(true);
+      return;
+    }
 
     setCreating(true);
     const { error } = await supabase.from('textbook_orders').insert({
