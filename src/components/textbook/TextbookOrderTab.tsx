@@ -45,6 +45,14 @@ interface TextbookGroup {
   totalQty: number;
   totalDistributed: number;
   status: string;
+  /** Stock available for distribution: 입고완료 qty - 배부 qty (학생용 only) */
+  remainingStock: number;
+  /** 입고완료 권수 합 (학생용) */
+  receivedQty: number;
+}
+
+interface TextbookOrderTabProps {
+  onNavigateToDistribution?: () => void;
 }
 
 const SUBJECTS = ['수학', '영어', '국어', '과학'];
