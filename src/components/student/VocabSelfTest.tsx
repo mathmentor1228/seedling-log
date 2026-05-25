@@ -159,7 +159,7 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
   return 'wrong';
 }
 
-export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, onFinish, onBack }: VocabSelfTestProps) {
+export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, levelLabel, scopeLabel, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
