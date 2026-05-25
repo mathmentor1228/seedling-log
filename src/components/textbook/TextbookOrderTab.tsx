@@ -64,7 +64,7 @@ const TEXTBOOK_TYPES = [
   { value: 'teacher', label: '교사용', icon: BookOpen },
 ] as const;
 
-export function TextbookOrderTab() {
+export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabProps = {}) {
   const { user, role } = useAuth();
   const [orders, setOrders] = useState<TextbookOrder[]>([]);
   const [loading, setLoading] = useState(true);
