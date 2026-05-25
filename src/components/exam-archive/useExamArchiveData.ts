@@ -174,11 +174,27 @@ export function useExamArchiveData() {
         }
       }
 
+        // 1학기 기말고사 D-Day: merge school_schedules (exam) + academy_events for this school
+        const finalsCandidates: { title: string; start_date: string }[] = [];
+        for (const s of mergedSchedules) {
+          if (s.school_name === name && s.schedule_type === 'exam' && s.start_date && isFinalsTitle(s.title)) {
+            finalsCandidates.push({ title: s.title, start_date: s.start_date });
+          }
+        }
+        for (const ev of allEvents) {
+          if (!ev.title || !ev.start_at) continue;
+          if (!matchesSchoolTitle(ev.title, name)) continue;
+          if (!isFinalsTitle(ev.title)) continue;
+          finalsCandidates.push({ title: ev.title, start_date: ev.start_at.split('T')[0] });
+        }
+        const finalsExam = pickNearestFinals(finalsCandidates, today);
+
         return {
           name,
           level,
           studentCount,
           nextExam,
+          finalsExam,
         };
       });
 
