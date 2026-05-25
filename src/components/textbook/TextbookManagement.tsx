@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Package, BookMarked, CreditCard } from 'lucide-react';
 import { TextbookOrderTab } from './TextbookOrderTab';
@@ -12,6 +13,8 @@ export function TextbookManagement() {
   const normalizedEmail = (user?.email || '').trim().toLowerCase();
   const canSeePayment = role === 'admin' || role === 'assistant' || PAYMENT_ALLOWED_EMAILS.some((email) => email.trim().toLowerCase() === normalizedEmail);
 
+  const [tab, setTab] = useState('orders');
+
   return (
     <div className="space-y-6">
       <div>
@@ -21,7 +24,7 @@ export function TextbookManagement() {
         </p>
       </div>
 
-      <Tabs defaultValue="orders">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="orders" className="gap-1.5"><Package className="w-3.5 h-3.5" />신청/입고</TabsTrigger>
           <TabsTrigger value="distribution" className="gap-1.5"><BookMarked className="w-3.5 h-3.5" />배부</TabsTrigger>
@@ -30,7 +33,9 @@ export function TextbookManagement() {
           )}
         </TabsList>
 
-        <TabsContent value="orders"><TextbookOrderTab /></TabsContent>
+        <TabsContent value="orders">
+          <TextbookOrderTab onNavigateToDistribution={() => setTab('distribution')} />
+        </TabsContent>
         <TabsContent value="distribution"><TextbookDistributionTab /></TabsContent>
         {canSeePayment && (
           <TabsContent value="payment"><TextbookPaymentTab /></TabsContent>
