@@ -711,13 +711,13 @@ export function AdminBriefing() {
           <Collapsible defaultOpen={false}>
             <Card>
               <CollapsibleTrigger asChild>
-                <button type="button" className="w-full p-3 flex items-center gap-2 text-sm font-medium hover:bg-muted/40 transition-colors">
+                <button type="button" className="group w-full p-3 flex items-center gap-2 text-sm font-medium hover:bg-muted/40 transition-colors">
                   <Filter className="h-4 w-4" />
                   필터
                   {hasActiveFilters && (
                     <Badge variant="secondary" className="text-[10px] h-5">적용중</Badge>
                   )}
-                  <ChevronDown className="h-4 w-4 ml-auto text-muted-foreground transition-transform data-[state=open]:rotate-180" />
+                  <ChevronDown className="h-4 w-4 ml-auto text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent>
