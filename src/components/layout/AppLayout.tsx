@@ -40,6 +40,7 @@ import { AcademyCalendar } from '@/components/AcademyCalendar';
 import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
 import { BrandFooter } from '@/components/layout/BrandFooter';
 import { FloatingAttendanceWidget } from '@/components/layout/FloatingAttendanceWidget';
+import { AttendanceAlertWatcher } from '@/components/layout/AttendanceAlertWatcher';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -461,6 +462,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Floating attendance widget for assistant/admin */}
       <FloatingAttendanceWidget />
+
+      {/* 15분 경과 미출석 팝업 알림 (원장/담당 선생님) */}
+      <AttendanceAlertWatcher />
     </div>
   );
 }
