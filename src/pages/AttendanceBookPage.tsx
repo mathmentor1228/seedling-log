@@ -56,11 +56,12 @@ const inferTimeFromClassName = (className: string) => {
   return { startTime, endTime };
 };
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function StatPill({ label, value, tone, dot }: { label: string; value: number; tone?: string; dot?: string }) {
   return (
-    <div className="rounded-lg border p-2.5">
-      <div className="text-[11px] text-muted-foreground">{label}</div>
-      <div className={cn('text-lg font-bold', tone)}>{value}</div>
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/60 border">
+      {dot && <span className={cn('w-2 h-2 rounded-full', dot)} />}
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className={cn('text-sm font-bold tabular-nums', tone)}>{value}</span>
     </div>
   );
 }
