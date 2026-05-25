@@ -18,6 +18,8 @@ import type { Schedule } from './types';
 import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS } from './types';
 import { buildSchoolCalendarScheduleRow, fileToDataUrl, isGlobalMockExam } from './scheduleUploadUtils';
 import { ExamTimetableGrid } from './ExamTimetableGrid';
+import { pickNearestFinals, finalsDdayLabel, finalsDdayColor } from '@/lib/finalsExamUtils';
+import { CalendarClock } from 'lucide-react';
 
 type ParsedExamScheduleItem = {
   date: string | null;
