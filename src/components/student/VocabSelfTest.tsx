@@ -28,6 +28,10 @@ interface VocabSelfTestProps {
   testTimeLimit?: number | null; // total seconds
   /** When provided, each question will randomly pick a mode from this pool (self-test only). */
   modePool?: QMode[];
+  /** Display label for level (shown on completion screen). e.g. "Lv.2 (5지선다 · 4초)" */
+  levelLabel?: string;
+  /** Display label for scope/range (shown on completion screen). e.g. "Day 1, Day 2" */
+  scopeLabel?: string;
   onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number }) => void;
   onBack: () => void;
 }
