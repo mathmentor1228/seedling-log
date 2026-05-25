@@ -158,9 +158,12 @@ export function ExamTimetableGrid({ schedules, archives = [] }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr>
-                <th className="text-left px-3 py-2 border-b-2 border-border text-xs text-muted-foreground font-semibold w-[100px]">
+              <tr className="bg-muted/40">
+                <th className="text-left px-3 py-2 border-b-2 border-border text-xs text-muted-foreground font-semibold w-[110px]">
                   날짜
+                </th>
+                <th className="text-center px-2 py-2 border-b-2 border-border text-xs text-muted-foreground font-semibold w-[64px]">
+                  교시
                 </th>
                 {grades.map(g => (
                   <th key={g} className="text-center px-3 py-2 border-b-2 border-border text-xs font-semibold">
@@ -182,11 +185,18 @@ export function ExamTimetableGrid({ schedules, archives = [] }: Props) {
                 );
 
                 return Array.from({ length: maxSubjects }, (_, rowIdx) => (
-                  <tr key={`${date}-${rowIdx}`} className={cn("border-b border-border/50", dayColor)}>
+                  <tr
+                    key={`${date}-${rowIdx}`}
+                    className={cn(
+                      "border-b border-border/50",
+                      dayColor,
+                      rowIdx === maxSubjects - 1 && "border-b-2 border-b-border"
+                    )}
+                  >
                     {rowIdx === 0 && (
                       <td
                         rowSpan={maxSubjects}
-                        className="px-3 py-2 font-medium align-top border-r border-border/30"
+                        className="px-3 py-2 font-medium align-top border-r-2 border-border/60"
                       >
                         <div className="text-xs font-bold">
                           {format(d, 'M/d')}
@@ -194,6 +204,11 @@ export function ExamTimetableGrid({ schedules, archives = [] }: Props) {
                         </div>
                       </td>
                     )}
+                    <td className="px-2 py-1.5 text-center align-middle border-r border-border/40 bg-background/40">
+                      <span className="inline-flex items-center justify-center min-w-[36px] h-6 rounded-md bg-primary/10 text-primary text-[11px] font-bold tabular-nums">
+                        {rowIdx + 1}교시
+                      </span>
+                    </td>
                     {grades.map(g => {
                       const subjects = getSubjectsForDateAndGrade(date, g);
                       const subj = subjects[rowIdx];
@@ -215,7 +230,7 @@ export function ExamTimetableGrid({ schedules, archives = [] }: Props) {
                               )}
                             </div>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground/50">—</span>
+                            <span className="text-[10px] text-muted-foreground/40">—</span>
                           )}
                         </td>
                       );
