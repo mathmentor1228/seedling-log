@@ -283,194 +283,255 @@ function AttendanceBookContent() {
     setStatusFilter('all'); setStudentQuery('');
   };
 
+  const hasActiveFilters = teacherFilter !== 'all' || subjectFilter !== 'all'
+    || classFilter !== 'all' || statusFilter !== 'all' || studentQuery.trim() !== '';
+
   return (
-    <div className="space-y-5 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-lg font-semibold flex items-center gap-2">
-            <ClipboardList className="w-5 h-5" />
-            출석부
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            날짜를 선택하면 그날의 시간표 기반 출석부가 표시됩니다. 선생님·과목·반·출결상태로 필터링할 수 있어요.
-          </p>
+    <div className="space-y-3 animate-fade-in pb-8">
+      {/* Sticky toolbar */}
+      <div className="sticky top-0 z-20 -mx-2 px-2 py-2 bg-background/85 backdrop-blur-md border-b">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <ClipboardList className="w-4 h-4 text-primary shrink-0" />
+            <h1 className="text-base font-semibold whitespace-nowrap">출석부</h1>
+            <div className="hidden md:flex items-center gap-1 ml-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftDay(-1)}>
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-7 px-2 gap-1.5 font-normal text-xs">
+                    <CalendarIcon className="w-3.5 h-3.5" />
+                    {format(date, 'M월 d일 (eee)', { locale: ko })}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus className={cn('p-3 pointer-events-auto')} />
+                </PopoverContent>
+              </Popover>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftDay(1)}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setDate(new Date())}>오늘</Button>
+            </div>
+          </div>
+
+          {/* Stat strip — always visible */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <StatPill label="전체" value={totals.total} />
+            <StatPill label="출석" value={totals.present} tone="text-emerald-600" dot="bg-emerald-500" />
+            <StatPill label="지각" value={totals.late} tone="text-amber-600" dot="bg-amber-500" />
+            <StatPill label="결석" value={totals.absent} tone="text-destructive" dot="bg-destructive" />
+            <StatPill label="미기록" value={totals.empty} tone="text-muted-foreground" dot="bg-muted-foreground/50" />
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftDay(-1)}>
+
+        {/* Mobile date row */}
+        <div className="flex md:hidden items-center gap-1 mt-2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftDay(-1)}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="h-8 gap-2 font-normal">
+              <Button variant="outline" className="h-7 px-2 gap-1.5 font-normal text-xs flex-1">
                 <CalendarIcon className="w-3.5 h-3.5" />
                 {format(date, 'yyyy년 M월 d일 (eee)', { locale: ko })}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={(d) => d && setDate(d)}
-                initialFocus
-                className={cn('p-3 pointer-events-auto')}
-              />
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus className={cn('p-3 pointer-events-auto')} />
             </PopoverContent>
           </Popover>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => shiftDay(1)}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftDay(1)}>
             <ChevronRight className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="sm" className="h-8 ml-1" onClick={() => setDate(new Date())}>
-            오늘
-          </Button>
+        </div>
+
+        {/* Quick search + collapsible filters */}
+        <div className="flex items-center gap-2 mt-2">
+          <div className="relative flex-1 min-w-0 max-w-xs">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={studentQuery}
+              onChange={(e) => setStudentQuery(e.target.value)}
+              placeholder="학생 이름 검색"
+              className="h-8 pl-8 pr-7 rounded-md border border-input bg-background text-xs w-full focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            {studentQuery && (
+              <button onClick={() => setStudentQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Status quick chips */}
+          <div className="hidden sm:flex items-center gap-1">
+            {[
+              { v: 'all', label: '전체' },
+              { v: 'absent', label: '결석' },
+              { v: 'late', label: '지각' },
+              { v: 'empty', label: '미기록' },
+            ].map((opt) => (
+              <button
+                key={opt.v}
+                onClick={() => setStatusFilter(opt.v)}
+                className={cn(
+                  'h-7 px-2.5 rounded-full text-[11px] font-medium border transition-colors',
+                  statusFilter === opt.v
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <Collapsible className="ml-auto">
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Filter className="w-3.5 h-3.5" />
+                필터
+                {hasActiveFilters && <Badge variant="secondary" className="h-4 px-1 text-[9px]">ON</Badge>}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2 absolute right-2 z-30 bg-popover border rounded-md shadow-lg p-3 w-[min(90vw,420px)]">
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={teacherFilter} onValueChange={setTeacherFilter}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선생님" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 선생님</SelectItem>
+                    {teacherOptions.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="과목" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 과목</SelectItem>
+                    {subjectOptions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={classFilter} onValueChange={setClassFilter}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="반" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 반</SelectItem>
+                    {classOptions.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="출결" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 출결</SelectItem>
+                    <SelectItem value="present">정상등원</SelectItem>
+                    <SelectItem value="late">지각</SelectItem>
+                    <SelectItem value="absent">결석/미등원</SelectItem>
+                    <SelectItem value="empty">기록 없음</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 w-full mt-2 text-xs" onClick={resetFilters}>필터 초기화</Button>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
-            <Filter className="w-3.5 h-3.5" /> 필터
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2">
-          <Select value={teacherFilter} onValueChange={setTeacherFilter}>
-            <SelectTrigger className="w-36 h-9"><SelectValue placeholder="선생님" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체 선생님</SelectItem>
-              {teacherOptions.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-            <SelectTrigger className="w-32 h-9"><SelectValue placeholder="과목" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체 과목</SelectItem>
-              {subjectOptions.map((s) => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={classFilter} onValueChange={setClassFilter}>
-            <SelectTrigger className="w-40 h-9"><SelectValue placeholder="반" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체 반</SelectItem>
-              {classOptions.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36 h-9"><SelectValue placeholder="출결" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체 출결</SelectItem>
-              <SelectItem value="present">정상등원</SelectItem>
-              <SelectItem value="late">지각</SelectItem>
-              <SelectItem value="absent">결석/미등원</SelectItem>
-              <SelectItem value="empty">기록 없음</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <input
-            type="text"
-            value={studentQuery}
-            onChange={(e) => setStudentQuery(e.target.value)}
-            placeholder="학생 이름 검색"
-            className="h-9 px-3 rounded-md border border-input bg-background text-sm w-40 focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-
-          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>초기화</Button>
-        </CardContent>
-      </Card>
-
       {/* Body */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            {format(date, 'yyyy년 M월 d일 (eee)', { locale: ko })} 출석부
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Skeleton className="h-48" />
-          ) : filteredSlots.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">조건에 해당하는 수업이 없습니다</p>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-                <Stat label="자리 수" value={`${totals.total}`} />
-                <Stat label="출석" value={`${totals.present}`} tone="text-emerald-600" />
-                <Stat label="지각" value={`${totals.late}`} tone="text-amber-600" />
-                <Stat label="결석/미등원" value={`${totals.absent}`} tone="text-destructive" />
-                <Stat label="기록 없음" value={`${totals.empty}`} tone="text-muted-foreground" />
-              </div>
+      {loading ? (
+        <Skeleton className="h-64" />
+      ) : filteredSlots.length === 0 ? (
+        <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">조건에 해당하는 수업이 없습니다</CardContent></Card>
+      ) : (
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {filteredSlots.map((s) => {
+            const present = s.students.filter((st) => st.status === '정상등원' || st.status === '지각').length;
+            const absent = s.students.filter((st) => st.status && (st.status.includes('결석') || st.status === '미등원')).length;
+            const empty = s.students.filter((st) => !st.status).length;
+            const total = s.students.length;
+            const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+            const hasIssue = absent > 0 || empty > 0;
 
-              <div className="space-y-2">
-                {filteredSlots.map((s) => {
-                  const present = s.students.filter((st) => st.status === '정상등원' || st.status === '지각').length;
-                  return (
-                    <div key={s.scheduleId} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
-                      <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold">
-                              {s.startTime}~{s.endTime}
-                            </span>
-                            <span className="text-sm font-semibold truncate">{s.className}</span>
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{s.subject}</Badge>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            {s.teacherName} 선생님
-                          </p>
-                        </div>
-                        <span className="text-xs font-mono text-muted-foreground shrink-0 flex items-center gap-1">
-                          <Users className="w-3 h-3" />
-                          {present}/{s.students.length}명
-                        </span>
-                      </div>
-
-                      {s.students.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1">
-                          {s.students.map((st) => {
-                            const isPresent = st.status === '정상등원';
-                            const isLate = st.status === '지각';
-                            const isAbsent = st.status && (st.status.includes('결석') || st.status === '미등원');
-                            const info = st.status ? STATUS_LABEL[st.status] : null;
-                            return (
-                              <span
-                                key={st.id}
-                                title={info?.label || '기록 없음'}
-                                className={cn(
-                                  'text-[11px] font-medium',
-                                  isPresent && 'text-emerald-600',
-                                  isLate && 'text-amber-600',
-                                  isAbsent && 'text-destructive line-through',
-                                  !st.status && 'text-muted-foreground',
-                                )}
-                              >
-                                {st.name}
-                                {isLate && <span className="text-[9px] ml-0.5">(지각)</span>}
-                                {isAbsent && <span className="text-[9px] ml-0.5">({info?.label || '결'})</span>}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-[11px] text-muted-foreground mt-2">조건에 맞는 학생 없음</p>
-                      )}
+            return (
+              <div
+                key={s.scheduleId}
+                className={cn(
+                  'border rounded-lg p-3 bg-card hover:shadow-sm transition-all',
+                  hasIssue && 'border-l-4 border-l-amber-500/60',
+                  absent > 0 && 'border-l-destructive/70',
+                )}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold tabular-nums">
+                        {s.startTime || '—'}
+                      </span>
+                      <span className="text-sm font-semibold truncate">{s.className}</span>
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{s.subject}</Badge>
                     </div>
-                  );
-                })}
+                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{s.teacherName}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-bold tabular-nums">
+                      <span className="text-emerald-600">{present}</span>
+                      <span className="text-muted-foreground/50">/{total}</span>
+                    </div>
+                    <div className="text-[9px] text-muted-foreground">{pct}%</div>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                {total > 0 && (
+                  <div className="flex h-1 rounded-full overflow-hidden bg-muted mb-2">
+                    <div className="bg-emerald-500" style={{ width: `${(present / total) * 100}%` }} />
+                    <div className="bg-destructive" style={{ width: `${(absent / total) * 100}%` }} />
+                    <div className="bg-muted-foreground/30" style={{ width: `${(empty / total) * 100}%` }} />
+                  </div>
+                )}
+
+                {/* Students grid */}
+                {s.students.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {s.students.map((st) => {
+                      const isPresent = st.status === '정상등원';
+                      const isLate = st.status === '지각';
+                      const isAbsent = st.status && (st.status.includes('결석') || st.status === '미등원');
+                      const info = st.status ? STATUS_LABEL[st.status] : null;
+                      return (
+                        <span
+                          key={st.id}
+                          title={info?.label || '기록 없음'}
+                          className={cn(
+                            'inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border',
+                            isPresent && 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400',
+                            isLate && 'bg-amber-500/15 text-amber-700 border-amber-500/40 dark:text-amber-400',
+                            isAbsent && 'bg-destructive/15 text-destructive border-destructive/40',
+                            !st.status && 'bg-muted text-muted-foreground border-transparent',
+                          )}
+                        >
+                          <span className={cn(
+                            'w-1.5 h-1.5 rounded-full shrink-0',
+                            isPresent && 'bg-emerald-500',
+                            isLate && 'bg-amber-500',
+                            isAbsent && 'bg-destructive',
+                            !st.status && 'bg-muted-foreground/40',
+                          )} />
+                          {st.name}
+                          {isLate && <span className="text-[9px] opacity-70">지</span>}
+                          {isAbsent && <span className="text-[9px] opacity-70">{info?.label?.[0] || '결'}</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">조건에 맞는 학생 없음</p>
+                )}
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
