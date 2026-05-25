@@ -606,275 +606,223 @@ export function AdminBriefing() {
     }
   }
 
+  const hasActiveFilters = filters.subject !== 'all' || filters.grade !== 'all' || filters.teacherId !== 'all' ||
+    filters.testsOnly || filters.commentsOnly || filters.attendanceIssuesOnly ||
+    filters.homeworkIssuesOnly || filters.unsubmittedOnly || filters.includeAdminLessons;
+
+  const statPills = [
+    { label: '총 수업', value: stats.total, color: 'text-foreground' },
+    { label: '제출', value: stats.submitted, color: 'text-green-600' },
+    { label: '미제출', value: stats.draft, color: 'text-yellow-600' },
+    { label: '테스트', value: stats.withTests, color: 'text-blue-600' },
+    { label: '코멘트', value: stats.withComments, color: 'text-purple-600' },
+    { label: '출결 이슈', value: stats.attendanceIssues, color: 'text-orange-600' },
+    { label: '숙제 이슈', value: stats.homeworkIssues, color: 'text-red-600' },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">원장 보고</h1>
-          <p className="text-muted-foreground text-sm">
-            수업 현황 모니터링 및 요약 리포트 생성
-          </p>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchLessonRecords}
-            disabled={loading}
-          >
-            <RefreshCw className={cn("h-4 w-4 mr-1", loading && "animate-spin")} />
-            새로고침
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">원장 보고</h1>
+        <p className="text-muted-foreground text-sm">수업 모니터링 · 휴강 관리</p>
       </div>
 
-      {/* View Mode Tabs */}
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'weekly' | 'daily')}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <TabsList>
-            <TabsTrigger value="weekly">주간</TabsTrigger>
-            <TabsTrigger value="daily">일간</TabsTrigger>
-          </TabsList>
+      {/* Outer tabs: 수업 / 휴강 */}
+      <Tabs defaultValue="lessons" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="lessons" className="gap-1.5">
+            <ClipboardList className="h-4 w-4" /> 수업 모니터링
+          </TabsTrigger>
+          <TabsTrigger value="holidays" className="gap-1.5">
+            <CalendarOff className="h-4 w-4" /> 휴강 관리
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Date Navigation */}
-          <div className="flex items-center gap-2">
-            {viewMode === 'weekly' ? (
-              <>
-                <Button variant="outline" size="icon" onClick={() => setWeekStart(subWeeks(weekStart, 1))}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-medium min-w-[140px] text-center">
-                  {format(weekStart, 'M/d', { locale: ko })} ~ {format(weekEnd, 'M/d', { locale: ko })}
-                </span>
-                <Button variant="outline" size="icon" onClick={() => setWeekStart(addWeeks(weekStart, 1))}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </>
-            ) : (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <CalendarIcon className="h-4 w-4" />
-                    {format(selectedDate, 'yyyy-MM-dd (EEE)', { locale: ko })}
+        {/* ============ 수업 모니터링 ============ */}
+        <TabsContent value="lessons" className="space-y-4 mt-0">
+          {/* Compact toolbar: view mode + date nav + actions */}
+          <Card>
+            <CardContent className="p-3 flex flex-wrap items-center gap-2">
+              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'weekly' | 'daily')}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="weekly" className="text-xs h-7 px-3">주간</TabsTrigger>
+                  <TabsTrigger value="daily" className="text-xs h-7 px-3">일간</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              {viewMode === 'weekly' ? (
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekStart(subWeeks(weekStart, 1))}>
+                    <ChevronLeft className="h-4 w-4" />
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(d) => d && setSelectedDate(d)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
-        </div>
-
-        {/* Filters */}
-        <Card className="mt-4">
-          <CardHeader className="py-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              필터
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Row 1: Dropdowns */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">과목</Label>
-                <Select value={filters.subject} onValueChange={(v) => setFilters(f => ({ ...f, subject: v }))}>
-                  <SelectTrigger className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">전체</SelectItem>
-                    {SUBJECTS.map(s => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">학년</Label>
-                <Select value={filters.grade} onValueChange={(v) => setFilters(f => ({ ...f, grade: v }))}>
-                  <SelectTrigger className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">전체</SelectItem>
-                    {grades.map(g => (
-                      <SelectItem key={g} value={g}>{g}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">선생님</Label>
-                <Select value={filters.teacherId} onValueChange={(v) => setFilters(f => ({ ...f, teacherId: v }))}>
-                  <SelectTrigger className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">전체</SelectItem>
-                    {teachers.map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Row 2: Toggle filters */}
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="testsOnly"
-                  checked={filters.testsOnly}
-                  onCheckedChange={(c) => setFilters(f => ({ ...f, testsOnly: !!c }))}
-                />
-                <Label htmlFor="testsOnly" className="text-xs cursor-pointer">테스트 있음</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="commentsOnly"
-                  checked={filters.commentsOnly}
-                  onCheckedChange={(c) => setFilters(f => ({ ...f, commentsOnly: !!c }))}
-                />
-                <Label htmlFor="commentsOnly" className="text-xs cursor-pointer">코멘트 있음</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="attendanceIssuesOnly"
-                  checked={filters.attendanceIssuesOnly}
-                  onCheckedChange={(c) => setFilters(f => ({ ...f, attendanceIssuesOnly: !!c }))}
-                />
-                <Label htmlFor="attendanceIssuesOnly" className="text-xs cursor-pointer">출결 이슈</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="homeworkIssuesOnly"
-                  checked={filters.homeworkIssuesOnly}
-                  onCheckedChange={(c) => setFilters(f => ({ ...f, homeworkIssuesOnly: !!c }))}
-                />
-                <Label htmlFor="homeworkIssuesOnly" className="text-xs cursor-pointer">숙제 이슈</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="unsubmittedOnly"
-                  checked={filters.unsubmittedOnly}
-                  onCheckedChange={(c) => setFilters(f => ({ ...f, unsubmittedOnly: !!c }))}
-                />
-                <Label htmlFor="unsubmittedOnly" className="text-xs cursor-pointer">미제출만</Label>
-              </div>
-              <div className="flex items-center gap-2 ml-auto border-l pl-4">
-                <Checkbox
-                  id="includeAdminLessons"
-                  checked={filters.includeAdminLessons}
-                  onCheckedChange={(c) => setFilters(f => ({ ...f, includeAdminLessons: !!c }))}
-                />
-                <Label htmlFor="includeAdminLessons" className="text-xs cursor-pointer">원장 수업 포함</Label>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mt-4">
-          <Card className="p-3">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-xs text-muted-foreground">총 수업</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-2xl font-bold text-green-600">{stats.submitted}</div>
-            <div className="text-xs text-muted-foreground">제출</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-2xl font-bold text-yellow-600">{stats.draft}</div>
-            <div className="text-xs text-muted-foreground">미제출</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-2xl font-bold text-blue-600">{stats.withTests}</div>
-            <div className="text-xs text-muted-foreground">테스트</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-2xl font-bold text-purple-600">{stats.withComments}</div>
-            <div className="text-xs text-muted-foreground">코멘트</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-2xl font-bold text-orange-600">{stats.attendanceIssues}</div>
-            <div className="text-xs text-muted-foreground">출결 이슈</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-2xl font-bold text-red-600">{stats.homeworkIssues}</div>
-            <div className="text-xs text-muted-foreground">숙제 이슈</div>
-          </Card>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-2 mt-4">
-          {viewMode === 'daily' && (
-            <Button
-              onClick={generateDailySummary}
-              disabled={generatingDaily || loading}
-              className="gap-2"
-            >
-              {generatingDaily ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              오늘 데일리 요약 생성/갱신
-            </Button>
-          )}
-          {viewMode === 'weekly' && (
-            <Button
-              onClick={generateWeeklySummary}
-              disabled={generatingWeekly || loading}
-              className="gap-2"
-            >
-              {generatingWeekly ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
-              주간 원장 요약 리포트 생성
-            </Button>
-          )}
-        </div>
-
-        {/* Daily Briefing Preview */}
-        {viewMode === 'daily' && dailyBriefing && (
-          <Card className="mt-4 bg-muted/30">
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm">
-                📋 저장된 데일리 요약 ({format(new Date(dailyBriefing.generated_at), 'HH:mm')} 생성)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-2">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div>총 수업: <strong>{dailyBriefing.totals.total_lessons}</strong></div>
-                <div>제출: <strong>{dailyBriefing.totals.submitted}</strong></div>
-                <div>테스트: <strong>{dailyBriefing.totals.tests}</strong></div>
-                <div>출결 이슈: <strong>{dailyBriefing.totals.attendance_issues}</strong></div>
-              </div>
-              {dailyBriefing.highlights.length > 0 && (
-                <div className="pt-2 border-t">
-                  <div className="font-medium mb-1">주요 사항:</div>
-                  <ul className="space-y-1">
-                    {dailyBriefing.highlights.slice(0, 5).map((h, i) => (
-                      <li key={i} className="flex items-center gap-2">
-                        {h.type === 'attendance' ? (
-                          <AlertTriangle className="h-3 w-3 text-orange-500" />
-                        ) : (
-                          <Clock className="h-3 w-3 text-yellow-500" />
-                        )}
-                        <span>{h.message}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <span className="text-sm font-medium min-w-[120px] text-center">
+                    {format(weekStart, 'M/d', { locale: ko })} ~ {format(weekEnd, 'M/d', { locale: ko })}
+                  </span>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekStart(addWeeks(weekStart, 1))}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
+              ) : (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 gap-2">
+                      <CalendarIcon className="h-4 w-4" />
+                      {format(selectedDate, 'M/d (EEE)', { locale: ko })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={selectedDate} onSelect={(d) => d && setSelectedDate(d)} initialFocus />
+                  </PopoverContent>
+                </Popover>
               )}
+
+              <div className="ml-auto flex items-center gap-2">
+                <Button variant="outline" size="sm" className="h-8" onClick={fetchLessonRecords} disabled={loading}>
+                  <RefreshCw className={cn("h-4 w-4 mr-1", loading && "animate-spin")} />
+                  새로고침
+                </Button>
+                {viewMode === 'daily' ? (
+                  <Button size="sm" className="h-8 gap-1.5" onClick={generateDailySummary} disabled={generatingDaily || loading}>
+                    {generatingDaily ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    데일리 요약
+                  </Button>
+                ) : (
+                  <Button size="sm" className="h-8 gap-1.5" onClick={generateWeeklySummary} disabled={generatingWeekly || loading}>
+                    {generatingWeekly ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
+                    주간 요약
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
-        )}
+
+          {/* Compact stats strip */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+            {statPills.map((s) => (
+              <Card key={s.label} className="p-2.5">
+                <div className={cn("text-xl font-bold leading-tight", s.color)}>{s.value}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">{s.label}</div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Collapsible filters */}
+          <Collapsible defaultOpen={false}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <button type="button" className="w-full p-3 flex items-center gap-2 text-sm font-medium hover:bg-muted/40 transition-colors">
+                  <Filter className="h-4 w-4" />
+                  필터
+                  {hasActiveFilters && (
+                    <Badge variant="secondary" className="text-[10px] h-5">적용중</Badge>
+                  )}
+                  <ChevronDown className="h-4 w-4 ml-auto text-muted-foreground transition-transform data-[state=open]:rotate-180" />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0 space-y-4">
+                  {/* Row 1: Dropdowns */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">과목</Label>
+                      <Select value={filters.subject} onValueChange={(v) => setFilters(f => ({ ...f, subject: v }))}>
+                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">전체</SelectItem>
+                          {SUBJECTS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">학년</Label>
+                      <Select value={filters.grade} onValueChange={(v) => setFilters(f => ({ ...f, grade: v }))}>
+                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">전체</SelectItem>
+                          {grades.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">선생님</Label>
+                      <Select value={filters.teacherId} onValueChange={(v) => setFilters(f => ({ ...f, teacherId: v }))}>
+                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">전체</SelectItem>
+                          {teachers.map(t => <SelectItem key={t.id} value={t.id}>{t.full_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Toggles */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {[
+                      { id: 'testsOnly', label: '테스트 있음' },
+                      { id: 'commentsOnly', label: '코멘트 있음' },
+                      { id: 'attendanceIssuesOnly', label: '출결 이슈' },
+                      { id: 'homeworkIssuesOnly', label: '숙제 이슈' },
+                      { id: 'unsubmittedOnly', label: '미제출만' },
+                    ].map(({ id, label }) => (
+                      <div key={id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={id}
+                          checked={(filters as any)[id]}
+                          onCheckedChange={(c) => setFilters(f => ({ ...f, [id]: !!c }))}
+                        />
+                        <Label htmlFor={id} className="text-xs cursor-pointer">{label}</Label>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-2 ml-auto border-l pl-4">
+                      <Checkbox
+                        id="includeAdminLessons"
+                        checked={filters.includeAdminLessons}
+                        onCheckedChange={(c) => setFilters(f => ({ ...f, includeAdminLessons: !!c }))}
+                      />
+                      <Label htmlFor="includeAdminLessons" className="text-xs cursor-pointer">원장 수업 포함</Label>
+                    </div>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Daily briefing preview (compact) */}
+          {viewMode === 'daily' && dailyBriefing && (
+            <Card className="bg-muted/30">
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm">
+                  📋 저장된 데일리 요약 ({format(new Date(dailyBriefing.generated_at), 'HH:mm')} 생성)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2 pt-0">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>총 수업: <strong>{dailyBriefing.totals.total_lessons}</strong></div>
+                  <div>제출: <strong>{dailyBriefing.totals.submitted}</strong></div>
+                  <div>테스트: <strong>{dailyBriefing.totals.tests}</strong></div>
+                  <div>출결 이슈: <strong>{dailyBriefing.totals.attendance_issues}</strong></div>
+                </div>
+                {dailyBriefing.highlights.length > 0 && (
+                  <div className="pt-2 border-t">
+                    <div className="font-medium mb-1">주요 사항:</div>
+                    <ul className="space-y-1">
+                      {dailyBriefing.highlights.slice(0, 5).map((h, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          {h.type === 'attendance' ? (
+                            <AlertTriangle className="h-3 w-3 text-orange-500" />
+                          ) : (
+                            <Clock className="h-3 w-3 text-yellow-500" />
+                          )}
+                          <span>{h.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
         {/* Records Table */}
         <TabsContent value={viewMode} className="mt-4">
