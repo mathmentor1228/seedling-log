@@ -313,6 +313,7 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
           textbook_name: o.textbook_name, subject: o.subject, unit_price: o.unit_price,
           grade: o.grade || null, category: o.category || null, textbook_type: o.textbook_type || 'student',
           orders: [], totalQty: 0, totalDistributed: 0, status,
+          remainingStock: 0, receivedQty: 0,
         });
       }
       const g = map.get(key)!;
@@ -328,6 +329,10 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       g.status = statusOrder[minIdx];
       const allSame = g.orders.every(o => normalizeStatus(o.status) === normalizeStatus(g.orders[0].status));
       if (allSame) g.status = normalizeStatus(g.orders[0].status);
+      // Recompute received vs remaining stock (학생용, 입고완료만 카운트)
+      const receivedOrders = g.orders.filter(o => normalizeStatus(o.status) === '입고완료' && (o.textbook_type || 'student') !== 'teacher');
+      g.receivedQty = receivedOrders.reduce((s, o) => s + o.quantity, 0);
+      g.remainingStock = Math.max(0, g.receivedQty - receivedOrders.reduce((s, o) => s + (o.distributed_qty || 0), 0));
     });
 
     return Array.from(map.values()).sort((a, b) => {
