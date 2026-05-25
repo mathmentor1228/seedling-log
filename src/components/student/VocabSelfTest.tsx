@@ -338,6 +338,8 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       reviewFilter={reviewFilter}
       setReviewFilter={setReviewFilter}
       mode={mode}
+      levelLabel={levelLabel}
+      scopeLabel={scopeLabel}
       onBack={onBack}
       onRetry={() => {
         startedAtRef.current = new Date().toISOString();
