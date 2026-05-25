@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { SchoolInfo, Schedule, Textbook, SchoolFile } from './types';
 import { differenceInDays, parseISO } from 'date-fns';
 import { getTodayKST } from '@/lib/utils';
+import { isFinalsTitle, pickNearestFinals } from '@/lib/finalsExamUtils';
 
 // Normalize school names (merge variants like 신길초 / 신길초등학교)
 const SCHOOL_NAME_MAP: Record<string, string> = {
