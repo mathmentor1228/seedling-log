@@ -824,8 +824,7 @@ export function AdminBriefing() {
             </Card>
           )}
 
-        {/* Records Table */}
-        <TabsContent value={viewMode} className="mt-4">
+          {/* Records Table */}
           <Card>
             <CardContent className="p-0">
               {loading ? (
