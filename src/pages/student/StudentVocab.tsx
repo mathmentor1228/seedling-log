@@ -606,7 +606,7 @@ export default function StudentVocab() {
     const selfLevelLabel = `Lv.${selfTestLevel} (${levelDesc})`;
     const selfScopeLabel = vocabSets
       .filter(s => selectedSetIds.includes(s.set_id))
-      .map(s => s.set_name)
+      .map(s => s.set_title)
       .join(', ');
     return (
       <VocabSelfTest
