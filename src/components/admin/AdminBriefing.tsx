@@ -16,7 +16,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { LessonModal } from '@/components/lessons/LessonModal';
+import HolidayManagement from '@/components/HolidayManagement';
 import { 
   CalendarIcon, 
   ChevronLeft, 
@@ -29,7 +31,9 @@ import {
   CheckCircle,
   Clock,
   MessageSquare,
-  ClipboardList
+  ClipboardList,
+  ChevronDown,
+  CalendarOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { LessonFormContext } from '@/components/lessons/LessonRecordForm';
