@@ -699,6 +699,113 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
   const selectedDraftsList = useMemo(() => drafts.filter(d => selectedIds.has(d.id)), [drafts, selectedIds]);
 
+  // HW-CHECK-INLINE-SAVE-V1: Save a single previous-homework check inline (mirrors LessonRecordForm.handleSaveHomeworkCheckForItem).
+  // This updates homework_assignments + lesson_records.homework_status for the matching draft,
+  // and awards/deducts points the same way the individual form does. The dashboard one-line
+  // summary then immediately reflects the checked status (no need to toggle the bulk field).
+  async function handleInlineSaveHwItem(
+    draft: DraftRecord,
+    hw: { id: string; student_id: string; submission_image_url: string | null; submitted_at: string | null },
+    result: string,
+    notes: string,
+  ) {
+    if (!user || !result) return;
+    setSavingHwItemId(hw.id);
+    try {
+      const nowIso = new Date().toISOString();
+      const { error: hwErr } = await supabase
+        .from('homework_assignments')
+        .update({
+          check_status: 'checked',
+          result,
+          notes: notes.trim() || null,
+          checked_by: user.id,
+          checked_at: nowIso,
+        })
+        .eq('id', hw.id);
+      if (hwErr) throw hwErr;
+
+      // Mirror lesson_records.homework_status so dashboard reflects same status as individual form
+      const homeworkStatusToSave = mapResultToStatus(result);
+      await supabase
+        .from('lesson_records')
+        .update({ homework_status: homeworkStatusToSave })
+        .eq('id', draft.id);
+
+      // POINT-AWARD parity with LessonRecordForm.handleSaveHomeworkCheckForItem
+      let pointsAlreadyAwarded = false;
+      if (['completed', 'not_done', 'lost', 'low_effort'].includes(result)) {
+        const { data: existingPoints } = await supabase
+          .from('student_point_history')
+          .select('id')
+          .eq('related_homework_id', hw.id)
+          .limit(1);
+        pointsAlreadyAwarded = (existingPoints?.length || 0) > 0;
+      }
+      let awardedPoints = 0;
+      if (!pointsAlreadyAwarded) {
+        if (result === 'completed') {
+          const hasPhotoSubmission = !!(hw.submission_image_url && hw.submitted_at);
+          awardedPoints = hasPhotoSubmission ? 10 : 5;
+        } else if (['not_done', 'lost', 'low_effort'].includes(result)) {
+          awardedPoints = -5;
+        }
+      }
+      if (awardedPoints !== 0 && !pointsAlreadyAwarded) {
+        let reason = '';
+        if (awardedPoints === 10) reason = '숙제 완료 보상 (사진 인증)';
+        else if (awardedPoints === 5) reason = '숙제 완료 보상 (현장 확인)';
+        else if (awardedPoints === -5) reason = '숙제 미이행 감점';
+        await supabase.from('student_point_history').insert({
+          student_id: hw.student_id,
+          points: awardedPoints,
+          reason,
+          related_homework_id: hw.id,
+          created_by: user.id,
+        });
+        const { data: stu } = await supabase
+          .from('students')
+          .select('total_points')
+          .eq('id', hw.student_id)
+          .single();
+        if (stu) {
+          await supabase
+            .from('students')
+            .update({ total_points: (stu.total_points || 0) + awardedPoints })
+            .eq('id', hw.student_id);
+        }
+      }
+
+      // Update local state: remove the checked item from prev list and clear its inputs
+      setPrevUncheckedByDraft(prev => {
+        const next = { ...prev };
+        const list = (next[draft.id] || []).filter(it => it.id !== hw.id);
+        if (list.length === 0) delete next[draft.id];
+        else next[draft.id] = list;
+        return next;
+      });
+      setPerStudentPrevHwResults(prev => {
+        const inner = { ...(prev[draft.id] || {}) };
+        delete inner[hw.id];
+        return { ...prev, [draft.id]: inner };
+      });
+      setPerStudentPrevHwNotes(prev => {
+        const inner = { ...(prev[draft.id] || {}) };
+        delete inner[hw.id];
+        return { ...prev, [draft.id]: inner };
+      });
+
+      const statusLabel = { completed: '완료', partial: '일부완료', not_done: '미이행', none_assigned: '없음' }[homeworkStatusToSave] || homeworkStatusToSave;
+      toast({ title: '숙제 확인 완료', description: `${draft.student_name} · ${statusLabel}${awardedPoints !== 0 ? ` · ${awardedPoints > 0 ? '+' : ''}${awardedPoints}점` : ''}` });
+    } catch (err: any) {
+      console.error('inline hw check save failed', err);
+      toast({ title: '저장 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingHwItemId(null);
+    }
+  }
+
+
   async function handleBulkDraftSave() {
     if (selectedIds.size === 0) return;
     setSaving(true);
