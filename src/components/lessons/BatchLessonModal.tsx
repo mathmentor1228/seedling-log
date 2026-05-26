@@ -23,7 +23,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayKST } from '@/lib/utils';
-import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight } from 'lucide-react';
+import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight, CheckCircle2, Clock, XCircle, PackageX, Frown, HelpCircle } from 'lucide-react';
+
+// HW-CHECK-BTN-OPTIONS-V1: mirror LessonRecordForm.HOMEWORK_RESULT_OPTIONS so the batch
+// per-item homework check UI looks/behaves the same as the individual lesson form.
+const HW_RESULT_BUTTON_OPTIONS = [
+  { value: 'completed', label: '완료', icon: CheckCircle2 },
+  { value: 'partial', label: '부분', icon: Clock },
+  { value: 'not_done', label: '미완', icon: XCircle },
+  { value: 'lost', label: '분실', icon: PackageX },
+  { value: 'low_effort', label: '성의부족', icon: Frown },
+  { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle },
+];
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
@@ -200,9 +211,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentAttendance, setPerStudentAttendance] = useState<Record<string, string[]>>({});
 
   // HW-PER-ITEM-CHECK-V1: Previous-lesson unchecked homework loaded per draft, for explicit per-item confirmation
-  const [prevUncheckedByDraft, setPrevUncheckedByDraft] = useState<Record<string, Array<{ id: string; content: string; assigned_date: string; homework_type: string }>>>({});
+  const [prevUncheckedByDraft, setPrevUncheckedByDraft] = useState<Record<string, Array<{ id: string; student_id: string; subject: string; content: string; assigned_date: string; homework_type: string; submission_image_url: string | null; submitted_at: string | null; check_status?: string; result?: string | null; checked_notes?: string | null }>>>({});
   const [perStudentPrevHwResults, setPerStudentPrevHwResults] = useState<Record<string, Record<string, string>>>({});
   const [perStudentPrevHwNotes, setPerStudentPrevHwNotes] = useState<Record<string, Record<string, string>>>({});
+  // HW-CHECK-INLINE-SAVE-V1: track per-item inline saving state for batch homework check
+  const [savingHwItemId, setSavingHwItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -473,11 +486,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     // HW-PER-ITEM-CHECK-V1: Load previous-lesson unchecked homework per (student, subject)
     // so the teacher can confirm each previous homework item explicitly from the bulk editor.
     try {
-      const prevMap: Record<string, Array<{ id: string; content: string; assigned_date: string; homework_type: string }>> = {};
+      const prevMap: Record<string, Array<{ id: string; student_id: string; subject: string; content: string; assigned_date: string; homework_type: string; submission_image_url: string | null; submitted_at: string | null }>> = {};
       for (const d of selectedDrafts) {
         const { data: prevHw } = await supabase
           .from('homework_assignments')
-          .select('id, content, assigned_date, homework_type')
+          .select('id, student_id, subject, content, assigned_date, homework_type, submission_image_url, submitted_at')
           .eq('student_id', d.student_id)
           .eq('subject', d.subject as SubjectType)
           .eq('check_status', 'unchecked')
@@ -685,6 +698,113 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   }
 
   const selectedDraftsList = useMemo(() => drafts.filter(d => selectedIds.has(d.id)), [drafts, selectedIds]);
+
+  // HW-CHECK-INLINE-SAVE-V1: Save a single previous-homework check inline (mirrors LessonRecordForm.handleSaveHomeworkCheckForItem).
+  // This updates homework_assignments + lesson_records.homework_status for the matching draft,
+  // and awards/deducts points the same way the individual form does. The dashboard one-line
+  // summary then immediately reflects the checked status (no need to toggle the bulk field).
+  async function handleInlineSaveHwItem(
+    draft: DraftRecord,
+    hw: { id: string; student_id: string; submission_image_url: string | null; submitted_at: string | null },
+    result: string,
+    notes: string,
+  ) {
+    if (!user || !result) return;
+    setSavingHwItemId(hw.id);
+    try {
+      const nowIso = new Date().toISOString();
+      const { error: hwErr } = await supabase
+        .from('homework_assignments')
+        .update({
+          check_status: 'checked',
+          result,
+          notes: notes.trim() || null,
+          checked_by: user.id,
+          checked_at: nowIso,
+        })
+        .eq('id', hw.id);
+      if (hwErr) throw hwErr;
+
+      // Mirror lesson_records.homework_status so dashboard reflects same status as individual form
+      const homeworkStatusToSave = mapResultToStatus(result);
+      await supabase
+        .from('lesson_records')
+        .update({ homework_status: homeworkStatusToSave })
+        .eq('id', draft.id);
+
+      // POINT-AWARD parity with LessonRecordForm.handleSaveHomeworkCheckForItem
+      let pointsAlreadyAwarded = false;
+      if (['completed', 'not_done', 'lost', 'low_effort'].includes(result)) {
+        const { data: existingPoints } = await supabase
+          .from('student_point_history')
+          .select('id')
+          .eq('related_homework_id', hw.id)
+          .limit(1);
+        pointsAlreadyAwarded = (existingPoints?.length || 0) > 0;
+      }
+      let awardedPoints = 0;
+      if (!pointsAlreadyAwarded) {
+        if (result === 'completed') {
+          const hasPhotoSubmission = !!(hw.submission_image_url && hw.submitted_at);
+          awardedPoints = hasPhotoSubmission ? 10 : 5;
+        } else if (['not_done', 'lost', 'low_effort'].includes(result)) {
+          awardedPoints = -5;
+        }
+      }
+      if (awardedPoints !== 0 && !pointsAlreadyAwarded) {
+        let reason = '';
+        if (awardedPoints === 10) reason = '숙제 완료 보상 (사진 인증)';
+        else if (awardedPoints === 5) reason = '숙제 완료 보상 (현장 확인)';
+        else if (awardedPoints === -5) reason = '숙제 미이행 감점';
+        await supabase.from('student_point_history').insert({
+          student_id: hw.student_id,
+          points: awardedPoints,
+          reason,
+          related_homework_id: hw.id,
+          created_by: user.id,
+        });
+        const { data: stu } = await supabase
+          .from('students')
+          .select('total_points')
+          .eq('id', hw.student_id)
+          .single();
+        if (stu) {
+          await supabase
+            .from('students')
+            .update({ total_points: (stu.total_points || 0) + awardedPoints })
+            .eq('id', hw.student_id);
+        }
+      }
+
+      // Update local state: remove the checked item from prev list and clear its inputs
+      setPrevUncheckedByDraft(prev => {
+        const next = { ...prev };
+        const list = (next[draft.id] || []).filter(it => it.id !== hw.id);
+        if (list.length === 0) delete next[draft.id];
+        else next[draft.id] = list;
+        return next;
+      });
+      setPerStudentPrevHwResults(prev => {
+        const inner = { ...(prev[draft.id] || {}) };
+        delete inner[hw.id];
+        return { ...prev, [draft.id]: inner };
+      });
+      setPerStudentPrevHwNotes(prev => {
+        const inner = { ...(prev[draft.id] || {}) };
+        delete inner[hw.id];
+        return { ...prev, [draft.id]: inner };
+      });
+
+      const statusLabel = { completed: '완료', partial: '일부완료', not_done: '미이행', none_assigned: '없음' }[homeworkStatusToSave] || homeworkStatusToSave;
+      toast({ title: '숙제 확인 완료', description: `${draft.student_name} · ${statusLabel}${awardedPoints !== 0 ? ` · ${awardedPoints > 0 ? '+' : ''}${awardedPoints}점` : ''}` });
+    } catch (err: any) {
+      console.error('inline hw check save failed', err);
+      toast({ title: '저장 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingHwItemId(null);
+    }
+  }
+
 
   async function handleBulkDraftSave() {
     if (selectedIds.size === 0) return;
@@ -1157,69 +1277,92 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
               </div>
             </FieldToggleBlock>
 
-            {/* Homework Status - HW-PER-ITEM-CHECK-V1: show previous unchecked HW per student with explicit per-item result selectors */}
+            {/* Homework Status - HW-CHECK-INLINE-SAVE-V1: per-item buttons + inline 확인저장,
+                identical UX to the individual lesson record form (LessonRecordForm). */}
             <FieldToggleBlock field="homework_status" active={activeFields.has('homework_status')} onToggle={() => toggleField('homework_status')}>
               <div className="space-y-2">
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  ⚠️ 학생별로 <strong>지난 수업의 숙제 항목을 직접 확인</strong>해야 반영됩니다. 항목별 결과를 선택하지 않으면 확인 처리되지 않습니다.
+                  학생별로 지난 수업의 숙제 항목을 직접 확인해주세요. 항목별 결과를 선택하고 <strong>확인 저장</strong>을 누르면 즉시 반영됩니다.
                 </p>
-                <PerStudentToggle checked={usePerStudentHomework} onChange={setUsePerStudentHomework} />
-                {usePerStudentHomework ? (
-                  <PerStudentContainer>
-                    {selectedDraftsList.map(d => {
-                      const prevItems = prevUncheckedByDraft[d.id] || [];
-                      const itemResults = perStudentPrevHwResults[d.id] || {};
-                      const itemNotes = perStudentPrevHwNotes[d.id] || {};
-                      return (
-                        <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
-                          {prevItems.length === 0 ? (
-                            <p className="text-[11px] text-muted-foreground italic">미확인된 지난 숙제가 없습니다.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {prevItems.map(hw => (
-                                <div key={hw.id} className="rounded-md border border-border/50 bg-background/60 p-2 space-y-1.5">
+                <PerStudentContainer>
+                  {selectedDraftsList.map(d => {
+                    const prevItems = prevUncheckedByDraft[d.id] || [];
+                    const itemResults = perStudentPrevHwResults[d.id] || {};
+                    const itemNotes = perStudentPrevHwNotes[d.id] || {};
+                    return (
+                      <StudentBlock key={d.id} name={d.student_name} subject={d.subject}>
+                        {prevItems.length === 0 ? (
+                          <p className="text-[11px] text-muted-foreground italic">미확인된 지난 숙제가 없습니다.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {prevItems.map(hw => {
+                              const selected = itemResults[hw.id] || '';
+                              const isSaving = savingHwItemId === hw.id;
+                              return (
+                                <div key={hw.id} className="rounded-md border border-border/50 bg-background/60 p-2 space-y-2">
                                   <div className="flex items-center justify-between gap-2">
                                     <p className="text-xs text-foreground leading-snug flex-1 whitespace-pre-wrap">{hw.content}</p>
                                     <span className="text-[10px] text-muted-foreground shrink-0">{hw.assigned_date}</span>
                                   </div>
-                                  <Select
-                                    value={itemResults[hw.id] || ''}
-                                    onValueChange={v => setPerStudentPrevHwResults(prev => ({
-                                      ...prev,
-                                      [d.id]: { ...(prev[d.id] || {}), [hw.id]: v },
-                                    }))}
-                                  >
-                                    <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="결과 선택 (미선택 시 확인 안됨)" /></SelectTrigger>
-                                    <SelectContent>
-                                      {HOMEWORK_STATUS_OPTIONS.filter(o => o.value !== 'none_assigned').map(o => (
-                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Input
+                                  <div className="space-y-1.5">
+                                    <span className="text-[11px] font-medium text-muted-foreground">숙제상태 확인</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {HW_RESULT_BUTTON_OPTIONS.map(opt => {
+                                        const Icon = opt.icon;
+                                        const isSelected = selected === opt.value;
+                                        return (
+                                          <Button
+                                            key={opt.value}
+                                            type="button"
+                                            variant={isSelected ? 'default' : 'outline'}
+                                            size="sm"
+                                            className={`gap-1 h-7 text-xs px-2.5 ${!isSelected ? 'border-border/60' : ''}`}
+                                            onClick={() => setPerStudentPrevHwResults(prev => ({
+                                              ...prev,
+                                              [d.id]: { ...(prev[d.id] || {}), [hw.id]: opt.value },
+                                            }))}
+                                          >
+                                            <Icon className="w-3.5 h-3.5" />
+                                            {opt.label === '완료' ? '완료' : opt.label === '부분' ? '일부완료' : opt.label === '미완' ? '미이행' : opt.label}
+                                          </Button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  <Textarea
                                     value={itemNotes[hw.id] || ''}
                                     onChange={e => setPerStudentPrevHwNotes(prev => ({
                                       ...prev,
                                       [d.id]: { ...(prev[d.id] || {}), [hw.id]: e.target.value },
                                     }))}
                                     placeholder="확인 메모 (선택)"
-                                    className="h-7 text-xs"
+                                    rows={2}
+                                    className="text-xs"
                                   />
+                                  <div className="flex justify-end">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      disabled={!selected || isSaving}
+                                      onClick={() => handleInlineSaveHwItem(d, hw, selected, itemNotes[hw.id] || '')}
+                                    >
+                                      {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1" />}
+                                      확인 저장
+                                    </Button>
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                        </StudentBlock>
-                      );
-                    })}
-                  </PerStudentContainer>
-                ) : (
-                  <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-foreground/80 space-y-1">
-                    <p>지난 숙제는 학생마다 다르므로, <strong>"학생별 설정"을 켜고</strong> 각 학생의 숙제 항목별로 결과를 선택해주세요.</p>
-                  </div>
-                )}
+                              );
+                            })}
+                          </div>
+                        )}
+                      </StudentBlock>
+                    );
+                  })}
+                </PerStudentContainer>
               </div>
             </FieldToggleBlock>
+
 
 
             {/* Learning Issues */}
