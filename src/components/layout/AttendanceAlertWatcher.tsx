@@ -71,6 +71,12 @@ export function AttendanceAlertWatcher() {
     if (!user || (role !== 'admin' && role !== 'teacher')) return;
 
     const now = new Date();
+    // QUIET-HOURS-V1: after 22:00, suppress today's attendance alerts entirely
+    if (now.getHours() >= 22) {
+      setEntries([]);
+      setOpen(false);
+      return;
+    }
     const today = now.toISOString().split('T')[0];
     const dayOfWeek = getDayOfWeekKo(now);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
