@@ -23,7 +23,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayKST } from '@/lib/utils';
-import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight } from 'lucide-react';
+import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight, CheckCircle2, Clock, XCircle, PackageX, Frown, HelpCircle } from 'lucide-react';
+
+// HW-CHECK-BTN-OPTIONS-V1: mirror LessonRecordForm.HOMEWORK_RESULT_OPTIONS so the batch
+// per-item homework check UI looks/behaves the same as the individual lesson form.
+const HW_RESULT_BUTTON_OPTIONS = [
+  { value: 'completed', label: '완료', icon: CheckCircle2 },
+  { value: 'partial', label: '부분', icon: Clock },
+  { value: 'not_done', label: '미완', icon: XCircle },
+  { value: 'lost', label: '분실', icon: PackageX },
+  { value: 'low_effort', label: '성의부족', icon: Frown },
+  { value: 'unable_to_verify', label: '확인불가', icon: HelpCircle },
+];
 
 type SubjectType = '수학' | '과학' | '영어' | '국어';
 
