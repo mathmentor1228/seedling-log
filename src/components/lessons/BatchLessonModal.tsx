@@ -486,11 +486,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     // HW-PER-ITEM-CHECK-V1: Load previous-lesson unchecked homework per (student, subject)
     // so the teacher can confirm each previous homework item explicitly from the bulk editor.
     try {
-      const prevMap: Record<string, Array<{ id: string; content: string; assigned_date: string; homework_type: string }>> = {};
+      const prevMap: Record<string, Array<{ id: string; student_id: string; subject: string; content: string; assigned_date: string; homework_type: string; submission_image_url: string | null; submitted_at: string | null }>> = {};
       for (const d of selectedDrafts) {
         const { data: prevHw } = await supabase
           .from('homework_assignments')
-          .select('id, content, assigned_date, homework_type')
+          .select('id, student_id, subject, content, assigned_date, homework_type, submission_image_url, submitted_at')
           .eq('student_id', d.student_id)
           .eq('subject', d.subject as SubjectType)
           .eq('check_status', 'unchecked')
