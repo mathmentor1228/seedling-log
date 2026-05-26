@@ -116,6 +116,27 @@ export function AttendanceAlertWatcher() {
         .map((l) => `${l.student_id}_${l.room_id}`)
     );
 
+    // Pre-marked absences: attendance table + lesson_records attendance_status for today
+    const absentIds = new Set<string>();
+    const { data: attRows } = await supabase
+      .from('attendance')
+      .select('student_id, status')
+      .eq('att_date', today);
+    (attRows ?? []).forEach((r: any) => {
+      if (r.status && r.status !== 'present') absentIds.add(r.student_id);
+    });
+    const { data: lessonRows } = await supabase
+      .from('lesson_records')
+      .select('student_id, attendance_status, lesson_types')
+      .eq('lesson_date', today);
+    const ABSENCE_TAGS = ['결석', '인정결석', '무단결석', '보충불가', '지각', '조퇴'];
+    (lessonRows ?? []).forEach((r: any) => {
+      const tags: string[] = r.attendance_status ?? [];
+      const lt: string[] = r.lesson_types ?? [];
+      if (lt.includes('휴강')) { absentIds.add(r.student_id); return; }
+      if (tags.some((t) => ABSENCE_TAGS.includes(t))) absentIds.add(r.student_id);
+    });
+
     // Collect overdue
     const overdue: OverdueEntry[] = [];
     const seen = new Set<string>();
@@ -135,9 +156,10 @@ export function AttendanceAlertWatcher() {
       const names = (a.student_names ?? []) as string[];
       ids.forEach((id, i) => {
         if (myStudentIds && !myStudentIds.has(id)) return;
+        if (absentIds.has(id)) return;                       // pre-marked absent — skip
+        if (checkedIn.has(`${id}_${a.room}`)) return;        // already checked in — skip
         const key = `${id}_${a.room}_${slot}`;
         if (seen.has(key)) return;
-        if (checkedIn.has(`${id}_${a.room}`)) return;
         seen.add(key);
         if (a.teacher_id) teacherIdsToLookup.add(a.teacher_id);
         overdue.push({
@@ -161,7 +183,6 @@ export function AttendanceAlertWatcher() {
       (profiles ?? []).forEach((p) => {
         nameMap[p.id] = p.full_name || '선생님';
       });
-      // attach via re-derive (need teacher_id per entry — fetch again from assigned)
       const teacherByKey = new Map<string, string>();
       (assigned ?? []).forEach((a) => {
         if (!a.teacher_id || !a.slot_start) return;
@@ -176,10 +197,13 @@ export function AttendanceAlertWatcher() {
       });
     }
 
-    // Filter out dismissed
+    // Keep dismissed-state filter for the open trigger; always sync visible list
     const fresh = overdue.filter((o) => !dismissedRef.current.has(o.key));
-    setEntries(overdue); // show full current list when opened
-    if (fresh.length > 0) {
+    setEntries(overdue);
+    if (overdue.length === 0) {
+      // All cleared (checked in / marked absent) → close dialog
+      setOpen(false);
+    } else if (fresh.length > 0) {
       setOpen(true);
     }
   }, [user, role]);
