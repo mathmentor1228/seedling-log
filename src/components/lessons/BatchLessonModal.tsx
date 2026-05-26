@@ -211,9 +211,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentAttendance, setPerStudentAttendance] = useState<Record<string, string[]>>({});
 
   // HW-PER-ITEM-CHECK-V1: Previous-lesson unchecked homework loaded per draft, for explicit per-item confirmation
-  const [prevUncheckedByDraft, setPrevUncheckedByDraft] = useState<Record<string, Array<{ id: string; content: string; assigned_date: string; homework_type: string }>>>({});
+  const [prevUncheckedByDraft, setPrevUncheckedByDraft] = useState<Record<string, Array<{ id: string; student_id: string; subject: string; content: string; assigned_date: string; homework_type: string; submission_image_url: string | null; submitted_at: string | null; check_status?: string; result?: string | null; checked_notes?: string | null }>>>({});
   const [perStudentPrevHwResults, setPerStudentPrevHwResults] = useState<Record<string, Record<string, string>>>({});
   const [perStudentPrevHwNotes, setPerStudentPrevHwNotes] = useState<Record<string, Record<string, string>>>({});
+  // HW-CHECK-INLINE-SAVE-V1: track per-item inline saving state for batch homework check
+  const [savingHwItemId, setSavingHwItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
