@@ -1542,12 +1542,13 @@ export function LessonRecordForm({
       const homeworkStatusToSave = mapHomeworkResultToStatus(checkResult);
       setFormData(prev => ({ ...prev, homework_status: homeworkStatusToSave }));
 
-      if (editingLesson?.id || existingRecordId) {
-        const recordId = editingLesson?.id || existingRecordId;
+      // HW-STATUS-PERSIST-FIX-V1: include currentDraftId so newly-created drafts also persist the homework_status
+      const targetRecordId = editingLesson?.id || existingRecordId || currentDraftId;
+      if (targetRecordId) {
         await supabase
           .from('lesson_records')
           .update({ homework_status: homeworkStatusToSave })
-          .eq('id', recordId);
+          .eq('id', targetRecordId);
       }
 
       // POINT-AWARD-V3: Award/deduct points
