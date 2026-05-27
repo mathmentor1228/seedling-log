@@ -182,6 +182,7 @@ export function AttendanceAlertWatcher() {
       ids.forEach((id, i) => {
         if (!activeStudentIds.has(id)) return;
         if (myStudentIds && !myStudentIds.has(id)) return;
+        if (absentIds.has(id)) return;
         if (checkedIn.has(`${id}_${a.room}`)) return;
         const key = `${id}_${a.room}_${slot}`;
         if (seen.has(key)) return;
