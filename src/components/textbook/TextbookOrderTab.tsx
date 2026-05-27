@@ -329,7 +329,11 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
   // 예) "리피트 2-2", "리피트중2-2", "2-2리피트", "리피트_중2-2" → 동일 시그니처
   const textbookSignature = (s: string): string => {
     if (!s) return '';
-    const compact = s.toLowerCase().replace(/[\s_./\\()[\]]+/g, '');
+    // 공백/구두점 제거 후, 학년 수준 표기(초/중/고) 단일 글자도 제거하여
+    // "리피트 2-2" ≡ "리피트중2-2" ≡ "리피트_중2-2" ≡ "2-2리피트" 동일 시그니처
+    const compact = s.toLowerCase()
+      .replace(/[\s_./\\()[\]]+/g, '')
+      .replace(/[초중고]/g, '');
     const tokens = compact.match(/[가-힣]+|[0-9]+(?:[-][0-9]+)*|[a-z]+/g) || [];
     return tokens.slice().sort().join('|');
   };
