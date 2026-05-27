@@ -447,6 +447,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main content */}
       <div className={cn("min-h-screen pt-14 lg:pt-0 flex flex-col transition-all duration-200", sidebarCollapsed ? "lg:ml-14" : "lg:ml-56")}>
+        <SystemAnnouncementBar />
         <main className="flex-1">
           <div className={cn('mx-auto', isWideWorkspace ? 'max-w-none p-3 lg:p-4' : 'max-w-7xl p-5 lg:p-8')}>
             {isDashboard && (
