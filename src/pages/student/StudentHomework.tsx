@@ -56,10 +56,8 @@ interface HomeworkItem {
   submission_count?: number;
 }
 
-// VOICE-RECORD-V1: Subjects that require/allow voice recording
+// VOICE-RECORD-V1: All subjects support voice recording; 영어 is the only required one
 const VOICE_SUBJECTS = ['영어'];
-// Subjects where voice is optional (shown but not required)
-const VOICE_OPTIONAL_SUBJECTS = ['국어'];
 
 // DEADLINE-V1: Format deadline for display
 function formatDeadline(deadlineAt: string): string {
@@ -175,9 +173,9 @@ export default function StudentHomework() {
     setUploadImages([]);
   };
 
-  // VOICE-RECORD-V1: Check if subject supports voice recording
+  // VOICE-RECORD-V1: All subjects can use voice recording; only English is required
   const showVoiceRecorder = (subject: string): boolean => {
-    return VOICE_SUBJECTS.includes(subject) || VOICE_OPTIONAL_SUBJECTS.includes(subject);
+    return true; // 모든 과목에서 음성 녹음 선택 가능
   };
 
   const isVoiceRequired = (subject: string): boolean => {
