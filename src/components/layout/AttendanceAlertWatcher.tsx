@@ -10,16 +10,20 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { AlertTriangle, Clock, Check, X, BellRing } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface OverdueEntry {
   key: string;          // studentId_room_slotStart
   studentId: string;
   studentName: string;
   roomLabel: string;
+  roomId: string;
   slotStart: string;    // "HH:MM"
   minutesLate: number;
   teacherName?: string;
+  teacherId?: string;
+  escalated?: boolean;
 }
 
 const ROOM_LABELS: Record<string, string> = {
@@ -28,50 +32,63 @@ const ROOM_LABELS: Record<string, string> = {
 };
 
 const ROOM_IDS = ['room10', 'glass'];
-const LATE_THRESHOLD_MIN = 15;
+// Show popup at scheduled start (0), then again at 5min and 10min after if still unmarked.
+const ALERT_TIERS_MIN = [0, 5, 10];
 const POLL_INTERVAL_MS = 60_000;
-const SESSION_KEY = 'attendanceAlertDismissed_v1';
+const SNOOZE_KEY = 'attendanceAlertSnoozeV2';
+const ESCALATED_KEY = 'attendanceAlertEscalatedV1';
 
 function getDayOfWeekKo(d: Date) {
   return ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
 }
 
 function parseSlotToMinutes(slot: string) {
-  // "HH:MM" or "HH:MM:SS"
   const [h, m] = slot.split(':').map((x) => parseInt(x, 10));
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
 }
 
-function loadDismissed(): Set<string> {
+// Snooze: map of entryKey -> epoch ms until which the popup should not auto-open
+function loadDayMap(key: string): Map<string, number> {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as { date: string; keys: string[] };
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return new Map();
+    const parsed = JSON.parse(raw) as { date: string; items: Record<string, number> };
     const today = new Date().toISOString().split('T')[0];
-    if (parsed.date !== today) return new Set();
-    return new Set(parsed.keys);
+    if (parsed.date !== today) return new Map();
+    return new Map(Object.entries(parsed.items));
   } catch {
-    return new Set();
+    return new Map();
   }
 }
-
-function saveDismissed(keys: Set<string>) {
+function saveDayMap(key: string, m: Map<string, number>) {
   const today = new Date().toISOString().split('T')[0];
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ date: today, keys: Array.from(keys) }));
+  sessionStorage.setItem(
+    key,
+    JSON.stringify({ date: today, items: Object.fromEntries(m.entries()) })
+  );
 }
 
 export function AttendanceAlertWatcher() {
   const { user, role } = useAuth();
   const [entries, setEntries] = useState<OverdueEntry[]>([]);
   const [open, setOpen] = useState(false);
-  const dismissedRef = useRef<Set<string>>(loadDismissed());
+  const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
+  const snoozeRef = useRef<Map<string, number>>(loadDayMap(SNOOZE_KEY));
+  const escalatedRef = useRef<Map<string, number>>(loadDayMap(ESCALATED_KEY));
+
+  const setBusy = (key: string, v: boolean) => {
+    setBusyKeys((prev) => {
+      const next = new Set(prev);
+      if (v) next.add(key); else next.delete(key);
+      return next;
+    });
+  };
 
   const check = useCallback(async () => {
     if (!user || (role !== 'admin' && role !== 'teacher')) return;
 
     const now = new Date();
-    // QUIET-HOURS-V1: after 22:00, suppress today's attendance alerts entirely
     if (now.getHours() >= 22) {
       setEntries([]);
       setOpen(false);
@@ -81,7 +98,6 @@ export function AttendanceAlertWatcher() {
     const dayOfWeek = getDayOfWeekKo(now);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-    // Teacher: restrict to own students
     let myStudentIds: Set<string> | null = null;
     if (role === 'teacher') {
       const { data: classes } = await supabase
@@ -100,7 +116,6 @@ export function AttendanceAlertWatcher() {
       }
     }
 
-    // Today's room assignments (fixed by day + ad-hoc by date)
     const { data: assigned } = await supabase
       .from('room_assignments')
       .select('student_ids, student_names, room, slot_start, teacher_id')
@@ -109,7 +124,6 @@ export function AttendanceAlertWatcher() {
         `and(is_fixed.eq.true,day.eq.${dayOfWeek}),and(is_fixed.eq.false,assigned_date.eq.${today})`
       );
 
-    // Today's check-ins
     const { data: logs } = await supabase
       .from('attendance_logs')
       .select('student_id, room_id, checked_in_at')
@@ -122,7 +136,6 @@ export function AttendanceAlertWatcher() {
         .map((l) => `${l.student_id}_${l.room_id}`)
     );
 
-    // Pre-marked absences: attendance table + lesson_records attendance_status for today
     const absentIds = new Set<string>();
     const { data: attRows } = await supabase
       .from('attendance')
@@ -143,7 +156,6 @@ export function AttendanceAlertWatcher() {
       if (tags.some((t) => ABSENCE_TAGS.includes(t))) absentIds.add(r.student_id);
     });
 
-    // Collect overdue
     const overdue: OverdueEntry[] = [];
     const seen = new Set<string>();
     const teacherIdsToLookup = new Set<string>();
@@ -154,16 +166,16 @@ export function AttendanceAlertWatcher() {
       const slotMin = parseSlotToMinutes(slot);
       if (slotMin == null) return;
       const minutesLate = nowMinutes - slotMin;
-      if (minutesLate < LATE_THRESHOLD_MIN) return;
-      // Skip very stale (>4 hours past) to avoid spamming on long-past slots
+      // alert from scheduled time; stop after 4 hours stale
+      if (minutesLate < ALERT_TIERS_MIN[0]) return;
       if (minutesLate > 240) return;
 
       const ids = (a.student_ids ?? []) as string[];
       const names = (a.student_names ?? []) as string[];
       ids.forEach((id, i) => {
         if (myStudentIds && !myStudentIds.has(id)) return;
-        if (absentIds.has(id)) return;                       // pre-marked absent — skip
-        if (checkedIn.has(`${id}_${a.room}`)) return;        // already checked in — skip
+        if (absentIds.has(id)) return;
+        if (checkedIn.has(`${id}_${a.room}`)) return;
         const key = `${id}_${a.room}_${slot}`;
         if (seen.has(key)) return;
         seen.add(key);
@@ -173,13 +185,15 @@ export function AttendanceAlertWatcher() {
           studentId: id,
           studentName: names[i] ?? '이름없음',
           roomLabel: ROOM_LABELS[a.room] ?? a.room,
+          roomId: a.room,
           slotStart: slot.slice(0, 5),
           minutesLate,
+          teacherId: a.teacher_id ?? undefined,
+          escalated: escalatedRef.current.has(key),
         });
       });
     });
 
-    // Resolve teacher names for admin display
     if (role === 'admin' && teacherIdsToLookup.size > 0 && overdue.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
@@ -189,27 +203,24 @@ export function AttendanceAlertWatcher() {
       (profiles ?? []).forEach((p) => {
         nameMap[p.id] = p.full_name || '선생님';
       });
-      const teacherByKey = new Map<string, string>();
-      (assigned ?? []).forEach((a) => {
-        if (!a.teacher_id || !a.slot_start) return;
-        const ids = (a.student_ids ?? []) as string[];
-        ids.forEach((id) => {
-          teacherByKey.set(`${id}_${a.room}_${a.slot_start}`, a.teacher_id as string);
-        });
-      });
       overdue.forEach((o) => {
-        const tId = teacherByKey.get(o.key);
-        if (tId) o.teacherName = nameMap[tId];
+        if (o.teacherId) o.teacherName = nameMap[o.teacherId];
       });
     }
 
-    // Keep dismissed-state filter for the open trigger; always sync visible list
-    const fresh = overdue.filter((o) => !dismissedRef.current.has(o.key));
+    // Auto-open: only if any entry has crossed a new tier that isn't snoozed
+    const nowEpoch = Date.now();
+    const shouldOpen = overdue.some((o) => {
+      const snoozeUntil = snoozeRef.current.get(o.key) ?? 0;
+      if (snoozeUntil > nowEpoch) return false;
+      // entry is past a tier boundary (0/5/10) → open
+      return ALERT_TIERS_MIN.some((t) => o.minutesLate >= t);
+    });
+
     setEntries(overdue);
     if (overdue.length === 0) {
-      // All cleared (checked in / marked absent) → close dialog
       setOpen(false);
-    } else if (fresh.length > 0) {
+    } else if (shouldOpen) {
       setOpen(true);
     }
   }, [user, role]);
@@ -221,16 +232,156 @@ export function AttendanceAlertWatcher() {
     return () => window.clearInterval(id);
   }, [user, role, check]);
 
-  const dismissAll = () => {
-    entries.forEach((e) => dismissedRef.current.add(e.key));
-    saveDismissed(dismissedRef.current);
+  // Admin: listen for escalation notifications and surface as toast popups
+  useEffect(() => {
+    if (!user || role !== 'admin') return;
+    const channel = supabase
+      .channel(`attendance-escalation-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'teacher_notifications',
+          filter: `teacher_id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          const row = payload.new;
+          if (row?.notification_type !== 'attendance_escalation') return;
+          toast.warning(row.title || '출석 미확인 알림', {
+            description: row.message || '',
+            duration: 15000,
+          });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, role]);
+
+  // Snooze popup for 5 minutes (re-emerges at next tier)
+  const snoozeFor = (key: string, minutes: number) => {
+    snoozeRef.current.set(key, Date.now() + minutes * 60_000);
+    saveDayMap(SNOOZE_KEY, snoozeRef.current);
+  };
+  const snoozeAllUntilEndOfDay = () => {
+    const eod = new Date();
+    eod.setHours(23, 59, 59, 999);
+    entries.forEach((e) => snoozeRef.current.set(e.key, eod.getTime()));
+    saveDayMap(SNOOZE_KEY, snoozeRef.current);
+  };
+
+  const handleClose = () => {
+    // Snooze everything 5 min so it pops again at next tier
+    entries.forEach((e) => {
+      const cur = snoozeRef.current.get(e.key) ?? 0;
+      const next = Date.now() + 5 * 60_000;
+      if (next > cur) snoozeRef.current.set(e.key, next);
+    });
+    saveDayMap(SNOOZE_KEY, snoozeRef.current);
     setOpen(false);
+  };
+
+  const handleCheckIn = async (e: OverdueEntry) => {
+    if (!user) return;
+    setBusy(e.key, true);
+    try {
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const { data: existing } = await supabase
+        .from('attendance_logs')
+        .select('id')
+        .eq('student_id', e.studentId)
+        .eq('date', today)
+        .eq('room_id', e.roomId)
+        .maybeSingle();
+      if (existing) {
+        await supabase.from('attendance_logs')
+          .update({ checked_in_at: now.toISOString(), checked_out_at: null })
+          .eq('id', existing.id);
+      } else {
+        await supabase.from('attendance_logs').insert({
+          student_id: e.studentId,
+          room_id: e.roomId,
+          date: today,
+          checked_in_at: now.toISOString(),
+          recorded_by: user.id,
+        });
+      }
+      toast.success(`${e.studentName} 출석 처리되었습니다`);
+      setEntries((prev) => prev.filter((x) => x.key !== e.key));
+      await check();
+    } catch (err) {
+      console.error(err);
+      toast.error('출석 처리 실패');
+    } finally {
+      setBusy(e.key, false);
+    }
+  };
+
+  const handleMarkAbsent = async (e: OverdueEntry) => {
+    setBusy(e.key, true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await supabase.from('attendance').upsert({
+        student_id: e.studentId,
+        att_date: today,
+        status: 'absent',
+      }, { onConflict: 'student_id,att_date' });
+      toast.success(`${e.studentName} 결석 처리되었습니다`);
+      setEntries((prev) => prev.filter((x) => x.key !== e.key));
+      await check();
+    } catch (err) {
+      console.error(err);
+      toast.error('결석 처리 실패 — 권한이 없을 수 있습니다');
+    } finally {
+      setBusy(e.key, false);
+    }
+  };
+
+  const handleEscalate = async (e: OverdueEntry) => {
+    setBusy(e.key, true);
+    try {
+      const { data: admins } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin');
+      const adminIds = (admins ?? []).map((r: any) => r.user_id);
+      if (adminIds.length === 0) {
+        toast.error('원장 계정을 찾을 수 없습니다');
+        return;
+      }
+      const rows = adminIds.map((adminId: string) => ({
+        teacher_id: adminId,
+        student_id: e.studentId,
+        notification_type: 'attendance_escalation',
+        title: `출석 미확인: ${e.studentName} (${e.roomLabel})`,
+        message: `${e.slotStart} 수업 · ${e.minutesLate}분 경과 — 출석 확인 요망`,
+        metadata: {
+          student_id: e.studentId,
+          room: e.roomId,
+          slot_start: e.slotStart,
+          minutes_late: e.minutesLate,
+          reported_by: user?.id,
+        },
+      }));
+      const { error } = await supabase.from('teacher_notifications').insert(rows);
+      if (error) throw error;
+      escalatedRef.current.set(e.key, Date.now());
+      saveDayMap(ESCALATED_KEY, escalatedRef.current);
+      setEntries((prev) => prev.map((x) => x.key === e.key ? { ...x, escalated: true } : x));
+      toast.success('원장님께 알림을 보냈습니다');
+    } catch (err) {
+      console.error(err);
+      toast.error('알림 전송 실패');
+    } finally {
+      setBusy(e.key, false);
+    }
   };
 
   if (entries.length === 0) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) dismissAll(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -238,45 +389,88 @@ export function AttendanceAlertWatcher() {
             미출석 알림 — 출석 확인 요망
           </DialogTitle>
           <DialogDescription>
-            수업 시작 후 {LATE_THRESHOLD_MIN}분이 지났는데 출석 체크가 되지 않은 학생입니다.
+            수업 시작 후 출석 체크가 되지 않은 학생입니다. 바로 처리하거나 5분 후 다시 알려드립니다.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[50vh] overflow-y-auto space-y-2 py-2">
-          {entries.map((e) => (
-            <div
-              key={e.key}
-              className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-semibold text-sm">
-                    {e.studentName}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      ({e.roomLabel})
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {e.slotStart} 수업 · 미출석 · 출석 확인 요망
-                  </div>
-                  {e.teacherName && (
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      담당: {e.teacherName} 선생님
+        <div className="max-h-[60vh] overflow-y-auto space-y-2 py-2">
+          {entries.map((e) => {
+            const busy = busyKeys.has(e.key);
+            const canEscalate = role === 'teacher' && e.minutesLate >= 10 && !e.escalated;
+            return (
+              <div
+                key={e.key}
+                className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm">
+                      {e.studentName}
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        ({e.roomLabel})
+                      </span>
                     </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {e.slotStart} 수업 · 미출석
+                    </div>
+                    {e.teacherName && (
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        담당: {e.teacherName} 선생님
+                      </div>
+                    )}
+                  </div>
+                  <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-destructive/15 text-destructive text-[11px] font-bold px-2 py-1">
+                    <Clock className="w-3 h-3" />
+                    {e.minutesLate}분 경과
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-7 text-xs"
+                    disabled={busy}
+                    onClick={() => handleCheckIn(e)}
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1" /> 출석
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    disabled={busy}
+                    onClick={() => handleMarkAbsent(e)}
+                  >
+                    <X className="w-3.5 h-3.5 mr-1" /> 결석
+                  </Button>
+                  {canEscalate && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 text-xs"
+                      disabled={busy}
+                      onClick={() => handleEscalate(e)}
+                    >
+                      <BellRing className="w-3.5 h-3.5 mr-1" /> 원장님께 알림
+                    </Button>
+                  )}
+                  {e.escalated && (
+                    <span className="inline-flex items-center text-[11px] text-muted-foreground px-1.5">
+                      ✓ 원장님께 알림 전송됨
+                    </span>
                   )}
                 </div>
-                <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-destructive/15 text-destructive text-[11px] font-bold px-2 py-1">
-                  <Clock className="w-3 h-3" />
-                  {e.minutesLate}분 경과
-                </span>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={dismissAll}>
-            확인했습니다
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={handleClose}>
+            5분 후 다시 알림
+          </Button>
+          <Button variant="outline" onClick={() => { snoozeAllUntilEndOfDay(); setOpen(false); }}>
+            오늘 그만 보기
           </Button>
         </DialogFooter>
       </DialogContent>
