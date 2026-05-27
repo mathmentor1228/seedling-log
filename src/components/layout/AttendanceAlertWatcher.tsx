@@ -116,6 +116,13 @@ export function AttendanceAlertWatcher() {
       }
     }
 
+    // Exclude withdrawn/inactive students from popup
+    const { data: activeStudents } = await supabase
+      .from('students')
+      .select('id')
+      .in('enrollment_status', ['재학', '재등원']);
+    const activeStudentIds = new Set((activeStudents ?? []).map((s) => s.id));
+
     const { data: assigned } = await supabase
       .from('room_assignments')
       .select('student_ids, student_names, room, slot_start, teacher_id')
