@@ -56,10 +56,8 @@ interface HomeworkItem {
   submission_count?: number;
 }
 
-// VOICE-RECORD-V1: Subjects that require/allow voice recording
+// VOICE-RECORD-V1: All subjects support voice recording; 영어 is the only required one
 const VOICE_SUBJECTS = ['영어'];
-// Subjects where voice is optional (shown but not required)
-const VOICE_OPTIONAL_SUBJECTS = ['국어'];
 
 // DEADLINE-V1: Format deadline for display
 function formatDeadline(deadlineAt: string): string {
