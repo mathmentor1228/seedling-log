@@ -175,9 +175,9 @@ export default function StudentHomework() {
     setUploadImages([]);
   };
 
-  // VOICE-RECORD-V1: Check if subject supports voice recording
+  // VOICE-RECORD-V1: All subjects can use voice recording; only English is required
   const showVoiceRecorder = (subject: string): boolean => {
-    return VOICE_SUBJECTS.includes(subject) || VOICE_OPTIONAL_SUBJECTS.includes(subject);
+    return true; // 모든 과목에서 음성 녹음 선택 가능
   };
 
   const isVoiceRequired = (subject: string): boolean => {
