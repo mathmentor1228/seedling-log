@@ -103,11 +103,28 @@ function isFuzzyMatch(user: string, candidate: string): boolean {
 
 // Split a meaning string into individual acceptable answers.
 // Supports: , / ; · 、 | ~또는~ and Korean middle dot.
+// Also extracts parenthetical glosses as additional acceptable answers,
+// e.g. "관람객(시청자), 보는 사람" -> ["관람객", "시청자", "보는 사람"].
 function splitMeanings(s: string): string[] {
-  return stripParens(s)
-    .split(/[,/;·、|]|\s또는\s|\sor\s/i)
-    .map(a => a.trim())
-    .filter(a => a.length > 0);
+  const splitter = /[,/;·、|]|\s또는\s|\sor\s/i;
+  const results = new Set<string>();
+  const pushAll = (str: string) => {
+    for (const part of str.split(splitter)) {
+      const t = part.trim();
+      if (t) results.add(t);
+    }
+  };
+  // 1) Pieces with parens removed
+  pushAll(stripParens(s));
+  // 2) Pieces inside parens (treat as alternative meanings)
+  const parenRe = /\(([^)]*)\)|（([^）]*)）/g;
+  let m: RegExpExecArray | null;
+  while ((m = parenRe.exec(s)) !== null) {
+    pushAll(m[1] ?? m[2] ?? '');
+  }
+  // 3) Original raw pieces too (preserve as-is in case parens carry meaning)
+  pushAll(s);
+  return Array.from(results);
 }
 
 function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultStatus {
