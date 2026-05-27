@@ -325,10 +325,21 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
 
   const normalizeStatus = (s: string) => s === '신청' ? '교재신청' : s;
 
+  // 교재명 정규화: 띄어쓰기/언더스코어/순서/기호 차이를 흡수해 동일 교재로 묶는 시그니처
+  // 예) "리피트 2-2", "리피트중2-2", "2-2리피트", "리피트_중2-2" → 동일 시그니처
+  const textbookSignature = (s: string): string => {
+    if (!s) return '';
+    const compact = s.toLowerCase().replace(/[\s_./\\()[\]]+/g, '');
+    const tokens = compact.match(/[가-힣]+|[0-9]+(?:[-][0-9]+)*|[a-z]+/g) || [];
+    return tokens.slice().sort().join('|');
+  };
+
   const groups = useMemo((): TextbookGroup[] => {
-    const map = new Map<string, TextbookGroup>();
+    const map = new Map<string, TextbookGroup & { _nameCounts: Map<string, number> }>();
     orders.forEach(o => {
-      const key = `${o.textbook_name}||${o.subject}||${o.unit_price}`;
+      // 시그니처 + 과목 + 유형으로만 묶음 (단가/세부표기 차이 흡수)
+      const sig = textbookSignature(o.textbook_name);
+      const key = `${sig}||${o.subject}||${o.textbook_type || 'student'}`;
       const status = normalizeStatus(o.status);
       if (!map.has(key)) {
         map.set(key, {
@@ -336,12 +347,15 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
           grade: o.grade || null, category: o.category || null, textbook_type: o.textbook_type || 'student',
           orders: [], totalQty: 0, totalDistributed: 0, status,
           remainingStock: 0, receivedQty: 0,
-        });
+          _nameCounts: new Map(),
+        } as any);
       }
       const g = map.get(key)!;
       g.orders.push({ ...o, status }); g.totalQty += o.quantity; g.totalDistributed += o.distributed_qty || 0;
       if (o.grade) g.grade = o.grade; if (o.category && o.category !== '기타') g.category = o.category;
       if (o.textbook_type === 'teacher') g.textbook_type = 'teacher';
+      // 표시명 후보 집계 (가장 자주 쓰인 표기를 대표명으로)
+      g._nameCounts.set(o.textbook_name, (g._nameCounts.get(o.textbook_name) || 0) + 1);
     });
 
     map.forEach(g => {
@@ -355,6 +369,14 @@ export function TextbookOrderTab({ onNavigateToDistribution }: TextbookOrderTabP
       const receivedOrders = g.orders.filter(o => normalizeStatus(o.status) === '입고완료' && (o.textbook_type || 'student') !== 'teacher');
       g.receivedQty = receivedOrders.reduce((s, o) => s + o.quantity, 0);
       g.remainingStock = Math.max(0, g.receivedQty - receivedOrders.reduce((s, o) => s + (o.distributed_qty || 0), 0));
+      // 대표 표기명: 가장 많이 쓰인 표기 (동률이면 가장 긴 이름)
+      const sorted = Array.from(g._nameCounts.entries()).sort((a, b) => b[1] - a[1] || b[0].length - a[0].length);
+      if (sorted[0]) g.textbook_name = sorted[0][0];
+      // 대표 단가: 가장 자주 쓰인 단가
+      const priceCounts = new Map<number, number>();
+      g.orders.forEach(o => priceCounts.set(o.unit_price, (priceCounts.get(o.unit_price) || 0) + 1));
+      const pSorted = Array.from(priceCounts.entries()).sort((a, b) => b[1] - a[1]);
+      if (pSorted[0]) g.unit_price = pSorted[0][0];
     });
 
     return Array.from(map.values()).sort((a, b) => {
