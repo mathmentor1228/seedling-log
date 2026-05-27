@@ -41,6 +41,7 @@ import { AdminOfficeBell } from '@/components/admin/AdminOfficeBell';
 import { BrandFooter } from '@/components/layout/BrandFooter';
 import { FloatingAttendanceWidget } from '@/components/layout/FloatingAttendanceWidget';
 import { AttendanceAlertWatcher } from '@/components/layout/AttendanceAlertWatcher';
+import { SystemAnnouncementBar } from '@/components/layout/SystemAnnouncementBar';
 
 interface AppLayoutProps {
   children: ReactNode;
