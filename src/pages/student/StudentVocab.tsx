@@ -707,18 +707,45 @@ export default function StudentVocab() {
 
   // Test mode view (existing Korean test - teacher assigned)
   if (testMode) {
+    const perQSec = testLevel === 3 ? 6 : 4;
+    const expectedSec = cards.length * perQSec;
+    const levelDesc = testLevel === 1 ? '3지선다·4초' : testLevel === 2 ? '5지선다·4초' : '주관식·6초';
+    const testLevelLabel = `Lv.${testLevel} (${levelDesc})`;
+    const testScopeLabel = vocabSets
+      .filter(s => selectedSetIds.includes(s.set_id))
+      .map(s => s.set_title)
+      .join(', ');
     return (
       <VocabSelfTest
         words={cards}
         mode={studyType === 'listening' ? 'listening' : mode}
         testLevel={testLevel}
         testTimeLimit={testTimeLimit}
-        onFinish={async (correct, wrong, total) => {
+        levelLabel={testLevelLabel}
+        scopeLabel={testScopeLabel}
+        expectedSeconds={expectedSec}
+        onFinish={async (correct, wrong, total, meta) => {
           const { error } = await studentApi.submitVocabCompletion(
-            selectedSetIds, correct, wrong, total, mode + '_test', false, 'assigned'
+            selectedSetIds, correct, wrong, total, mode + '_test', false, 'assigned',
+            meta ? {
+              startedAt: meta.startedAt,
+              finishedAt: meta.finishedAt,
+              durationSeconds: meta.durationSeconds,
+              expectedSeconds: expectedSec,
+              options: {
+                level: testLevel,
+                per_question_seconds: perQSec,
+                time_limit_seconds: testTimeLimit,
+                word_count: total,
+              },
+            } : undefined
           );
           if (!error) {
-            toast({ title: '테스트 기록 저장 완료! ✅' });
+            const overTime = (meta?.durationSeconds ?? 0) > expectedSec;
+            toast({
+              title: '테스트 기록 저장 완료! ✅',
+              description: meta ? `소요 ${meta.durationSeconds}초 / 기준 ${expectedSec}초${overTime ? ' (초과)' : ''}` : undefined,
+            });
             setCompletions(prev => [{
               id: crypto.randomUUID(),
               word_set_ids: selectedSetIds,
