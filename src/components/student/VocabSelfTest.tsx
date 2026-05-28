@@ -32,6 +32,8 @@ interface VocabSelfTestProps {
   levelLabel?: string;
   /** Display label for scope/range (shown on completion screen). e.g. "Day 1, Day 2" */
   scopeLabel?: string;
+  /** Expected total seconds (shown on completion screen alongside actual duration). */
+  expectedSeconds?: number;
   onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number }) => void;
   onBack: () => void;
 }
