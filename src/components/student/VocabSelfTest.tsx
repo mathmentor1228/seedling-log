@@ -583,6 +583,8 @@ interface FinishedViewProps {
   mode: string;
   levelLabel?: string;
   scopeLabel?: string;
+  durationSeconds?: number | null;
+  expectedSeconds?: number;
   onBack: () => void;
   onRetry: () => void;
 }
@@ -590,9 +592,15 @@ interface FinishedViewProps {
 function FinishedView({
   correctCount, partialCount, wrongCount, totalCount,
   wrongAndPartialWords, filteredReview, reviewFilter, setReviewFilter,
-  mode, levelLabel, scopeLabel, onBack, onRetry,
+  mode, levelLabel, scopeLabel, durationSeconds, expectedSeconds, onBack, onRetry,
 }: FinishedViewProps) {
   const score = Math.round((correctCount / totalCount) * 100);
+  const overTime = durationSeconds != null && expectedSeconds != null && durationSeconds > expectedSeconds;
+  const fmtDuration = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
+  };
   return (
     <div className="space-y-4 p-4 max-w-lg mx-auto">
       <Card>
@@ -600,11 +608,11 @@ function FinishedView({
           <div className="text-4xl">{score >= 80 ? '🎉' : score >= 50 ? '💪' : '📖'}</div>
           <h2 className="text-xl font-bold">테스트 완료!</h2>
 
-          {(levelLabel || scopeLabel) && (
+          {(levelLabel || scopeLabel || durationSeconds != null) && (
             <div className="flex flex-wrap items-center justify-center gap-1.5 px-2">
               {levelLabel && (
                 <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
-                  <span className="opacity-70">레벨</span>
+                  <span className="opacity-70">난이도</span>
                   <span>{levelLabel}</span>
                 </span>
               )}
@@ -612,6 +620,15 @@ function FinishedView({
                 <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-foreground border border-border max-w-full">
                   <span className="opacity-70 shrink-0">범위</span>
                   <span className="truncate">{scopeLabel}</span>
+                </span>
+              )}
+              {durationSeconds != null && (
+                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${overTime ? 'bg-red-500/10 text-red-600 border-red-500/30' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'}`}>
+                  <span className="opacity-70">소요</span>
+                  <span>{fmtDuration(durationSeconds)}</span>
+                  {expectedSeconds != null && (
+                    <span className="opacity-70">/ 기준 {fmtDuration(expectedSeconds)}{overTime ? ' (초과)' : ''}</span>
+                  )}
                 </span>
               )}
             </div>
