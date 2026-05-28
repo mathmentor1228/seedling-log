@@ -32,6 +32,8 @@ interface VocabSelfTestProps {
   levelLabel?: string;
   /** Display label for scope/range (shown on completion screen). e.g. "Day 1, Day 2" */
   scopeLabel?: string;
+  /** Expected total seconds (shown on completion screen alongside actual duration). */
+  expectedSeconds?: number;
   onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number }) => void;
   onBack: () => void;
 }
@@ -176,13 +178,14 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
   return 'wrong';
 }
 
-export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, levelLabel, scopeLabel, onFinish, onBack }: VocabSelfTestProps) {
+export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, levelLabel, scopeLabel, expectedSeconds, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
   const [showResult, setShowResult] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<ResultStatus | null>(null);
   const [finished, setFinished] = useState(false);
+  const [finishedDuration, setFinishedDuration] = useState<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'wrong' | 'partial'>('all');
   const [listeningRevealed, setListeningRevealed] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
@@ -261,6 +264,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
           const wrong = words.length - correct;
           const finishedAt = new Date().toISOString();
           const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
+          setFinishedDuration(duration);
           setFinished(true);
           onFinish(correct, wrong, words.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration });
           return 0;
@@ -317,6 +321,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       const wrong = results.filter(r => r.status !== 'correct').length;
       const finishedAt = new Date().toISOString();
       const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
+      setFinishedDuration(duration);
       setFinished(true);
       onFinish(correct, wrong, words.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration });
     }
@@ -357,6 +362,8 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       mode={mode}
       levelLabel={levelLabel}
       scopeLabel={scopeLabel}
+      durationSeconds={finishedDuration}
+      expectedSeconds={expectedSeconds}
       onBack={onBack}
       onRetry={() => {
         startedAtRef.current = new Date().toISOString();
@@ -366,6 +373,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
         setShowResult(false);
         setCurrentStatus(null);
         setFinished(false);
+        setFinishedDuration(null);
         setReviewFilter('all');
         setListeningRevealed(false);
       }}
@@ -575,6 +583,8 @@ interface FinishedViewProps {
   mode: string;
   levelLabel?: string;
   scopeLabel?: string;
+  durationSeconds?: number | null;
+  expectedSeconds?: number;
   onBack: () => void;
   onRetry: () => void;
 }
@@ -582,9 +592,15 @@ interface FinishedViewProps {
 function FinishedView({
   correctCount, partialCount, wrongCount, totalCount,
   wrongAndPartialWords, filteredReview, reviewFilter, setReviewFilter,
-  mode, levelLabel, scopeLabel, onBack, onRetry,
+  mode, levelLabel, scopeLabel, durationSeconds, expectedSeconds, onBack, onRetry,
 }: FinishedViewProps) {
   const score = Math.round((correctCount / totalCount) * 100);
+  const overTime = durationSeconds != null && expectedSeconds != null && durationSeconds > expectedSeconds;
+  const fmtDuration = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}분 ${sec}초` : `${sec}초`;
+  };
   return (
     <div className="space-y-4 p-4 max-w-lg mx-auto">
       <Card>
@@ -592,11 +608,11 @@ function FinishedView({
           <div className="text-4xl">{score >= 80 ? '🎉' : score >= 50 ? '💪' : '📖'}</div>
           <h2 className="text-xl font-bold">테스트 완료!</h2>
 
-          {(levelLabel || scopeLabel) && (
+          {(levelLabel || scopeLabel || durationSeconds != null) && (
             <div className="flex flex-wrap items-center justify-center gap-1.5 px-2">
               {levelLabel && (
                 <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
-                  <span className="opacity-70">레벨</span>
+                  <span className="opacity-70">난이도</span>
                   <span>{levelLabel}</span>
                 </span>
               )}
@@ -604,6 +620,15 @@ function FinishedView({
                 <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-foreground border border-border max-w-full">
                   <span className="opacity-70 shrink-0">범위</span>
                   <span className="truncate">{scopeLabel}</span>
+                </span>
+              )}
+              {durationSeconds != null && (
+                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${overTime ? 'bg-red-500/10 text-red-600 border-red-500/30' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'}`}>
+                  <span className="opacity-70">소요</span>
+                  <span>{fmtDuration(durationSeconds)}</span>
+                  {expectedSeconds != null && (
+                    <span className="opacity-70">/ 기준 {fmtDuration(expectedSeconds)}{overTime ? ' (초과)' : ''}</span>
+                  )}
                 </span>
               )}
             </div>

@@ -520,6 +520,55 @@ export default function StudentVocab() {
                 </Card>
               )}
 
+              {/* Test mode settings (student-overridable) */}
+              {(studyType === 'test' || studyType === 'listening') && (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardContent className="pt-3 pb-3 space-y-3">
+                    <p className="text-xs font-medium flex items-center gap-1.5">
+                      <Settings2 className="w-3.5 h-3.5 text-primary" />
+                      테스트 설정 {activeTestAssignment ? '(선생님 설정 변경 가능)' : ''}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">난이도(문항당 시간)</Label>
+                        <Select value={String(testLevel)} onValueChange={v => setTestLevel(Number(v))}>
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">Lv.1 · 3지선다 · 4초</SelectItem>
+                            <SelectItem value="2">Lv.2 · 5지선다 · 4초</SelectItem>
+                            <SelectItem value="3">Lv.3 · 주관식 · 6초</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">전체 제한시간</Label>
+                        <Select
+                          value={testTimeLimit ? String(testTimeLimit) : 'none'}
+                          onValueChange={v => setTestTimeLimit(v === 'none' ? null : Number(v))}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">제한 없음</SelectItem>
+                            <SelectItem value="60">1분</SelectItem>
+                            <SelectItem value="120">2분</SelectItem>
+                            <SelectItem value="180">3분</SelectItem>
+                            <SelectItem value="300">5분</SelectItem>
+                            <SelectItem value="600">10분</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      ⏱ 완료 후 난이도와 소요 시간이 결과 화면에 함께 표시됩니다.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
               <Button
                 onClick={startFlashcards}
                 disabled={selectedSetIds.length === 0 || (studyType === 'self_test' && !selfModeEK && !selfModeKE && !selfModeListen)}
@@ -658,18 +707,45 @@ export default function StudentVocab() {
 
   // Test mode view (existing Korean test - teacher assigned)
   if (testMode) {
+    const perQSec = testLevel === 3 ? 6 : 4;
+    const expectedSec = cards.length * perQSec;
+    const levelDesc = testLevel === 1 ? '3지선다·4초' : testLevel === 2 ? '5지선다·4초' : '주관식·6초';
+    const testLevelLabel = `Lv.${testLevel} (${levelDesc})`;
+    const testScopeLabel = vocabSets
+      .filter(s => selectedSetIds.includes(s.set_id))
+      .map(s => s.set_title)
+      .join(', ');
     return (
       <VocabSelfTest
         words={cards}
         mode={studyType === 'listening' ? 'listening' : mode}
         testLevel={testLevel}
         testTimeLimit={testTimeLimit}
-        onFinish={async (correct, wrong, total) => {
+        levelLabel={testLevelLabel}
+        scopeLabel={testScopeLabel}
+        expectedSeconds={expectedSec}
+        onFinish={async (correct, wrong, total, meta) => {
           const { error } = await studentApi.submitVocabCompletion(
-            selectedSetIds, correct, wrong, total, mode + '_test', false, 'assigned'
+            selectedSetIds, correct, wrong, total, mode + '_test', false, 'assigned',
+            meta ? {
+              startedAt: meta.startedAt,
+              finishedAt: meta.finishedAt,
+              durationSeconds: meta.durationSeconds,
+              expectedSeconds: expectedSec,
+              options: {
+                level: testLevel,
+                per_question_seconds: perQSec,
+                time_limit_seconds: testTimeLimit,
+                word_count: total,
+              },
+            } : undefined
           );
           if (!error) {
-            toast({ title: '테스트 기록 저장 완료! ✅' });
+            const overTime = (meta?.durationSeconds ?? 0) > expectedSec;
+            toast({
+              title: '테스트 기록 저장 완료! ✅',
+              description: meta ? `소요 ${meta.durationSeconds}초 / 기준 ${expectedSec}초${overTime ? ' (초과)' : ''}` : undefined,
+            });
             setCompletions(prev => [{
               id: crypto.randomUUID(),
               word_set_ids: selectedSetIds,
