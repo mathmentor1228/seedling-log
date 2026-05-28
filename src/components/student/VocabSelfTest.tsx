@@ -178,13 +178,14 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
   return 'wrong';
 }
 
-export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, levelLabel, scopeLabel, onFinish, onBack }: VocabSelfTestProps) {
+export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, levelLabel, scopeLabel, expectedSeconds, onFinish, onBack }: VocabSelfTestProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
   const [showResult, setShowResult] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<ResultStatus | null>(null);
   const [finished, setFinished] = useState(false);
+  const [finishedDuration, setFinishedDuration] = useState<number | null>(null);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'wrong' | 'partial'>('all');
   const [listeningRevealed, setListeningRevealed] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
