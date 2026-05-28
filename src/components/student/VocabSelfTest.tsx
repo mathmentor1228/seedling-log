@@ -362,6 +362,8 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       mode={mode}
       levelLabel={levelLabel}
       scopeLabel={scopeLabel}
+      durationSeconds={finishedDuration}
+      expectedSeconds={expectedSeconds}
       onBack={onBack}
       onRetry={() => {
         startedAtRef.current = new Date().toISOString();
@@ -371,6 +373,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
         setShowResult(false);
         setCurrentStatus(null);
         setFinished(false);
+        setFinishedDuration(null);
         setReviewFilter('all');
         setListeningRevealed(false);
       }}
