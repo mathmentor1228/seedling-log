@@ -98,23 +98,10 @@ export function AttendanceAlertWatcher() {
     const dayOfWeek = getDayOfWeekKo(now);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-    let myStudentIds: Set<string> | null = null;
-    if (role === 'teacher') {
-      const { data: classes } = await supabase
-        .from('classes')
-        .select('id')
-        .eq('teacher_id', user.id);
-      const classIds = (classes ?? []).map((c) => c.id);
-      if (classIds.length === 0) {
-        myStudentIds = new Set();
-      } else {
-        const { data: cs } = await supabase
-          .from('class_students')
-          .select('student_id')
-          .in('class_id', classIds);
-        myStudentIds = new Set((cs ?? []).map((r) => r.student_id));
-      }
-    }
+    // ATT-ALERT-TEACHER-SCOPE-V2: For teachers, scope strictly to their OWN assignments
+    // (room_assignments.teacher_id === user.id) rather than "any student in any of teacher's classes".
+    // This ensures the popup only shows children that belong to this teacher's actual timetable today.
+    const teacherOnlyOwnSlots = role === 'teacher';
 
     // Exclude withdrawn/inactive students from popup
     const { data: activeStudents } = await supabase
