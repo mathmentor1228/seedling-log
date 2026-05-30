@@ -3502,7 +3502,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                         .delete()
                                         .eq('schedule_id', schedId)
                                         .eq('original_date', todayKST);
-                                      await fetchTodaySlots();
+                                      await refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
                                       toast({ title: '변경 취소됨', description: '원래 일정으로 복원되었습니다' });
                                     } catch (err) {
                                       console.error('Error reverting override:', err);
