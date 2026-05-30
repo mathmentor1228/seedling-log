@@ -224,7 +224,20 @@ export function AttendanceAlertWatcher() {
     if (!user || (role !== 'admin' && role !== 'teacher')) return;
     check();
     const id = window.setInterval(check, POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
+
+    // ATT-ALERT-REALTIME-V1: re-check immediately when the timetable / attendance changes
+    const ch = supabase
+      .channel(`att-alert-watch-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_assignments' }, () => { check(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'class_schedules' }, () => { check(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { check(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { check(); })
+      .subscribe();
+
+    return () => {
+      window.clearInterval(id);
+      supabase.removeChannel(ch);
+    };
   }, [user, role, check]);
 
   // Admin: listen for escalation notifications and surface as toast popups
