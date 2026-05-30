@@ -3502,7 +3502,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                         .delete()
                                         .eq('schedule_id', schedId)
                                         .eq('original_date', todayKST);
-                                      await fetchTodaySlots();
+                                      await refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
                                       toast({ title: '변경 취소됨', description: '원래 일정으로 복원되었습니다' });
                                     } catch (err) {
                                       console.error('Error reverting override:', err);
@@ -3926,8 +3926,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           originalStartTime={overrideModalContext.originalStartTime}
           originalEndTime={overrideModalContext.originalEndTime}
           onSuccess={async () => {
-            await fetchTodaySlots();
-            if (isAdmin(role)) await fetchAdminRosterData();
+            await refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
           }}
         />
       )}
@@ -3950,8 +3949,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           className={batchTestContext.className}
           date={getTodayKST()}
           onSaved={async () => {
-            if (isAdmin(role)) await fetchAdminRosterData();
-            else await fetchTodaySlots();
+            await refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
           }}
         />
       )}

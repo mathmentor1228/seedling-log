@@ -98,23 +98,10 @@ export function AttendanceAlertWatcher() {
     const dayOfWeek = getDayOfWeekKo(now);
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-    let myStudentIds: Set<string> | null = null;
-    if (role === 'teacher') {
-      const { data: classes } = await supabase
-        .from('classes')
-        .select('id')
-        .eq('teacher_id', user.id);
-      const classIds = (classes ?? []).map((c) => c.id);
-      if (classIds.length === 0) {
-        myStudentIds = new Set();
-      } else {
-        const { data: cs } = await supabase
-          .from('class_students')
-          .select('student_id')
-          .in('class_id', classIds);
-        myStudentIds = new Set((cs ?? []).map((r) => r.student_id));
-      }
-    }
+    // ATT-ALERT-TEACHER-SCOPE-V2: For teachers, scope strictly to their OWN assignments
+    // (room_assignments.teacher_id === user.id) rather than "any student in any of teacher's classes".
+    // This ensures the popup only shows children that belong to this teacher's actual timetable today.
+    const teacherOnlyOwnSlots = role === 'teacher';
 
     // Exclude withdrawn/inactive students from popup
     const { data: activeStudents } = await supabase
@@ -181,7 +168,7 @@ export function AttendanceAlertWatcher() {
       const names = (a.student_names ?? []) as string[];
       ids.forEach((id, i) => {
         if (!activeStudentIds.has(id)) return;
-        if (myStudentIds && !myStudentIds.has(id)) return;
+        if (teacherOnlyOwnSlots && a.teacher_id !== user.id) return;
         if (absentIds.has(id)) return;
         if (checkedIn.has(`${id}_${a.room}`)) return;
         const key = `${id}_${a.room}_${slot}`;
@@ -237,7 +224,20 @@ export function AttendanceAlertWatcher() {
     if (!user || (role !== 'admin' && role !== 'teacher')) return;
     check();
     const id = window.setInterval(check, POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
+
+    // ATT-ALERT-REALTIME-V1: re-check immediately when the timetable / attendance changes
+    const ch = supabase
+      .channel(`att-alert-watch-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_assignments' }, () => { check(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'class_schedules' }, () => { check(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { check(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { check(); })
+      .subscribe();
+
+    return () => {
+      window.clearInterval(id);
+      supabase.removeChannel(ch);
+    };
   }, [user, role, check]);
 
   // Admin: listen for escalation notifications and surface as toast popups
@@ -315,7 +315,7 @@ export function AttendanceAlertWatcher() {
           recorded_by: user.id,
         });
       }
-      toast.success(`${e.studentName} 출석 처리되었습니다`);
+      toast.success(`${e.studentName} 출석 처리`, { description: `${e.slotStart} ${e.roomLabel}` });
       setEntries((prev) => prev.filter((x) => x.key !== e.key));
       await check();
     } catch (err) {
@@ -335,7 +335,7 @@ export function AttendanceAlertWatcher() {
         att_date: today,
         status: 'absent',
       }, { onConflict: 'student_id,att_date' });
-      toast.success(`${e.studentName} 결석 처리되었습니다`);
+      toast.success(`${e.studentName} 결석 처리`, { description: `${e.slotStart} ${e.roomLabel}` });
       setEntries((prev) => prev.filter((x) => x.key !== e.key));
       await check();
     } catch (err) {
