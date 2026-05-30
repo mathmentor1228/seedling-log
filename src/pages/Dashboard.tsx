@@ -3926,8 +3926,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           originalStartTime={overrideModalContext.originalStartTime}
           originalEndTime={overrideModalContext.originalEndTime}
           onSuccess={async () => {
-            await fetchTodaySlots();
-            if (isAdmin(role)) await fetchAdminRosterData();
+            await refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
           }}
         />
       )}
