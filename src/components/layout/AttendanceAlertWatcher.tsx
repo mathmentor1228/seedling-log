@@ -168,7 +168,7 @@ export function AttendanceAlertWatcher() {
       const names = (a.student_names ?? []) as string[];
       ids.forEach((id, i) => {
         if (!activeStudentIds.has(id)) return;
-        if (myStudentIds && !myStudentIds.has(id)) return;
+        if (teacherOnlyOwnSlots && a.teacher_id !== user.id) return;
         if (absentIds.has(id)) return;
         if (checkedIn.has(`${id}_${a.room}`)) return;
         const key = `${id}_${a.room}_${slot}`;
