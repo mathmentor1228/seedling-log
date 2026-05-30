@@ -3949,8 +3949,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           className={batchTestContext.className}
           date={getTodayKST()}
           onSaved={async () => {
-            if (isAdmin(role)) await fetchAdminRosterData();
-            else await fetchTodaySlots();
+            await refreshDashboardRosterData({ includeAttendance: isAdmin(role) });
           }}
         />
       )}
