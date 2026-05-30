@@ -335,7 +335,7 @@ export function AttendanceAlertWatcher() {
         att_date: today,
         status: 'absent',
       }, { onConflict: 'student_id,att_date' });
-      toast.success(`${e.studentName} 결석 처리되었습니다`);
+      toast.success(`${e.studentName} 결석 처리`, { description: `${e.slotStart} ${e.roomLabel}` });
       setEntries((prev) => prev.filter((x) => x.key !== e.key));
       await check();
     } catch (err) {
