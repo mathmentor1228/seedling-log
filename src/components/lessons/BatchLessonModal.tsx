@@ -1536,6 +1536,23 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             {/* Test Fields */}
             <FieldToggleBlock field="test_fields" active={activeFields.has('test_fields')} onToggle={() => toggleField('test_fields')}>
               <div className="space-y-2">
+                {/* SYNC-TESTRECORDS-V1: Pull existing test_records into each selected student's lesson record */}
+                <div className="flex items-center justify-between gap-2 p-2 rounded-md border border-primary/30 bg-primary/5">
+                  <div className="text-[11px] text-muted-foreground leading-tight">
+                    선택한 학생의 <b>{searchDate}</b> 테스트 기록(같은 과목)을 자동으로 일지에 채워넣습니다.
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    className="h-7 gap-1 text-xs shrink-0"
+                    onClick={syncTestResultsFromTestRecords}
+                    disabled={syncingTests || selectedDraftsList.length === 0}
+                  >
+                    {syncingTests ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                    테스트 결과 연동
+                  </Button>
+                </div>
                 <PerStudentToggle checked={usePerStudentTest} onChange={setUsePerStudentTest} />
                 {usePerStudentTest ? (
                   <PerStudentContainer>
@@ -1547,6 +1564,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                           className="h-8 text-sm"
                           placeholder="테스트 내용"
                         />
+                        {d.test_result_text && (
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            점수: {d.test_result_text} {d.test_result === 'pass' ? '· 통과' : d.test_result === 'fail' ? '· 불통과' : ''}
+                          </div>
+                        )}
                       </StudentBlock>
                     ))}
                   </PerStudentContainer>
@@ -1555,6 +1577,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                 )}
               </div>
             </FieldToggleBlock>
+
 
             {/* Notes / Memo */}
             <FieldToggleBlock field="notes" active={activeFields.has('notes')} onToggle={() => toggleField('notes')}>
