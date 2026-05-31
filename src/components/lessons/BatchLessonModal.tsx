@@ -714,19 +714,66 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
     setSyncingTests(true);
     try {
       const studentIds = Array.from(new Set(targets.map(d => d.student_id)));
-      const { data: testRows, error: trErr } = await supabase
-        .from('test_records')
-        .select('id, student_id, subject, content, score, passed, test_date, created_at')
-        .in('student_id', studentIds)
-        .eq('test_date', searchDate)
-        .order('created_at', { ascending: false });
-      if (trErr) throw trErr;
 
-      // Pick latest test_record per (student_id, subject)
-      const latestMap = new Map<string, any>();
+      // SYNC-TESTRECORDS-V2: Pull from BOTH test_records AND lesson_records on the same date.
+      // test_records: created via UnifiedRecordModal/TestTab
+      // lesson_records: tests entered via BatchTestInputModal write directly into test_content/test_result_text
+      const [{ data: testRows, error: trErr }, { data: lessonTestRows, error: lrErr }] = await Promise.all([
+        supabase
+          .from('test_records')
+          .select('id, student_id, subject, content, score, passed, test_date, created_at')
+          .in('student_id', studentIds)
+          .eq('test_date', searchDate)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('lesson_records')
+          .select('id, student_id, subject, test_content, test_name, test_title, test_result_text, test_result, english_pass_fail, updated_at, lesson_date')
+          .in('student_id', studentIds)
+          .eq('lesson_date', searchDate)
+          .or('test_content.neq.,test_name.neq.,test_title.neq.,test_result_text.neq.')
+          .order('updated_at', { ascending: false }),
+      ]);
+      if (trErr) throw trErr;
+      if (lrErr) throw lrErr;
+
+      // Build latest map per (student_id, subject). Prefer the most recent across both sources.
+      type SyncSource = { content: string; scoreText: string | null; result: 'pass' | 'fail' | 'none'; ts: number };
+      const latestMap = new Map<string, SyncSource>();
+
       for (const r of testRows || []) {
         const key = `${r.student_id}::${r.subject}`;
-        if (!latestMap.has(key)) latestMap.set(key, r);
+        const content = (r.content || '').toString().trim();
+        if (!content && r.score == null && r.passed == null) continue;
+        const cand: SyncSource = {
+          content,
+          scoreText: r.score != null ? String(r.score) : null,
+          result: r.passed === true ? 'pass' : r.passed === false ? 'fail' : 'none',
+          ts: new Date(r.created_at || 0).getTime(),
+        };
+        const cur = latestMap.get(key);
+        if (!cur || cand.ts > cur.ts) latestMap.set(key, cand);
+      }
+
+      const draftIdSet = new Set(targets.map(d => d.id));
+      for (const r of lessonTestRows || []) {
+        const key = `${r.student_id}::${r.subject}`;
+        const content = ((r.test_content || r.test_name || r.test_title) || '').toString().trim();
+        if (!content && !r.test_result_text && (!r.test_result || r.test_result === 'none')) continue;
+        const ts = new Date(r.updated_at || 0).getTime();
+        // Skip if this row is the draft itself AND map already has a richer source.
+        // Otherwise still consider it (useful when the draft already has test data, but we don't overwrite later).
+        const cand: SyncSource = {
+          content,
+          scoreText: r.test_result_text || null,
+          result: (r.test_result === 'pass' || r.test_result === 'fail') ? r.test_result : 'none',
+          ts,
+        };
+        const cur = latestMap.get(key);
+        if (!cur || cand.ts > cur.ts) latestMap.set(key, cand);
+        // Don't let the draft itself act as a self-source if it's empty — already filtered above.
+        if (draftIdSet.has(r.id) && !content && !cand.scoreText && cand.result === 'none') {
+          // no-op
+        }
       }
 
       let updatedCount = 0;
@@ -736,29 +783,29 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
       for (const draft of targets) {
         const key = `${draft.student_id}::${draft.subject}`;
-        const tr = latestMap.get(key);
-        if (!tr) { skippedCount++; continue; }
-
-        const resultEnum: 'pass' | 'fail' | 'none' = tr.passed === true ? 'pass' : tr.passed === false ? 'fail' : 'none';
-        const content = (tr.content || '').toString();
-        const scoreText = tr.score != null ? String(tr.score) : null;
+        const src = latestMap.get(key);
+        if (!src || (!src.content && !src.scoreText && src.result === 'none')) { skippedCount++; continue; }
 
         const { error: rpcErr } = await supabase.rpc('update_lesson_test_fields', {
           _lesson_id: draft.id,
-          _test_content: content,
-          _test_name: content,
-          _test_result_text: scoreText,
-          _test_result: resultEnum,
+          _test_content: src.content,
+          _test_name: src.content,
+          _test_result_text: src.scoreText,
+          _test_result: src.result,
           _test_date: searchDate,
         });
-        if (rpcErr) { skippedCount++; continue; }
+        if (rpcErr) {
+          console.error('[sync] update_lesson_test_fields error:', rpcErr);
+          skippedCount++;
+          continue;
+        }
 
         // Ensure lesson_types includes '테스트' + sync english_pass_fail for 영어
         const currentTypes: string[] = draft.lesson_types || [];
         const nextTypes = currentTypes.includes('테스트') ? currentTypes : [...currentTypes, '테스트'];
         const updatePayload: Record<string, any> = { lesson_types: nextTypes };
         if (draft.subject === '영어') {
-          updatePayload.english_pass_fail = resultEnum === 'pass' ? 'pass' : resultEnum === 'fail' ? 'fail' : null;
+          updatePayload.english_pass_fail = src.result === 'pass' ? 'pass' : src.result === 'fail' ? 'fail' : null;
         }
         await supabase.from('lesson_records').update(updatePayload).eq('id', draft.id);
 
@@ -767,14 +814,14 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
         if (idx >= 0) {
           updatedDrafts[idx] = {
             ...updatedDrafts[idx],
-            test_content: content,
-            test_name: content,
-            test_result: resultEnum,
-            test_result_text: scoreText,
+            test_content: src.content,
+            test_name: src.content,
+            test_result: src.result,
+            test_result_text: src.scoreText,
             lesson_types: nextTypes,
           };
         }
-        newPerTest[draft.id] = content;
+        newPerTest[draft.id] = src.content;
         updatedCount++;
       }
 
@@ -782,12 +829,15 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       setPerStudentTest(newPerTest);
 
       toast({
-        title: '테스트 결과 연동 완료',
-        description: `${updatedCount}명 적용${skippedCount > 0 ? ` · ${skippedCount}명 매칭 없음` : ''}`,
+        title: updatedCount > 0 ? '테스트 결과 연동 완료' : '연동할 테스트가 없습니다',
+        description: updatedCount > 0
+          ? `${updatedCount}명 적용${skippedCount > 0 ? ` · ${skippedCount}명 매칭 없음` : ''}`
+          : `${searchDate}에 등록된 테스트 기록(test_records / 일괄테스트입력)을 찾지 못했습니다. 날짜와 과목을 확인해주세요.`,
+        variant: updatedCount > 0 ? 'default' : 'destructive',
       });
       onSaved?.();
     } catch (err: any) {
-      console.error(err);
+      console.error('[sync] failed:', err);
       toast({ title: '연동 실패', description: err.message, variant: 'destructive' });
     } finally {
       setSyncingTests(false);
