@@ -701,6 +701,100 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
   const selectedDraftsList = useMemo(() => drafts.filter(d => selectedIds.has(d.id)), [drafts, selectedIds]);
 
+  // SYNC-TESTRECORDS-V1: For selected drafts on searchDate, pull matching test_records
+  // (same student + subject + date) and write content/score/passed into each lesson_record's
+  // test fields. Also marks lesson_types to include '테스트' and sets english_pass_fail for 영어.
+  async function syncTestResultsFromTestRecords() {
+    if (!user) return;
+    const targets = drafts.filter(d => selectedIds.has(d.id));
+    if (targets.length === 0) {
+      toast({ title: '학생을 먼저 선택해주세요', variant: 'destructive' });
+      return;
+    }
+    setSyncingTests(true);
+    try {
+      const studentIds = Array.from(new Set(targets.map(d => d.student_id)));
+      const { data: testRows, error: trErr } = await supabase
+        .from('test_records')
+        .select('id, student_id, subject, content, score, passed, test_date, created_at')
+        .in('student_id', studentIds)
+        .eq('test_date', searchDate)
+        .order('created_at', { ascending: false });
+      if (trErr) throw trErr;
+
+      // Pick latest test_record per (student_id, subject)
+      const latestMap = new Map<string, any>();
+      for (const r of testRows || []) {
+        const key = `${r.student_id}::${r.subject}`;
+        if (!latestMap.has(key)) latestMap.set(key, r);
+      }
+
+      let updatedCount = 0;
+      let skippedCount = 0;
+      const updatedDrafts = [...drafts];
+      const newPerTest: Record<string, string> = { ...perStudentTest };
+
+      for (const draft of targets) {
+        const key = `${draft.student_id}::${draft.subject}`;
+        const tr = latestMap.get(key);
+        if (!tr) { skippedCount++; continue; }
+
+        const resultEnum: 'pass' | 'fail' | 'none' = tr.passed === true ? 'pass' : tr.passed === false ? 'fail' : 'none';
+        const content = (tr.content || '').toString();
+        const scoreText = tr.score != null ? String(tr.score) : null;
+
+        const { error: rpcErr } = await supabase.rpc('update_lesson_test_fields', {
+          _lesson_id: draft.id,
+          _test_content: content,
+          _test_name: content,
+          _test_result_text: scoreText,
+          _test_result: resultEnum,
+          _test_date: searchDate,
+        });
+        if (rpcErr) { skippedCount++; continue; }
+
+        // Ensure lesson_types includes '테스트' + sync english_pass_fail for 영어
+        const currentTypes: string[] = draft.lesson_types || [];
+        const nextTypes = currentTypes.includes('테스트') ? currentTypes : [...currentTypes, '테스트'];
+        const updatePayload: Record<string, any> = { lesson_types: nextTypes };
+        if (draft.subject === '영어') {
+          updatePayload.english_pass_fail = resultEnum === 'pass' ? 'pass' : resultEnum === 'fail' ? 'fail' : null;
+        }
+        await supabase.from('lesson_records').update(updatePayload).eq('id', draft.id);
+
+        // Update local state
+        const idx = updatedDrafts.findIndex(d => d.id === draft.id);
+        if (idx >= 0) {
+          updatedDrafts[idx] = {
+            ...updatedDrafts[idx],
+            test_content: content,
+            test_name: content,
+            test_result: resultEnum,
+            test_result_text: scoreText,
+            lesson_types: nextTypes,
+          };
+        }
+        newPerTest[draft.id] = content;
+        updatedCount++;
+      }
+
+      setDrafts(updatedDrafts);
+      setPerStudentTest(newPerTest);
+
+      toast({
+        title: '테스트 결과 연동 완료',
+        description: `${updatedCount}명 적용${skippedCount > 0 ? ` · ${skippedCount}명 매칭 없음` : ''}`,
+      });
+      onSaved?.();
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '연동 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setSyncingTests(false);
+    }
+  }
+
+
   // HW-CHECK-INLINE-SAVE-V1: Save a single previous-homework check inline (mirrors LessonRecordForm.handleSaveHomeworkCheckForItem).
   // This updates homework_assignments + lesson_records.homework_status for the matching draft,
   // and awards/deducts points the same way the individual form does. The dashboard one-line
