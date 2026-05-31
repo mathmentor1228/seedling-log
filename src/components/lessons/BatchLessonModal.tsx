@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayKST } from '@/lib/utils';
-import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight, CheckCircle2, Clock, XCircle, PackageX, Frown, HelpCircle } from 'lucide-react';
+import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight, CheckCircle2, Clock, XCircle, PackageX, Frown, HelpCircle, Link2 } from 'lucide-react';
 
 // HW-CHECK-BTN-OPTIONS-V1: mirror LessonRecordForm.HOMEWORK_RESULT_OPTIONS so the batch
 // per-item homework check UI looks/behaves the same as the individual lesson form.
