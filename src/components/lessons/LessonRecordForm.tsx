@@ -2270,16 +2270,18 @@ export function LessonRecordForm({
                   id={`form_attendance_${opt.value}`}
                   checked={formData.attendance_status.includes(opt.value)}
                   onCheckedChange={(checked) => {
-                    if (checked) {
-                      const newStatus = [...formData.attendance_status, opt.value];
-                      setFormData({ ...formData, attendance_status: newStatus });
-                      // ABSENCE-SUPPLEMENT-V1: Prompt for supplementary scheduling on absence
-                      if (ABSENCE_STATUSES.includes(opt.value)) {
-                        setSupplementDate('');
-                        setSupplementTime('');
-                        setShowAbsenceSupplementDialog(true);
-                      }
-                    } else {
+                  if (checked) {
+                    const newStatus = [...formData.attendance_status, opt.value];
+                    setFormData({ ...formData, attendance_status: newStatus });
+                    // ABSENCE-SUPPLEMENT-V1: Prompt for supplementary scheduling on absence
+                    if (ABSENCE_STATUSES.includes(opt.value)) {
+                      setSupplementDate('');
+                      setSupplementTime('');
+                      setShowAbsenceSupplementDialog(true);
+                      // ABSENCE-AUTO-CARRY-V1: Auto carry-forward unchecked homework on absence
+                      void autoCarryForwardOnAbsence();
+                    }
+                  } else {
                       const newStatus = formData.attendance_status.filter(s => s !== opt.value);
                       setFormData({ ...formData, attendance_status: newStatus.length === 0 ? ['정상등원'] : newStatus });
                     }
