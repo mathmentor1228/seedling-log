@@ -1519,6 +1519,69 @@ export function LessonRecordForm({
     }
   };
 
+  // ABSENCE-AUTO-CARRY-V1: When absence is marked, auto carry-forward all unchecked previous homeworks
+  // to the next calendar day, mark originals as checked (unable_to_verify) with a 결석 reason note.
+  const autoCarryForwardOnAbsence = async () => {
+    if (isViewMode || !user) return;
+    if (!formData.student_id || !formData.subject) return;
+    try {
+      const pool: HomeworkAssignment[] = [];
+      const seen = new Set<string>();
+      for (const h of allPreviousHomeworks || []) {
+        if (h && h.check_status !== 'checked' && !seen.has(h.id)) { pool.push(h); seen.add(h.id); }
+      }
+      if (previousHomework && previousHomework.check_status !== 'checked' && !seen.has(previousHomework.id)) {
+        pool.push(previousHomework); seen.add(previousHomework.id);
+      }
+      if (pool.length === 0) return;
+
+      const base = new Date(formData.lesson_date || getTodayKST());
+      base.setDate(base.getDate() + 1);
+      const nextDate = format(base, 'yyyy-MM-dd');
+      const reasonLabel = '결석';
+      const carryNote = `[이월사유: ${reasonLabel}] 결석으로 다음시간 검사예정으로 이월`;
+
+      let carried = 0;
+      for (const hwItem of pool) {
+        const contentWithReason = `[${reasonLabel}이월] ${hwItem.content}`;
+        const { data: dup } = await supabase
+          .from('homework_assignments')
+          .select('id')
+          .eq('student_id', hwItem.student_id)
+          .eq('subject', hwItem.subject as any)
+          .eq('assigned_date', nextDate)
+          .eq('content', contentWithReason)
+          .maybeSingle();
+        if (!dup) {
+          await supabase.from('homework_assignments').insert({
+            student_id: hwItem.student_id,
+            subject: hwItem.subject as any,
+            content: contentWithReason,
+            assigned_date: nextDate,
+            homework_type: 'regular',
+            created_by: user.id,
+          });
+        }
+        await supabase.from('homework_assignments').update({
+          check_status: 'checked',
+          checked_by: user.id,
+          checked_at: new Date().toISOString(),
+          result: 'unable_to_verify',
+          notes: carryNote,
+        }).eq('id', hwItem.id);
+        carried++;
+      }
+
+      if (carried > 0) {
+        toast({ title: '결석 → 숙제 자동 이월', description: `${carried}건을 ${nextDate}로 이월했습니다.` });
+        await fetchPreviousLesson(formData.student_id, formData.subject, formData.lesson_date);
+      }
+    } catch (err: any) {
+      console.error('[ABSENCE-AUTO-CARRY] failed:', err);
+      toast({ title: '숙제 자동 이월 실패', description: err.message, variant: 'destructive' });
+    }
+  };
+
   // MULTI-HW-V1: Save homework check for a specific homework item
   const handleSaveHomeworkCheckForItem = async (hwItem: HomeworkAssignment, checkResult: string, checkNotes: string) => {
     if (isViewMode) return;
