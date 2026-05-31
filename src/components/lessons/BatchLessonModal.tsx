@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { getTodayKST } from '@/lib/utils';
-import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight, CheckCircle2, Clock, XCircle, PackageX, Frown, HelpCircle } from 'lucide-react';
+import { Users, Search, Loader2, Save, Send, Plus, Trash2, CheckSquare, ArrowRight, CheckCircle2, Clock, XCircle, PackageX, Frown, HelpCircle, Link2 } from 'lucide-react';
 
 // HW-CHECK-BTN-OPTIONS-V1: mirror LessonRecordForm.HOMEWORK_RESULT_OPTIONS so the batch
 // per-item homework check UI looks/behaves the same as the individual lesson form.
@@ -216,6 +216,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentPrevHwNotes, setPerStudentPrevHwNotes] = useState<Record<string, Record<string, string>>>({});
   // HW-CHECK-INLINE-SAVE-V1: track per-item inline saving state for batch homework check
   const [savingHwItemId, setSavingHwItemId] = useState<string | null>(null);
+  // SYNC-TESTRECORDS-V1: Pull test results from test_records into each selected student's lesson record
+  const [syncingTests, setSyncingTests] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -698,6 +700,100 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   }
 
   const selectedDraftsList = useMemo(() => drafts.filter(d => selectedIds.has(d.id)), [drafts, selectedIds]);
+
+  // SYNC-TESTRECORDS-V1: For selected drafts on searchDate, pull matching test_records
+  // (same student + subject + date) and write content/score/passed into each lesson_record's
+  // test fields. Also marks lesson_types to include '테스트' and sets english_pass_fail for 영어.
+  async function syncTestResultsFromTestRecords() {
+    if (!user) return;
+    const targets = drafts.filter(d => selectedIds.has(d.id));
+    if (targets.length === 0) {
+      toast({ title: '학생을 먼저 선택해주세요', variant: 'destructive' });
+      return;
+    }
+    setSyncingTests(true);
+    try {
+      const studentIds = Array.from(new Set(targets.map(d => d.student_id)));
+      const { data: testRows, error: trErr } = await supabase
+        .from('test_records')
+        .select('id, student_id, subject, content, score, passed, test_date, created_at')
+        .in('student_id', studentIds)
+        .eq('test_date', searchDate)
+        .order('created_at', { ascending: false });
+      if (trErr) throw trErr;
+
+      // Pick latest test_record per (student_id, subject)
+      const latestMap = new Map<string, any>();
+      for (const r of testRows || []) {
+        const key = `${r.student_id}::${r.subject}`;
+        if (!latestMap.has(key)) latestMap.set(key, r);
+      }
+
+      let updatedCount = 0;
+      let skippedCount = 0;
+      const updatedDrafts = [...drafts];
+      const newPerTest: Record<string, string> = { ...perStudentTest };
+
+      for (const draft of targets) {
+        const key = `${draft.student_id}::${draft.subject}`;
+        const tr = latestMap.get(key);
+        if (!tr) { skippedCount++; continue; }
+
+        const resultEnum: 'pass' | 'fail' | 'none' = tr.passed === true ? 'pass' : tr.passed === false ? 'fail' : 'none';
+        const content = (tr.content || '').toString();
+        const scoreText = tr.score != null ? String(tr.score) : null;
+
+        const { error: rpcErr } = await supabase.rpc('update_lesson_test_fields', {
+          _lesson_id: draft.id,
+          _test_content: content,
+          _test_name: content,
+          _test_result_text: scoreText,
+          _test_result: resultEnum,
+          _test_date: searchDate,
+        });
+        if (rpcErr) { skippedCount++; continue; }
+
+        // Ensure lesson_types includes '테스트' + sync english_pass_fail for 영어
+        const currentTypes: string[] = draft.lesson_types || [];
+        const nextTypes = currentTypes.includes('테스트') ? currentTypes : [...currentTypes, '테스트'];
+        const updatePayload: Record<string, any> = { lesson_types: nextTypes };
+        if (draft.subject === '영어') {
+          updatePayload.english_pass_fail = resultEnum === 'pass' ? 'pass' : resultEnum === 'fail' ? 'fail' : null;
+        }
+        await supabase.from('lesson_records').update(updatePayload).eq('id', draft.id);
+
+        // Update local state
+        const idx = updatedDrafts.findIndex(d => d.id === draft.id);
+        if (idx >= 0) {
+          updatedDrafts[idx] = {
+            ...updatedDrafts[idx],
+            test_content: content,
+            test_name: content,
+            test_result: resultEnum,
+            test_result_text: scoreText,
+            lesson_types: nextTypes,
+          };
+        }
+        newPerTest[draft.id] = content;
+        updatedCount++;
+      }
+
+      setDrafts(updatedDrafts);
+      setPerStudentTest(newPerTest);
+
+      toast({
+        title: '테스트 결과 연동 완료',
+        description: `${updatedCount}명 적용${skippedCount > 0 ? ` · ${skippedCount}명 매칭 없음` : ''}`,
+      });
+      onSaved?.();
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: '연동 실패', description: err.message, variant: 'destructive' });
+    } finally {
+      setSyncingTests(false);
+    }
+  }
+
 
   // HW-CHECK-INLINE-SAVE-V1: Save a single previous-homework check inline (mirrors LessonRecordForm.handleSaveHomeworkCheckForItem).
   // This updates homework_assignments + lesson_records.homework_status for the matching draft,
@@ -1440,6 +1536,23 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
             {/* Test Fields */}
             <FieldToggleBlock field="test_fields" active={activeFields.has('test_fields')} onToggle={() => toggleField('test_fields')}>
               <div className="space-y-2">
+                {/* SYNC-TESTRECORDS-V1: Pull existing test_records into each selected student's lesson record */}
+                <div className="flex items-center justify-between gap-2 p-2 rounded-md border border-primary/30 bg-primary/5">
+                  <div className="text-[11px] text-muted-foreground leading-tight">
+                    선택한 학생의 <b>{searchDate}</b> 테스트 기록(같은 과목)을 자동으로 일지에 채워넣습니다.
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    className="h-7 gap-1 text-xs shrink-0"
+                    onClick={syncTestResultsFromTestRecords}
+                    disabled={syncingTests || selectedDraftsList.length === 0}
+                  >
+                    {syncingTests ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                    테스트 결과 연동
+                  </Button>
+                </div>
                 <PerStudentToggle checked={usePerStudentTest} onChange={setUsePerStudentTest} />
                 {usePerStudentTest ? (
                   <PerStudentContainer>
@@ -1451,6 +1564,11 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                           className="h-8 text-sm"
                           placeholder="테스트 내용"
                         />
+                        {d.test_result_text && (
+                          <div className="text-[10px] text-muted-foreground mt-1">
+                            점수: {d.test_result_text} {d.test_result === 'pass' ? '· 통과' : d.test_result === 'fail' ? '· 불통과' : ''}
+                          </div>
+                        )}
                       </StudentBlock>
                     ))}
                   </PerStudentContainer>
@@ -1459,6 +1577,7 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
                 )}
               </div>
             </FieldToggleBlock>
+
 
             {/* Notes / Memo */}
             <FieldToggleBlock field="notes" active={activeFields.has('notes')} onToggle={() => toggleField('notes')}>
