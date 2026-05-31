@@ -216,6 +216,8 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
   const [perStudentPrevHwNotes, setPerStudentPrevHwNotes] = useState<Record<string, Record<string, string>>>({});
   // HW-CHECK-INLINE-SAVE-V1: track per-item inline saving state for batch homework check
   const [savingHwItemId, setSavingHwItemId] = useState<string | null>(null);
+  // SYNC-TESTRECORDS-V1: Pull test results from test_records into each selected student's lesson record
+  const [syncingTests, setSyncingTests] = useState(false);
 
   useEffect(() => {
     if (open) {
