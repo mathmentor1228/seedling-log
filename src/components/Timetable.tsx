@@ -778,10 +778,22 @@ export function Timetable() {
           <span className="text-sm font-medium">{row.className}</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
-            <Clock className="w-3 h-3" />
-            {fmt(row.startTime)}–{fmt(row.endTime)}
-          </div>
+          {editable && !isExamPrep ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); openEditSlot(row); }}
+              className="flex items-center gap-1 text-xs text-muted-foreground font-mono px-1.5 py-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
+              title="시간 수정"
+            >
+              <Clock className="w-3 h-3" />
+              {fmt(row.startTime)}–{fmt(row.endTime)}
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+              <Clock className="w-3 h-3" />
+              {fmt(row.startTime)}–{fmt(row.endTime)}
+            </div>
+          )}
           {editable && !isExamPrep && (
             <button
               onClick={(e) => { e.stopPropagation(); openEditSlot(row); }}
