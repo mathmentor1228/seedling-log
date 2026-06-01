@@ -1013,6 +1013,7 @@ export default function Classes() {
                         <TeacherScheduleTable
                           scheduleRows={rows}
                           onRowClick={handleOpenDetail}
+                          onScheduleUpdated={fetchClasses}
                         />
                       </CardContent>
                     </CollapsibleContent>
