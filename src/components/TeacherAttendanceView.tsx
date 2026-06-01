@@ -402,46 +402,49 @@ export function TeacherAttendanceView() {
         console.warn('Student status update skipped:', studentStatusError);
       }
 
-      const { data: existingLesson, error: existingLessonError } = await supabase
-        .from('lesson_records')
-        .select('id, lesson_range')
-        .eq('student_id', studentId)
-        .eq('class_id', activeSlot.classId)
-        .eq('lesson_date', today)
-        .eq('subject', activeSlot.subject as any)
-        .maybeSingle();
-      if (existingLessonError) throw existingLessonError;
+      // Skip lesson_records writes for exam-prep slots (no class_id)
+      if (!activeSlot.isExamPrep && activeSlot.classId) {
+        const { data: existingLesson, error: existingLessonError } = await supabase
+          .from('lesson_records')
+          .select('id, lesson_range')
+          .eq('student_id', studentId)
+          .eq('class_id', activeSlot.classId)
+          .eq('lesson_date', today)
+          .eq('subject', activeSlot.subject as any)
+          .maybeSingle();
+        if (existingLessonError) throw existingLessonError;
 
-      const mergedLessonRange = lessonRangeText
-        ? existingLesson?.lesson_range?.includes(lessonRangeText)
-          ? existingLesson.lesson_range
-          : [existingLesson?.lesson_range?.trim(), lessonRangeText].filter(Boolean).join('\n')
-        : existingLesson?.lesson_range ?? '';
+        const mergedLessonRange = lessonRangeText
+          ? existingLesson?.lesson_range?.includes(lessonRangeText)
+            ? existingLesson.lesson_range
+            : [existingLesson?.lesson_range?.trim(), lessonRangeText].filter(Boolean).join('\n')
+          : existingLesson?.lesson_range ?? '';
 
-      const lessonPayload: Record<string, any> = {
-        attendance_status: lessonAttendanceStatus,
-        lesson_range: mergedLessonRange,
-        submitted: false,
-      };
-
-      if (existingLesson) {
-        const { error: updateLessonError } = await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
-        if (updateLessonError) throw updateLessonError;
-      } else {
-        const { error: insertLessonError } = await supabase.from('lesson_records').insert({
-          teacher_id: teacherId,
-          student_id: studentId,
-          class_id: activeSlot.classId,
-          subject: activeSlot.subject as any,
-          lesson_date: today,
-          lesson_range: lessonRangeText,
-          understanding_score: null,
-          homework_status: 'none_assigned',
-          learning_issues: [],
+        const lessonPayload: Record<string, any> = {
           attendance_status: lessonAttendanceStatus,
+          lesson_range: mergedLessonRange,
           submitted: false,
-        } as any);
-        if (insertLessonError) throw insertLessonError;
+        };
+
+        if (existingLesson) {
+          const { error: updateLessonError } = await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
+          if (updateLessonError) throw updateLessonError;
+        } else {
+          const { error: insertLessonError } = await supabase.from('lesson_records').insert({
+            teacher_id: teacherId,
+            student_id: studentId,
+            class_id: activeSlot.classId,
+            subject: activeSlot.subject as any,
+            lesson_date: today,
+            lesson_range: lessonRangeText,
+            understanding_score: null,
+            homework_status: 'none_assigned',
+            learning_issues: [],
+            attendance_status: lessonAttendanceStatus,
+            submitted: false,
+          } as any);
+          if (insertLessonError) throw insertLessonError;
+        }
       }
 
       if (newStatus === '등원' || newStatus === '지각') {
