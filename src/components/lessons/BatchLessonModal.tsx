@@ -1083,38 +1083,78 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
       // Draft save must publish homework assignments immediately so students can submit
       // even before the lesson journal itself is formally submitted.
+      // HW-DEDUP-V1: dedup non-daily homework against existing assignments on same date.
       if (activeFields.has('homework_items')) {
         const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
+        const normHw = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
+        // First, delete existing rows tied to these lesson_records
         for (const record of selectedRecords) {
-          const sourceItems = usePerStudentHomeworkItems
-            ? (perStudentHomeworkItems[record.id] || [])
-            : homeworkItems;
-          const validItems = sourceItems.filter(hw => hw.content.trim());
-
           const { error: deleteError } = await supabase
             .from('homework_assignments')
             .delete()
             .eq('lesson_record_id', record.id);
           if (deleteError) throw deleteError;
+        }
 
-          if (validItems.length === 0) continue;
+        // Build candidates with within-batch dedup
+        const seenInBatch = new Set<string>();
+        const candidates = selectedRecords.flatMap(record => {
+          const sourceItems = usePerStudentHomeworkItems
+            ? (perStudentHomeworkItems[record.id] || [])
+            : homeworkItems;
+          return sourceItems
+            .filter(hw => hw.content.trim())
+            .map(hw => ({
+              student_id: record.student_id,
+              subject: record.subject as SubjectType,
+              lesson_record_id: record.id,
+              assigned_date: searchDate,
+              content: hw.content.trim(),
+              homework_type: hw.homework_type,
+              check_status: 'unchecked' as const,
+              created_by: user!.id,
+            }))
+            .filter(row => {
+              if (row.homework_type === 'daily') return true;
+              const key = `${row.student_id}::${row.subject}::${normHw(row.content)}`;
+              if (seenInBatch.has(key)) return false;
+              seenInBatch.add(key);
+              return true;
+            });
+        });
 
-          const assignments = validItems.map(hw => ({
-            student_id: record.student_id,
-            subject: record.subject as SubjectType,
-            lesson_record_id: record.id,
-            assigned_date: searchDate,
-            content: hw.content.trim(),
-            homework_type: hw.homework_type,
-            check_status: 'unchecked' as const,
-            created_by: user!.id,
-          }));
+        if (candidates.length === 0) {
+          // nothing to insert
+        } else {
+          const nonDaily = candidates.filter(c => c.homework_type !== 'daily');
+          const existingKeys = new Set<string>();
+          if (nonDaily.length > 0) {
+            const studentIds = Array.from(new Set(nonDaily.map(c => c.student_id)));
+            const subjects = Array.from(new Set(nonDaily.map(c => c.subject)));
+            const { data: existing } = await supabase
+              .from('homework_assignments')
+              .select('student_id, subject, content, homework_type')
+              .in('student_id', studentIds)
+              .in('subject', subjects)
+              .eq('assigned_date', searchDate)
+              .neq('homework_type', 'daily');
+            (existing || []).forEach((e: any) => {
+              existingKeys.add(`${e.student_id}::${e.subject}::${normHw(e.content || '')}`);
+            });
+          }
+          const assignments = candidates.filter(c => {
+            if (c.homework_type === 'daily') return true;
+            const key = `${c.student_id}::${c.subject}::${normHw(c.content)}`;
+            return !existingKeys.has(key);
+          });
 
-          const { error: insertError } = await supabase
-            .from('homework_assignments')
-            .insert(assignments);
-          if (insertError) throw insertError;
+          if (assignments.length > 0) {
+            const { error: insertError } = await supabase
+              .from('homework_assignments')
+              .insert(assignments);
+            if (insertError) throw insertError;
+          }
         }
       }
 
