@@ -30,6 +30,7 @@ import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
 import { BatchTestInputModal } from '@/components/BatchTestInputModal';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
+import { ExamDdayBanner } from '@/components/ExamDdayBanner';
 
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { 
@@ -2619,7 +2620,12 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
       {(isAdmin(role) || isTeacher(role)) && (
         <AssistantRequestsWidget />
       )}
-      
+
+      {/* ━━━ 다가오는 시험 D-Day ━━━ */}
+      {(isAdmin(role) || isTeacher(role)) && (
+        <ExamDdayBanner />
+      )}
+
       {/* ━━━ 섹션 1: 주의사항 ━━━ */}
       <AttentionSummaryBar items={attentionItems} />
 
