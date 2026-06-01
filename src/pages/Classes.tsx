@@ -1032,6 +1032,7 @@ export default function Classes() {
                 <TeacherScheduleTable
                   scheduleRows={scheduleRows.filter((r) => r.teacherId === adminSelectedTeacher)}
                   onRowClick={handleOpenDetail}
+                  onScheduleUpdated={fetchClasses}
                 />
               </CardContent>
             </Card>
