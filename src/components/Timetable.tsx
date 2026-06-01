@@ -1072,6 +1072,62 @@ export function Timetable() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Time/slot edit dialog (teacher view) */}
+        <Dialog open={!!editSlot} onOpenChange={(open) => { if (!open) setEditSlot(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="w-5 h-5" />
+                수업 정보 수정
+              </DialogTitle>
+            </DialogHeader>
+            {editSlot && (
+              <div className="space-y-4 mt-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Badge variant="outline">
+                    {DAYS_OF_WEEK.find(d => d.value === editSlot.dayOfWeek)?.full}
+                  </Badge>
+                  <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', SUBJECT_COLORS[editSlot.subject] || 'bg-muted text-muted-foreground')}>
+                    {editSlot.subject}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <Label>수업명</Label>
+                  <Input
+                    value={editForm.className}
+                    onChange={(e) => setEditForm(f => ({ ...f, className: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>시작 시간</Label>
+                    <Input
+                      type="time"
+                      value={editForm.startTime}
+                      onChange={(e) => setEditForm(f => ({ ...f, startTime: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>종료 시간</Label>
+                    <Input
+                      type="time"
+                      value={editForm.endTime}
+                      onChange={(e) => setEditForm(f => ({ ...f, endTime: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setEditSlot(null)}>취소</Button>
+                  <Button onClick={handleEditSave} disabled={editSaving || !editForm.className.trim()}>
+                    {editSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    저장
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </Card>
     );
   }
