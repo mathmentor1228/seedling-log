@@ -65,4 +65,30 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    target: 'es2020',
+    cssCodeSplit: true,
+    sourcemap: false,
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('react-dom') || id.includes('/react/') || id.includes('scheduler')) return 'react-vendor';
+          if (id.includes('@radix-ui')) return 'radix';
+          if (id.includes('@tanstack')) return 'tanstack';
+          if (id.includes('@supabase')) return 'supabase';
+          if (id.includes('recharts') || id.includes('d3-')) return 'charts';
+          if (id.includes('katex')) return 'katex';
+          if (id.includes('xlsx')) return 'xlsx';
+          if (id.includes('jspdf') || id.includes('html2canvas')) return 'pdf';
+          if (id.includes('framer-motion')) return 'motion';
+          if (id.includes('lucide-react')) return 'icons';
+          if (id.includes('date-fns')) return 'date-fns';
+          if (id.includes('qrcode') || id.includes('html5-qrcode')) return 'qrcode';
+          if (id.includes('dompurify')) return 'dompurify';
+        },
+      },
+    },
+  },
 }));

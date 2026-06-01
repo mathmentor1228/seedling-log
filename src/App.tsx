@@ -5,10 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/lib/auth";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
 import { Loader2 } from "lucide-react";
 import { StudentAuthProvider } from "@/lib/studentAuth";
+
+const Index = lazy(() => import("./pages/Index"));
+const Auth = lazy(() => import("./pages/Auth"));
 
 const VocabTestViewPage = lazy(() => import("./pages/VocabTestViewPage"));
 const QuizPrintPage = lazy(() => import("./pages/QuizPrintPage"));
@@ -68,7 +69,16 @@ const StudentMathQuiz = lazy(() => import("./pages/student/StudentMathQuiz"));
 const StudentStudySession = lazy(() => import("./pages/student/StudentStudySession"));
 const StudentExamReview = lazy(() => import("./pages/student/StudentExamReview"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const RouteLoading = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
