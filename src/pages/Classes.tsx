@@ -1013,6 +1013,7 @@ export default function Classes() {
                         <TeacherScheduleTable
                           scheduleRows={rows}
                           onRowClick={handleOpenDetail}
+                          onScheduleUpdated={fetchClasses}
                         />
                       </CardContent>
                     </CollapsibleContent>
@@ -1031,6 +1032,7 @@ export default function Classes() {
                 <TeacherScheduleTable
                   scheduleRows={scheduleRows.filter((r) => r.teacherId === adminSelectedTeacher)}
                   onRowClick={handleOpenDetail}
+                  onScheduleUpdated={fetchClasses}
                 />
               </CardContent>
             </Card>
@@ -1184,6 +1186,7 @@ export default function Classes() {
                   scheduleRows={myScheduleRows}
                   onRowClick={(classId) => setHighlightClassId(classId)}
                   highlightClassId={highlightClassId}
+                  onScheduleUpdated={fetchClasses}
                 />
               </CardContent>
             </Card>
