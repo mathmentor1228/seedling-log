@@ -66,7 +66,7 @@ function StudentRow({ student, onStatusChange, isLoading }: {
       isLoading && "opacity-50 pointer-events-none"
     )}>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold text-foreground truncate">{student.name}</span>
           {timeLabel && (
             <span className={cn(
@@ -74,6 +74,11 @@ function StudentRow({ student, onStatusChange, isLoading }: {
               student.status === '지각' ? "bg-amber-500/15 text-amber-600" : "bg-muted text-muted-foreground"
             )}>
               {timeLabel}
+            </span>
+          )}
+          {student.isEarly && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-500/15 text-blue-700 dark:text-blue-300">
+              조기등원
             </span>
           )}
         </div>
