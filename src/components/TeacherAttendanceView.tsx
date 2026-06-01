@@ -557,9 +557,23 @@ export function TeacherAttendanceView() {
   const handleMarkAllPresent = async () => {
     const pending = activeStudents.filter(s => s.status === '미등원');
     if (pending.length === 0) { toast({ title: '전원 등원 상태입니다' }); return; }
+    if (activeSlot) {
+      const [sh, sm] = activeSlot.startTime.split(':').map(Number);
+      if (!isNaN(sh)) {
+        const slotStart = new Date();
+        slotStart.setHours(sh, sm || 0, 0, 0);
+        const minutesUntil = (slotStart.getTime() - Date.now()) / 60000;
+        if (minutesUntil > 30) {
+          const ok = window.confirm(
+            `아직 수업시간이 아닙니다 (수업 ${activeSlot.startTime} 시작, 약 ${Math.round(minutesUntil)}분 남음).\n그래도 전원 등원처리 하시겠습니까?\n→ 조기등원으로 일괄 기록됩니다.`
+          );
+          if (!ok) return;
+        }
+      }
+    }
     setMarkingAll(true);
     for (const s of pending) {
-      await handleStatusChange(s.id, '등원');
+      await handleStatusChange(s.id, '등원', { skipEarlyCheck: true });
     }
     setMarkingAll(false);
     sonnerToast.success(`${pending.length}명 전체 등원 처리 완료`);
