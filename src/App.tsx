@@ -5,10 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/lib/auth";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
 import { Loader2 } from "lucide-react";
 import { StudentAuthProvider } from "@/lib/studentAuth";
+
+const Index = lazy(() => import("./pages/Index"));
+const Auth = lazy(() => import("./pages/Auth"));
 
 const VocabTestViewPage = lazy(() => import("./pages/VocabTestViewPage"));
 const QuizPrintPage = lazy(() => import("./pages/QuizPrintPage"));
