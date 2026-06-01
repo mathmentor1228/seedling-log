@@ -1186,6 +1186,7 @@ export default function Classes() {
                   scheduleRows={myScheduleRows}
                   onRowClick={(classId) => setHighlightClassId(classId)}
                   highlightClassId={highlightClassId}
+                  onScheduleUpdated={fetchClasses}
                 />
               </CardContent>
             </Card>
