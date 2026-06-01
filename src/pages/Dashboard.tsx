@@ -30,6 +30,7 @@ import { LessonFormContext } from '@/components/lessons/LessonRecordForm';
 import { BatchSupplementaryModal } from '@/components/BatchSupplementaryModal';
 import { BatchTestInputModal } from '@/components/BatchTestInputModal';
 import { useStudentLatestTests, formatTestLine, formatTestSnippet, formatTestTooltip, LatestTest } from '@/hooks/useStudentLatestTests';
+import { ExamDdayBanner } from '@/components/ExamDdayBanner';
 
 import { SectionHeader } from '@/components/dashboard/SectionHeader';
 import { 
