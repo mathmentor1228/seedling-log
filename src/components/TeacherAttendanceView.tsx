@@ -31,6 +31,7 @@ interface StudentAttendance {
   grade: string | null;
   status: AttendanceStatus;
   checkedInAt?: string | null;
+  isEarly?: boolean;
 }
 
 interface ScheduleSlot {
@@ -41,6 +42,8 @@ interface ScheduleSlot {
   startTime: string;
   endTime: string;
   classroomName: string | null;
+  isExamPrep?: boolean;
+  examPrepStudentIds?: string[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -63,7 +66,7 @@ function StudentRow({ student, onStatusChange, isLoading }: {
       isLoading && "opacity-50 pointer-events-none"
     )}>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-semibold text-foreground truncate">{student.name}</span>
           {timeLabel && (
             <span className={cn(
@@ -71,6 +74,11 @@ function StudentRow({ student, onStatusChange, isLoading }: {
               student.status === '지각' ? "bg-amber-500/15 text-amber-600" : "bg-muted text-muted-foreground"
             )}>
               {timeLabel}
+            </span>
+          )}
+          {student.isEarly && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-500/15 text-blue-700 dark:text-blue-300">
+              조기등원
             </span>
           )}
         </div>
@@ -136,15 +144,23 @@ export function TeacherAttendanceView() {
   const fetchSchedule = useCallback(async () => {
     try {
       const dow = new Date().getDay();
-      const { data: schedules } = await supabase
-        .from('class_schedules')
-        .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
-        .eq('teacher_id', teacherId)
-        .eq('day_of_week', dow)
-        .eq('is_active', true)
-        .order('start_time');
+      const [schedRes, examRes] = await Promise.all([
+        supabase
+          .from('class_schedules')
+          .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
+          .eq('teacher_id', teacherId)
+          .eq('day_of_week', dow)
+          .eq('is_active', true)
+          .order('start_time'),
+        supabase
+          .from('exam_prep_schedules')
+          .select('id, student_id, subject, start_time, end_time')
+          .eq('teacher_id', teacherId)
+          .eq('schedule_date', today),
+      ]);
 
-      if (!schedules || schedules.length === 0) { setSlots([]); setLoading(false); return; }
+      const schedules = schedRes.data || [];
+      const examPrep = examRes.data || [];
 
       const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
         id: s.id,
@@ -155,46 +171,81 @@ export function TeacherAttendanceView() {
         endTime: s.end_time?.slice(0, 5) || '',
         classroomName: s.classrooms?.name || null,
       }));
-      setSlots(parsed);
+
+      // Group exam prep schedules by start-end-subject into synthetic slots
+      const examGroups = new Map<string, { startTime: string; endTime: string; subject: string; studentIds: string[] }>();
+      examPrep.forEach((e: any) => {
+        const start = (e.start_time || '').slice(0, 5);
+        const end = (e.end_time || '').slice(0, 5);
+        const key = `${start}-${end}-${e.subject}`;
+        if (!examGroups.has(key)) examGroups.set(key, { startTime: start, endTime: end, subject: e.subject, studentIds: [] });
+        examGroups.get(key)!.studentIds.push(e.student_id);
+      });
+      const examSlots: ScheduleSlot[] = Array.from(examGroups.entries()).map(([k, g]) => ({
+        id: `examprep-${k}`,
+        classId: '',
+        className: '시험특강',
+        subject: g.subject,
+        startTime: g.startTime,
+        endTime: g.endTime,
+        classroomName: null,
+        isExamPrep: true,
+        examPrepStudentIds: g.studentIds,
+      }));
+
+      const all = [...parsed, ...examSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
+      if (all.length === 0) { setSlots([]); setLoading(false); return; }
+      setSlots(all);
 
       const n = new Date();
       const nowStr = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
-      const current = parsed.find(sl => nowStr >= sl.startTime && nowStr <= sl.endTime);
-      setActiveSlotId(current?.id || parsed[0]?.id || null);
+      const current = all.find(sl => nowStr >= sl.startTime && nowStr <= sl.endTime);
+      setActiveSlotId(current?.id || all[0]?.id || null);
     } catch (err) {
       console.error('fetchSchedule error:', err);
       setLoading(false);
     }
-  }, [teacherId]);
+  }, [teacherId, today]);
 
   const fetchStudents = useCallback(async () => {
     try {
       if (slots.length === 0) return;
 
-      const classIds = [...new Set(slots.map(s => s.classId))];
-      const { data: cs } = await supabase.from('class_students').select('student_id, class_id').in('class_id', classIds);
-      if (!cs || cs.length === 0) { setStudentMap({}); setLoading(false); return; }
+      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && s.classId).map(s => s.classId))];
+      const examPrepIds = [...new Set(slots.filter(s => s.isExamPrep).flatMap(s => s.examPrepStudentIds || []))];
 
-      const allStudentIds = [...new Set(cs.map(r => r.student_id))];
+      let cs: { student_id: string; class_id: string }[] = [];
+      if (classIds.length > 0) {
+        const { data } = await supabase.from('class_students').select('student_id, class_id').in('class_id', classIds);
+        cs = data || [];
+      }
+
+      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds])];
+      if (allStudentIds.length === 0) { setStudentMap({}); setLoading(false); return; }
+
+      const lessonQuery = classIds.length > 0
+        ? supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today)
+        : Promise.resolve({ data: [] as any[] });
+
       const [studentRes, logRes, lessonRes] = await Promise.all([
         supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
         supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
-        supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today),
+        lessonQuery,
       ]);
 
-        const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
-        (logRes.data ?? []).forEach(l => {
-          if (!l.student_id) return;
-          const prev = logMap.get(l.student_id);
-          const prevTime = prev?.checked_in_at ? new Date(prev.checked_in_at).getTime() : -1;
-          const nextTime = l.checked_in_at ? new Date(l.checked_in_at).getTime() : -1;
-          if (!prev || nextTime >= prevTime) {
-            logMap.set(l.student_id, l);
-          }
-        });
+      const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
+      (logRes.data ?? []).forEach(l => {
+        if (!l.student_id) return;
+        const prev = logMap.get(l.student_id);
+        const prevTime = prev?.checked_in_at ? new Date(prev.checked_in_at).getTime() : -1;
+        const nextTime = l.checked_in_at ? new Date(l.checked_in_at).getTime() : -1;
+        if (!prev || nextTime >= prevTime) {
+          logMap.set(l.student_id, l);
+        }
+      });
 
       const lessonMap = new Map<string, { attendance_status: string[] | null }>();
-      (lessonRes.data ?? []).forEach((record: any) => {
+      ((lessonRes as any).data ?? []).forEach((record: any) => {
         lessonMap.set(`${record.student_id}:${record.class_id}`, {
           attendance_status: record.attendance_status ?? null,
         });
@@ -207,21 +258,24 @@ export function TeacherAttendanceView() {
 
       const map: Record<string, StudentAttendance[]> = {};
       slots.forEach(slot => {
-        const classStudentIds = cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
-        map[slot.id] = classStudentIds
+        const slotStudentIds = slot.isExamPrep
+          ? (slot.examPrepStudentIds || [])
+          : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
+        map[slot.id] = slotStudentIds
           .map(sid => {
             const student = studentData.get(sid);
             if (!student) return null;
 
             const log = logMap.get(sid);
-            const lesson = lessonMap.get(`${sid}:${slot.classId}`);
+            const lesson = slot.isExamPrep ? null : lessonMap.get(`${sid}:${slot.classId}`);
             const attendance = lesson?.attendance_status ?? [];
+            const isEarly = attendance.includes('조기등원');
 
             let status: AttendanceStatus = '미등원';
             if (attendance.includes('무단결석') || attendance.includes('인정결석') || attendance.includes('결석')) status = '결석';
             else if (attendance.includes('지각')) status = '지각';
             else if (attendance.includes('미등원')) status = '미등원';
-            else if (attendance.includes('정상등원')) status = '등원';
+            else if (attendance.includes('정상등원') || isEarly) status = '등원';
             else if (log?.checked_in_at) status = '등원';
             else if (student.baseStatus === '결석') status = '결석';
             else if (student.baseStatus === '지각') status = '지각';
@@ -234,6 +288,7 @@ export function TeacherAttendanceView() {
               grade: student.grade,
               status,
               checkedInAt: log?.checked_in_at ?? null,
+              isEarly,
             } as StudentAttendance;
           })
           .filter((s): s is StudentAttendance => s !== null)
@@ -280,7 +335,7 @@ export function TeacherAttendanceView() {
     return () => clearInterval(t);
   }, []);
 
-  const handleStatusChange = useCallback(async (studentId: string, newStatus: AttendanceStatus) => {
+  const handleStatusChange = useCallback(async (studentId: string, newStatus: AttendanceStatus, opts?: { skipEarlyCheck?: boolean }) => {
     try {
       if (!activeSlot) return;
       const student = activeStudents.find(s => s.id === studentId);
@@ -292,6 +347,7 @@ export function TeacherAttendanceView() {
       let lessonRangeText = '';
       let supplementaryDate: string | null = null;
       let supplementaryTime = '미정';
+      let earlyArrival = false;
 
       if (newStatus === '결석') {
         setAbsenceDialog(d => ({
@@ -305,6 +361,24 @@ export function TeacherAttendanceView() {
         lessonAttendanceStatus = ['지각'];
       } else if (newStatus === '미등원') {
         lessonAttendanceStatus = ['미등원'];
+      } else if (newStatus === '등원') {
+        // EARLY-ARRIVAL-GUARD-V1: block 임의 등원처리 well before class
+        const [sh, sm] = activeSlot.startTime.split(':').map(Number);
+        if (!isNaN(sh)) {
+          const slotStart = new Date();
+          slotStart.setHours(sh, sm || 0, 0, 0);
+          const minutesUntil = (slotStart.getTime() - Date.now()) / 60000;
+          if (minutesUntil > 30) {
+            if (!opts?.skipEarlyCheck) {
+              const ok = window.confirm(
+                `아직 수업시간이 아닙니다.\n수업 시작: ${activeSlot.startTime} (약 ${Math.round(minutesUntil)}분 남음)\n\n그래도 등원처리 하시겠습니까?\n→ 조기등원으로 기록됩니다.`
+              );
+              if (!ok) return;
+            }
+            earlyArrival = true;
+            lessonAttendanceStatus = ['조기등원'];
+          }
+        }
       }
 
       setActionLoading(prev => new Set(prev).add(studentId));
@@ -317,6 +391,7 @@ export function TeacherAttendanceView() {
                 ...s,
                 status: newStatus,
                 checkedInAt: newStatus === '등원' || newStatus === '지각' ? nowIso : null,
+                isEarly: earlyArrival,
               }
             : s
         );
@@ -329,46 +404,49 @@ export function TeacherAttendanceView() {
         console.warn('Student status update skipped:', studentStatusError);
       }
 
-      const { data: existingLesson, error: existingLessonError } = await supabase
-        .from('lesson_records')
-        .select('id, lesson_range')
-        .eq('student_id', studentId)
-        .eq('class_id', activeSlot.classId)
-        .eq('lesson_date', today)
-        .eq('subject', activeSlot.subject as any)
-        .maybeSingle();
-      if (existingLessonError) throw existingLessonError;
+      // Skip lesson_records writes for exam-prep slots (no class_id)
+      if (!activeSlot.isExamPrep && activeSlot.classId) {
+        const { data: existingLesson, error: existingLessonError } = await supabase
+          .from('lesson_records')
+          .select('id, lesson_range')
+          .eq('student_id', studentId)
+          .eq('class_id', activeSlot.classId)
+          .eq('lesson_date', today)
+          .eq('subject', activeSlot.subject as any)
+          .maybeSingle();
+        if (existingLessonError) throw existingLessonError;
 
-      const mergedLessonRange = lessonRangeText
-        ? existingLesson?.lesson_range?.includes(lessonRangeText)
-          ? existingLesson.lesson_range
-          : [existingLesson?.lesson_range?.trim(), lessonRangeText].filter(Boolean).join('\n')
-        : existingLesson?.lesson_range ?? '';
+        const mergedLessonRange = lessonRangeText
+          ? existingLesson?.lesson_range?.includes(lessonRangeText)
+            ? existingLesson.lesson_range
+            : [existingLesson?.lesson_range?.trim(), lessonRangeText].filter(Boolean).join('\n')
+          : existingLesson?.lesson_range ?? '';
 
-      const lessonPayload: Record<string, any> = {
-        attendance_status: lessonAttendanceStatus,
-        lesson_range: mergedLessonRange,
-        submitted: false,
-      };
-
-      if (existingLesson) {
-        const { error: updateLessonError } = await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
-        if (updateLessonError) throw updateLessonError;
-      } else {
-        const { error: insertLessonError } = await supabase.from('lesson_records').insert({
-          teacher_id: teacherId,
-          student_id: studentId,
-          class_id: activeSlot.classId,
-          subject: activeSlot.subject as any,
-          lesson_date: today,
-          lesson_range: lessonRangeText,
-          understanding_score: null,
-          homework_status: 'none_assigned',
-          learning_issues: [],
+        const lessonPayload: Record<string, any> = {
           attendance_status: lessonAttendanceStatus,
+          lesson_range: mergedLessonRange,
           submitted: false,
-        } as any);
-        if (insertLessonError) throw insertLessonError;
+        };
+
+        if (existingLesson) {
+          const { error: updateLessonError } = await supabase.from('lesson_records').update(lessonPayload).eq('id', existingLesson.id);
+          if (updateLessonError) throw updateLessonError;
+        } else {
+          const { error: insertLessonError } = await supabase.from('lesson_records').insert({
+            teacher_id: teacherId,
+            student_id: studentId,
+            class_id: activeSlot.classId,
+            subject: activeSlot.subject as any,
+            lesson_date: today,
+            lesson_range: lessonRangeText,
+            understanding_score: null,
+            homework_status: 'none_assigned',
+            learning_issues: [],
+            attendance_status: lessonAttendanceStatus,
+            submitted: false,
+          } as any);
+          if (insertLessonError) throw insertLessonError;
+        }
       }
 
       if (newStatus === '등원' || newStatus === '지각') {
@@ -481,9 +559,23 @@ export function TeacherAttendanceView() {
   const handleMarkAllPresent = async () => {
     const pending = activeStudents.filter(s => s.status === '미등원');
     if (pending.length === 0) { toast({ title: '전원 등원 상태입니다' }); return; }
+    if (activeSlot) {
+      const [sh, sm] = activeSlot.startTime.split(':').map(Number);
+      if (!isNaN(sh)) {
+        const slotStart = new Date();
+        slotStart.setHours(sh, sm || 0, 0, 0);
+        const minutesUntil = (slotStart.getTime() - Date.now()) / 60000;
+        if (minutesUntil > 30) {
+          const ok = window.confirm(
+            `아직 수업시간이 아닙니다 (수업 ${activeSlot.startTime} 시작, 약 ${Math.round(minutesUntil)}분 남음).\n그래도 전원 등원처리 하시겠습니까?\n→ 조기등원으로 일괄 기록됩니다.`
+          );
+          if (!ok) return;
+        }
+      }
+    }
     setMarkingAll(true);
     for (const s of pending) {
-      await handleStatusChange(s.id, '등원');
+      await handleStatusChange(s.id, '등원', { skipEarlyCheck: true });
     }
     setMarkingAll(false);
     sonnerToast.success(`${pending.length}명 전체 등원 처리 완료`);
