@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Check, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Check, Users, ChevronDown, ChevronUp, Pencil, X, Save } from 'lucide-react';
 import { useAuth, isAdmin } from '@/lib/auth';
 
 const DAYS_OF_WEEK = [
@@ -37,6 +38,7 @@ interface ScheduleRow {
   startTime: string;
   endTime: string;
   studentCount: number;
+  scheduleId?: string;
 }
 
 interface StudentInfo {
@@ -49,6 +51,8 @@ interface TeacherScheduleTableProps {
   onRowClick?: (classId: string) => void;
   highlightClassId?: string | null;
   showStudentManageLink?: boolean;
+  onScheduleUpdated?: () => void;
+  editable?: boolean;
 }
 
 export function TeacherScheduleTable({ 
@@ -56,6 +60,8 @@ export function TeacherScheduleTable({
   onRowClick,
   highlightClassId,
   showStudentManageLink = false,
+  onScheduleUpdated,
+  editable = true,
 }: TeacherScheduleTableProps) {
   const { role } = useAuth();
   const { toast } = useToast();
@@ -63,6 +69,13 @@ export function TeacherScheduleTable({
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [density, setDensity] = useState<'compact' | 'expanded'>('compact');
   const [copiedClassId, setCopiedClassId] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{ className: string; startTime: string; endTime: string }>({
+    className: '',
+    startTime: '',
+    endTime: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const sortedRows = useMemo(() => {
     return [...scheduleRows].sort((a, b) => {
@@ -71,12 +84,10 @@ export function TeacherScheduleTable({
     });
   }, [scheduleRows]);
 
-  // Get unique class IDs
   const classIds = useMemo(() => {
     return [...new Set(scheduleRows.map((r) => r.classId))];
   }, [scheduleRows]);
 
-  // Batch fetch students for all classes (2 queries total: class_students + students)
   useEffect(() => {
     if (classIds.length === 0) {
       setStudentsByClass({});
@@ -86,7 +97,6 @@ export function TeacherScheduleTable({
     async function fetchStudents() {
       setLoadingStudents(true);
       try {
-        // Query 1: Get class-student mappings
         const { data: classStudents, error: csError } = await supabase
           .from('class_students')
           .select('class_id, student_id')
@@ -100,10 +110,8 @@ export function TeacherScheduleTable({
           return;
         }
 
-        // Get unique student IDs
         const studentIds = [...new Set(classStudents.map((cs) => cs.student_id))];
 
-        // Query 2: Get student names
         const { data: students, error: sError } = await supabase
           .from('students')
           .select('id, name')
@@ -111,13 +119,11 @@ export function TeacherScheduleTable({
 
         if (sError) throw sError;
 
-        // Build map: student_id -> name
         const studentMap: Record<string, string> = {};
         (students || []).forEach((s) => {
           studentMap[s.id] = s.name;
         });
 
-        // Group by class_id
         const grouped: Record<string, StudentInfo[]> = {};
         classStudents.forEach((cs) => {
           if (!grouped[cs.class_id]) {
@@ -129,7 +135,6 @@ export function TeacherScheduleTable({
           });
         });
 
-        // Sort students by name within each class
         Object.keys(grouped).forEach((classId) => {
           grouped[classId].sort((a, b) => a.name.localeCompare(b.name));
         });
@@ -146,13 +151,11 @@ export function TeacherScheduleTable({
   }, [classIds]);
 
   const formatTime = (time: string) => time.slice(0, 5);
-
   const maxVisibleStudents = density === 'compact' ? 3 : 6;
 
   const handleCopyStudents = async (classId: string) => {
     const students = studentsByClass[classId] || [];
     if (students.length === 0) return;
-
     const names = students.map((s) => s.name).join(', ');
     try {
       await navigator.clipboard.writeText(names);
@@ -168,6 +171,60 @@ export function TeacherScheduleTable({
     }
   };
 
+  const startEdit = (row: ScheduleRow, key: string) => {
+    setEditingKey(key);
+    setEditForm({
+      className: row.className,
+      startTime: formatTime(row.startTime),
+      endTime: formatTime(row.endTime),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingKey(null);
+  };
+
+  const saveEdit = async (row: ScheduleRow) => {
+    if (!row.scheduleId) {
+      toast({ title: '수정 불가', description: '스케줄 ID가 없습니다', variant: 'destructive' });
+      return;
+    }
+    const { className, startTime, endTime } = editForm;
+    if (!className.trim() || !startTime || !endTime) {
+      toast({ title: '입력 확인', description: '모든 항목을 입력해주세요', variant: 'destructive' });
+      return;
+    }
+    if (startTime >= endTime) {
+      toast({ title: '시간 오류', description: '종료 시간은 시작 시간보다 늦어야 합니다', variant: 'destructive' });
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const { error: schErr } = await supabase
+        .from('class_schedules')
+        .update({ start_time: startTime, end_time: endTime })
+        .eq('id', row.scheduleId);
+      if (schErr) throw schErr;
+
+      if (className.trim() !== row.className) {
+        const { error: clsErr } = await supabase
+          .from('classes')
+          .update({ name: className.trim() })
+          .eq('id', row.classId);
+        if (clsErr) throw clsErr;
+      }
+
+      toast({ title: '저장됨', description: '시간표가 수정되었습니다' });
+      setEditingKey(null);
+      onScheduleUpdated?.();
+    } catch (e: any) {
+      console.error('Edit save error:', e);
+      toast({ title: '저장 실패', description: e?.message || '오류가 발생했습니다', variant: 'destructive' });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   if (sortedRows.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-4">
@@ -178,7 +235,6 @@ export function TeacherScheduleTable({
 
   return (
     <div className="space-y-2">
-      {/* Density toggle */}
       <div className="flex justify-end">
         <Button
           variant="ghost"
@@ -210,6 +266,7 @@ export function TeacherScheduleTable({
               <TableHead className="py-2 px-3">과목</TableHead>
               <TableHead className="py-2 px-3">클래스명</TableHead>
               <TableHead className="py-2 px-3">학생</TableHead>
+              {editable && <TableHead className="py-2 px-3 w-24">수정</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -217,33 +274,61 @@ export function TeacherScheduleTable({
               const students = studentsByClass[row.classId] || [];
               const visibleStudents = students.slice(0, maxVisibleStudents);
               const overflowCount = students.length - maxVisibleStudents;
+              const rowKey = `${row.scheduleId || row.classId}-${row.dayOfWeek}-${idx}`;
+              const isEditing = editingKey === rowKey;
 
               return (
                 <TableRow
-                  key={`${row.classId}-${row.dayOfWeek}-${idx}`}
-                  className={`text-sm cursor-pointer hover:bg-muted/30 ${
+                  key={rowKey}
+                  className={`text-sm ${!isEditing ? 'cursor-pointer hover:bg-muted/30' : ''} ${
                     highlightClassId === row.classId ? 'bg-primary/10' : ''
                   }`}
-                  onClick={() => onRowClick?.(row.classId)}
+                  onClick={() => !isEditing && onRowClick?.(row.classId)}
                 >
                   <TableCell className="py-2 px-3">
                     <Badge variant="outline" className="text-xs">
                       {DAYS_OF_WEEK.find((d) => d.value === row.dayOfWeek)?.label}
                     </Badge>
                   </TableCell>
-                  <TableCell className="py-2 px-3 font-mono text-xs">
-                    {formatTime(row.startTime)}
+                  <TableCell className="py-2 px-3 font-mono text-xs" onClick={(e) => isEditing && e.stopPropagation()}>
+                    {isEditing ? (
+                      <Input
+                        type="time"
+                        value={editForm.startTime}
+                        onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
+                        className="h-7 text-xs px-2 w-24"
+                      />
+                    ) : (
+                      formatTime(row.startTime)
+                    )}
                   </TableCell>
-                  <TableCell className="py-2 px-3 font-mono text-xs">
-                    {formatTime(row.endTime)}
+                  <TableCell className="py-2 px-3 font-mono text-xs" onClick={(e) => isEditing && e.stopPropagation()}>
+                    {isEditing ? (
+                      <Input
+                        type="time"
+                        value={editForm.endTime}
+                        onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
+                        className="h-7 text-xs px-2 w-24"
+                      />
+                    ) : (
+                      formatTime(row.endTime)
+                    )}
                   </TableCell>
                   <TableCell className="py-2 px-3">
                     <Badge variant="secondary" className="text-xs">
                       {row.subject}
                     </Badge>
                   </TableCell>
-                  <TableCell className="py-2 px-3 text-xs truncate max-w-[100px]">
-                    {row.className}
+                  <TableCell className="py-2 px-3 text-xs max-w-[160px]" onClick={(e) => isEditing && e.stopPropagation()}>
+                    {isEditing ? (
+                      <Input
+                        value={editForm.className}
+                        onChange={(e) => setEditForm({ ...editForm, className: e.target.value })}
+                        className="h-7 text-xs px-2"
+                      />
+                    ) : (
+                      <span className="truncate block">{row.className}</span>
+                    )}
                   </TableCell>
                   <TableCell className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1 flex-wrap">
@@ -380,6 +465,45 @@ export function TeacherScheduleTable({
                       )}
                     </div>
                   </TableCell>
+                  {editable && (
+                    <TableCell className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 w-7 p-0"
+                            disabled={savingEdit}
+                            onClick={() => saveEdit(row)}
+                            title="저장"
+                          >
+                            <Save className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            disabled={savingEdit}
+                            onClick={cancelEdit}
+                            title="취소"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={() => startEdit(row, rowKey)}
+                          title="시간/이름 수정"
+                          disabled={!row.scheduleId}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}
