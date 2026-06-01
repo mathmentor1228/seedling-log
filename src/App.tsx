@@ -69,7 +69,16 @@ const StudentMathQuiz = lazy(() => import("./pages/student/StudentMathQuiz"));
 const StudentStudySession = lazy(() => import("./pages/student/StudentStudySession"));
 const StudentExamReview = lazy(() => import("./pages/student/StudentExamReview"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const RouteLoading = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
