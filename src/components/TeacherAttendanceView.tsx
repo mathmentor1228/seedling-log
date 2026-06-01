@@ -211,30 +211,41 @@ export function TeacherAttendanceView() {
     try {
       if (slots.length === 0) return;
 
-      const classIds = [...new Set(slots.map(s => s.classId))];
-      const { data: cs } = await supabase.from('class_students').select('student_id, class_id').in('class_id', classIds);
-      if (!cs || cs.length === 0) { setStudentMap({}); setLoading(false); return; }
+      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && s.classId).map(s => s.classId))];
+      const examPrepIds = [...new Set(slots.filter(s => s.isExamPrep).flatMap(s => s.examPrepStudentIds || []))];
 
-      const allStudentIds = [...new Set(cs.map(r => r.student_id))];
+      let cs: { student_id: string; class_id: string }[] = [];
+      if (classIds.length > 0) {
+        const { data } = await supabase.from('class_students').select('student_id, class_id').in('class_id', classIds);
+        cs = data || [];
+      }
+
+      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds])];
+      if (allStudentIds.length === 0) { setStudentMap({}); setLoading(false); return; }
+
+      const lessonQuery = classIds.length > 0
+        ? supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today)
+        : Promise.resolve({ data: [] as any[] });
+
       const [studentRes, logRes, lessonRes] = await Promise.all([
         supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
         supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
-        supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today),
+        lessonQuery,
       ]);
 
-        const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
-        (logRes.data ?? []).forEach(l => {
-          if (!l.student_id) return;
-          const prev = logMap.get(l.student_id);
-          const prevTime = prev?.checked_in_at ? new Date(prev.checked_in_at).getTime() : -1;
-          const nextTime = l.checked_in_at ? new Date(l.checked_in_at).getTime() : -1;
-          if (!prev || nextTime >= prevTime) {
-            logMap.set(l.student_id, l);
-          }
-        });
+      const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
+      (logRes.data ?? []).forEach(l => {
+        if (!l.student_id) return;
+        const prev = logMap.get(l.student_id);
+        const prevTime = prev?.checked_in_at ? new Date(prev.checked_in_at).getTime() : -1;
+        const nextTime = l.checked_in_at ? new Date(l.checked_in_at).getTime() : -1;
+        if (!prev || nextTime >= prevTime) {
+          logMap.set(l.student_id, l);
+        }
+      });
 
       const lessonMap = new Map<string, { attendance_status: string[] | null }>();
-      (lessonRes.data ?? []).forEach((record: any) => {
+      ((lessonRes as any).data ?? []).forEach((record: any) => {
         lessonMap.set(`${record.student_id}:${record.class_id}`, {
           attendance_status: record.attendance_status ?? null,
         });
@@ -247,21 +258,24 @@ export function TeacherAttendanceView() {
 
       const map: Record<string, StudentAttendance[]> = {};
       slots.forEach(slot => {
-        const classStudentIds = cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
-        map[slot.id] = classStudentIds
+        const slotStudentIds = slot.isExamPrep
+          ? (slot.examPrepStudentIds || [])
+          : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
+        map[slot.id] = slotStudentIds
           .map(sid => {
             const student = studentData.get(sid);
             if (!student) return null;
 
             const log = logMap.get(sid);
-            const lesson = lessonMap.get(`${sid}:${slot.classId}`);
+            const lesson = slot.isExamPrep ? null : lessonMap.get(`${sid}:${slot.classId}`);
             const attendance = lesson?.attendance_status ?? [];
+            const isEarly = attendance.includes('조기등원');
 
             let status: AttendanceStatus = '미등원';
             if (attendance.includes('무단결석') || attendance.includes('인정결석') || attendance.includes('결석')) status = '결석';
             else if (attendance.includes('지각')) status = '지각';
             else if (attendance.includes('미등원')) status = '미등원';
-            else if (attendance.includes('정상등원')) status = '등원';
+            else if (attendance.includes('정상등원') || isEarly) status = '등원';
             else if (log?.checked_in_at) status = '등원';
             else if (student.baseStatus === '결석') status = '결석';
             else if (student.baseStatus === '지각') status = '지각';
@@ -274,6 +288,7 @@ export function TeacherAttendanceView() {
               grade: student.grade,
               status,
               checkedInAt: log?.checked_in_at ?? null,
+              isEarly,
             } as StudentAttendance;
           })
           .filter((s): s is StudentAttendance => s !== null)
