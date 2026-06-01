@@ -75,22 +75,34 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
     const allIds = new Set(eventList.map((e) => e.id));
     for (const e of ongoing) if (!allIds.has(e.id)) eventList.push(e as ExamEvent);
 
-    // 2) Per-school exam schedules (covers 기말고사 entered per school)
+    // 2) Per-school exam schedules (covers 기말고사/중간고사 entered per school)
     let schoolList: ExamEvent[] = [];
-    if (schoolFilter) {
-      const { data: schoolExams } = await supabase
+    {
+      let q = supabase
         .from('school_schedules')
         .select('id, title, start_date, end_date, school_name')
         .eq('schedule_type', 'exam')
-        .eq('school_name', schoolFilter)
+        .not('start_date', 'is', null)
         .gte('start_date', todayStr)
         .order('start_date');
-      schoolList = (schoolExams || []).map((s: any) => ({
-        id: `school-${s.id}`,
-        title: `${s.school_name} ${s.title}`,
-        start_at: s.start_date,
-        end_at: s.end_date,
-      }));
+      if (schoolFilter) q = q.eq('school_name', schoolFilter);
+      const { data: schoolExams } = await q;
+      // Group by (school + base title) to avoid one row per subject
+      const grouped = new Map<string, ExamEvent>();
+      for (const s of (schoolExams || []) as any[]) {
+        // Strip trailing " - <subject>" so "중간고사 - 수학" collapses to "중간고사"
+        const baseTitle = String(s.title || '').replace(/\s*[-–]\s*[^-–]+$/, '').trim() || s.title;
+        const key = `${s.school_name}|${baseTitle}|${s.start_date}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            id: `school-${s.id}`,
+            title: `${s.school_name} ${baseTitle}`,
+            start_at: s.start_date,
+            end_at: s.end_date,
+          });
+        }
+      }
+      schoolList = Array.from(grouped.values());
     }
 
     // Filter academy events by school name when schoolFilter set
