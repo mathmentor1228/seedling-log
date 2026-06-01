@@ -655,14 +655,19 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
       }
 
 
-      // Homework assignment creation
+      // Homework assignment creation — HW-DEDUP-V1
+      // Skip duplicate inserts of the same homework (same student+subject+normalized content)
+      // EXCLUDING 'daily' homework (daily checks are intentionally repeatable).
       if (activeFields.has('homework_items')) {
         const selectedRecords = drafts.filter(d => selectedIds.has(d.id));
-        const hwAssignments = selectedRecords.flatMap(record => {
+        const normHw = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+
+        // Build candidates (already with within-batch dedup)
+        const seenInBatch = new Set<string>();
+        const candidates = selectedRecords.flatMap(record => {
           const sourceItems = usePerStudentHomeworkItems
             ? (perStudentHomeworkItems[record.id] || [])
             : homeworkItems;
-
           return sourceItems
             .filter(hw => hw.content.trim())
             .map(hw => ({
@@ -674,12 +679,45 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
               homework_type: hw.homework_type,
               check_status: 'unchecked' as const,
               created_by: user!.id,
-            }));
+            }))
+            .filter(row => {
+              if (row.homework_type === 'daily') return true; // daily allows repeats
+              const key = `${row.student_id}::${row.subject}::${normHw(row.content)}`;
+              if (seenInBatch.has(key)) return false;
+              seenInBatch.add(key);
+              return true;
+            });
         });
 
-        if (hwAssignments.length > 0) {
-          const { error: hwError } = await supabase.from('homework_assignments').insert(hwAssignments);
-          if (hwError) throw hwError;
+        if (candidates.length > 0) {
+          // Dedup against existing assignments on the same date (non-daily only)
+          const nonDaily = candidates.filter(c => c.homework_type !== 'daily');
+          const existingKeys = new Set<string>();
+          if (nonDaily.length > 0) {
+            const studentIds = Array.from(new Set(nonDaily.map(c => c.student_id)));
+            const subjects = Array.from(new Set(nonDaily.map(c => c.subject)));
+            const { data: existing } = await supabase
+              .from('homework_assignments')
+              .select('student_id, subject, content, homework_type')
+              .in('student_id', studentIds)
+              .in('subject', subjects)
+              .eq('assigned_date', searchDate)
+              .neq('homework_type', 'daily');
+            (existing || []).forEach((e: any) => {
+              existingKeys.add(`${e.student_id}::${e.subject}::${normHw(e.content || '')}`);
+            });
+          }
+
+          const hwAssignments = candidates.filter(c => {
+            if (c.homework_type === 'daily') return true;
+            const key = `${c.student_id}::${c.subject}::${normHw(c.content)}`;
+            return !existingKeys.has(key);
+          });
+
+          if (hwAssignments.length > 0) {
+            const { error: hwError } = await supabase.from('homework_assignments').insert(hwAssignments);
+            if (hwError) throw hwError;
+          }
         }
       }
 
