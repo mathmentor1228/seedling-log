@@ -865,11 +865,25 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
       setDrafts(updatedDrafts);
       setPerStudentTest(newPerTest);
+      // SYNC-TEST-RESULT-DISPLAY-V1: auto-open per-student view so synced score is visible
+      if (updatedCount > 0) setUsePerStudentTest(true);
+
+      // Build short results summary for toast (so the actual test outcome appears immediately)
+      const lines: string[] = [];
+      for (const draft of targets) {
+        const key = `${draft.student_id}::${draft.subject}`;
+        const src = latestMap.get(key);
+        if (!src || (!src.content && !src.scoreText && src.result === 'none')) continue;
+        const tag = src.result === 'pass' ? '통과' : src.result === 'fail' ? '불통과' : '';
+        const score = src.scoreText ? ` ${src.scoreText}` : '';
+        lines.push(`${draft.student_name}${score}${tag ? ` (${tag})` : ''}`);
+      }
+      const summary = lines.slice(0, 5).join(' · ') + (lines.length > 5 ? ` 외 ${lines.length - 5}명` : '');
 
       toast({
         title: updatedCount > 0 ? '테스트 결과 연동 완료' : '연동할 테스트가 없습니다',
         description: updatedCount > 0
-          ? `${updatedCount}명 적용${skippedCount > 0 ? ` · ${skippedCount}명 매칭 없음` : ''}`
+          ? `${updatedCount}명 적용${skippedCount > 0 ? ` · ${skippedCount}명 매칭 없음` : ''}${summary ? `\n${summary}` : ''}`
           : `${searchDate}에 등록된 테스트 기록(test_records / 일괄테스트입력)을 찾지 못했습니다. 날짜와 과목을 확인해주세요.`,
         variant: updatedCount > 0 ? 'default' : 'destructive',
       });
