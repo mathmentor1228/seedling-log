@@ -142,12 +142,17 @@ export function AttendanceAlertWatcher() {
       .from('lesson_records')
       .select('student_id, attendance_status, lesson_types')
       .eq('lesson_date', today);
-    const ABSENCE_TAGS = ['결석', '인정결석', '무단결석', '보충불가', '지각', '조퇴'];
+    // ATT-ALERT-RESOLVE-V2: ANY non-empty attendance_status on today's lesson_record means
+    // the teacher has already handled this student (including '정상등원'), so the popup should
+    // stop showing them. Previously we only treated absence tags as resolved, which left
+    // dashboard-checked "정상등원" students lingering in the popup.
     (lessonRows ?? []).forEach((r: any) => {
       const tags: string[] = r.attendance_status ?? [];
       const lt: string[] = r.lesson_types ?? [];
       if (lt.includes('휴강')) { absentIds.add(r.student_id); return; }
-      if (tags.some((t) => ABSENCE_TAGS.includes(t))) absentIds.add(r.student_id);
+      if (Array.isArray(tags) && tags.filter(Boolean).length > 0) {
+        absentIds.add(r.student_id);
+      }
     });
 
     const overdue: OverdueEntry[] = [];
