@@ -147,8 +147,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error };
+    if (data.user) {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('id', data.user.id)
+        .single();
+      if (prof && (prof as any).is_active === false) {
+        await supabase.auth.signOut();
+        return { error: new Error('비활성화된 계정입니다. 관리자에게 문의하세요.') };
+      }
+    }
+    return { error: null };
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
