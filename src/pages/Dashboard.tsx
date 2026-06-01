@@ -2619,7 +2619,12 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
       {(isAdmin(role) || isTeacher(role)) && (
         <AssistantRequestsWidget />
       )}
-      
+
+      {/* ━━━ 다가오는 시험 D-Day ━━━ */}
+      {(isAdmin(role) || isTeacher(role)) && (
+        <ExamDdayBanner />
+      )}
+
       {/* ━━━ 섹션 1: 주의사항 ━━━ */}
       <AttentionSummaryBar items={attentionItems} />
 
