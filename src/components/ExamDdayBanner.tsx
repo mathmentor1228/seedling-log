@@ -120,9 +120,9 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
       merged.push(e);
     }
 
-    // Show only the nearest upcoming exam per type label (middle / final), keep all distinct titles up to 3
+    // Show nearest upcoming exams (more entries when no school filter for teacher view)
     merged.sort((a, b) => a.start_at.localeCompare(b.start_at));
-    setExams(merged.slice(0, 4));
+    setExams(merged.slice(0, schoolFilter ? 4 : 10));
   }
 
   if (exams.length === 0) return null;
