@@ -144,15 +144,23 @@ export function TeacherAttendanceView() {
   const fetchSchedule = useCallback(async () => {
     try {
       const dow = new Date().getDay();
-      const { data: schedules } = await supabase
-        .from('class_schedules')
-        .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
-        .eq('teacher_id', teacherId)
-        .eq('day_of_week', dow)
-        .eq('is_active', true)
-        .order('start_time');
+      const [schedRes, examRes] = await Promise.all([
+        supabase
+          .from('class_schedules')
+          .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
+          .eq('teacher_id', teacherId)
+          .eq('day_of_week', dow)
+          .eq('is_active', true)
+          .order('start_time'),
+        supabase
+          .from('exam_prep_schedules')
+          .select('id, student_id, subject, start_time, end_time')
+          .eq('teacher_id', teacherId)
+          .eq('schedule_date', today),
+      ]);
 
-      if (!schedules || schedules.length === 0) { setSlots([]); setLoading(false); return; }
+      const schedules = schedRes.data || [];
+      const examPrep = examRes.data || [];
 
       const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
         id: s.id,
@@ -163,17 +171,41 @@ export function TeacherAttendanceView() {
         endTime: s.end_time?.slice(0, 5) || '',
         classroomName: s.classrooms?.name || null,
       }));
-      setSlots(parsed);
+
+      // Group exam prep schedules by start-end-subject into synthetic slots
+      const examGroups = new Map<string, { startTime: string; endTime: string; subject: string; studentIds: string[] }>();
+      examPrep.forEach((e: any) => {
+        const start = (e.start_time || '').slice(0, 5);
+        const end = (e.end_time || '').slice(0, 5);
+        const key = `${start}-${end}-${e.subject}`;
+        if (!examGroups.has(key)) examGroups.set(key, { startTime: start, endTime: end, subject: e.subject, studentIds: [] });
+        examGroups.get(key)!.studentIds.push(e.student_id);
+      });
+      const examSlots: ScheduleSlot[] = Array.from(examGroups.entries()).map(([k, g]) => ({
+        id: `examprep-${k}`,
+        classId: '',
+        className: '시험특강',
+        subject: g.subject,
+        startTime: g.startTime,
+        endTime: g.endTime,
+        classroomName: null,
+        isExamPrep: true,
+        examPrepStudentIds: g.studentIds,
+      }));
+
+      const all = [...parsed, ...examSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
+      if (all.length === 0) { setSlots([]); setLoading(false); return; }
+      setSlots(all);
 
       const n = new Date();
       const nowStr = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
-      const current = parsed.find(sl => nowStr >= sl.startTime && nowStr <= sl.endTime);
-      setActiveSlotId(current?.id || parsed[0]?.id || null);
+      const current = all.find(sl => nowStr >= sl.startTime && nowStr <= sl.endTime);
+      setActiveSlotId(current?.id || all[0]?.id || null);
     } catch (err) {
       console.error('fetchSchedule error:', err);
       setLoading(false);
     }
-  }, [teacherId]);
+  }, [teacherId, today]);
 
   const fetchStudents = useCallback(async () => {
     try {
