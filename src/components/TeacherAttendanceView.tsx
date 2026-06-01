@@ -368,11 +368,13 @@ export function TeacherAttendanceView() {
           const slotStart = new Date();
           slotStart.setHours(sh, sm || 0, 0, 0);
           const minutesUntil = (slotStart.getTime() - Date.now()) / 60000;
-          if (minutesUntil > 30 && !opts?.skipEarlyCheck) {
-            const ok = window.confirm(
-              `아직 수업시간이 아닙니다.\n수업 시작: ${activeSlot.startTime} (약 ${Math.round(minutesUntil)}분 남음)\n\n그래도 등원처리 하시겠습니까?\n→ 조기등원으로 기록됩니다.`
-            );
-            if (!ok) return;
+          if (minutesUntil > 30) {
+            if (!opts?.skipEarlyCheck) {
+              const ok = window.confirm(
+                `아직 수업시간이 아닙니다.\n수업 시작: ${activeSlot.startTime} (약 ${Math.round(minutesUntil)}분 남음)\n\n그래도 등원처리 하시겠습니까?\n→ 조기등원으로 기록됩니다.`
+              );
+              if (!ok) return;
+            }
             earlyArrival = true;
             lessonAttendanceStatus = ['조기등원'];
           }
