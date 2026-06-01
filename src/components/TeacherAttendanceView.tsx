@@ -31,6 +31,7 @@ interface StudentAttendance {
   grade: string | null;
   status: AttendanceStatus;
   checkedInAt?: string | null;
+  isEarly?: boolean;
 }
 
 interface ScheduleSlot {
@@ -41,6 +42,8 @@ interface ScheduleSlot {
   startTime: string;
   endTime: string;
   classroomName: string | null;
+  isExamPrep?: boolean;
+  examPrepStudentIds?: string[];
 }
 
 /* ------------------------------------------------------------------ */
