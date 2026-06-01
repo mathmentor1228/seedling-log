@@ -714,10 +714,6 @@ export function RoomAssignmentTab() {
             <div className="space-y-1.5 text-[11px] text-muted-foreground">
               <p className="font-semibold text-foreground text-xs">범례</p>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded border-2" style={{ backgroundColor: '#9FE1CB', borderColor: '#085041' }} />
-                <span>김다빈T</span>
-              </div>
-              <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded border-2" style={{ backgroundColor: '#CECBF6', borderColor: '#534AB7' }} />
                 <span>김민희T</span>
               </div>

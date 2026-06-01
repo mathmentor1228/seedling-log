@@ -17,7 +17,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 
 const TEACHER_OPTIONS = [
-  { value: 'seo', label: '김다빈' },
   { value: 'kim', label: '김민희' },
 ];
 
