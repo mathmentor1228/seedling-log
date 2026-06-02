@@ -393,10 +393,19 @@ Deno.serve(async (req) => {
               avgUnderstanding = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
             }
 
-            const homeworkDone = lessons.filter(
-              (l) => l.homework_status === 'done' || l.homework_status === 'done_all'
-            ).length;
-            homeworkCompletionRate = Math.round((homeworkDone / lessons.length) * 100);
+            // HW-RATE-FIX: enum values are completed/partial/not_done/none_assigned.
+            // Exclude none_assigned/none/null from denominator; count completed as 1.0 and partial as 0.5.
+            const hwLessons = lessons.filter(
+              (l) => l.homework_status && l.homework_status !== 'none_assigned' && l.homework_status !== 'none'
+            );
+            if (hwLessons.length > 0) {
+              const score = hwLessons.reduce((acc, l) => {
+                if (l.homework_status === 'completed') return acc + 1;
+                if (l.homework_status === 'partial') return acc + 0.5;
+                return acc;
+              }, 0);
+              homeworkCompletionRate = Math.round((score / hwLessons.length) * 100);
+            }
           }
 
           let riskLevel: string | null = riskLevelFromAi || 'low';
