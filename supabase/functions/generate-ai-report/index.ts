@@ -1748,7 +1748,8 @@ async function generateOpeningClosingNotes(
   weekStart: string,
   weekEnd: string,
   subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>,
-  customParentPrompt?: string
+  customParentPrompt?: string,
+  precomputedHwStats?: { completed: number; partial: number; notDone: number; total: number; bySubject?: Record<string, { completed: number; partial: number; notDone: number; total: number }> }
 ): Promise<{ openingNote: string; closingNote: string }> {
   const subjects = Object.keys(subjectData);
   const totalLessons = Object.values(subjectData).reduce((sum, d) => sum + d.lessons.length, 0);
@@ -1769,7 +1770,8 @@ async function generateOpeningClosingNotes(
     }
   }
 
-  // REPORT_TRUST_UPGRADE_V1: Calculate homework completion stats
+  // REPORT_TRUST_UPGRADE_V1 + HW-MERGE-V1: Calculate homework completion stats
+  // Combine lesson_records.homework_status AND homework_assignments (DailyHomeworkChecklist)
   let hwCompleted = 0, hwPartial = 0, hwNotDone = 0, hwTotal = 0;
   for (const data of Object.values(subjectData)) {
     for (const lesson of data.lessons) {
@@ -1781,7 +1783,14 @@ async function generateOpeningClosingNotes(
       }
     }
   }
-  const hwRate = hwTotal > 0 ? Math.round((hwCompleted / hwTotal) * 100) : null;
+  if (precomputedHwStats && precomputedHwStats.total > 0) {
+    hwTotal += precomputedHwStats.total;
+    hwCompleted += precomputedHwStats.completed;
+    hwPartial += precomputedHwStats.partial;
+    hwNotDone += precomputedHwStats.notDone;
+  }
+  const hwRate = hwTotal > 0 ? Math.round(((hwCompleted + hwPartial * 0.5) / hwTotal) * 100) : null;
+  
   
   // REPORT_TEMPLATE_DB_V1: Use custom prompt for opening/closing if available
   const systemPrompt = customParentPrompt
