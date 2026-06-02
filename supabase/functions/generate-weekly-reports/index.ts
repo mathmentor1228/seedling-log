@@ -393,18 +393,35 @@ Deno.serve(async (req) => {
               avgUnderstanding = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
             }
 
-            // HW-RATE-FIX: enum values are completed/partial/not_done/none_assigned.
-            // Exclude none_assigned/none/null from denominator; count completed as 1.0 and partial as 0.5.
+            // HW-RATE-FIX + HW-MERGE-V1: enum values are completed/partial/not_done/none_assigned.
+            // Combine lesson_records.homework_status AND homework_assignments (DailyHomeworkChecklist).
             const hwLessons = lessons.filter(
               (l) => l.homework_status && l.homework_status !== 'none_assigned' && l.homework_status !== 'none'
             );
-            if (hwLessons.length > 0) {
-              const score = hwLessons.reduce((acc, l) => {
-                if (l.homework_status === 'completed') return acc + 1;
-                if (l.homework_status === 'partial') return acc + 0.5;
-                return acc;
-              }, 0);
-              homeworkCompletionRate = Math.round((score / hwLessons.length) * 100);
+            let hwCount = hwLessons.length;
+            let hwScore = hwLessons.reduce((acc, l) => {
+              if (l.homework_status === 'completed') return acc + 1;
+              if (l.homework_status === 'partial') return acc + 0.5;
+              return acc;
+            }, 0);
+
+            const { data: hwAssignments } = await supabase
+              .from('homework_assignments')
+              .select('result, check_status')
+              .eq('student_id', student.id)
+              .gte('assigned_date', weekStart)
+              .lte('assigned_date', weekEnd)
+              .eq('check_status', 'checked');
+            for (const a of hwAssignments || []) {
+              const r = a.result;
+              if (!r || r === 'unable_to_verify') continue;
+              if (r === 'completed' || r === 'low_effort_completed') { hwCount++; hwScore += 1; }
+              else if (r === 'partial') { hwCount++; hwScore += 0.5; }
+              else if (r === 'not_done' || r === 'low_effort' || r === 'lost') { hwCount++; }
+            }
+
+            if (hwCount > 0) {
+              homeworkCompletionRate = Math.round((hwScore / hwCount) * 100);
             }
           }
 
