@@ -34,7 +34,7 @@ interface VocabSelfTestProps {
   scopeLabel?: string;
   /** Expected total seconds (shown on completion screen alongside actual duration). */
   expectedSeconds?: number;
-  onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number }) => void;
+  onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number; wordResults?: { english: string; correct: boolean }[] }) => void;
   onBack: () => void;
 }
 
@@ -179,6 +179,7 @@ function checkAnswerResult(userAnswer: string, correctAnswer: string): ResultSta
 }
 
 export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimit, modePool, levelLabel, scopeLabel, expectedSeconds, onFinish, onBack }: VocabSelfTestProps) {
+  const [activeWords, setActiveWords] = useState<VocabWord[]>(words);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [results, setResults] = useState<TestResult[]>([]);
@@ -198,18 +199,18 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
 
   // Per-question mode (random pick if pool, else fixed)
   const perQuestionModes = useMemo<QMode[]>(() => {
-    if (!modePool || modePool.length === 0) return words.map(() => mode);
-    return words.map(() => modePool[Math.floor(Math.random() * modePool.length)]);
-  }, [words, mode, modePool]);
+    if (!modePool || modePool.length === 0) return activeWords.map(() => mode);
+    return activeWords.map(() => modePool[Math.floor(Math.random() * modePool.length)]);
+  }, [activeWords, mode, modePool]);
 
   const activeMode: QMode = perQuestionModes[currentIdx] ?? mode;
   const isListening = activeMode === 'listening';
-  const isLevelMode = testLevel >= 1 && testLevel <= 3;
-  const isChoiceMode = isLevelMode && (testLevel === 1 || testLevel === 2) && !isListening;
+  const isLevelMode = testLevel >= 0 && testLevel <= 3;
+  const isChoiceMode = isLevelMode && (testLevel === 0 || testLevel === 1 || testLevel === 2) && !isListening;
   const isTypingLevel = isLevelMode && (testLevel === 3 || isListening);
-  const choiceCount = testLevel === 1 ? 3 : testLevel === 2 ? 5 : 0;
-  const perQuestionSeconds = testLevel === 3 ? 6 : 4;
-  const currentWord = words[currentIdx];
+  const choiceCount = testLevel === 2 ? 5 : 3; // Lv.0·1: 3지선다, Lv.2: 5지선다
+  const perQuestionSeconds = testLevel === 0 ? 2 : testLevel === 3 ? 6 : 4;
+  const currentWord = activeWords[currentIdx];
   // In listening mode: student hears English, types Korean meaning
   const question = isListening ? '' : (activeMode === 'eng_to_kor' ? currentWord?.english : currentWord?.meaning);
   const answer = isListening ? currentWord?.meaning : (activeMode === 'eng_to_kor' ? currentWord?.meaning : currentWord?.english);
@@ -218,7 +219,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
   useEffect(() => {
     if (isChoiceMode && currentWord && !showResult && !finished) {
       const correctAnswer = answer;
-      const otherAnswers = words
+      const otherAnswers = activeWords
         .filter(w => w.english !== currentWord.english)
         .map(w => activeMode === 'eng_to_kor' ? w.meaning : w.english)
         .sort(() => Math.random() - 0.5)
@@ -261,12 +262,13 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
           clearInterval(interval);
           // Force finish
           const correct = results.filter(r => r.status === 'correct').length;
-          const wrong = words.length - correct;
+          const wrong = activeWords.length - correct;
           const finishedAt = new Date().toISOString();
           const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
+          const wordResults = results.map(r => ({ english: r.word.english, correct: r.status === 'correct' }));
           setFinishedDuration(duration);
           setFinished(true);
-          onFinish(correct, wrong, words.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration });
+          onFinish(correct, wrong, activeWords.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration, wordResults });
           return 0;
         }
         return prev - 1;
@@ -310,7 +312,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
   }, [currentWord, doCheck]);
 
   const goNext = () => {
-    if (currentIdx < words.length - 1) {
+    if (currentIdx < activeWords.length - 1) {
       setCurrentIdx(prev => prev + 1);
       setUserAnswer('');
       setShowResult(false);
@@ -321,9 +323,10 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       const wrong = results.filter(r => r.status !== 'correct').length;
       const finishedAt = new Date().toISOString();
       const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
+      const wordResults = results.map(r => ({ english: r.word.english, correct: r.status === 'correct' }));
       setFinishedDuration(duration);
       setFinished(true);
-      onFinish(correct, wrong, words.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration });
+      onFinish(correct, wrong, activeWords.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration, wordResults });
     }
   };
 
@@ -340,7 +343,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
   const correctCount = results.filter(r => r.status === 'correct').length;
   const partialCount = results.filter(r => r.status === 'partial').length;
   const wrongCount = results.filter(r => r.status === 'wrong' || r.status === 'skipped').length;
-  const progressPercent = Math.round(((currentIdx + (showResult ? 1 : 0)) / words.length) * 100);
+  const progressPercent = Math.round(((currentIdx + (showResult ? 1 : 0)) / activeWords.length) * 100);
 
   const wrongAndPartialWords = results.filter(r => r.status !== 'correct');
   const filteredReview = reviewFilter === 'all'
@@ -349,12 +352,26 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
         reviewFilter === 'partial' ? r.status === 'partial' : (r.status === 'wrong' || r.status === 'skipped')
       );
 
+  const resetTest = (nextWords: VocabWord[]) => {
+    setActiveWords(nextWords);
+    startedAtRef.current = new Date().toISOString();
+    setCurrentIdx(0);
+    setUserAnswer('');
+    setResults([]);
+    setShowResult(false);
+    setCurrentStatus(null);
+    setFinished(false);
+    setFinishedDuration(null);
+    setReviewFilter('all');
+    setListeningRevealed(false);
+  };
+
   if (finished) {
     return <FinishedView
       correctCount={correctCount}
       partialCount={partialCount}
       wrongCount={wrongCount}
-      totalCount={words.length}
+      totalCount={activeWords.length}
       wrongAndPartialWords={wrongAndPartialWords}
       filteredReview={filteredReview}
       reviewFilter={reviewFilter}
@@ -365,18 +382,8 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       durationSeconds={finishedDuration}
       expectedSeconds={expectedSeconds}
       onBack={onBack}
-      onRetry={() => {
-        startedAtRef.current = new Date().toISOString();
-        setCurrentIdx(0);
-        setUserAnswer('');
-        setResults([]);
-        setShowResult(false);
-        setCurrentStatus(null);
-        setFinished(false);
-        setFinishedDuration(null);
-        setReviewFilter('all');
-        setListeningRevealed(false);
-      }}
+      onRetry={() => resetTest(words)}
+      onRetryWrong={wrongAndPartialWords.length > 0 ? () => resetTest(wrongAndPartialWords.map(r => r.word)) : undefined}
     />;
   }
 
@@ -388,7 +395,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
           <ChevronLeft className="w-4 h-4 mr-1" /> 목록
         </Button>
         <div className="text-sm text-muted-foreground">
-          {currentIdx + 1} / {words.length}
+          {currentIdx + 1} / {activeWords.length}
         </div>
         <div className="flex gap-2 text-sm">
           <span className="text-green-600 font-medium">✓{correctCount}</span>
@@ -587,12 +594,13 @@ interface FinishedViewProps {
   expectedSeconds?: number;
   onBack: () => void;
   onRetry: () => void;
+  onRetryWrong?: () => void;
 }
 
 function FinishedView({
   correctCount, partialCount, wrongCount, totalCount,
   wrongAndPartialWords, filteredReview, reviewFilter, setReviewFilter,
-  mode, levelLabel, scopeLabel, durationSeconds, expectedSeconds, onBack, onRetry,
+  mode, levelLabel, scopeLabel, durationSeconds, expectedSeconds, onBack, onRetry, onRetryWrong,
 }: FinishedViewProps) {
   const score = Math.round((correctCount / totalCount) * 100);
   const overTime = durationSeconds != null && expectedSeconds != null && durationSeconds > expectedSeconds;
@@ -706,13 +714,20 @@ function FinishedView({
             </div>
           )}
 
-          <div className="flex gap-2 justify-center mt-4">
-            <Button variant="outline" onClick={onBack}>
-              <ChevronLeft className="w-4 h-4 mr-1" /> 목록으로
-            </Button>
-            <Button variant="outline" onClick={onRetry}>
-              <RotateCcw className="w-3.5 h-3.5 mr-1" /> 다시 풀기
-            </Button>
+          <div className="flex flex-col gap-2 mt-4">
+            {onRetryWrong && (
+              <Button onClick={onRetryWrong} className="w-full bg-red-500 hover:bg-red-600 text-white">
+                <RotateCcw className="w-3.5 h-3.5 mr-1" /> 오답만 다시 ({wrongCount + partialCount}개)
+              </Button>
+            )}
+            <div className="flex gap-2 justify-center">
+              <Button variant="outline" onClick={onBack}>
+                <ChevronLeft className="w-4 h-4 mr-1" /> 목록으로
+              </Button>
+              <Button variant="outline" onClick={onRetry}>
+                <RotateCcw className="w-3.5 h-3.5 mr-1" /> 전체 다시 풀기
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

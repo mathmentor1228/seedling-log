@@ -66,6 +66,7 @@ export default function StudentVocab() {
   const [selfModeEK, setSelfModeEK] = useState(true);   // 영→한
   const [selfModeKE, setSelfModeKE] = useState(true);   // 한→영
   const [selfModeListen, setSelfModeListen] = useState(false); // 듣고 스펠/뜻
+  const [selfTestWeakBoost, setSelfTestWeakBoost] = useState(false); // 약점 우선
 
   useEffect(() => {
     loadVocabSets();
@@ -108,21 +109,59 @@ export default function StudentVocab() {
     );
   };
 
+  const weakKey = `vocabWeakWords_${student?.id ?? 'guest'}`;
+
+  const getWeakCounts = (): Record<string, number> => {
+    try { return JSON.parse(localStorage.getItem(weakKey) ?? '{}'); } catch { return {}; }
+  };
+
+  const updateWeakCounts = (wordResults: { english: string; correct: boolean }[]) => {
+    const counts = getWeakCounts();
+    for (const { english, correct } of wordResults) {
+      if (correct) {
+        counts[english] = Math.max(0, (counts[english] ?? 0) - 1);
+      } else {
+        counts[english] = (counts[english] ?? 0) + 1;
+      }
+    }
+    localStorage.setItem(weakKey, JSON.stringify(counts));
+  };
+
   const startFlashcards = () => {
     const allWords = vocabSets
       .filter(s => selectedSetIds.includes(s.set_id))
       .flatMap(s => s.words);
     if (allWords.length === 0) return;
 
-    let shuffled = [...allWords];
+    // For self-test with weak boost: duplicate words proportional to wrong count before shuffling
+    let pool = [...allWords];
+    if (studyType === 'self_test' && selfTestWeakBoost) {
+      const weakCounts = getWeakCounts();
+      const extras: VocabWord[] = [];
+      for (const word of allWords) {
+        const wc = weakCounts[word.english] ?? 0;
+        // 1~2회 오답: 1개 추가, 3회+: 2개 추가
+        const copies = wc >= 3 ? 2 : wc >= 1 ? 1 : 0;
+        for (let c = 0; c < copies; c++) extras.push(word);
+      }
+      pool = [...allWords, ...extras];
+    }
+
+    let shuffled = [...pool];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
 
-    // For self-test, limit to selfTestWordCount
+    // For self-test, limit to selfTestWordCount (dedup to avoid same word appearing twice in a row)
     if (studyType === 'self_test') {
-      shuffled = shuffled.slice(0, Math.min(selfTestWordCount, shuffled.length));
+      const seen = new Set<string>();
+      const deduped: VocabWord[] = [];
+      for (const w of shuffled) {
+        if (!seen.has(w.english)) { seen.add(w.english); deduped.push(w); }
+        if (deduped.length >= Math.min(selfTestWordCount, allWords.length)) break;
+      }
+      shuffled = deduped;
     }
 
     setCards(shuffled);
@@ -237,6 +276,78 @@ export default function StudentVocab() {
   // Check if any set has homework (required_rounds > 0)
   const hasHomework = vocabSets.some(s => s.required_rounds > 0);
 
+  // Today's recommended sets: sets not yet studied today
+  const recommendedSets = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayDoneIds = new Set(
+      completions
+        .filter(c => c.completed_at.startsWith(todayStr))
+        .flatMap(c => c.word_set_ids)
+    );
+    return vocabSets.filter(s => !todayDoneIds.has(s.set_id));
+  }, [vocabSets, completions]);
+
+  const startFromRecommended = () => {
+    if (recommendedSets.length === 0) return;
+    const ids = recommendedSets.map(s => s.set_id);
+    setSelectedSetIds(ids);
+    const allWords = recommendedSets.flatMap(s => s.words);
+    let pool = [...allWords];
+    if (selfTestWeakBoost) {
+      const weakCounts = getWeakCounts();
+      const extras: VocabWord[] = [];
+      for (const word of allWords) {
+        const wc = weakCounts[word.english] ?? 0;
+        const copies = wc >= 3 ? 2 : wc >= 1 ? 1 : 0;
+        for (let c = 0; c < copies; c++) extras.push(word);
+      }
+      pool = [...allWords, ...extras];
+    }
+    let shuffled = [...pool];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const seen = new Set<string>();
+    const deduped: VocabWord[] = [];
+    for (const w of shuffled) {
+      if (!seen.has(w.english)) { seen.add(w.english); deduped.push(w); }
+      if (deduped.length >= Math.min(selfTestWordCount, allWords.length)) break;
+    }
+    setCards(deduped);
+    setStudyType('self_test');
+    setTestMode(true);
+    setStarted(true);
+  };
+
+  // KST date string helper (UTC+9)
+  const toKST = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+  const todayKST = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+
+  const streak = useMemo(() => {
+    const doneSet = new Set(completions.map(c => toKST(c.completed_at)));
+    const startOffset = doneSet.has(todayKST) ? 0 : 1;
+    let count = 0;
+    for (let i = startOffset; i < 365; i++) {
+      const d = new Date(Date.now() + 9 * 3600000 - i * 86400000).toISOString().slice(0, 10);
+      if (!doneSet.has(d)) break;
+      count++;
+    }
+    return count;
+  }, [completions]);
+
+  const grassData = useMemo(() => {
+    const countByDate: Record<string, number> = {};
+    for (const c of completions) {
+      const d = toKST(c.completed_at);
+      countByDate[d] = (countByDate[d] || 0) + 1;
+    }
+    return Array.from({ length: 28 }, (_, i) => {
+      const d = new Date(Date.now() + 9 * 3600000 - (27 - i) * 86400000).toISOString().slice(0, 10);
+      return { date: d, count: countByDate[d] || 0 };
+    });
+  }, [completions]);
+
   // Check if any selected sets have english_definition
   const hasEngDefinitions = useMemo(() => {
     const selected = selectedSetIds.length > 0
@@ -289,6 +400,80 @@ export default function StudentVocab() {
               <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                 <span>Lv.{testLevel}</span>
                 {testTimeLimit && <span>제한시간 {testTimeLimit}초</span>}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Today's recommended words */}
+        {vocabSets.length > 0 && recommendedSets.length > 0 && (
+          <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+            <CardContent className="pt-4 pb-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  오늘의 단어
+                </p>
+                <span className="text-xs text-muted-foreground">
+                  {Math.min(selfTestWordCount, recommendedSets.reduce((s, set) => s + set.words.length, 0))}단어
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {recommendedSets.slice(0, 4).map(s => (
+                  <Badge key={s.set_id} variant="outline" className="text-[10px] border-amber-300">{s.set_title}</Badge>
+                ))}
+                {recommendedSets.length > 4 && (
+                  <Badge variant="outline" className="text-[10px] border-amber-300">+{recommendedSets.length - 4}개</Badge>
+                )}
+              </div>
+              <Button
+                size="sm"
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white h-8 text-xs"
+                onClick={startFromRecommended}
+              >
+                <Zap className="w-3.5 h-3.5 mr-1" />
+                지금 바로 시작하기
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {vocabSets.length > 0 && recommendedSets.length === 0 && (
+          <Card className="border-green-300 bg-green-50 dark:bg-green-950/20">
+            <CardContent className="py-3 text-center text-sm text-green-700 dark:text-green-400">
+              🎉 오늘 모든 단어를 학습했어요!
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Streak & grass widget */}
+        {completions.length > 0 && (
+          <Card>
+            <CardContent className="pt-4 pb-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">학습 기록</p>
+                <div className="flex items-center gap-1">
+                  <span className="text-base">🔥</span>
+                  <span className="font-bold text-sm">{streak}일</span>
+                  <span className="text-xs text-muted-foreground">연속</span>
+                </div>
+              </div>
+              <div className="grid grid-rows-4 grid-flow-col gap-1">
+                {grassData.map(({ date, count }) => (
+                  <div
+                    key={date}
+                    className={`w-6 h-6 rounded-sm ${
+                      count === 0 ? 'bg-muted' :
+                      count === 1 ? 'bg-green-200 dark:bg-green-800' :
+                      count === 2 ? 'bg-green-400 dark:bg-green-600' :
+                      'bg-green-600 dark:bg-green-400'
+                    }`}
+                  />
+                ))}
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground px-0.5">
+                <span>4주 전</span>
+                <span>오늘</span>
               </div>
             </CardContent>
           </Card>
@@ -477,6 +662,7 @@ export default function StudentVocab() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="0">⚡ Lv.0 · 스피드런 · 3지선다 · 2초</SelectItem>
                             <SelectItem value="1">Lv.1 · 3지선다 · 4초</SelectItem>
                             <SelectItem value="2">Lv.2 · 5지선다 · 4초</SelectItem>
                             <SelectItem value="3">Lv.3 · 주관식 · 6초</SelectItem>
@@ -513,6 +699,23 @@ export default function StudentVocab() {
                         <p className="text-[10px] text-red-500 mt-1">최소 1개 출제 방식을 선택해주세요</p>
                       )}
                     </div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[11px] text-muted-foreground">약점 단어 우선 출제</Label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={selfTestWeakBoost ? 'default' : 'outline'}
+                        className="h-7 text-[11px] px-3"
+                        onClick={() => setSelfTestWeakBoost(v => !v)}
+                      >
+                        {selfTestWeakBoost ? '🎯 ON' : 'OFF'}
+                      </Button>
+                    </div>
+                    {selfTestWeakBoost && (
+                      <p className="text-[10px] text-amber-600">
+                        이전 테스트에서 틀린 단어가 더 자주 출제됩니다
+                      </p>
+                    )}
                     <p className="text-[10px] text-muted-foreground">
                       ⚡ 결과(소요 시간 포함)는 담당 선생님에게 자동 보고되며, 무제한 재응시 가능합니다.
                     </p>
@@ -576,7 +779,7 @@ export default function StudentVocab() {
                 size="lg"
               >
                 <Shuffle className="w-4 h-4 mr-2" />
-                {studyType === 'self_test' ? `셀프 테스트 시작 (${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0))}단어 · 기준 ${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)) * (selfTestLevel === 3 ? 6 : 4)}초)`
+                {studyType === 'self_test' ? `셀프 테스트 시작 (${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0))}단어 · 기준 ${Math.min(selfTestWordCount, vocabSets.filter(s => selectedSetIds.includes(s.set_id)).reduce((sum, s) => sum + s.words.length, 0)) * (selfTestLevel === 0 ? 2 : selfTestLevel === 3 ? 6 : 4)}초)`
                   : studyType === 'test' ? '테스트 시작'
                   : studyType === 'listening' ? '듣기 테스트 시작'
                   : studyType === 'eng_eng_mc' ? '영영 객관식 시작'
@@ -649,9 +852,9 @@ export default function StudentVocab() {
     if (selfModeKE) modePool.push('kor_to_eng');
     if (selfModeListen) modePool.push('listening');
     const safePool = modePool.length > 0 ? modePool : ['eng_to_kor' as const];
-    const perQSec = selfTestLevel === 3 ? 6 : 4;
+    const perQSec = selfTestLevel === 0 ? 2 : selfTestLevel === 3 ? 6 : 4;
     const expectedSec = cards.length * perQSec;
-    const levelDesc = selfTestLevel === 1 ? '3지선다·4초' : selfTestLevel === 2 ? '5지선다·4초' : '주관식·6초';
+    const levelDesc = selfTestLevel === 0 ? '스피드런·3지선다·2초' : selfTestLevel === 1 ? '3지선다·4초' : selfTestLevel === 2 ? '5지선다·4초' : '주관식·6초';
     const selfLevelLabel = `Lv.${selfTestLevel} (${levelDesc})`;
     const selfScopeLabel = vocabSets
       .filter(s => selectedSetIds.includes(s.set_id))
@@ -667,6 +870,7 @@ export default function StudentVocab() {
         scopeLabel={selfScopeLabel}
         testTimeLimit={null}
         onFinish={async (correct, wrong, total, meta) => {
+          if (meta?.wordResults) updateWeakCounts(meta.wordResults);
           const modeStr = (safePool.length > 1 ? 'mixed' : safePool[0]) + '_self_test';
           const { error } = await studentApi.submitVocabCompletion(
             selectedSetIds, correct, wrong, total, modeStr, true, 'self',
