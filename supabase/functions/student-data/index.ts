@@ -6,6 +6,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// AUTOVOCA-SPRINT2-A3: SM-2 망각곡선 한 단어 채점 결과 반영
+// 이진 정오답(correct)을 SM-2 quality로 매핑하여 다음 복습일/숙련도를 계산한다.
+// prev 가 없으면(첫 학습) 기본값에서 시작한다.
+interface MasteryState {
+  level: number;          // 0~5 숙련도 (학생 표시용)
+  ease_factor: number;
+  interval_days: number;
+  repetitions: number;
+}
+function applySM2(prev: MasteryState | null, correct: boolean, nowMs: number): MasteryState & { next_due_at: string } {
+  const base: MasteryState = prev ?? { level: 0, ease_factor: 2.5, interval_days: 0, repetitions: 0 };
+  // 이진 결과 → quality: 정답 4, 오답 1
+  const q = correct ? 4 : 1;
+  let { ease_factor, interval_days, repetitions } = base;
+
+  if (q < 3) {
+    // 실패 → 반복 카운트 초기화, 다음날 다시
+    repetitions = 0;
+    interval_days = 1;
+  } else {
+    if (repetitions === 0) interval_days = 1;
+    else if (repetitions === 1) interval_days = 6;
+    else interval_days = Math.round(interval_days * ease_factor);
+    repetitions += 1;
+  }
+  // ease factor 갱신 (SM-2 표준식), 최소 1.3
+  ease_factor = Math.max(1.3, ease_factor + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));
+
+  // 숙련도: 정답 +1, 오답 -1, 0~5 클램프
+  const level = Math.max(0, Math.min(5, base.level + (correct ? 1 : -1)));
+
+  const next_due_at = new Date(nowMs + interval_days * 86400000).toISOString();
+  return { level, ease_factor, interval_days, repetitions, next_due_at };
+}
+
 // DEADLINE-V1: Calculate the next class datetime for a given subject and student's schedule
 // Returns the next occurrence of the class (KST), or null if no schedule found
 // If skipToday is true, skip classes on the same day (used for homework assigned today)
@@ -1266,6 +1301,7 @@ Deno.serve(async (req) => {
         const {
           word_set_ids, correct_count, wrong_count, total_count, mode, is_self_test, test_source,
           started_at, finished_at, duration_seconds, expected_seconds, self_test_options,
+          word_results, // AUTOVOCA-SPRINT2-A2: [{ english, meaning, correct }] per-word 결과(있을 때만 숙련도 갱신)
         } = params;
         if (!word_set_ids || !Array.isArray(word_set_ids)) {
           return new Response(
@@ -1314,8 +1350,12 @@ Deno.serve(async (req) => {
           .maybeSingle();
         const studentName = studentData?.name || '학생';
 
+        // AUTOVOCA-SPRINT2-A3: "오늘 복습할 단어"(망각곡선 복습)는 점수가 아닌 학습 습관이므로
+        // 교사 알림/수업기록 동기화는 건너뛴다. (숙련도 갱신·완료기록·스트릭 집계는 유지)
+        const isSm2Review = mode === 'review_self_test';
+
         // Send notification to teacher
-        if (teacherId) {
+        if (teacherId && !isSm2Review) {
           const scorePercent = total_count > 0 ? Math.round(((correct_count || 0) / total_count) * 100) : 0;
           const sourceLabel = (is_self_test || test_source === 'self') ? '셀프' : '배정';
           const overTime = duration_seconds && expected_seconds && duration_seconds > expected_seconds;
@@ -1352,7 +1392,7 @@ Deno.serve(async (req) => {
 
         // Auto-sync to lesson_records: find today's English lesson record and update test fields
         const todayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const { data: todayLesson } = await supabase
+        const { data: todayLesson } = isSm2Review ? { data: null } : await supabase
           .from('lesson_records')
           .select('id, test_content, test_result_text, test_content_2, test_result_text_2')
           .eq('student_id', student_id)
@@ -1392,7 +1432,108 @@ Deno.serve(async (req) => {
           }
         }
 
+        // AUTOVOCA-SPRINT2-A2/A3: per-word 결과가 오면 단어별 숙련도 + SM-2 스케줄 갱신
+        if (Array.isArray(word_results) && word_results.length > 0) {
+          try {
+            // 같은 단어가 한 세션에 중복 출제될 수 있으므로 word_key 기준으로 병합
+            // (정답 우선: 한 번이라도 맞히면 그 단어는 correct 로 처리)
+            const byKey: Record<string, { english: string; meaning: string | null; correct: boolean }> = {};
+            for (const wr of word_results) {
+              const eng = String(wr?.english ?? '').trim();
+              if (!eng) continue;
+              const key = eng.toLowerCase();
+              const correct = !!wr?.correct;
+              if (!byKey[key]) {
+                byKey[key] = { english: eng, meaning: wr?.meaning ?? null, correct };
+              } else {
+                byKey[key].correct = byKey[key].correct || correct;
+                if (!byKey[key].meaning && wr?.meaning) byKey[key].meaning = wr.meaning;
+              }
+            }
+            const keys = Object.keys(byKey);
+
+            if (keys.length > 0) {
+              // 기존 숙련도 로드
+              const { data: existingRows } = await supabase
+                .from('student_word_mastery')
+                .select('word_key, level, ease_factor, interval_days, repetitions, correct_count, wrong_count')
+                .eq('student_id', student_id)
+                .in('word_key', keys);
+              const existingMap: Record<string, any> = {};
+              for (const r of existingRows || []) existingMap[r.word_key] = r;
+
+              const nowMs = Date.now();
+              const nowIso = new Date(nowMs).toISOString();
+              const upserts = keys.map(key => {
+                const { english, meaning, correct } = byKey[key];
+                const prev = existingMap[key];
+                const sm2 = applySM2(
+                  prev ? { level: prev.level, ease_factor: prev.ease_factor, interval_days: prev.interval_days, repetitions: prev.repetitions } : null,
+                  correct,
+                  nowMs,
+                );
+                return {
+                  student_id,
+                  word_key: key,
+                  english,
+                  meaning: meaning ?? prev?.meaning ?? null,
+                  level: sm2.level,
+                  correct_count: (prev?.correct_count ?? 0) + (correct ? 1 : 0),
+                  wrong_count: (prev?.wrong_count ?? 0) + (correct ? 0 : 1),
+                  ease_factor: sm2.ease_factor,
+                  interval_days: sm2.interval_days,
+                  repetitions: sm2.repetitions,
+                  last_seen_at: nowIso,
+                  next_due_at: sm2.next_due_at,
+                  updated_at: nowIso,
+                };
+              });
+
+              const { error: masteryErr } = await supabase
+                .from('student_word_mastery')
+                .upsert(upserts, { onConflict: 'student_id,word_key' });
+              if (masteryErr) console.error('word mastery upsert error:', masteryErr);
+            }
+          } catch (e) {
+            // 숙련도 갱신 실패가 완료 기록 저장을 막지 않도록 격리
+            console.error('word mastery update exception:', e);
+          }
+        }
+
         result = { success: true };
+        break;
+      }
+
+      case 'vocab_mastery': {
+        // AUTOVOCA-SPRINT2-A2/A3: 학생 단어별 숙련도 + "오늘 복습할 단어" 큐
+        const nowIso = new Date().toISOString();
+        const { data: masteryRows } = await supabase
+          .from('student_word_mastery')
+          .select('word_key, english, meaning, level, correct_count, wrong_count, repetitions, last_seen_at, next_due_at')
+          .eq('student_id', student_id)
+          .order('next_due_at', { ascending: true, nullsFirst: true });
+
+        const rows = masteryRows || [];
+        // 복습 예정(due) 단어: next_due_at 이 지났거나 비어있는 단어
+        const dueWords = rows
+          .filter((r: any) => !r.next_due_at || r.next_due_at <= nowIso)
+          .map((r: any) => ({ english: r.english, meaning: r.meaning, level: r.level }));
+
+        // 숙련도 분포(0~5)
+        const levelDist = [0, 0, 0, 0, 0, 0];
+        for (const r of rows) {
+          const lv = Math.max(0, Math.min(5, r.level ?? 0));
+          levelDist[lv] += 1;
+        }
+
+        result = {
+          mastery: rows,
+          total_words: rows.length,
+          mastered_count: rows.filter((r: any) => (r.level ?? 0) >= 4).length,
+          due_count: dueWords.length,
+          due_words: dueWords,
+          level_distribution: levelDist,
+        };
         break;
       }
 

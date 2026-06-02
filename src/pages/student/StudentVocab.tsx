@@ -60,6 +60,16 @@ export default function StudentVocab() {
   const [testMode, setTestMode] = useState(false);
   const [results, setResults] = useState<('correct' | 'wrong' | null)[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // AUTOVOCA-SPRINT2-A2/A3: 단어별 숙련도 + "오늘 복습할 단어"
+  const [mastery, setMastery] = useState<{
+    total_words: number;
+    mastered_count: number;
+    due_count: number;
+    due_words: { english: string; meaning: string | null; level: number }[];
+    level_distribution: number[];
+  } | null>(null);
+  const [reviewMode, setReviewMode] = useState(false);
+  const [reviewWords, setReviewWords] = useState<VocabWord[]>([]);
   // Self-test settings
   const [selfTestWordCount, setSelfTestWordCount] = useState(20);
   const [selfTestLevel, setSelfTestLevel] = useState(2);
@@ -71,6 +81,30 @@ export default function StudentVocab() {
   useEffect(() => {
     loadVocabSets();
   }, []);
+
+  // AUTOVOCA-SPRINT2-A2/A3: 숙련도 요약 로드 (시작 화면 진입 시마다 갱신)
+  const loadMastery = useCallback(async () => {
+    const { data } = await studentApi.getVocabMastery();
+    if (data) setMastery(data);
+  }, []);
+
+  useEffect(() => {
+    if (!started) loadMastery();
+  }, [started, loadMastery]);
+
+  // "오늘 복습할 단어" 복습 시작 — due 단어를 셀프 테스트 러너로 출제
+  const startReview = () => {
+    const due = mastery?.due_words ?? [];
+    if (due.length === 0) return;
+    const words: VocabWord[] = due
+      .slice(0, 50)
+      .map(d => ({ english: d.english, meaning: d.meaning || '' }))
+      .filter(w => w.meaning);
+    if (words.length === 0) return;
+    setReviewWords(words);
+    setReviewMode(true);
+    setStarted(true);
+  };
 
   const loadVocabSets = async () => {
     setLoading(true);
@@ -226,12 +260,19 @@ export default function StudentVocab() {
     setSubmitting(true);
     const correct = results.filter(r => r === 'correct').length;
     const wrong = results.filter(r => r === 'wrong').length;
+    // AUTOVOCA-SPRINT2-A2: 카드별 "알았어요/몰랐어요"를 단어별 숙련도로 반영
+    const wordResults = cards
+      .map((c, i) => ({ english: c.english, meaning: c.meaning, correct: results[i] === 'correct' }))
+      .filter((_, i) => results[i] !== null);
     const { error } = await studentApi.submitVocabCompletion(
       selectedSetIds,
       correct,
       wrong,
       cards.length,
-      mode
+      mode,
+      false,
+      'assigned',
+      { wordResults }
     );
     if (!error) {
       toast({ title: '학습 기록 저장 완료! ✅' });
@@ -347,6 +388,32 @@ export default function StudentVocab() {
       return { date: d, count: countByDate[d] || 0 };
     });
   }, [completions]);
+
+  // AUTOVOCA-SPRINT2-B3: 자동 배지 (기존 데이터로 클라이언트 계산 — 추가 테이블 없음)
+  const badges = useMemo(() => {
+    const sessions = completions.length;
+    const mastered = mastery?.mastered_count ?? 0;
+    const defs: { id: string; emoji: string; label: string; value: number; goal: number }[] = [
+      { id: 'streak3', emoji: '🔥', label: '3일 연속', value: streak, goal: 3 },
+      { id: 'streak7', emoji: '🔥', label: '7일 연속', value: streak, goal: 7 },
+      { id: 'streak14', emoji: '⚡', label: '14일 연속', value: streak, goal: 14 },
+      { id: 'streak30', emoji: '🏅', label: '30일 연속', value: streak, goal: 30 },
+      { id: 'sess10', emoji: '📚', label: '10회 학습', value: sessions, goal: 10 },
+      { id: 'sess50', emoji: '📖', label: '50회 학습', value: sessions, goal: 50 },
+      { id: 'sess100', emoji: '🎓', label: '100회 학습', value: sessions, goal: 100 },
+      { id: 'master10', emoji: '🌱', label: '10단어 완벽', value: mastered, goal: 10 },
+      { id: 'master50', emoji: '🌿', label: '50단어 완벽', value: mastered, goal: 50 },
+      { id: 'master100', emoji: '🏆', label: '100단어 완벽', value: mastered, goal: 100 },
+    ];
+    const items = defs.map(d => ({ ...d, earned: d.value >= d.goal }));
+    const earned = items.filter(i => i.earned);
+    // 다음 목표: 아직 못 받은 배지 중 달성률 높은 순 2개
+    const next = items
+      .filter(i => !i.earned)
+      .sort((a, b) => (b.value / b.goal) - (a.value / a.goal))
+      .slice(0, 2);
+    return { earned, next, total: items.length };
+  }, [completions.length, mastery?.mastered_count, streak]);
 
   // Check if any selected sets have english_definition
   const hasEngDefinitions = useMemo(() => {
@@ -475,6 +542,87 @@ export default function StudentVocab() {
                 <span>4주 전</span>
                 <span>오늘</span>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* AUTOVOCA-SPRINT2-A2/A3: 단어 숙련도 + 오늘 복습할 단어 */}
+        {mastery && mastery.total_words > 0 && (
+          <Card className="border-violet-200 bg-violet-50/50 dark:bg-violet-950/20">
+            <CardContent className="pt-4 pb-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Target className="w-4 h-4 text-violet-500" />
+                  단어 숙련도
+                </p>
+                <span className="text-xs text-muted-foreground">
+                  완벽 암기 <span className="font-bold text-violet-600">{mastery.mastered_count}</span> / {mastery.total_words}
+                </span>
+              </div>
+              {/* 숙련도 분포 막대 (Lv0 빨강 → Lv5 초록) */}
+              <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
+                {mastery.level_distribution.map((cnt, lv) => {
+                  const pct = mastery.total_words > 0 ? (cnt / mastery.total_words) * 100 : 0;
+                  if (pct === 0) return null;
+                  const colors = ['bg-red-400', 'bg-orange-400', 'bg-amber-400', 'bg-lime-400', 'bg-green-400', 'bg-emerald-500'];
+                  return <div key={lv} className={colors[lv]} style={{ width: `${pct}%` }} title={`Lv.${lv}: ${cnt}개`} />;
+                })}
+              </div>
+              <div className="flex justify-between text-[9px] text-muted-foreground px-0.5">
+                <span>모름</span>
+                <span>완벽</span>
+              </div>
+              {mastery.due_count > 0 ? (
+                <Button
+                  size="sm"
+                  className="w-full bg-violet-500 hover:bg-violet-600 text-white h-8 text-xs mt-1"
+                  onClick={startReview}
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                  오늘 복습할 단어 {Math.min(mastery.due_count, 50)}개 복습하기
+                </Button>
+              ) : (
+                <p className="text-[11px] text-center text-green-600 dark:text-green-400 pt-1">
+                  ✅ 지금 복습할 단어가 없어요. 잘하고 있어요!
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* AUTOVOCA-SPRINT2-B3: 자동 배지 */}
+        {(badges.earned.length > 0 || badges.next.length > 0) && (
+          <Card>
+            <CardContent className="pt-4 pb-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">🎖 내 배지</p>
+                <span className="text-xs text-muted-foreground">{badges.earned.length} / {badges.total}</span>
+              </div>
+              {badges.earned.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {badges.earned.map(b => (
+                    <div
+                      key={b.id}
+                      className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 text-[11px] font-medium"
+                    >
+                      <span>{b.emoji}</span>{b.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {badges.next.length > 0 && (
+                <div className="space-y-1.5 pt-0.5">
+                  {badges.next.map(b => (
+                    <div key={b.id} className="space-y-0.5">
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span className="opacity-60">{b.emoji} {b.label}</span>
+                        <span>{Math.min(b.value, b.goal)}/{b.goal}</span>
+                      </div>
+                      <Progress value={Math.min(100, Math.round((b.value / b.goal) * 100))} className="h-1" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -793,6 +941,46 @@ export default function StudentVocab() {
     );
   }
 
+  // AUTOVOCA-SPRINT2-A3: "오늘 복습할 단어" 망각곡선 복습 모드
+  if (reviewMode) {
+    const perQSec = 4;
+    const expectedSec = reviewWords.length * perQSec;
+    return (
+      <VocabSelfTest
+        words={reviewWords}
+        mode="eng_to_kor"
+        modePool={['eng_to_kor', 'kor_to_eng']}
+        testLevel={2}
+        levelLabel="복습 (Lv.2 · 5지선다 · 4초)"
+        scopeLabel="오늘 복습할 단어"
+        testTimeLimit={null}
+        onFinish={async (correct, wrong, total, meta) => {
+          // 복습은 점수가 아닌 학습 습관: 숙련도(SM-2)·스트릭만 반영.
+          // word_set_ids=[] (숙제 진행도 비오염), is_self_test=false (교사 셀프테스트 결과 패널 제외)
+          const { error } = await studentApi.submitVocabCompletion(
+            [], correct, wrong, total, 'review_self_test', false, 'self',
+            {
+              startedAt: meta?.startedAt,
+              finishedAt: meta?.finishedAt,
+              durationSeconds: meta?.durationSeconds,
+              expectedSeconds: expectedSec,
+              wordResults: meta?.wordResults,
+              options: { kind: 'sm2_review', word_count: total },
+            }
+          );
+          if (!error) {
+            toast({
+              title: '복습 완료! ✅',
+              description: `${correct}/${total} · 망각곡선에 따라 다음 복습일이 갱신됐어요`,
+            });
+            loadMastery();
+          }
+        }}
+        onBack={() => { setReviewMode(false); setStarted(false); }}
+      />
+    );
+  }
+
   // English-English test mode
   if (testMode && (studyType === 'eng_eng_mc' || studyType === 'eng_eng_typing')) {
     const engEngWords = cards
@@ -879,6 +1067,7 @@ export default function StudentVocab() {
               finishedAt: meta?.finishedAt,
               durationSeconds: meta?.durationSeconds,
               expectedSeconds: expectedSec,
+              wordResults: meta?.wordResults,
               options: {
                 level: selfTestLevel,
                 per_question_seconds: perQSec,
@@ -936,6 +1125,7 @@ export default function StudentVocab() {
               finishedAt: meta.finishedAt,
               durationSeconds: meta.durationSeconds,
               expectedSeconds: expectedSec,
+              wordResults: meta.wordResults,
               options: {
                 level: testLevel,
                 per_question_seconds: perQSec,

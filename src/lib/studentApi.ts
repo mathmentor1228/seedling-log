@@ -130,6 +130,16 @@ export const studentApi = {
 
   getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[]; test_level?: number; test_time_limit?: number | null; active_test_assignment?: any | null }>('vocab_cards'),
 
+  // AUTOVOCA-SPRINT2-A2/A3: 단어별 숙련도 + "오늘 복습할 단어" 큐
+  getVocabMastery: () => studentApiCall<{
+    mastery: any[];
+    total_words: number;
+    mastered_count: number;
+    due_count: number;
+    due_words: { english: string; meaning: string | null; level: number }[];
+    level_distribution: number[];
+  }>('vocab_mastery'),
+
   submitVocabCompletion: (
     wordSetIds: string[],
     correctCount: number,
@@ -144,6 +154,7 @@ export const studentApi = {
       durationSeconds?: number;
       expectedSeconds?: number;
       options?: Record<string, any>;
+      wordResults?: { english: string; meaning?: string | null; correct: boolean }[];
     }
   ) =>
     studentApiCall<{ success: boolean }>('submit_vocab_completion', {
@@ -159,6 +170,7 @@ export const studentApi = {
       duration_seconds: extra?.durationSeconds ?? null,
       expected_seconds: extra?.expectedSeconds ?? null,
       self_test_options: extra?.options ?? null,
+      word_results: extra?.wordResults ?? null,
     }),
 
   getMathQuizzes: () => studentApiCall<{ quizzes: any[]; submissions: any[] }>('math_quizzes'),

@@ -34,7 +34,7 @@ interface VocabSelfTestProps {
   scopeLabel?: string;
   /** Expected total seconds (shown on completion screen alongside actual duration). */
   expectedSeconds?: number;
-  onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number; wordResults?: { english: string; correct: boolean }[] }) => void;
+  onFinish: (correct: number, wrong: number, total: number, meta?: { startedAt: string; finishedAt: string; durationSeconds: number; wordResults?: { english: string; meaning?: string; correct: boolean }[] }) => void;
   onBack: () => void;
 }
 
@@ -265,7 +265,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
           const wrong = activeWords.length - correct;
           const finishedAt = new Date().toISOString();
           const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
-          const wordResults = results.map(r => ({ english: r.word.english, correct: r.status === 'correct' }));
+          const wordResults = results.map(r => ({ english: r.word.english, meaning: r.word.meaning, correct: r.status === 'correct' }));
           setFinishedDuration(duration);
           setFinished(true);
           onFinish(correct, wrong, activeWords.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration, wordResults });
@@ -323,7 +323,7 @@ export default function VocabSelfTest({ words, mode, testLevel = 1, testTimeLimi
       const wrong = results.filter(r => r.status !== 'correct').length;
       const finishedAt = new Date().toISOString();
       const duration = Math.round((new Date(finishedAt).getTime() - new Date(startedAtRef.current).getTime()) / 1000);
-      const wordResults = results.map(r => ({ english: r.word.english, correct: r.status === 'correct' }));
+      const wordResults = results.map(r => ({ english: r.word.english, meaning: r.word.meaning, correct: r.status === 'correct' }));
       setFinishedDuration(duration);
       setFinished(true);
       onFinish(correct, wrong, activeWords.length, { startedAt: startedAtRef.current, finishedAt, durationSeconds: duration, wordResults });
