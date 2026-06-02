@@ -5958,6 +5958,7 @@ export type Database = {
           cutline_percent: number
           days_per_test: number
           days_per_test_map: Json | null
+          enhanced_features_enabled: boolean
           id: string
           is_active: boolean
           notes: string | null
@@ -5978,6 +5979,7 @@ export type Database = {
           cutline_percent?: number
           days_per_test?: number
           days_per_test_map?: Json | null
+          enhanced_features_enabled?: boolean
           id?: string
           is_active?: boolean
           notes?: string | null
@@ -5998,6 +6000,7 @@ export type Database = {
           cutline_percent?: number
           days_per_test?: number
           days_per_test_map?: Json | null
+          enhanced_features_enabled?: boolean
           id?: string
           is_active?: boolean
           notes?: string | null

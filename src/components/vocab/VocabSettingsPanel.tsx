@@ -41,6 +41,7 @@ interface VocabSetting {
   assigned_teacher: string | null;
   test_time_limit: number | null;
   test_level: number;
+  enhanced_features_enabled?: boolean;
   students?: { name: string; grade: string | null; school: string | null };
 }
 
@@ -132,6 +133,7 @@ export function VocabSettingsPanel() {
   const [formAssignedTeacher, setFormAssignedTeacher] = useState('');
   const [formTimeLimit, setFormTimeLimit] = useState<number | ''>('');
   const [formTestLevel, setFormTestLevel] = useState(1);
+  const [formEnhanced, setFormEnhanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<VocabSetting | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -176,6 +178,7 @@ export function VocabSettingsPanel() {
     setFormAssignedTeacher('');
     setFormTimeLimit('');
     setFormTestLevel(1);
+    setFormEnhanced(false);
     setEditingId(null);
   };
 
@@ -196,6 +199,7 @@ export function VocabSettingsPanel() {
     setFormAssignedTeacher(s.assigned_teacher || '');
     setFormTimeLimit(s.test_time_limit || '');
     setFormTestLevel(s.test_level || 1);
+    setFormEnhanced(!!s.enhanced_features_enabled);
     setDialogOpen(true);
   };
 
@@ -228,6 +232,7 @@ export function VocabSettingsPanel() {
       assigned_teacher: formAssignedTeacher,
       test_time_limit: formTimeLimit ? Number(formTimeLimit) : null,
       test_level: formTestLevel,
+      enhanced_features_enabled: formEnhanced,
     };
 
     let error;
@@ -435,6 +440,17 @@ export function VocabSettingsPanel() {
               <div className="space-y-1.5">
                 <Label className="text-xs">메모</Label>
                 <Input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="선택 사항" />
+              </div>
+
+              {/* AUTOVOCA-SPRINT2: 학습 강화 기능 학생별 ON/OFF (기본 OFF) */}
+              <div className="flex items-center justify-between rounded-md border border-violet-200 bg-violet-50/50 p-3">
+                <div className="pr-3">
+                  <Label className="text-xs font-medium">학습 강화 기능</Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                    켜면 이 학생의 단어 화면에 <b>단어 숙련도·망각곡선 복습·배지·학습 스트릭·오늘의 단어</b>가 표시됩니다. 끄면 기존 화면 그대로예요.
+                  </p>
+                </div>
+                <Switch checked={formEnhanced} onCheckedChange={setFormEnhanced} />
               </div>
 
               {(() => {

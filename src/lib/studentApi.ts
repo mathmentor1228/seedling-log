@@ -128,7 +128,7 @@ export const studentApi = {
   completeExamSelfCheck: (reviewId: string) =>
     studentApiCall<{ success: boolean; points_awarded: number }>('complete_exam_self_check', { review_id: reviewId }),
 
-  getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[]; test_level?: number; test_time_limit?: number | null; active_test_assignment?: any | null }>('vocab_cards'),
+  getVocabCards: () => studentApiCall<{ sets: any[]; completions: any[]; test_level?: number; test_time_limit?: number | null; active_test_assignment?: any | null; enhanced_features_enabled?: boolean }>('vocab_cards'),
 
   // AUTOVOCA-SPRINT2-A2/A3: 단어별 숙련도 + "오늘 복습할 단어" 큐
   getVocabMastery: () => studentApiCall<{

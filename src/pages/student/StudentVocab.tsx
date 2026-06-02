@@ -70,6 +70,8 @@ export default function StudentVocab() {
   } | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewWords, setReviewWords] = useState<VocabWord[]>([]);
+  // 학습 강화 기능(숙련도·복습·배지·스트릭·오늘의 단어) 노출 여부 — 담당쌤이 학생별로 ON, 기본 OFF
+  const [enhancedEnabled, setEnhancedEnabled] = useState(false);
   // Self-test settings
   const [selfTestWordCount, setSelfTestWordCount] = useState(20);
   const [selfTestLevel, setSelfTestLevel] = useState(2);
@@ -89,8 +91,8 @@ export default function StudentVocab() {
   }, []);
 
   useEffect(() => {
-    if (!started) loadMastery();
-  }, [started, loadMastery]);
+    if (!started && enhancedEnabled) loadMastery();
+  }, [started, enhancedEnabled, loadMastery]);
 
   // "오늘 복습할 단어" 복습 시작 — due 단어를 셀프 테스트 러너로 출제
   const startReview = () => {
@@ -117,6 +119,7 @@ export default function StudentVocab() {
     }
     if (data?.test_level) setTestLevel(data.test_level);
     if (data?.test_time_limit) setTestTimeLimit(data.test_time_limit);
+    setEnhancedEnabled(!!data?.enhanced_features_enabled);
     setActiveTestAssignment(data?.active_test_assignment || null);
     if (data?.active_test_assignment?.word_set_ids?.length) {
       setSelectedSetIds(data.active_test_assignment.word_set_ids);
@@ -473,7 +476,7 @@ export default function StudentVocab() {
         )}
 
         {/* Today's recommended words */}
-        {vocabSets.length > 0 && recommendedSets.length > 0 && (
+        {enhancedEnabled && vocabSets.length > 0 && recommendedSets.length > 0 && (
           <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
             <CardContent className="pt-4 pb-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -505,7 +508,7 @@ export default function StudentVocab() {
           </Card>
         )}
 
-        {vocabSets.length > 0 && recommendedSets.length === 0 && (
+        {enhancedEnabled && vocabSets.length > 0 && recommendedSets.length === 0 && (
           <Card className="border-green-300 bg-green-50 dark:bg-green-950/20">
             <CardContent className="py-3 text-center text-sm text-green-700 dark:text-green-400">
               🎉 오늘 모든 단어를 학습했어요!
@@ -514,7 +517,7 @@ export default function StudentVocab() {
         )}
 
         {/* Streak & grass widget */}
-        {completions.length > 0 && (
+        {enhancedEnabled && completions.length > 0 && (
           <Card>
             <CardContent className="pt-4 pb-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -547,7 +550,7 @@ export default function StudentVocab() {
         )}
 
         {/* AUTOVOCA-SPRINT2-A2/A3: 단어 숙련도 + 오늘 복습할 단어 */}
-        {mastery && mastery.total_words > 0 && (
+        {enhancedEnabled && mastery && mastery.total_words > 0 && (
           <Card className="border-violet-200 bg-violet-50/50 dark:bg-violet-950/20">
             <CardContent className="pt-4 pb-3 space-y-2.5">
               <div className="flex items-center justify-between">
@@ -591,7 +594,7 @@ export default function StudentVocab() {
         )}
 
         {/* AUTOVOCA-SPRINT2-B3: 자동 배지 */}
-        {(badges.earned.length > 0 || badges.next.length > 0) && (
+        {enhancedEnabled && (badges.earned.length > 0 || badges.next.length > 0) && (
           <Card>
             <CardContent className="pt-4 pb-3 space-y-2.5">
               <div className="flex items-center justify-between">

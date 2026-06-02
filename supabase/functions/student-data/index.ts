@@ -1283,7 +1283,7 @@ Deno.serve(async (req) => {
 
         const { data: vocabSettingData } = await supabase
           .from('vocab_settings')
-          .select('test_level, test_time_limit')
+          .select('test_level, test_time_limit, enhanced_features_enabled')
           .eq('student_id', student_id)
           .maybeSingle();
 
@@ -1293,6 +1293,8 @@ Deno.serve(async (req) => {
           test_level: activeTestAssignment?.test_level || vocabSettingData?.test_level || 1,
           test_time_limit: activeTestAssignment?.test_time_limit ?? vocabSettingData?.test_time_limit ?? null,
           active_test_assignment: activeTestAssignment,
+          // AUTOVOCA-SPRINT2: 학습 강화 기능(숙련도·복습·배지·스트릭 등) 노출 여부. 설정 없으면 OFF
+          enhanced_features_enabled: vocabSettingData?.enhanced_features_enabled ?? false,
         };
         break;
       }
