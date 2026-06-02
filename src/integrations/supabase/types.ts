@@ -4465,6 +4465,68 @@ export type Database = {
           },
         ]
       }
+      student_word_mastery: {
+        Row: {
+          correct_count: number
+          created_at: string
+          ease_factor: number
+          english: string
+          id: string
+          interval_days: number
+          last_seen_at: string | null
+          level: number
+          meaning: string | null
+          next_due_at: string | null
+          repetitions: number
+          student_id: string
+          updated_at: string
+          word_key: string
+          wrong_count: number
+        }
+        Insert: {
+          correct_count?: number
+          created_at?: string
+          ease_factor?: number
+          english: string
+          id?: string
+          interval_days?: number
+          last_seen_at?: string | null
+          level?: number
+          meaning?: string | null
+          next_due_at?: string | null
+          repetitions?: number
+          student_id: string
+          updated_at?: string
+          word_key: string
+          wrong_count?: number
+        }
+        Update: {
+          correct_count?: number
+          created_at?: string
+          ease_factor?: number
+          english?: string
+          id?: string
+          interval_days?: number
+          last_seen_at?: string | null
+          level?: number
+          meaning?: string | null
+          next_due_at?: string | null
+          repetitions?: number
+          student_id?: string
+          updated_at?: string
+          word_key?: string
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_word_mastery_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
           course_status: string
