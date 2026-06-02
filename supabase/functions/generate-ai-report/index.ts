@@ -867,6 +867,49 @@ Deno.serve(async (req) => {
       curriculumInfo = curriculum || [];
     }
 
+    // HW-MERGE-V1: also pull homework_assignments checked by teachers
+    // (teachers often mark HW completion via DailyHomeworkChecklist, not via lesson_records.homework_status)
+    const { data: hwAssignments } = await supabase
+      .from('homework_assignments')
+      .select('subject, result, check_status, assigned_date')
+      .eq('student_id', student_id)
+      .gte('assigned_date', week_start)
+      .lte('assigned_date', week_end);
+
+    const mapHwResult = (r: string | null): 'completed' | 'partial' | 'not_done' | null => {
+      if (!r) return null;
+      if (r === 'completed' || r === 'low_effort_completed') return 'completed';
+      if (r === 'partial') return 'partial';
+      if (r === 'not_done' || r === 'low_effort' || r === 'lost') return 'not_done';
+      return null; // unable_to_verify -> exclude
+    };
+
+    let hwAssignCompleted = 0, hwAssignPartial = 0, hwAssignNotDone = 0, hwAssignTotal = 0;
+    const hwAssignBySubject: Record<string, { completed: number; partial: number; notDone: number; total: number }> = {};
+    for (const a of hwAssignments || []) {
+      if (a.check_status !== 'checked') continue;
+      const norm = mapHwResult(a.result);
+      if (!norm) continue;
+      hwAssignTotal++;
+      if (norm === 'completed') hwAssignCompleted++;
+      else if (norm === 'partial') hwAssignPartial++;
+      else if (norm === 'not_done') hwAssignNotDone++;
+      const s = a.subject || '기타';
+      if (!hwAssignBySubject[s]) hwAssignBySubject[s] = { completed: 0, partial: 0, notDone: 0, total: 0 };
+      hwAssignBySubject[s].total++;
+      if (norm === 'completed') hwAssignBySubject[s].completed++;
+      else if (norm === 'partial') hwAssignBySubject[s].partial++;
+      else if (norm === 'not_done') hwAssignBySubject[s].notDone++;
+    }
+    const precomputedHwStats = {
+      completed: hwAssignCompleted,
+      partial: hwAssignPartial,
+      notDone: hwAssignNotDone,
+      total: hwAssignTotal,
+      bySubject: hwAssignBySubject,
+    };
+    console.log(`[HW-MERGE-V1] fetched=${hwAssignments?.length || 0} checkedUsable=${hwAssignTotal} completed=${hwAssignCompleted} partial=${hwAssignPartial} notDone=${hwAssignNotDone}`);
+
     // Organize data by subject
     const subjectData: Record<string, {
       lessons: LessonRecord[];
@@ -974,7 +1017,8 @@ Deno.serve(async (req) => {
       week_start,
       week_end,
       subjectData,
-      dbParentTemplate?.prompt_text
+      dbParentTemplate?.prompt_text,
+      precomputedHwStats
     );
 
     // Assemble final report from isolated subjects
@@ -1704,7 +1748,8 @@ async function generateOpeningClosingNotes(
   weekStart: string,
   weekEnd: string,
   subjectData: Record<string, { lessons: LessonRecord[]; curriculum: CurriculumInfo[]; previousLessons: LessonRecord[] }>,
-  customParentPrompt?: string
+  customParentPrompt?: string,
+  precomputedHwStats?: { completed: number; partial: number; notDone: number; total: number; bySubject?: Record<string, { completed: number; partial: number; notDone: number; total: number }> }
 ): Promise<{ openingNote: string; closingNote: string }> {
   const subjects = Object.keys(subjectData);
   const totalLessons = Object.values(subjectData).reduce((sum, d) => sum + d.lessons.length, 0);
@@ -1725,7 +1770,8 @@ async function generateOpeningClosingNotes(
     }
   }
 
-  // REPORT_TRUST_UPGRADE_V1: Calculate homework completion stats
+  // REPORT_TRUST_UPGRADE_V1 + HW-MERGE-V1: Calculate homework completion stats
+  // Combine lesson_records.homework_status AND homework_assignments (DailyHomeworkChecklist)
   let hwCompleted = 0, hwPartial = 0, hwNotDone = 0, hwTotal = 0;
   for (const data of Object.values(subjectData)) {
     for (const lesson of data.lessons) {
@@ -1737,7 +1783,14 @@ async function generateOpeningClosingNotes(
       }
     }
   }
-  const hwRate = hwTotal > 0 ? Math.round((hwCompleted / hwTotal) * 100) : null;
+  if (precomputedHwStats && precomputedHwStats.total > 0) {
+    hwTotal += precomputedHwStats.total;
+    hwCompleted += precomputedHwStats.completed;
+    hwPartial += precomputedHwStats.partial;
+    hwNotDone += precomputedHwStats.notDone;
+  }
+  const hwRate = hwTotal > 0 ? Math.round(((hwCompleted + hwPartial * 0.5) / hwTotal) * 100) : null;
+  
   
   // REPORT_TEMPLATE_DB_V1: Use custom prompt for opening/closing if available
   const systemPrompt = customParentPrompt
