@@ -1017,7 +1017,8 @@ Deno.serve(async (req) => {
       week_start,
       week_end,
       subjectData,
-      dbParentTemplate?.prompt_text
+      dbParentTemplate?.prompt_text,
+      precomputedHwStats
     );
 
     // Assemble final report from isolated subjects
