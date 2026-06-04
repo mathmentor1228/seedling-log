@@ -228,6 +228,7 @@ function getHomeworkStatusLabel(status: string | null | undefined): string {
   if (['not_done', '미이행', '미완료'].includes(normalized)) return '미이행';
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return '일부완료';
   if (['completed', '완료'].includes(normalized)) return '완료';
+  if (['unable_to_verify', '확인불가'].includes(normalized)) return '확인불가';
   if (['checked', '확인함', '확인됨'].includes(normalized)) return '확인함';
   if (['unchecked', '확인요망', '확인대기'].includes(normalized)) return '확인요망';
   if (['none_assigned', '없음'].includes(normalized)) return '미배정';
@@ -239,6 +240,7 @@ function mapHomeworkAssignmentResultToStatus(result: string | null | undefined):
   if (result === 'completed' || result === 'low_effort_completed') return 'completed';
   if (result === 'partial') return 'partial';
   if (result === 'not_done' || result === 'low_effort' || result === 'lost') return 'not_done';
+  if (result === 'unable_to_verify') return 'unable_to_verify';
   return null;
 }
 
@@ -249,6 +251,7 @@ function getHomeworkStatusBadgeClass(status: string | null | undefined): string 
   if (['not_done', '미이행', '미완료'].includes(normalized)) return 'bg-red-500/15 text-red-600 border-red-500/30';
   if (['partial', '일부완료', '부분 완료', '부분완료'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
   if (['completed', '완료', 'checked', '확인함', '확인됨'].includes(normalized)) return 'bg-green-500/15 text-green-600 border-green-500/30';
+  if (['unable_to_verify', '확인불가'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
   if (['unchecked', '확인요망', '확인대기'].includes(normalized)) return 'bg-amber-500/15 text-amber-600 border-amber-500/30';
   if (['none_assigned', '없음'].includes(normalized)) return 'bg-muted text-muted-foreground';
   return 'bg-muted text-muted-foreground';
