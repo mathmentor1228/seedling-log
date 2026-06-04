@@ -161,6 +161,7 @@ interface TodaySlotStudent {
   prevNextLessonGoal?: string | null;
   // HOMEWORK-CHECK-STATUS-SYNC-V1: latest previous homework assignment check status
   latestAssignmentCheckStatus?: string | null;
+  latestAssignmentResult?: string | null;
   // HW-STATUS-SYNC-V1: homework_status from today's lesson_records (single source of truth)
   homeworkStatus?: string | null;
   // TEST-CONTENT-DISPLAY-V2: Today's test data for inline display (content-first)
