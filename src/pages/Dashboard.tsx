@@ -1224,6 +1224,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
               recordId: null,
               homeworkStatus: null,
               latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
+              latestAssignmentResult: latestAssignmentResultMap[photoKey] || null,
               hasNextHomework: false,
               hasPhotoSubmission: hasPhoto,
               hasAudioSubmission: hasAudio,
@@ -1778,6 +1779,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                   photoData: null,
                   homeworkStatus: null,
                   latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[`${ts.student_id}:${ts.subject}`] || null,
+                  latestAssignmentResult: latestAssignmentResultMap[`${ts.student_id}:${ts.subject}`] || null,
                   subject: ts.subject,
                   todayTestData: {
                     test_content: ts.content || null,
@@ -1860,6 +1862,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             prevNextLessonGoal: prevGoalMap[goalKey] || null,
             // HOMEWORK-CHECK-STATUS-SYNC-V1: Add latest previous assignment check status
             latestAssignmentCheckStatus: recordInfo?.latestAssignmentCheckStatus || null,
+            latestAssignmentResult: recordInfo?.latestAssignmentResult || null,
             // DASH-ROW-TEST-SNIPPET-V1: Add today's test data
             todayTestData: recordInfo?.todayTestData || null,
             // HW-STATUS-SYNC-V1: Pass homework_status from lesson_records
