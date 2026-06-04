@@ -3346,6 +3346,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                                   if (label === '확인함') return 'text-success';
                                                   if (label === '미이행') return 'text-destructive';
                                                   if (label === '일부완료') return 'text-warning';
+                                                  if (label === '확인불가') return 'text-warning';
                                                   if (label === '확인요망') return 'text-warning';
                                                   return 'text-muted-foreground';
                                                 })()
@@ -3749,6 +3750,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                               if (label === '확인함') return 'text-success';
                                               if (label === '미이행') return 'text-destructive';
                                               if (label === '일부완료') return 'text-warning';
+                                              if (label === '확인불가') return 'text-warning';
                                               if (label === '확인요망') return 'text-warning';
                                               return 'text-muted-foreground';
                                             })()
