@@ -1561,6 +1561,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         homeworkStatus?: string | null;
         // HOMEWORK-CHECK-STATUS-SYNC-V1: latest previous assignment check status
         latestAssignmentCheckStatus?: string | null;
+        latestAssignmentResult?: string | null;
         todayTestData?: {
           test_content: string | null;
           test_title: string | null;
@@ -1713,7 +1714,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
               submitted: lr.submitted || false,
               homeworkCheckNote: lr.homework_check_note || null,
               homeworkCheckLessonId: lr.homework_check_note ? lr.id : null,
-              hasNextHomework: hwAssignmentSet.has(lr.id),
+              hasNextHomework: hwAssignmentSet.has(lr.id) || nextHwStudentSubjectSet.has(photoKey),
               hasPhotoSubmission: !!pd && pd.urls.length > 0,
               hasAudioSubmission: !!pd?.audioUrl,
               photoData: pd || null,
