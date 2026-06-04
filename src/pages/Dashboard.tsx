@@ -1611,19 +1611,34 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         // Fetch homework assignments for today's records (for hasNextHomework)
         const recordIds = (todayRecords || []).map((lr: any) => lr.id).filter(Boolean);
         let hwAssignmentSet = new Set<string>();
+        let nextHwStudentSubjectSet = new Set<string>();
         if (recordIds.length > 0) {
           const { data: hwAssignments } = await supabase
             .from('homework_assignments')
-            .select('lesson_record_id')
+            .select('lesson_record_id, student_id, subject')
             .in('lesson_record_id', recordIds)
             .not('content', 'eq', '');
-          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
+          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id).filter(Boolean));
+        }
+
+        if (studentIds.length > 0) {
+          const rosterSubjectsForHw = [...new Set(allStudentClassPairs.map((p) => p.subject))].filter(Boolean);
+          const { data: todayHwAssignments } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject')
+            .in('student_id', studentIds)
+            .in('subject', rosterSubjectsForHw as any)
+            .eq('assigned_date', today)
+            .not('content', 'eq', '');
+
+          nextHwStudentSubjectSet = new Set((todayHwAssignments || []).map((ha: any) => `${ha.student_id}:${ha.subject}`));
         }
 
         // Fetch photo/audio submissions for teacher's students
         let teacherPhotoDataMap: Record<string, { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null }> = {};
         // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
         let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
+        let latestAssignmentResultMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
           const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
           const { data: submissions } = await supabase
@@ -1649,7 +1664,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status, result')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
@@ -1660,6 +1675,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
             if (hw.assigned_date < today && latestAssignmentCheckStatusMap[photoKey] === undefined) {
               latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
+              latestAssignmentResultMap[photoKey] = hw.result || null;
             }
 
             if (seenLatest.has(photoKey)) return;
@@ -1705,6 +1721,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
               homeworkStatus: lr.homework_status || null,
               // HOMEWORK-CHECK-STATUS-SYNC-V1: Include latest previous assignment check status
               latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
+              latestAssignmentResult: latestAssignmentResultMap[photoKey] || null,
               // TEST-CONTENT-DISPLAY-V2
               subject: lr.subject,
               todayTestData: hasTestData ? {
