@@ -407,12 +407,14 @@ Deno.serve(async (req) => {
 
             const { data: hwAssignments } = await supabase
               .from('homework_assignments')
-              .select('result, check_status')
+              .select('result, check_status, assigned_date, checked_at')
               .eq('student_id', student.id)
-              .gte('assigned_date', weekStart)
               .lte('assigned_date', weekEnd)
               .eq('check_status', 'checked');
             for (const a of hwAssignments || []) {
+              const checkedDate = a.checked_at ? String(a.checked_at).slice(0, 10) : null;
+              const countedInWeek = (a.assigned_date >= weekStart && a.assigned_date <= weekEnd) || (!!checkedDate && checkedDate >= weekStart && checkedDate <= weekEnd);
+              if (!countedInWeek) continue;
               const r = a.result;
               if (!r || r === 'unable_to_verify') continue;
               if (r === 'completed' || r === 'low_effort_completed') { hwCount++; hwScore += 1; }

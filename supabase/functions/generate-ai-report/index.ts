@@ -871,9 +871,8 @@ Deno.serve(async (req) => {
     // (teachers often mark HW completion via DailyHomeworkChecklist, not via lesson_records.homework_status)
     const { data: hwAssignments } = await supabase
       .from('homework_assignments')
-      .select('subject, result, check_status, assigned_date')
+      .select('subject, result, check_status, assigned_date, checked_at')
       .eq('student_id', student_id)
-      .gte('assigned_date', week_start)
       .lte('assigned_date', week_end);
 
     const mapHwResult = (r: string | null): 'completed' | 'partial' | 'not_done' | null => {
@@ -888,6 +887,9 @@ Deno.serve(async (req) => {
     const hwAssignBySubject: Record<string, { completed: number; partial: number; notDone: number; total: number }> = {};
     for (const a of hwAssignments || []) {
       if (a.check_status !== 'checked') continue;
+      const checkedDate = a.checked_at ? String(a.checked_at).slice(0, 10) : null;
+      const countedInWeek = (a.assigned_date >= week_start && a.assigned_date <= week_end) || (!!checkedDate && checkedDate >= week_start && checkedDate <= week_end);
+      if (!countedInWeek) continue;
       const norm = mapHwResult(a.result);
       if (!norm) continue;
       hwAssignTotal++;
