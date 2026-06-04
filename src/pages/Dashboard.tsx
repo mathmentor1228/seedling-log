@@ -1003,21 +1003,36 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         
         // NEXT-HW-BADGE-V1: Fetch homework_assignments for today's lesson records
         let hwAssignmentSet = new Set<string>();
+        let nextHwStudentSubjectSet = new Set<string>();
         // Photo submission tracking moved to PHOTO-STABLE-V2 below
         if (recordIds.length > 0) {
           const { data: hwAssignments } = await supabase
             .from('homework_assignments')
-            .select('lesson_record_id, student_id, submitted_at, submission_image_url')
+            .select('lesson_record_id, student_id, subject, submitted_at, submission_image_url')
             .in('lesson_record_id', recordIds)
             .not('content', 'eq', '');
           
-          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id));
+          hwAssignmentSet = new Set((hwAssignments || []).map((ha: any) => ha.lesson_record_id).filter(Boolean));
+        }
+
+        if (studentIds.length > 0) {
+          const subjects = [...new Set(rosterRows.map((r: any) => r.subject))].filter(Boolean);
+          const { data: todayHwAssignments } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject')
+            .in('student_id', studentIds)
+            .in('subject', subjects as any)
+            .eq('assigned_date', today)
+            .not('content', 'eq', '');
+
+          nextHwStudentSubjectSet = new Set((todayHwAssignments || []).map((ha: any) => `${ha.student_id}:${ha.subject}`));
         }
 
         // PHOTO-STABLE-V2: Fetch photo/audio submissions from homework_submissions + homework_assignments
         let photoDataMap: Record<string, { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null }> = {};
         // HOMEWORK-CHECK-STATUS-SYNC-V1: Track latest previous assignment check_status per student+subject
         let latestAssignmentCheckStatusMap: Record<string, string | null> = {};
+        let latestAssignmentResultMap: Record<string, string | null> = {};
         if (studentIds.length > 0) {
           // Primary source: homework_submissions table (joined via homework_assignments for subject)
           const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
@@ -1047,7 +1062,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           // PHOTO-MATCH-V3: If latest homework has no submission, do NOT fall back to older homework submissions.
           const { data: hwAll } = await supabase
             .from('homework_assignments')
-            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status')
+            .select('student_id, subject, assigned_date, submitted_at, submission_image_url, submission_audio_url, submission_text, check_status, result')
             .in('student_id', studentIds)
             .gte('assigned_date', sevenDaysAgo)
             .order('assigned_date', { ascending: false });
@@ -1058,6 +1073,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
             if (hw.assigned_date < today && latestAssignmentCheckStatusMap[photoKey] === undefined) {
               latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
+              latestAssignmentResultMap[photoKey] = hw.result || null;
             }
 
             if (seenLatest.has(photoKey)) return;
@@ -1133,7 +1149,8 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             recordId: lr.id,
             homeworkStatus: lr.homework_status || null,
             latestAssignmentCheckStatus: latestAssignmentCheckStatusMap[photoKey] || null,
-            hasNextHomework: hwAssignmentSet.has(lr.id),
+            latestAssignmentResult: latestAssignmentResultMap[photoKey] || null,
+            hasNextHomework: hwAssignmentSet.has(lr.id) || nextHwStudentSubjectSet.has(photoKey),
             hasPhotoSubmission: photoSubmissionSet.has(photoKey),
             hasAudioSubmission: audioSubmissionSet.has(photoKey),
             prevNextLessonGoal: adminPrevGoalMap[goalKey] || null,
