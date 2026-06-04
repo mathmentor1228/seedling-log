@@ -1016,12 +1016,12 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         }
 
         if (studentIds.length > 0) {
-          const subjects = [...new Set(rosterRows.map((r: any) => r.subject))].filter(Boolean);
+          const rosterSubjectsForHw = [...new Set(rosterRows.map((r: any) => r.subject))].filter(Boolean);
           const { data: todayHwAssignments } = await supabase
             .from('homework_assignments')
             .select('student_id, subject')
             .in('student_id', studentIds)
-            .in('subject', subjects as any)
+            .in('subject', rosterSubjectsForHw as any)
             .eq('assigned_date', today)
             .not('content', 'eq', '');
 
