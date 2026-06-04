@@ -233,6 +233,14 @@ function getHomeworkStatusLabel(status: string | null | undefined): string {
   return '확인요망';
 }
 
+function mapHomeworkAssignmentResultToStatus(result: string | null | undefined): string | null {
+  if (!result) return null;
+  if (result === 'completed' || result === 'low_effort_completed') return 'completed';
+  if (result === 'partial') return 'partial';
+  if (result === 'not_done' || result === 'low_effort' || result === 'lost') return 'not_done';
+  return null;
+}
+
 // HOMEWORK-STATUS-DISPLAY-FIX-V1: Get badge variant based on status
 function getHomeworkStatusBadgeClass(status: string | null | undefined): string {
   if (!status) return 'bg-muted text-muted-foreground';
@@ -428,7 +436,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
   // Lesson status map for admin roster badges
   // HOMEWORK-STATUS-DISPLAY-FIX-V1: Include homeworkStatus in type
   // NEXT-HW-BADGE-V1: Include hasNextHomework
-  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; hasAudioSubmission?: boolean; photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
+  const [lessonStatusMap, setLessonStatusMap] = useState<Record<string, { submitted: boolean; recordId: string | null; homeworkStatus: string | null; latestAssignmentCheckStatus?: string | null; latestAssignmentResult?: string | null; hasNextHomework: boolean; hasPhotoSubmission: boolean; hasAudioSubmission?: boolean; photoData?: { urls: string[]; audioUrl?: string | null; text: string | null; at: string | null; studentName: string }; prevNextLessonGoal?: string | null; todayTestData?: { test_content: string | null; test_title: string | null; test_result_text: string | null; english_pass_fail: string | null } | null }>>({});
 
   // TEACHER-HW-ALERT-V2: Homework alert modal state
   const [hwAlertModalOpen, setHwAlertModalOpen] = useState(false);
