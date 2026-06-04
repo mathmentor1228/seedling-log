@@ -3233,7 +3233,9 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                       const rawHwStatus = (() => {
                                         const hwFromRecord = ls?.homeworkStatus;
                                         const isDefaultDraft = hwFromRecord === 'none_assigned' && !ls?.submitted;
-                                        if (hwFromRecord && !isDefaultDraft) return hwFromRecord;
+                                        const mappedAssignmentResult = mapHomeworkAssignmentResultToStatus(ls?.latestAssignmentResult);
+                                        if (mappedAssignmentResult) return mappedAssignmentResult;
+                                        if (hwFromRecord && !isDefaultDraft && hwFromRecord !== 'none_assigned') return hwFromRecord;
                                         if (ls?.latestAssignmentCheckStatus === 'checked') return 'checked';
                                         if (ls?.latestAssignmentCheckStatus === 'unchecked') return 'unchecked';
                                         return null;
@@ -3571,7 +3573,9 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                     // HW-STATUS-DRAFT-FIX-V1: If record is draft (not submitted) and homework_status is default 'none_assigned', skip to fallback
                                     const hwFromRecord = student.homeworkStatus;
                                     const isDefaultDraft = hwFromRecord === 'none_assigned' && !student.lessonSubmitted;
-                                    if (hwFromRecord && !isDefaultDraft) return hwFromRecord;
+                                    const mappedAssignmentResult = mapHomeworkAssignmentResultToStatus(student.latestAssignmentResult);
+                                    if (mappedAssignmentResult) return mappedAssignmentResult;
+                                    if (hwFromRecord && !isDefaultDraft && hwFromRecord !== 'none_assigned') return hwFromRecord;
                                     if (student.latestAssignmentCheckStatus === 'checked') return 'checked';
                                     if (student.latestAssignmentCheckStatus === 'unchecked') return 'unchecked';
                                     // Fallback to RPC result
