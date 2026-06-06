@@ -146,7 +146,7 @@ export function TeacherAttendanceView() {
   const fetchSchedule = useCallback(async () => {
     try {
       const dow = new Date().getDay();
-      const [schedRes, examRes] = await Promise.all([
+      const [schedRes, examRes, suppRes] = await Promise.all([
         supabase
           .from('class_schedules')
           .select('id, start_time, end_time, class_id, classroom_id, classes(name, subject), classrooms(name)')
@@ -159,10 +159,19 @@ export function TeacherAttendanceView() {
           .select('id, student_id, subject, start_time, end_time')
           .eq('teacher_id', teacherId)
           .eq('schedule_date', today),
+        // 오늘 잡힌 보충수업 (class_id 없는 별도 lesson_records)
+        supabase
+          .from('lesson_records')
+          .select('id, student_id, subject, notes, lesson_types, class_id')
+          .eq('teacher_id', teacherId)
+          .eq('lesson_date', today)
+          .is('class_id', null)
+          .contains('lesson_types', ['보충수업']),
       ]);
 
       const schedules = schedRes.data || [];
       const examPrep = examRes.data || [];
+      const suppLessons = suppRes.data || [];
 
       const parsed: ScheduleSlot[] = schedules.map((s: any) => ({
         id: s.id,
@@ -195,7 +204,34 @@ export function TeacherAttendanceView() {
         examPrepStudentIds: g.studentIds,
       }));
 
-      const all = [...parsed, ...examSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
+      // Group supplementary lessons by 시간 (parsed from notes "[보충 시간: HH:MM]") + subject
+      const parseSuppTime = (notes: string | null): string => {
+        if (!notes) return '미정';
+        const m = notes.match(/보충\s*시간\s*[:：]\s*([0-9]{1,2}[:：][0-9]{2}|미정)/);
+        return m ? m[1].replace('：', ':') : '미정';
+      };
+      const suppGroups = new Map<string, { time: string; subject: string; studentIds: string[] }>();
+      suppLessons.forEach((s: any) => {
+        if (!s.student_id) return;
+        const time = parseSuppTime(s.notes);
+        const subject = s.subject || '';
+        const key = `${time}-${subject}`;
+        if (!suppGroups.has(key)) suppGroups.set(key, { time, subject, studentIds: [] });
+        suppGroups.get(key)!.studentIds.push(s.student_id);
+      });
+      const suppSlots: ScheduleSlot[] = Array.from(suppGroups.entries()).map(([k, g]) => ({
+        id: `supp-${k}`,
+        classId: '',
+        className: '보충수업',
+        subject: g.subject,
+        startTime: g.time === '미정' ? '23:58' : g.time,
+        endTime: g.time === '미정' ? '23:59' : g.time,
+        classroomName: null,
+        isSupplementary: true,
+        supplementaryStudentIds: g.studentIds,
+      }));
+
+      const all = [...parsed, ...examSlots, ...suppSlots].sort((a, b) => a.startTime.localeCompare(b.startTime));
       if (all.length === 0) { setSlots([]); setLoading(false); return; }
       setSlots(all);
 
