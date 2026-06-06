@@ -162,7 +162,7 @@ export function HomeworkCompletionChart() {
       return getHomeworkCategory(hw) === categoryKey;
     });
 
-    const rows: DetailRow[] = filtered.map((hw: any) => ({
+    const rows: DetailRow[] = filtered.map((hw) => ({
       studentName: students.get(hw.student_id) || '(알 수 없음)',
       studentId: hw.student_id,
       subject: hw.subject || '-',
