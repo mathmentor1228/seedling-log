@@ -1723,11 +1723,6 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
           (hwAll || []).forEach((hw: any) => {
             const photoKey = `${hw.student_id}:${hw.subject}`;
 
-            if (hw.assigned_date < today && latestAssignmentCheckStatusMap[photoKey] === undefined) {
-              latestAssignmentCheckStatusMap[photoKey] = hw.check_status || null;
-              latestAssignmentResultMap[photoKey] = hw.result || null;
-            }
-
             if (seenLatest.has(photoKey)) return;
             seenLatest.add(photoKey);
             const hasImage = !!hw.submission_image_url;
@@ -1746,6 +1741,10 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             if (!existing.text && hw.submission_text) existing.text = hw.submission_text;
             if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
+
+          const latestSummary = buildHomeworkCheckSummaryMap((hwAll || []).filter((hw: any) => hw.assigned_date < today));
+          latestAssignmentCheckStatusMap = latestSummary.statusMap;
+          latestAssignmentResultMap = latestSummary.resultMap;
         }
 
         if (todayRecords) {
