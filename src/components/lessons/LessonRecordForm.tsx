@@ -832,24 +832,28 @@ export function LessonRecordForm({
     try {
       let recordId = existingRecordId;
 
-      // PREFILL-FIX-V5: Skip DB lookup when forceNewRecord is true (user explicitly clicked "+ 수업기록 생성")
-      // This prevents reusing a previous draft and ensures prefill runs correctly
-      if (!forceNewRecord && !recordId && initialContext?.student_id && initialContext?.class_id) {
-        const { data: existing } = await supabase
-          .from('lesson_records')
-          .select('id')
-          .eq('student_id', initialContext.student_id)
-          .eq('class_id', initialContext.class_id)
-          .eq('lesson_date', initialContext.lesson_date || getTodayKST())
-          .eq('subject', (initialContext.subject || getLastSelectedSubject(user.id)) as SubjectType)
-          .maybeSingle();
-
-        if (existing) {
-          recordId = existing.id;
-          console.log('[PREFILL-FIX-V5] Found existing record for context:', existing.id);
+      // PREFILL-FIX-V6: Skip DB lookup when forceNewRecord is true (user explicitly clicked "+ 수업기록 생성")
+      // For exam prep / supplementary, initialContext.class_id may be '' — still look up by null class_id.
+      if (!forceNewRecord && !recordId && initialContext?.student_id) {
+        const hasClassId = !!initialContext.class_id;
+        const lookupTypes = initialContext.lesson_types || [];
+        const isExamPrepOrSupp = lookupTypes.includes('시험특강') || lookupTypes.includes('보충수업');
+        if (hasClassId || isExamPrepOrSupp) {
+          let q = supabase
+            .from('lesson_records')
+            .select('id')
+            .eq('student_id', initialContext.student_id)
+            .eq('lesson_date', initialContext.lesson_date || getTodayKST())
+            .eq('subject', (initialContext.subject || getLastSelectedSubject(user.id)) as SubjectType);
+          q = hasClassId ? q.eq('class_id', initialContext.class_id) : q.is('class_id', null);
+          const { data: existing } = await q.maybeSingle();
+          if (existing) {
+            recordId = existing.id;
+            console.log('[PREFILL-FIX-V6] Found existing record for context:', existing.id);
+          }
         }
       } else if (forceNewRecord) {
-        console.log('[PREFILL-FIX-V5] forceNewRecord=true, skipping DB lookup for existing drafts');
+        console.log('[PREFILL-FIX-V6] forceNewRecord=true, skipping DB lookup for existing drafts');
       }
 
       if (recordId) {
