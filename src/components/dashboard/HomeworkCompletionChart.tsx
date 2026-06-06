@@ -38,6 +38,17 @@ interface TeacherUncheckedSummary {
   rate: number;
 }
 
+interface HomeworkRow {
+  id: string;
+  student_id: string;
+  subject: string | null;
+  content: string | null;
+  assigned_date: string;
+  check_status: string | null;
+  result: string | null;
+  created_by: string | null;
+}
+
 const CHART_COLORS = [
   'hsl(160, 84%, 39%)',  // success - completed
   'hsl(38, 92%, 50%)',   // warning - partial
@@ -52,7 +63,7 @@ const STATUS_CONFIG = [
   { key: 'unchecked', label: '미확인', icon: MinusCircle, colorClass: 'text-muted-foreground', filterStatuses: [] },
 ] as const;
 
-function getHomeworkCategory(hw: any): keyof HomeworkStats {
+function getHomeworkCategory(hw: HomeworkRow): keyof HomeworkStats {
   if ((hw.check_status || '').toLowerCase().trim() !== 'checked') return 'unchecked';
   const result = (hw.result || '').toLowerCase().trim();
   if (['partial', '일부완료', '부분완료'].includes(result)) return 'partial';
@@ -63,7 +74,7 @@ function getHomeworkCategory(hw: any): keyof HomeworkStats {
 export function HomeworkCompletionChart() {
   const [stats, setStats] = useState<HomeworkStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [rawData, setRawData] = useState<any[]>([]);
+  const [rawData, setRawData] = useState<HomeworkRow[]>([]);
   const [students, setStudents] = useState<Map<string, string>>(new Map());
   const [profiles, setProfiles] = useState<Map<string, string>>(new Map());
   
@@ -97,7 +108,7 @@ export function HomeworkCompletionChart() {
       setRawData(hwRes.data || []);
 
       const counts: HomeworkStats = { completed: 0, partial: 0, notDone: 0, unchecked: 0 };
-      (hwRes.data || []).forEach((hw: any) => {
+      ((hwRes.data || []) as HomeworkRow[]).forEach((hw) => {
         counts[getHomeworkCategory(hw)]++;
       });
 
@@ -105,7 +116,7 @@ export function HomeworkCompletionChart() {
       
       // Build teacher unchecked summaries
       const teacherAgg = new Map<string, { total: number; unchecked: number }>();
-      (hwRes.data || []).forEach((hw: any) => {
+      ((hwRes.data || []) as HomeworkRow[]).forEach((hw) => {
         const tid = hw.created_by || 'unknown';
         if (!teacherAgg.has(tid)) teacherAgg.set(tid, { total: 0, unchecked: 0 });
         const agg = teacherAgg.get(tid)!;
@@ -147,7 +158,7 @@ export function HomeworkCompletionChart() {
     const config = STATUS_CONFIG.find(c => c.key === categoryKey);
     if (!config) return;
     
-    const filtered = rawData.filter((hw: any) => {
+    const filtered = rawData.filter((hw) => {
       return getHomeworkCategory(hw) === categoryKey;
     });
 
