@@ -78,71 +78,70 @@ export function HomeworkCompletionChart() {
   
   const { toast } = useToast();
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const since = format(subDays(new Date(), 7), 'yyyy-MM-dd');
-        
-        const [hwRes, studRes, profRes] = await Promise.all([
-          supabase.from('homework_assignments').select('id, student_id, subject, content, assigned_date, check_status, created_by').gte('assigned_date', since),
-          supabase.from('students').select('id, name').in('enrollment_status', ['재학', '재등원']),
-          supabase.from('profiles').select('id, full_name'),
-        ]);
+  async function fetchStats() {
+    try {
+      const since = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+      
+      const [hwRes, studRes, profRes] = await Promise.all([
+        supabase.from('homework_assignments').select('id, student_id, subject, content, assigned_date, check_status, result, created_by').gte('assigned_date', since),
+        supabase.from('students').select('id, name').in('enrollment_status', ['재학', '재등원']),
+        supabase.from('profiles').select('id, full_name'),
+      ]);
 
-        if (hwRes.error) throw hwRes.error;
+      if (hwRes.error) throw hwRes.error;
 
-        const studentMap = new Map((studRes.data || []).map(s => [s.id, s.name]));
-        const profileMap = new Map((profRes.data || []).map(p => [p.id, p.full_name]));
-        setStudents(studentMap);
-        setProfiles(profileMap);
-        setRawData(hwRes.data || []);
+      const studentMap = new Map((studRes.data || []).map(s => [s.id, s.name]));
+      const profileMap = new Map((profRes.data || []).map(p => [p.id, p.full_name]));
+      setStudents(studentMap);
+      setProfiles(profileMap);
+      setRawData(hwRes.data || []);
 
-        const counts: HomeworkStats = { completed: 0, partial: 0, notDone: 0, unchecked: 0 };
-        (hwRes.data || []).forEach((hw: any) => {
-          const s = (hw.check_status || '').toLowerCase().trim();
-          if (['checked', 'completed', '완료', '확인함'].includes(s)) counts.completed++;
-          else if (['partial', '일부완료', '부분완료'].includes(s)) counts.partial++;
-          else if (['not_done', '미이행', '미완료'].includes(s)) counts.notDone++;
-          else counts.unchecked++;
-        });
+      const counts: HomeworkStats = { completed: 0, partial: 0, notDone: 0, unchecked: 0 };
+      (hwRes.data || []).forEach((hw: any) => {
+        counts[getHomeworkCategory(hw)]++;
+      });
 
-        setStats(counts);
-        
-        // Build teacher unchecked summaries
-        const teacherAgg = new Map<string, { total: number; unchecked: number }>();
-        (hwRes.data || []).forEach((hw: any) => {
-          const tid = hw.created_by || 'unknown';
-          if (!teacherAgg.has(tid)) teacherAgg.set(tid, { total: 0, unchecked: 0 });
-          const agg = teacherAgg.get(tid)!;
-          agg.total++;
-          const s = (hw.check_status || '').toLowerCase().trim();
-          if (!['checked', 'completed', '완료', '확인함', 'partial', '일부완료', '부분완료', 'not_done', '미이행', '미완료'].includes(s)) {
-            agg.unchecked++;
-          }
-        });
-        
-        const summaries: TeacherUncheckedSummary[] = [];
-        for (const [tid, agg] of teacherAgg) {
-          if (agg.unchecked > 0) {
-            summaries.push({
-              teacherId: tid,
-              teacherName: profileMap.get(tid) || '(알 수 없음)',
-              uncheckedCount: agg.unchecked,
-              totalCount: agg.total,
-              rate: Math.round((agg.unchecked / agg.total) * 100),
-            });
-          }
+      setStats(counts);
+      
+      // Build teacher unchecked summaries
+      const teacherAgg = new Map<string, { total: number; unchecked: number }>();
+      (hwRes.data || []).forEach((hw: any) => {
+        const tid = hw.created_by || 'unknown';
+        if (!teacherAgg.has(tid)) teacherAgg.set(tid, { total: 0, unchecked: 0 });
+        const agg = teacherAgg.get(tid)!;
+        agg.total++;
+        if (getHomeworkCategory(hw) === 'unchecked') agg.unchecked++;
+      });
+      
+      const summaries: TeacherUncheckedSummary[] = [];
+      for (const [tid, agg] of teacherAgg) {
+        if (agg.unchecked > 0) {
+          summaries.push({
+            teacherId: tid,
+            teacherName: profileMap.get(tid) || '(알 수 없음)',
+            uncheckedCount: agg.unchecked,
+            totalCount: agg.total,
+            rate: Math.round((agg.unchecked / agg.total) * 100),
+          });
         }
-        summaries.sort((a, b) => b.uncheckedCount - a.uncheckedCount);
-        setTeacherSummaries(summaries);
-      } catch (err) {
-        console.error('Error fetching homework stats:', err);
-      } finally {
-        setLoading(false);
       }
+      summaries.sort((a, b) => b.uncheckedCount - a.uncheckedCount);
+      setTeacherSummaries(summaries);
+    } catch (err) {
+      console.error('Error fetching homework stats:', err);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     fetchStats();
   }, []);
+
+  useHomeworkRealtimeSync({
+    channelKey: 'homework-completion-chart',
+    onChange: fetchStats,
+  });
 
   const handleCategoryClick = (categoryKey: string) => {
     const config = STATUS_CONFIG.find(c => c.key === categoryKey);
