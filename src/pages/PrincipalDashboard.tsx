@@ -379,6 +379,7 @@ function PrincipalContent() {
     const ch = supabase
       .channel('principal-dash')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchAll().catch(() => {}); })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'students' }, () => { fetchAll().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
