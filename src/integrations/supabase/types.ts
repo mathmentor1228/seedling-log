@@ -4556,6 +4556,7 @@ export type Database = {
           total_points: number | null
           tuition_memo: string | null
           updated_at: string
+          withdrawn_at: string | null
         }
         Insert: {
           course_status?: string
@@ -4585,6 +4586,7 @@ export type Database = {
           total_points?: number | null
           tuition_memo?: string | null
           updated_at?: string
+          withdrawn_at?: string | null
         }
         Update: {
           course_status?: string
@@ -4614,6 +4616,7 @@ export type Database = {
           total_points?: number | null
           tuition_memo?: string | null
           updated_at?: string
+          withdrawn_at?: string | null
         }
         Relationships: []
       }
