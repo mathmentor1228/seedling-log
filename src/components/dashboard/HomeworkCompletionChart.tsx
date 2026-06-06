@@ -148,11 +148,7 @@ export function HomeworkCompletionChart() {
     if (!config) return;
     
     const filtered = rawData.filter((hw: any) => {
-      const s = (hw.check_status || '').toLowerCase().trim();
-      if (categoryKey === 'unchecked') {
-        return !['checked', 'completed', '완료', '확인함', 'partial', '일부완료', '부분완료', 'not_done', '미이행', '미완료'].includes(s);
-      }
-      return (config.filterStatuses as readonly string[]).includes(s);
+      return getHomeworkCategory(hw) === categoryKey;
     });
 
     const rows: DetailRow[] = filtered.map((hw: any) => ({
