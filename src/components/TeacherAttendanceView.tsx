@@ -249,8 +249,9 @@ export function TeacherAttendanceView() {
     try {
       if (slots.length === 0) return;
 
-      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && s.classId).map(s => s.classId))];
+      const classIds = [...new Set(slots.filter(s => !s.isExamPrep && !s.isSupplementary && s.classId).map(s => s.classId))];
       const examPrepIds = [...new Set(slots.filter(s => s.isExamPrep).flatMap(s => s.examPrepStudentIds || []))];
+      const suppIds = [...new Set(slots.filter(s => s.isSupplementary).flatMap(s => s.supplementaryStudentIds || []))];
 
       let cs: { student_id: string; class_id: string }[] = [];
       if (classIds.length > 0) {
@@ -258,17 +259,28 @@ export function TeacherAttendanceView() {
         cs = data || [];
       }
 
-      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds])];
+      const allStudentIds = [...new Set([...cs.map(r => r.student_id), ...examPrepIds, ...suppIds])];
       if (allStudentIds.length === 0) { setStudentMap({}); setLoading(false); return; }
 
       const lessonQuery = classIds.length > 0
         ? supabase.from('lesson_records').select('id, student_id, class_id, attendance_status').in('student_id', allStudentIds).in('class_id', classIds).eq('lesson_date', today)
         : Promise.resolve({ data: [] as any[] });
 
-      const [studentRes, logRes, lessonRes] = await Promise.all([
+      // 보충수업 출결 (class_id = NULL, 학생별로 별도 record)
+      const suppLessonQuery = suppIds.length > 0
+        ? supabase.from('lesson_records')
+            .select('id, student_id, attendance_status, lesson_types, class_id')
+            .in('student_id', suppIds)
+            .eq('lesson_date', today)
+            .is('class_id', null)
+            .contains('lesson_types', ['보충수업'])
+        : Promise.resolve({ data: [] as any[] });
+
+      const [studentRes, logRes, lessonRes, suppLessonRes] = await Promise.all([
         supabase.from('students').select('id, name, status, school, grade').in('id', allStudentIds).neq('enrollment_status', '퇴원'),
         supabase.from('attendance_logs').select('student_id, checked_in_at, checked_out_at').in('student_id', allStudentIds).eq('date', today),
         lessonQuery,
+        suppLessonQuery,
       ]);
 
       const logMap = new Map<string, { checked_in_at: string | null; checked_out_at: string | null }>();
@@ -289,6 +301,12 @@ export function TeacherAttendanceView() {
         });
       });
 
+      const suppLessonMap = new Map<string, { attendance_status: string[] | null }>();
+      ((suppLessonRes as any).data ?? []).forEach((record: any) => {
+        if (!record.student_id) return;
+        suppLessonMap.set(record.student_id, { attendance_status: record.attendance_status ?? null });
+      });
+
       const studentData = new Map<string, { id: string; name: string; school: string | null; grade: string | null; baseStatus: string | null }>();
       (studentRes.data ?? []).forEach(s => {
         studentData.set(s.id, { id: s.id, name: s.name, school: s.school, grade: s.grade, baseStatus: (s as any).status ?? null });
@@ -298,14 +316,20 @@ export function TeacherAttendanceView() {
       slots.forEach(slot => {
         const slotStudentIds = slot.isExamPrep
           ? (slot.examPrepStudentIds || [])
-          : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
+          : slot.isSupplementary
+            ? (slot.supplementaryStudentIds || [])
+            : cs.filter(c => c.class_id === slot.classId).map(c => c.student_id);
         map[slot.id] = slotStudentIds
           .map(sid => {
             const student = studentData.get(sid);
             if (!student) return null;
 
             const log = logMap.get(sid);
-            const lesson = slot.isExamPrep ? null : lessonMap.get(`${sid}:${slot.classId}`);
+            const lesson = slot.isExamPrep
+              ? null
+              : slot.isSupplementary
+                ? (suppLessonMap.get(sid) || null)
+                : lessonMap.get(`${sid}:${slot.classId}`);
             const attendance = lesson?.attendance_status ?? [];
             const isEarly = attendance.includes('조기등원');
 
