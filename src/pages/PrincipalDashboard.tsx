@@ -410,7 +410,7 @@ function PrincipalContent() {
 
       <PageTransition>
         <div className="space-y-5">
-          {/* 출석 현황 */}
+          {/* 출석 현황 — 클릭 시 학생 명단 모달 */}
           <div className="grid grid-cols-3 gap-3">
             <StatCard
               icon={CheckCircle}
@@ -418,6 +418,7 @@ function PrincipalContent() {
               value={attendanceRate}
               sub={`${checkedIn.length + checkedOut.length}/${totalStudents}명 출석`}
               color="green"
+              onClick={() => setDetailOpen('rate')}
             />
             <StatCard
               icon={Clock}
@@ -425,6 +426,7 @@ function PrincipalContent() {
               value={lateCount}
               sub="오늘 기준"
               color="orange"
+              onClick={() => setDetailOpen('late')}
             />
             <StatCard
               icon={XCircle}
@@ -432,8 +434,15 @@ function PrincipalContent() {
               value={absentCount}
               sub="미등원 학생"
               color="red"
+              onClick={() => setDetailOpen('absent')}
             />
           </div>
+
+          <AttendanceDetailDialog
+            kind={detailOpen}
+            onClose={() => setDetailOpen(null)}
+            logs={logs}
+          />
 
           {/* 강의실 수업 현황 */}
           <ClassroomView slots={classroomSlots} />
