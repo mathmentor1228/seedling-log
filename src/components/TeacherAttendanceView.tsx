@@ -371,11 +371,12 @@ export function TeacherAttendanceView() {
     if (!teacherId) return;
     const ch = supabase.channel('teacher-att-shared')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => { fetchStudents().catch(() => {}); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchStudents().catch(() => {}); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchStudents().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'students' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_records' }, () => { fetchSchedule().catch(() => {}); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exam_prep_schedules' }, () => { fetchSchedule().catch(() => {}); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [teacherId, fetchStudents]);
+  }, [teacherId, fetchStudents, fetchSchedule]);
 
   const activeSlot = useMemo(() => slots.find(s => s.id === activeSlotId) || null, [slots, activeSlotId]);
   const activeStudents = activeSlotId ? (studentMap[activeSlotId] || []) : [];
