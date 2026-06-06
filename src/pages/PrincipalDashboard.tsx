@@ -57,9 +57,10 @@ function LiveClock() {
 /* ------------------------------------------------------------------ */
 /*  Stat Card with count-up                                            */
 /* ------------------------------------------------------------------ */
-function StatCard({ label, value, sub, color, icon: Icon }: {
+function StatCard({ label, value, sub, color, icon: Icon, onClick }: {
   label: string; value: number; sub?: string; color: 'green' | 'orange' | 'red' | 'blue';
   icon: React.ElementType;
+  onClick?: () => void;
 }) {
   const colorMap = {
     green: 'border-success/30 shadow-glow-success',
@@ -81,7 +82,13 @@ function StatCard({ label, value, sub, color, icon: Icon }: {
   };
 
   return (
-    <Card className={`bg-card border ${colorMap[color]} transition-all duration-300 hover:scale-[1.02]`}>
+    <Card
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      className={`bg-card border ${colorMap[color]} transition-all duration-300 hover:scale-[1.02] ${onClick ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40' : ''}`}
+    >
       <CardContent className="p-4 flex items-center gap-3">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg[color]}`}>
           <Icon className="w-5 h-5" />
