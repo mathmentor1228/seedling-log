@@ -105,6 +105,32 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
       schoolList = Array.from(grouped.values());
     }
 
+    // 3) school_exam_archives — 학교별 기말/중간고사 (과목별 다중행, school+exam_type+date로 dedupe)
+    let archiveList: ExamEvent[] = [];
+    {
+      let q = supabase
+        .from('school_exam_archives')
+        .select('id, school_name, exam_type, semester, exam_date_start, exam_date_end')
+        .not('exam_date_start', 'is', null)
+        .gte('exam_date_start', todayStr)
+        .order('exam_date_start');
+      if (schoolFilter) q = q.eq('school_name', schoolFilter);
+      const { data: archives } = await q;
+      const grouped = new Map<string, ExamEvent>();
+      for (const a of (archives || []) as any[]) {
+        const key = `${a.school_name}|${a.exam_type}|${a.exam_date_start}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            id: `archive-${a.school_name}-${a.exam_type}-${a.exam_date_start}`,
+            title: `${a.school_name} ${a.semester ? a.semester + ' ' : ''}${a.exam_type}`,
+            start_at: a.exam_date_start,
+            end_at: a.exam_date_end,
+          });
+        }
+      }
+      archiveList = Array.from(grouped.values());
+    }
+
     // Filter academy events by school name when schoolFilter set
     const filteredEvents = schoolFilter
       ? eventList.filter((e) => e.title.includes(schoolFilter))
@@ -113,7 +139,7 @@ export function ExamDdayBanner({ schoolFilter, compact = false }: Props) {
     // Merge + dedupe by (title + start date)
     const merged: ExamEvent[] = [];
     const seen = new Set<string>();
-    for (const e of [...filteredEvents, ...schoolList]) {
+    for (const e of [...filteredEvents, ...schoolList, ...archiveList]) {
       const key = `${e.title}|${e.start_at.split('T')[0]}`;
       if (seen.has(key)) continue;
       seen.add(key);
