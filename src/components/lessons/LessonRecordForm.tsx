@@ -1377,16 +1377,19 @@ export function LessonRecordForm({
           .eq('id', draftId);
         if (error) throw error;
       } else {
-        // DRAFT-OVERWRITE-V1: Check for existing record with same student+class+date+subject before inserting
-        const { data: existingRecord } = await supabase
+        // DRAFT-OVERWRITE-V2: Check for existing record with same student+class+date+subject before inserting
+        // Use .is() for null class_id (exam prep / supplementary) since .eq() never matches NULL
+        let existingQuery = supabase
           .from('lesson_records')
           .select('id')
           .eq('student_id', payload.student_id)
-          .eq('class_id', payload.class_id)
           .eq('lesson_date', payload.lesson_date)
           .eq('subject', payload.subject)
-          .eq('submitted', false)
-          .maybeSingle();
+          .eq('submitted', false);
+        existingQuery = payload.class_id === null
+          ? existingQuery.is('class_id', null)
+          : existingQuery.eq('class_id', payload.class_id);
+        const { data: existingRecord } = await existingQuery.maybeSingle();
 
         if (existingRecord) {
           // Overwrite existing draft with latest data
