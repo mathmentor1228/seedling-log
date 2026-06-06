@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { CheckCircle2, AlertCircle, Clock, MinusCircle, Bell, X } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { useHomeworkRealtimeSync } from '@/hooks/useHomeworkRealtimeSync';
 
 interface HomeworkStats {
   completed: number;
@@ -50,6 +51,14 @@ const STATUS_CONFIG = [
   { key: 'notDone', label: '미이행', icon: AlertCircle, colorClass: 'text-destructive', filterStatuses: ['not_done', '미이행', '미완료'] },
   { key: 'unchecked', label: '미확인', icon: MinusCircle, colorClass: 'text-muted-foreground', filterStatuses: [] },
 ] as const;
+
+function getHomeworkCategory(hw: any): keyof HomeworkStats {
+  if ((hw.check_status || '').toLowerCase().trim() !== 'checked') return 'unchecked';
+  const result = (hw.result || '').toLowerCase().trim();
+  if (['partial', '일부완료', '부분완료'].includes(result)) return 'partial';
+  if (['not_done', 'lost', 'low_effort', '미이행', '미완료'].includes(result)) return 'notDone';
+  return 'completed';
+}
 
 export function HomeworkCompletionChart() {
   const [stats, setStats] = useState<HomeworkStats | null>(null);
