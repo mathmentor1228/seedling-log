@@ -1146,7 +1146,19 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
 
-          const latestSummary = buildHomeworkCheckSummaryMap((hwAll || []).filter((hw: any) => hw.assigned_date < today));
+          const checkSubjects = [...new Set(rosterRows.map((r: any) => r.subject))].filter(Boolean);
+          const { data: previousHwChecks } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject, assigned_date, check_status, result, created_at')
+            .in('student_id', studentIds)
+            .in('subject', checkSubjects as any)
+            .lt('assigned_date', today)
+            .not('content', 'eq', '')
+            .order('assigned_date', { ascending: false })
+            .order('created_at', { ascending: false })
+            .limit(1000);
+
+          const latestSummary = buildHomeworkCheckSummaryMap(previousHwChecks || []);
           latestAssignmentCheckStatusMap = latestSummary.statusMap;
           latestAssignmentResultMap = latestSummary.resultMap;
         }
@@ -1742,7 +1754,19 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
             if (!existing.at && hw.submitted_at) existing.at = hw.submitted_at;
           });
 
-          const latestSummary = buildHomeworkCheckSummaryMap((hwAll || []).filter((hw: any) => hw.assigned_date < today));
+          const checkSubjects = [...new Set(allStudentClassPairs.map((p) => p.subject))].filter(Boolean);
+          const { data: previousHwChecks } = await supabase
+            .from('homework_assignments')
+            .select('student_id, subject, assigned_date, check_status, result, created_at')
+            .in('student_id', studentIds)
+            .in('subject', checkSubjects as any)
+            .lt('assigned_date', today)
+            .not('content', 'eq', '')
+            .order('assigned_date', { ascending: false })
+            .order('created_at', { ascending: false })
+            .limit(1000);
+
+          const latestSummary = buildHomeworkCheckSummaryMap(previousHwChecks || []);
           latestAssignmentCheckStatusMap = latestSummary.statusMap;
           latestAssignmentResultMap = latestSummary.resultMap;
         }
