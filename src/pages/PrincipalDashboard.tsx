@@ -270,6 +270,7 @@ function PrincipalContent() {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [classroomSlots, setClassroomSlots] = useState<ClassroomSlot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailOpen, setDetailOpen] = useState<null | 'rate' | 'late' | 'absent'>(null);
 
   // KST 기준 오늘 날짜 및 요일 (UTC+9)
   const today = useMemo(() => {
