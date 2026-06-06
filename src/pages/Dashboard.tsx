@@ -244,6 +244,51 @@ function mapHomeworkAssignmentResultToStatus(result: string | null | undefined):
   return null;
 }
 
+function getEffectiveHomeworkStatus(input: {
+  homeworkStatus?: string | null;
+  lessonSubmitted?: boolean;
+  latestAssignmentCheckStatus?: string | null;
+  latestAssignmentResult?: string | null;
+  previousHomeworkStatus?: TodaySlotStudent['previousHomeworkStatus'];
+}): string | null {
+  const mappedAssignmentResult = mapHomeworkAssignmentResultToStatus(input.latestAssignmentResult);
+  if (input.latestAssignmentCheckStatus === 'unchecked') return 'unchecked';
+  if (mappedAssignmentResult) return mappedAssignmentResult;
+
+  const isDefaultDraft = input.homeworkStatus === 'none_assigned' && !input.lessonSubmitted;
+  if (input.homeworkStatus && !isDefaultDraft && input.homeworkStatus !== 'none_assigned') return input.homeworkStatus;
+  if (input.latestAssignmentCheckStatus === 'checked') return 'checked';
+
+  if (input.previousHomeworkStatus === 'completed') return '완료';
+  if (input.previousHomeworkStatus === 'partial') return '일부완료';
+  if (input.previousHomeworkStatus === 'not_done') return '미이행';
+  if (input.previousHomeworkStatus === 'none_assigned') return '없음';
+  return null;
+}
+
+function buildHomeworkCheckSummaryMap(rows: any[]) {
+  const statusMap: Record<string, string | null> = {};
+  const resultMap: Record<string, string | null> = {};
+
+  (rows || []).forEach((hw: any) => {
+    const key = `${hw.student_id}:${hw.subject}`;
+    const checkStatus = hw.check_status || 'unchecked';
+
+    if (checkStatus !== 'checked') {
+      statusMap[key] = 'unchecked';
+      resultMap[key] = null;
+      return;
+    }
+
+    if (statusMap[key] === undefined) {
+      statusMap[key] = 'checked';
+      resultMap[key] = hw.result || null;
+    }
+  });
+
+  return { statusMap, resultMap };
+}
+
 // HOMEWORK-STATUS-DISPLAY-FIX-V1: Get badge variant based on status
 function getHomeworkStatusBadgeClass(status: string | null | undefined): string {
   if (!status) return 'bg-muted text-muted-foreground';
