@@ -3281,15 +3281,21 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                                 size="sm"
                                                 className="h-7 text-xs px-2.5"
                                                 onClick={() => {
+                                                  const isExamPrepRow = !!row.isExamPrep || (typeof row.class_id === 'string' && row.class_id.startsWith('exam-prep-'));
                                                   setAdminLessonModalContext({
                                                     student_id: row.student_id,
-                                                    class_id: row.class_id,
+                                                    // EXAM-PREP-FIX-V1 / SUPP-FIX-V1: class_id must be a real UUID or empty string; the synthetic "exam-prep-*" id is not a uuid
+                                                    class_id: (isExamPrepRow || row.isSupplementary) ? '' : row.class_id,
                                                     subject: row.subject,
                                                     lesson_date: getTodayKST(),
                                                     ...(row.isSupplementary ? { lesson_types: ['보충수업'] } : {}),
+                                                    ...(isExamPrepRow ? { lesson_types: ['시험특강'] } : {}),
                                                   });
-                                                  setAdminLessonModalRecordId(row.isSupplementary ? (row.supplementaryRecordId || ls?.recordId || null) : (ls?.recordId || null));
-                                                  setAdminLessonModalForceNew(row.isSupplementary ? false : !ls?.recordId);
+                                                  const resolvedRecordId = row.isSupplementary
+                                                    ? (row.supplementaryRecordId || ls?.recordId || null)
+                                                    : (ls?.recordId || null);
+                                                  setAdminLessonModalRecordId(resolvedRecordId);
+                                                  setAdminLessonModalForceNew(!resolvedRecordId);
                                                   setAdminLessonModalOpen(true);
                                                 }}
                                               >
