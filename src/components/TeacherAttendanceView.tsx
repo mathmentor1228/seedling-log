@@ -44,6 +44,8 @@ interface ScheduleSlot {
   classroomName: string | null;
   isExamPrep?: boolean;
   examPrepStudentIds?: string[];
+  isSupplementary?: boolean;
+  supplementaryStudentIds?: string[];
 }
 
 /* ------------------------------------------------------------------ */
