@@ -3701,7 +3701,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
                                           <span className="font-semibold text-sm text-foreground">{student.name}</span>
                                           {getAttendanceStatusBadge(student.attendanceStatus)}
                                           {getRosterBadges(
-                                            student.previousHomeworkStatus,
+                                            normalizeHomeworkStatus(rawHwStatus),
                                             student.debugReason,
                                             student.firstSubject,
                                             student.followup2wDue,
