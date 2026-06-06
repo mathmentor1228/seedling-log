@@ -558,13 +558,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
               : understandingScore;
           }
         }
-        if (activeFields.has('homework_status')) {
-          const ext = (usePerStudentHomework && recordId)
-            ? (perStudentHomework[recordId] || homeworkStatus)
-            : homeworkStatus;
-          // lesson_records.homework_status is a constrained enum, so map extended value
-          p.homework_status = mapResultToStatus(ext);
-        }
+        // HW-CHECK-SOURCE-OF-TRUTH-V2: homework_status is now derived from explicit
+        // homework_assignments checks below. Do not write the draft's default
+        // 'none_assigned' just because the teacher opened the homework check section.
         if (activeFields.has('notes')) {
           const val = (usePerStudentMemo && recordId)
             ? (perStudentMemo[recordId] ?? notes)
@@ -1035,10 +1031,9 @@ export function BatchLessonModal({ open, onOpenChange, onSaved, standalone = fal
 
         // HW-NO-AUTO-CONFIRM-V1: Only write homework_status when the teacher explicitly toggled this field on.
         // Otherwise we would silently overwrite (and effectively confirm/reset) the existing status on every bulk draft save.
-        if (activeFields.has('homework_status')) {
-          const hw = usePerStudentHomework ? (perStudentHomework[id] || homeworkStatus) : homeworkStatus;
-          payload.homework_status = mapResultToStatus(hw);
-        }
+        // HW-CHECK-SOURCE-OF-TRUTH-V2: Do not overwrite lesson_records.homework_status
+        // from the bulk draft save path. Explicit per-item homework checks above are
+        // the only source that should update the homework check result.
 
         const types = usePerStudentLessonTypes ? (perStudentLessonTypes[id] ?? batchLessonTypes) : batchLessonTypes;
         payload.lesson_types = types;
