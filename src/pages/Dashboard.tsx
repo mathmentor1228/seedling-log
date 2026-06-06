@@ -1999,7 +1999,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
         todaySlots.forEach(slot => {
           if (slot.isOverridden && slot.overrideType === 'cancelled') return;
           const isEP = !!(slot.isExamPrep || (slot.class_id && slot.class_id.startsWith('exam-prep-')));
-          const isSup = !!(slot as any).isSupplementary;
+          const isSup = !!(slot as any).isSupplementary || (typeof slot.id === 'string' && slot.id.startsWith('supp-'));
           slot.students.forEach(student => {
             const key = `${student.id}:${slot.class_id || 'null'}:${slot.subject}`;
             candidates.set(key, {
@@ -2009,7 +2009,7 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
               teacher_id: user.id,
               isExamPrep: isEP,
               isSupplementary: isSup,
-              existingRecordId: (slot as any).supplementaryRecordId || undefined,
+              existingRecordId: student.lessonRecordId || (slot as any).supplementaryRecordId || undefined,
             });
           });
         });
