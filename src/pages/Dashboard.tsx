@@ -266,11 +266,18 @@ function getEffectiveHomeworkStatus(input: {
   return null;
 }
 
-function buildHomeworkCheckSummaryMap(rows: any[]) {
+interface HomeworkCheckSummaryRow {
+  student_id: string;
+  subject: string;
+  check_status: string | null;
+  result: string | null;
+}
+
+function buildHomeworkCheckSummaryMap(rows: HomeworkCheckSummaryRow[]) {
   const statusMap: Record<string, string | null> = {};
   const resultMap: Record<string, string | null> = {};
 
-  (rows || []).forEach((hw: any) => {
+  (rows || []).forEach((hw) => {
     const key = `${hw.student_id}:${hw.subject}`;
     const checkStatus = hw.check_status || 'unchecked';
 
