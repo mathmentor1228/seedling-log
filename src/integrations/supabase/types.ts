@@ -2087,6 +2087,7 @@ export type Database = {
           homework_status: string
           id: string
           internal_notes: string | null
+          is_common_entry: boolean
           korean_categories: string[] | null
           learning_issues: string[] | null
           learning_issues_note: string | null
@@ -2122,6 +2123,8 @@ export type Database = {
           test_title: string | null
           understanding_score: number | null
           updated_at: string
+          weekly_summary: string | null
+          weekly_summary_week: string | null
         }
         Insert: {
           attendance_status?: string[] | null
@@ -2142,6 +2145,7 @@ export type Database = {
           homework_status: string
           id?: string
           internal_notes?: string | null
+          is_common_entry?: boolean
           korean_categories?: string[] | null
           learning_issues?: string[] | null
           learning_issues_note?: string | null
@@ -2177,6 +2181,8 @@ export type Database = {
           test_title?: string | null
           understanding_score?: number | null
           updated_at?: string
+          weekly_summary?: string | null
+          weekly_summary_week?: string | null
         }
         Update: {
           attendance_status?: string[] | null
@@ -2197,6 +2203,7 @@ export type Database = {
           homework_status?: string
           id?: string
           internal_notes?: string | null
+          is_common_entry?: boolean
           korean_categories?: string[] | null
           learning_issues?: string[] | null
           learning_issues_note?: string | null
@@ -2232,6 +2239,8 @@ export type Database = {
           test_title?: string | null
           understanding_score?: number | null
           updated_at?: string
+          weekly_summary?: string | null
+          weekly_summary_week?: string | null
         }
         Relationships: [
           {
