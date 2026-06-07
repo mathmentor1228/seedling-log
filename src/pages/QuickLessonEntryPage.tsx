@@ -36,6 +36,7 @@ import { useNavigate } from 'react-router-dom';
 import { MissingAttendanceDialog } from '@/components/lessons/MissingAttendanceDialog';
 
 import { UnifiedLessonRow } from '@/components/lessons/UnifiedLessonRow';
+import { LinkedRecordsChip, LinkedRecordsState, LinkedChoices } from '@/components/lessons/LinkedRecordsChip';
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 
@@ -59,6 +60,8 @@ interface StudentRow {
   attendanceStatuses: string[];
   hasAttendanceLog: boolean; // false => auto-create on save
   existingDraft: boolean;    // true => roster forced by draft lesson_record
+  linked: LinkedRecordsState;
+  linkedChoices: LinkedChoices;
 }
 
 interface GroupState {
@@ -163,6 +166,28 @@ function QuickLessonEntryContent() {
         if (!hwMap.has(r.student_id)) hwMap.set(r.student_id, { id: r.id, content: r.content });
       }
 
+      // 5. Linked records: test/clinic/self_study for same day + subject (per student)
+      const [testRes, clinicRes, studyRes] = await Promise.all([
+        supabase.from('test_records').select('id, student_id, test_type, content, score, passed')
+          .in('student_id', finalIds).eq('test_date', date).eq('subject', subject),
+        supabase.from('clinic_records').select('id, student_id, content, teacher_note')
+          .in('student_id', finalIds).eq('clinic_date', date).eq('subject', subject),
+        supabase.from('self_study_records').select('id, student_id, task_list, memo, duration_minutes')
+          .in('student_id', finalIds).eq('study_date', date).eq('subject', subject),
+      ]);
+      const testsBy = new Map<string, any[]>();
+      for (const r of (testRes.data || []) as any[]) {
+        const arr = testsBy.get(r.student_id) || []; arr.push(r); testsBy.set(r.student_id, arr);
+      }
+      const clinicsBy = new Map<string, any[]>();
+      for (const r of (clinicRes.data || []) as any[]) {
+        const arr = clinicsBy.get(r.student_id) || []; arr.push(r); clinicsBy.set(r.student_id, arr);
+      }
+      const studiesBy = new Map<string, any[]>();
+      for (const r of (studyRes.data || []) as any[]) {
+        const arr = studiesBy.get(r.student_id) || []; arr.push(r); studiesBy.set(r.student_id, arr);
+      }
+
       const rows: StudentRow[] = sortStudents(list).map(s => {
         const a = avgMap.get(s.id);
         const avg = a ? Math.round(a.sum / a.n) : null;
@@ -184,6 +209,12 @@ function QuickLessonEntryContent() {
           attendanceStatuses: (rec?.attendance_status as string[]) ?? (hasAtt ? ['출석'] : ['출석']),
           hasAttendanceLog: hasAtt,
           existingDraft: !!rec,
+          linked: {
+            tests: testsBy.get(s.id) || [],
+            clinics: clinicsBy.get(s.id) || [],
+            studies: studiesBy.get(s.id) || [],
+          },
+          linkedChoices: { test: 'merge', clinic: 'merge', study: 'merge' },
         };
       });
 
@@ -322,11 +353,52 @@ function QuickLessonEntryContent() {
       const autoAttendance: any[] = [];
       for (const s of targets) {
         const { range, hw, isCommon } = resolveProgress(s);
+
+        // Apply linked records (test/clinic/self_study) per merge choice
+        let mergedNotes = s.note || '';
+        let testName: string | null = null;
+        let testContent: string | null = null;
+        let testResultText: string | null = null;
+
+        const tc = s.linkedChoices;
+        if (tc.test !== 'skip' && s.linked.tests.length > 0) {
+          const parts = s.linked.tests.map(t =>
+            `${t.test_type || '테스트'}${t.content ? ` ${t.content}` : ''}${t.score ? ` (${t.score})` : ''}${t.passed === true ? ' ✓' : t.passed === false ? ' ✗' : ''}`
+          );
+          testName = s.linked.tests[0].test_type || '테스트';
+          testContent = s.linked.tests.map(t => t.content || '').filter(Boolean).join(' / ') || null;
+          testResultText = parts.join(' / ');
+        }
+        const appendNote = (label: string, lines: string[]) => {
+          if (lines.length === 0) return;
+          const block = `[${label}] ${lines.join(' / ')}`;
+          mergedNotes = mergedNotes ? `${mergedNotes}\n${block}` : block;
+        };
+        const replaceNote = (label: string, lines: string[]) => {
+          if (lines.length === 0) return;
+          mergedNotes = `[${label}] ${lines.join(' / ')}`;
+        };
+        if (s.linked.clinics.length > 0 && tc.clinic !== 'skip') {
+          const lines = s.linked.clinics.map(c => c.content || c.teacher_note || '').filter(Boolean);
+          if (tc.clinic === 'replace') replaceNote('클리닉', lines);
+          else appendNote('클리닉', lines);
+        }
+        if (s.linked.studies.length > 0 && tc.study !== 'skip') {
+          const lines = s.linked.studies.map(st => {
+            const tasks = Array.isArray(st.task_list)
+              ? st.task_list.map((t: any) => t?.title || t?.name || '').filter(Boolean).join(', ')
+              : '';
+            return `${tasks || st.memo || ''}${st.duration_minutes ? ` (${st.duration_minutes}분)` : ''}`.trim();
+          }).filter(Boolean);
+          if (tc.study === 'replace') replaceNote('자습', lines);
+          else appendNote('자습', lines);
+        }
+
         const payload: any = {
           lesson_range: range,
           understanding_score: s.understanding,
           homework_status: s.homework,
-          notes: s.note || null,
+          notes: mergedNotes || null,
           next_lesson_goal: hw,
           is_common_entry: isCommon,
           lesson_types: s.lessonTypes,
@@ -334,6 +406,11 @@ function QuickLessonEntryContent() {
           submitted: submit,
           submitted_at: submit ? new Date().toISOString() : null,
         };
+        if (testName) {
+          payload.test_name = testName;
+          payload.test_content = testContent;
+          payload.test_result_text = testResultText;
+        }
         const existId = existingMap.get(s.id);
         if (existId) updates.push({ id: existId, payload });
         else inserts.push({
@@ -540,15 +617,27 @@ function QuickLessonEntryContent() {
                     <div className="space-y-2">
                       {groupStudents.map((s, idx) => {
                         const inCommonGroup = g.mode === 'group' && g.groupMemberIds.includes(s.id);
+                        const hasLinked = s.linked.tests.length + s.linked.clinics.length + s.linked.studies.length > 0;
                         return (
-                          <UnifiedLessonRow
-                            key={s.id}
-                            student={s}
-                            idx={idx}
-                            inCommonGroup={inCommonGroup}
-                            groupMode={g.mode}
-                            onChange={(key, value) => updateStudent(s.id, key, value as any)}
-                          />
+                          <div key={s.id} className="space-y-1">
+                            {hasLinked && (
+                              <div className="flex justify-end pr-1">
+                                <LinkedRecordsChip
+                                  studentName={s.name}
+                                  linked={s.linked}
+                                  choices={s.linkedChoices}
+                                  onChange={(c) => updateStudent(s.id, 'linkedChoices', c)}
+                                />
+                              </div>
+                            )}
+                            <UnifiedLessonRow
+                              student={s}
+                              idx={idx}
+                              inCommonGroup={inCommonGroup}
+                              groupMode={g.mode}
+                              onChange={(key, value) => updateStudent(s.id, key, value as any)}
+                            />
+                          </div>
                         );
                       })}
                     </div>
