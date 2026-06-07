@@ -293,6 +293,8 @@ export default function TeacherRevenueSection() {
             student_count: cur?.students.size || 0,
             prev_revenue: prev?.revenue || 0,
             prev_student_count: prev?.students.size || 0,
+            student_ids: cur ? Array.from(cur.students) : [],
+            prev_student_ids: prev ? Array.from(prev.students) : [],
             salary,
             profit,
             margin,
