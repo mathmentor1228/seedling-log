@@ -353,11 +353,52 @@ function QuickLessonEntryContent() {
       const autoAttendance: any[] = [];
       for (const s of targets) {
         const { range, hw, isCommon } = resolveProgress(s);
+
+        // Apply linked records (test/clinic/self_study) per merge choice
+        let mergedNotes = s.note || '';
+        let testName: string | null = null;
+        let testContent: string | null = null;
+        let testResultText: string | null = null;
+
+        const tc = s.linkedChoices;
+        if (tc.test !== 'skip' && s.linked.tests.length > 0) {
+          const parts = s.linked.tests.map(t =>
+            `${t.test_type || '테스트'}${t.content ? ` ${t.content}` : ''}${t.score ? ` (${t.score})` : ''}${t.passed === true ? ' ✓' : t.passed === false ? ' ✗' : ''}`
+          );
+          testName = s.linked.tests[0].test_type || '테스트';
+          testContent = s.linked.tests.map(t => t.content || '').filter(Boolean).join(' / ') || null;
+          testResultText = parts.join(' / ');
+        }
+        const appendNote = (label: string, lines: string[]) => {
+          if (lines.length === 0) return;
+          const block = `[${label}] ${lines.join(' / ')}`;
+          mergedNotes = mergedNotes ? `${mergedNotes}\n${block}` : block;
+        };
+        const replaceNote = (label: string, lines: string[]) => {
+          if (lines.length === 0) return;
+          mergedNotes = `[${label}] ${lines.join(' / ')}`;
+        };
+        if (s.linked.clinics.length > 0 && tc.clinic !== 'skip') {
+          const lines = s.linked.clinics.map(c => c.content || c.teacher_note || '').filter(Boolean);
+          if (tc.clinic === 'replace') replaceNote('클리닉', lines);
+          else appendNote('클리닉', lines);
+        }
+        if (s.linked.studies.length > 0 && tc.study !== 'skip') {
+          const lines = s.linked.studies.map(st => {
+            const tasks = Array.isArray(st.task_list)
+              ? st.task_list.map((t: any) => t?.title || t?.name || '').filter(Boolean).join(', ')
+              : '';
+            return `${tasks || st.memo || ''}${st.duration_minutes ? ` (${st.duration_minutes}분)` : ''}`.trim();
+          }).filter(Boolean);
+          if (tc.study === 'replace') replaceNote('자습', lines);
+          else appendNote('자습', lines);
+        }
+
         const payload: any = {
           lesson_range: range,
           understanding_score: s.understanding,
           homework_status: s.homework,
-          notes: s.note || null,
+          notes: mergedNotes || null,
           next_lesson_goal: hw,
           is_common_entry: isCommon,
           lesson_types: s.lessonTypes,
@@ -365,6 +406,11 @@ function QuickLessonEntryContent() {
           submitted: submit,
           submitted_at: submit ? new Date().toISOString() : null,
         };
+        if (testName) {
+          payload.test_name = testName;
+          payload.test_content = testContent;
+          payload.test_result_text = testResultText;
+        }
         const existId = existingMap.get(s.id);
         if (existId) updates.push({ id: existId, payload });
         else inserts.push({
