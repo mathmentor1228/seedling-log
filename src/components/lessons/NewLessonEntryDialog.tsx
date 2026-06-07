@@ -182,6 +182,17 @@ export function NewLessonEntryDialog({ open, onOpenChange, onIndividual, onBatch
             <Button
               variant="outline"
               className="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary hover:bg-primary/5"
+              onClick={() => { onOpenChange(false); navigate('/lessons/quick'); }}
+            >
+              <Zap className="w-6 h-6 text-primary" />
+              <div className="text-center">
+                <p className="font-semibold text-sm">⚡ 빠른 입력 (추천)</p>
+                <p className="text-xs text-muted-foreground">공통란 1회 + 학생별 평가를 한 화면에서</p>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto py-4 flex flex-col items-center gap-2 hover:border-primary hover:bg-primary/5"
               onClick={() => { onOpenChange(false); onIndividual(); }}
             >
               <User className="w-6 h-6 text-primary" />
