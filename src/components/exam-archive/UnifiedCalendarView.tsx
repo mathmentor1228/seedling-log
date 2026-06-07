@@ -75,6 +75,9 @@ export function UnifiedCalendarView({ schedules }: Props) {
   const [enabledCats, setEnabledCats] = useState<Set<SubjectCategory>>(() => new Set(SUBJECT_CATS));
   const [cursor, setCursor] = useState(today);
   const [autoJumped, setAutoJumped] = useState(false);
+  const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const openSchedule = (s: Schedule) => { setSelectedSchedule(s); setDialogOpen(true); };
 
   // sync enabled when schools list grows
   useMemo(() => {
