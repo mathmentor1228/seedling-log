@@ -155,6 +155,7 @@ export function FinalPrepOverview({
       map.get(key)!.students.push({
         id: e.studentId, name: e.studentName, school: e.studentSchool,
         status: e.enrollment?.status || 'pending',
+        gradeYear: e.studentGradeYear, schoolLevel: e.studentSchoolLevel,
       });
     }
     return Array.from(map.values());
