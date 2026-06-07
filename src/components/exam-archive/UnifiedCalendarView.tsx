@@ -399,6 +399,12 @@ export function UnifiedCalendarView({ schedules }: Props) {
           )}
         </TabsContent>
       </Tabs>
+
+      <ScheduleNotesDialog
+        schedule={selectedSchedule}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </Card>
   );
 }
