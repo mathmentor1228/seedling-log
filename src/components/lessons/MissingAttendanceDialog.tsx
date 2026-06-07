@@ -125,7 +125,7 @@ export function MissingAttendanceDialog({ open, onOpenChange, teacherId, subject
                     <Badge variant="secondary" className="text-[10px]">{gs.length}명</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {gs.map(s => (
+                    {(gs as Row[]).map(s => (
                       <label key={s.id}
                         className="flex items-center gap-2 p-2 border rounded-md cursor-pointer hover:bg-muted/40 text-sm">
                         <input type="checkbox" checked={selected.has(s.id)}
