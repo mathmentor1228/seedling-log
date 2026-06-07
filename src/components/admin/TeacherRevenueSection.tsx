@@ -298,12 +298,24 @@ export default function TeacherRevenueSection() {
           .lt('lesson_date', prevEnd) as any,
         supabase
           .from('students')
-          .select('id, name, grade, enrollment_status, registration_date, updated_at') as any,
+          .select('id, name, grade, enrollment_status, registration_date, updated_at, sibling_group_id') as any,
       ]);
 
       const studentNameMap = new Map<string, { name: string; grade: string | null }>();
-      (studentsAll || []).forEach((s: any) =>
-        studentNameMap.set(s.id, { name: s.name, grade: s.grade }),
+      const siblingGroupByStudent = new Map<string, number | null>();
+      const siblingCountByGroup = new Map<number, number>();
+      (studentsAll || []).forEach((s: any) => {
+        studentNameMap.set(s.id, { name: s.name, grade: s.grade });
+        siblingGroupByStudent.set(s.id, s.sibling_group_id ?? null);
+        if (s.sibling_group_id != null && s.enrollment_status !== '퇴원') {
+          siblingCountByGroup.set(s.sibling_group_id, (siblingCountByGroup.get(s.sibling_group_id) || 0) + 1);
+        }
+      });
+
+      const { feeByCourse } = computeEffectiveFees(
+        (courses || []) as any[],
+        siblingCountByGroup,
+        siblingGroupByStudent,
       );
 
       const curAttrib = computeAttribution(
@@ -311,13 +323,16 @@ export default function TeacherRevenueSection() {
         (subjectTeachers || []) as any[],
         (lessons || []) as any[],
         studentNameMap,
+        feeByCourse,
       );
       const prevAttrib = computeAttribution(
         (courses || []) as any[],
         (subjectTeachers || []) as any[],
         (prevLessons || []) as any[],
         studentNameMap,
+        feeByCourse,
       );
+
 
       const teacherNameMap = new Map<string, string>();
       (profiles || []).forEach((p: any) => teacherNameMap.set(p.id, p.full_name || '이름없음'));
