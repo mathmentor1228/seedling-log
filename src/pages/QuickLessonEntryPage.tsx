@@ -565,16 +565,25 @@ function QuickLessonEntryContent() {
         groups.map((g, gi) => {
           const groupStudents = students.filter(s => g.studentIds.includes(s.id));
           return (
-            <Card key={g.key} className="border-l-4 border-l-primary border-y border-r overflow-hidden">
+          const accent = GROUP_ACCENTS[gi % GROUP_ACCENTS.length];
+          const draftCount = groupStudents.filter(s => s.existingDraft).length;
+          return (
+            <Card key={g.key} className={`border-l-4 ${accent.bar} border-y border-r overflow-hidden shadow-sm`}>
               <Collapsible open={!g.collapsed} onOpenChange={(o) => updateGroup(gi, 'collapsed', !o)}>
-                <CardHeader className="pb-2 bg-primary/5">
-                  <CardTitle className="text-base flex items-center justify-between">
-                    <CollapsibleTrigger className="flex items-center gap-2">
-                      {g.collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                      <span className="font-bold">{g.label}</span>
-                      <Badge className="text-xs bg-primary/15 text-primary border-0 hover:bg-primary/20">{groupStudents.length}명</Badge>
+                <CardHeader className={`pb-2 ${accent.bg}`}>
+                  <CardTitle className="text-base flex items-center justify-between gap-2">
+                    <CollapsibleTrigger className="flex items-center gap-2 min-w-0">
+                      {g.collapsed ? <ChevronRight className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+                      <span className="font-bold text-lg">{g.label}</span>
+                      <Badge className={`text-xs border-0 ${accent.chip} hover:opacity-90`}>{groupStudents.length}명</Badge>
+                      {draftCount > 0 && (
+                        <Badge className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-0">임시 {draftCount}</Badge>
+                      )}
+                      {g.mode === 'group' && (
+                        <Badge className="text-[10px] bg-primary/15 text-primary border-0">그룹입력 {g.groupMemberIds.length}명</Badge>
+                      )}
                     </CollapsibleTrigger>
-                    <Button size="sm" variant="ghost" onClick={() => prefillGroupFromLast(gi)} className="h-8 text-xs">
+                    <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); prefillGroupFromLast(gi); }} className="h-8 text-xs shrink-0">
                       <History className="w-3.5 h-3.5 mr-1" /> 이전 회차
                     </Button>
                   </CardTitle>
