@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import Dashboard from './Dashboard';
 import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
 import { PrepLectureProposalsWidget } from '@/components/exam-prep/PrepLectureProposalsWidget';
+import { WeeklySummaryWidget } from '@/components/lessons/WeeklySummaryWidget';
 
 /* ------------------------------------------------------------------ */
 function LiveClock() {
@@ -27,6 +28,7 @@ function TeacherSideBySide() {
   return (
     <div className="space-y-3">
       <PrepLectureProposalsWidget />
+      <WeeklySummaryWidget />
       <div className="flex lg:hidden justify-center gap-2">
         {TEACHER_TABS.map((label, i) => (
           <button

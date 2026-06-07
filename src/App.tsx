@@ -57,6 +57,7 @@ const QuizBulkUploadPage = lazy(() => import("./pages/QuizBulkUploadPage"));
 const QuizLookupPage = lazy(() => import("./pages/QuizLookupPage"));
 const LessonRecordPage = lazy(() => import("./pages/LessonRecordPage"));
 const BatchLessonEntryPage = lazy(() => import("./pages/BatchLessonEntryPage"));
+const QuickLessonEntryPage = lazy(() => import("./pages/QuickLessonEntryPage"));
 const SubjectMaterialPage = lazy(() => import("./pages/SubjectMaterialPage"));
 const StudentLogin = lazy(() => import("./pages/student/StudentLogin"));
 const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard"));
@@ -159,6 +160,7 @@ const App = () => (
                 <Route path="/classes" element={<ClassesPage />} />
                 <Route path="/lessons" element={<LessonsPage />} />
                 <Route path="/lessons/batch" element={<BatchLessonEntryPage />} />
+                <Route path="/lessons/quick" element={<QuickLessonEntryPage />} />
                 <Route path="/lessons/record/new" element={<LessonRecordPage />} />
                 <Route path="/lessons/record/:recordId" element={<LessonRecordPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
