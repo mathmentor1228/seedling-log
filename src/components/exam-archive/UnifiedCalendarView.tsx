@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -49,6 +49,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
   );
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(schools));
   const [cursor, setCursor] = useState(today);
+  const [autoJumped, setAutoJumped] = useState(false);
 
   // sync enabled when schools list grows
   useMemo(() => {
@@ -90,6 +91,24 @@ export function UnifiedCalendarView({ schedules }: Props) {
       .sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''))
       .slice(0, 60);
   }, [filtered]);
+
+  // Auto-jump cursor to the month of the nearest event when current month has none
+  useEffect(() => {
+    if (autoJumped || filtered.length === 0) return;
+    const monthKey = format(cursor, 'yyyy-MM');
+    const hasInMonth = filtered.some(s => s.start_date && s.start_date.startsWith(monthKey));
+    if (hasInMonth) return;
+    const todayStr = getTodayKST();
+    const future = filtered.filter(s => s.start_date && s.start_date >= todayStr)
+      .sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''));
+    const target = future[0] || [...filtered]
+      .filter(s => s.start_date)
+      .sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))[0];
+    if (target?.start_date) {
+      setCursor(parseISO(target.start_date));
+      setAutoJumped(true);
+    }
+  }, [filtered, cursor, autoJumped]);
 
   // Build month grid
   const monthGrid = useMemo(() => {
