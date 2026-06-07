@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import {
-  TrendingUp, TrendingDown, Wallet, Save, ChevronDown, UserPlus, UserMinus, Users, ArrowRight,
+  TrendingUp, TrendingDown, Wallet, Save, ChevronDown, UserPlus, UserMinus, Users, ArrowRight, Calculator, Check,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Cell,
@@ -189,6 +189,7 @@ export default function TeacherRevenueSection() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [newStudents, setNewStudents] = useState<MovementStudent[]>([]);
   const [withdrawnStudents, setWithdrawnStudents] = useState<MovementStudent[]>([]);
+  const [targetMargin, setTargetMargin] = useState<string>('30');
 
   const fetchData = async () => {
     setLoading(true);
@@ -526,8 +527,59 @@ export default function TeacherRevenueSection() {
 
       {/* Per-teacher table with expandable per-student breakdown */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 space-y-3">
           <CardTitle className="text-sm">선생님 상세 (▶ 클릭 시 학생별 수강료 표시)</CardTitle>
+          {!loading && rows.length > 0 && (() => {
+            const m = Math.max(0, Math.min(100, Number(targetMargin) || 0));
+            const totalRecommended = rows.reduce(
+              (a, r) => a + Math.max(0, Math.round(r.revenue * (1 - m / 100))),
+              0,
+            );
+            const totalDiff = totalRecommended - totals.salary;
+            return (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-primary">
+                  <Calculator className="w-4 h-4" />
+                  목표 마진율
+                </div>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={targetMargin}
+                    onChange={(e) => setTargetMargin(e.target.value)}
+                    className="h-8 w-20 text-right font-mono"
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  → 추천 총 급여{' '}
+                  <span className="font-mono font-semibold text-foreground">{wonFmt(totalRecommended)}</span>
+                  {totals.salary > 0 && (
+                    <span className={`ml-2 ${totalDiff < 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                      (현재 대비 {totalDiff >= 0 ? '+' : ''}{wonFmt(totalDiff)})
+                    </span>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 ml-auto"
+                  onClick={() => {
+                    const next: Record<string, string> = { ...salaryDraft };
+                    rows.forEach((r) => {
+                      next[r.teacher_id] = String(Math.max(0, Math.round(r.revenue * (1 - m / 100))));
+                    });
+                    setSalaryDraft(next);
+                    toast({ title: `목표 마진 ${m}% 기준 추천 급여를 입력란에 반영했습니다`, description: '각 행의 저장 버튼을 눌러 확정하세요.' });
+                  }}
+                >
+                  전체 입력란에 반영
+                </Button>
+              </div>
+            );
+          })()}
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -543,6 +595,7 @@ export default function TeacherRevenueSection() {
                     <TableHead className="text-center">전월 대비</TableHead>
                     <TableHead className="text-right">매출</TableHead>
                     <TableHead className="w-44">급여 (원)</TableHead>
+                    <TableHead className="text-right">추천 급여</TableHead>
                     <TableHead className="text-right">차액</TableHead>
                     <TableHead className="text-right">마진</TableHead>
                   </TableRow>
@@ -550,7 +603,7 @@ export default function TeacherRevenueSection() {
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         해당 월 매출 데이터가 없습니다
                       </TableCell>
                     </TableRow>
@@ -603,6 +656,37 @@ export default function TeacherRevenueSection() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-mono">
+                              {(() => {
+                                const m = Math.max(0, Math.min(100, Number(targetMargin) || 0));
+                                const rec = Math.max(0, Math.round(r.revenue * (1 - m / 100)));
+                                const diff = rec - r.salary;
+                                return (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <div className="text-right">
+                                      <div className="text-xs">{wonFmt(rec)}</div>
+                                      {r.salary > 0 && (
+                                        <div className={`text-[10px] font-sans ${diff < 0 ? 'text-destructive' : diff > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                          {diff === 0 ? '±0' : (diff > 0 ? '+' : '') + shortWon(Math.abs(diff))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0"
+                                      title="이 추천 급여를 입력란에 반영"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSalaryDraft({ ...salaryDraft, [r.teacher_id]: String(rec) });
+                                      }}
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                );
+                              })()}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
                               <span className={r.profit < 0 ? 'text-destructive' : 'text-emerald-600'}>
                                 {r.profit >= 0 ? '+' : ''}{wonFmt(r.profit)}
                               </span>
@@ -616,7 +700,7 @@ export default function TeacherRevenueSection() {
                           {isOpen && (
                             <TableRow key={r.teacher_id + '_detail'} className="bg-muted/20 hover:bg-muted/20">
                               <TableCell></TableCell>
-                              <TableCell colSpan={7} className="py-3">
+                              <TableCell colSpan={8} className="py-3">
                                 {r.contribs.length === 0 ? (
                                   <p className="text-xs text-muted-foreground">담당 학생 수강료 데이터가 없습니다.</p>
                                 ) : (
