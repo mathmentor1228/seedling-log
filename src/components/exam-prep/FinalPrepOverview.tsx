@@ -275,9 +275,33 @@ export function FinalPrepOverview({
             <SelectItem value="teacher">선생님별</SelectItem>
             <SelectItem value="student">학생별</SelectItem>
             <SelectItem value="school">학교별</SelectItem>
+            <SelectItem value="grade">학년별</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
+      {availableGrades.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground mr-1">학년 필터:</span>
+          <Badge
+            variant={gradeFilter === 'all' ? 'default' : 'outline'}
+            className="cursor-pointer text-[11px]"
+            onClick={() => setGradeFilter('all')}
+          >
+            전체
+          </Badge>
+          {availableGrades.map(g => (
+            <Badge
+              key={g}
+              variant={gradeFilter === g ? 'default' : 'outline'}
+              className="cursor-pointer text-[11px]"
+              onClick={() => setGradeFilter(g)}
+            >
+              {g}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-4">
         {grouped.map(([groupName, entries]) => (
