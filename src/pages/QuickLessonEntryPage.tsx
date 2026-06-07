@@ -84,6 +84,8 @@ function QuickLessonEntryContent() {
   const [groups, setGroups] = useState<GroupState[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [missingOpen, setMissingOpen] = useState(false);
+
 
   const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
 
