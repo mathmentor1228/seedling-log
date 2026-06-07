@@ -244,6 +244,7 @@ export function FinalPrepOverview({
     student: <Users className="w-3.5 h-3.5" />,
     school: <School className="w-3.5 h-3.5" />,
     date: <Calendar className="w-3.5 h-3.5" />,
+    grade: <Users className="w-3.5 h-3.5" />,
   };
   const sortIcon = SORT_ICONS[sortMode];
 
