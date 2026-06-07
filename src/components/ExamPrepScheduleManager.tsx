@@ -712,6 +712,7 @@ export function ExamPrepScheduleManager() {
     setMode('list'); setStep(1);
     setFormSubject('수학'); setFormTeacherId(''); setFormSchool('');
     setFormTitle(''); setFormDescription(''); setFormDeadline('');
+    setFormGradeYears([]);
     setSessions([
       { label: '1회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
       { label: '2회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
