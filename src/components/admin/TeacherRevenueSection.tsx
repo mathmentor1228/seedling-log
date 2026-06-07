@@ -189,6 +189,7 @@ export default function TeacherRevenueSection() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [newStudents, setNewStudents] = useState<MovementStudent[]>([]);
   const [withdrawnStudents, setWithdrawnStudents] = useState<MovementStudent[]>([]);
+  const [targetMargin, setTargetMargin] = useState<string>('30');
 
   const fetchData = async () => {
     setLoading(true);
