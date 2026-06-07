@@ -210,6 +210,35 @@ export function UnifiedCalendarView({ schedules }: Props) {
         </Popover>
       </div>
 
+      {/* Subject category filter chips (시험 과목 우선순위) */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] text-muted-foreground mr-1">과목 필터:</span>
+        {SUBJECT_CATS.map((c) => {
+          const active = enabledCats.has(c);
+          return (
+            <button
+              key={c}
+              onClick={() => toggleCat(c)}
+              className={cn(
+                'text-[10px] px-2 py-0.5 rounded-full border transition',
+                active ? SUBJECT_CATEGORY_COLORS[c] : 'bg-muted/30 text-muted-foreground border-transparent opacity-60'
+              )}
+            >
+              {SUBJECT_CATEGORY_LABELS[c]}
+            </button>
+          );
+        })}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-[10px] ml-auto"
+          onClick={() => setEnabledCats(enabledCats.size === SUBJECT_CATS.length ? new Set() : new Set(SUBJECT_CATS))}
+        >
+          {enabledCats.size === SUBJECT_CATS.length ? '전체 해제' : '전체 선택'}
+        </Button>
+      </div>
+
+
       <Tabs defaultValue="month">
         <TabsList className="h-8">
           <TabsTrigger value="month" className="text-xs gap-1.5 h-7"><CalendarIcon className="w-3.5 h-3.5" /> 월별</TabsTrigger>
