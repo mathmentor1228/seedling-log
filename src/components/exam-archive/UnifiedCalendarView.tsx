@@ -70,6 +70,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
     [schedules]
   );
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(schools));
+  const [enabledCats, setEnabledCats] = useState<Set<SubjectCategory>>(() => new Set(SUBJECT_CATS));
   const [cursor, setCursor] = useState(today);
   const [autoJumped, setAutoJumped] = useState(false);
 
@@ -81,11 +82,19 @@ export function UnifiedCalendarView({ schedules }: Props) {
   }, [schools, enabled]);
 
   const filtered = useMemo(
-    () => schedules.filter(s => s.start_date && enabled.has(s.school_name)),
-    [schedules, enabled]
+    () => schedules.filter(s => {
+      if (!s.start_date) return false;
+      if (!enabled.has(s.school_name)) return false;
+      // Subject filter applies only to exam entries; 학사일정/행사 등은 항상 표시
+      if (s.schedule_type === 'exam') {
+        return enabledCats.has(categoryOf(s));
+      }
+      return true;
+    }),
+    [schedules, enabled, enabledCats]
   );
 
-  // group by date for month view
+  // group by date for month view (priority sort within each day)
   const byDate = useMemo(() => {
     const m = new Map<string, Schedule[]>();
     for (const s of filtered) {
@@ -102,15 +111,20 @@ export function UnifiedCalendarView({ schedules }: Props) {
         guard++;
       }
     }
+    for (const arr of m.values()) arr.sort(sortByCategory);
     return m;
   }, [filtered]);
 
-  // Upcoming timeline (today and future, sorted by date)
+  // Upcoming timeline (today and future, sorted by date then category priority)
   const upcoming = useMemo(() => {
     const todayStr = getTodayKST();
     return filtered
       .filter(s => (s.start_date || '') >= todayStr)
-      .sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''))
+      .sort((a, b) => {
+        const d = (a.start_date || '').localeCompare(b.start_date || '');
+        if (d !== 0) return d;
+        return sortByCategory(a, b);
+      })
       .slice(0, 60);
   }, [filtered]);
 
