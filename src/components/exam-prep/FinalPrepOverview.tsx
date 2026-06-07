@@ -31,6 +31,7 @@ interface FinalPrepEntry {
   teacherId: string; teacherName: string; schoolName: string;
   session: Session; enrollment: Enrollment | undefined;
   studentId: string; studentName: string; studentSchool: string;
+  studentGradeYear: number | null; studentSchoolLevel: string | null;
   slotStart: string; slotEnd: string;
 }
 
@@ -44,7 +45,7 @@ interface GroupedScheduleEntry {
   teacherName: string; schoolName: string;
   session: Session;
   slotStart: string; slotEnd: string;
-  students: { id: string; name: string; school: string; status: string }[];
+  students: { id: string; name: string; school: string; status: string; gradeYear: number | null; schoolLevel: string | null }[];
 }
 
 function fmtDate(dateStr: string) {
