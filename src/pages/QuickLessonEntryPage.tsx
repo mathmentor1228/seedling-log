@@ -206,7 +206,7 @@ function QuickLessonEntryContent() {
           individualProgress: rec && rec.is_common_entry === false ? (rec.lesson_range || '') : '',
           showOverride: !!(rec && rec.is_common_entry === false && rec.lesson_range),
           lessonTypes: (rec?.lesson_types as string[]) ?? ['정규수업'],
-          attendanceStatuses: (rec?.attendance_status as string[]) ?? (hasAtt ? ['출석'] : ['출석']),
+          attendanceStatuses: (rec?.attendance_status as string[]) ?? ['정상등원'],
           hasAttendanceLog: hasAtt,
           existingDraft: !!rec,
           linked: {

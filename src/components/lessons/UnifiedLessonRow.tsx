@@ -14,7 +14,8 @@ export const HW_OPTIONS = [
 ] as const;
 
 export const LESSON_TYPES = ['정규수업', '보충수업', '시험특강', '방학특강', '테스트', '휴강'] as const;
-export const ATTENDANCE_STATUSES = ['출석', '지각', '조퇴', '인정결석', '무단결석'] as const;
+// Standardized to match LessonRecordForm ATTENDANCE_STATUS_OPTIONS
+export const ATTENDANCE_STATUSES = ['정상등원', '지각', '조퇴', '인정결석', '무단결석', '보충불가'] as const;
 
 export const UNDERSTANDING_COLORS: Record<number, { active: string; dim: string }> = {
   1: { active: 'bg-red-500 text-white border-red-500',     dim: 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40' },
@@ -25,11 +26,12 @@ export const UNDERSTANDING_COLORS: Record<number, { active: string; dim: string 
 };
 
 export const ATTENDANCE_COLOR: Record<string, string> = {
-  '출석': 'bg-emerald-500 text-white border-emerald-500',
+  '정상등원': 'bg-emerald-500 text-white border-emerald-500',
   '지각': 'bg-amber-500 text-white border-amber-500',
   '조퇴': 'bg-orange-500 text-white border-orange-500',
   '인정결석': 'bg-slate-500 text-white border-slate-500',
   '무단결석': 'bg-red-500 text-white border-red-500',
+  '보충불가': 'bg-rose-600 text-white border-rose-600',
 };
 
 export interface UnifiedLessonRowData {
