@@ -22,6 +22,7 @@ import {
 } from '@/lib/subjectCategory';
 import { ScheduleNotesDialog } from './ScheduleNotesDialog';
 import { FileText } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 function categoryOf(s: Schedule): SubjectCategory {
   const fromSubject = s.subject ? classifyCompositeSubject(s.subject) : 'other';
