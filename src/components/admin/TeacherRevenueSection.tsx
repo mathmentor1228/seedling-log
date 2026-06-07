@@ -603,7 +603,7 @@ export default function TeacherRevenueSection() {
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         해당 월 매출 데이터가 없습니다
                       </TableCell>
                     </TableRow>
