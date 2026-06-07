@@ -78,7 +78,20 @@ export function UnifiedCalendarView({ schedules }: Props) {
   const [autoJumped, setAutoJumped] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
   const openSchedule = (s: Schedule) => { setSelectedSchedule(s); setDialogOpen(true); };
+
+  const reloadCounts = async () => {
+    const { data } = await (supabase as any)
+      .from('school_exam_notes')
+      .select('schedule_id');
+    const map: Record<string, number> = {};
+    for (const r of (data || [])) {
+      if (r.schedule_id) map[r.schedule_id] = (map[r.schedule_id] || 0) + 1;
+    }
+    setNoteCounts(map);
+  };
+  useEffect(() => { reloadCounts(); }, []);
 
   // sync enabled when schools list grows
   useMemo(() => {
