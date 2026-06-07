@@ -43,6 +43,7 @@ const AdminReportPage = lazy(() => import("./pages/AdminReportPage"));
 const AdminDailyOpsPage = lazy(() => import("./pages/AdminDailyOpsPage"));
 const AdminOfficePage = lazy(() => import("./pages/AdminOfficePage"));
 const TuitionPage = lazy(() => import("./pages/TuitionPage"));
+const IncomeManagementPage = lazy(() => import("./pages/IncomeManagementPage"));
 const TextbookPage = lazy(() => import("./pages/TextbookPage"));
 const ReportStatusPage = lazy(() => import("./pages/ReportStatusPage"));
 const VocabTestPage = lazy(() => import("./pages/VocabTestPage"));
