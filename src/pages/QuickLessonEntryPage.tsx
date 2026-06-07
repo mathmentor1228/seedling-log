@@ -35,31 +35,9 @@ import { UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MissingAttendanceDialog } from '@/components/lessons/MissingAttendanceDialog';
 
+import { UnifiedLessonRow } from '@/components/lessons/UnifiedLessonRow';
+
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
-const HW_OPTIONS = [
-  { v: 'completed', label: '완료', cls: 'bg-emerald-500 text-white border-emerald-500', dim: 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-200/60 dark:border-emerald-900' },
-  { v: 'partial', label: '부분', cls: 'bg-amber-500 text-white border-amber-500', dim: 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 border-amber-200/60 dark:border-amber-900' },
-  { v: 'not_done', label: '미완', cls: 'bg-red-500 text-white border-red-500', dim: 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 border-red-200/60 dark:border-red-900' },
-  { v: 'none_assigned', label: '없음', cls: 'bg-muted text-foreground border-muted', dim: 'text-muted-foreground hover:bg-muted border-border' },
-] as const;
-const LESSON_TYPES = ['정규수업', '보충수업', '시험특강', '방학특강', '테스트', '휴강'] as const;
-const ATTENDANCE_STATUSES = ['출석', '지각', '조퇴', '인정결석', '무단결석'] as const;
-
-const UNDERSTANDING_COLORS: Record<number, { active: string; dim: string }> = {
-  1: { active: 'bg-red-500 text-white border-red-500',     dim: 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40' },
-  2: { active: 'bg-orange-500 text-white border-orange-500', dim: 'text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40' },
-  3: { active: 'bg-amber-500 text-white border-amber-500',  dim: 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40' },
-  4: { active: 'bg-lime-500 text-white border-lime-500',    dim: 'text-lime-700 hover:bg-lime-50 dark:hover:bg-lime-950/40' },
-  5: { active: 'bg-emerald-500 text-white border-emerald-500', dim: 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40' },
-};
-
-const ATTENDANCE_COLOR: Record<string, string> = {
-  '출석': 'bg-emerald-500 text-white border-emerald-500',
-  '지각': 'bg-amber-500 text-white border-amber-500',
-  '조퇴': 'bg-orange-500 text-white border-orange-500',
-  '인정결석': 'bg-slate-500 text-white border-slate-500',
-  '무단결석': 'bg-red-500 text-white border-red-500',
-};
 
 
 interface StudentRow {
