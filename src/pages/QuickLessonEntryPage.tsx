@@ -103,14 +103,26 @@ function QuickLessonEntryContent() {
       const teacherIds = await fetchTeacherStudentIds(effectiveTeacherId, subject);
       if (teacherIds.length === 0) { setStudents([]); setGroups([]); return; }
 
-      // 2. Attendance for the date — intersection
+      // 2a. Attendance for the date
       const { data: attRows } = await supabase
         .from('attendance_logs')
         .select('student_id')
         .eq('date', date)
         .in('student_id', teacherIds);
       const attendedIds = new Set<string>((attRows || []).map((r: any) => r.student_id).filter(Boolean));
-      const finalIds = teacherIds.filter(id => attendedIds.has(id));
+
+      // 2b. Existing lesson_records (drafts or submitted) for this teacher/date/subject
+      const { data: existingRecs } = await supabase
+        .from('lesson_records')
+        .select('id, student_id, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, lesson_types, attendance_status, submitted, is_common_entry')
+        .eq('teacher_id', effectiveTeacherId)
+        .eq('lesson_date', date)
+        .eq('subject', subject as any)
+        .in('student_id', teacherIds);
+      const recordMap = new Map<string, any>((existingRecs || []).map((r: any) => [r.student_id, r]));
+
+      // Union: attendance ∪ existing records
+      const finalIds = teacherIds.filter(id => attendedIds.has(id) || recordMap.has(id));
 
       if (finalIds.length === 0) {
         setStudents([]);
@@ -155,17 +167,23 @@ function QuickLessonEntryContent() {
         const a = avgMap.get(s.id);
         const avg = a ? Math.round(a.sum / a.n) : null;
         const hw = hwMap.get(s.id) || null;
+        const rec = recordMap.get(s.id);
+        const hasAtt = attendedIds.has(s.id);
         return {
           ...s,
           included: true,
-          understanding: avg ?? 3,
-          homework: hw ? 'completed' : 'none_assigned',
-          note: '',
+          understanding: rec?.understanding_score ?? avg ?? 3,
+          homework: rec?.homework_status ?? (hw ? 'completed' : 'none_assigned'),
+          note: rec?.notes ?? '',
           prevAvg: avg,
           prevHwContent: hw?.content || null,
           prevHwId: hw?.id || null,
-          individualProgress: '',
-          showOverride: false,
+          individualProgress: rec && rec.is_common_entry === false ? (rec.lesson_range || '') : '',
+          showOverride: !!(rec && rec.is_common_entry === false && rec.lesson_range),
+          lessonTypes: (rec?.lesson_types as string[]) ?? ['정규수업'],
+          attendanceStatuses: (rec?.attendance_status as string[]) ?? (hasAtt ? ['출석'] : ['출석']),
+          hasAttendanceLog: hasAtt,
+          existingDraft: !!rec,
         };
       });
 
