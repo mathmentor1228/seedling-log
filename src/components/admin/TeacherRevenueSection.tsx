@@ -527,8 +527,59 @@ export default function TeacherRevenueSection() {
 
       {/* Per-teacher table with expandable per-student breakdown */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 space-y-3">
           <CardTitle className="text-sm">선생님 상세 (▶ 클릭 시 학생별 수강료 표시)</CardTitle>
+          {!loading && rows.length > 0 && (() => {
+            const m = Math.max(0, Math.min(100, Number(targetMargin) || 0));
+            const totalRecommended = rows.reduce(
+              (a, r) => a + Math.max(0, Math.round(r.revenue * (1 - m / 100))),
+              0,
+            );
+            const totalDiff = totalRecommended - totals.salary;
+            return (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-primary">
+                  <Calculator className="w-4 h-4" />
+                  목표 마진율
+                </div>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={targetMargin}
+                    onChange={(e) => setTargetMargin(e.target.value)}
+                    className="h-8 w-20 text-right font-mono"
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  → 추천 총 급여{' '}
+                  <span className="font-mono font-semibold text-foreground">{wonFmt(totalRecommended)}</span>
+                  {totals.salary > 0 && (
+                    <span className={`ml-2 ${totalDiff < 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                      (현재 대비 {totalDiff >= 0 ? '+' : ''}{wonFmt(totalDiff)})
+                    </span>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 ml-auto"
+                  onClick={() => {
+                    const next: Record<string, string> = { ...salaryDraft };
+                    rows.forEach((r) => {
+                      next[r.teacher_id] = String(Math.max(0, Math.round(r.revenue * (1 - m / 100))));
+                    });
+                    setSalaryDraft(next);
+                    toast({ title: `목표 마진 ${m}% 기준 추천 급여를 입력란에 반영했습니다`, description: '각 행의 저장 버튼을 눌러 확정하세요.' });
+                  }}
+                >
+                  전체 입력란에 반영
+                </Button>
+              </div>
+            );
+          })()}
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -544,6 +595,7 @@ export default function TeacherRevenueSection() {
                     <TableHead className="text-center">전월 대비</TableHead>
                     <TableHead className="text-right">매출</TableHead>
                     <TableHead className="w-44">급여 (원)</TableHead>
+                    <TableHead className="text-right">추천 급여</TableHead>
                     <TableHead className="text-right">차액</TableHead>
                     <TableHead className="text-right">마진</TableHead>
                   </TableRow>
