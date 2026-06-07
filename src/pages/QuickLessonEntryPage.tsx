@@ -60,6 +60,8 @@ interface StudentRow {
   attendanceStatuses: string[];
   hasAttendanceLog: boolean; // false => auto-create on save
   existingDraft: boolean;    // true => roster forced by draft lesson_record
+  linked: LinkedRecordsState;
+  linkedChoices: LinkedChoices;
 }
 
 interface GroupState {
