@@ -3626,6 +3626,68 @@ export type Database = {
           },
         ]
       }
+      school_exam_notes: {
+        Row: {
+          author_id: string | null
+          author_name: string | null
+          created_at: string
+          exam_period: string | null
+          grade: number | null
+          id: string
+          note: string | null
+          schedule_id: string | null
+          school_name: string
+          scope: string | null
+          subject: string | null
+          subject_category: string | null
+          updated_at: string
+          urls: Json
+          year: number
+        }
+        Insert: {
+          author_id?: string | null
+          author_name?: string | null
+          created_at?: string
+          exam_period?: string | null
+          grade?: number | null
+          id?: string
+          note?: string | null
+          schedule_id?: string | null
+          school_name: string
+          scope?: string | null
+          subject?: string | null
+          subject_category?: string | null
+          updated_at?: string
+          urls?: Json
+          year: number
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string | null
+          created_at?: string
+          exam_period?: string | null
+          grade?: number | null
+          id?: string
+          note?: string | null
+          schedule_id?: string | null
+          school_name?: string
+          scope?: string | null
+          subject?: string | null
+          subject_category?: string | null
+          updated_at?: string
+          urls?: Json
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_exam_notes_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "school_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       school_exam_reports: {
         Row: {
           academy_helped_rate: number | null
