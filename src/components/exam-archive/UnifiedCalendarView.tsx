@@ -12,6 +12,28 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getTodayKST, cn } from '@/lib/utils';
 import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS, type Schedule } from './types';
+import {
+  classifyCompositeSubject,
+  classifyFromTitle,
+  SUBJECT_CATEGORY_LABELS,
+  SUBJECT_CATEGORY_PRIORITY,
+  SUBJECT_CATEGORY_COLORS,
+  type SubjectCategory,
+} from '@/lib/subjectCategory';
+
+function categoryOf(s: Schedule): SubjectCategory {
+  const fromSubject = s.subject ? classifyCompositeSubject(s.subject) : 'other';
+  if (fromSubject !== 'other') return fromSubject;
+  return classifyFromTitle(s.title);
+}
+
+// Priority sort: math > english > korean > science > others
+function sortByCategory(a: Schedule, b: Schedule) {
+  return SUBJECT_CATEGORY_PRIORITY[categoryOf(a)] - SUBJECT_CATEGORY_PRIORITY[categoryOf(b)];
+}
+
+const SUBJECT_CATS: SubjectCategory[] = ['math', 'english', 'korean', 'science', 'other'];
+
 
 interface Props {
   schedules: Schedule[];
@@ -48,6 +70,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
     [schedules]
   );
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(schools));
+  const [enabledCats, setEnabledCats] = useState<Set<SubjectCategory>>(() => new Set(SUBJECT_CATS));
   const [cursor, setCursor] = useState(today);
   const [autoJumped, setAutoJumped] = useState(false);
 
@@ -59,11 +82,19 @@ export function UnifiedCalendarView({ schedules }: Props) {
   }, [schools, enabled]);
 
   const filtered = useMemo(
-    () => schedules.filter(s => s.start_date && enabled.has(s.school_name)),
-    [schedules, enabled]
+    () => schedules.filter(s => {
+      if (!s.start_date) return false;
+      if (!enabled.has(s.school_name)) return false;
+      // Subject filter applies only to exam entries; 학사일정/행사 등은 항상 표시
+      if (s.schedule_type === 'exam') {
+        return enabledCats.has(categoryOf(s));
+      }
+      return true;
+    }),
+    [schedules, enabled, enabledCats]
   );
 
-  // group by date for month view
+  // group by date for month view (priority sort within each day)
   const byDate = useMemo(() => {
     const m = new Map<string, Schedule[]>();
     for (const s of filtered) {
@@ -80,15 +111,20 @@ export function UnifiedCalendarView({ schedules }: Props) {
         guard++;
       }
     }
+    for (const arr of m.values()) arr.sort(sortByCategory);
     return m;
   }, [filtered]);
 
-  // Upcoming timeline (today and future, sorted by date)
+  // Upcoming timeline (today and future, sorted by date then category priority)
   const upcoming = useMemo(() => {
     const todayStr = getTodayKST();
     return filtered
       .filter(s => (s.start_date || '') >= todayStr)
-      .sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''))
+      .sort((a, b) => {
+        const d = (a.start_date || '').localeCompare(b.start_date || '');
+        if (d !== 0) return d;
+        return sortByCategory(a, b);
+      })
       .slice(0, 60);
   }, [filtered]);
 
@@ -132,6 +168,11 @@ export function UnifiedCalendarView({ schedules }: Props) {
     if (enabled.size === schools.length) setEnabled(new Set());
     else setEnabled(new Set(schools));
   };
+  const toggleCat = (c: SubjectCategory) => {
+    const next = new Set(enabledCats);
+    if (next.has(c)) next.delete(c); else next.add(c);
+    setEnabledCats(next);
+  };
 
   return (
     <Card className="p-4 space-y-3">
@@ -168,6 +209,35 @@ export function UnifiedCalendarView({ schedules }: Props) {
           </PopoverContent>
         </Popover>
       </div>
+
+      {/* Subject category filter chips (시험 과목 우선순위) */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] text-muted-foreground mr-1">과목 필터:</span>
+        {SUBJECT_CATS.map((c) => {
+          const active = enabledCats.has(c);
+          return (
+            <button
+              key={c}
+              onClick={() => toggleCat(c)}
+              className={cn(
+                'text-[10px] px-2 py-0.5 rounded-full border transition',
+                active ? SUBJECT_CATEGORY_COLORS[c] : 'bg-muted/30 text-muted-foreground border-transparent opacity-60'
+              )}
+            >
+              {SUBJECT_CATEGORY_LABELS[c]}
+            </button>
+          );
+        })}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-[10px] ml-auto"
+          onClick={() => setEnabledCats(enabledCats.size === SUBJECT_CATS.length ? new Set() : new Set(SUBJECT_CATS))}
+        >
+          {enabledCats.size === SUBJECT_CATS.length ? '전체 해제' : '전체 선택'}
+        </Button>
+      </div>
+
 
       <Tabs defaultValue="month">
         <TabsList className="h-8">
@@ -230,7 +300,9 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         {format(cell.date, 'yyyy년 M월 d일 (E)', { locale: ko })}
                       </div>
                       <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                        {items.map((it, idx) => (
+                        {items.map((it, idx) => {
+                          const cat = categoryOf(it);
+                          return (
                           <div key={idx} className="flex items-start gap-2 text-xs p-1.5 rounded bg-muted/40">
                             <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: colorFor(it.school_name) }} />
                             <div className="min-w-0 flex-1">
@@ -241,10 +313,17 @@ export function UnifiedCalendarView({ schedules }: Props) {
                                 <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4', SCHEDULE_TYPE_COLORS[it.schedule_type])}>
                                   {SCHEDULE_TYPE_LABELS[it.schedule_type] || it.schedule_type}
                                 </Badge>
+                                {it.schedule_type === 'exam' && (
+                                  <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4', SUBJECT_CATEGORY_COLORS[cat])}>
+                                    {SUBJECT_CATEGORY_LABELS[cat]}
+                                  </Badge>
+                                )}
+                                {it.subject && <span className="truncate">· {it.subject}</span>}
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </PopoverContent>
                   )}
@@ -264,6 +343,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
                   const d = parseISO(s.start_date!);
                   const days = differenceInDays(d, today);
                   const dd = ddayBadge(days);
+                  const cat = categoryOf(s);
                   return (
                     <div key={`${s.id}-${idx}`} className="flex items-center gap-2 p-2 rounded-md border bg-card hover:bg-muted/40 transition">
                       <Badge className={cn('shrink-0 font-bold text-[10px] px-1.5', dd.cls)}>{dd.label}</Badge>
@@ -272,9 +352,15 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         <div className="text-xs font-medium truncate">{s.title}</div>
                         <div className="text-[10px] text-muted-foreground">
                           {format(d, 'M월 d일 (E)', { locale: ko })} · {s.school_name}
+                          {s.subject && ` · ${s.subject}`}
                           {s.end_date && s.end_date !== s.start_date && ` ~ ${format(parseISO(s.end_date), 'M월 d일', { locale: ko })}`}
                         </div>
                       </div>
+                      {s.schedule_type === 'exam' && (
+                        <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4 shrink-0', SUBJECT_CATEGORY_COLORS[cat])}>
+                          {SUBJECT_CATEGORY_LABELS[cat]}
+                        </Badge>
+                      )}
                       <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4 shrink-0', SCHEDULE_TYPE_COLORS[s.schedule_type])}>
                         {SCHEDULE_TYPE_LABELS[s.schedule_type] || s.schedule_type}
                       </Badge>
