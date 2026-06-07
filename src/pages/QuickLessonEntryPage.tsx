@@ -475,14 +475,27 @@ function QuickLessonEntryContent() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-3 py-4 space-y-3">
-      <div className="flex items-center gap-2">
+    <div className="max-w-6xl mx-auto px-3 py-4 space-y-3 pb-24">
+      {/* Header bar */}
+      <div className="rounded-2xl bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border p-4 flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/lessons')}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <h1 className="text-lg font-bold flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" /> 오늘 수업 한번에 기록
-        </h1>
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-xl bg-primary/20 flex items-center justify-center">
+            <Zap className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-extrabold leading-tight">오늘 수업 한번에 기록</h1>
+            <p className="text-xs text-muted-foreground">출석 학생 자동 로드 · 학년별 그룹 입력 · 외부기록 흡수</p>
+          </div>
+        </div>
+        <div className="ml-auto flex flex-wrap gap-1.5">
+          <Badge variant="outline" className="h-7 px-2.5 text-xs">출석 <b className="ml-1">{stats.total}</b></Badge>
+          {stats.draft > 0 && <Badge className="h-7 px-2.5 text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border-0">임시 {stats.draft}</Badge>}
+          {stats.linked > 0 && <Badge className="h-7 px-2.5 text-xs bg-purple-500/15 text-purple-700 dark:text-purple-300 border-0">외부기록 {stats.linked}</Badge>}
+          {stats.absent > 0 && <Badge className="h-7 px-2.5 text-xs bg-rose-500/15 text-rose-700 dark:text-rose-300 border-0">결석 {stats.absent}</Badge>}
+        </div>
       </div>
 
       {/* Header context */}
@@ -517,14 +530,11 @@ function QuickLessonEntryContent() {
             <Label className="text-xs">수업 날짜</Label>
             <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-9" />
           </div>
-          <div className="flex items-end gap-2">
-            <Badge variant="outline" className="text-xs h-9 px-3 flex items-center">
-              출석 {selectedCount}/{students.length}명
-            </Badge>
-            <Button variant="outline" size="sm" className="h-9 text-xs"
+          <div className="flex items-end">
+            <Button variant="outline" size="sm" className="h-9 text-xs w-full"
               onClick={() => setMissingOpen(true)}
               disabled={!effectiveTeacherId || !subject || !date}>
-              <UserPlus className="w-3.5 h-3.5 mr-1" /> 누락 추가
+              <UserPlus className="w-3.5 h-3.5 mr-1" /> 누락 학생 추가
             </Button>
           </div>
         </CardContent>
@@ -544,8 +554,12 @@ function QuickLessonEntryContent() {
           <Loader2 className="w-5 h-5 animate-spin mr-2" /> 출석/학생 로딩...
         </CardContent></Card>
       ) : students.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-          이 날짜의 출석 또는 임시저장 학생이 없습니다. "누락 추가"로 학생을 추가하거나 날짜를 확인해주세요.
+        <Card className="border-dashed"><CardContent className="p-10 text-center space-y-2">
+          <div className="w-12 h-12 mx-auto rounded-full bg-muted flex items-center justify-center">
+            <UserPlus className="w-6 h-6 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium">이 날짜의 출석 또는 임시저장 학생이 없습니다</p>
+          <p className="text-xs text-muted-foreground">"누락 학생 추가"로 직접 추가하거나 다른 날짜를 선택해주세요.</p>
         </CardContent></Card>
       ) : (
         groups.map((g, gi) => {
