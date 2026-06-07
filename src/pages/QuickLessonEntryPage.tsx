@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
@@ -110,6 +112,7 @@ function QuickLessonEntryContent() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [missingOpen, setMissingOpen] = useState(false);
+  const [validation, setValidation] = useState<{ open: boolean; issues: { name: string; problems: string[] }[] }>({ open: false, issues: [] });
 
 
   const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
@@ -282,23 +285,46 @@ function QuickLessonEntryContent() {
     const groupByStudent = new Map<string, GroupState>();
     for (const g of groups) for (const sid of g.studentIds) groupByStudent.set(sid, g);
 
-    // Helper: get effective progress/homework for a student based on group mode
+    // Helper: get effective progress/homework for a student.
+    // If student is in common group AND has individual progress text → MERGE both.
     const resolveProgress = (s: StudentRow) => {
       const g = groupByStudent.get(s.id);
-      if (!g) return { range: s.individualProgress.trim(), hw: null as string | null, isCommon: false };
+      const indiv = s.individualProgress.trim();
+      if (!g) return { range: indiv, hw: null as string | null, isCommon: false };
       const inGroup = g.mode === 'group' && g.groupMemberIds.includes(s.id);
+      const groupRange = g.lessonRange.trim();
       if (inGroup) {
-        return { range: g.lessonRange.trim(), hw: g.homeworkAssigned || null, isCommon: true };
+        const merged = indiv ? `${groupRange}\n[개별] ${indiv}` : groupRange;
+        return { range: merged, hw: g.homeworkAssigned || null, isCommon: true };
       }
-      return { range: s.individualProgress.trim(), hw: g.homeworkAssigned || null, isCommon: false };
+      return { range: indiv, hw: g.homeworkAssigned || null, isCommon: false };
     };
 
-    // Validate each included student has some progress
-    for (const s of targets) {
-      const { range } = resolveProgress(s);
-      if (!range) {
-        toast({ title: `진도 누락: ${s.name}`, description: '그룹 또는 개별 진도를 입력해주세요', variant: 'destructive' });
+    // PRE-SUBMIT VALIDATION (only when submitting; temp save is unrestricted)
+    if (submit) {
+      const issues: { name: string; problems: string[] }[] = [];
+      for (const s of targets) {
+        const probs: string[] = [];
+        const { range } = resolveProgress(s);
+        if (!range) probs.push('수업 진도 누락');
+        if (!s.attendanceStatuses || s.attendanceStatuses.length === 0) probs.push('출결 상태 미선택');
+        if (!s.lessonTypes || s.lessonTypes.length === 0) probs.push('수업 종류 미선택');
+        // Homework check: if a previous HW was assigned, status must not remain 'none_assigned'
+        if (s.prevHwId && s.homework === 'none_assigned') probs.push('숙제 확인 누락 (이전 숙제 있음)');
+        if (probs.length > 0) issues.push({ name: s.name, problems: probs });
+      }
+      if (issues.length > 0) {
+        setValidation({ open: true, issues });
         return;
+      }
+    } else {
+      // For temp save: still require progress (otherwise nothing to record)
+      for (const s of targets) {
+        const { range } = resolveProgress(s);
+        if (!range) {
+          toast({ title: `진도 누락: ${s.name}`, description: '임시저장이라도 진도는 필요합니다', variant: 'destructive' });
+          return;
+        }
       }
     }
 
@@ -684,6 +710,42 @@ function QuickLessonEntryContent() {
           </Button>
         </div>
       )}
+
+      <Dialog open={validation.open} onOpenChange={(o) => setValidation(v => ({ ...v, open: o }))}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="w-5 h-5" /> 제출 전 확인 필요 ({validation.issues.length}명)
+            </DialogTitle>
+            <DialogDescription>
+              아래 항목이 누락되었습니다. 수정 후 다시 제출해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto space-y-2">
+            {validation.issues.map(it => (
+              <div key={it.name} className="border rounded-md p-2.5 bg-amber-50/50 dark:bg-amber-950/20">
+                <div className="font-semibold text-sm mb-1">{it.name}</div>
+                <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
+                  {it.problems.map(p => (
+                    <li key={p} className="flex items-start gap-1.5">
+                      <span className="text-amber-600 mt-0.5">•</span>
+                      <span>{p}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setValidation({ open: false, issues: [] })}>
+              수정하러 가기
+            </Button>
+            <Button variant="secondary" onClick={() => { setValidation({ open: false, issues: [] }); save(false); }}>
+              그래도 임시저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
