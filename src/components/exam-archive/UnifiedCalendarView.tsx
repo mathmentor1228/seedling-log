@@ -300,7 +300,9 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         {format(cell.date, 'yyyy년 M월 d일 (E)', { locale: ko })}
                       </div>
                       <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                        {items.map((it, idx) => (
+                        {items.map((it, idx) => {
+                          const cat = categoryOf(it);
+                          return (
                           <div key={idx} className="flex items-start gap-2 text-xs p-1.5 rounded bg-muted/40">
                             <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: colorFor(it.school_name) }} />
                             <div className="min-w-0 flex-1">
@@ -311,10 +313,17 @@ export function UnifiedCalendarView({ schedules }: Props) {
                                 <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4', SCHEDULE_TYPE_COLORS[it.schedule_type])}>
                                   {SCHEDULE_TYPE_LABELS[it.schedule_type] || it.schedule_type}
                                 </Badge>
+                                {it.schedule_type === 'exam' && (
+                                  <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4', SUBJECT_CATEGORY_COLORS[cat])}>
+                                    {SUBJECT_CATEGORY_LABELS[cat]}
+                                  </Badge>
+                                )}
+                                {it.subject && <span className="truncate">· {it.subject}</span>}
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </PopoverContent>
                   )}
