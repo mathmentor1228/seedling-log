@@ -185,7 +185,15 @@ function SchoolExamArchiveInner() {
         ) : null}
 
         <div className={cn('min-w-0 flex-1 overflow-y-auto', isFullWidthTab && 'w-full')}>
-          {selectedSchool || isFullWidthTab ? (
+          {selectedSchool === HUB_SENTINEL ? (
+            <UnifiedExamHub
+              schools={schools}
+              schedules={schedules}
+              archives={archives}
+              onSelectSchool={setSelectedSchool}
+              onRefetch={refetch}
+            />
+          ) : selectedSchool || isFullWidthTab ? (
             <div className={isFullWidthTab ? 'flex h-full min-h-0 flex-col' : 'space-y-5 p-6'}>
               {!isFullWidthTab ? (
                 <>
