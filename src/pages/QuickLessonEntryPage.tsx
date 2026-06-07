@@ -651,16 +651,18 @@ function QuickLessonEntryContent() {
                             disabled={!s.included}
                             placeholder="이 학생만 코멘트 (선택)" className="h-8 text-sm" />
 
-                          {(s.showOverride || s.individualProgress) && s.included && (
+                          {needsIndividualProgress && s.included && (
                             <div className="mt-2">
+                              <Label className="text-[11px] font-medium text-muted-foreground">개별 진도 {g.mode === 'group' && <span className="text-red-500">(필수)</span>}</Label>
                               <Input value={s.individualProgress}
                                 onChange={e => updateStudent(s.id, 'individualProgress', e.target.value)}
-                                placeholder="이 학생만의 개별 진도 (비우면 그룹 공통 진도 사용)"
-                                className="h-9 text-sm border-primary/50 focus-visible:border-primary" />
+                                placeholder={g.mode === 'group' ? '공통진도 비적용 학생 — 개별 진도 입력' : '예) 일차함수의 그래프'}
+                                className="h-9 text-sm border-primary/50 focus-visible:border-primary mt-1" />
                             </div>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </CollapsibleContent>
