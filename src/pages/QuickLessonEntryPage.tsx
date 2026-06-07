@@ -35,13 +35,30 @@ import { MissingAttendanceDialog } from '@/components/lessons/MissingAttendanceD
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 const HW_OPTIONS = [
-  { v: 'completed', label: '완료', color: 'text-emerald-600' },
-  { v: 'partial', label: '부분', color: 'text-amber-600' },
-  { v: 'not_done', label: '미완', color: 'text-red-600' },
-  { v: 'none_assigned', label: '없음', color: 'text-muted-foreground' },
+  { v: 'completed', label: '완료', cls: 'bg-emerald-500 text-white border-emerald-500', dim: 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-200/60 dark:border-emerald-900' },
+  { v: 'partial', label: '부분', cls: 'bg-amber-500 text-white border-amber-500', dim: 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 border-amber-200/60 dark:border-amber-900' },
+  { v: 'not_done', label: '미완', cls: 'bg-red-500 text-white border-red-500', dim: 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 border-red-200/60 dark:border-red-900' },
+  { v: 'none_assigned', label: '없음', cls: 'bg-muted text-foreground border-muted', dim: 'text-muted-foreground hover:bg-muted border-border' },
 ] as const;
 const LESSON_TYPES = ['정규수업', '보충수업', '시험특강', '방학특강', '테스트', '휴강'] as const;
 const ATTENDANCE_STATUSES = ['출석', '지각', '조퇴', '인정결석', '무단결석'] as const;
+
+const UNDERSTANDING_COLORS: Record<number, { active: string; dim: string }> = {
+  1: { active: 'bg-red-500 text-white border-red-500',     dim: 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40' },
+  2: { active: 'bg-orange-500 text-white border-orange-500', dim: 'text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40' },
+  3: { active: 'bg-amber-500 text-white border-amber-500',  dim: 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40' },
+  4: { active: 'bg-lime-500 text-white border-lime-500',    dim: 'text-lime-700 hover:bg-lime-50 dark:hover:bg-lime-950/40' },
+  5: { active: 'bg-emerald-500 text-white border-emerald-500', dim: 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40' },
+};
+
+const ATTENDANCE_COLOR: Record<string, string> = {
+  '출석': 'bg-emerald-500 text-white border-emerald-500',
+  '지각': 'bg-amber-500 text-white border-amber-500',
+  '조퇴': 'bg-orange-500 text-white border-orange-500',
+  '인정결석': 'bg-slate-500 text-white border-slate-500',
+  '무단결석': 'bg-red-500 text-white border-red-500',
+};
+
 
 interface StudentRow {
   id: string;
@@ -424,17 +441,17 @@ function QuickLessonEntryContent() {
         groups.map((g, gi) => {
           const groupStudents = students.filter(s => g.studentIds.includes(s.id));
           return (
-            <Card key={g.key} className="border-primary/20">
+            <Card key={g.key} className="border-l-4 border-l-primary border-y border-r overflow-hidden">
               <Collapsible open={!g.collapsed} onOpenChange={(o) => updateGroup(gi, 'collapsed', !o)}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center justify-between">
+                <CardHeader className="pb-2 bg-primary/5">
+                  <CardTitle className="text-base flex items-center justify-between">
                     <CollapsibleTrigger className="flex items-center gap-2">
-                      {g.collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      <span>{g.label}</span>
-                      <Badge variant="secondary" className="text-[10px]">{groupStudents.length}명</Badge>
+                      {g.collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                      <span className="font-bold">{g.label}</span>
+                      <Badge className="text-xs bg-primary/15 text-primary border-0 hover:bg-primary/20">{groupStudents.length}명</Badge>
                     </CollapsibleTrigger>
-                    <Button size="sm" variant="ghost" onClick={() => prefillGroupFromLast(gi)} className="h-7 text-xs">
-                      <History className="w-3 h-3 mr-1" /> 이전 회차
+                    <Button size="sm" variant="ghost" onClick={() => prefillGroupFromLast(gi)} className="h-8 text-xs">
+                      <History className="w-3.5 h-3.5 mr-1" /> 이전 회차
                     </Button>
                   </CardTitle>
                 </CardHeader>
@@ -478,105 +495,130 @@ function QuickLessonEntryContent() {
                     </div>
 
                     {/* Per-student rows */}
-                    <div className="divide-y">
-                      {groupStudents.map(s => (
-                        <div key={s.id} className={`py-2 space-y-1.5 ${!s.included ? 'opacity-50' : ''}`}>
-                          <div className="grid grid-cols-12 gap-2 items-center text-sm">
-                            <label className="col-span-3 flex items-center gap-2 cursor-pointer">
+                    <div className="space-y-2">
+                      {groupStudents.map((s, idx) => (
+                        <div key={s.id}
+                          className={`rounded-lg border bg-card p-3 transition ${!s.included ? 'opacity-50' : 'hover:border-primary/40'} ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                          {/* Row 1: name + meta + override toggle */}
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <label className="flex items-center gap-2.5 cursor-pointer min-w-0 flex-1">
                               <input type="checkbox" checked={s.included}
-                                onChange={e => updateStudent(s.id, 'included', e.target.checked)} className="rounded" />
+                                onChange={e => updateStudent(s.id, 'included', e.target.checked)}
+                                className="rounded w-4 h-4" />
                               <div className="min-w-0">
-                                <div className="font-medium truncate flex items-center gap-1">
-                                  {s.name}
+                                <div className="font-semibold text-base flex items-center gap-1.5 flex-wrap">
+                                  <span className="truncate">{s.name}</span>
                                   {s.existingDraft && (
-                                    <Badge variant="secondary" className="text-[9px] h-4 px-1">임시</Badge>
+                                    <Badge className="text-[10px] h-5 px-1.5 bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0 hover:bg-blue-500/20">임시저장</Badge>
                                   )}
                                   {!s.hasAttendanceLog && (
-                                    <Badge variant="outline" className="text-[9px] h-4 px-1 border-amber-400 text-amber-600">출결없음</Badge>
+                                    <Badge className="text-[10px] h-5 px-1.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0 hover:bg-amber-500/20">출결없음</Badge>
                                   )}
                                 </div>
-                                <div className="text-[10px] text-muted-foreground truncate">
-                                  {s.school || ''} {s.prevAvg != null && <span>· 평균 {s.prevAvg}</span>}
+                                <div className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {s.school || '—'} {s.prevAvg != null && <span className="ml-1">· 이전 평균 <b className="text-foreground">{s.prevAvg}</b></span>}
                                 </div>
                               </div>
                             </label>
-                            <div className="col-span-3 flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map(n => (
-                                <Button key={n} size="sm" variant={s.understanding === n ? 'default' : 'ghost'}
-                                  disabled={!s.included}
-                                  onClick={() => updateStudent(s.id, 'understanding', n)}
-                                  className="h-7 w-7 p-0 text-xs">{n}</Button>
-                              ))}
-                            </div>
-                            <div className="col-span-3 flex flex-col gap-0.5">
-                              <div className="flex gap-0.5">
-                                {HW_OPTIONS.map(o => (
-                                  <Button key={o.v} size="sm" variant={s.homework === o.v ? 'default' : 'ghost'}
-                                    disabled={!s.included}
-                                    onClick={() => updateStudent(s.id, 'homework', o.v)}
-                                    className="h-7 px-1.5 text-[10px]">{o.label}</Button>
-                                ))}
+                            <Button size="sm" variant={s.showOverride || s.individualProgress ? 'default' : 'outline'}
+                              onClick={() => updateStudent(s.id, 'showOverride', !s.showOverride)}
+                              disabled={!s.included}
+                              className="h-8 text-xs shrink-0" title="개별 진도 override">
+                              <PenLine className="w-3.5 h-3.5 mr-1" /> 개별진도
+                            </Button>
+                          </div>
+
+                          {/* Row 2: understanding + homework */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-medium text-muted-foreground w-10 shrink-0">이해도</span>
+                              <div className="flex gap-1 flex-1">
+                                {[1, 2, 3, 4, 5].map(n => {
+                                  const active = s.understanding === n;
+                                  const c = UNDERSTANDING_COLORS[n];
+                                  return (
+                                    <button key={n} type="button" disabled={!s.included}
+                                      onClick={() => updateStudent(s.id, 'understanding', n)}
+                                      className={`h-8 flex-1 rounded-md border text-sm font-bold transition ${active ? c.active : `${c.dim} border-border bg-background`}`}>
+                                      {n}
+                                    </button>
+                                  );
+                                })}
                               </div>
-                              {s.prevHwContent && (
-                                <div className="flex items-start gap-1 text-[10px] text-muted-foreground">
-                                  <BookOpen className="w-3 h-3 mt-0.5 shrink-0" />
-                                  <span className="truncate" title={s.prevHwContent}>{s.prevHwContent}</span>
-                                </div>
-                              )}
                             </div>
-                            <div className="col-span-2">
-                              <Input value={s.note} onChange={e => updateStudent(s.id, 'note', e.target.value)}
-                                disabled={!s.included}
-                                placeholder="코멘트" className="h-7 text-xs" />
-                            </div>
-                            <div className="col-span-1 flex justify-end">
-                              <Button size="sm" variant={s.showOverride || s.individualProgress ? 'default' : 'ghost'}
-                                onClick={() => updateStudent(s.id, 'showOverride', !s.showOverride)}
-                                disabled={!s.included}
-                                className="h-7 px-1.5 text-[10px]" title="개별 진도 override">
-                                <PenLine className="w-3 h-3" />
-                              </Button>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-medium text-muted-foreground w-10 shrink-0">숙제</span>
+                              <div className="flex gap-1 flex-1">
+                                {HW_OPTIONS.map(o => {
+                                  const active = s.homework === o.v;
+                                  return (
+                                    <button key={o.v} type="button" disabled={!s.included}
+                                      onClick={() => updateStudent(s.id, 'homework', o.v)}
+                                      className={`h-8 flex-1 rounded-md border text-xs font-semibold transition ${active ? o.cls : `${o.dim} bg-background`}`}>
+                                      {o.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
+
+                          {/* Row 3: lesson types + attendance status */}
                           {s.included && (
-                            <div className="pl-6 flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
-                              <div className="flex items-center gap-1">
-                                <span className="text-muted-foreground">수업:</span>
-                                {LESSON_TYPES.map(lt => {
-                                  const on = s.lessonTypes.includes(lt);
-                                  return (
-                                    <button key={lt} type="button"
-                                      onClick={() => updateStudent(s.id, 'lessonTypes',
-                                        on ? s.lessonTypes.filter(x => x !== lt) : [...s.lessonTypes, lt])}
-                                      className={`px-1.5 py-0.5 rounded border ${on ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>
-                                      {lt}
-                                    </button>
-                                  );
-                                })}
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 mb-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] font-medium text-muted-foreground w-10 shrink-0">수업</span>
+                                <div className="flex gap-1 flex-wrap">
+                                  {LESSON_TYPES.map(lt => {
+                                    const on = s.lessonTypes.includes(lt);
+                                    return (
+                                      <button key={lt} type="button"
+                                        onClick={() => updateStudent(s.id, 'lessonTypes',
+                                          on ? s.lessonTypes.filter(x => x !== lt) : [...s.lessonTypes, lt])}
+                                        className={`px-2 py-1 rounded-md border text-[11px] font-medium transition ${on ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted bg-background'}`}>
+                                        {lt}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <span className="text-muted-foreground">출결:</span>
-                                {ATTENDANCE_STATUSES.map(at => {
-                                  const on = s.attendanceStatuses.includes(at);
-                                  const isAbsent = at.includes('결석');
-                                  return (
-                                    <button key={at} type="button"
-                                      onClick={() => updateStudent(s.id, 'attendanceStatuses',
-                                        on ? s.attendanceStatuses.filter(x => x !== at) : [at] /* single select */)}
-                                      className={`px-1.5 py-0.5 rounded border ${on ? (isAbsent ? 'bg-destructive text-destructive-foreground border-destructive' : 'bg-primary text-primary-foreground border-primary') : 'border-border text-muted-foreground hover:bg-muted'}`}>
-                                      {at}
-                                    </button>
-                                  );
-                                })}
+                              <div className="flex items-center gap-2 flex-wrap md:justify-end">
+                                <span className="text-[11px] font-medium text-muted-foreground shrink-0">출결</span>
+                                <div className="flex gap-1 flex-wrap">
+                                  {ATTENDANCE_STATUSES.map(at => {
+                                    const on = s.attendanceStatuses.includes(at);
+                                    return (
+                                      <button key={at} type="button"
+                                        onClick={() => updateStudent(s.id, 'attendanceStatuses',
+                                          on ? s.attendanceStatuses.filter(x => x !== at) : [at])}
+                                        className={`px-2 py-1 rounded-md border text-[11px] font-semibold transition ${on ? ATTENDANCE_COLOR[at] : 'border-border text-muted-foreground hover:bg-muted bg-background'}`}>
+                                        {at}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
                           )}
+
+                          {/* Row 4: prev HW hint + note */}
+                          {s.prevHwContent && (
+                            <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-md px-2 py-1 mb-2">
+                              <BookOpen className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+                              <span className="font-medium">이전 숙제:</span>
+                              <span className="truncate" title={s.prevHwContent}>{s.prevHwContent}</span>
+                            </div>
+                          )}
+                          <Input value={s.note} onChange={e => updateStudent(s.id, 'note', e.target.value)}
+                            disabled={!s.included}
+                            placeholder="이 학생만 코멘트 (선택)" className="h-8 text-sm" />
+
                           {(s.showOverride || s.individualProgress) && s.included && (
-                            <div className="pl-6">
+                            <div className="mt-2">
                               <Input value={s.individualProgress}
                                 onChange={e => updateStudent(s.id, 'individualProgress', e.target.value)}
                                 placeholder="이 학생만의 개별 진도 (비우면 그룹 공통 진도 사용)"
-                                className="h-8 text-xs" />
+                                className="h-9 text-sm border-primary/50 focus-visible:border-primary" />
                             </div>
                           )}
                         </div>
