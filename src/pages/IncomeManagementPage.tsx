@@ -731,7 +731,7 @@ function IncomeContent() {
           </div>
           <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
             * <b>실수업/시수/신규/퇴원</b>: 수업일지(lesson_records) 기반. 신규·퇴원은 해당 월에 실제로 그 선생님이 수업한 학생만 집계.<br/>
-            * <b>매출(예상)</b>: 활성 수강(student_courses)의 월 수강료 합 — 다과목 할인(2과목 -5만, 3과목 -8만, 4과목+ -10만)·형제 할인(-1만/인)을 학생 단위로 적용한 뒤, 학생의 과목 수로 균등 분배하여 담당 선생님에게 귀속.<br/>
+            * <b>매출(예상)</b>: <u>정액 월수강료 기준</u> — 실제 수업 회수(시수)와 무관. 활성 수강(student_courses)의 월 수강료 합에서 다과목 할인(2과목 -5만, 3과목 -8만, 4과목+ -10만)·형제 할인(-1만/인)을 학생 단위로 차감한 뒤, <u>각 수강의 수강료 비율</u>로 담당 선생님에게 귀속.<br/>
             * <b>인건비</b>: 통계/급여 화면에서 입력한 해당 월 급여(teacher_monthly_compensation).
           </p>
         </CardContent>
