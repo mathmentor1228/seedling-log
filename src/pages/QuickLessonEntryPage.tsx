@@ -441,17 +441,17 @@ function QuickLessonEntryContent() {
         groups.map((g, gi) => {
           const groupStudents = students.filter(s => g.studentIds.includes(s.id));
           return (
-            <Card key={g.key} className="border-primary/20">
+            <Card key={g.key} className="border-l-4 border-l-primary border-y border-r overflow-hidden">
               <Collapsible open={!g.collapsed} onOpenChange={(o) => updateGroup(gi, 'collapsed', !o)}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center justify-between">
+                <CardHeader className="pb-2 bg-primary/5">
+                  <CardTitle className="text-base flex items-center justify-between">
                     <CollapsibleTrigger className="flex items-center gap-2">
-                      {g.collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      <span>{g.label}</span>
-                      <Badge variant="secondary" className="text-[10px]">{groupStudents.length}명</Badge>
+                      {g.collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                      <span className="font-bold">{g.label}</span>
+                      <Badge className="text-xs bg-primary/15 text-primary border-0 hover:bg-primary/20">{groupStudents.length}명</Badge>
                     </CollapsibleTrigger>
-                    <Button size="sm" variant="ghost" onClick={() => prefillGroupFromLast(gi)} className="h-7 text-xs">
-                      <History className="w-3 h-3 mr-1" /> 이전 회차
+                    <Button size="sm" variant="ghost" onClick={() => prefillGroupFromLast(gi)} className="h-8 text-xs">
+                      <History className="w-3.5 h-3.5 mr-1" /> 이전 회차
                     </Button>
                   </CardTitle>
                 </CardHeader>
