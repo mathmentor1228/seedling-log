@@ -168,6 +168,11 @@ export function UnifiedCalendarView({ schedules }: Props) {
     if (enabled.size === schools.length) setEnabled(new Set());
     else setEnabled(new Set(schools));
   };
+  const toggleCat = (c: SubjectCategory) => {
+    const next = new Set(enabledCats);
+    if (next.has(c)) next.delete(c); else next.add(c);
+    setEnabledCats(next);
+  };
 
   return (
     <Card className="p-4 space-y-3">
