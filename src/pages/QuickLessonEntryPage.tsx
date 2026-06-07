@@ -564,7 +564,6 @@ function QuickLessonEntryContent() {
       ) : (
         groups.map((g, gi) => {
           const groupStudents = students.filter(s => g.studentIds.includes(s.id));
-          return (
           const accent = GROUP_ACCENTS[gi % GROUP_ACCENTS.length];
           const draftCount = groupStudents.filter(s => s.existingDraft).length;
           return (
