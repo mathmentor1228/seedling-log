@@ -1,77 +1,108 @@
 ## 목표
-내신자료실 메인을 "한 곳 업로드 → AI 자동 분류 → 실시간 반영" 허브로 재구성한다.
+시험 일정(`school_schedules` exam)이 등록되면 **D-14 시점**에 시스템이 자동으로 "직전특강(시험 전날 수업)" 후보를 만들고, 담당 선생님이 빈 슬롯 중 하나를 골라 확정·공지하면 내신특강과 학생/학부모 화면에 그대로 반영되는 **고정 프로세스**.
 
-## 1. 새 통합 허브 (내신자료실 기본 화면)
+## 핵심 로직
 
-기존 사이드바형 학교 선택 UI 위에 **신규 기본 화면(`UnifiedExamHub`)** 을 배치한다. 좌측 사이드바의 "전체일정" 항목을 누르면 이 허브가 뜬다(기본값). 학교를 선택하면 기존 학교별 상세 화면으로 이동.
+### 1) 누가/어떤 과목/어느 학생인지 결정
+이미 있는 데이터로 자동 매핑됨 (추가 입력 불필요):
+- 학교: `school_schedules.school_name`
+- 학년: 시험 일정의 grade (없으면 그 학교 학생의 전체 grade) 
+- 학생: `students.school_name` + `students.grade_year` 일치 + 재원중
+- 담당쌤: `student_subject_teachers`(과목별 매핑). 매핑 없는 과목은 자동지정(1명) 규칙 적용. 그래도 비면 관리자 알림.
 
-허브 구성:
-- **(상단) 드래그&드롭 업로드 카드** — PDF/이미지 다중 업로드
-- **(중단) 통합 캘린더** — 탭 전환: `월별 캘린더 뷰` ↔ `다가오는 일정 타임라인`
-- **(하단) 최근 업로드된 시험 시간표 / 시험 범위 카드** — 학교별 그룹화, 클릭 시 상세
+→ `(school, grade, subject, teacher_id)` 4튜플 단위로 묶음 (선생님이 다르면 분리).
 
-## 2. AI 자동 분류 + 확인 모달 흐름
+### 2) D-14 자동 트리거
+신규 cron `auto-generate-prep-lectures` (매일 06:00 KST):
+- `school_schedules` schedule_type='exam' 중 14일 이내 시험 조회
+- 위 4튜플 단위로 `prep_lecture_proposals` 후보 row 생성 (이미 있으면 skip)
+- 시험 '전날' 날짜를 target_date로 저장
 
-```text
-파일 업로드
-   ↓
-storage(school-uploads 버킷)에 임시 저장
-   ↓
-edge function: analyze-school-document (이미 존재) 호출
-   - 입력: 파일 URL
-   - 출력: { school_name, doc_type, exam_type, subjects[], date_range, summary, items[] }
-   ↓
-"분류 확인 모달" 표시 (학교/유형/일정 수정 가능)
-   ↓
-확정 시 적절한 테이블에 INSERT:
-   - 학사일정    → school_schedules (schedule_type='academic')
-   - 시험 시간표 → school_schedules (schedule_type='exam') + school_files
-   - 시험 범위   → school_exam_archives (+ 과목별 exam_subject_details)
+### 3) 빈 슬롯 제안 (수동 선택)
+선생님 대시보드에 "직전특강 제안" 위젯:
+- 카드별: 시험명 / 학교+학년+과목 / 대상학생 N명 / 시험전날 날짜
+- 그 선생님의 그날 `class_schedules` + `exam_prep_sessions` + `study_sessions` + `routine_schedules`로 점유 시간 계산
+- 09:00~22:00 30분 단위에서 빈 구간만 시간대 chip으로 표시
+- 강의실(`classrooms`)도 함께 빈 곳 제안
+- 선생님이 시간/강의실/소요시간 선택 → "확정" + (옵션) "학생·학부모 공지" 체크박스
+
+### 4) 확정 시
+- `exam_prep_courses` (subject_type='직전특강', is_finals=true)에 INSERT
+- 대상 학생 전원 `exam_prep_enrollments`에 INSERT (status='confirmed')
+- `exam_prep_sessions` + `exam_prep_time_slots` 생성 (시험 전날, 선택시간)
+- 공지 체크 시 → 학생 PWA(StudentExamPrepSchedule)·학부모 포털에 즉시 노출 + `parent_notifications`·`teacher_notifications` 발송
+- `prep_lecture_proposals.status='confirmed'`
+
+### 5) 매핑 누락 시 UX
+- 후보 생성 시 담당쌤이 없는 과목은 별도 "담당쌤 지정 필요" 알림 카드로 분리 → 관리자가 `StudentSubjectTeacherMapping`으로 보낸 뒤 다시 매핑
+
+## DB 변경
+
+```sql
+CREATE TABLE prep_lecture_proposals (
+  id uuid PK,
+  school_schedule_id uuid REFERENCES school_schedules,
+  school_name text,
+  grade_year int,
+  subject text,
+  teacher_id uuid REFERENCES profiles,
+  student_ids uuid[],
+  exam_date date,
+  target_date date,            -- 시험 전날
+  status text DEFAULT 'pending', -- pending|confirmed|dismissed|needs_teacher
+  confirmed_course_id uuid REFERENCES exam_prep_courses,
+  selected_start_time time,
+  selected_end_time time,
+  selected_classroom_id uuid,
+  notify_students bool DEFAULT true,
+  created_at, updated_at
+);
+-- UNIQUE(school_schedule_id, subject, teacher_id)
 ```
 
-`doc_type` 분류: `academic_calendar | exam_timetable | exam_scope | other`
+GRANT + RLS: teacher는 본인 teacher_id row만 RW, admin/principal 전체.
 
-## 3. 통합 캘린더 뷰 (탭)
+## 신규/수정 파일
 
-### 탭 A — 월별 캘린더
-- `react-day-picker` 기반 월 단위 그리드
-- 모든 학교의 `school_schedules` + `academy_events`(category=exam) 표시
-- 학교별 색상(해시 기반 자동 배정) + 학교 필터 체크박스(전체/개별)
-- 날짜 클릭 시 그날의 모든 이벤트 팝오버
+**Edge functions (신규)**
+- `supabase/functions/auto-generate-prep-lectures/index.ts` — cron 진입점, D-14 시험 → 후보 생성
+- `supabase/functions/confirm-prep-lecture/index.ts` — 확정 + exam_prep_courses 생성 + 공지
 
-### 탭 B — 타임라인 리스트
-- 오늘 이후 일정을 가까운 순으로 카드 나열
-- D-Day 뱃지, 학교 뱃지, 유형 뱃지
-- 학교 필터 select
+**Frontend (신규)**
+- `src/components/exam-prep/PrepLectureProposalsWidget.tsx` — 선생님 대시보드 위젯 (카드 + 빈 슬롯 chip + 확정 다이얼로그)
+- `src/components/exam-prep/PrepLectureConfirmDialog.tsx` — 시간/강의실/공지여부 선택
 
-## 4. 시험 범위 추가 코멘트 + 자료 URL
+**Frontend (수정)**
+- `src/pages/TeacherDashboard.tsx` & `src/components/dashboard/...` — 위젯 마운트
+- `src/components/ExamPrepScheduleManager.tsx` — 직전특강 코스 필터/표기 (배지 "직전특강")
+- `src/components/exam-prep/FinalPrepOverview.tsx` — 직전특강도 자동 노출 (이미 exam_prep_courses 기반이므로 동작)
+- `src/components/student/StudentExamPrepSchedule.tsx` — 직전특강 배지
 
-`school_exam_archives` 테이블에 컬럼 추가:
-- `teacher_notes` (jsonb, default `[]`) — 담당 선생님별 코멘트 배열 `[{teacher_id, subject, note, urls[], created_at}]`
+**Cron**
+- pg_cron으로 매일 06:00 KST `auto-generate-prep-lectures` 호출
 
-기존 `ArchiveTab`/시험범위 카드에 "내 코멘트/자료 추가" 섹션 추가. 본인 코멘트는 수정/삭제, 타인 것은 읽기.
-
-## 5. 시험 시간표 알람
-
-`school_schedules.schedule_type='exam'` 행 추가 시 자동으로 D-3, D-1 알림이 dashboard `ExamDdayBanner`에 잡히도록(이미 동작). 추가로 `teacher_notifications`에 D-7/D-1 INSERT 트리거 생성.
-
-## 변경 파일
-
-- 신규: `src/components/exam-archive/UnifiedExamHub.tsx` (메인 허브)
-- 신규: `src/components/exam-archive/UploadDropzone.tsx` (드래그&드롭 + AI 호출)
-- 신규: `src/components/exam-archive/ClassifyConfirmModal.tsx` (분류 확인)
-- 신규: `src/components/exam-archive/UnifiedCalendarView.tsx` (월/타임라인 탭)
-- 신규: `src/components/exam-archive/TeacherExamNotes.tsx` (시험범위 코멘트)
-- 수정: `src/components/exam-archive/SchoolExamArchiveNew.tsx`
-   - 학교 미선택(또는 "전체일정" 선택) 시 `UnifiedExamHub` 렌더
-- 수정: `src/components/exam-archive/SchoolSidebar.tsx`
-   - 최상단에 "📥 통합 업로드 허브" 항목
-- 수정: edge function `analyze-school-document/index.ts`
-   - 응답 스키마 표준화: doc_type 분류 + 학교명/일정/범위 구조화
-- DB 마이그레이션:
-   - `school_exam_archives.teacher_notes jsonb default '[]'`
-   - 시험일정 알림 트리거(선택, 사용자 확인 후)
+## 흐름
+```text
+school_schedules (exam) 등록
+        │
+   매일 06:00 cron
+        ▼
+auto-generate-prep-lectures
+  └─ 14일 이내 시험 × (학교,학년,과목,담당쌤) 4튜플
+  └─ prep_lecture_proposals INSERT (전날 날짜)
+        ▼
+선생님 대시보드 위젯에 카드 표시
+  └─ 빈 슬롯 chip (정규수업/내신특강 등 충돌 제외)
+  └─ 선생님: 시간 선택 + 공지 체크 + 확정
+        ▼
+confirm-prep-lecture
+  ├─ exam_prep_courses + sessions + time_slots 생성
+  ├─ 대상학생 enrollments 자동 등록
+  └─ 공지 체크 시 학생/학부모 알림
+        ▼
+StudentExamPrepSchedule / 학부모 포털에 노출
+```
 
 ## 비고
-- 기존 학교별 탭/기능은 그대로 유지 — 허브는 추가 진입점
-- 업로드 시 학교/유형 추출 실패하면 모달에서 수동 선택 가능
+- 추가로 명시 입력해야 할 건 없음 — `student_subject_teachers` 매핑만 정확하면 자동.
+- 매핑 비어있는 과목(수학 등 후보 多)은 미리 알림으로 채워달라고 유도.

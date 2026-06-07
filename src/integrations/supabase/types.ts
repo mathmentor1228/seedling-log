@@ -3025,6 +3025,104 @@ export type Database = {
           },
         ]
       }
+      prep_lecture_proposals: {
+        Row: {
+          confirmed_course_id: string | null
+          created_at: string
+          exam_date: string
+          exam_title: string | null
+          grade_year: number | null
+          id: string
+          notes: string | null
+          notify_students: boolean
+          school_level: string | null
+          school_name: string
+          school_schedule_id: string | null
+          selected_classroom_id: string | null
+          selected_end_time: string | null
+          selected_start_time: string | null
+          status: string
+          student_ids: string[]
+          subject: string
+          target_date: string
+          teacher_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          confirmed_course_id?: string | null
+          created_at?: string
+          exam_date: string
+          exam_title?: string | null
+          grade_year?: number | null
+          id?: string
+          notes?: string | null
+          notify_students?: boolean
+          school_level?: string | null
+          school_name: string
+          school_schedule_id?: string | null
+          selected_classroom_id?: string | null
+          selected_end_time?: string | null
+          selected_start_time?: string | null
+          status?: string
+          student_ids?: string[]
+          subject: string
+          target_date: string
+          teacher_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          confirmed_course_id?: string | null
+          created_at?: string
+          exam_date?: string
+          exam_title?: string | null
+          grade_year?: number | null
+          id?: string
+          notes?: string | null
+          notify_students?: boolean
+          school_level?: string | null
+          school_name?: string
+          school_schedule_id?: string | null
+          selected_classroom_id?: string | null
+          selected_end_time?: string | null
+          selected_start_time?: string | null
+          status?: string
+          student_ids?: string[]
+          subject?: string
+          target_date?: string
+          teacher_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prep_lecture_proposals_confirmed_course_id_fkey"
+            columns: ["confirmed_course_id"]
+            isOneToOne: false
+            referencedRelation: "exam_prep_courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prep_lecture_proposals_school_schedule_id_fkey"
+            columns: ["school_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "school_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prep_lecture_proposals_selected_classroom_id_fkey"
+            columns: ["selected_classroom_id"]
+            isOneToOne: false
+            referencedRelation: "classrooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prep_lecture_proposals_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           assigned_subject: string | null
