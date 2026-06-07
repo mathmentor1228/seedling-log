@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import {
-  TrendingUp, TrendingDown, Wallet, Save, ChevronDown, UserPlus, UserMinus, Users, ArrowRight,
+  TrendingUp, TrendingDown, Wallet, Save, ChevronDown, UserPlus, UserMinus, Users, ArrowRight, Calculator, Check,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Cell,
