@@ -41,6 +41,8 @@ interface TeacherRevenueRow {
   student_count: number;
   prev_revenue: number;
   prev_student_count: number;
+  student_ids: string[];
+  prev_student_ids: string[];
   salary: number;
   profit: number;
   margin: number;
@@ -291,6 +293,8 @@ export default function TeacherRevenueSection() {
             student_count: cur?.students.size || 0,
             prev_revenue: prev?.revenue || 0,
             prev_student_count: prev?.students.size || 0,
+            student_ids: cur ? Array.from(cur.students) : [],
+            prev_student_ids: prev ? Array.from(prev.students) : [],
             salary,
             profit,
             margin,
@@ -358,8 +362,15 @@ export default function TeacherRevenueSection() {
     const salary = rows.reduce((a, r) => a + r.salary, 0);
     const profit = revenue - salary;
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
-    const studentTotal = rows.reduce((a, r) => a + r.student_count, 0);
-    const prevStudentTotal = rows.reduce((a, r) => a + r.prev_student_count, 0);
+    // Dedupe across teachers: a student taking multiple subjects from different teachers counts once.
+    const curSet = new Set<string>();
+    const prevSet = new Set<string>();
+    rows.forEach((r) => {
+      r.student_ids.forEach((id) => curSet.add(id));
+      r.prev_student_ids.forEach((id) => prevSet.add(id));
+    });
+    const studentTotal = curSet.size;
+    const prevStudentTotal = prevSet.size;
     return { revenue, prevRevenue, salary, profit, margin, studentTotal, prevStudentTotal };
   }, [rows]);
 
