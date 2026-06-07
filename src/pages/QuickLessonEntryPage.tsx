@@ -112,6 +112,7 @@ function QuickLessonEntryContent() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [missingOpen, setMissingOpen] = useState(false);
+  const [validation, setValidation] = useState<{ open: boolean; issues: { name: string; problems: string[] }[] }>({ open: false, issues: [] });
 
 
   const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
