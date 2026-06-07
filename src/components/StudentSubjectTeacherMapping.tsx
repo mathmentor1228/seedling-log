@@ -35,9 +35,8 @@ const SUBJECT_TEACHERS: Record<string, string[]> = {
 
 export default function StudentSubjectTeacherMapping({ studentId }: Props) {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [mappings, setMappings] = useState<SubjectMapping[]>(
-    SUBJECTS.map((s) => ({ subject: s, teacher_ids: [] }))
-  );
+  const [enrolledSubjects, setEnrolledSubjects] = useState<string[]>([]);
+  const [mappings, setMappings] = useState<SubjectMapping[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -55,17 +54,33 @@ export default function StudentSubjectTeacherMapping({ studentId }: Props) {
       const teacherProfiles = (profilesData || []).filter((p) => teacherIds.has(p.id));
       setTeachers(teacherProfiles);
 
+      // Enrolled subjects from student_courses → course_policies
+      const { data: coursesData } = await supabase
+        .from('student_courses')
+        .select('course_policies(subject)')
+        .eq('student_id', studentId)
+        .eq('is_active', true);
+      const allowed = SUBJECTS as readonly string[];
+      const enrolled = [
+        ...new Set(
+          (coursesData || [])
+            .map((r: any) => r.course_policies?.subject as string | undefined)
+            .filter((s): s is string => !!s && allowed.includes(s))
+        ),
+      ];
+      setEnrolledSubjects(enrolled);
+
       const { data: mappingsData } = await supabase
         .from('student_subject_teachers')
         .select('subject, teacher_id')
         .eq('student_id', studentId);
 
-      const newMappings: SubjectMapping[] = SUBJECTS.map((subject) => ({
+      const newMappings: SubjectMapping[] = enrolled.map((subject) => ({
         subject,
         teacher_ids: (mappingsData || []).filter((m) => m.subject === subject).map((m) => m.teacher_id),
       }));
 
-      // Auto-assign: for subjects with exactly 1 allowed teacher, ensure mapping exists
+      // Auto-assign: only for enrolled subjects with exactly 1 allowed teacher
       const autoInserts: { student_id: string; subject: string; teacher_id: string }[] = [];
       for (const m of newMappings) {
         const candidates = candidatesFor(m.subject, teacherProfiles);
