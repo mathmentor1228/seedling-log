@@ -375,10 +375,34 @@ Deno.serve(async (req) => {
             const aiAdminTag = aiReportData?._debug?.admin_tag || aiReportData?.admin_tag;
             qualityTag = determineQualityTag(true, subjectCount, lessonCount, aiAdminTag);
 
-            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=${qualityTag} validator=pass retries=${aiAttempts - 1}`;
+            // WEEKLY-SUMMARY-APPEND-V1: Append teacher-curated weekly comments verbatim so
+            // they always reach parents (independent of AI quality).
+            const { data: weeklySummaries } = await supabase
+              .from('lesson_records')
+              .select('weekly_summary, subject, teacher_id, lesson_date, profiles:teacher_id(full_name)')
+              .eq('student_id', student.id)
+              .gte('lesson_date', weekStart)
+              .lte('lesson_date', weekEnd)
+              .not('weekly_summary', 'is', null);
+
+            const seen = new Set<string>();
+            const summaryBlocks: string[] = [];
+            for (const r of (weeklySummaries || []) as any[]) {
+              const key = `${r.teacher_id}|${r.subject}|${r.weekly_summary}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              const name = r.profiles?.full_name || '담당 선생님';
+              summaryBlocks.push(`【${r.subject} ${name}】\n${r.weekly_summary}`);
+            }
+            const summaryAppendix = summaryBlocks.length > 0
+              ? `\n\n---\n💬 담당 선생님 주간 코멘트\n\n${summaryBlocks.join('\n\n')}`
+              : '';
+            const missingTag = summaryBlocks.length === 0 ? ' weekly_summary=MISSING' : ` weekly_summary=${summaryBlocks.length}`;
+
+            const debugLine = `[REPORT_GEN_DEBUG_V2.4] templateVersion=${TEMPLATE_VERSION} tag=${qualityTag} validator=pass retries=${aiAttempts - 1}${missingTag}`;
             
             // parent_message from generate-ai-report already includes the header, so don't add it again
-            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${aiReportData.parent_message}`;
+            finalParentMessageToSave = `${NARRATIVE_RENDER_PREFIX}\n\n${debugLine}\n\n${aiReportData.parent_message}${summaryAppendix}`;
             finalStudentMessageToSave = aiReportData?.student_message || null;
           }
 

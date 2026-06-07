@@ -1,108 +1,102 @@
-## 목표
-시험 일정(`school_schedules` exam)이 등록되면 **D-14 시점**에 시스템이 자동으로 "직전특강(시험 전날 수업)" 후보를 만들고, 담당 선생님이 빈 슬롯 중 하나를 골라 확정·공지하면 내신특강과 학생/학부모 화면에 그대로 반영되는 **고정 프로세스**.
 
-## 핵심 로직
+# 수업일지 입력 부담 감소 시스템
 
-### 1) 누가/어떤 과목/어느 학생인지 결정
-이미 있는 데이터로 자동 매핑됨 (추가 입력 불필요):
-- 학교: `school_schedules.school_name`
-- 학년: 시험 일정의 grade (없으면 그 학교 학생의 전체 grade) 
-- 학생: `students.school_name` + `students.grade_year` 일치 + 재원중
-- 담당쌤: `student_subject_teachers`(과목별 매핑). 매핑 없는 과목은 자동지정(1명) 규칙 적용. 그래도 비면 관리자 알림.
+목표: 매일 학생별로 똑같은 내용을 반복 타이핑하는 부담을 없애고, 주간리포트 품질은 오히려 더 좋게 만든다.
 
-→ `(school, grade, subject, teacher_id)` 4튜플 단위로 묶음 (선생님이 다르면 분리).
+## 1. 반 단위 일괄입력 화면 (A)
 
-### 2) D-14 자동 트리거
-신규 cron `auto-generate-prep-lectures` (매일 06:00 KST):
-- `school_schedules` schedule_type='exam' 중 14일 이내 시험 조회
-- 위 4튜플 단위로 `prep_lecture_proposals` 후보 row 생성 (이미 있으면 skip)
-- 시험 '전날' 날짜를 target_date로 저장
+새 페이지/탭: **"오늘 수업 한번에 기록"** (선생님 대시보드 + Lessons 탭 진입)
 
-### 3) 빈 슬롯 제안 (수동 선택)
-선생님 대시보드에 "직전특강 제안" 위젯:
-- 카드별: 시험명 / 학교+학년+과목 / 대상학생 N명 / 시험전날 날짜
-- 그 선생님의 그날 `class_schedules` + `exam_prep_sessions` + `study_sessions` + `routine_schedules`로 점유 시간 계산
-- 09:00~22:00 30분 단위에서 빈 구간만 시간대 chip으로 표시
-- 강의실(`classrooms`)도 함께 빈 곳 제안
-- 선생님이 시간/강의실/소요시간 선택 → "확정" + (옵션) "학생·학부모 공지" 체크박스
+- 좌측: 오늘 내 수업 슬롯 리스트 (시간 + 반 + 과목 + 학생 N명)
+- 슬롯 클릭 → 우측에 한 장의 "수업 카드" 펼침
+  - **공통란(한 번만 입력, 모든 학생에 적용)**
+    - 진도/단원 (curriculum_map에서 자동 제안)
+    - 수업 내용 (lesson_range)
+    - 과제 부여 내용
+  - **학생별 빠른 입력 (행당 3초)**
+    - 학생 이름 | 이해도 1-5 (탭/슬라이더) | 숙제 상태 (✅/△/✗) | 짧은 코멘트 (선택)
+- 한 번에 저장 → 학생 N명 lesson_records가 동일한 공통란 + 개별 평가로 생성
 
-### 4) 확정 시
-- `exam_prep_courses` (subject_type='직전특강', is_finals=true)에 INSERT
-- 대상 학생 전원 `exam_prep_enrollments`에 INSERT (status='confirmed')
-- `exam_prep_sessions` + `exam_prep_time_slots` 생성 (시험 전날, 선택시간)
-- 공지 체크 시 → 학생 PWA(StudentExamPrepSchedule)·학부모 포털에 즉시 노출 + `parent_notifications`·`teacher_notifications` 발송
-- `prep_lecture_proposals.status='confirmed'`
+기존 `NewLessonEntryDialog` 일괄 생성 + `BatchLessonModal`을 합쳐 **"공통란 + 학생별 평가" 단일 화면**으로 재구성. 빈 레코드 생성 후 다시 채우는 2-스텝 흐름 제거.
 
-### 5) 매핑 누락 시 UX
-- 후보 생성 시 담당쌤이 없는 과목은 별도 "담당쌤 지정 필요" 알림 카드로 분리 → 관리자가 `StudentSubjectTeacherMapping`으로 보낸 뒤 다시 매핑
+## 2. 이전 회차 자동 채움 (B)
 
-## DB 변경
+수업 카드 열릴 때 자동 prefill:
+- **진도**: 같은 (teacher_id, class_id 또는 student set, subject)의 가장 최근 lesson_record의 `lesson_range` + curriculum_map의 다음 단원 제안
+- **과제 부여**: 직전 회차의 과제 그대로 + "오늘 같은 과제 연장" 토글
+- **이해도**: 학생별 최근 평균을 회색 placeholder로 표시 (덮어쓰기 전까지 저장 안됨)
+- **숙제 상태**: `homework_submissions`/`homework_assignments`에 이미 제출 데이터가 있으면 자동 매핑 (기존 sync hook 재활용)
 
-```sql
-CREATE TABLE prep_lecture_proposals (
-  id uuid PK,
-  school_schedule_id uuid REFERENCES school_schedules,
-  school_name text,
-  grade_year int,
-  subject text,
-  teacher_id uuid REFERENCES profiles,
-  student_ids uuid[],
-  exam_date date,
-  target_date date,            -- 시험 전날
-  status text DEFAULT 'pending', -- pending|confirmed|dismissed|needs_teacher
-  confirmed_course_id uuid REFERENCES exam_prep_courses,
-  selected_start_time time,
-  selected_end_time time,
-  selected_classroom_id uuid,
-  notify_students bool DEFAULT true,
-  created_at, updated_at
-);
--- UNIQUE(school_schedule_id, subject, teacher_id)
-```
+"이전 회차 그대로" 버튼 한 번이면 공통란이 통째로 채워짐.
 
-GRANT + RLS: teacher는 본인 teacher_id row만 RW, admin/principal 전체.
+## 3. 일일 필수항목 최소화 + 주간 필수 free-text (D)
 
-## 신규/수정 파일
+`lesson_records` 폼을 두 레벨로 분리:
 
-**Edge functions (신규)**
-- `supabase/functions/auto-generate-prep-lectures/index.ts` — cron 진입점, D-14 시험 → 후보 생성
-- `supabase/functions/confirm-prep-lecture/index.ts` — 확정 + exam_prep_courses 생성 + 공지
+- **일일 필수 (매 회차)**: 이해도, 숙제 상태, 진도 (공통란에서 1회 입력)
+- **주간 필수 (학생당 주 1회)**: "이번 주 핵심 코멘트" free-text 한 단락
+  - 일요일 23:59 마감 알림
+  - 미작성 학생 리스트가 선생님 대시보드 상단에 위젯으로 노출 (PrepLectureProposalsWidget 옆)
+- **AI 주간 종합**: `generate-weekly-reports` 함수가 다음을 입력으로 받음
+  - 한 주의 일일 lesson_records (이해도/숙제/진도)
+  - 주간 필수 코멘트 한 단락
+  - 시험/숙제 평가 결과
+  → 학부모 리포트 본문 자동 작성, 선생님은 검수/수정만
 
-**Frontend (신규)**
-- `src/components/exam-prep/PrepLectureProposalsWidget.tsx` — 선생님 대시보드 위젯 (카드 + 빈 슬롯 chip + 확정 다이얼로그)
-- `src/components/exam-prep/PrepLectureConfirmDialog.tsx` — 시간/강의실/공지여부 선택
+## 4. 음성 메모 모드 (C, 선택 기능)
 
-**Frontend (수정)**
-- `src/pages/TeacherDashboard.tsx` & `src/components/dashboard/...` — 위젯 마운트
-- `src/components/ExamPrepScheduleManager.tsx` — 직전특강 코스 필터/표기 (배지 "직전특강")
-- `src/components/exam-prep/FinalPrepOverview.tsx` — 직전특강도 자동 노출 (이미 exam_prep_courses 기반이므로 동작)
-- `src/components/student/StudentExamPrepSchedule.tsx` — 직전특강 배지
+선생님이 본인 계정에서 옵션 ON 가능 (개인 설정):
+- 수업 카드 우상단 🎙 버튼
+- 1-2분 녹음 → ElevenLabs Scribe(`scribe_v2`)로 STT → Lovable AI(`google/gemini-2.5-flash`)가 학생별 초안 생성
+  - 출력: `{학생ID: {이해도, 짧은 코멘트, 숙제 상태}}` JSON
+- 선생님이 수업 카드에서 검수/수정 후 저장
 
-**Cron**
-- pg_cron으로 매일 06:00 KST `auto-generate-prep-lectures` 호출
+ElevenLabs는 standard connector로 연결, 키는 서버에만. 음성 파일은 처리 후 즉시 폐기 (저장 안함).
 
-## 흐름
-```text
-school_schedules (exam) 등록
-        │
-   매일 06:00 cron
-        ▼
-auto-generate-prep-lectures
-  └─ 14일 이내 시험 × (학교,학년,과목,담당쌤) 4튜플
-  └─ prep_lecture_proposals INSERT (전날 날짜)
-        ▼
-선생님 대시보드 위젯에 카드 표시
-  └─ 빈 슬롯 chip (정규수업/내신특강 등 충돌 제외)
-  └─ 선생님: 시간 선택 + 공지 체크 + 확정
-        ▼
-confirm-prep-lecture
-  ├─ exam_prep_courses + sessions + time_slots 생성
-  ├─ 대상학생 enrollments 자동 등록
-  └─ 공지 체크 시 학생/학부모 알림
-        ▼
-StudentExamPrepSchedule / 학부모 포털에 노출
-```
+## 5. 학부모 주간리포트 보장 장치
 
-## 비고
-- 추가로 명시 입력해야 할 건 없음 — `student_subject_teachers` 매핑만 정확하면 자동.
-- 매핑 비어있는 과목(수학 등 후보 多)은 미리 알림으로 채워달라고 유도.
+- 주간 필수 코멘트 미작성이면 AI 리포트 생성 차단 + 알림
+- AI는 일일 데이터 + 주간 코멘트 모두 인용. 일일 데이터만으로는 절대 학부모 발송 불가
+- 기존 `weekly_reports` 흐름/검수 단계 유지 — 자동 발송 아님
+
+---
+
+## 기술 변경 요약
+
+**DB 마이그레이션**
+- `lesson_records`에 컬럼 추가:
+  - `weekly_summary` (text, nullable) — 주간 필수 코멘트
+  - `weekly_summary_week` (date) — 해당 주 월요일
+  - `is_common_entry` (boolean, default false) — 일괄 입력 출처 표시
+- 인덱스: `(teacher_id, student_id, weekly_summary_week)`
+
+**프론트엔드**
+- 신규: `src/components/lessons/UnifiedLessonCard.tsx` — 공통란+학생별 평가 단일 화면
+- 신규: `src/components/lessons/WeeklySummaryWidget.tsx` — 미작성 학생 리스트 (대시보드)
+- 신규: `src/components/lessons/VoiceMemoCapture.tsx` — 녹음/STT/AI 초안 UI (옵션 ON시 표시)
+- 신규: `src/pages/UnifiedLessonEntryPage.tsx` (또는 Lessons 탭 추가)
+- 수정: `NewLessonEntryDialog`, `BatchLessonModal` — 신규 화면으로 라우팅
+- 수정: `TeacherDashboard.tsx` — WeeklySummaryWidget 추가
+
+**Edge Functions**
+- 신규: `transcribe-lesson-memo` (ElevenLabs Scribe STT)
+- 신규: `draft-lesson-from-memo` (Lovable AI로 학생별 초안 생성)
+- 수정: `generate-weekly-reports` — `weekly_summary` 입력 추가, 미작성시 차단
+
+**Connectors**
+- ElevenLabs 연결 (음성 메모 옵션에만 필요)
+
+---
+
+## 단계별 진행
+
+이 작업은 크니까 두 단계로 나눠서 작업할게요:
+
+**1단계 (먼저 실행)** — A + B + D
+- 일괄입력 화면, 이전 회차 자동채움, 주간 필수 코멘트, AI 주간 종합 보강
+
+**2단계 (1단계 검증 후)** — C 음성 메모
+- ElevenLabs 연결, 녹음/STT/초안 생성 흐름 추가
+- 선생님 개인 설정에서 ON/OFF
+
+승인하시면 1단계부터 바로 시작합니다.
