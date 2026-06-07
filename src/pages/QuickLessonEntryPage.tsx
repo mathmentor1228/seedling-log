@@ -284,6 +284,23 @@ function QuickLessonEntryContent() {
   }
 
   const selectedCount = useMemo(() => students.filter(s => s.included).length, [students]);
+  const stats = useMemo(() => {
+    const total = students.length;
+    const draft = students.filter(s => s.existingDraft).length;
+    const linked = students.filter(s => s.linked.tests.length + s.linked.clinics.length + s.linked.studies.length > 0).length;
+    const absent = students.filter(s => s.attendanceStatuses.some(a => a.includes('결석'))).length;
+    return { total, draft, linked, absent };
+  }, [students]);
+
+  // Color accent per group (cycles by group index)
+  const GROUP_ACCENTS = [
+    { bar: 'border-l-blue-500',    bg: 'bg-blue-500/5',    chip: 'bg-blue-500/15 text-blue-600 dark:text-blue-300' },
+    { bar: 'border-l-emerald-500', bg: 'bg-emerald-500/5', chip: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' },
+    { bar: 'border-l-purple-500',  bg: 'bg-purple-500/5',  chip: 'bg-purple-500/15 text-purple-600 dark:text-purple-300' },
+    { bar: 'border-l-amber-500',   bg: 'bg-amber-500/5',   chip: 'bg-amber-500/15 text-amber-600 dark:text-amber-300' },
+    { bar: 'border-l-rose-500',    bg: 'bg-rose-500/5',    chip: 'bg-rose-500/15 text-rose-600 dark:text-rose-300' },
+    { bar: 'border-l-cyan-500',    bg: 'bg-cyan-500/5',    chip: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300' },
+  ];
 
   async function save(submit: boolean) {
     if (!effectiveTeacherId) { toast({ title: '선생님을 선택해주세요', variant: 'destructive' }); return; }
