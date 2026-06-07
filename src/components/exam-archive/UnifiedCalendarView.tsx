@@ -343,6 +343,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
                   const d = parseISO(s.start_date!);
                   const days = differenceInDays(d, today);
                   const dd = ddayBadge(days);
+                  const cat = categoryOf(s);
                   return (
                     <div key={`${s.id}-${idx}`} className="flex items-center gap-2 p-2 rounded-md border bg-card hover:bg-muted/40 transition">
                       <Badge className={cn('shrink-0 font-bold text-[10px] px-1.5', dd.cls)}>{dd.label}</Badge>
@@ -351,9 +352,15 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         <div className="text-xs font-medium truncate">{s.title}</div>
                         <div className="text-[10px] text-muted-foreground">
                           {format(d, 'M월 d일 (E)', { locale: ko })} · {s.school_name}
+                          {s.subject && ` · ${s.subject}`}
                           {s.end_date && s.end_date !== s.start_date && ` ~ ${format(parseISO(s.end_date), 'M월 d일', { locale: ko })}`}
                         </div>
                       </div>
+                      {s.schedule_type === 'exam' && (
+                        <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4 shrink-0', SUBJECT_CATEGORY_COLORS[cat])}>
+                          {SUBJECT_CATEGORY_LABELS[cat]}
+                        </Badge>
+                      )}
                       <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4 shrink-0', SCHEDULE_TYPE_COLORS[s.schedule_type])}>
                         {SCHEDULE_TYPE_LABELS[s.schedule_type] || s.schedule_type}
                       </Badge>
