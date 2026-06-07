@@ -20,6 +20,8 @@ import {
   SUBJECT_CATEGORY_COLORS,
   type SubjectCategory,
 } from '@/lib/subjectCategory';
+import { ScheduleNotesDialog } from './ScheduleNotesDialog';
+import { FileText } from 'lucide-react';
 
 function categoryOf(s: Schedule): SubjectCategory {
   const fromSubject = s.subject ? classifyCompositeSubject(s.subject) : 'other';
