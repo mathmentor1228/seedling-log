@@ -284,6 +284,23 @@ function QuickLessonEntryContent() {
   }
 
   const selectedCount = useMemo(() => students.filter(s => s.included).length, [students]);
+  const stats = useMemo(() => {
+    const total = students.length;
+    const draft = students.filter(s => s.existingDraft).length;
+    const linked = students.filter(s => s.linked.tests.length + s.linked.clinics.length + s.linked.studies.length > 0).length;
+    const absent = students.filter(s => s.attendanceStatuses.some(a => a.includes('결석'))).length;
+    return { total, draft, linked, absent };
+  }, [students]);
+
+  // Color accent per group (cycles by group index)
+  const GROUP_ACCENTS = [
+    { bar: 'border-l-blue-500',    bg: 'bg-blue-500/5',    chip: 'bg-blue-500/15 text-blue-600 dark:text-blue-300' },
+    { bar: 'border-l-emerald-500', bg: 'bg-emerald-500/5', chip: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' },
+    { bar: 'border-l-purple-500',  bg: 'bg-purple-500/5',  chip: 'bg-purple-500/15 text-purple-600 dark:text-purple-300' },
+    { bar: 'border-l-amber-500',   bg: 'bg-amber-500/5',   chip: 'bg-amber-500/15 text-amber-600 dark:text-amber-300' },
+    { bar: 'border-l-rose-500',    bg: 'bg-rose-500/5',    chip: 'bg-rose-500/15 text-rose-600 dark:text-rose-300' },
+    { bar: 'border-l-cyan-500',    bg: 'bg-cyan-500/5',    chip: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300' },
+  ];
 
   async function save(submit: boolean) {
     if (!effectiveTeacherId) { toast({ title: '선생님을 선택해주세요', variant: 'destructive' }); return; }
@@ -458,14 +475,27 @@ function QuickLessonEntryContent() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-3 py-4 space-y-3">
-      <div className="flex items-center gap-2">
+    <div className="max-w-6xl mx-auto px-3 py-4 space-y-3 pb-24">
+      {/* Header bar */}
+      <div className="rounded-2xl bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border p-4 flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate('/lessons')}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <h1 className="text-lg font-bold flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary" /> 오늘 수업 한번에 기록
-        </h1>
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-xl bg-primary/20 flex items-center justify-center">
+            <Zap className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-xl font-extrabold leading-tight">오늘 수업 한번에 기록</h1>
+            <p className="text-xs text-muted-foreground">출석 학생 자동 로드 · 학년별 그룹 입력 · 외부기록 흡수</p>
+          </div>
+        </div>
+        <div className="ml-auto flex flex-wrap gap-1.5">
+          <Badge variant="outline" className="h-7 px-2.5 text-xs">출석 <b className="ml-1">{stats.total}</b></Badge>
+          {stats.draft > 0 && <Badge className="h-7 px-2.5 text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border-0">임시 {stats.draft}</Badge>}
+          {stats.linked > 0 && <Badge className="h-7 px-2.5 text-xs bg-purple-500/15 text-purple-700 dark:text-purple-300 border-0">외부기록 {stats.linked}</Badge>}
+          {stats.absent > 0 && <Badge className="h-7 px-2.5 text-xs bg-rose-500/15 text-rose-700 dark:text-rose-300 border-0">결석 {stats.absent}</Badge>}
+        </div>
       </div>
 
       {/* Header context */}
@@ -500,14 +530,11 @@ function QuickLessonEntryContent() {
             <Label className="text-xs">수업 날짜</Label>
             <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-9" />
           </div>
-          <div className="flex items-end gap-2">
-            <Badge variant="outline" className="text-xs h-9 px-3 flex items-center">
-              출석 {selectedCount}/{students.length}명
-            </Badge>
-            <Button variant="outline" size="sm" className="h-9 text-xs"
+          <div className="flex items-end">
+            <Button variant="outline" size="sm" className="h-9 text-xs w-full"
               onClick={() => setMissingOpen(true)}
               disabled={!effectiveTeacherId || !subject || !date}>
-              <UserPlus className="w-3.5 h-3.5 mr-1" /> 누락 추가
+              <UserPlus className="w-3.5 h-3.5 mr-1" /> 누락 학생 추가
             </Button>
           </div>
         </CardContent>
@@ -527,23 +554,35 @@ function QuickLessonEntryContent() {
           <Loader2 className="w-5 h-5 animate-spin mr-2" /> 출석/학생 로딩...
         </CardContent></Card>
       ) : students.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-          이 날짜의 출석 또는 임시저장 학생이 없습니다. "누락 추가"로 학생을 추가하거나 날짜를 확인해주세요.
+        <Card className="border-dashed"><CardContent className="p-10 text-center space-y-2">
+          <div className="w-12 h-12 mx-auto rounded-full bg-muted flex items-center justify-center">
+            <UserPlus className="w-6 h-6 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium">이 날짜의 출석 또는 임시저장 학생이 없습니다</p>
+          <p className="text-xs text-muted-foreground">"누락 학생 추가"로 직접 추가하거나 다른 날짜를 선택해주세요.</p>
         </CardContent></Card>
       ) : (
         groups.map((g, gi) => {
           const groupStudents = students.filter(s => g.studentIds.includes(s.id));
+          const accent = GROUP_ACCENTS[gi % GROUP_ACCENTS.length];
+          const draftCount = groupStudents.filter(s => s.existingDraft).length;
           return (
-            <Card key={g.key} className="border-l-4 border-l-primary border-y border-r overflow-hidden">
+            <Card key={g.key} className={`border-l-4 ${accent.bar} border-y border-r overflow-hidden shadow-sm`}>
               <Collapsible open={!g.collapsed} onOpenChange={(o) => updateGroup(gi, 'collapsed', !o)}>
-                <CardHeader className="pb-2 bg-primary/5">
-                  <CardTitle className="text-base flex items-center justify-between">
-                    <CollapsibleTrigger className="flex items-center gap-2">
-                      {g.collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                      <span className="font-bold">{g.label}</span>
-                      <Badge className="text-xs bg-primary/15 text-primary border-0 hover:bg-primary/20">{groupStudents.length}명</Badge>
+                <CardHeader className={`pb-2 ${accent.bg}`}>
+                  <CardTitle className="text-base flex items-center justify-between gap-2">
+                    <CollapsibleTrigger className="flex items-center gap-2 min-w-0">
+                      {g.collapsed ? <ChevronRight className="w-5 h-5 shrink-0" /> : <ChevronDown className="w-5 h-5 shrink-0" />}
+                      <span className="font-bold text-lg">{g.label}</span>
+                      <Badge className={`text-xs border-0 ${accent.chip} hover:opacity-90`}>{groupStudents.length}명</Badge>
+                      {draftCount > 0 && (
+                        <Badge className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border-0">임시 {draftCount}</Badge>
+                      )}
+                      {g.mode === 'group' && (
+                        <Badge className="text-[10px] bg-primary/15 text-primary border-0">그룹입력 {g.groupMemberIds.length}명</Badge>
+                      )}
                     </CollapsibleTrigger>
-                    <Button size="sm" variant="ghost" onClick={() => prefillGroupFromLast(gi)} className="h-8 text-xs">
+                    <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); prefillGroupFromLast(gi); }} className="h-8 text-xs shrink-0">
                       <History className="w-3.5 h-3.5 mr-1" /> 이전 회차
                     </Button>
                   </CardTitle>
@@ -650,12 +689,17 @@ function QuickLessonEntryContent() {
       )}
 
       {students.length > 0 && (
-        <div className="sticky bottom-2 flex gap-2 justify-end bg-background/80 backdrop-blur p-2 rounded-lg border">
-          <Button variant="outline" onClick={() => save(false)} disabled={saving} size="sm">
+        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-background/95 backdrop-blur shadow-xl border-2 border-primary/30 rounded-2xl px-4 py-2.5">
+          <div className="text-xs text-muted-foreground hidden sm:flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <b className="text-foreground">{selectedCount}</b>명 기록 준비됨
+          </div>
+          <div className="h-6 w-px bg-border hidden sm:block" />
+          <Button variant="outline" onClick={() => save(false)} disabled={saving} size="sm" className="h-9">
             {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
             임시저장
           </Button>
-          <Button onClick={() => save(true)} disabled={saving} size="sm">
+          <Button onClick={() => save(true)} disabled={saving} size="sm" className="h-9 px-4 font-semibold shadow-md">
             {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
             {selectedCount}명 제출
           </Button>
