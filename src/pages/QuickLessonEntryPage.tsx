@@ -486,7 +486,15 @@ function QuickLessonEntryContent() {
                               <input type="checkbox" checked={s.included}
                                 onChange={e => updateStudent(s.id, 'included', e.target.checked)} className="rounded" />
                               <div className="min-w-0">
-                                <div className="font-medium truncate">{s.name}</div>
+                                <div className="font-medium truncate flex items-center gap-1">
+                                  {s.name}
+                                  {s.existingDraft && (
+                                    <Badge variant="secondary" className="text-[9px] h-4 px-1">임시</Badge>
+                                  )}
+                                  {!s.hasAttendanceLog && (
+                                    <Badge variant="outline" className="text-[9px] h-4 px-1 border-amber-400 text-amber-600">출결없음</Badge>
+                                  )}
+                                </div>
                                 <div className="text-[10px] text-muted-foreground truncate">
                                   {s.school || ''} {s.prevAvg != null && <span>· 평균 {s.prevAvg}</span>}
                                 </div>
