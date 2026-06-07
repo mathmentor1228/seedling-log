@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import Dashboard from './Dashboard';
 import { TeacherAttendanceView } from '@/components/TeacherAttendanceView';
+import { PrepLectureProposalsWidget } from '@/components/exam-prep/PrepLectureProposalsWidget';
 
 /* ------------------------------------------------------------------ */
 function LiveClock() {
