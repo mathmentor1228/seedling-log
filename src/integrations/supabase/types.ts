@@ -3515,6 +3515,7 @@ export type Database = {
           semester: string
           status: string
           subject: string
+          teacher_notes: Json
           textbook_publisher: string | null
           updated_at: string
         }
@@ -3543,6 +3544,7 @@ export type Database = {
           semester?: string
           status?: string
           subject: string
+          teacher_notes?: Json
           textbook_publisher?: string | null
           updated_at?: string
         }
@@ -3571,6 +3573,7 @@ export type Database = {
           semester?: string
           status?: string
           subject?: string
+          teacher_notes?: Json
           textbook_publisher?: string | null
           updated_at?: string
         }

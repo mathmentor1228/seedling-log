@@ -1,0 +1,1 @@
+ALTER TABLE public.school_exam_archives ADD COLUMN IF NOT EXISTS teacher_notes jsonb NOT NULL DEFAULT '[]'::jsonb;
