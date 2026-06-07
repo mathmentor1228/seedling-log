@@ -617,15 +617,27 @@ function QuickLessonEntryContent() {
                     <div className="space-y-2">
                       {groupStudents.map((s, idx) => {
                         const inCommonGroup = g.mode === 'group' && g.groupMemberIds.includes(s.id);
+                        const hasLinked = s.linked.tests.length + s.linked.clinics.length + s.linked.studies.length > 0;
                         return (
-                          <UnifiedLessonRow
-                            key={s.id}
-                            student={s}
-                            idx={idx}
-                            inCommonGroup={inCommonGroup}
-                            groupMode={g.mode}
-                            onChange={(key, value) => updateStudent(s.id, key, value as any)}
-                          />
+                          <div key={s.id} className="space-y-1">
+                            {hasLinked && (
+                              <div className="flex justify-end pr-1">
+                                <LinkedRecordsChip
+                                  studentName={s.name}
+                                  linked={s.linked}
+                                  choices={s.linkedChoices}
+                                  onChange={(c) => updateStudent(s.id, 'linkedChoices', c)}
+                                />
+                              </div>
+                            )}
+                            <UnifiedLessonRow
+                              student={s}
+                              idx={idx}
+                              inCommonGroup={inCommonGroup}
+                              groupMode={g.mode}
+                              onChange={(key, value) => updateStudent(s.id, key, value as any)}
+                            />
+                          </div>
                         );
                       })}
                     </div>
