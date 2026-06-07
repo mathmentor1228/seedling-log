@@ -166,6 +166,28 @@ function QuickLessonEntryContent() {
         if (!hwMap.has(r.student_id)) hwMap.set(r.student_id, { id: r.id, content: r.content });
       }
 
+      // 5. Linked records: test/clinic/self_study for same day + subject (per student)
+      const [testRes, clinicRes, studyRes] = await Promise.all([
+        supabase.from('test_records').select('id, student_id, test_type, content, score, passed')
+          .in('student_id', finalIds).eq('test_date', date).eq('subject', subject),
+        supabase.from('clinic_records').select('id, student_id, content, teacher_note')
+          .in('student_id', finalIds).eq('clinic_date', date).eq('subject', subject),
+        supabase.from('self_study_records').select('id, student_id, task_list, memo, duration_minutes')
+          .in('student_id', finalIds).eq('study_date', date).eq('subject', subject),
+      ]);
+      const testsBy = new Map<string, any[]>();
+      for (const r of (testRes.data || []) as any[]) {
+        const arr = testsBy.get(r.student_id) || []; arr.push(r); testsBy.set(r.student_id, arr);
+      }
+      const clinicsBy = new Map<string, any[]>();
+      for (const r of (clinicRes.data || []) as any[]) {
+        const arr = clinicsBy.get(r.student_id) || []; arr.push(r); clinicsBy.set(r.student_id, arr);
+      }
+      const studiesBy = new Map<string, any[]>();
+      for (const r of (studyRes.data || []) as any[]) {
+        const arr = studiesBy.get(r.student_id) || []; arr.push(r); studiesBy.set(r.student_id, arr);
+      }
+
       const rows: StudentRow[] = sortStudents(list).map(s => {
         const a = avgMap.get(s.id);
         const avg = a ? Math.round(a.sum / a.n) : null;
@@ -187,6 +209,12 @@ function QuickLessonEntryContent() {
           attendanceStatuses: (rec?.attendance_status as string[]) ?? (hasAtt ? ['출석'] : ['출석']),
           hasAttendanceLog: hasAtt,
           existingDraft: !!rec,
+          linked: {
+            tests: testsBy.get(s.id) || [],
+            clinics: clinicsBy.get(s.id) || [],
+            studies: studiesBy.get(s.id) || [],
+          },
+          linkedChoices: { test: 'merge', clinic: 'merge', study: 'merge' },
         };
       });
 
