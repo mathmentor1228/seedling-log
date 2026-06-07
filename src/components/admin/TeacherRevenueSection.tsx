@@ -90,13 +90,73 @@ function monthRange(m: string) {
 
 const UNASSIGNED = '__unassigned__';
 
+const MULTI_SUBJECT_DISCOUNT: Record<number, number> = {
+  1: 0,
+  2: 50000,
+  3: 80000,
+  4: 100000,
+};
+const SIBLING_DISCOUNT = 10000;
+
+// Compute effective per-course fee after multi-subject + sibling discounts.
+// Returns { feeByCourseId, discountByStudentId }
+function computeEffectiveFees(
+  courses: any[],
+  siblingCountByGroup: Map<number, number>,
+  siblingGroupByStudent: Map<string, number | null>,
+) {
+  const feeByCourse = new Map<string, number>();
+  const discountByStudent = new Map<string, { gross: number; discount: number; subjects: number; sibling: boolean; hasCustom: boolean }>();
+
+  // group active courses by student
+  const byStudent = new Map<string, any[]>();
+  for (const c of courses) {
+    const status = c.students?.enrollment_status;
+    if (status !== '재학' && status !== '재등원') continue;
+    if (!byStudent.has(c.student_id)) byStudent.set(c.student_id, []);
+    byStudent.get(c.student_id)!.push(c);
+  }
+
+  for (const [sid, list] of byStudent.entries()) {
+    const subjects = new Set<string>();
+    let gross = 0;
+    let hasCustom = false;
+    for (const c of list) {
+      const subj = c.course_policies?.subject;
+      if (subj) subjects.add(subj);
+      const policyFee = Number(c.course_policies?.monthly_fee ?? 0);
+      const customFee = c.custom_monthly_fee == null ? null : Number(c.custom_monthly_fee);
+      if (customFee != null) hasCustom = true;
+      gross += customFee != null ? customFee : policyFee;
+    }
+    const groupId = siblingGroupByStudent.get(sid) ?? null;
+    const sibCount = groupId != null ? (siblingCountByGroup.get(groupId) || 0) : 0;
+    const subjectCount = subjects.size;
+    const multi = hasCustom ? 0 : (MULTI_SUBJECT_DISCOUNT[Math.min(subjectCount, 4)] ?? (subjectCount > 4 ? 100000 : 0));
+    const sib = hasCustom ? 0 : (sibCount > 1 ? SIBLING_DISCOUNT : 0);
+    const discount = multi + sib;
+
+    discountByStudent.set(sid, { gross, discount, subjects: subjectCount, sibling: sibCount > 1, hasCustom });
+
+    // scale each course's fee pro-rata
+    const ratio = gross > 0 ? Math.max(0, (gross - discount)) / gross : 1;
+    for (const c of list) {
+      const policyFee = Number(c.course_policies?.monthly_fee ?? 0);
+      const customFee = c.custom_monthly_fee == null ? null : Number(c.custom_monthly_fee);
+      const raw = customFee != null ? customFee : policyFee;
+      feeByCourse.set(c.id, raw * ratio);
+    }
+  }
+  return { feeByCourse, discountByStudent };
+}
+
 // Compute per-teacher revenue + per-student contributions for one month.
-// Returns Map<teacher_id, { revenue, students:Set, contribs:StudentContrib[] }>
 function computeAttribution(
   courses: any[],
   subjectTeachers: any[],
   lessons: any[],
   studentNameMap: Map<string, { name: string; grade: string | null }>,
+  feeByCourse: Map<string, number>,
 ) {
   const result = new Map<
     string,
@@ -126,7 +186,9 @@ function computeAttribution(
   for (const c of courses) {
     const status = c.students?.enrollment_status;
     if (status !== '재학' && status !== '재등원') continue;
-    const fee = Number(c.custom_monthly_fee ?? c.course_policies?.monthly_fee ?? 0);
+    const fee = feeByCourse.has(c.id)
+      ? feeByCourse.get(c.id)!
+      : Number(c.custom_monthly_fee ?? c.course_policies?.monthly_fee ?? 0);
     if (fee <= 0) continue;
     const subject = c.course_policies?.subject || '';
     const key = subject ? `${c.student_id}::${subject}` : '';
@@ -177,6 +239,7 @@ function computeAttribution(
   }
   return result;
 }
+
 
 export default function TeacherRevenueSection() {
   const { toast } = useToast();
@@ -235,12 +298,24 @@ export default function TeacherRevenueSection() {
           .lt('lesson_date', prevEnd) as any,
         supabase
           .from('students')
-          .select('id, name, grade, enrollment_status, registration_date, updated_at') as any,
+          .select('id, name, grade, enrollment_status, registration_date, updated_at, sibling_group_id') as any,
       ]);
 
       const studentNameMap = new Map<string, { name: string; grade: string | null }>();
-      (studentsAll || []).forEach((s: any) =>
-        studentNameMap.set(s.id, { name: s.name, grade: s.grade }),
+      const siblingGroupByStudent = new Map<string, number | null>();
+      const siblingCountByGroup = new Map<number, number>();
+      (studentsAll || []).forEach((s: any) => {
+        studentNameMap.set(s.id, { name: s.name, grade: s.grade });
+        siblingGroupByStudent.set(s.id, s.sibling_group_id ?? null);
+        if (s.sibling_group_id != null && s.enrollment_status !== '퇴원') {
+          siblingCountByGroup.set(s.sibling_group_id, (siblingCountByGroup.get(s.sibling_group_id) || 0) + 1);
+        }
+      });
+
+      const { feeByCourse } = computeEffectiveFees(
+        (courses || []) as any[],
+        siblingCountByGroup,
+        siblingGroupByStudent,
       );
 
       const curAttrib = computeAttribution(
@@ -248,13 +323,16 @@ export default function TeacherRevenueSection() {
         (subjectTeachers || []) as any[],
         (lessons || []) as any[],
         studentNameMap,
+        feeByCourse,
       );
       const prevAttrib = computeAttribution(
         (courses || []) as any[],
         (subjectTeachers || []) as any[],
         (prevLessons || []) as any[],
         studentNameMap,
+        feeByCourse,
       );
+
 
       const teacherNameMap = new Map<string, string>();
       (profiles || []).forEach((p: any) => teacherNameMap.set(p.id, p.full_name || '이름없음'));
@@ -400,7 +478,7 @@ export default function TeacherRevenueSection() {
               선생님별 매출 · 인원 · 급여
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              매출은 그 달 제출된 수업일지의 (학생·과목) 실제 수업 횟수 비율로 분배됩니다. 전월 비교는 같은 방식으로 계산.
+              매출은 다과목 할인(2과목 -5만 / 3과목 -8만 / 4과목 -10만)과 형제 할인(인당 -1만)을 학생별로 반영한 뒤, 수업일지의 실제 수업 횟수 비율로 선생님에게 분배됩니다.
             </p>
           </div>
           <Select value={month} onValueChange={setMonth}>
