@@ -29,7 +29,9 @@ import {
   ArrowLeft, Loader2, CheckCircle2, Clock, XCircle, History, Zap, Send, Save,
   ChevronDown, ChevronRight, PenLine, BookOpen,
 } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { MissingAttendanceDialog } from '@/components/lessons/MissingAttendanceDialog';
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 const HW_OPTIONS = [
@@ -82,6 +84,8 @@ function QuickLessonEntryContent() {
   const [groups, setGroups] = useState<GroupState[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [missingOpen, setMissingOpen] = useState(false);
+
 
   const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
 
@@ -345,13 +349,27 @@ function QuickLessonEntryContent() {
             <Label className="text-xs">수업 날짜</Label>
             <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-9" />
           </div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <Badge variant="outline" className="text-xs h-9 px-3 flex items-center">
               출석 {selectedCount}/{students.length}명
             </Badge>
+            <Button variant="outline" size="sm" className="h-9 text-xs"
+              onClick={() => setMissingOpen(true)}
+              disabled={!effectiveTeacherId || !subject || !date}>
+              <UserPlus className="w-3.5 h-3.5 mr-1" /> 누락 추가
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      <MissingAttendanceDialog
+        open={missingOpen}
+        onOpenChange={setMissingOpen}
+        teacherId={effectiveTeacherId}
+        subject={subject}
+        date={date}
+        onDone={loadStudents}
+      />
 
       {loading ? (
         <Card><CardContent className="p-8 flex items-center justify-center text-muted-foreground">
