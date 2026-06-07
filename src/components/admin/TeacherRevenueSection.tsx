@@ -41,6 +41,8 @@ interface TeacherRevenueRow {
   student_count: number;
   prev_revenue: number;
   prev_student_count: number;
+  student_ids: string[];
+  prev_student_ids: string[];
   salary: number;
   profit: number;
   margin: number;
