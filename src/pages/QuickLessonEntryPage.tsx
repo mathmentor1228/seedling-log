@@ -689,12 +689,17 @@ function QuickLessonEntryContent() {
       )}
 
       {students.length > 0 && (
-        <div className="sticky bottom-2 flex gap-2 justify-end bg-background/80 backdrop-blur p-2 rounded-lg border">
-          <Button variant="outline" onClick={() => save(false)} disabled={saving} size="sm">
+        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-background/95 backdrop-blur shadow-xl border-2 border-primary/30 rounded-2xl px-4 py-2.5">
+          <div className="text-xs text-muted-foreground hidden sm:flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <b className="text-foreground">{selectedCount}</b>명 기록 준비됨
+          </div>
+          <div className="h-6 w-px bg-border hidden sm:block" />
+          <Button variant="outline" onClick={() => save(false)} disabled={saving} size="sm" className="h-9">
             {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
             임시저장
           </Button>
-          <Button onClick={() => save(true)} disabled={saving} size="sm">
+          <Button onClick={() => save(true)} disabled={saving} size="sm" className="h-9 px-4 font-semibold shadow-md">
             {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
             {selectedCount}명 제출
           </Button>
