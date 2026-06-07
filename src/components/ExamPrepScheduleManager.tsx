@@ -110,6 +110,8 @@ export function ExamPrepScheduleManager() {
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formDeadline, setFormDeadline] = useState('');
+  // Grade year filter (multi-select). Empty = all grades.
+  const [formGradeYears, setFormGradeYears] = useState<number[]>([]);
 
   const [sessions, setSessions] = useState<SessionEntry[]>([
     { label: '1회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
@@ -231,7 +233,22 @@ export function ExamPrepScheduleManager() {
     if (formSchool) {
       filtered = filtered.filter(s => s.school === formSchool);
     }
+    if (formGradeYears.length > 0) {
+      filtered = filtered.filter(s => s.grade_year != null && formGradeYears.includes(s.grade_year));
+    }
     return filtered;
+  }, [formSubject, formTeacherId, formSchool, formGradeYears, classInfos, students]);
+
+  // Available grade years for current school selection (for filter chips)
+  const availableGradeYears = useMemo(() => {
+    const set = new Set<number>();
+    const sids = new Set(classInfos.filter(ci => ci.subject === formSubject && ci.teacher_id === formTeacherId).map(ci => ci.student_id));
+    for (const s of students) {
+      if (!sids.has(s.id)) continue;
+      if (formSchool && s.school !== formSchool) continue;
+      if (s.grade_year != null) set.add(s.grade_year);
+    }
+    return [...set].sort((a, b) => a - b);
   }, [formSubject, formTeacherId, formSchool, classInfos, students]);
 
   const groupedStudents = useMemo(() => {
@@ -695,6 +712,7 @@ export function ExamPrepScheduleManager() {
     setMode('list'); setStep(1);
     setFormSubject('수학'); setFormTeacherId(''); setFormSchool('');
     setFormTitle(''); setFormDescription(''); setFormDeadline('');
+    setFormGradeYears([]);
     setSessions([
       { label: '1회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
       { label: '2회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
@@ -915,6 +933,38 @@ export function ExamPrepScheduleManager() {
                   </Select>
                 </div>
               </div>
+
+              {formSubject && formTeacherId && availableGradeYears.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <UsersRound className="w-3.5 h-3.5" /> 학년 필터 <span className="text-muted-foreground font-normal">(선택 시 해당 학년만 대상)</span>
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge
+                      variant={formGradeYears.length === 0 ? 'default' : 'outline'}
+                      className="cursor-pointer text-[11px]"
+                      onClick={() => setFormGradeYears([])}
+                    >
+                      전체
+                    </Badge>
+                    {availableGradeYears.map(y => {
+                      const active = formGradeYears.includes(y);
+                      return (
+                        <Badge
+                          key={y}
+                          variant={active ? 'default' : 'outline'}
+                          className="cursor-pointer text-[11px]"
+                          onClick={() => setFormGradeYears(prev =>
+                            prev.includes(y) ? prev.filter(g => g !== y) : [...prev, y]
+                          )}
+                        >
+                          {y}학년
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
