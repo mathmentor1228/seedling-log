@@ -478,7 +478,7 @@ export default function TeacherRevenueSection() {
               선생님별 매출 · 인원 · 급여
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              매출은 그 달 제출된 수업일지의 (학생·과목) 실제 수업 횟수 비율로 분배됩니다. 전월 비교는 같은 방식으로 계산.
+              매출은 다과목 할인(2과목 -5만 / 3과목 -8만 / 4과목 -10만)과 형제 할인(인당 -1만)을 학생별로 반영한 뒤, 수업일지의 실제 수업 횟수 비율로 선생님에게 분배됩니다.
             </p>
           </div>
           <Select value={month} onValueChange={setMonth}>
