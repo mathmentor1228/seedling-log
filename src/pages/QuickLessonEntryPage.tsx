@@ -30,6 +30,8 @@ import {
   ChevronDown, ChevronRight, PenLine, BookOpen,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { MissingAttendanceDialog } from '@/components/lessons/MissingAttendanceDialog';
+import { UserPlus } from 'lucide-react';
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 const HW_OPTIONS = [
