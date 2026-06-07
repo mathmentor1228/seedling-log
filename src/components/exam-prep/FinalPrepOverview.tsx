@@ -128,6 +128,8 @@ export function FinalPrepOverview({
             studentId: sid,
             studentName: st?.name || '—',
             studentSchool: st?.school || '미지정',
+            studentGradeYear: st?.grade_year ?? null,
+            studentSchoolLevel: st?.school_level ?? null,
             slotStart: slotStart?.slice(0, 5) || '',
             slotEnd: slotEnd?.slice(0, 5) || '',
           });
