@@ -43,6 +43,7 @@ const AdminReportPage = lazy(() => import("./pages/AdminReportPage"));
 const AdminDailyOpsPage = lazy(() => import("./pages/AdminDailyOpsPage"));
 const AdminOfficePage = lazy(() => import("./pages/AdminOfficePage"));
 const TuitionPage = lazy(() => import("./pages/TuitionPage"));
+const IncomeManagementPage = lazy(() => import("./pages/IncomeManagementPage"));
 const TextbookPage = lazy(() => import("./pages/TextbookPage"));
 const ReportStatusPage = lazy(() => import("./pages/ReportStatusPage"));
 const VocabTestPage = lazy(() => import("./pages/VocabTestPage"));
@@ -176,6 +177,7 @@ const App = () => (
                 <Route path="/admin/daily" element={<AdminDailyOpsPage />} />
                 <Route path="/admin/office" element={<AdminOfficePage />} />
                 <Route path="/admin/tuition" element={<TuitionPage />} />
+                <Route path="/admin/income" element={<IncomeManagementPage />} />
                 <Route path="/textbooks" element={<TextbookPage />} />
                 <Route path="/reports/status" element={<ReportStatusPage />} />
                 <Route path="/vocab-test" element={<VocabTestPage />} />
