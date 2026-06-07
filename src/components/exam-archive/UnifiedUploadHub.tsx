@@ -146,12 +146,14 @@ export function UnifiedUploadHub({ knownSchools, onComplete }: Props) {
         },
       });
       if (error) throw error;
-      // Normalize response shape
-      const raw = (data as any) ?? {};
-      const schedules: ExtractedSchedule[] = Array.isArray(raw.schedules) ? raw.schedules : [];
-      const scope: ExtractedExamScope[] = Array.isArray(raw.exam_scope) ? raw.exam_scope : [];
+      // Edge function returns { success, data: {...} } or sometimes the payload directly
+      const envelope = (data as any) ?? {};
+      const raw = envelope?.data && typeof envelope.data === 'object' ? envelope.data : envelope;
+      if (envelope?.error) throw new Error(envelope.error);
+      const schedules: ExtractedSchedule[] = Array.isArray(raw.schedules) ? [...raw.schedules] : [];
+      const scope: ExtractedExamScope[] = Array.isArray(raw.exam_scope) ? [...raw.exam_scope] : [];
       // evaluation_plan returns exam_schedule with date/subject — convert to schedule rows
-      if (docType === 'evaluation_plan' && Array.isArray(raw.exam_schedule)) {
+      if (Array.isArray(raw.exam_schedule)) {
         for (const s of raw.exam_schedule) {
           if (!s?.date) continue;
           schedules.push({
@@ -164,6 +166,9 @@ export function UnifiedUploadHub({ knownSchools, onComplete }: Props) {
             description: [s.start_time, s.end_time].filter(Boolean).join(' ~ ') || null,
           });
         }
+      }
+      if (schedules.length === 0 && scope.length === 0) {
+        toast.warning('추출된 일정/시험범위가 없습니다. 문서 유형이나 학교를 확인 후 다시 시도해보세요.');
       }
       setResult({
         doc_type: docType,
