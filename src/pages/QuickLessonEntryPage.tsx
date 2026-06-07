@@ -40,6 +40,8 @@ const HW_OPTIONS = [
   { v: 'not_done', label: '미완', color: 'text-red-600' },
   { v: 'none_assigned', label: '없음', color: 'text-muted-foreground' },
 ] as const;
+const LESSON_TYPES = ['정규수업', '보충수업', '시험특강', '방학특강', '테스트', '휴강'] as const;
+const ATTENDANCE_STATUSES = ['출석', '지각', '조퇴', '인정결석', '무단결석'] as const;
 
 interface StudentRow {
   id: string;
@@ -56,6 +58,10 @@ interface StudentRow {
   prevHwId: string | null;
   individualProgress: string; // empty => use group progress
   showOverride: boolean;
+  lessonTypes: string[];
+  attendanceStatuses: string[];
+  hasAttendanceLog: boolean; // false => auto-create on save
+  existingDraft: boolean;    // true => roster forced by draft lesson_record
 }
 
 interface GroupState {
