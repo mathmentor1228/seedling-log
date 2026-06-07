@@ -710,6 +710,42 @@ function QuickLessonEntryContent() {
           </Button>
         </div>
       )}
+
+      <Dialog open={validation.open} onOpenChange={(o) => setValidation(v => ({ ...v, open: o }))}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="w-5 h-5" /> 제출 전 확인 필요 ({validation.issues.length}명)
+            </DialogTitle>
+            <DialogDescription>
+              아래 항목이 누락되었습니다. 수정 후 다시 제출해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto space-y-2">
+            {validation.issues.map(it => (
+              <div key={it.name} className="border rounded-md p-2.5 bg-amber-50/50 dark:bg-amber-950/20">
+                <div className="font-semibold text-sm mb-1">{it.name}</div>
+                <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
+                  {it.problems.map(p => (
+                    <li key={p} className="flex items-start gap-1.5">
+                      <span className="text-amber-600 mt-0.5">•</span>
+                      <span>{p}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setValidation({ open: false, issues: [] })}>
+              수정하러 가기
+            </Button>
+            <Button variant="secondary" onClick={() => { setValidation({ open: false, issues: [] }); save(false); }}>
+              그래도 임시저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
