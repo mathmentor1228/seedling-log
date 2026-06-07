@@ -534,10 +534,13 @@ function QuickLessonEntryContent() {
 
                     {/* Per-student rows */}
                     <div className="space-y-2">
-                      {groupStudents.map((s, idx) => (
+                      {groupStudents.map((s, idx) => {
+                        const inCommonGroup = g.mode === 'group' && g.groupMemberIds.includes(s.id);
+                        const needsIndividualProgress = !inCommonGroup;
+                        return (
                         <div key={s.id}
-                          className={`rounded-lg border bg-card p-3 transition ${!s.included ? 'opacity-50' : 'hover:border-primary/40'} ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
-                          {/* Row 1: name + meta + override toggle */}
+                          className={`rounded-lg border bg-card p-3 transition ${!s.included ? 'opacity-50' : 'hover:border-primary/40'} ${idx % 2 === 1 ? 'bg-muted/20' : ''} ${inCommonGroup ? 'border-l-4 border-l-primary/60' : ''}`}>
+                          {/* Row 1: name + meta */}
                           <div className="flex items-center justify-between gap-2 mb-2">
                             <label className="flex items-center gap-2.5 cursor-pointer min-w-0 flex-1">
                               <input type="checkbox" checked={s.included}
@@ -546,6 +549,9 @@ function QuickLessonEntryContent() {
                               <div className="min-w-0">
                                 <div className="font-semibold text-base flex items-center gap-1.5 flex-wrap">
                                   <span className="truncate">{s.name}</span>
+                                  {inCommonGroup && (
+                                    <Badge className="text-[10px] h-5 px-1.5 bg-primary/15 text-primary border-0 hover:bg-primary/20">공통진도 적용</Badge>
+                                  )}
                                   {s.existingDraft && (
                                     <Badge className="text-[10px] h-5 px-1.5 bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0 hover:bg-blue-500/20">임시저장</Badge>
                                   )}
@@ -558,12 +564,6 @@ function QuickLessonEntryContent() {
                                 </div>
                               </div>
                             </label>
-                            <Button size="sm" variant={s.showOverride || s.individualProgress ? 'default' : 'outline'}
-                              onClick={() => updateStudent(s.id, 'showOverride', !s.showOverride)}
-                              disabled={!s.included}
-                              className="h-8 text-xs shrink-0" title="개별 진도 override">
-                              <PenLine className="w-3.5 h-3.5 mr-1" /> 개별진도
-                            </Button>
                           </div>
 
                           {/* Row 2: understanding + homework */}
