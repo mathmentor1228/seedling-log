@@ -110,6 +110,8 @@ export function ExamPrepScheduleManager() {
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formDeadline, setFormDeadline] = useState('');
+  // Grade year filter (multi-select). Empty = all grades.
+  const [formGradeYears, setFormGradeYears] = useState<number[]>([]);
 
   const [sessions, setSessions] = useState<SessionEntry[]>([
     { label: '1회차', date: '', slots: [{ id: tempId(), startTime: '', endTime: '' }] },
