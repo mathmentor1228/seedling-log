@@ -40,6 +40,8 @@ const HW_OPTIONS = [
   { v: 'not_done', label: '미완', color: 'text-red-600' },
   { v: 'none_assigned', label: '없음', color: 'text-muted-foreground' },
 ] as const;
+const LESSON_TYPES = ['정규수업', '보충수업', '시험특강', '방학특강', '테스트', '휴강'] as const;
+const ATTENDANCE_STATUSES = ['출석', '지각', '조퇴', '인정결석', '무단결석'] as const;
 
 interface StudentRow {
   id: string;
@@ -56,6 +58,10 @@ interface StudentRow {
   prevHwId: string | null;
   individualProgress: string; // empty => use group progress
   showOverride: boolean;
+  lessonTypes: string[];
+  attendanceStatuses: string[];
+  hasAttendanceLog: boolean; // false => auto-create on save
+  existingDraft: boolean;    // true => roster forced by draft lesson_record
 }
 
 interface GroupState {
@@ -97,14 +103,26 @@ function QuickLessonEntryContent() {
       const teacherIds = await fetchTeacherStudentIds(effectiveTeacherId, subject);
       if (teacherIds.length === 0) { setStudents([]); setGroups([]); return; }
 
-      // 2. Attendance for the date — intersection
+      // 2a. Attendance for the date
       const { data: attRows } = await supabase
         .from('attendance_logs')
         .select('student_id')
         .eq('date', date)
         .in('student_id', teacherIds);
       const attendedIds = new Set<string>((attRows || []).map((r: any) => r.student_id).filter(Boolean));
-      const finalIds = teacherIds.filter(id => attendedIds.has(id));
+
+      // 2b. Existing lesson_records (drafts or submitted) for this teacher/date/subject
+      const { data: existingRecs } = await supabase
+        .from('lesson_records')
+        .select('id, student_id, lesson_range, understanding_score, homework_status, notes, next_lesson_goal, lesson_types, attendance_status, submitted, is_common_entry')
+        .eq('teacher_id', effectiveTeacherId)
+        .eq('lesson_date', date)
+        .eq('subject', subject as any)
+        .in('student_id', teacherIds);
+      const recordMap = new Map<string, any>((existingRecs || []).map((r: any) => [r.student_id, r]));
+
+      // Union: attendance ∪ existing records
+      const finalIds = teacherIds.filter(id => attendedIds.has(id) || recordMap.has(id));
 
       if (finalIds.length === 0) {
         setStudents([]);
@@ -149,17 +167,23 @@ function QuickLessonEntryContent() {
         const a = avgMap.get(s.id);
         const avg = a ? Math.round(a.sum / a.n) : null;
         const hw = hwMap.get(s.id) || null;
+        const rec = recordMap.get(s.id);
+        const hasAtt = attendedIds.has(s.id);
         return {
           ...s,
           included: true,
-          understanding: avg ?? 3,
-          homework: hw ? 'completed' : 'none_assigned',
-          note: '',
+          understanding: rec?.understanding_score ?? avg ?? 3,
+          homework: rec?.homework_status ?? (hw ? 'completed' : 'none_assigned'),
+          note: rec?.notes ?? '',
           prevAvg: avg,
           prevHwContent: hw?.content || null,
           prevHwId: hw?.id || null,
-          individualProgress: '',
-          showOverride: false,
+          individualProgress: rec && rec.is_common_entry === false ? (rec.lesson_range || '') : '',
+          showOverride: !!(rec && rec.is_common_entry === false && rec.lesson_range),
+          lessonTypes: (rec?.lesson_types as string[]) ?? ['정규수업'],
+          attendanceStatuses: (rec?.attendance_status as string[]) ?? (hasAtt ? ['출석'] : ['출석']),
+          hasAttendanceLog: hasAtt,
+          existingDraft: !!rec,
         };
       });
 
@@ -260,6 +284,7 @@ function QuickLessonEntryContent() {
 
       const inserts: any[] = [];
       const updates: { id: string; payload: any }[] = [];
+      const autoAttendance: any[] = [];
       for (const s of targets) {
         const g = groupByStudent.get(s.id);
         const lessonRange = s.individualProgress.trim() || g?.lessonRange || '';
@@ -271,6 +296,8 @@ function QuickLessonEntryContent() {
           notes: s.note || null,
           next_lesson_goal: homeworkAssigned,
           is_common_entry: !s.individualProgress.trim(),
+          lesson_types: s.lessonTypes,
+          attendance_status: s.attendanceStatuses,
           submitted: submit,
           submitted_at: submit ? new Date().toISOString() : null,
         };
@@ -283,6 +310,17 @@ function QuickLessonEntryContent() {
           subject: subject as any,
           ...payload,
         });
+        // Auto-create attendance_log if missing (only for non-absent statuses)
+        const isAbsent = s.attendanceStatuses.some(a => a.includes('결석'));
+        if (!s.hasAttendanceLog && !isAbsent) {
+          autoAttendance.push({
+            student_id: s.id,
+            student_name: s.name,
+            date,
+            checked_in_at: `${date}T09:00:00+09:00`,
+            recorded_by: effectiveTeacherId,
+          });
+        }
       }
 
       if (inserts.length > 0) {
@@ -292,6 +330,9 @@ function QuickLessonEntryContent() {
       for (const u of updates) {
         const { error } = await supabase.from('lesson_records').update(u.payload).eq('id', u.id);
         if (error) throw error;
+      }
+      if (autoAttendance.length > 0) {
+        await supabase.from('attendance_logs').insert(autoAttendance);
       }
 
       toast({
@@ -377,7 +418,7 @@ function QuickLessonEntryContent() {
         </CardContent></Card>
       ) : students.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-          이 날짜의 출석 학생이 없습니다. (출석체크 또는 날짜를 확인해주세요)
+          이 날짜의 출석 또는 임시저장 학생이 없습니다. "누락 추가"로 학생을 추가하거나 날짜를 확인해주세요.
         </CardContent></Card>
       ) : (
         groups.map((g, gi) => {
@@ -445,7 +486,15 @@ function QuickLessonEntryContent() {
                               <input type="checkbox" checked={s.included}
                                 onChange={e => updateStudent(s.id, 'included', e.target.checked)} className="rounded" />
                               <div className="min-w-0">
-                                <div className="font-medium truncate">{s.name}</div>
+                                <div className="font-medium truncate flex items-center gap-1">
+                                  {s.name}
+                                  {s.existingDraft && (
+                                    <Badge variant="secondary" className="text-[9px] h-4 px-1">임시</Badge>
+                                  )}
+                                  {!s.hasAttendanceLog && (
+                                    <Badge variant="outline" className="text-[9px] h-4 px-1 border-amber-400 text-amber-600">출결없음</Badge>
+                                  )}
+                                </div>
                                 <div className="text-[10px] text-muted-foreground truncate">
                                   {s.school || ''} {s.prevAvg != null && <span>· 평균 {s.prevAvg}</span>}
                                 </div>
@@ -489,6 +538,39 @@ function QuickLessonEntryContent() {
                               </Button>
                             </div>
                           </div>
+                          {s.included && (
+                            <div className="pl-6 flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">수업:</span>
+                                {LESSON_TYPES.map(lt => {
+                                  const on = s.lessonTypes.includes(lt);
+                                  return (
+                                    <button key={lt} type="button"
+                                      onClick={() => updateStudent(s.id, 'lessonTypes',
+                                        on ? s.lessonTypes.filter(x => x !== lt) : [...s.lessonTypes, lt])}
+                                      className={`px-1.5 py-0.5 rounded border ${on ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                                      {lt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">출결:</span>
+                                {ATTENDANCE_STATUSES.map(at => {
+                                  const on = s.attendanceStatuses.includes(at);
+                                  const isAbsent = at.includes('결석');
+                                  return (
+                                    <button key={at} type="button"
+                                      onClick={() => updateStudent(s.id, 'attendanceStatuses',
+                                        on ? s.attendanceStatuses.filter(x => x !== at) : [at] /* single select */)}
+                                      className={`px-1.5 py-0.5 rounded border ${on ? (isAbsent ? 'bg-destructive text-destructive-foreground border-destructive' : 'bg-primary text-primary-foreground border-primary') : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                                      {at}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                           {(s.showOverride || s.individualProgress) && s.included && (
                             <div className="pl-6">
                               <Input value={s.individualProgress}
