@@ -233,7 +233,22 @@ export function ExamPrepScheduleManager() {
     if (formSchool) {
       filtered = filtered.filter(s => s.school === formSchool);
     }
+    if (formGradeYears.length > 0) {
+      filtered = filtered.filter(s => s.grade_year != null && formGradeYears.includes(s.grade_year));
+    }
     return filtered;
+  }, [formSubject, formTeacherId, formSchool, formGradeYears, classInfos, students]);
+
+  // Available grade years for current school selection (for filter chips)
+  const availableGradeYears = useMemo(() => {
+    const set = new Set<number>();
+    const sids = new Set(classInfos.filter(ci => ci.subject === formSubject && ci.teacher_id === formTeacherId).map(ci => ci.student_id));
+    for (const s of students) {
+      if (!sids.has(s.id)) continue;
+      if (formSchool && s.school !== formSchool) continue;
+      if (s.grade_year != null) set.add(s.grade_year);
+    }
+    return [...set].sort((a, b) => a - b);
   }, [formSubject, formTeacherId, formSchool, classInfos, students]);
 
   const groupedStudents = useMemo(() => {
