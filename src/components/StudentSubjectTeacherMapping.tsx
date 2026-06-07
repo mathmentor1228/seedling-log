@@ -171,8 +171,13 @@ export default function StudentSubjectTeacherMapping({ studentId }: Props) {
         </Button>
       </div>
 
+      {enrolledSubjects.length === 0 && (
+        <p className="text-xs text-muted-foreground py-2">
+          학습과정에 등록된 과목이 없습니다. 먼저 수강 과목을 추가하면 담당 선생님을 지정할 수 있습니다.
+        </p>
+      )}
       <div className="grid gap-2">
-        {SUBJECTS.map((subject) => {
+        {enrolledSubjects.map((subject) => {
           const mapping = mappings.find((m) => m.subject === subject)!;
           const candidates = candidatesFor(subject, teachers);
           const isAuto = candidates.length === 1;
