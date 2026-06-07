@@ -418,7 +418,7 @@ function QuickLessonEntryContent() {
         </CardContent></Card>
       ) : students.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-          이 날짜의 출석 학생이 없습니다. (출석체크 또는 날짜를 확인해주세요)
+          이 날짜의 출석 또는 임시저장 학생이 없습니다. "누락 추가"로 학생을 추가하거나 날짜를 확인해주세요.
         </CardContent></Card>
       ) : (
         groups.map((g, gi) => {
