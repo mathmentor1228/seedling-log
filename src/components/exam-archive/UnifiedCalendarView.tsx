@@ -385,9 +385,9 @@ export function UnifiedCalendarView({ schedules }: Props) {
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium truncate flex items-center gap-1">
                           {s.title}
-                          {Array.isArray((s as any).notes) && (s as any).notes.length > 0 && (
+                          {(noteCounts[s.id] || 0) > 0 && (
                             <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
-                              <FileText className="w-2.5 h-2.5" />{(s as any).notes.length}
+                              <FileText className="w-2.5 h-2.5" />{noteCounts[s.id]}
                             </Badge>
                           )}
                         </div>
