@@ -607,32 +607,42 @@ export default function Dashboard({ hideAdminTools }: { hideAdminTools?: boolean
 
         // Admin and Teacher can view dashboard stats (not assistant)
         if (!isAssistant(role)) {
-          // Fetch students count
+          // STAT-CONSISTENCY-V1: Filter active students only (재학+재등원), exclude 퇴원/휴학
           const { count: studentsCount } = await supabase
             .from('students')
-            .select('*', { count: 'exact', head: true });
+            .select('*', { count: 'exact', head: true })
+            .in('enrollment_status', ['재학', '재등원']);
 
           // Fetch classes count
           const { count: classesCount } = await supabase
             .from('classes')
             .select('*', { count: 'exact', head: true });
 
-          // Fetch lessons this week
+          // Fetch lessons this week (exclude 휴강 = canceled lessons)
           let lessonsQuery = supabase
             .from('lesson_records')
-            .select('*', { count: 'exact' })
-            .gte('lesson_date', format(weekAgo, 'yyyy-MM-dd'));
+            .select('understanding_score, lesson_types, submitted', { count: 'exact' })
+            .gte('lesson_date', format(weekAgo, 'yyyy-MM-dd'))
+            .eq('submitted', true);
 
           // Teachers only see their own lessons
           if (isTeacher(role)) {
             lessonsQuery = lessonsQuery.eq('teacher_id', user.id);
           }
 
-          const { count: lessonsCount, data: lessonsData } = await lessonsQuery;
+          const { data: lessonsRaw } = await lessonsQuery;
+          // Exclude 휴강 lessons from counts and averages
+          const lessonsData = (lessonsRaw || []).filter(
+            (l: any) => !((l.lesson_types || []) as string[]).includes('휴강'),
+          );
+          const lessonsCount = lessonsData.length;
 
-          // Calculate average understanding
-          const avgScore = lessonsData?.length 
-            ? lessonsData.reduce((sum, l) => sum + l.understanding_score, 0) / lessonsData.length
+          // STAT-CONSISTENCY-V1: Average understanding only over non-null scores (1-5)
+          const scoredLessons = lessonsData.filter(
+            (l: any) => typeof l.understanding_score === 'number' && l.understanding_score >= 1,
+          );
+          const avgScore = scoredLessons.length
+            ? scoredLessons.reduce((sum: number, l: any) => sum + l.understanding_score, 0) / scoredLessons.length
             : 0;
 
           // Fetch weekly reports for high-risk student count only
