@@ -36,6 +36,7 @@ import { useNavigate } from 'react-router-dom';
 import { MissingAttendanceDialog } from '@/components/lessons/MissingAttendanceDialog';
 
 import { UnifiedLessonRow } from '@/components/lessons/UnifiedLessonRow';
+import { LinkedRecordsChip, LinkedRecordsState, LinkedChoices } from '@/components/lessons/LinkedRecordsChip';
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 
