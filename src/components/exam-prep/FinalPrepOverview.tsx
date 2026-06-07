@@ -24,7 +24,7 @@ interface CourseView {
   sessions: Session[]; enrollments: Enrollment[];
 }
 
-type SortMode = 'teacher' | 'student' | 'school' | 'date';
+type SortMode = 'teacher' | 'student' | 'school' | 'date' | 'grade';
 
 interface FinalPrepEntry {
   courseId: string; courseTitle: string; subject: string;
