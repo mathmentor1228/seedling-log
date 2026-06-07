@@ -49,6 +49,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
   );
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(schools));
   const [cursor, setCursor] = useState(today);
+  const [autoJumped, setAutoJumped] = useState(false);
 
   // sync enabled when schools list grows
   useMemo(() => {
