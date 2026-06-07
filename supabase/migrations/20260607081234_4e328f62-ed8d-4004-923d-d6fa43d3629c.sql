@@ -1,0 +1,1 @@
+ALTER TABLE public.school_schedules ADD COLUMN IF NOT EXISTS notes jsonb NOT NULL DEFAULT '[]'::jsonb;

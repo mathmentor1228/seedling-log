@@ -3751,6 +3751,7 @@ export type Database = {
           grade: number | null
           id: string
           is_ai_extracted: boolean | null
+          notes: Json
           schedule_type: string
           school_name: string
           source_file_url: string | null
@@ -3766,6 +3767,7 @@ export type Database = {
           grade?: number | null
           id?: string
           is_ai_extracted?: boolean | null
+          notes?: Json
           schedule_type?: string
           school_name: string
           source_file_url?: string | null
@@ -3781,6 +3783,7 @@ export type Database = {
           grade?: number | null
           id?: string
           is_ai_extracted?: boolean | null
+          notes?: Json
           schedule_type?: string
           school_name?: string
           source_file_url?: string | null
