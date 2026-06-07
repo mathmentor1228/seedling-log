@@ -20,6 +20,8 @@ import {
   SUBJECT_CATEGORY_COLORS,
   type SubjectCategory,
 } from '@/lib/subjectCategory';
+import { ScheduleNotesDialog } from './ScheduleNotesDialog';
+import { FileText } from 'lucide-react';
 
 function categoryOf(s: Schedule): SubjectCategory {
   const fromSubject = s.subject ? classifyCompositeSubject(s.subject) : 'other';
@@ -73,6 +75,9 @@ export function UnifiedCalendarView({ schedules }: Props) {
   const [enabledCats, setEnabledCats] = useState<Set<SubjectCategory>>(() => new Set(SUBJECT_CATS));
   const [cursor, setCursor] = useState(today);
   const [autoJumped, setAutoJumped] = useState(false);
+  const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const openSchedule = (s: Schedule) => { setSelectedSchedule(s); setDialogOpen(true); };
 
   // sync enabled when schools list grows
   useMemo(() => {
@@ -303,10 +308,21 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         {items.map((it, idx) => {
                           const cat = categoryOf(it);
                           return (
-                          <div key={idx} className="flex items-start gap-2 text-xs p-1.5 rounded bg-muted/40">
+                          <button
+                            key={idx}
+                            onClick={() => openSchedule(it)}
+                            className="w-full flex items-start gap-2 text-xs p-1.5 rounded bg-muted/40 hover:bg-muted text-left transition"
+                          >
                             <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: colorFor(it.school_name) }} />
                             <div className="min-w-0 flex-1">
-                              <div className="font-medium truncate">{it.title}</div>
+                              <div className="font-medium truncate flex items-center gap-1">
+                                {it.title}
+                                {Array.isArray((it as any).notes) && (it as any).notes.length > 0 && (
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
+                                    <FileText className="w-2.5 h-2.5" />{(it as any).notes.length}
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
                                 <span>{it.school_name}</span>
                                 <span>·</span>
@@ -321,7 +337,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
                                 {it.subject && <span className="truncate">· {it.subject}</span>}
                               </div>
                             </div>
-                          </div>
+                          </button>
                           );
                         })}
                       </div>
@@ -345,11 +361,22 @@ export function UnifiedCalendarView({ schedules }: Props) {
                   const dd = ddayBadge(days);
                   const cat = categoryOf(s);
                   return (
-                    <div key={`${s.id}-${idx}`} className="flex items-center gap-2 p-2 rounded-md border bg-card hover:bg-muted/40 transition">
+                    <button
+                      key={`${s.id}-${idx}`}
+                      onClick={() => openSchedule(s)}
+                      className="w-full flex items-center gap-2 p-2 rounded-md border bg-card hover:bg-muted/40 transition text-left"
+                    >
                       <Badge className={cn('shrink-0 font-bold text-[10px] px-1.5', dd.cls)}>{dd.label}</Badge>
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: colorFor(s.school_name) }} />
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium truncate">{s.title}</div>
+                        <div className="text-xs font-medium truncate flex items-center gap-1">
+                          {s.title}
+                          {Array.isArray((s as any).notes) && (s as any).notes.length > 0 && (
+                            <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
+                              <FileText className="w-2.5 h-2.5" />{(s as any).notes.length}
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-[10px] text-muted-foreground">
                           {format(d, 'M월 d일 (E)', { locale: ko })} · {s.school_name}
                           {s.subject && ` · ${s.subject}`}
@@ -364,7 +391,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
                       <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4 shrink-0', SCHEDULE_TYPE_COLORS[s.schedule_type])}>
                         {SCHEDULE_TYPE_LABELS[s.schedule_type] || s.schedule_type}
                       </Badge>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -372,6 +399,12 @@ export function UnifiedCalendarView({ schedules }: Props) {
           )}
         </TabsContent>
       </Tabs>
+
+      <ScheduleNotesDialog
+        schedule={selectedSchedule}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </Card>
   );
 }
