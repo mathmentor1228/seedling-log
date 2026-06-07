@@ -29,7 +29,7 @@ import {
 import { getTodayKST } from '@/lib/utils';
 import {
   ArrowLeft, Loader2, CheckCircle2, Clock, XCircle, History, Zap, Send, Save,
-  ChevronDown, ChevronRight, PenLine, BookOpen,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
