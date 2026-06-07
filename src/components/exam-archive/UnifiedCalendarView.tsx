@@ -361,11 +361,22 @@ export function UnifiedCalendarView({ schedules }: Props) {
                   const dd = ddayBadge(days);
                   const cat = categoryOf(s);
                   return (
-                    <div key={`${s.id}-${idx}`} className="flex items-center gap-2 p-2 rounded-md border bg-card hover:bg-muted/40 transition">
+                    <button
+                      key={`${s.id}-${idx}`}
+                      onClick={() => openSchedule(s)}
+                      className="w-full flex items-center gap-2 p-2 rounded-md border bg-card hover:bg-muted/40 transition text-left"
+                    >
                       <Badge className={cn('shrink-0 font-bold text-[10px] px-1.5', dd.cls)}>{dd.label}</Badge>
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: colorFor(s.school_name) }} />
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium truncate">{s.title}</div>
+                        <div className="text-xs font-medium truncate flex items-center gap-1">
+                          {s.title}
+                          {Array.isArray((s as any).notes) && (s as any).notes.length > 0 && (
+                            <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
+                              <FileText className="w-2.5 h-2.5" />{(s as any).notes.length}
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-[10px] text-muted-foreground">
                           {format(d, 'M월 d일 (E)', { locale: ko })} · {s.school_name}
                           {s.subject && ` · ${s.subject}`}
@@ -380,7 +391,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
                       <Badge variant="outline" className={cn('text-[9px] px-1 py-0 h-4 shrink-0', SCHEDULE_TYPE_COLORS[s.schedule_type])}>
                         {SCHEDULE_TYPE_LABELS[s.schedule_type] || s.schedule_type}
                       </Badge>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
