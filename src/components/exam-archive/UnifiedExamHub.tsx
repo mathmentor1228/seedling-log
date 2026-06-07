@@ -9,6 +9,7 @@ import { getTodayKST, cn } from '@/lib/utils';
 import type { Schedule, SchoolInfo } from './types';
 import { UnifiedCalendarView } from './UnifiedCalendarView';
 import { UnifiedUploadHub } from './UnifiedUploadHub';
+import { ExamMaterialsBrowser } from './ExamMaterialsBrowser';
 
 interface Props {
   schools: SchoolInfo[];
@@ -64,6 +65,10 @@ export function UnifiedExamHub({ schools, schedules, archives, onSelectSchool, o
 
       {/* Calendar */}
       <UnifiedCalendarView schedules={schedules} />
+
+      {/* Cross-school exam materials library */}
+      <ExamMaterialsBrowser />
+
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Upcoming exam schools */}

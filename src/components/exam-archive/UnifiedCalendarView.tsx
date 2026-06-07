@@ -22,6 +22,7 @@ import {
 } from '@/lib/subjectCategory';
 import { ScheduleNotesDialog } from './ScheduleNotesDialog';
 import { FileText } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 function categoryOf(s: Schedule): SubjectCategory {
   const fromSubject = s.subject ? classifyCompositeSubject(s.subject) : 'other';
@@ -77,7 +78,20 @@ export function UnifiedCalendarView({ schedules }: Props) {
   const [autoJumped, setAutoJumped] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
   const openSchedule = (s: Schedule) => { setSelectedSchedule(s); setDialogOpen(true); };
+
+  const reloadCounts = async () => {
+    const { data } = await (supabase as any)
+      .from('school_exam_notes')
+      .select('schedule_id');
+    const map: Record<string, number> = {};
+    for (const r of (data || [])) {
+      if (r.schedule_id) map[r.schedule_id] = (map[r.schedule_id] || 0) + 1;
+    }
+    setNoteCounts(map);
+  };
+  useEffect(() => { reloadCounts(); }, []);
 
   // sync enabled when schools list grows
   useMemo(() => {
@@ -317,9 +331,9 @@ export function UnifiedCalendarView({ schedules }: Props) {
                             <div className="min-w-0 flex-1">
                               <div className="font-medium truncate flex items-center gap-1">
                                 {it.title}
-                                {Array.isArray((it as any).notes) && (it as any).notes.length > 0 && (
+                                {(noteCounts[it.id] || 0) > 0 && (
                                   <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
-                                    <FileText className="w-2.5 h-2.5" />{(it as any).notes.length}
+                                    <FileText className="w-2.5 h-2.5" />{noteCounts[it.id]}
                                   </Badge>
                                 )}
                               </div>
@@ -371,9 +385,9 @@ export function UnifiedCalendarView({ schedules }: Props) {
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium truncate flex items-center gap-1">
                           {s.title}
-                          {Array.isArray((s as any).notes) && (s as any).notes.length > 0 && (
+                          {(noteCounts[s.id] || 0) > 0 && (
                             <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
-                              <FileText className="w-2.5 h-2.5" />{(s as any).notes.length}
+                              <FileText className="w-2.5 h-2.5" />{noteCounts[s.id]}
                             </Badge>
                           )}
                         </div>
@@ -404,6 +418,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
         schedule={selectedSchedule}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+        onSaved={reloadCounts}
       />
     </Card>
   );
