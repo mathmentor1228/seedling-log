@@ -656,6 +656,37 @@ export default function TeacherRevenueSection() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-mono">
+                              {(() => {
+                                const m = Math.max(0, Math.min(100, Number(targetMargin) || 0));
+                                const rec = Math.max(0, Math.round(r.revenue * (1 - m / 100)));
+                                const diff = rec - r.salary;
+                                return (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <div className="text-right">
+                                      <div className="text-xs">{wonFmt(rec)}</div>
+                                      {r.salary > 0 && (
+                                        <div className={`text-[10px] font-sans ${diff < 0 ? 'text-destructive' : diff > 0 ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                                          {diff === 0 ? '±0' : (diff > 0 ? '+' : '') + shortWon(Math.abs(diff))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0"
+                                      title="이 추천 급여를 입력란에 반영"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSalaryDraft({ ...salaryDraft, [r.teacher_id]: String(rec) });
+                                      }}
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                );
+                              })()}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
                               <span className={r.profit < 0 ? 'text-destructive' : 'text-emerald-600'}>
                                 {r.profit >= 0 ? '+' : ''}{wonFmt(r.profit)}
                               </span>
@@ -669,7 +700,7 @@ export default function TeacherRevenueSection() {
                           {isOpen && (
                             <TableRow key={r.teacher_id + '_detail'} className="bg-muted/20 hover:bg-muted/20">
                               <TableCell></TableCell>
-                              <TableCell colSpan={7} className="py-3">
+                              <TableCell colSpan={8} className="py-3">
                                 {r.contribs.length === 0 ? (
                                   <p className="text-xs text-muted-foreground">담당 학생 수강료 데이터가 없습니다.</p>
                                 ) : (
