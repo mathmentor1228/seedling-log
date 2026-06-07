@@ -469,42 +469,68 @@ function QuickLessonEntryContent() {
                 </CardHeader>
                 <CollapsibleContent>
                   <CardContent className="space-y-3">
-                    {/* Group common fields */}
-                    <div className="bg-muted/30 p-2 rounded-md space-y-2">
-                      <div>
-                        <Label className="text-xs">그룹 공통 진도 <span className="text-muted-foreground">(개별 진도 미입력시 적용)</span></Label>
-                        <Textarea value={g.lessonRange} onChange={e => updateGroup(gi, 'lessonRange', e.target.value)}
-                          rows={2} placeholder="예) 일차함수의 그래프" className="text-sm" />
+                    {/* Mode toggle: 개별입력 vs 그룹입력 */}
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-muted/40 border">
+                      <span className="text-xs font-medium text-muted-foreground shrink-0">입력 방식</span>
+                      <div className="flex gap-1">
+                        <button type="button"
+                          onClick={() => updateGroup(gi, 'mode', 'individual')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition ${g.mode === 'individual' ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-muted-foreground hover:bg-muted'}`}>
+                          개별입력
+                        </button>
+                        <button type="button"
+                          onClick={() => updateGroup(gi, 'mode', 'group')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition ${g.mode === 'group' ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-muted-foreground hover:bg-muted'}`}>
+                          그룹입력
+                        </button>
                       </div>
-                      <div>
-                        <Label className="text-xs">오늘 부여한 과제 (선택)</Label>
-                        <Input value={g.homeworkAssigned} onChange={e => updateGroup(gi, 'homeworkAssigned', e.target.value)}
-                          placeholder="예) 교재 p.34-37" className="h-8 text-sm" />
-                      </div>
-                      <div className="flex gap-2 items-end flex-wrap">
-                        <div>
-                          <Label className="text-xs">기본 이해도</Label>
-                          <div className="flex gap-0.5 mt-1">
-                            {[1, 2, 3, 4, 5].map(n => (
-                              <Button key={n} size="sm" variant={g.defaultUnderstanding === n ? 'default' : 'outline'}
-                                onClick={() => updateGroup(gi, 'defaultUnderstanding', n)} className="h-7 w-7 p-0 text-xs">{n}</Button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs">기본 숙제</Label>
-                          <div className="flex gap-0.5 mt-1">
-                            {HW_OPTIONS.map(o => (
-                              <Button key={o.v} size="sm" variant={g.defaultHw === o.v ? 'default' : 'outline'}
-                                onClick={() => updateGroup(gi, 'defaultHw', o.v)} className="h-7 px-1.5 text-[10px]">{o.label}</Button>
-                            ))}
-                          </div>
-                        </div>
-                        <Button variant="secondary" size="sm" onClick={() => applyGroupDefaults(gi)} className="h-7 text-xs">
-                          그룹 일괄 적용
-                        </Button>
-                      </div>
+                      <span className="text-[11px] text-muted-foreground ml-auto">
+                        {g.mode === 'group'
+                          ? `공통 진도 적용: ${g.groupMemberIds.length}명 / 개별: ${groupStudents.length - g.groupMemberIds.length}명`
+                          : '학생마다 진도 개별 입력'}
+                      </span>
                     </div>
+
+                    {/* Group mode only: member selection + common inputs */}
+                    {g.mode === 'group' && (
+                      <div className="bg-primary/5 border border-primary/20 p-3 rounded-md space-y-3">
+                        <div>
+                          <Label className="text-xs font-semibold">① 공통 진도를 적용할 학생 선택</Label>
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            <button type="button"
+                              onClick={() => updateGroup(gi, 'groupMemberIds',
+                                g.groupMemberIds.length === groupStudents.length ? [] : groupStudents.map(s => s.id))}
+                              className="px-2 py-1 rounded-md text-[11px] font-medium border border-dashed border-primary/50 text-primary hover:bg-primary/10">
+                              {g.groupMemberIds.length === groupStudents.length ? '전체 해제' : '전체 선택'}
+                            </button>
+                            {groupStudents.map(s => {
+                              const on = g.groupMemberIds.includes(s.id);
+                              return (
+                                <button key={s.id} type="button"
+                                  onClick={() => updateGroup(gi, 'groupMemberIds',
+                                    on ? g.groupMemberIds.filter(x => x !== s.id) : [...g.groupMemberIds, s.id])}
+                                  className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${on ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border text-foreground hover:bg-muted'}`}>
+                                  {s.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs font-semibold">② 공통 진도</Label>
+                            <Textarea value={g.lessonRange} onChange={e => updateGroup(gi, 'lessonRange', e.target.value)}
+                              rows={2} placeholder="예) 일차함수의 그래프" className="text-sm mt-1" />
+                          </div>
+                          <div>
+                            <Label className="text-xs font-semibold">③ 공통 숙제 범위 (선택)</Label>
+                            <Input value={g.homeworkAssigned} onChange={e => updateGroup(gi, 'homeworkAssigned', e.target.value)}
+                              placeholder="예) 교재 p.34-37" className="h-9 text-sm mt-1" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Per-student rows */}
                     <div className="space-y-2">
