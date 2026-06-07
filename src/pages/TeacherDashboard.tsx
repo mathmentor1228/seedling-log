@@ -26,6 +26,7 @@ function TeacherSideBySide() {
 
   return (
     <div className="space-y-3">
+      <PrepLectureProposalsWidget />
       <div className="flex lg:hidden justify-center gap-2">
         {TEACHER_TABS.map((label, i) => (
           <button
