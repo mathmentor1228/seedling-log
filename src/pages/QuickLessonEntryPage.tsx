@@ -284,6 +284,7 @@ function QuickLessonEntryContent() {
 
       const inserts: any[] = [];
       const updates: { id: string; payload: any }[] = [];
+      const autoAttendance: any[] = [];
       for (const s of targets) {
         const g = groupByStudent.get(s.id);
         const lessonRange = s.individualProgress.trim() || g?.lessonRange || '';
@@ -295,6 +296,8 @@ function QuickLessonEntryContent() {
           notes: s.note || null,
           next_lesson_goal: homeworkAssigned,
           is_common_entry: !s.individualProgress.trim(),
+          lesson_types: s.lessonTypes,
+          attendance_status: s.attendanceStatuses,
           submitted: submit,
           submitted_at: submit ? new Date().toISOString() : null,
         };
@@ -307,6 +310,17 @@ function QuickLessonEntryContent() {
           subject: subject as any,
           ...payload,
         });
+        // Auto-create attendance_log if missing (only for non-absent statuses)
+        const isAbsent = s.attendanceStatuses.some(a => a.includes('결석'));
+        if (!s.hasAttendanceLog && !isAbsent) {
+          autoAttendance.push({
+            student_id: s.id,
+            student_name: s.name,
+            date,
+            checked_in_at: `${date}T09:00:00+09:00`,
+            recorded_by: effectiveTeacherId,
+          });
+        }
       }
 
       if (inserts.length > 0) {
@@ -316,6 +330,9 @@ function QuickLessonEntryContent() {
       for (const u of updates) {
         const { error } = await supabase.from('lesson_records').update(u.payload).eq('id', u.id);
         if (error) throw error;
+      }
+      if (autoAttendance.length > 0) {
+        await supabase.from('attendance_logs').insert(autoAttendance);
       }
 
       toast({
