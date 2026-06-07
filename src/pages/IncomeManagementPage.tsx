@@ -214,40 +214,35 @@ function IncomeContent() {
     return m;
   }, [studentGrossFee, studentById, siblingCount]);
 
-  // For revenue attribution: distribute student net fee proportionally to each subject the student takes,
-  // and map subject -> teacher via student_courses (or sst as fallback)
-  const studentSubjectTeacher = useMemo(() => {
-    // student_id -> Map<subject, teacher_id>
-    const m = new Map<string, Map<string, string>>();
-    for (const c of courses) {
-      if (!c.is_active || !c.teacher_id) continue;
-      const subj = c.course_policy_id ? policyById.get(c.course_policy_id)?.subject || '' : '';
-      if (!subj) continue;
-      if (!m.has(c.student_id)) m.set(c.student_id, new Map());
-      m.get(c.student_id)!.set(subj, c.teacher_id);
-    }
-    for (const r of sst) {
-      if (!m.has(r.student_id)) m.set(r.student_id, new Map());
-      if (!m.get(r.student_id)!.has(r.subject)) {
-        m.get(r.student_id)!.set(r.subject, r.teacher_id);
-      }
-    }
-    return m;
-  }, [courses, policyById, sst]);
-
-  // Per-teacher CURRENT-MONTH revenue (based on active courses & subject mapping)
+  // Per-teacher CURRENT-MONTH revenue: distribute student's NET fee across courses
+  // proportionally to each course's own fee (NOT by lesson count, NOT by equal split).
+  // 매출은 정액 월수강료 기준 — 실제 진행한 수업 회수와 무관.
   const teacherRevenue = useMemo(() => {
     const m = new Map<string, number>();
-    for (const [sid, netFee] of studentNetFee) {
-      const subjMap = studentSubjectTeacher.get(sid);
-      if (!subjMap || subjMap.size === 0) continue;
-      const share = netFee / subjMap.size;
-      for (const tid of subjMap.values()) {
-        m.set(tid, (m.get(tid) || 0) + share);
+    // Group active courses by student
+    const coursesByStudent = new Map<string, { teacher_id: string; fee: number }[]>();
+    for (const c of courses) {
+      if (!c.is_active || !c.teacher_id) continue;
+      const fee = Number(
+        c.custom_monthly_fee ??
+        (c.course_policy_id ? policyById.get(c.course_policy_id)?.monthly_fee : 0) ??
+        0
+      );
+      if (!coursesByStudent.has(c.student_id)) coursesByStudent.set(c.student_id, []);
+      coursesByStudent.get(c.student_id)!.push({ teacher_id: c.teacher_id, fee });
+    }
+    for (const [sid, list] of coursesByStudent) {
+      const gross = list.reduce((a, b) => a + b.fee, 0);
+      if (gross <= 0) continue;
+      const net = studentNetFee.get(sid) ?? gross;
+      for (const c of list) {
+        const share = (c.fee / gross) * net;
+        m.set(c.teacher_id, (m.get(c.teacher_id) || 0) + share);
       }
     }
     return m;
-  }, [studentNetFee, studentSubjectTeacher]);
+  }, [courses, policyById, studentNetFee]);
+
 
   // Lookup: comp by teacher + month
   const compByKey = useMemo(() => {
@@ -736,7 +731,7 @@ function IncomeContent() {
           </div>
           <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
             * <b>실수업/시수/신규/퇴원</b>: 수업일지(lesson_records) 기반. 신규·퇴원은 해당 월에 실제로 그 선생님이 수업한 학생만 집계.<br/>
-            * <b>매출(예상)</b>: 활성 수강(student_courses)의 월 수강료 합 — 다과목 할인(2과목 -5만, 3과목 -8만, 4과목+ -10만)·형제 할인(-1만/인)을 학생 단위로 적용한 뒤, 학생의 과목 수로 균등 분배하여 담당 선생님에게 귀속.<br/>
+            * <b>매출(예상)</b>: <u>정액 월수강료 기준</u> — 실제 수업 회수(시수)와 무관. 활성 수강(student_courses)의 월 수강료 합에서 다과목 할인(2과목 -5만, 3과목 -8만, 4과목+ -10만)·형제 할인(-1만/인)을 학생 단위로 차감한 뒤, <u>각 수강의 수강료 비율</u>로 담당 선생님에게 귀속.<br/>
             * <b>인건비</b>: 통계/급여 화면에서 입력한 해당 월 급여(teacher_monthly_compensation).
           </p>
         </CardContent>
