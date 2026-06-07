@@ -199,8 +199,8 @@ export function useExamArchiveData() {
       });
 
     setSchools(schoolInfos);
-    if (!selectedSchool && schoolInfos.length > 0) {
-      setSelectedSchool(schoolInfos[0].name);
+    if (!selectedSchool) {
+      setSelectedSchool('__hub__');
     }
     } catch (err) {
       console.error('useExamArchiveData fetchAll error:', err);
