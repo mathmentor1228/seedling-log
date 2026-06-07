@@ -12,6 +12,28 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getTodayKST, cn } from '@/lib/utils';
 import { SCHEDULE_TYPE_LABELS, SCHEDULE_TYPE_COLORS, type Schedule } from './types';
+import {
+  classifyCompositeSubject,
+  classifyFromTitle,
+  SUBJECT_CATEGORY_LABELS,
+  SUBJECT_CATEGORY_PRIORITY,
+  SUBJECT_CATEGORY_COLORS,
+  type SubjectCategory,
+} from '@/lib/subjectCategory';
+
+function categoryOf(s: Schedule): SubjectCategory {
+  const fromSubject = s.subject ? classifyCompositeSubject(s.subject) : 'other';
+  if (fromSubject !== 'other') return fromSubject;
+  return classifyFromTitle(s.title);
+}
+
+// Priority sort: math > english > korean > science > others
+function sortByCategory(a: Schedule, b: Schedule) {
+  return SUBJECT_CATEGORY_PRIORITY[categoryOf(a)] - SUBJECT_CATEGORY_PRIORITY[categoryOf(b)];
+}
+
+const SUBJECT_CATS: SubjectCategory[] = ['math', 'english', 'korean', 'science', 'other'];
+
 
 interface Props {
   schedules: Schedule[];
