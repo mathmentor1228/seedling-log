@@ -214,6 +214,8 @@ function QuickLessonEntryContent() {
         key,
         label: getStudentGroupLabel(key),
         studentIds: gs.map(g => g.id),
+        mode: 'individual' as const,
+        groupMemberIds: [],
         lessonRange: '',
         homeworkAssigned: '',
         defaultUnderstanding: 3,
