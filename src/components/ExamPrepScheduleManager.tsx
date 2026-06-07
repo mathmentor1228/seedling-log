@@ -934,6 +934,38 @@ export function ExamPrepScheduleManager() {
                 </div>
               </div>
 
+              {formSubject && formTeacherId && availableGradeYears.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <UsersRound className="w-3.5 h-3.5" /> 학년 필터 <span className="text-muted-foreground font-normal">(선택 시 해당 학년만 대상)</span>
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge
+                      variant={formGradeYears.length === 0 ? 'default' : 'outline'}
+                      className="cursor-pointer text-[11px]"
+                      onClick={() => setFormGradeYears([])}
+                    >
+                      전체
+                    </Badge>
+                    {availableGradeYears.map(y => {
+                      const active = formGradeYears.includes(y);
+                      return (
+                        <Badge
+                          key={y}
+                          variant={active ? 'default' : 'outline'}
+                          className="cursor-pointer text-[11px]"
+                          onClick={() => setFormGradeYears(prev =>
+                            prev.includes(y) ? prev.filter(g => g !== y) : [...prev, y]
+                          )}
+                        >
+                          {y}학년
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">특강 제목 (선택)</Label>
