@@ -83,6 +83,7 @@ export function FinalPrepOverview({
   teacherMap: Record<string, string>;
 }) {
   const [sortMode, setSortMode] = useState<SortMode>('teacher');
+  const [gradeFilter, setGradeFilter] = useState<string>('all'); // 'all' | grade label like '고1','중3'
 
   const finalPrepEntries = useMemo(() => {
     const entries: FinalPrepEntry[] = [];
