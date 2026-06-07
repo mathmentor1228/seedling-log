@@ -282,11 +282,21 @@ function QuickLessonEntryContent() {
     const groupByStudent = new Map<string, GroupState>();
     for (const g of groups) for (const sid of g.studentIds) groupByStudent.set(sid, g);
 
+    // Helper: get effective progress/homework for a student based on group mode
+    const resolveProgress = (s: StudentRow) => {
+      const g = groupByStudent.get(s.id);
+      if (!g) return { range: s.individualProgress.trim(), hw: null as string | null, isCommon: false };
+      const inGroup = g.mode === 'group' && g.groupMemberIds.includes(s.id);
+      if (inGroup) {
+        return { range: g.lessonRange.trim(), hw: g.homeworkAssigned || null, isCommon: true };
+      }
+      return { range: s.individualProgress.trim(), hw: g.homeworkAssigned || null, isCommon: false };
+    };
+
     // Validate each included student has some progress
     for (const s of targets) {
-      const g = groupByStudent.get(s.id);
-      const progress = s.individualProgress.trim() || g?.lessonRange.trim() || '';
-      if (!progress) {
+      const { range } = resolveProgress(s);
+      if (!range) {
         toast({ title: `진도 누락: ${s.name}`, description: '그룹 또는 개별 진도를 입력해주세요', variant: 'destructive' });
         return;
       }
@@ -307,16 +317,14 @@ function QuickLessonEntryContent() {
       const updates: { id: string; payload: any }[] = [];
       const autoAttendance: any[] = [];
       for (const s of targets) {
-        const g = groupByStudent.get(s.id);
-        const lessonRange = s.individualProgress.trim() || g?.lessonRange || '';
-        const homeworkAssigned = g?.homeworkAssigned || null;
+        const { range, hw, isCommon } = resolveProgress(s);
         const payload: any = {
-          lesson_range: lessonRange,
+          lesson_range: range,
           understanding_score: s.understanding,
           homework_status: s.homework,
           notes: s.note || null,
-          next_lesson_goal: homeworkAssigned,
-          is_common_entry: !s.individualProgress.trim(),
+          next_lesson_goal: hw,
+          is_common_entry: isCommon,
           lesson_types: s.lessonTypes,
           attendance_status: s.attendanceStatuses,
           submitted: submit,
