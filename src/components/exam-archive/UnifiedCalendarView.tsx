@@ -418,6 +418,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
         schedule={selectedSchedule}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+        onSaved={reloadCounts}
       />
     </Card>
   );
