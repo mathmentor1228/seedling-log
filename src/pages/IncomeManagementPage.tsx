@@ -214,40 +214,35 @@ function IncomeContent() {
     return m;
   }, [studentGrossFee, studentById, siblingCount]);
 
-  // For revenue attribution: distribute student net fee proportionally to each subject the student takes,
-  // and map subject -> teacher via student_courses (or sst as fallback)
-  const studentSubjectTeacher = useMemo(() => {
-    // student_id -> Map<subject, teacher_id>
-    const m = new Map<string, Map<string, string>>();
-    for (const c of courses) {
-      if (!c.is_active || !c.teacher_id) continue;
-      const subj = c.course_policy_id ? policyById.get(c.course_policy_id)?.subject || '' : '';
-      if (!subj) continue;
-      if (!m.has(c.student_id)) m.set(c.student_id, new Map());
-      m.get(c.student_id)!.set(subj, c.teacher_id);
-    }
-    for (const r of sst) {
-      if (!m.has(r.student_id)) m.set(r.student_id, new Map());
-      if (!m.get(r.student_id)!.has(r.subject)) {
-        m.get(r.student_id)!.set(r.subject, r.teacher_id);
-      }
-    }
-    return m;
-  }, [courses, policyById, sst]);
-
-  // Per-teacher CURRENT-MONTH revenue (based on active courses & subject mapping)
+  // Per-teacher CURRENT-MONTH revenue: distribute student's NET fee across courses
+  // proportionally to each course's own fee (NOT by lesson count, NOT by equal split).
+  // 매출은 정액 월수강료 기준 — 실제 진행한 수업 회수와 무관.
   const teacherRevenue = useMemo(() => {
     const m = new Map<string, number>();
-    for (const [sid, netFee] of studentNetFee) {
-      const subjMap = studentSubjectTeacher.get(sid);
-      if (!subjMap || subjMap.size === 0) continue;
-      const share = netFee / subjMap.size;
-      for (const tid of subjMap.values()) {
-        m.set(tid, (m.get(tid) || 0) + share);
+    // Group active courses by student
+    const coursesByStudent = new Map<string, { teacher_id: string; fee: number }[]>();
+    for (const c of courses) {
+      if (!c.is_active || !c.teacher_id) continue;
+      const fee = Number(
+        c.custom_monthly_fee ??
+        (c.course_policy_id ? policyById.get(c.course_policy_id)?.monthly_fee : 0) ??
+        0
+      );
+      if (!coursesByStudent.has(c.student_id)) coursesByStudent.set(c.student_id, []);
+      coursesByStudent.get(c.student_id)!.push({ teacher_id: c.teacher_id, fee });
+    }
+    for (const [sid, list] of coursesByStudent) {
+      const gross = list.reduce((a, b) => a + b.fee, 0);
+      if (gross <= 0) continue;
+      const net = studentNetFee.get(sid) ?? gross;
+      for (const c of list) {
+        const share = (c.fee / gross) * net;
+        m.set(c.teacher_id, (m.get(c.teacher_id) || 0) + share);
       }
     }
     return m;
-  }, [studentNetFee, studentSubjectTeacher]);
+  }, [courses, policyById, studentNetFee]);
+
 
   // Lookup: comp by teacher + month
   const compByKey = useMemo(() => {
