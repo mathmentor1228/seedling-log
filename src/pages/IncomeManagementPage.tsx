@@ -214,22 +214,34 @@ function IncomeContent() {
     return m;
   }, [studentGrossFee, studentById, siblingCount]);
 
-  // Per-teacher CURRENT-MONTH revenue: distribute student's NET fee across courses
-  // proportionally to each course's own fee (NOT by lesson count, NOT by equal split).
-  // 매출은 정액 월수강료 기준 — 실제 진행한 수업 회수와 무관.
+  // SST lookup: (student_id, subject) -> teacher_id (실제 과목 담당 선생님)
+  const sstTeacherBySubject = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of sst) {
+      m.set(`${r.student_id}__${r.subject}`, r.teacher_id);
+    }
+    return m;
+  }, [sst]);
+
+  // Per-teacher CURRENT-MONTH revenue: 학생 NET 수강료를 각 수강의 과목별 실제 담당
+  // 선생님(student_subject_teachers 기준)에게 수강료 비율로 귀속.
+  // student_courses.teacher_id 는 stale 한 경우가 많아 fallback 으로만 사용.
   const teacherRevenue = useMemo(() => {
     const m = new Map<string, number>();
-    // Group active courses by student
     const coursesByStudent = new Map<string, { teacher_id: string; fee: number }[]>();
     for (const c of courses) {
-      if (!c.is_active || !c.teacher_id) continue;
-      const fee = Number(
-        c.custom_monthly_fee ??
-        (c.course_policy_id ? policyById.get(c.course_policy_id)?.monthly_fee : 0) ??
-        0
-      );
+      if (!c.is_active) continue;
+      const policy = c.course_policy_id ? policyById.get(c.course_policy_id) : null;
+      const fee = Number(c.custom_monthly_fee ?? policy?.monthly_fee ?? 0);
+      if (fee <= 0) continue;
+      const subject = policy?.subject || null;
+      // 실제 담당: SST(학생, 과목) > 강좌 teacher_id
+      let teacherId: string | null = null;
+      if (subject) teacherId = sstTeacherBySubject.get(`${c.student_id}__${subject}`) || null;
+      if (!teacherId) teacherId = c.teacher_id || null;
+      if (!teacherId) continue;
       if (!coursesByStudent.has(c.student_id)) coursesByStudent.set(c.student_id, []);
-      coursesByStudent.get(c.student_id)!.push({ teacher_id: c.teacher_id, fee });
+      coursesByStudent.get(c.student_id)!.push({ teacher_id: teacherId, fee });
     }
     for (const [sid, list] of coursesByStudent) {
       const gross = list.reduce((a, b) => a + b.fee, 0);
@@ -241,7 +253,7 @@ function IncomeContent() {
       }
     }
     return m;
-  }, [courses, policyById, studentNetFee]);
+  }, [courses, policyById, studentNetFee, sstTeacherBySubject]);
 
 
   // Lookup: comp by teacher + month
