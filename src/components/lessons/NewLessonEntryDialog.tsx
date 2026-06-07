@@ -14,7 +14,8 @@ import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { useTeachersList } from './useTeachersList';
 import { fetchStudentsByIds, fetchTeacherStudentIds, groupStudentsByGrade, getStudentGroupLabel } from './studentSelection';
 import { getTodayKST } from '@/lib/utils';
-import { User, Users, Search, Loader2, CheckCircle2, UserCheck } from 'lucide-react';
+import { User, Users, Search, Loader2, CheckCircle2, UserCheck, Zap } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 
@@ -39,6 +40,7 @@ export function NewLessonEntryDialog({ open, onOpenChange, onIndividual, onBatch
   const { toast } = useToast();
   const isAssistant = checkIsAssistant(role);
   const { teachers } = useTeachersList();
+  const navigate = useNavigate();
 
   const [mode, setMode] = useState<'choose' | 'batch'>('choose');
   const [teacherId, setTeacherId] = useState('');
