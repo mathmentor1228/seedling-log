@@ -85,6 +85,8 @@ interface GroupState {
   key: string;
   label: string;
   studentIds: string[];
+  mode: 'individual' | 'group';        // 학년별 입력 방식
+  groupMemberIds: string[];             // 그룹입력 시 공통 진도를 적용할 학생들
   lessonRange: string;
   homeworkAssigned: string;
   defaultUnderstanding: number;
