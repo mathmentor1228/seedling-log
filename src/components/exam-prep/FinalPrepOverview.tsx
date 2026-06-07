@@ -162,15 +162,47 @@ export function FinalPrepOverview({
     return Array.from(map.values());
   }, [finalPrepEntries]);
 
+  // Grade label helper (e.g. "고1", "중3"). Returns '미지정' if unknown.
+  const gradeLabelOf = (level: string | null, year: number | null) => {
+    if (!level && !year) return '미지정';
+    const lv = level === '초등' ? '초' : level === '중등' ? '중' : level === '고등' ? '고' : (level || '');
+    return `${lv}${year ?? ''}` || '미지정';
+  };
+
+  // Available grade options for filter chips
+  const availableGrades = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of groupedScheduleEntries) {
+      for (const st of e.students) set.add(gradeLabelOf(st.schoolLevel, st.gradeYear));
+    }
+    return [...set].sort();
+  }, [groupedScheduleEntries]);
+
+  // Apply grade filter (filters students inside each grouped entry; drops empty)
+  const filteredScheduleEntries = useMemo(() => {
+    if (gradeFilter === 'all') return groupedScheduleEntries;
+    return groupedScheduleEntries
+      .map(e => ({ ...e, students: e.students.filter(st => gradeLabelOf(st.schoolLevel, st.gradeYear) === gradeFilter) }))
+      .filter(e => e.students.length > 0);
+  }, [groupedScheduleEntries, gradeFilter]);
+
   // Group by sort mode
   const grouped = useMemo(() => {
     const map: Record<string, GroupedScheduleEntry[]> = {};
-    for (const e of groupedScheduleEntries) {
+    for (const e of filteredScheduleEntries) {
       let key: string;
       if (sortMode === 'date') key = e.session.schedule_date;
       else if (sortMode === 'teacher') key = e.teacherName;
       else if (sortMode === 'school') key = e.schoolName;
-      else {
+      else if (sortMode === 'grade') {
+        // grade mode: explode per student grade
+        for (const st of e.students) {
+          const k = gradeLabelOf(st.schoolLevel, st.gradeYear);
+          if (!map[k]) map[k] = [];
+          map[k].push({ ...e, students: [st] });
+        }
+        continue;
+      } else {
         // student mode: explode back per student
         for (const st of e.students) {
           const k = st.name;
@@ -195,7 +227,7 @@ export function FinalPrepOverview({
       });
     }
     return sorted;
-  }, [groupedScheduleEntries, sortMode]);
+  }, [filteredScheduleEntries, sortMode]);
 
   if (finalPrepEntries.length === 0) {
     return (
