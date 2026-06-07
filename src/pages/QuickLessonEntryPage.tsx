@@ -538,6 +538,39 @@ function QuickLessonEntryContent() {
                               </Button>
                             </div>
                           </div>
+                          {s.included && (
+                            <div className="pl-6 flex flex-wrap gap-x-3 gap-y-1 text-[10px]">
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">수업:</span>
+                                {LESSON_TYPES.map(lt => {
+                                  const on = s.lessonTypes.includes(lt);
+                                  return (
+                                    <button key={lt} type="button"
+                                      onClick={() => updateStudent(s.id, 'lessonTypes',
+                                        on ? s.lessonTypes.filter(x => x !== lt) : [...s.lessonTypes, lt])}
+                                      className={`px-1.5 py-0.5 rounded border ${on ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                                      {lt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-muted-foreground">출결:</span>
+                                {ATTENDANCE_STATUSES.map(at => {
+                                  const on = s.attendanceStatuses.includes(at);
+                                  const isAbsent = at.includes('결석');
+                                  return (
+                                    <button key={at} type="button"
+                                      onClick={() => updateStudent(s.id, 'attendanceStatuses',
+                                        on ? s.attendanceStatuses.filter(x => x !== at) : [at] /* single select */)}
+                                      className={`px-1.5 py-0.5 rounded border ${on ? (isAbsent ? 'bg-destructive text-destructive-foreground border-destructive' : 'bg-primary text-primary-foreground border-primary') : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                                      {at}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                           {(s.showOverride || s.individualProgress) && s.included && (
                             <div className="pl-6">
                               <Input value={s.individualProgress}
