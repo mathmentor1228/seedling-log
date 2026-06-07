@@ -308,10 +308,21 @@ export function UnifiedCalendarView({ schedules }: Props) {
                         {items.map((it, idx) => {
                           const cat = categoryOf(it);
                           return (
-                          <div key={idx} className="flex items-start gap-2 text-xs p-1.5 rounded bg-muted/40">
+                          <button
+                            key={idx}
+                            onClick={() => openSchedule(it)}
+                            className="w-full flex items-start gap-2 text-xs p-1.5 rounded bg-muted/40 hover:bg-muted text-left transition"
+                          >
                             <span className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: colorFor(it.school_name) }} />
                             <div className="min-w-0 flex-1">
-                              <div className="font-medium truncate">{it.title}</div>
+                              <div className="font-medium truncate flex items-center gap-1">
+                                {it.title}
+                                {Array.isArray((it as any).notes) && (it as any).notes.length > 0 && (
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5 gap-0.5">
+                                    <FileText className="w-2.5 h-2.5" />{(it as any).notes.length}
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
                                 <span>{it.school_name}</span>
                                 <span>·</span>
@@ -326,7 +337,7 @@ export function UnifiedCalendarView({ schedules }: Props) {
                                 {it.subject && <span className="truncate">· {it.subject}</span>}
                               </div>
                             </div>
-                          </div>
+                          </button>
                           );
                         })}
                       </div>
