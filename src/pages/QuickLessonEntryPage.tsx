@@ -1,7 +1,8 @@
-// QUICK-LESSON-ENTRY-V1: Single-step batch lesson entry — common fields + per-student fast row.
-// Picks teacher + subject + date, loads students, applies common values once, and
-// optionally overrides understanding / homework / comment per student. Saves all in
-// one DB write — no draft-then-edit flow.
+// QUICK-LESSON-ENTRY-V2: Group-by-grade batch lesson entry.
+// - Roster = (teacher's students for subject) ∩ (attendance_logs on selected date)
+// - Each grade group has its own 진도 / 숙제범위 / 일괄적용 (그룹 단위 진도)
+// - Each student row can override progress individually (개별 진도)
+// - Each student row shows previous-assigned homework as hint for HW check
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,22 +12,32 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth, isAssistant as checkIsAssistant } from '@/lib/auth';
 import { useTeachersList } from '@/components/lessons/useTeachersList';
-import { fetchStudentsByIds, fetchTeacherStudentIds, sortStudents } from '@/components/lessons/studentSelection';
+import {
+  fetchStudentsByIds,
+  fetchTeacherStudentIds,
+  groupStudentsByGrade,
+  getStudentGroupLabel,
+  sortStudents,
+} from '@/components/lessons/studentSelection';
 import { getTodayKST } from '@/lib/utils';
-import { ArrowLeft, Loader2, CheckCircle2, Clock, XCircle, History, Zap, Send, Save } from 'lucide-react';
+import {
+  ArrowLeft, Loader2, CheckCircle2, Clock, XCircle, History, Zap, Send, Save,
+  ChevronDown, ChevronRight, PenLine, BookOpen,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const SUBJECTS = ['수학', '영어', '과학', '국어'] as const;
 const HW_OPTIONS = [
-  { v: 'completed', label: '완료', icon: CheckCircle2, color: 'text-emerald-600' },
-  { v: 'partial', label: '부분', icon: Clock, color: 'text-amber-600' },
-  { v: 'not_done', label: '미완', icon: XCircle, color: 'text-red-600' },
-  { v: 'none_assigned', label: '없음', icon: null, color: 'text-muted-foreground' },
-];
+  { v: 'completed', label: '완료', color: 'text-emerald-600' },
+  { v: 'partial', label: '부분', color: 'text-amber-600' },
+  { v: 'not_done', label: '미완', color: 'text-red-600' },
+  { v: 'none_assigned', label: '없음', color: 'text-muted-foreground' },
+] as const;
 
 interface StudentRow {
   id: string;
@@ -39,6 +50,21 @@ interface StudentRow {
   homework: string;
   note: string;
   prevAvg: number | null;
+  prevHwContent: string | null;
+  prevHwId: string | null;
+  individualProgress: string; // empty => use group progress
+  showOverride: boolean;
+}
+
+interface GroupState {
+  key: string;
+  label: string;
+  studentIds: string[];
+  lessonRange: string;
+  homeworkAssigned: string;
+  defaultUnderstanding: number;
+  defaultHw: string;
+  collapsed: boolean;
 }
 
 function QuickLessonEntryContent() {
@@ -52,27 +78,40 @@ function QuickLessonEntryContent() {
   const [subject, setSubject] = useState<string>('수학');
   const [date, setDate] = useState(getTodayKST());
 
-  const [lessonRange, setLessonRange] = useState('');
-  const [homeworkAssigned, setHomeworkAssigned] = useState('');
-  const [defaultUnderstanding, setDefaultUnderstanding] = useState(3);
-  const [defaultHw, setDefaultHw] = useState('none_assigned');
-
   const [students, setStudents] = useState<StudentRow[]>([]);
+  const [groups, setGroups] = useState<GroupState[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [prevLoading, setPrevLoading] = useState(false);
 
   const effectiveTeacherId = isAssistant ? teacherId : (user?.id || '');
 
   const loadStudents = useCallback(async () => {
-    if (!effectiveTeacherId || !subject) { setStudents([]); return; }
+    if (!effectiveTeacherId || !subject || !date) { setStudents([]); setGroups([]); return; }
     setLoading(true);
     try {
-      const ids = await fetchTeacherStudentIds(effectiveTeacherId, subject);
-      const list = await fetchStudentsByIds(ids);
+      // 1. Teacher's students for subject
+      const teacherIds = await fetchTeacherStudentIds(effectiveTeacherId, subject);
+      if (teacherIds.length === 0) { setStudents([]); setGroups([]); return; }
 
-      // Fetch previous avg understanding (last 5 lessons per student)
-      const { data: prev } = await supabase
+      // 2. Attendance for the date — intersection
+      const { data: attRows } = await supabase
+        .from('attendance_logs')
+        .select('student_id')
+        .eq('date', date)
+        .in('student_id', teacherIds);
+      const attendedIds = new Set<string>((attRows || []).map((r: any) => r.student_id).filter(Boolean));
+      const finalIds = teacherIds.filter(id => attendedIds.has(id));
+
+      if (finalIds.length === 0) {
+        setStudents([]);
+        setGroups([]);
+        return;
+      }
+
+      const list = await fetchStudentsByIds(finalIds);
+
+      // 3. Previous lesson avg understanding
+      const { data: prevRecs } = await supabase
         .from('lesson_records')
         .select('student_id, understanding_score')
         .eq('teacher_id', effectiveTeacherId)
@@ -81,84 +120,131 @@ function QuickLessonEntryContent() {
         .order('lesson_date', { ascending: false })
         .limit(500);
       const avgMap = new Map<string, { sum: number; n: number }>();
-      for (const r of (prev || []) as any[]) {
+      for (const r of (prevRecs || []) as any[]) {
         const cur = avgMap.get(r.student_id) || { sum: 0, n: 0 };
         cur.sum += r.understanding_score;
         cur.n += 1;
         avgMap.set(r.student_id, cur);
       }
 
-      setStudents(sortStudents(list).map(s => {
+      // 4. Previous homework assignment (most recent per student, before today, same subject)
+      const { data: hwRows } = await supabase
+        .from('homework_assignments')
+        .select('id, student_id, content, assigned_date')
+        .in('student_id', finalIds)
+        .eq('subject', subject as any)
+        .lt('assigned_date', date)
+        .order('assigned_date', { ascending: false })
+        .limit(500);
+      const hwMap = new Map<string, { id: string; content: string }>();
+      for (const r of (hwRows || []) as any[]) {
+        if (!hwMap.has(r.student_id)) hwMap.set(r.student_id, { id: r.id, content: r.content });
+      }
+
+      const rows: StudentRow[] = sortStudents(list).map(s => {
         const a = avgMap.get(s.id);
         const avg = a ? Math.round(a.sum / a.n) : null;
+        const hw = hwMap.get(s.id) || null;
         return {
           ...s,
           included: true,
           understanding: avg ?? 3,
-          homework: 'none_assigned',
+          homework: hw ? 'completed' : 'none_assigned',
           note: '',
           prevAvg: avg,
+          prevHwContent: hw?.content || null,
+          prevHwId: hw?.id || null,
+          individualProgress: '',
+          showOverride: false,
         };
-      }));
+      });
+
+      setStudents(rows);
+
+      // Build groups by school_level + grade
+      const grouped = groupStudentsByGrade(rows);
+      setGroups(grouped.map(([key, gs]) => ({
+        key,
+        label: getStudentGroupLabel(key),
+        studentIds: gs.map(g => g.id),
+        lessonRange: '',
+        homeworkAssigned: '',
+        defaultUnderstanding: 3,
+        defaultHw: 'none_assigned',
+        collapsed: false,
+      })));
     } catch (e: any) {
       toast({ title: '학생 로드 실패', description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  }, [effectiveTeacherId, subject, toast]);
+  }, [effectiveTeacherId, subject, date, toast]);
 
   useEffect(() => { loadStudents(); }, [loadStudents]);
 
-  // Prefill common fields from previous lesson by same teacher/subject
-  async function prefillFromLastLesson() {
-    if (!effectiveTeacherId) return;
-    setPrevLoading(true);
-    try {
-      const { data } = await supabase
-        .from('lesson_records')
-        .select('lesson_range, next_lesson_goal')
-        .eq('teacher_id', effectiveTeacherId)
-        .eq('subject', subject as any)
-        .order('lesson_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (data) {
-        // Suggest: today's range = previous "next_lesson_goal" or just previous range
-        const suggested = data.next_lesson_goal || data.lesson_range || '';
-        if (suggested) setLessonRange(suggested);
-        toast({ title: '이전 회차 진도를 자동 채움', description: suggested ? `"${suggested.slice(0, 30)}..."` : '데이터 없음' });
-      } else {
-        toast({ title: '이전 회차 기록이 없습니다' });
-      }
-    } finally {
-      setPrevLoading(false);
+  async function prefillGroupFromLast(groupIdx: number) {
+    const g = groups[groupIdx];
+    if (!g || g.studentIds.length === 0) return;
+    // Use first student in group as representative
+    const { data } = await supabase
+      .from('lesson_records')
+      .select('lesson_range, next_lesson_goal')
+      .eq('teacher_id', effectiveTeacherId)
+      .eq('subject', subject as any)
+      .in('student_id', g.studentIds)
+      .order('lesson_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      const suggested = data.next_lesson_goal || data.lesson_range || '';
+      updateGroup(groupIdx, 'lessonRange', suggested);
+      toast({ title: `${g.label} 이전 회차 자동채움` });
+    } else {
+      toast({ title: '이전 기록 없음' });
     }
   }
 
-  function applyCommonToAll() {
-    setStudents(prev => prev.map(s => ({
-      ...s,
-      understanding: defaultUnderstanding,
-      homework: defaultHw,
-    })));
-    toast({ title: `이해도 ${defaultUnderstanding} / 숙제 일괄 적용` });
+  function updateGroup<K extends keyof GroupState>(idx: number, key: K, value: GroupState[K]) {
+    setGroups(prev => prev.map((g, i) => i === idx ? { ...g, [key]: value } : g));
   }
 
-  function updateStudent<K extends keyof StudentRow>(idx: number, key: K, value: StudentRow[K]) {
-    setStudents(prev => prev.map((s, i) => i === idx ? { ...s, [key]: value } : s));
+  function applyGroupDefaults(idx: number) {
+    const g = groups[idx];
+    if (!g) return;
+    setStudents(prev => prev.map(s => g.studentIds.includes(s.id)
+      ? { ...s, understanding: g.defaultUnderstanding, homework: g.defaultHw }
+      : s
+    ));
+    toast({ title: `${g.label} 일괄 적용` });
+  }
+
+  function updateStudent<K extends keyof StudentRow>(id: string, key: K, value: StudentRow[K]) {
+    setStudents(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s));
   }
 
   const selectedCount = useMemo(() => students.filter(s => s.included).length, [students]);
 
   async function save(submit: boolean) {
     if (!effectiveTeacherId) { toast({ title: '선생님을 선택해주세요', variant: 'destructive' }); return; }
-    if (!lessonRange.trim()) { toast({ title: '수업 내용(진도)을 입력해주세요', variant: 'destructive' }); return; }
     const targets = students.filter(s => s.included);
     if (targets.length === 0) { toast({ title: '학생을 1명 이상 선택해주세요', variant: 'destructive' }); return; }
 
+    // Build per-student progress map from groups
+    const groupByStudent = new Map<string, GroupState>();
+    for (const g of groups) for (const sid of g.studentIds) groupByStudent.set(sid, g);
+
+    // Validate each included student has some progress
+    for (const s of targets) {
+      const g = groupByStudent.get(s.id);
+      const progress = s.individualProgress.trim() || g?.lessonRange.trim() || '';
+      if (!progress) {
+        toast({ title: `진도 누락: ${s.name}`, description: '그룹 또는 개별 진도를 입력해주세요', variant: 'destructive' });
+        return;
+      }
+    }
+
     setSaving(true);
     try {
-      // Check existing records — upsert by (teacher,student,date,subject)
       const { data: existing } = await supabase
         .from('lesson_records')
         .select('id, student_id')
@@ -171,28 +257,28 @@ function QuickLessonEntryContent() {
       const inserts: any[] = [];
       const updates: { id: string; payload: any }[] = [];
       for (const s of targets) {
+        const g = groupByStudent.get(s.id);
+        const lessonRange = s.individualProgress.trim() || g?.lessonRange || '';
+        const homeworkAssigned = g?.homeworkAssigned || null;
         const payload: any = {
           lesson_range: lessonRange,
           understanding_score: s.understanding,
           homework_status: s.homework,
           notes: s.note || null,
-          next_lesson_goal: homeworkAssigned || null,
-          is_common_entry: true,
+          next_lesson_goal: homeworkAssigned,
+          is_common_entry: !s.individualProgress.trim(),
           submitted: submit,
           submitted_at: submit ? new Date().toISOString() : null,
         };
         const existId = existingMap.get(s.id);
-        if (existId) {
-          updates.push({ id: existId, payload });
-        } else {
-          inserts.push({
-            teacher_id: effectiveTeacherId,
-            student_id: s.id,
-            lesson_date: date,
-            subject: subject as any,
-            ...payload,
-          });
-        }
+        if (existId) updates.push({ id: existId, payload });
+        else inserts.push({
+          teacher_id: effectiveTeacherId,
+          student_id: s.id,
+          lesson_date: date,
+          subject: subject as any,
+          ...payload,
+        });
       }
 
       if (inserts.length > 0) {
@@ -261,125 +347,161 @@ function QuickLessonEntryContent() {
           </div>
           <div className="flex items-end">
             <Badge variant="outline" className="text-xs h-9 px-3 flex items-center">
-              포함 {selectedCount}/{students.length}명
+              출석 {selectedCount}/{students.length}명
             </Badge>
           </div>
         </CardContent>
       </Card>
 
-      {/* Common fields */}
-      <Card className="border-primary/30">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center justify-between">
-            <span>공통란 (모든 학생에 적용)</span>
-            <Button size="sm" variant="ghost" onClick={prefillFromLastLesson} disabled={prevLoading} className="h-7 text-xs">
-              {prevLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <History className="w-3 h-3 mr-1" />}
-              이전 회차에서 가져오기
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label className="text-xs">진도 / 수업 내용 <span className="text-destructive">*</span></Label>
-            <Textarea value={lessonRange} onChange={e => setLessonRange(e.target.value)} rows={2}
-              placeholder="예) 함수 단원 - 일차함수의 그래프" />
-          </div>
-          <div>
-            <Label className="text-xs">오늘 부여한 과제 / 다음 수업 목표 (선택)</Label>
-            <Input value={homeworkAssigned} onChange={e => setHomeworkAssigned(e.target.value)}
-              placeholder="예) 교재 p.34-37 풀이 + 오답노트" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-            <div>
-              <Label className="text-xs">기본 이해도 (1-5)</Label>
-              <div className="flex gap-1 mt-1">
-                {[1, 2, 3, 4, 5].map(n => (
-                  <Button key={n} size="sm" variant={defaultUnderstanding === n ? 'default' : 'outline'}
-                    onClick={() => setDefaultUnderstanding(n)} className="h-8 w-8 p-0">{n}</Button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">기본 숙제 상태</Label>
-              <div className="flex gap-1 mt-1">
-                {HW_OPTIONS.map(o => (
-                  <Button key={o.v} size="sm" variant={defaultHw === o.v ? 'default' : 'outline'}
-                    onClick={() => setDefaultHw(o.v)} className="h-8 px-2 text-xs">
-                    {o.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <Button variant="secondary" size="sm" onClick={applyCommonToAll} className="h-8">
-              전체 학생에 일괄 적용
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Per-student grid */}
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">학생별 빠른 평가</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" /> 학생 로딩...
-            </div>
-          ) : students.length === 0 ? (
-            <div className="text-center py-8 text-sm text-muted-foreground">담당 학생이 없습니다.</div>
-          ) : (
-            <div className="divide-y">
-              {students.map((s, idx) => (
-                <div key={s.id} className={`p-2 grid grid-cols-12 gap-2 items-center text-sm ${!s.included ? 'opacity-50' : ''}`}>
-                  <label className="col-span-3 flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={s.included}
-                      onChange={e => updateStudent(idx, 'included', e.target.checked)} className="rounded" />
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{s.name}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">
-                        {s.school || ''} {s.school_level}{s.grade_year ?? ''}
-                        {s.prevAvg != null && <span className="ml-1">· 평균 {s.prevAvg}</span>}
+      {loading ? (
+        <Card><CardContent className="p-8 flex items-center justify-center text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> 출석/학생 로딩...
+        </CardContent></Card>
+      ) : students.length === 0 ? (
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
+          이 날짜의 출석 학생이 없습니다. (출석체크 또는 날짜를 확인해주세요)
+        </CardContent></Card>
+      ) : (
+        groups.map((g, gi) => {
+          const groupStudents = students.filter(s => g.studentIds.includes(s.id));
+          return (
+            <Card key={g.key} className="border-primary/20">
+              <Collapsible open={!g.collapsed} onOpenChange={(o) => updateGroup(gi, 'collapsed', !o)}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <CollapsibleTrigger className="flex items-center gap-2">
+                      {g.collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      <span>{g.label}</span>
+                      <Badge variant="secondary" className="text-[10px]">{groupStudents.length}명</Badge>
+                    </CollapsibleTrigger>
+                    <Button size="sm" variant="ghost" onClick={() => prefillGroupFromLast(gi)} className="h-7 text-xs">
+                      <History className="w-3 h-3 mr-1" /> 이전 회차
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CollapsibleContent>
+                  <CardContent className="space-y-3">
+                    {/* Group common fields */}
+                    <div className="bg-muted/30 p-2 rounded-md space-y-2">
+                      <div>
+                        <Label className="text-xs">그룹 공통 진도 <span className="text-muted-foreground">(개별 진도 미입력시 적용)</span></Label>
+                        <Textarea value={g.lessonRange} onChange={e => updateGroup(gi, 'lessonRange', e.target.value)}
+                          rows={2} placeholder="예) 일차함수의 그래프" className="text-sm" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">오늘 부여한 과제 (선택)</Label>
+                        <Input value={g.homeworkAssigned} onChange={e => updateGroup(gi, 'homeworkAssigned', e.target.value)}
+                          placeholder="예) 교재 p.34-37" className="h-8 text-sm" />
+                      </div>
+                      <div className="flex gap-2 items-end flex-wrap">
+                        <div>
+                          <Label className="text-xs">기본 이해도</Label>
+                          <div className="flex gap-0.5 mt-1">
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <Button key={n} size="sm" variant={g.defaultUnderstanding === n ? 'default' : 'outline'}
+                                onClick={() => updateGroup(gi, 'defaultUnderstanding', n)} className="h-7 w-7 p-0 text-xs">{n}</Button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs">기본 숙제</Label>
+                          <div className="flex gap-0.5 mt-1">
+                            {HW_OPTIONS.map(o => (
+                              <Button key={o.v} size="sm" variant={g.defaultHw === o.v ? 'default' : 'outline'}
+                                onClick={() => updateGroup(gi, 'defaultHw', o.v)} className="h-7 px-1.5 text-[10px]">{o.label}</Button>
+                            ))}
+                          </div>
+                        </div>
+                        <Button variant="secondary" size="sm" onClick={() => applyGroupDefaults(gi)} className="h-7 text-xs">
+                          그룹 일괄 적용
+                        </Button>
                       </div>
                     </div>
-                  </label>
-                  <div className="col-span-3 flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map(n => (
-                      <Button key={n} size="sm" variant={s.understanding === n ? 'default' : 'ghost'}
-                        disabled={!s.included}
-                        onClick={() => updateStudent(idx, 'understanding', n)}
-                        className="h-7 w-7 p-0 text-xs">{n}</Button>
-                    ))}
-                  </div>
-                  <div className="col-span-3 flex gap-0.5">
-                    {HW_OPTIONS.map(o => (
-                      <Button key={o.v} size="sm" variant={s.homework === o.v ? 'default' : 'ghost'}
-                        disabled={!s.included}
-                        onClick={() => updateStudent(idx, 'homework', o.v)}
-                        className="h-7 px-1.5 text-[10px]">{o.label}</Button>
-                    ))}
-                  </div>
-                  <div className="col-span-3">
-                    <Input value={s.note} onChange={e => updateStudent(idx, 'note', e.target.value)}
-                      disabled={!s.included}
-                      placeholder="짧은 코멘트 (선택)" className="h-7 text-xs" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      <div className="sticky bottom-2 flex gap-2 justify-end bg-background/80 backdrop-blur p-2 rounded-lg border">
-        <Button variant="outline" onClick={() => save(false)} disabled={saving} size="sm">
-          {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
-          임시저장
-        </Button>
-        <Button onClick={() => save(true)} disabled={saving} size="sm">
-          {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
-          {selectedCount}명 제출
-        </Button>
-      </div>
+                    {/* Per-student rows */}
+                    <div className="divide-y">
+                      {groupStudents.map(s => (
+                        <div key={s.id} className={`py-2 space-y-1.5 ${!s.included ? 'opacity-50' : ''}`}>
+                          <div className="grid grid-cols-12 gap-2 items-center text-sm">
+                            <label className="col-span-3 flex items-center gap-2 cursor-pointer">
+                              <input type="checkbox" checked={s.included}
+                                onChange={e => updateStudent(s.id, 'included', e.target.checked)} className="rounded" />
+                              <div className="min-w-0">
+                                <div className="font-medium truncate">{s.name}</div>
+                                <div className="text-[10px] text-muted-foreground truncate">
+                                  {s.school || ''} {s.prevAvg != null && <span>· 평균 {s.prevAvg}</span>}
+                                </div>
+                              </div>
+                            </label>
+                            <div className="col-span-3 flex gap-0.5">
+                              {[1, 2, 3, 4, 5].map(n => (
+                                <Button key={n} size="sm" variant={s.understanding === n ? 'default' : 'ghost'}
+                                  disabled={!s.included}
+                                  onClick={() => updateStudent(s.id, 'understanding', n)}
+                                  className="h-7 w-7 p-0 text-xs">{n}</Button>
+                              ))}
+                            </div>
+                            <div className="col-span-3 flex flex-col gap-0.5">
+                              <div className="flex gap-0.5">
+                                {HW_OPTIONS.map(o => (
+                                  <Button key={o.v} size="sm" variant={s.homework === o.v ? 'default' : 'ghost'}
+                                    disabled={!s.included}
+                                    onClick={() => updateStudent(s.id, 'homework', o.v)}
+                                    className="h-7 px-1.5 text-[10px]">{o.label}</Button>
+                                ))}
+                              </div>
+                              {s.prevHwContent && (
+                                <div className="flex items-start gap-1 text-[10px] text-muted-foreground">
+                                  <BookOpen className="w-3 h-3 mt-0.5 shrink-0" />
+                                  <span className="truncate" title={s.prevHwContent}>{s.prevHwContent}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="col-span-2">
+                              <Input value={s.note} onChange={e => updateStudent(s.id, 'note', e.target.value)}
+                                disabled={!s.included}
+                                placeholder="코멘트" className="h-7 text-xs" />
+                            </div>
+                            <div className="col-span-1 flex justify-end">
+                              <Button size="sm" variant={s.showOverride || s.individualProgress ? 'default' : 'ghost'}
+                                onClick={() => updateStudent(s.id, 'showOverride', !s.showOverride)}
+                                disabled={!s.included}
+                                className="h-7 px-1.5 text-[10px]" title="개별 진도 override">
+                                <PenLine className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          {(s.showOverride || s.individualProgress) && s.included && (
+                            <div className="pl-6">
+                              <Input value={s.individualProgress}
+                                onChange={e => updateStudent(s.id, 'individualProgress', e.target.value)}
+                                placeholder="이 학생만의 개별 진도 (비우면 그룹 공통 진도 사용)"
+                                className="h-8 text-xs" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
+          );
+        })
+      )}
+
+      {students.length > 0 && (
+        <div className="sticky bottom-2 flex gap-2 justify-end bg-background/80 backdrop-blur p-2 rounded-lg border">
+          <Button variant="outline" onClick={() => save(false)} disabled={saving} size="sm">
+            {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+            임시저장
+          </Button>
+          <Button onClick={() => save(true)} disabled={saving} size="sm">
+            {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
+            {selectedCount}명 제출
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
