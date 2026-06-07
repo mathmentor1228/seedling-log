@@ -9,6 +9,7 @@ import { getTodayKST, cn } from '@/lib/utils';
 import type { Schedule, SchoolInfo } from './types';
 import { UnifiedCalendarView } from './UnifiedCalendarView';
 import { UnifiedUploadHub } from './UnifiedUploadHub';
+import { ExamMaterialsBrowser } from './ExamMaterialsBrowser';
 
 interface Props {
   schools: SchoolInfo[];
