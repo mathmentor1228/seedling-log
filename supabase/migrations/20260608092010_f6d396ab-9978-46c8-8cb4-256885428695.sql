@@ -1,0 +1,1 @@
+UPDATE public.student_accounts SET session_token = 'DEBUGTEST12345', session_expires_at = now() + interval '2 hour' WHERE student_id = '02205382-dd67-4fb3-a259-336371b6a8b0'
