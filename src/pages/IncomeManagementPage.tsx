@@ -620,6 +620,37 @@ function IncomeContent() {
         </CardContent>
       </Card>
 
+      {/* P&L trend */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-primary" />
+            학원 손익 추이 (매출·인건비·순이익)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={plTrend} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => manFmt(v as number)} />
+                <Tooltip
+                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                  formatter={(v: any) => wonFmt(Number(v))}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="revenue" name="매출" fill="hsl(217 91% 60%)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="salary" name="인건비" fill="hsl(25 95% 53%)" radius={[4, 4, 0, 0]} />
+                <Line type="monotone" dataKey="profit" name="순이익" stroke="hsl(160 84% 39%)" strokeWidth={2.5} dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-3">
+            * 2026-05 이전 매출은 <b>실제 납부 데이터(엑셀 적재)</b> 기준, 이후는 현재 활성 수강 정액 기준입니다.
+          </p>
+        </CardContent>
+
       {/* Teacher selector */}
       <Card>
         <CardHeader className="pb-2">
