@@ -37,6 +37,7 @@ type Course = {
 };
 type Policy = { id: string; monthly_fee: number | null; subject: string | null };
 type Comp = { teacher_id: string; month: string; salary: number | null };
+type Historical = { year_month: string; student_id: string | null; student_name: string; paid: number; billed: number };
 
 interface MonthKey { y: number; m: number; key: string; label: string }
 
@@ -115,6 +116,7 @@ function IncomeContent() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [comps, setComps] = useState<Comp[]>([]);
+  const [historical, setHistorical] = useState<Historical[]>([]);
 
   const today = new Date();
   const [anchor, setAnchor] = useState<string>(monthKeyFromDate(today).key);
@@ -126,17 +128,18 @@ function IncomeContent() {
     const { start } = monthRange(earliest);
 
     try {
-      const [tRes, sRes, sstRes, cRes, pRes, compRes, lessonsAll] = await Promise.all([
+      const [tRes, sRes, sstRes, cRes, pRes, compRes, histRes, lessonsAll] = await Promise.all([
         supabase.from('profiles').select('id, full_name, is_active').eq('is_active', true).order('full_name'),
         supabase.from('students').select('id, name, registration_date, withdrawn_at, enrollment_status, sibling_group_id'),
         supabase.from('student_subject_teachers').select('student_id, teacher_id, subject'),
         supabase.from('student_courses').select('id, student_id, teacher_id, enrollment_date, end_date, is_active, custom_monthly_fee, course_policy_id'),
         supabase.from('course_policies').select('id, monthly_fee, subject'),
         supabase.from('teacher_monthly_compensation').select('teacher_id, month, salary'),
+        supabase.from('historical_monthly_tuition').select('year_month, student_id, student_name, paid, billed'),
         fetchAllLessons(start),
       ]);
 
-      const errs = [tRes.error, sRes.error, sstRes.error, cRes.error, pRes.error, compRes.error].filter(Boolean);
+      const errs = [tRes.error, sRes.error, sstRes.error, cRes.error, pRes.error, compRes.error, histRes.error].filter(Boolean);
       if (errs.length) throw errs[0];
 
       setTeachers((tRes.data || []) as Profile[]);
@@ -145,6 +148,7 @@ function IncomeContent() {
       setCourses((cRes.data || []) as Course[]);
       setPolicies((pRes.data || []) as Policy[]);
       setComps((compRes.data || []) as Comp[]);
+      setHistorical((histRes.data || []) as Historical[]);
       setLessons(lessonsAll);
     } catch (e: any) {
       toast({ title: '데이터 로드 실패', description: e?.message || String(e), variant: 'destructive' });
@@ -223,27 +227,30 @@ function IncomeContent() {
     return m;
   }, [sst]);
 
-  // Per-teacher CURRENT-MONTH revenue: 학생 NET 수강료를 각 수강의 과목별 실제 담당
-  // 선생님(student_subject_teachers 기준)에게 수강료 비율로 귀속.
-  // student_courses.teacher_id 는 stale 한 경우가 많아 fallback 으로만 사용.
-  const teacherRevenue = useMemo(() => {
-    const m = new Map<string, number>();
-    const coursesByStudent = new Map<string, { teacher_id: string; fee: number }[]>();
+  // Per-student course teacher fee ratios (current snapshot - SST 우선, fallback course teacher_id)
+  const studentTeacherRatios = useMemo(() => {
+    // student_id -> Array<{teacher_id, fee}>
+    const m = new Map<string, { teacher_id: string; fee: number }[]>();
     for (const c of courses) {
       if (!c.is_active) continue;
       const policy = c.course_policy_id ? policyById.get(c.course_policy_id) : null;
       const fee = Number(c.custom_monthly_fee ?? policy?.monthly_fee ?? 0);
       if (fee <= 0) continue;
       const subject = policy?.subject || null;
-      // 실제 담당: SST(학생, 과목) > 강좌 teacher_id
       let teacherId: string | null = null;
       if (subject) teacherId = sstTeacherBySubject.get(`${c.student_id}__${subject}`) || null;
       if (!teacherId) teacherId = c.teacher_id || null;
       if (!teacherId) continue;
-      if (!coursesByStudent.has(c.student_id)) coursesByStudent.set(c.student_id, []);
-      coursesByStudent.get(c.student_id)!.push({ teacher_id: teacherId, fee });
+      if (!m.has(c.student_id)) m.set(c.student_id, []);
+      m.get(c.student_id)!.push({ teacher_id: teacherId, fee });
     }
-    for (const [sid, list] of coursesByStudent) {
+    return m;
+  }, [courses, policyById, sstTeacherBySubject]);
+
+  // Per-teacher CURRENT-MONTH revenue (활성 수강 기반 정액)
+  const teacherRevenueCurrent = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const [sid, list] of studentTeacherRatios) {
       const gross = list.reduce((a, b) => a + b.fee, 0);
       if (gross <= 0) continue;
       const net = studentNetFee.get(sid) ?? gross;
@@ -253,7 +260,43 @@ function IncomeContent() {
       }
     }
     return m;
-  }, [courses, policyById, studentNetFee, sstTeacherBySubject]);
+  }, [studentTeacherRatios, studentNetFee]);
+
+  // Historical revenue: per month -> { teacherRevenue: Map<tid, won>, total: won, unassigned: won }
+  // 과거월 paid 금액을 학생의 현재 SST/course 비율로 선생님에게 분배.
+  const historicalByMonth = useMemo(() => {
+    const out = new Map<string, { teacherRevenue: Map<string, number>; total: number; unassigned: number }>();
+    for (const h of historical) {
+      const paid = Number(h.paid || 0);
+      if (paid <= 0) continue;
+      let entry = out.get(h.year_month);
+      if (!entry) { entry = { teacherRevenue: new Map(), total: 0, unassigned: 0 }; out.set(h.year_month, entry); }
+      entry.total += paid;
+      const ratios = h.student_id ? studentTeacherRatios.get(h.student_id) : null;
+      if (!ratios || ratios.length === 0) {
+        entry.unassigned += paid;
+        continue;
+      }
+      const gross = ratios.reduce((a, b) => a + b.fee, 0);
+      if (gross <= 0) { entry.unassigned += paid; continue; }
+      for (const c of ratios) {
+        const share = (c.fee / gross) * paid;
+        entry.teacherRevenue.set(c.teacher_id, (entry.teacherRevenue.get(c.teacher_id) || 0) + share);
+      }
+    }
+    return out;
+  }, [historical, studentTeacherRatios]);
+
+  // Resolve revenue for a given month: historical if exists, else current snapshot
+  const getMonthRevenue = (monthKey: string): { teacherRevenue: Map<string, number>; total: number; unassigned: number; source: 'historical' | 'current' } => {
+    const h = historicalByMonth.get(monthKey);
+    if (h) return { ...h, source: 'historical' };
+    let total = 0;
+    for (const v of teacherRevenueCurrent.values()) total += v;
+    return { teacherRevenue: teacherRevenueCurrent, total, unassigned: 0, source: 'current' };
+  };
+
+  const teacherRevenue = useMemo(() => getMonthRevenue(focusKey).teacherRevenue, [historicalByMonth, teacherRevenueCurrent, focusKey]);
 
 
   // Lookup: comp by teacher + month
@@ -362,9 +405,12 @@ function IncomeContent() {
       // Salary total this month (from comps)
       let salaryTotal = 0;
       for (const c of comps) if (c.month === mk.key) salaryTotal += Number(c.salary || 0);
-      return { month: mk.label, key: mk.key, taught: taught.size, lessons: lessonCount, new: newCnt, withdrawn: wdCnt, net: newCnt - wdCnt, salaryTotal };
+      // Revenue: historical if available, else current snapshot total
+      const monthRev = getMonthRevenue(mk.key);
+      const revenue = monthRev.total;
+      return { month: mk.label, key: mk.key, taught: taught.size, lessons: lessonCount, new: newCnt, withdrawn: wdCnt, net: newCnt - wdCnt, salaryTotal, revenue, profit: revenue - salaryTotal, revSource: monthRev.source };
     });
-  }, [months, lessons, students, comps]);
+  }, [months, lessons, students, comps, historicalByMonth, teacherRevenueCurrent]);
 
   // Focus month per-teacher rows (table + P&L)
   const focusMonthRows = useMemo(() => {
@@ -420,31 +466,30 @@ function IncomeContent() {
     });
   }, [months, monthlyStats, selectedTeacherIds, teacherById]);
 
-  // P&L trend (academy-wide, last 12 months): revenue is constant (current-month snapshot), so we use salary actuals per month
-  // We approximate revenue per month as current month's revenue total (best-effort given lack of historical fees) — only for visualization clarity, we display salary actuals.
-  const totalCurrentRevenue = useMemo(() => {
-    let s = 0;
-    for (const v of teacherRevenue.values()) s += v;
-    return s;
-  }, [teacherRevenue]);
+  // P&L trend (academy-wide): historical revenue for past months, snapshot for focus/current
+  const totalFocusRevenue = useMemo(() => {
+    return getMonthRevenue(focusKey).total;
+  }, [historicalByMonth, teacherRevenueCurrent, focusKey]);
 
   const plTrend = useMemo(() => {
     return academyTrend.map(r => ({
       month: r.month,
       key: r.key,
-      revenue: r.key === focusKey ? totalCurrentRevenue : 0, // only meaningful for focus month
+      revenue: r.revenue,
       salary: r.salaryTotal,
-      profit: (r.key === focusKey ? totalCurrentRevenue : 0) - r.salaryTotal,
+      profit: r.profit,
+      source: r.revSource,
     }));
-  }, [academyTrend, totalCurrentRevenue, focusKey]);
+  }, [academyTrend]);
 
   const focusKPI = useMemo(() => {
     const cur = academyTrend.find(r => r.key === focusKey);
     const prevKey = shiftMonth(focusKey, -1);
     const prev = academyTrend.find(r => r.key === prevKey);
     const focusSalary = cur?.salaryTotal || 0;
-    const profit = totalCurrentRevenue - focusSalary;
-    const margin = totalCurrentRevenue > 0 ? (profit / totalCurrentRevenue) * 100 : 0;
+    const revenue = cur?.revenue ?? totalFocusRevenue;
+    const profit = revenue - focusSalary;
+    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
     return {
       taught: cur?.taught ?? 0,
       taughtDiff: (cur?.taught ?? 0) - (prev?.taught ?? 0),
@@ -453,12 +498,12 @@ function IncomeContent() {
       new: cur?.new ?? 0,
       withdrawn: cur?.withdrawn ?? 0,
       net: cur?.net ?? 0,
-      revenue: totalCurrentRevenue,
+      revenue,
       salary: focusSalary,
       profit,
       margin,
     };
-  }, [academyTrend, focusKey, totalCurrentRevenue]);
+  }, [academyTrend, focusKey, totalFocusRevenue]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -574,6 +619,40 @@ function IncomeContent() {
           </div>
         </CardContent>
       </Card>
+
+      {/* P&L trend */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-primary" />
+            학원 손익 추이 (매출·인건비·순이익)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={plTrend} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => manFmt(v as number)} />
+                <Tooltip
+                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                  formatter={(v: any) => wonFmt(Number(v))}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="revenue" name="매출" fill="hsl(217 91% 60%)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="salary" name="인건비" fill="hsl(25 95% 53%)" radius={[4, 4, 0, 0]} />
+                <Line type="monotone" dataKey="profit" name="순이익" stroke="hsl(160 84% 39%)" strokeWidth={2.5} dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-3">
+            * 2026-05 이전 매출은 <b>실제 납부 데이터(엑셀 적재)</b> 기준, 이후는 현재 활성 수강 정액 기준입니다.
+          </p>
+        </CardContent>
+      </Card>
+
+
 
       {/* Teacher selector */}
       <Card>
@@ -743,7 +822,7 @@ function IncomeContent() {
           </div>
           <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
             * <b>실수업/시수/신규/퇴원</b>: 수업일지(lesson_records) 기반. 신규·퇴원은 해당 월에 실제로 그 선생님이 수업한 학생만 집계.<br/>
-            * <b>매출(예상)</b>: <u>정액 월수강료 기준</u> — 실제 수업 회수(시수)와 무관. 활성 수강(student_courses)의 월 수강료 합에서 다과목 할인(2과목 -5만, 3과목 -8만, 4과목+ -10만)·형제 할인(-1만/인)을 학생 단위로 차감한 뒤, <u>각 수강의 수강료 비율</u>로 담당 선생님에게 귀속.<br/>
+            * <b>매출</b>: <u>2026-05 이전</u> = 엑셀로 적재된 <b>실제 납부액</b>을 학생의 현재 과목·담당 비율로 분배. <u>2026-05 이후</u> = 활성 수강의 정액 월수강료 합(다과목 할인 -5/8/10만, 형제 -1만 차감) 비율 분배.<br/>
             * <b>인건비</b>: 통계/급여 화면에서 입력한 해당 월 급여(teacher_monthly_compensation).
           </p>
         </CardContent>

@@ -1834,6 +1834,62 @@ export type Database = {
           },
         ]
       }
+      historical_monthly_tuition: {
+        Row: {
+          billed: number
+          billed_at: string | null
+          created_at: string
+          id: string
+          memo: string | null
+          paid: number
+          paid_at: string | null
+          payment_method: string | null
+          source: string | null
+          student_id: string | null
+          student_name: string
+          updated_at: string
+          year_month: string
+        }
+        Insert: {
+          billed?: number
+          billed_at?: string | null
+          created_at?: string
+          id?: string
+          memo?: string | null
+          paid?: number
+          paid_at?: string | null
+          payment_method?: string | null
+          source?: string | null
+          student_id?: string | null
+          student_name: string
+          updated_at?: string
+          year_month: string
+        }
+        Update: {
+          billed?: number
+          billed_at?: string | null
+          created_at?: string
+          id?: string
+          memo?: string | null
+          paid?: number
+          paid_at?: string | null
+          payment_method?: string | null
+          source?: string | null
+          student_id?: string | null
+          student_name?: string
+          updated_at?: string
+          year_month?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "historical_monthly_tuition_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holidays: {
         Row: {
           created_at: string
