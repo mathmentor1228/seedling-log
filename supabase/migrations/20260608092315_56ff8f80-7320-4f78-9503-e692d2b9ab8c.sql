@@ -1,0 +1,1 @@
+UPDATE public.student_accounts SET session_token = NULL, session_expires_at = NULL WHERE session_token = 'DEBUGTEST12345'
