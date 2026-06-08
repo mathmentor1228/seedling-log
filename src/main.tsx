@@ -2,33 +2,21 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
-// Service worker management: only keep SW for /student/ routes (PWA)
-// For all other routes, aggressively unregister to prevent stale cache issues
+// Always unregister any previously installed service workers and wipe their caches.
+// The kill-switch worker at /sw.js will also self-unregister on activate, but this
+// belt-and-suspenders cleanup ensures users on older builds recover immediately.
 if ('serviceWorker' in navigator) {
-  const isStudentRoute = window.location.pathname.startsWith('/student');
-
-  if (!isStudentRoute) {
-    // Non-student pages: unregister ALL service workers to prevent stale cache
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      registrations.forEach((registration) => {
-        registration.unregister();
-      });
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      registration.unregister();
     });
-    // Also clear all caches created by workbox
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        names.forEach((name) => {
-          caches.delete(name);
-        });
+  }).catch(() => {});
+  if ('caches' in window) {
+    caches.keys().then((names) => {
+      names.forEach((name) => {
+        caches.delete(name);
       });
-    }
-  } else {
-    // Student pages: only update existing student-scoped SW
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      registrations.forEach((registration) => {
-        registration.update();
-      });
-    });
+    }).catch(() => {});
   }
 }
 
