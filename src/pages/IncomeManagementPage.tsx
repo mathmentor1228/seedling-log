@@ -405,9 +405,12 @@ function IncomeContent() {
       // Salary total this month (from comps)
       let salaryTotal = 0;
       for (const c of comps) if (c.month === mk.key) salaryTotal += Number(c.salary || 0);
-      return { month: mk.label, key: mk.key, taught: taught.size, lessons: lessonCount, new: newCnt, withdrawn: wdCnt, net: newCnt - wdCnt, salaryTotal };
+      // Revenue: historical if available, else current snapshot total
+      const monthRev = getMonthRevenue(mk.key);
+      const revenue = monthRev.total;
+      return { month: mk.label, key: mk.key, taught: taught.size, lessons: lessonCount, new: newCnt, withdrawn: wdCnt, net: newCnt - wdCnt, salaryTotal, revenue, profit: revenue - salaryTotal, revSource: monthRev.source };
     });
-  }, [months, lessons, students, comps]);
+  }, [months, lessons, students, comps, historicalByMonth, teacherRevenueCurrent]);
 
   // Focus month per-teacher rows (table + P&L)
   const focusMonthRows = useMemo(() => {
