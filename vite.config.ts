@@ -48,8 +48,8 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        // Only precache the app shell - NOT all JS bundles
-        globPatterns: ['**/*.{ico,png,svg,woff2}'],
+        // Precache app shell (include html so navigateFallback works) - NOT all JS bundles
+        globPatterns: ['**/*.{html,ico,png,svg,woff2}'],
         // Skip waiting so new SW activates immediately
         skipWaiting: true,
         clientsClaim: true,
