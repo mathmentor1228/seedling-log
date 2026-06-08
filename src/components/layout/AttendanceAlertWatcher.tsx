@@ -37,6 +37,25 @@ const ALERT_TIERS_MIN = [0, 5, 10];
 const POLL_INTERVAL_MS = 60_000;
 const SNOOZE_KEY = 'attendanceAlertSnoozeV2';
 const ESCALATED_KEY = 'attendanceAlertEscalatedV1';
+const MUTE_ALL_KEY = 'attendanceAlertMuteAllV1';
+
+// Load/save a single "mute everything until" timestamp (per-day) in sessionStorage
+function loadMuteAll(): number {
+  try {
+    const raw = sessionStorage.getItem(MUTE_ALL_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as { date: string; until: number };
+    const today = new Date().toISOString().split('T')[0];
+    if (parsed.date !== today) return 0;
+    return parsed.until || 0;
+  } catch {
+    return 0;
+  }
+}
+function saveMuteAll(until: number) {
+  const today = new Date().toISOString().split('T')[0];
+  sessionStorage.setItem(MUTE_ALL_KEY, JSON.stringify({ date: today, until }));
+}
 
 function getDayOfWeekKo(d: Date) {
   return ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
@@ -76,6 +95,7 @@ export function AttendanceAlertWatcher() {
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
   const snoozeRef = useRef<Map<string, number>>(loadDayMap(SNOOZE_KEY));
   const escalatedRef = useRef<Map<string, number>>(loadDayMap(ESCALATED_KEY));
+  const muteAllRef = useRef<number>(loadMuteAll());
 
   const setBusy = (key: string, v: boolean) => {
     setBusyKeys((prev) => {
@@ -209,8 +229,10 @@ export function AttendanceAlertWatcher() {
     }
 
     // Auto-open: only if any entry has crossed a new tier that isn't snoozed
+    // AND the global "mute all today" timestamp has not been set.
     const nowEpoch = Date.now();
-    const shouldOpen = overdue.some((o) => {
+    const globallyMuted = muteAllRef.current > nowEpoch;
+    const shouldOpen = !globallyMuted && overdue.some((o) => {
       const snoozeUntil = snoozeRef.current.get(o.key) ?? 0;
       if (snoozeUntil > nowEpoch) return false;
       // entry is past a tier boundary (0/5/10) → open
@@ -281,6 +303,10 @@ export function AttendanceAlertWatcher() {
     eod.setHours(23, 59, 59, 999);
     entries.forEach((e) => snoozeRef.current.set(e.key, eod.getTime()));
     saveDayMap(SNOOZE_KEY, snoozeRef.current);
+    // Also globally mute popups for the rest of the day so newly overdue
+    // students don't immediately re-open the dialog.
+    muteAllRef.current = eod.getTime();
+    saveMuteAll(eod.getTime());
   };
 
   const handleClose = () => {
