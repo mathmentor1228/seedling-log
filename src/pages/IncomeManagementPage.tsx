@@ -650,6 +650,9 @@ function IncomeContent() {
             * 2026-05 이전 매출은 <b>실제 납부 데이터(엑셀 적재)</b> 기준, 이후는 현재 활성 수강 정액 기준입니다.
           </p>
         </CardContent>
+      </Card>
+
+
 
       {/* Teacher selector */}
       <Card>
