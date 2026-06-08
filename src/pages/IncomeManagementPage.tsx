@@ -227,27 +227,30 @@ function IncomeContent() {
     return m;
   }, [sst]);
 
-  // Per-teacher CURRENT-MONTH revenue: 학생 NET 수강료를 각 수강의 과목별 실제 담당
-  // 선생님(student_subject_teachers 기준)에게 수강료 비율로 귀속.
-  // student_courses.teacher_id 는 stale 한 경우가 많아 fallback 으로만 사용.
-  const teacherRevenue = useMemo(() => {
-    const m = new Map<string, number>();
-    const coursesByStudent = new Map<string, { teacher_id: string; fee: number }[]>();
+  // Per-student course teacher fee ratios (current snapshot - SST 우선, fallback course teacher_id)
+  const studentTeacherRatios = useMemo(() => {
+    // student_id -> Array<{teacher_id, fee}>
+    const m = new Map<string, { teacher_id: string; fee: number }[]>();
     for (const c of courses) {
       if (!c.is_active) continue;
       const policy = c.course_policy_id ? policyById.get(c.course_policy_id) : null;
       const fee = Number(c.custom_monthly_fee ?? policy?.monthly_fee ?? 0);
       if (fee <= 0) continue;
       const subject = policy?.subject || null;
-      // 실제 담당: SST(학생, 과목) > 강좌 teacher_id
       let teacherId: string | null = null;
       if (subject) teacherId = sstTeacherBySubject.get(`${c.student_id}__${subject}`) || null;
       if (!teacherId) teacherId = c.teacher_id || null;
       if (!teacherId) continue;
-      if (!coursesByStudent.has(c.student_id)) coursesByStudent.set(c.student_id, []);
-      coursesByStudent.get(c.student_id)!.push({ teacher_id: teacherId, fee });
+      if (!m.has(c.student_id)) m.set(c.student_id, []);
+      m.get(c.student_id)!.push({ teacher_id: teacherId, fee });
     }
-    for (const [sid, list] of coursesByStudent) {
+    return m;
+  }, [courses, policyById, sstTeacherBySubject]);
+
+  // Per-teacher CURRENT-MONTH revenue (활성 수강 기반 정액)
+  const teacherRevenueCurrent = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const [sid, list] of studentTeacherRatios) {
       const gross = list.reduce((a, b) => a + b.fee, 0);
       if (gross <= 0) continue;
       const net = studentNetFee.get(sid) ?? gross;
@@ -257,7 +260,43 @@ function IncomeContent() {
       }
     }
     return m;
-  }, [courses, policyById, studentNetFee, sstTeacherBySubject]);
+  }, [studentTeacherRatios, studentNetFee]);
+
+  // Historical revenue: per month -> { teacherRevenue: Map<tid, won>, total: won, unassigned: won }
+  // 과거월 paid 금액을 학생의 현재 SST/course 비율로 선생님에게 분배.
+  const historicalByMonth = useMemo(() => {
+    const out = new Map<string, { teacherRevenue: Map<string, number>; total: number; unassigned: number }>();
+    for (const h of historical) {
+      const paid = Number(h.paid || 0);
+      if (paid <= 0) continue;
+      let entry = out.get(h.year_month);
+      if (!entry) { entry = { teacherRevenue: new Map(), total: 0, unassigned: 0 }; out.set(h.year_month, entry); }
+      entry.total += paid;
+      const ratios = h.student_id ? studentTeacherRatios.get(h.student_id) : null;
+      if (!ratios || ratios.length === 0) {
+        entry.unassigned += paid;
+        continue;
+      }
+      const gross = ratios.reduce((a, b) => a + b.fee, 0);
+      if (gross <= 0) { entry.unassigned += paid; continue; }
+      for (const c of ratios) {
+        const share = (c.fee / gross) * paid;
+        entry.teacherRevenue.set(c.teacher_id, (entry.teacherRevenue.get(c.teacher_id) || 0) + share);
+      }
+    }
+    return out;
+  }, [historical, studentTeacherRatios]);
+
+  // Resolve revenue for a given month: historical if exists, else current snapshot
+  const getMonthRevenue = (monthKey: string): { teacherRevenue: Map<string, number>; total: number; unassigned: number; source: 'historical' | 'current' } => {
+    const h = historicalByMonth.get(monthKey);
+    if (h) return { ...h, source: 'historical' };
+    let total = 0;
+    for (const v of teacherRevenueCurrent.values()) total += v;
+    return { teacherRevenue: teacherRevenueCurrent, total, unassigned: 0, source: 'current' };
+  };
+
+  const teacherRevenue = useMemo(() => getMonthRevenue(focusKey).teacherRevenue, [historicalByMonth, teacherRevenueCurrent, focusKey]);
 
 
   // Lookup: comp by teacher + month
