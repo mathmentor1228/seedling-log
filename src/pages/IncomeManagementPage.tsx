@@ -37,6 +37,7 @@ type Course = {
 };
 type Policy = { id: string; monthly_fee: number | null; subject: string | null };
 type Comp = { teacher_id: string; month: string; salary: number | null };
+type Historical = { year_month: string; student_id: string | null; student_name: string; paid: number; billed: number };
 
 interface MonthKey { y: number; m: number; key: string; label: string }
 
