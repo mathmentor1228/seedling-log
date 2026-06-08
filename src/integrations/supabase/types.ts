@@ -1847,6 +1847,7 @@ export type Database = {
           source: string | null
           student_id: string | null
           student_name: string
+          teacher_id_override: string | null
           updated_at: string
           year_month: string
         }
@@ -1862,6 +1863,7 @@ export type Database = {
           source?: string | null
           student_id?: string | null
           student_name: string
+          teacher_id_override?: string | null
           updated_at?: string
           year_month: string
         }
@@ -1877,6 +1879,7 @@ export type Database = {
           source?: string | null
           student_id?: string | null
           student_name?: string
+          teacher_id_override?: string | null
           updated_at?: string
           year_month?: string
         }
@@ -1886,6 +1889,13 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historical_monthly_tuition_teacher_id_override_fkey"
+            columns: ["teacher_id_override"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

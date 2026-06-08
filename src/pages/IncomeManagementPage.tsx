@@ -37,7 +37,7 @@ type Course = {
 };
 type Policy = { id: string; monthly_fee: number | null; subject: string | null };
 type Comp = { teacher_id: string; month: string; salary: number | null };
-type Historical = { year_month: string; student_id: string | null; student_name: string; paid: number; billed: number };
+type Historical = { year_month: string; student_id: string | null; student_name: string; paid: number; billed: number; teacher_id_override: string | null };
 
 interface MonthKey { y: number; m: number; key: string; label: string }
 
@@ -135,7 +135,7 @@ function IncomeContent() {
         supabase.from('student_courses').select('id, student_id, teacher_id, enrollment_date, end_date, is_active, custom_monthly_fee, course_policy_id'),
         supabase.from('course_policies').select('id, monthly_fee, subject'),
         supabase.from('teacher_monthly_compensation').select('teacher_id, month, salary'),
-        supabase.from('historical_monthly_tuition').select('year_month, student_id, student_name, paid, billed'),
+        supabase.from('historical_monthly_tuition').select('year_month, student_id, student_name, paid, billed, teacher_id_override'),
         fetchAllLessons(start),
       ]);
 
@@ -272,6 +272,11 @@ function IncomeContent() {
       let entry = out.get(h.year_month);
       if (!entry) { entry = { teacherRevenue: new Map(), total: 0, unassigned: 0 }; out.set(h.year_month, entry); }
       entry.total += paid;
+      // 1) explicit teacher override (e.g. historical-only teachers like 허민영)
+      if (h.teacher_id_override) {
+        entry.teacherRevenue.set(h.teacher_id_override, (entry.teacherRevenue.get(h.teacher_id_override) || 0) + paid);
+        continue;
+      }
       const ratios = h.student_id ? studentTeacherRatios.get(h.student_id) : null;
       if (!ratios || ratios.length === 0) {
         entry.unassigned += paid;
