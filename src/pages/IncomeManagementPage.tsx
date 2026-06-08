@@ -128,17 +128,18 @@ function IncomeContent() {
     const { start } = monthRange(earliest);
 
     try {
-      const [tRes, sRes, sstRes, cRes, pRes, compRes, lessonsAll] = await Promise.all([
+      const [tRes, sRes, sstRes, cRes, pRes, compRes, histRes, lessonsAll] = await Promise.all([
         supabase.from('profiles').select('id, full_name, is_active').eq('is_active', true).order('full_name'),
         supabase.from('students').select('id, name, registration_date, withdrawn_at, enrollment_status, sibling_group_id'),
         supabase.from('student_subject_teachers').select('student_id, teacher_id, subject'),
         supabase.from('student_courses').select('id, student_id, teacher_id, enrollment_date, end_date, is_active, custom_monthly_fee, course_policy_id'),
         supabase.from('course_policies').select('id, monthly_fee, subject'),
         supabase.from('teacher_monthly_compensation').select('teacher_id, month, salary'),
+        supabase.from('historical_monthly_tuition').select('year_month, student_id, student_name, paid, billed'),
         fetchAllLessons(start),
       ]);
 
-      const errs = [tRes.error, sRes.error, sstRes.error, cRes.error, pRes.error, compRes.error].filter(Boolean);
+      const errs = [tRes.error, sRes.error, sstRes.error, cRes.error, pRes.error, compRes.error, histRes.error].filter(Boolean);
       if (errs.length) throw errs[0];
 
       setTeachers((tRes.data || []) as Profile[]);
@@ -147,6 +148,7 @@ function IncomeContent() {
       setCourses((cRes.data || []) as Course[]);
       setPolicies((pRes.data || []) as Policy[]);
       setComps((compRes.data || []) as Comp[]);
+      setHistorical((histRes.data || []) as Historical[]);
       setLessons(lessonsAll);
     } catch (e: any) {
       toast({ title: '데이터 로드 실패', description: e?.message || String(e), variant: 'destructive' });
