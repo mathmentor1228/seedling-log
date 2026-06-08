@@ -466,31 +466,30 @@ function IncomeContent() {
     });
   }, [months, monthlyStats, selectedTeacherIds, teacherById]);
 
-  // P&L trend (academy-wide, last 12 months): revenue is constant (current-month snapshot), so we use salary actuals per month
-  // We approximate revenue per month as current month's revenue total (best-effort given lack of historical fees) — only for visualization clarity, we display salary actuals.
-  const totalCurrentRevenue = useMemo(() => {
-    let s = 0;
-    for (const v of teacherRevenue.values()) s += v;
-    return s;
-  }, [teacherRevenue]);
+  // P&L trend (academy-wide): historical revenue for past months, snapshot for focus/current
+  const totalFocusRevenue = useMemo(() => {
+    return getMonthRevenue(focusKey).total;
+  }, [historicalByMonth, teacherRevenueCurrent, focusKey]);
 
   const plTrend = useMemo(() => {
     return academyTrend.map(r => ({
       month: r.month,
       key: r.key,
-      revenue: r.key === focusKey ? totalCurrentRevenue : 0, // only meaningful for focus month
+      revenue: r.revenue,
       salary: r.salaryTotal,
-      profit: (r.key === focusKey ? totalCurrentRevenue : 0) - r.salaryTotal,
+      profit: r.profit,
+      source: r.revSource,
     }));
-  }, [academyTrend, totalCurrentRevenue, focusKey]);
+  }, [academyTrend]);
 
   const focusKPI = useMemo(() => {
     const cur = academyTrend.find(r => r.key === focusKey);
     const prevKey = shiftMonth(focusKey, -1);
     const prev = academyTrend.find(r => r.key === prevKey);
     const focusSalary = cur?.salaryTotal || 0;
-    const profit = totalCurrentRevenue - focusSalary;
-    const margin = totalCurrentRevenue > 0 ? (profit / totalCurrentRevenue) * 100 : 0;
+    const revenue = cur?.revenue ?? totalFocusRevenue;
+    const profit = revenue - focusSalary;
+    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
     return {
       taught: cur?.taught ?? 0,
       taughtDiff: (cur?.taught ?? 0) - (prev?.taught ?? 0),
@@ -499,7 +498,7 @@ function IncomeContent() {
       new: cur?.new ?? 0,
       withdrawn: cur?.withdrawn ?? 0,
       net: cur?.net ?? 0,
-      revenue: totalCurrentRevenue,
+      revenue,
       salary: focusSalary,
       profit,
       margin,
