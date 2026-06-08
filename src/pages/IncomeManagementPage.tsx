@@ -503,7 +503,7 @@ function IncomeContent() {
       profit,
       margin,
     };
-  }, [academyTrend, focusKey, totalCurrentRevenue]);
+  }, [academyTrend, focusKey, totalFocusRevenue]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
