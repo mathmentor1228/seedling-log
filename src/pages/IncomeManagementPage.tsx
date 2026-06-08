@@ -116,6 +116,7 @@ function IncomeContent() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [comps, setComps] = useState<Comp[]>([]);
+  const [historical, setHistorical] = useState<Historical[]>([]);
 
   const today = new Date();
   const [anchor, setAnchor] = useState<string>(monthKeyFromDate(today).key);
