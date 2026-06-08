@@ -272,6 +272,11 @@ function IncomeContent() {
       let entry = out.get(h.year_month);
       if (!entry) { entry = { teacherRevenue: new Map(), total: 0, unassigned: 0 }; out.set(h.year_month, entry); }
       entry.total += paid;
+      // 1) explicit teacher override (e.g. historical-only teachers like 허민영)
+      if (h.teacher_id_override) {
+        entry.teacherRevenue.set(h.teacher_id_override, (entry.teacherRevenue.get(h.teacher_id_override) || 0) + paid);
+        continue;
+      }
       const ratios = h.student_id ? studentTeacherRatios.get(h.student_id) : null;
       if (!ratios || ratios.length === 0) {
         entry.unassigned += paid;
