@@ -135,7 +135,7 @@ function IncomeContent() {
         supabase.from('student_courses').select('id, student_id, teacher_id, enrollment_date, end_date, is_active, custom_monthly_fee, course_policy_id'),
         supabase.from('course_policies').select('id, monthly_fee, subject'),
         supabase.from('teacher_monthly_compensation').select('teacher_id, month, salary'),
-        supabase.from('historical_monthly_tuition').select('year_month, student_id, student_name, paid, billed'),
+        supabase.from('historical_monthly_tuition').select('year_month, student_id, student_name, paid, billed, teacher_id_override'),
         fetchAllLessons(start),
       ]);
 
