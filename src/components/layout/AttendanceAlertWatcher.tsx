@@ -35,14 +35,19 @@ const ROOM_IDS = ['room10', 'glass'];
 // Show popup at scheduled start (0), then again at 5min and 10min after if still unmarked.
 const ALERT_TIERS_MIN = [0, 5, 10];
 const POLL_INTERVAL_MS = 60_000;
-const SNOOZE_KEY = 'attendanceAlertSnoozeV2';
-const ESCALATED_KEY = 'attendanceAlertEscalatedV1';
-const MUTE_ALL_KEY = 'attendanceAlertMuteAllV1';
+// ATT-ALERT-DISMISS-LOCAL-V3: persist per-user per-day dismiss in localStorage
+const SNOOZE_KEY_BASE = 'attendanceAlertSnoozeV3';
+const ESCALATED_KEY_BASE = 'attendanceAlertEscalatedV2';
+const MUTE_ALL_KEY_BASE = 'attendanceAlertMuteAllV2';
 
-// Load/save a single "mute everything until" timestamp (per-day) in sessionStorage
-function loadMuteAll(): number {
+function userKey(base: string, userId?: string) {
+  return `${base}:${userId ?? 'anon'}`;
+}
+
+// Load/save a single "mute everything until" timestamp (per-day, per-user) in localStorage
+function loadMuteAll(userId?: string): number {
   try {
-    const raw = sessionStorage.getItem(MUTE_ALL_KEY);
+    const raw = localStorage.getItem(userKey(MUTE_ALL_KEY_BASE, userId));
     if (!raw) return 0;
     const parsed = JSON.parse(raw) as { date: string; until: number };
     const today = new Date().toISOString().split('T')[0];
@@ -52,9 +57,9 @@ function loadMuteAll(): number {
     return 0;
   }
 }
-function saveMuteAll(until: number) {
+function saveMuteAll(until: number, userId?: string) {
   const today = new Date().toISOString().split('T')[0];
-  sessionStorage.setItem(MUTE_ALL_KEY, JSON.stringify({ date: today, until }));
+  localStorage.setItem(userKey(MUTE_ALL_KEY_BASE, userId), JSON.stringify({ date: today, until }));
 }
 
 function getDayOfWeekKo(d: Date) {
@@ -70,7 +75,7 @@ function parseSlotToMinutes(slot: string) {
 // Snooze: map of entryKey -> epoch ms until which the popup should not auto-open
 function loadDayMap(key: string): Map<string, number> {
   try {
-    const raw = sessionStorage.getItem(key);
+    const raw = localStorage.getItem(key);
     if (!raw) return new Map();
     const parsed = JSON.parse(raw) as { date: string; items: Record<string, number> };
     const today = new Date().toISOString().split('T')[0];
@@ -82,7 +87,7 @@ function loadDayMap(key: string): Map<string, number> {
 }
 function saveDayMap(key: string, m: Map<string, number>) {
   const today = new Date().toISOString().split('T')[0];
-  sessionStorage.setItem(
+  localStorage.setItem(
     key,
     JSON.stringify({ date: today, items: Object.fromEntries(m.entries()) })
   );
@@ -93,9 +98,11 @@ export function AttendanceAlertWatcher() {
   const [entries, setEntries] = useState<OverdueEntry[]>([]);
   const [open, setOpen] = useState(false);
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
+  const SNOOZE_KEY = userKey(SNOOZE_KEY_BASE, user?.id);
+  const ESCALATED_KEY = userKey(ESCALATED_KEY_BASE, user?.id);
   const snoozeRef = useRef<Map<string, number>>(loadDayMap(SNOOZE_KEY));
   const escalatedRef = useRef<Map<string, number>>(loadDayMap(ESCALATED_KEY));
-  const muteAllRef = useRef<number>(loadMuteAll());
+  const muteAllRef = useRef<number>(loadMuteAll(user?.id));
 
   const setBusy = (key: string, v: boolean) => {
     setBusyKeys((prev) => {
@@ -306,7 +313,7 @@ export function AttendanceAlertWatcher() {
     // Also globally mute popups for the rest of the day so newly overdue
     // students don't immediately re-open the dialog.
     muteAllRef.current = eod.getTime();
-    saveMuteAll(eod.getTime());
+    saveMuteAll(eod.getTime(), user?.id);
   };
 
   const handleClose = () => {
