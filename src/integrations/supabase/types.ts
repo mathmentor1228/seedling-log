@@ -232,6 +232,39 @@ export type Database = {
           },
         ]
       }
+      assistant_work_logs: {
+        Row: {
+          assistant_user_id: string
+          clock_in_at: string
+          clock_out_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          total_minutes: number | null
+          updated_at: string
+        }
+        Insert: {
+          assistant_user_id: string
+          clock_in_at: string
+          clock_out_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          total_minutes?: number | null
+          updated_at?: string
+        }
+        Update: {
+          assistant_user_id?: string
+          clock_in_at?: string
+          clock_out_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          total_minutes?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       attendance: {
         Row: {
           att_date: string
@@ -3197,6 +3230,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      private_messages: {
+        Row: {
+          body: string | null
+          created_at: string
+          done_at: string | null
+          from_user_id: string
+          id: string
+          link_url: string | null
+          read_at: string | null
+          status: string
+          title: string
+          to_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          done_at?: string | null
+          from_user_id: string
+          id?: string
+          link_url?: string | null
+          read_at?: string | null
+          status?: string
+          title: string
+          to_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          done_at?: string | null
+          from_user_id?: string
+          id?: string
+          link_url?: string | null
+          read_at?: string | null
+          status?: string
+          title?: string
+          to_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
