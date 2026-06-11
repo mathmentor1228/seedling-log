@@ -1036,12 +1036,12 @@ export function RosterActionModal({
           <DialogTitle className="text-base">📎 학생 제출물</DialogTitle>
         </DialogHeader>
         {(() => {
-          const rawUrl = studentSubmission?.image_url || previousHomework?.submission_image_url || '';
+          const submission = activeImageHw ? submissionsByHwId[activeImageHw.id] : null;
+          const rawUrl = submission?.image_url || activeImageHw?.submission_image_url || '';
           const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
-          const audioUrl = previousHomework?.submission_audio_url;
+          const audioUrl = activeImageHw?.submission_audio_url;
           return (
             <div className="space-y-3">
-              {/* Audio player */}
               {audioUrl && (
                 <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-200 dark:border-purple-800">
                   <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-2 flex items-center gap-1">
@@ -1059,9 +1059,9 @@ export function RosterActionModal({
                 <div className="grid grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto">
                   {imageUrls.map((url, idx) => (
                     <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
-                      <img 
-                        src={url} 
-                        alt={`제출 이미지 ${idx + 1}`} 
+                      <img
+                        src={url}
+                        alt={`제출 이미지 ${idx + 1}`}
                         className="w-full max-h-[50vh] object-contain rounded-lg border"
                         onError={(e) => {
                           const target = e.currentTarget;
@@ -1079,9 +1079,9 @@ export function RosterActionModal({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto">
                   {imageUrls.map((url, idx) => (
                     <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden border hover:ring-2 ring-primary transition-all">
-                      <img 
-                        src={url} 
-                        alt={`제출 이미지 ${idx + 1}`} 
+                      <img
+                        src={url}
+                        alt={`제출 이미지 ${idx + 1}`}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           const target = e.currentTarget;
@@ -1096,16 +1096,16 @@ export function RosterActionModal({
                   ))}
                 </div>
               ) : null}
-              {(studentSubmission || previousHomework?.submitted_at) && (
+              {(submission || activeImageHw?.submitted_at) && (
                 <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
                   <p className="font-medium">
-                    📷 제출 시간: {studentSubmission?.submitted_at || previousHomework?.submitted_at 
-                      ? format(new Date(studentSubmission?.submitted_at || previousHomework?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
+                    📷 제출 시간: {submission?.submitted_at || activeImageHw?.submitted_at
+                      ? format(new Date(submission?.submitted_at || activeImageHw?.submitted_at || ''), 'M월 d일 HH:mm', { locale: ko })
                       : '-'}
                   </p>
-                  {(studentSubmission?.submission_note || previousHomework?.submission_text) && (
+                  {(submission?.submission_note || activeImageHw?.submission_text) && (
                     <p className="text-muted-foreground">
-                      📝 메모: {studentSubmission?.submission_note || previousHomework?.submission_text}
+                      📝 메모: {submission?.submission_note || activeImageHw?.submission_text}
                     </p>
                   )}
                 </div>
