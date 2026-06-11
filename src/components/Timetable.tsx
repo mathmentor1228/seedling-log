@@ -101,11 +101,12 @@ interface StudentScheduleRow {
 }
 
 export function Timetable() {
-  const { user, role } = useAuth();
+  const { user, role, assignedSubject } = useAuth();
   const { toast } = useToast();
   const isAdminUser = isAdmin(role);
   const isAssistantUser = isAssistant(role);
   const canViewAllStudents = isAdminUser || isAssistantUser;
+  const subjectLock = (role === 'assistant' && assignedSubject) ? assignedSubject : null;
 
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]);
   const [examPrepRows, setExamPrepRows] = useState<ScheduleRow[]>([]);
@@ -185,8 +186,12 @@ export function Timetable() {
         scheduleQuery = scheduleQuery.eq('teacher_id', user.id);
       }
 
-      const { data: schedulesData, error: schedError } = await scheduleQuery;
+      const { data: schedulesDataRaw, error: schedError } = await scheduleQuery;
       if (schedError) throw schedError;
+      // Assistants assigned to a subject only see that subject
+      const schedulesData = subjectLock
+        ? (schedulesDataRaw || []).filter((s: any) => s.classes?.subject === subjectLock)
+        : schedulesDataRaw;
 
       const teacherIds = new Set<string>();
       const classIds = new Set<string>();
