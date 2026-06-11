@@ -800,9 +800,9 @@ function TagManagerDialog({ open, onOpenChange, presets, onChanged }: { open: bo
 }
 
 export default function PrivateChannelPage() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const email = user?.email?.toLowerCase() ?? '';
-  const isAllowed = PAIR_EMAILS.includes(email);
+  const isAllowed = PAIR_EMAILS.includes(email) || role === 'admin';
 
   return (
     <ProtectedRoute allowedRoles={['admin', 'teacher', 'assistant']}>
