@@ -793,179 +793,7 @@ export function RosterActionModal({
             
             {/* Previous Homework Check Tab */}
             <TabsContent value="homework" className="space-y-4 mt-4">
-              {previousHomework ? (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      <span>지난 숙제 ({previousHomework.assigned_date})</span>
-                      {previousHomework.check_status === 'checked' && (
-                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                          확인됨
-                        </Badge>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* CARRY-FORWARD-REASON-V1: Show reason badge + content */}
-                    <div className="p-3 bg-secondary/50 rounded-lg text-sm flex items-start gap-3">
-                      <div className="flex-1">
-                        {(() => {
-                          const reasonMatch = previousHomework.content.match(/^\[(분실|미완|부분|성의부족|확인불가)\]\s*/);
-                          if (reasonMatch) {
-                            const reason = reasonMatch[1];
-                            const cleanContent = previousHomework.content.replace(reasonMatch[0], '');
-                            const reasonColors: Record<string, string> = { '분실': 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300', '미완': 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300', '부분': 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', '성의부족': 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300', '확인불가': 'bg-muted text-muted-foreground' };
-                            return (
-                              <div className="space-y-1">
-                                <Badge variant="outline" className={`text-[10px] ${reasonColors[reason] || 'bg-muted'}`}>⚠️ 이월사유: {reason}</Badge>
-                                <p>{cleanContent}</p>
-                              </div>
-                            );
-                          }
-                          return <span>{previousHomework.content}</span>;
-                        })()}
-                      </div>
-                      {/* Show mic icon if student submitted audio */}
-                      {previousHomework.submission_audio_url && (
-                        <button
-                          type="button"
-                          onClick={() => setShowImageModal(true)}
-                          className="flex-shrink-0 relative group cursor-pointer"
-                          title="학생 음성 제출 듣기"
-                        >
-                          <div className="w-12 h-12 rounded-lg border-2 border-purple-400/50 overflow-hidden bg-purple-50 dark:bg-purple-950/30 hover:border-purple-500 transition-colors flex items-center justify-center">
-                            <Mic className="w-5 h-5 text-purple-500" />
-                          </div>
-                        </button>
-                      )}
-                      {/* Show camera icon if student submitted image */}
-                      {(studentSubmission?.image_url || previousHomework.submission_image_url) && (() => {
-                        const rawUrl = studentSubmission?.image_url || previousHomework.submission_image_url || '';
-                        const imageUrls = rawUrl.split(',').map(u => u.trim()).filter(Boolean);
-                        const firstUrl = imageUrls[0] || '';
-                        return (
-                        <button
-                          type="button"
-                          onClick={() => setShowImageModal(true)}
-                          className="flex-shrink-0 relative group cursor-pointer"
-                          title="학생 제출 사진 보기"
-                        >
-                          <div className="w-16 h-16 rounded-lg border-2 border-primary/30 overflow-hidden bg-muted hover:border-primary transition-colors">
-                            <img 
-                              src={firstUrl} 
-                              alt="제출 이미지" 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          </div>
-                          {imageUrls.length > 1 && (
-                            <div className="absolute -bottom-1 -left-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold">
-                              {imageUrls.length}
-                            </div>
-                          )}
-                          <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center">
-                            <Camera className="w-3 h-3" />
-                          </div>
-                        </button>
-                        );
-                      })()}
-                    </div>
-                    
-                    {/* STUDENT-SUBMISSION-V1: Show submission note if exists */}
-                    {(studentSubmission?.submission_note || previousHomework.submission_text) && (
-                      <div className="p-2 bg-primary/5 rounded-lg text-sm border border-primary/20">
-                        <p className="text-xs text-muted-foreground mb-1">📝 학생 메모:</p>
-                        <p>{studentSubmission?.submission_note || previousHomework.submission_text}</p>
-                      </div>
-                    )}
-                    
-                    {previousHomework.check_status === 'checked' ? (
-                      <div className="text-sm text-muted-foreground">
-                        <p>확인자: {previousHomework.checker_name || '알 수 없음'}</p>
-                        <p>결과: {HOMEWORK_RESULT_OPTIONS.find(o => o.value === previousHomework.result)?.label || '-'}</p>
-                        {previousHomework.notes && <p>메모: {previousHomework.notes}</p>}
-                      </div>
-                    ) : (
-                      <>
-                        <div className="space-y-2">
-                          <Label>확인 결과</Label>
-                          <div className="flex gap-2 flex-wrap">
-                            {HOMEWORK_RESULT_OPTIONS.map((option) => {
-                              const Icon = option.icon;
-                              return (
-                                <Button
-                                  key={option.value}
-                                  type="button"
-                                  variant={homeworkCheckResult === option.value ? 'default' : 'outline'}
-                                  size="sm"
-                                  onClick={() => setHomeworkCheckResult(option.value)}
-                                  className={homeworkCheckResult === option.value ? '' : option.color}
-                                >
-                                  <Icon className="w-4 h-4 mr-1" />
-                                  {option.label}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label>확인 메모 (선택)</Label>
-                          <Textarea
-                            value={homeworkCheckNotes}
-                            onChange={(e) => setHomeworkCheckNotes(e.target.value)}
-                            placeholder="확인 메모 (학생에게 알림용)..."
-                            rows={2}
-                          />
-                        </div>
-                        
-                        {/* TEACHER-HW-ALERT-V2: homework_check_note for teacher alert */}
-                        <div className="space-y-2 p-3 border border-amber-500/30 bg-amber-500/5 rounded-lg">
-                          <Label className="text-amber-700">🔔 선생님 별도 확인 요청 메모</Label>
-                          <Textarea
-                            value={homeworkCheckNote}
-                            onChange={(e) => setHomeworkCheckNote(e.target.value)}
-                            placeholder="선생님께서 별도로 확인해야 할 사항이 있으면 적어주세요 (대시보드에 알림 표시됨)"
-                            rows={2}
-                          />
-                          <span className="text-xs text-muted-foreground">
-                            TEACHER-HW-ALERT-V2
-                          </span>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={handleSaveHomeworkCheck}
-                            disabled={!homeworkCheckResult || isSavingHomework}
-                          >
-                            {isSavingHomework ? (
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : (
-                              <Save className="w-4 h-4 mr-2" />
-                            )}
-                            확인 저장
-                          </Button>
-                          {/* CARRY-FORWARD-REASON-V1: Show carry-forward button for non-completion results */}
-                          {homeworkCheckResult && homeworkCheckResult !== 'completed' && (
-                            <Button
-                              variant="outline"
-                              onClick={handleCarryForward}
-                              disabled={isCarryingForward}
-                              className="gap-1"
-                            >
-                              {isCarryingForward ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-                              다음시간 검사예정
-                            </Button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
+              {previousHomeworks.length === 0 ? (
                 <Card>
                   <CardContent className="py-8">
                     <p className="text-center text-muted-foreground">
@@ -973,6 +801,25 @@ export function RosterActionModal({
                     </p>
                   </CardContent>
                 </Card>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    미확인 숙제 {previousHomeworks.length}건 — 가장 최근 순서
+                  </div>
+                  {previousHomeworks.map(hw => (
+                    <PreviousHomeworkCard
+                      key={hw.id}
+                      hw={hw}
+                      submission={submissionsByHwId[hw.id] || null}
+                      defaultAlertNote={homeworkCheckNote}
+                      savingHwId={savingHwId}
+                      carryingHwId={carryingHwId}
+                      onOpenImage={(h) => { setActiveImageHw(h); setShowImageModal(true); }}
+                      onSave={handleSaveHomeworkCheck}
+                      onCarry={handleCarryForward}
+                    />
+                  ))}
+                </div>
               )}
             </TabsContent>
             
