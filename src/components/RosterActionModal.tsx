@@ -182,6 +182,9 @@ export function RosterActionModal({
   // Saving states
   const [isSavingTest, setIsSavingTest] = useState(false);
   const [isSavingNewHomework, setIsSavingNewHomework] = useState(false);
+  // MULTI-HW-CHECK-V1: which HW is currently being saved/carried-forward
+  const [savingHwId, setSavingHwId] = useState<string | null>(null);
+  const [carryingHwId, setCarryingHwId] = useState<string | null>(null);
 
   // Fetch data when modal opens
   useEffect(() => {
